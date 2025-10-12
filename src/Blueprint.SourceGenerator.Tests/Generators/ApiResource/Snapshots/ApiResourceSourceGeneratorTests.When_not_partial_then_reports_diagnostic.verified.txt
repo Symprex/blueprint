@@ -1,0 +1,10 @@
+﻿File: Input0.cs
+using Blueprint.Model;
+
+namespace TestNamespace;
+
+public class Test : ApiResource
+             ^^^^ [Error:CS0534] 'Test' does not implement inherited abstract member 'ApiResource.Object.get'
+             ^^^^ [Error:BP001] The class 'Test' must be partial to generate the Object property
+{
+}

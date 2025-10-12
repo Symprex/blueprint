@@ -1,0 +1,14 @@
+{
+  "$schema": "http://json.schemastore.org/launchsettings.json",
+  "profiles": {
+    "IntegrationTestsGenerator": {
+      "commandName": "DebugRoslynComponent",
+      "targetProject": "../Blueprint.SourceGenerator.Tests.Integration/Blueprint.SourceGenerator.Tests.Integration.csproj"
+    },
+
+    "SampleAppGenerator": {
+      "commandName": "DebugRoslynComponent",
+      "targetProject": "../Blueprint.SourceGenerator.Sample/Blueprint.SourceGenerator.Sample.csproj"
+    }
+  }
+}

@@ -1,0 +1,86 @@
+﻿using System.Diagnostics;
+using Blueprint.Model;
+
+namespace Blueprint.Runtime.Exec;
+
+/// <summary>
+/// The context of an API operation, the object that is passed to all middleware and final operation handlers
+/// to allow sharing of state, for example the operation being executed, or an authentication context that
+/// gets created.
+/// </summary>
+public class ApiOperationContext
+{
+    /// <summary>
+    /// Initialises a new instance of the <see cref="ApiOperationContext" /> class, using
+    /// <see cref="ApiOperationDescriptor.CreateInstance" /> to construct the operation
+    /// instance.
+    /// </summary>
+    /// <param name="serviceProvider">The service provider (typically a nested scope) for this context.</param>
+    /// <param name="appDataModel">The data model that represents the API in which this context is being executed.</param>
+    /// <param name="operationDescriptor">A descriptor for the operation that is being executed.</param>
+    /// <param name="token">A cancellation token to indicate the operation should stop.</param>
+    public ApiOperationContext(
+        IServiceProvider serviceProvider,
+        BlueprintAppDataModel appDataModel,
+        ApiOperationDescriptor operationDescriptor,
+        CancellationToken token)
+    {
+        this.Descriptor = operationDescriptor;
+        this.OperationCancelled = token;
+        this.AppDataModel = appDataModel;
+        this.ServiceProvider = serviceProvider;
+        this.Operation = operationDescriptor.CreateInstance();
+        this.Activity = Activity.Current;
+
+        this.Data = new Dictionary<string, object>();
+    }
+
+    /// <summary>
+    /// Gets the data model for this operation.
+    /// </summary>
+    public BlueprintAppDataModel AppDataModel { get; }
+
+    /// <summary>
+    /// Gets the operation descriptor that described the operation that is currently being executed.
+    /// </summary>
+    public ApiOperationDescriptor Descriptor { get; }
+
+    /// <summary>
+    /// Gets the cancellation token that is used to indicate / request cancellation of an operation.
+    /// </summary>
+    public CancellationToken OperationCancelled { get; }
+
+    /// <summary>
+    /// Gets the operation that is currently being executed.
+    /// </summary>
+    public object Operation { get; set; }
+
+    /// <summary>
+    /// The <see cref="IServiceProvider" /> associated with this operation execution, allowing middleware and
+    /// handlers to get runtime dependencies out of the correctly scoped container.
+    /// </summary>
+    public IServiceProvider ServiceProvider { get; set; }
+
+    /// <summary>
+    /// Gets the parent <see cref="ApiOperationContext" /> of this context, which may be null.
+    /// </summary>
+    public ApiOperationContext? Parent { get; set; }
+
+    /// <summary>
+    /// Gets or sets the <see cref="Activity" /> for this context, which may be <c>null</c> if the host
+    /// of an operation has not integrated with APM tooling.
+    /// </summary>
+    public Activity? Activity { get; set; }
+
+    /// <summary>
+    /// Gets a value indicating whether this is a nested context, meaning it has been created as a child of an
+    /// existing context, used to execute another operation in the context of an existing one.
+    /// </summary>
+    public bool IsNested => this.Parent != null;
+
+    /// <summary>
+    /// Provides a generic means of middleware components or hosts to store data related to an API operation
+    /// to be used throughout the processing pipeline.
+    /// </summary>
+    public Dictionary<string, object> Data { get; private set; }
+}

@@ -1,0 +1,18 @@
+﻿File: Input0.cs
+using Blueprint.Model;
+using Blueprint.Model.Attributes;
+
+namespace TestNamespace;
+
+[SelfLink(typeof(ApiResourceWithoutProps[]), "/operations/a")]
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [Error:BPLG003] The resource type 'TestNamespace.ApiResourceWithoutProps[]' is not an ILinkableResource. Check the link attributes on 'TestNamespace.OperationA'.
+public class OperationA : IOperation {}
+
+public class ApiResourceWithoutProps : ApiResource 
+{
+    // Not auto-generated because we are not running that generator
+    public override string Object => "resource";
+}
+
+[BlueprintAppScan]
+public partial class TestBlueprintApp : BlueprintAppDataModel;

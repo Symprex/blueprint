@@ -1,0 +1,52 @@
+<Project>
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <OutputPath>bin\$(Configuration)\</OutputPath>
+    <MSBuildWarningsAsMessages>NETSDK1069</MSBuildWarningsAsMessages>
+
+    <PackageId>$(AssemblyName)</PackageId>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/barclayadam/blueprint</PackageProjectUrl>
+    <PackageReleaseNotes>See https://github.com/barclayadam/blueprint/releases for more info</PackageReleaseNotes>
+    <PackageBaseTags>API;CQRS;Blueprint;Rest</PackageBaseTags>
+
+    <IsPackable>true</IsPackable>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+
+    <CodeAnalysisRuleset>$(MSBuildThisFileDirectory)Rules.ruleset</CodeAnalysisRuleset>
+    <CodeAnalysisDictionary>$(MSBuildThisFileDirectory)CustomDictionary.xml</CodeAnalysisDictionary>
+
+    <DefineConstants>$(DefineConstants);JETBRAINS_ANNOTATIONS</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="StyleCop.Analyzers" Version="1.2.0-beta.556" PrivateAssets="All" IncludeAssets="runtime; build; native; contentfiles; analyzers"/>
+
+    <AdditionalFiles Include="$(MSBuildThisFileDirectory)Stylecop.json">
+      <Link>Stylecop.json</Link>
+    </AdditionalFiles>
+
+    <AdditionalFiles Include="$(MSBuildThisFileDirectory)Rules.ruleset">
+      <Link>Rules.ruleset</Link>
+    </AdditionalFiles>
+  </ItemGroup>
+
+  <!-- Only required during CI builds -->
+  <PropertyGroup Condition="'$(GITHUB_ACTIONS)' == 'true'">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>portable</DebugType>
+    
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+    <MinVerTagPrefix>v</MinVerTagPrefix>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(GITHUB_ACTIONS)' == 'true'">
+    <PackageReference Include="MinVer" Version="5.0.0" PrivateAssets="All" IncludeAssets="runtime; build; native; contentfiles; analyzers; buildtransitive"/>
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.1.0-beta-20204-02" PrivateAssets="All" IncludeAssets="runtime; build; native; contentfiles; analyzers"/>
+  </ItemGroup>
+</Project>

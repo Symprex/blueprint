@@ -1,0 +1,13 @@
+﻿Blueprint.SourceGenerator\Blueprint.SourceGenerator.ApiResources.ApiResourceSourceGenerator\UserMembershipApiResource_ObjectProperty.g.cs:
+
+namespace TestNamespace
+{
+    /// <remarks>
+    /// The object type of this resource is "userMembership".
+    /// </remarks>
+    public partial class UserMembershipApiResource
+    {
+        public override string Object => "userMembership";
+    }
+}
+

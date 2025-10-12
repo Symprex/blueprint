@@ -1,0 +1,13 @@
+﻿Blueprint.SourceGenerator\Blueprint.SourceGenerator.ApiResources.ApiResourceSourceGenerator\TestResource_ObjectProperty.g.cs:
+
+namespace TestNamespace
+{
+    /// <remarks>
+    /// The object type of this resource is "test".
+    /// </remarks>
+    public partial class TestResource
+    {
+        public override string Object => "test";
+    }
+}
+

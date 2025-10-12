@@ -1,0 +1,39 @@
+﻿File: Input0.cs
+using Blueprint.Model;
+using Blueprint.Model.Attributes;
+
+namespace TestNamespace;
+
+[SelfLink(typeof(ApiResourceWithProps), "/operations/a/{Id}")]
+                                        ^^^^^^^^^^^^^^^^^^^^ [Error:BPLG002] The URL '/operations/a/{Id}' has already been registered with other operations: 'TestNamespace.OperationB, TestNamespace.OperationC'
+public class OperationA : IOperation 
+{
+    public string Id { get; set; }
+}
+
+[SelfLink(typeof(ApiResourceWithProps), "/operations/a/{ResourceId}")]
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [Error:BPLG002] The URL '/operations/a/{ResourceId}' has already been registered with other operations: 'TestNamespace.OperationA, TestNamespace.OperationC'
+public class OperationB : IOperation
+{
+    public string ResourceId { get; set; }
+}
+
+[SelfLink(typeof(ApiResourceWithProps), "/operations/a/{Id:ResourceId}")]
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [Error:BPLG002] The URL '/operations/a/{Id}' has already been registered with other operations: 'TestNamespace.OperationA, TestNamespace.OperationB'
+public class OperationC : IOperation
+{
+    public string Id { get; set; }
+}
+
+public class ApiResourceWithProps : ApiResource 
+{
+    // Not auto-generated because we are not running that generator
+    public override string Object => "resource";
+    
+    public string Id { get; set; } = null!;
+
+    public string ResourceId { get; set; } = null!;
+}
+
+[BlueprintAppScan]
+public partial class TestBlueprintApp : BlueprintAppDataModel;

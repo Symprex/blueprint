@@ -1,0 +1,9 @@
+﻿namespace Blueprint.Tests;
+
+/// <summary>
+/// This is a generated attribute.
+/// </summary>
+/// <param name="url">The route for this link, may contain placeholders.</param>
+[System.AttributeUsage(System.AttributeTargets.Class, AllowMultiple = false, Inherited = true)]
+// MarkerAttribute
+internal sealed class GeneratedAttribute(System.String url) : global::System.Attribute;

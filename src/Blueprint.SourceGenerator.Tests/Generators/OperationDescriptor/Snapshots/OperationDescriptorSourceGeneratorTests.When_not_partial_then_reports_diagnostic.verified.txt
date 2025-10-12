@@ -1,0 +1,8 @@
+﻿File: Input0.cs
+using Blueprint.Model;
+using Blueprint.Model.Attributes;
+
+namespace TestNamespace;
+
+public class NotPartialOperation : IOperation {}
+             ^^^^^^^^^^^^^^^^^^^ [Error:BP005] The class 'NotPartialOperation' must be partial

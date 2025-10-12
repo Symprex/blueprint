@@ -1,0 +1,8 @@
+﻿namespace Blueprint.Tests;
+
+/// <summary>
+/// This is a generated attribute.
+/// </summary>
+[System.AttributeUsage(System.AttributeTargets.Class, AllowMultiple = false, Inherited = true)]
+// MarkerAttribute
+internal sealed class GeneratedAttribute() : global::System.Attribute;

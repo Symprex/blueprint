@@ -1,0 +1,35 @@
+<Project>
+  <PropertyGroup>
+    <TypeScriptCompileBlocked>true</TypeScriptCompileBlocked>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <Authors>Symprex Limited</Authors>
+    <Company>Symprex Limited</Company>
+    <Copyright>2023 Symprex Limited</Copyright>
+    <Product>Symprex Signature 365</Product>
+
+    <DefineConstants>$(DefineConstants);JETBRAINS_ANNOTATIONS</DefineConstants>
+
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <Nullable>enable</Nullable>
+    <LangVersion>preview</LangVersion>
+
+    <ImplicitUsings>enable</ImplicitUsings>
+
+    <!-- We do not want to turn vulnerable package warnings in to errors. We will manage vulnerabilities outside of the
+         build system, especially given a working build one minute can fail the next during a restore, during development
+         causing too much friction. -->
+    <WarningsNotAsErrors>NU1901;NU1902;NU1903;NU1904</WarningsNotAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="JetBrains.Annotations" />
+  </ItemGroup>
+
+  <!-- Test-project specific settings. Including additional global usings -->
+  <ItemGroup Condition="$(MSBuildProjectName.EndsWith('.Tests'))">
+    <Using Include="FluentAssertions" />
+    <Using Include="Xunit" />
+  </ItemGroup>
+</Project>

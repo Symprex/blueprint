@@ -1,0 +1,9 @@
+﻿File: Input0.cs
+using Blueprint.Model;
+using Blueprint.Model.Attributes;
+
+namespace TestNamespace;
+
+[RootLink("/test/{DoesNotExist}")]
+                  ^^^^^^^^^^^^ [Error:BPLG001] A public property 'DoesNotExist' cannot be found on type 'RootLinkOperationWithNoParameters'
+public partial class RootLinkOperationWithNoParameters : IOperation {}
