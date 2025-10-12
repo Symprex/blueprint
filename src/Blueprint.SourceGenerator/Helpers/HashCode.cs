@@ -12,7 +12,7 @@ using System.Runtime.CompilerServices;
 namespace Blueprint.SourceGenerator.Helpers;
 
 /// <summary>
-/// Polyfill for .NET 6 HashCodem required as not available in netstandard 2.0.
+/// Polyfill for .NET 6 HashCode required as not available in netstandard 2.0.
 /// </summary>
 internal struct HashCode
 {

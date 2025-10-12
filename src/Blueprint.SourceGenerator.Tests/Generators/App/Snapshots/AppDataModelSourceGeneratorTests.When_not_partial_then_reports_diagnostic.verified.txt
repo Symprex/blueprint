@@ -1,0 +1,11 @@
+﻿File: Input0.cs
+using Blueprint.Model;
+using Blueprint.Model.Attributes;
+
+namespace TestNamespace;
+
+[BlueprintAppScan]
+public class TestBlueprintApp : BlueprintApp
+             ^^^^^^^^^^^^^^^^ [Error:BP002] The class 'TestBlueprintApp' must be partial to generate data model registrations
+{
+}

@@ -9,12 +9,12 @@ public class BlueprintRuntimeModel
 {
     private readonly Dictionary<Type, IOperationExecutorPipeline> _allOperations = new();
 
-    public BlueprintRuntimeModel(BlueprintAppDataModel appDataModel)
+    public BlueprintRuntimeModel(BlueprintApp app)
     {
-        this.AppDataModel = appDataModel;
+        this.App = app;
     }
 
-    public BlueprintAppDataModel AppDataModel { get; }
+    public BlueprintApp App { get; }
 
     /// <summary>
     /// Registers the given operation descriptor.

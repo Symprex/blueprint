@@ -1,4 +1,3 @@
-using Blueprint.SourceGenerator.AppDataModel.Model;
 using Microsoft.CodeAnalysis;
 
 namespace Blueprint.SourceGenerator.Helpers;

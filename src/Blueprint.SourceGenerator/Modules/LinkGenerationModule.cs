@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
+using Blueprint.SourceGenerator.Generators.Descriptors;
 using Blueprint.SourceGenerator.Helpers;
-using Blueprint.SourceGenerator.OperationDescription;
 using CodeGenHelpers;
 using Microsoft.CodeAnalysis;
 

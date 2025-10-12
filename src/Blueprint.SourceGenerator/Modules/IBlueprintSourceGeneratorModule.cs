@@ -1,5 +1,5 @@
-using Blueprint.SourceGenerator.AppDataModel;
-using Blueprint.SourceGenerator.OperationDescription;
+using Blueprint.SourceGenerator.Generators.App;
+using Blueprint.SourceGenerator.Generators.Descriptors;
 using CodeGenHelpers;
 using Microsoft.CodeAnalysis;
 

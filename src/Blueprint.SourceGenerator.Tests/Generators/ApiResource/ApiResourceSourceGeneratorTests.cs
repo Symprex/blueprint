@@ -1,4 +1,4 @@
-using Blueprint.SourceGenerator.ApiResources;
+using Blueprint.SourceGenerator.Generators.ApiResources;
 
 namespace Blueprint.SourceGenerator.Tests.Generators.ApiResource
 {

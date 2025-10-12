@@ -3,7 +3,7 @@ using System.Diagnostics;
 namespace Blueprint.Model;
 
 /// <summary>
-/// Attribute to be added to a concrete instance of <See cref="BlueprintAppDataModel"/> to indicate types
+/// Attribute to be added to a concrete instance of <See cref="BlueprintApp"/> to indicate types
 /// to scan and register as operations
 /// </summary>
 [Conditional("CODE_ANALYSIS")]

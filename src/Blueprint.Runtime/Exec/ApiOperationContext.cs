@@ -16,18 +16,18 @@ public class ApiOperationContext
     /// instance.
     /// </summary>
     /// <param name="serviceProvider">The service provider (typically a nested scope) for this context.</param>
-    /// <param name="appDataModel">The data model that represents the API in which this context is being executed.</param>
+    /// <param name="app">The data model that represents the API in which this context is being executed.</param>
     /// <param name="operationDescriptor">A descriptor for the operation that is being executed.</param>
     /// <param name="token">A cancellation token to indicate the operation should stop.</param>
     public ApiOperationContext(
         IServiceProvider serviceProvider,
-        BlueprintAppDataModel appDataModel,
+        BlueprintApp app,
         ApiOperationDescriptor operationDescriptor,
         CancellationToken token)
     {
         this.Descriptor = operationDescriptor;
         this.OperationCancelled = token;
-        this.AppDataModel = appDataModel;
+        this.App = app;
         this.ServiceProvider = serviceProvider;
         this.Operation = operationDescriptor.CreateInstance();
         this.Activity = Activity.Current;
@@ -38,7 +38,7 @@ public class ApiOperationContext
     /// <summary>
     /// Gets the data model for this operation.
     /// </summary>
-    public BlueprintAppDataModel AppDataModel { get; }
+    public BlueprintApp App { get; }
 
     /// <summary>
     /// Gets the operation descriptor that described the operation that is currently being executed.

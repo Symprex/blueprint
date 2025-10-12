@@ -1,4 +1,4 @@
-﻿Blueprint.SourceGenerator\Blueprint.SourceGenerator.ApiResources.ApiResourceSourceGenerator\TestApiResource_ObjectProperty.g.cs:
+﻿Blueprint.SourceGenerator\Blueprint.SourceGenerator.Generators.ApiResources.ApiResourceSourceGenerator\TestApiResource_ObjectProperty.g.cs:
 
 namespace TestNamespace
 {

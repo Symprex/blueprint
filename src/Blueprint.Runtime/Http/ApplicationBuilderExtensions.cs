@@ -57,7 +57,7 @@ public static class EndpointRouteBuilderExtensions
         //     builders.Add(builder);
         // }
 
-        foreach (var operation in runtimeModel.AppDataModel.Operations)
+        foreach (var operation in runtimeModel.App.Operations)
         {
             foreach (var url in operation.Urls)
             {
@@ -127,7 +127,7 @@ public static class EndpointRouteBuilderExtensions
 
             var apiContext = new ApiOperationContext(
                 nestedContainer.ServiceProvider,
-                this._runtimeModel.AppDataModel,
+                this._runtimeModel.App,
                 operation,
                 httpContext.RequestAborted)
             {

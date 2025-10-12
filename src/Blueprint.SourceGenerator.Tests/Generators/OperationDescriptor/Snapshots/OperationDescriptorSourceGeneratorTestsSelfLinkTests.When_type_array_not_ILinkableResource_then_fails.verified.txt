@@ -7,6 +7,7 @@ namespace TestNamespace;
 [SelfLink(typeof(ApiResourceWithoutProps[]), "/operations/a")]
           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [Error:BPLG003] The resource type 'TestNamespace.ApiResourceWithoutProps[]' is not an ILinkableResource. Check the link attributes on 'TestNamespace.OperationA'.
 public partial class OperationA : IOperation {}
+                                  ^^^^^^^^^^ [Error:CS0535] 'OperationA' does not implement interface member 'IOperation.Configure()'
 
 public class ApiResourceWithoutProps : ApiResource 
 {

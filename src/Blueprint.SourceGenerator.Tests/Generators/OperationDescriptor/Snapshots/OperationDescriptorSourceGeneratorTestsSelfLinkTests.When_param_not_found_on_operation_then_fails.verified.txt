@@ -7,6 +7,7 @@ namespace TestNamespace;
 [SelfLink(typeof(ApiResourceWithoutProps), "/operations/a/{DoesNotExist}")]
                                                            ^^^^^^^^^^^^ [Error:BPLG001] A public property 'DoesNotExist' cannot be found on type 'OperationA'
 public partial class OperationA : IOperation {}
+                                  ^^^^^^^^^^ [Error:CS0535] 'OperationA' does not implement interface member 'IOperation.Configure()'
 
 public class ApiResourceWithoutProps : ApiResource 
 {

@@ -26,6 +26,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Generators\AppDataModel\Snapshots\" />
+    <Folder Include="Generators\App\Snapshots\" />
   </ItemGroup>
 </Project>

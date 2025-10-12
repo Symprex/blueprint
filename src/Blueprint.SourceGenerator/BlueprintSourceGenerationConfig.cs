@@ -1,4 +1,4 @@
-using Blueprint.SourceGenerator.AppDataModel;
+using Blueprint.SourceGenerator.Generators.App;
 using Blueprint.SourceGenerator.Modules;
 
 namespace Blueprint.SourceGenerator;
