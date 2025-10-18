@@ -4,7 +4,7 @@ using Blueprint.SourceGenerator.Sample.Contract.Api;
 
 namespace Blueprint.SourceGenerator.Sample;
 
-public class SampleBlueprintAppExecutor : BlueprintRuntimeModel
+public class SampleBlueprintAppExecutor : BlueprintAppExecutor
 {
     public SampleBlueprintAppExecutor()
         : base(new SampleBlueprintApp())

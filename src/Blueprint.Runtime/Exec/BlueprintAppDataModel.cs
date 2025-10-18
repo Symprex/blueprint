@@ -5,11 +5,11 @@ namespace Blueprint;
 /// <summary>
 /// Provides a runtime model for an exposed API, a mapping of descriptors to their associated pipelines..
 /// </summary>
-public class BlueprintRuntimeModel
+public class BlueprintAppExecutor
 {
     private readonly Dictionary<Type, IOperationExecutorPipeline> _allOperations = new();
 
-    public BlueprintRuntimeModel(BlueprintApp app)
+    public BlueprintAppExecutor(BlueprintApp app)
     {
         this.App = app;
     }

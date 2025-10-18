@@ -13,14 +13,14 @@ namespace Microsoft.AspNetCore.Builder;
 public static class EndpointRouteBuilderExtensions
 {
     /// <summary>
-    /// Maps all Blueprint operation endpoints from the given <see cref="BlueprintRuntimeModel" />.
+    /// Maps all Blueprint operation endpoints from the given <see cref="BlueprintAppExecutor" />.
     /// </summary>
     /// <param name="endpoints">The endpoint builder to register with.</param>
     /// <param name="basePath">A base path to prepend to all routes.</param>
     /// <returns>A builder that allows adding metadata / conventions to all mapped endpoints.</returns>
     public static IEndpointConventionBuilder MapBlueprintApi<T>(
         this IEndpointRouteBuilder endpoints,
-        string basePath) where T : BlueprintRuntimeModel, new()
+        string basePath) where T : BlueprintAppExecutor, new()
     {
         // Ensure ends with a slash, but only one
         basePath = basePath.TrimEnd('/') + '/';
@@ -75,20 +75,20 @@ public static class EndpointRouteBuilderExtensions
     private class BlueprintApiRouter
     {
         private readonly IServiceProvider _rootServiceProvider;
-        private readonly BlueprintRuntimeModel _runtimeModel;
+        private readonly BlueprintAppExecutor _appExecutor;
         private readonly ILogger<BlueprintApiRouter> _logger;
         private readonly BlueprintHttpOptions _httpOptions;
         private readonly string _basePath;
 
         public BlueprintApiRouter(
             IServiceProvider rootServiceProvider,
-            BlueprintRuntimeModel runtimeModel,
+            BlueprintAppExecutor appExecutor,
             ILogger<BlueprintApiRouter> logger,
             BlueprintHttpOptions httpOptions,
             string basePath)
         {
             this._rootServiceProvider = rootServiceProvider;
-            this._runtimeModel = runtimeModel;
+            this._appExecutor = appExecutor;
             this._logger = logger;
             this._httpOptions = httpOptions;
             this._basePath = basePath;
@@ -127,7 +127,7 @@ public static class EndpointRouteBuilderExtensions
 
             var apiContext = new ApiOperationContext(
                 nestedContainer.ServiceProvider,
-                this._runtimeModel.App,
+                this._appExecutor.App,
                 operation,
                 httpContext.RequestAborted)
             {
@@ -145,7 +145,7 @@ public static class EndpointRouteBuilderExtensions
             //
             // httpContext.SetBaseUri(baseUri);
 
-            var result = await this._runtimeModel.GetPipeline(operation.OperationType).ExecuteAsync(apiContext);
+            var result = await this._appExecutor.GetPipeline(operation.OperationType).ExecuteAsync(apiContext);
 
             // We want to immediately execute the result to allow it to write to the HTTP response
             await result.ExecuteAsync(apiContext);
