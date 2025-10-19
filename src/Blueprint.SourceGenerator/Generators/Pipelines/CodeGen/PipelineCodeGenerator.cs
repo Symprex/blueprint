@@ -39,7 +39,7 @@ internal static class PipelineCodeGenerator
         writer.FinishBlock(); // End class
         writer.FinishBlock(); // End namespace
 
-        return writer.ToString();
+        return writer.Code();
     }
 
     private static void AddLoggingFields(SourceWriter writer)

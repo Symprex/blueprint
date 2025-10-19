@@ -41,6 +41,6 @@ internal static class ExecutorCodeGenerator
 
         writer.FinishBlock(); // End namespace
 
-        return writer.ToString();
+        return writer.Code();
     }
 }

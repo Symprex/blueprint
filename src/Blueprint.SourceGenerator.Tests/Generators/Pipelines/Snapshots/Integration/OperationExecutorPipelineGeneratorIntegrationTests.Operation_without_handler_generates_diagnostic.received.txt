@@ -1,0 +1,22 @@
+﻿File: Input0.cs
+using Blueprint;
+using Blueprint.Model;
+
+namespace TestNamespace;
+
+[BlueprintAppScan]
+public partial class TestApp : BlueprintApp
+{
+    public TestApp()
+    {
+        this.RegisterOperation<TestQuery>();
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [Error:CS1061] 'TestApp' does not contain a definition for 'RegisterOperation' and no accessible extension method 'RegisterOperation' accepting a first argument of type 'TestApp' could be found (are you missing a using directive or an assembly reference?)
+    }
+}
+
+public class TestQuery : IQuery<string>
+             ^^^^^^^^^ [Error:BP100] The operation 'TestQuery' does not have a handler method
+                         ^^^^^^^^^^^^^^ [Error:CS0535] 'TestQuery' does not implement interface member 'IOperation.Configure()'
+{
+    // No handler method
+}
