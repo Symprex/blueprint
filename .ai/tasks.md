@@ -6,7 +6,7 @@
 {"id": 6, "task": "Implement FindExternalHandler method to search for handlers in separate classes", "area": "Discovery", "status": "done", "dependencies": [3, 4]}
 {"id": 7, "task": "Implement AnalyzeParameters method to determine parameter sources", "area": "Discovery", "status": "done", "dependencies": [3]}
 {"id": 8, "task": "Implement DetermineParameterSource with resolution rules (Operation, Context, ContextProperty, DI)", "area": "Discovery", "status": "done", "dependencies": [7]}
-{"id": 9, "task": "Create OperationExecutorPipelineSourceGenerator with incremental pipeline stages", "area": "Generator", "status": "planned", "dependencies": [3]}
+{"id": 9, "task": "Create OperationExecutorPipelineSourceGenerator with incremental pipeline stages", "area": "Generator", "status": "doing", "dependencies": [3]}
 {"id": 10, "task": "Implement Stage 1: Find BlueprintApp and extract operation registrations", "area": "Generator", "status": "planned", "dependencies": [9]}
 {"id": 11, "task": "Implement Stage 2: For each operation, discover handler using FindInlineHandler and FindExternalHandler", "area": "Generator", "status": "planned", "dependencies": [5, 6, 10]}
 {"id": 12, "task": "Implement Stage 3: Generate pipeline class per operation with proper structure", "area": "CodeGen", "status": "planned", "dependencies": [11]}
