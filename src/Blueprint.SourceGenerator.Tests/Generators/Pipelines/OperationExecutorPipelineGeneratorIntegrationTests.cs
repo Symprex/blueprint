@@ -23,10 +23,6 @@ public class OperationExecutorPipelineGeneratorIntegrationTests
                      [BlueprintAppScan]
                      public partial class TestApp : BlueprintApp
                      {
-                         public TestApp()
-                         {
-                             this.RegisterOperation<TestQuery>();
-                         }
                      }
 
                      public class TestQuery : IQuery<string>
@@ -363,3 +359,4 @@ public class OperationExecutorPipelineGeneratorIntegrationTests
         return TestHelpers.Compile<OperationExecutorPipelineSourceGenerator>(source);
     }
 }
+
