@@ -95,7 +95,11 @@ internal static class ParameterAnalyzer
 
         // Match by parameter name convention (case-insensitive)
         var lowerName = paramName.ToLowerInvariant();
-        return lowerName == "datamodel" || lowerName == "app" || lowerName == "cancellationtoken";
+        return lowerName switch
+        {
+            "datamodel" or "app" or "cancellationtoken" => true,
+            _ => false,
+        };
     }
 
     /// <summary>
@@ -113,8 +117,8 @@ internal static class ParameterAnalyzer
             {
                 "datamodel" or "app" => "App",
                 "cancellationtoken" => "OperationCancelled",
-                _ => "App" // Default fallback
-            }
+                _ => "App", // Default fallback
+            },
         };
     }
 

@@ -1,11 +1,11 @@
 {"id": 1, "task": "Review and finalize plan.md with stakeholder feedback", "area": "Planning", "status": "done", "dependencies": []}
-{"id": 2, "task": "Create data models for handler discovery (OperationHandlerModel, HandlerParameter, enums)", "area": "Models", "status": "planned", "dependencies": [1]}
-{"id": 3, "task": "Implement OperationHandlerModel with equality comparison for incremental generation", "area": "Models", "status": "planned", "dependencies": [2]}
-{"id": 4, "task": "Create diagnostic descriptors for all error and warning cases (BP100-BP103, BP200-BP201)", "area": "Diagnostics", "status": "planned", "dependencies": [1]}
-{"id": 5, "task": "Implement FindInlineHandler method to discover handler methods on operation classes", "area": "Discovery", "status": "planned", "dependencies": [3, 4]}
-{"id": 6, "task": "Implement FindExternalHandler method to search for handlers in separate classes", "area": "Discovery", "status": "planned", "dependencies": [3, 4]}
-{"id": 7, "task": "Implement AnalyzeParameters method to determine parameter sources", "area": "Discovery", "status": "planned", "dependencies": [3]}
-{"id": 8, "task": "Implement DetermineParameterSource with resolution rules (Operation, Context, ContextProperty, DI)", "area": "Discovery", "status": "planned", "dependencies": [7]}
+{"id": 2, "task": "Create data models for handler discovery (OperationHandlerModel, HandlerParameter, enums)", "area": "Models", "status": "done", "dependencies": [1]}
+{"id": 3, "task": "Implement OperationHandlerModel with equality comparison for incremental generation", "area": "Models", "status": "done", "dependencies": [2]}
+{"id": 4, "task": "Create diagnostic descriptors for all error and warning cases (BP100-BP103, BP200-BP201)", "area": "Diagnostics", "status": "done", "dependencies": [1]}
+{"id": 5, "task": "Implement FindInlineHandler method to discover handler methods on operation classes", "area": "Discovery", "status": "done", "dependencies": [3, 4]}
+{"id": 6, "task": "Implement FindExternalHandler method to search for handlers in separate classes", "area": "Discovery", "status": "done", "dependencies": [3, 4]}
+{"id": 7, "task": "Implement AnalyzeParameters method to determine parameter sources", "area": "Discovery", "status": "done", "dependencies": [3]}
+{"id": 8, "task": "Implement DetermineParameterSource with resolution rules (Operation, Context, ContextProperty, DI)", "area": "Discovery", "status": "done", "dependencies": [7]}
 {"id": 9, "task": "Create OperationExecutorPipelineSourceGenerator with incremental pipeline stages", "area": "Generator", "status": "planned", "dependencies": [3]}
 {"id": 10, "task": "Implement Stage 1: Find BlueprintApp and extract operation registrations", "area": "Generator", "status": "planned", "dependencies": [9]}
 {"id": 11, "task": "Implement Stage 2: For each operation, discover handler using FindInlineHandler and FindExternalHandler", "area": "Generator", "status": "planned", "dependencies": [5, 6, 10]}

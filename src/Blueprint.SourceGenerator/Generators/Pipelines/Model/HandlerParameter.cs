@@ -42,6 +42,6 @@ public sealed record HandlerParameter(
     /// <inheritdoc />
     public override int GetHashCode()
     {
-        return HashCode.Combine(this.ParameterName, this.ParameterTypeName, this.Source, this.ContextPropertyName);
+        return System.HashCode.Combine(this.ParameterName, this.ParameterTypeName, this.Source, this.ContextPropertyName);
     }
 }

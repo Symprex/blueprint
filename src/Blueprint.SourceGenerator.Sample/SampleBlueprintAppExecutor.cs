@@ -13,3 +13,5 @@ public class SampleBlueprintAppExecutor : BlueprintAppExecutor
         this.Register(typeof(GetTemplatesQuery), new DelegatePipeline(c => Task.FromResult<OperationResult>(new OkResult(new GetTemplatesQueryHandler().HandleAsync((GetTemplatesQuery)c.Operation)))));
     }
 }
+
+

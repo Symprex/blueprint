@@ -78,7 +78,7 @@ public sealed record OperationHandlerModel(
     /// <inheritdoc />
     public override int GetHashCode()
     {
-        var hash = new HashCode();
+        var hash = default(System.HashCode);
         hash.Add(this.OperationTypeName);
         hash.Add(this.OperationTypeFullName);
         hash.Add(this.OperationNamespace);

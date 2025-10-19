@@ -17,11 +17,11 @@ internal static class DiagnosticDescriptors
     public static readonly DiagnosticDescriptor NoHandlerFound = new(
         id: "BP100",
         title: "No handler found for operation",
-        messageFormat: "The operation '{0}' does not have a handler method. Add a method named 'Handle', 'HandleAsync', 'Invoke', or 'InvokeAsync' either on the operation class or in a separate handler class.",
+        messageFormat: "The operation '{0}' does not have a handler method",
         category: Category,
         DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "Operations must have a handler method to be executed. The handler can be inline (on the operation class) or external (in a separate handler class).");
+        description: "Operations must have a handler method to be executed. The handler can be inline (on the operation class) or external (in a separate handler class). Add a method named 'Handle', 'HandleAsync', 'Invoke', or 'InvokeAsync'.");
 
     /// <summary>
     /// BP101: Multiple handlers found for operation.
@@ -29,7 +29,7 @@ internal static class DiagnosticDescriptors
     public static readonly DiagnosticDescriptor MultipleHandlersFound = new(
         id: "BP101",
         title: "Multiple handlers found for operation",
-        messageFormat: "The operation '{0}' has multiple handlers. Only one handler method is allowed per operation. Found handlers: {1}",
+        messageFormat: "The operation '{0}' has multiple handlers: {1}",
         category: Category,
         DiagnosticSeverity.Error,
         isEnabledByDefault: true,
@@ -53,11 +53,11 @@ internal static class DiagnosticDescriptors
     public static readonly DiagnosticDescriptor UnresolvableParameter = new(
         id: "BP103",
         title: "Handler parameter cannot be resolved",
-        messageFormat: "The parameter '{0}' of type '{1}' in handler '{2}' cannot be resolved. Ensure it's available in ApiOperationContext or registered in DI.",
+        messageFormat: "The parameter '{0}' of type '{1}' in handler '{2}' cannot be resolved",
         category: Category,
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
-        description: "Handler parameters must be resolvable from the ApiOperationContext, its properties, or the dependency injection container.");
+        description: "Handler parameters must be resolvable from the ApiOperationContext, its properties, or the dependency injection container. Ensure the parameter type is available in ApiOperationContext or registered in DI.");
 
     /// <summary>
     /// BP104: Handler class must be partial if generating pipeline.
@@ -79,7 +79,7 @@ internal static class DiagnosticDescriptors
     public static readonly DiagnosticDescriptor HandlerShouldBeAsync = new(
         id: "BP200",
         title: "Handler method should be async",
-        messageFormat: "The handler method '{0}' should return Task or Task<T> for better performance and to avoid blocking operations",
+        messageFormat: "The handler method '{0}' should return Task or Task<T> for better performance",
         category: Category,
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
@@ -91,11 +91,11 @@ internal static class DiagnosticDescriptors
     public static readonly DiagnosticDescriptor ConsiderStaticHandler = new(
         id: "BP201",
         title: "Consider making inline handler static",
-        messageFormat: "The inline handler '{0}' doesn't use instance state. Consider making it static for better performance",
+        messageFormat: "The inline handler '{0}' doesn't use instance state",
         category: Category,
         DiagnosticSeverity.Info,
         isEnabledByDefault: true,
-        description: "Static handlers avoid allocating the operation instance when not needed, improving performance.");
+        description: "Static handlers avoid allocating the operation instance when not needed, improving performance. Consider making it static for better performance.");
 
     /// <summary>
     /// BP202: External handler class not found in current compilation.
