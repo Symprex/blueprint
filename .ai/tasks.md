@@ -23,9 +23,9 @@
 {"id": 23, "task": "Add behaviour injection point comments in generated code", "area": "CodeGen", "status": "planned", "dependencies": [15]}
 {"id": 24, "task": "Implement Stage 4: Generate BlueprintAppExecutor with all pipeline registrations", "area": "CodeGen", "status": "planned", "dependencies": [12]}
 {"id": 25, "task": "Generate executor constructor with all pipeline dependencies", "area": "CodeGen", "status": "planned", "dependencies": [24]}
-{"id": 26, "task": "Generate Register calls for all discovered operation-pipeline pairs", "area": "CodeGen", "status": "planned", "dependencies": [25]}
-{"id": 28, "task": "Write unit tests for FindInlineHandler (static, instance, async, sync)", "area": "Tests", "status": "planned", "dependencies": [5]}
-{"id": 29, "task": "Write unit tests for FindExternalHandler", "area": "Tests", "status": "planned", "dependencies": [6]}
+{"id": 26, "task": "Generate Register calls for all discovered operation-pipeline pairs", "area": "CodeGen", "status": "done", "dependencies": [25]}
+{"id": 28, "task": "Write unit tests for FindInlineHandler (static, instance, async, sync)", "area": "Tests", "status": "done", "dependencies": [5]}
+{"id": 29, "task": "Write unit tests for FindExternalHandler", "area": "Tests", "status": "done", "dependencies": [6]}
 {"id": 29, "task": "Write unit tests for AnalyzeParameters with all parameter sources", "area": "Tests", "status": "planned", "dependencies": [7, 8]}
 {"id": 30, "task": "Write unit tests for diagnostic emission (no handler, multiple handlers)", "area": "Tests", "status": "planned", "dependencies": [4, 11]}
 {"id": 31, "task": "Write snapshot tests for inline handler pipeline generation", "area": "Tests", "status": "planned", "dependencies": [17, 20, 21]}

@@ -7,7 +7,7 @@ namespace Blueprint.SourceGenerator.Generators.Pipelines;
 /// <summary>
 /// Discovers handlers for operations, both inline (on the operation class) and external (separate handler classes).
 /// </summary>
-internal static class HandlerDiscovery
+public static class HandlerDiscovery
 {
     /// <summary>
     /// Attempts to find a handler for the given operation type.
@@ -20,17 +20,29 @@ internal static class HandlerDiscovery
         Compilation compilation)
     {
         // First, try to find an inline handler
-        var inlineResult = FindInlineHandler(operationType);
-        if (inlineResult.Value != null)
+        var (inlineValue, inlineDiagnostic) = FindInlineHandler(operationType);
+        if (inlineDiagnostic != null)
         {
-            return Result.Success(inlineResult.Value);
+            // Multiple inline handlers or other error
+            return Result<OperationHandlerModel>.Failure(inlineDiagnostic);
+        }
+
+        if (inlineValue != null)
+        {
+            return Result.Success(inlineValue);
         }
 
         // If no inline handler, search for external handler
-        var externalResult = FindExternalHandler(operationType, compilation);
-        if (externalResult.Value != null)
+        var (externalValue, externalDiagnostic) = FindExternalHandler(operationType, compilation);
+        if (externalDiagnostic != null)
         {
-            return Result.Success(externalResult.Value);
+            // Multiple external handlers or other error
+            return Result<OperationHandlerModel>.Failure(externalDiagnostic);
+        }
+
+        if (externalValue != null)
+        {
+            return Result.Success(externalValue);
         }
 
         // No handler found - create diagnostic

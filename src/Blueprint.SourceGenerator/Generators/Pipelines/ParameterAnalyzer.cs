@@ -7,7 +7,7 @@ namespace Blueprint.SourceGenerator.Generators.Pipelines;
 /// <summary>
 /// Helper class for analyzing handler method parameters and determining how they should be resolved.
 /// </summary>
-internal static class ParameterAnalyzer
+public static class ParameterAnalyzer
 {
     /// <summary>
     /// Well-known handler method names.

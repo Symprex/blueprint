@@ -9,7 +9,7 @@ namespace Blueprint.SourceGenerator.Helpers;
 /// <param name="Value">The value of the result.</param>
 /// <param name="Diagnostics">Any diagnostics that must be reported.</param>
 /// <typeparam name="TValue">The result type.</typeparam>
-internal sealed record Result<TValue>(TValue? Value, EquatableList<DiagnosticInfo> Diagnostics)
+public sealed record Result<TValue>(TValue? Value, EquatableList<DiagnosticInfo> Diagnostics)
     where TValue : IEquatable<TValue>?
 {
     /// <summary>
