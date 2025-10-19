@@ -16,11 +16,11 @@
 {"id": 16, "task": "Generate handler parameter resolution code (operation, context, DI)", "area": "CodeGen", "status": "done", "dependencies": [8, 15]}
 {"id": 17, "task": "Generate handler invocation code for inline handlers (static and instance)", "area": "CodeGen", "status": "done", "dependencies": [16]}
 {"id": 18, "task": "Generate handler invocation code for external handlers with ActivatorUtilities fallback", "area": "CodeGen", "status": "done", "dependencies": [16]}
-{"id": 19, "task": "Implement compile-time base class property analysis with caching per type", "area": "CodeGen", "status": "planned", "dependencies": [18]}
-{"id": 20, "task": "Generate base class property setup for external handlers (Context, Logger, etc.)", "area": "CodeGen", "status": "planned", "dependencies": [19]}
+{"id": 19, "task": "Implement compile-time base class property analysis with caching per type", "area": "CodeGen", "status": "done", "dependencies": [18]}
+{"id": 20, "task": "Generate base class property setup for external handlers (Context, Logger, etc.)", "area": "CodeGen", "status": "done", "dependencies": [19]}
 {"id": 21, "task": "Generate exception handling (ValidationException, ApiException, unhandled)", "area": "CodeGen", "status": "done", "dependencies": [15]}
 {"id": 22, "task": "Generate activity tagging for telemetry (status codes, error descriptions)", "area": "CodeGen", "status": "done", "dependencies": [21]}
-{"id": 23, "task": "Add behaviour injection point comments in generated code", "area": "CodeGen", "status": "planned", "dependencies": [15]}
+{"id": 23, "task": "Add behaviour injection point comments in generated code", "area": "CodeGen", "status": "done", "dependencies": [15]}
 {"id": 24, "task": "Implement Stage 4: Generate BlueprintAppExecutor with all pipeline registrations", "area": "CodeGen", "status": "done", "dependencies": [12]}
 {"id": 25, "task": "Generate executor constructor with all pipeline dependencies", "area": "CodeGen", "status": "done", "dependencies": [24]}
 {"id": 26, "task": "Generate Register calls for all discovered operation-pipeline pairs", "area": "CodeGen", "status": "done", "dependencies": [25]}
@@ -31,8 +31,8 @@
 {"id": 31, "task": "Write snapshot tests for inline handler pipeline generation", "area": "Tests", "status": "planned", "dependencies": [17, 20, 21]}
 {"id": 32, "task": "Write snapshot tests for external handler pipeline generation", "area": "Tests", "status": "planned", "dependencies": [18, 19, 20, 21]}
 {"id": 33, "task": "Write snapshot tests for executor generation", "area": "Tests", "status": "planned", "dependencies": [25]}
-{"id": 34, "task": "Write integration test: compile sample with inline query handler", "area": "Tests", "status": "planned", "dependencies": [30]}
-{"id": 35, "task": "Write integration test: compile sample with external command handler", "area": "Tests", "status": "planned", "dependencies": [31]}
+{"id": 34, "task": "Write integration test: compile sample with inline query handler", "area": "Tests", "status": "done", "dependencies": [30]}
+{"id": 35, "task": "Write integration test: compile sample with external command handler", "area": "Tests", "status": "done", "dependencies": [31]}
 {"id": 36, "task": "Write integration test: execute operation through generated pipeline", "area": "Tests", "status": "planned", "dependencies": [33, 34]}
 {"id": 37, "task": "Update sample project to use generated executor instead of manual DelegatePipeline", "area": "Sample", "status": "planned", "dependencies": [35]}
 {"id": 38, "task": "Add example inline handler to sample project", "area": "Sample", "status": "planned", "dependencies": [36]}
