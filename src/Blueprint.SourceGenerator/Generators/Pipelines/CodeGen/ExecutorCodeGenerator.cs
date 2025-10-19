@@ -1,5 +1,5 @@
 using Blueprint.SourceGenerator.Generators.Pipelines.Model;
-using CodeGenHelpers;
+using Blueprint.SourceGenerator.Helpers;
 
 namespace Blueprint.SourceGenerator.Generators.Pipelines;
 
@@ -13,28 +13,46 @@ internal static class ExecutorCodeGenerator
     /// </summary>
     public static string GenerateExecutor(PipelineCompilationModel model)
     {
-        var codeBuilder = CodeBuilder.Create(model.AppNamespace);
+        var writer = new SourceWriter();
 
-        var executorClass = codeBuilder.AddClass($"{model.AppTypeName}Executor")
-            .MakePartial()
-            .WithAccessModifier(Accessibility.Public)
-            .SetBaseClass("Blueprint.BlueprintAppExecutor");
+        // Namespace
+        writer.AppendLine($"namespace {model.AppNamespace}");
+        writer.AppendLine("{");
+        writer.Indent();
 
-        // Add constructor with all registrations
-        executorClass.AddConstructor()
-            .WithAccessModifier(Accessibility.Public)
-            .AddParameter("Microsoft.Extensions.Logging.ILoggerFactory", "loggerFactory")
-            .AddParameter($"{model.AppNamespace}.{model.AppTypeName}", "app")
-            .WithBaseCall(new Dictionary<string, string> { { "app", "app" } })
-            .WithBody(b =>
-            {
-                foreach (var handler in model.Handlers)
-                {
-                    var pipelineType = $"Blueprint.Generated.{handler.PipelineClassName}";
-                    b.AppendLine($"this.Register(typeof({handler.OperationTypeFullName}), new {pipelineType}(loggerFactory));");
-                }
-            });
+        // Class declaration
+        writer.AppendLine($"public partial class {model.AppTypeName}Executor : Blueprint.BlueprintAppExecutor");
+        writer.AppendLine("{");
+        writer.Indent();
 
-        return codeBuilder.Build();
+        // Constructor
+        writer.AppendLine($"public {model.AppTypeName}Executor(");
+        writer.Indent();
+        writer.AppendLine("Microsoft.Extensions.Logging.ILoggerFactory loggerFactory,");
+        writer.AppendLine($"{model.AppNamespace}.{model.AppTypeName} app)");
+        writer.Unindent();
+        writer.Indent();
+        writer.AppendLine(": base(app)");
+        writer.Unindent();
+        writer.AppendLine("{");
+        writer.Indent();
+
+        // Register all pipelines
+        foreach (var handler in model.Handlers)
+        {
+            var pipelineType = $"Blueprint.Generated.{handler.PipelineClassName}";
+            writer.AppendLine($"this.Register(typeof({handler.OperationTypeFullName}), new {pipelineType}(loggerFactory));");
+        }
+
+        writer.Unindent();
+        writer.AppendLine("}");
+
+        writer.Unindent();
+        writer.AppendLine("}");
+
+        writer.Unindent();
+        writer.AppendLine("}");
+
+        return writer.ToString();
     }
 }
