@@ -7,22 +7,22 @@
 {"id": 7, "task": "Implement AnalyzeParameters method to determine parameter sources", "area": "Discovery", "status": "done", "dependencies": [3]}
 {"id": 8, "task": "Implement DetermineParameterSource with resolution rules (Operation, Context, ContextProperty, DI)", "area": "Discovery", "status": "done", "dependencies": [7]}
 {"id": 9, "task": "Create OperationExecutorPipelineSourceGenerator with incremental pipeline stages", "area": "Generator", "status": "done", "dependencies": [3]}
-{"id": 10, "task": "Implement Stage 1: Find BlueprintApp and extract operation registrations", "area": "Generator", "status": "planned", "dependencies": [9]}
-{"id": 11, "task": "Implement Stage 2: For each operation, discover handler using FindInlineHandler and FindExternalHandler", "area": "Generator", "status": "planned", "dependencies": [5, 6, 10]}
-{"id": 12, "task": "Implement Stage 3: Generate pipeline class per operation with proper structure", "area": "CodeGen", "status": "planned", "dependencies": [11]}
-{"id": 13, "task": "Generate pipeline constructor with ILoggerFactory and required dependencies", "area": "CodeGen", "status": "planned", "dependencies": [12]}
-{"id": 14, "task": "Generate LoggerMessage.Define static fields for structured logging", "area": "CodeGen", "status": "planned", "dependencies": [12]}
-{"id": 15, "task": "Generate ExecuteAsync method with activity tracing setup", "area": "CodeGen", "status": "planned", "dependencies": [12]}
-{"id": 16, "task": "Generate handler parameter resolution code (operation, context, DI)", "area": "CodeGen", "status": "planned", "dependencies": [8, 15]}
-{"id": 17, "task": "Generate handler invocation code for inline handlers (static and instance)", "area": "CodeGen", "status": "planned", "dependencies": [16]}
-{"id": 18, "task": "Generate handler invocation code for external handlers with ActivatorUtilities fallback", "area": "CodeGen", "status": "planned", "dependencies": [16]}
+{"id": 10, "task": "Implement Stage 1: Find BlueprintApp and extract operation registrations", "area": "Generator", "status": "done", "dependencies": [9]}
+{"id": 11, "task": "Implement Stage 2: For each operation, discover handler using FindInlineHandler and FindExternalHandler", "area": "Generator", "status": "done", "dependencies": [5, 6, 10]}
+{"id": 12, "task": "Implement Stage 3: Generate pipeline class per operation with proper structure", "area": "CodeGen", "status": "done", "dependencies": [11]}
+{"id": 13, "task": "Generate pipeline constructor with ILoggerFactory and required dependencies", "area": "CodeGen", "status": "done", "dependencies": [12]}
+{"id": 14, "task": "Generate LoggerMessage.Define static fields for structured logging", "area": "CodeGen", "status": "done", "dependencies": [12]}
+{"id": 15, "task": "Generate ExecuteAsync method with activity tracing setup", "area": "CodeGen", "status": "done", "dependencies": [12]}
+{"id": 16, "task": "Generate handler parameter resolution code (operation, context, DI)", "area": "CodeGen", "status": "done", "dependencies": [8, 15]}
+{"id": 17, "task": "Generate handler invocation code for inline handlers (static and instance)", "area": "CodeGen", "status": "done", "dependencies": [16]}
+{"id": 18, "task": "Generate handler invocation code for external handlers with ActivatorUtilities fallback", "area": "CodeGen", "status": "done", "dependencies": [16]}
 {"id": 19, "task": "Implement compile-time base class property analysis with caching per type", "area": "CodeGen", "status": "planned", "dependencies": [18]}
 {"id": 20, "task": "Generate base class property setup for external handlers (Context, Logger, etc.)", "area": "CodeGen", "status": "planned", "dependencies": [19]}
-{"id": 21, "task": "Generate exception handling (ValidationException, ApiException, unhandled)", "area": "CodeGen", "status": "planned", "dependencies": [15]}
-{"id": 22, "task": "Generate activity tagging for telemetry (status codes, error descriptions)", "area": "CodeGen", "status": "planned", "dependencies": [21]}
+{"id": 21, "task": "Generate exception handling (ValidationException, ApiException, unhandled)", "area": "CodeGen", "status": "done", "dependencies": [15]}
+{"id": 22, "task": "Generate activity tagging for telemetry (status codes, error descriptions)", "area": "CodeGen", "status": "done", "dependencies": [21]}
 {"id": 23, "task": "Add behaviour injection point comments in generated code", "area": "CodeGen", "status": "planned", "dependencies": [15]}
-{"id": 24, "task": "Implement Stage 4: Generate BlueprintAppExecutor with all pipeline registrations", "area": "CodeGen", "status": "planned", "dependencies": [12]}
-{"id": 25, "task": "Generate executor constructor with all pipeline dependencies", "area": "CodeGen", "status": "planned", "dependencies": [24]}
+{"id": 24, "task": "Implement Stage 4: Generate BlueprintAppExecutor with all pipeline registrations", "area": "CodeGen", "status": "done", "dependencies": [12]}
+{"id": 25, "task": "Generate executor constructor with all pipeline dependencies", "area": "CodeGen", "status": "done", "dependencies": [24]}
 {"id": 26, "task": "Generate Register calls for all discovered operation-pipeline pairs", "area": "CodeGen", "status": "done", "dependencies": [25]}
 {"id": 28, "task": "Write unit tests for FindInlineHandler (static, instance, async, sync)", "area": "Tests", "status": "done", "dependencies": [5]}
 {"id": 29, "task": "Write unit tests for FindExternalHandler", "area": "Tests", "status": "done", "dependencies": [6]}
