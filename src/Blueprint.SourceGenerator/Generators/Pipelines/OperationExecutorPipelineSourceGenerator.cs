@@ -23,13 +23,12 @@ public sealed partial class OperationExecutorPipelineSourceGenerator : IIncremen
         var appProvider = context.SyntaxProvider.ForAttributeWithMetadataName(
                 "Blueprint.Model.BlueprintAppScanAttribute",
                 predicate: static (syntaxNode, _) => syntaxNode is ClassDeclarationSyntax,
-                transform: static (context, _) => ParseBlueprintApp(context))
-            .Where(method => method != null)
+                transform: static (context, _) => ParseBlueprintApp(context)!)
             .WithTrackingName(Stages.FindBlueprintApp);
 
         // Stage 2: Combine with compilation to get operation types
-        var combinedProvider = appProvider.Combine(context.CompilationProvider)
-            .WithComparer(CombinedProviderComparer<Result<AppInfo>>.Instance)
+        var combinedProvider = appProvider
+            .Combine(context.CompilationProvider)
             .WithTrackingName(Stages.CombineWithCompilation);
 
         // Stage 3: Find handlers for all operations

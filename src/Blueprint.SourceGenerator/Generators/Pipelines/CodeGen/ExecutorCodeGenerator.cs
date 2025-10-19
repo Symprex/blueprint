@@ -16,42 +16,30 @@ internal static class ExecutorCodeGenerator
         var writer = new SourceWriter();
 
         // Namespace
-        writer.AppendLine($"namespace {model.AppNamespace}");
-        writer.AppendLine("{");
-        writer.Indent();
+        writer.Block($"namespace {model.AppNamespace}");
 
         // Class declaration
-        writer.AppendLine($"public partial class {model.AppTypeName}Executor : Blueprint.BlueprintAppExecutor");
-        writer.AppendLine("{");
-        writer.Indent();
+        writer.Block($"public partial class {model.AppTypeName}Executor : Blueprint.BlueprintAppExecutor");
 
-        // Constructor
-        writer.AppendLine($"public {model.AppTypeName}Executor(");
-        writer.Indent();
-        writer.AppendLine("Microsoft.Extensions.Logging.ILoggerFactory loggerFactory,");
-        writer.AppendLine($"{model.AppNamespace}.{model.AppTypeName} app)");
-        writer.Unindent();
-        writer.Indent();
-        writer.AppendLine(": base(app)");
-        writer.Unindent();
-        writer.AppendLine("{");
-        writer.Indent();
+        // Constructor - need special formatting for multi-line signature
+        writer.Indent().Append($"public {model.AppTypeName}Executor(").Append(SourceWriter.NewLine);
+        writer.Indent().Indent().Append("Microsoft.Extensions.Logging.ILoggerFactory loggerFactory,").Append(SourceWriter.NewLine);
+        writer.Indent().Indent().Append($"{model.AppNamespace}.{model.AppTypeName} app)").Append(SourceWriter.NewLine);
+        writer.Indent().Indent().Append(": base(app)").Append(SourceWriter.NewLine);
+        writer.Block(string.Empty); // Start constructor body
 
         // Register all pipelines
         foreach (var handler in model.Handlers)
         {
             var pipelineType = $"Blueprint.Generated.{handler.PipelineClassName}";
-            writer.AppendLine($"this.Register(typeof({handler.OperationTypeFullName}), new {pipelineType}(loggerFactory));");
+            writer.WriteLine($"this.Register(typeof({handler.OperationTypeFullName}), new {pipelineType}(loggerFactory));");
         }
 
-        writer.Unindent();
-        writer.AppendLine("}");
+        writer.FinishBlock(); // End constructor
 
-        writer.Unindent();
-        writer.AppendLine("}");
+        writer.FinishBlock(); // End class
 
-        writer.Unindent();
-        writer.AppendLine("}");
+        writer.FinishBlock(); // End namespace
 
         return writer.ToString();
     }
