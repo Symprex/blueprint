@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <Nullable>enable</Nullable>
+    <LangVersion>preview</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Vendored upstream formatting is preserved in phase 1; suppress StyleCop drift until phase 2 hardening. -->
+    <NoWarn>$(NoWarn);SA1000;SA1005;SA1012;SA1013;SA1025;SA1028;SA1101;SA1110;SA1116;SA1122;SA1201;SA1204;SA1210;SA1214;SA1300;SA1306;SA1312;SA1401;SA1413;SA1500;SA1502;SA1503;SA1507;SA1513;SA1515;SA1516</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Blueprint.SourceGenerator.CodeWriter.Tests" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.9.2" />
+  </ItemGroup>
+</Project>

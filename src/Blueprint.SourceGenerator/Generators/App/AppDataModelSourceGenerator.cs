@@ -1,7 +1,7 @@
 using System.Text;
+using Blueprint.SourceGenerator.CodeWriter;
 using Blueprint.SourceGenerator.Generators.App.Model;
 using Blueprint.SourceGenerator.Helpers;
-using CodeGenHelpers;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;

@@ -1,5 +1,6 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
+# 
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Blueprint.Runtime", "src\Blueprint.Runtime\Blueprint.Runtime.csproj", "{6D8D9B8C-E1EE-4950-A941-1EECF1C80CB4}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Blueprint.Runtime.Model", "src\Blueprint.Runtime.Model\Blueprint.Runtime.Model.csproj", "{CB16EF06-847A-4836-AC90-A26747DD4F04}"
@@ -21,6 +22,12 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "_repo", "_repo", "{35C0E96C
 		global.json = global.json
 		NuGet.config = NuGet.config
 	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{6A6D0D4D-3EAE-4F88-94AD-9ABE41050A24}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Blueprint.SourceGenerator.CodeWriter", "src\Blueprint.SourceGenerator.CodeWriter\Blueprint.SourceGenerator.CodeWriter.csproj", "{AF948AAE-4F61-4D9C-942E-A8F318C61E9D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Blueprint.SourceGenerator.CodeWriter.Tests", "src\Blueprint.SourceGenerator.CodeWriter.Tests\Blueprint.SourceGenerator.CodeWriter.Tests.csproj", "{5110151B-C5D0-4FB3-9622-D3426F0ED32C}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -56,5 +63,17 @@ Global
 		{D9E8CA89-1257-413B-9252-645EE2CBA2F5}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D9E8CA89-1257-413B-9252-645EE2CBA2F5}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{D9E8CA89-1257-413B-9252-645EE2CBA2F5}.Release|Any CPU.Build.0 = Release|Any CPU
+		{AF948AAE-4F61-4D9C-942E-A8F318C61E9D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AF948AAE-4F61-4D9C-942E-A8F318C61E9D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AF948AAE-4F61-4D9C-942E-A8F318C61E9D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AF948AAE-4F61-4D9C-942E-A8F318C61E9D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5110151B-C5D0-4FB3-9622-D3426F0ED32C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5110151B-C5D0-4FB3-9622-D3426F0ED32C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5110151B-C5D0-4FB3-9622-D3426F0ED32C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5110151B-C5D0-4FB3-9622-D3426F0ED32C}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{AF948AAE-4F61-4D9C-942E-A8F318C61E9D} = {6A6D0D4D-3EAE-4F88-94AD-9ABE41050A24}
+		{5110151B-C5D0-4FB3-9622-D3426F0ED32C} = {6A6D0D4D-3EAE-4F88-94AD-9ABE41050A24}
 	EndGlobalSection
 EndGlobal

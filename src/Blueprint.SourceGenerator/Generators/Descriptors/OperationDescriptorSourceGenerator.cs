@@ -1,8 +1,8 @@
 using System.Text;
+using Blueprint.SourceGenerator.CodeWriter;
 using Blueprint.SourceGenerator.Generators.ApiResources;
 using Blueprint.SourceGenerator.Helpers;
 using Blueprint.SourceGenerator.Modules;
-using CodeGenHelpers;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -145,7 +145,7 @@ public sealed class OperationDescriptorSourceGenerator : IIncrementalGenerator, 
                     c.AppendLine($"return new {descriptorClassName}();");
                 });
 
-        // Note that we have to hack around CodeGenHelpers a little to get a base call without constructor arguments. We
+        // Note that we have to hack around Blueprint.SourceGenerator.CodeWriter a little to get a base call without constructor arguments. We
         // pass in an empty dictionary (as it *immediately* uses that to configure the parameters), and THEN after we
         // populate the dictionary because it uses callbacks to grab those when creating the base call.
         var baseParameters = new Dictionary<string, string>();
