@@ -27,7 +27,7 @@ public sealed partial class OperationExecutorPipelineSourceGenerator
                 new DiagnosticInfo(
                     DiagnosticDescriptors.MustBePartial,
                     LocationInfo.CreateFrom(classSymbol.Locations[0]),
-                    new EquatableList<string>(new[] { classSymbol.Name })));
+                    new EquatableList<string>([classSymbol.Name])));
         }
 
         var appInfo = new AppInfo(

@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "skills": {
+    "dotnet-advisor": {
+      "source": "novotnyllc/dotnet-artisan",
+      "sourceType": "github",
+      "computedHash": "9391219f18cb90405661c88584073ae5a452efc1ff4c2c7e7544428e786c67bb"
+    },
+    "dotnet-api": {
+      "source": "novotnyllc/dotnet-artisan",
+      "sourceType": "github",
+      "computedHash": "f31878364230ed6e4368135b25a8477c4e5a4647176cab8d94cd0c2663d87d5b"
+    },
+    "dotnet-csharp": {
+      "source": "novotnyllc/dotnet-artisan",
+      "sourceType": "github",
+      "computedHash": "ab10b21f2eaba7996d64e0813a03e532ff5a011295d7cc91397adff5d291a599"
+    },
+    "dotnet-debugging": {
+      "source": "novotnyllc/dotnet-artisan",
+      "sourceType": "github",
+      "computedHash": "84b565f6540679b01384628664f3ec66e6f19d4ea021b6205cdcfee2bd587e6e"
+    },
+    "dotnet-devops": {
+      "source": "novotnyllc/dotnet-artisan",
+      "sourceType": "github",
+      "computedHash": "6ad9848c6e775b68b9bab0c29359c97e95c4cbd497a96f2ee582bb074ebe465c"
+    },
+    "dotnet-testing": {
+      "source": "novotnyllc/dotnet-artisan",
+      "sourceType": "github",
+      "computedHash": "1dcff934ba62552725480714cb3dd23f25b21057baaaeb5ab10d82a9313a8d84"
+    },
+    "dotnet-tooling": {
+      "source": "novotnyllc/dotnet-artisan",
+      "sourceType": "github",
+      "computedHash": "fd2887cfddf973789f94bb86d2861a9a398f2862687555f22dbf4a4308594c4c"
+    },
+    "dotnet-ui": {
+      "source": "novotnyllc/dotnet-artisan",
+      "sourceType": "github",
+      "computedHash": "57a53430e60aee843c04edafbf8d97123e7102566126f68d3ab8716bae1c89bd"
+    },
+    "using-dotnet": {
+      "source": "novotnyllc/dotnet-artisan",
+      "sourceType": "github",
+      "computedHash": "9ac0c3f10391d6ed42372f54c244d3fcc67dde988c9eee81af0f93819a264e3a"
+    }
+  }
+}

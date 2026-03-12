@@ -171,7 +171,7 @@ internal static class PipelineCodeGenerator
         }
 
         writer.BlankLine();
-        writer.WriteLine("return new Blueprint.OkResult(handlerResult);");
+        writer.WriteLine("return new Blueprint.Runtime.Exec.OkResult(handlerResult);");
     }
 
     private static void AddExceptionHandling(SourceWriter writer)

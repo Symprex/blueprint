@@ -1,5 +1,6 @@
 using Blueprint.Model;
 using Blueprint.Model.Attributes;
+using Blueprint.Runtime.Exec;
 using FluentAssertions;
 
 namespace Blueprint.SourceGenerator.Tests.Integration.Generators.OperationDescriptors;
@@ -26,10 +27,21 @@ public class AppDataModelSourceGeneratorRootLinkTests
 }
 
 [RootLink("/test")]
-public partial class RootLinkOperationWithNoParameters : IOperation;
+public partial class RootLinkOperationWithNoParameters : IOperation
+{
+    public OkResult Handle()
+    {
+        return new OkResult("All OK");
+    }
+}
 
 [RootLink("/test/{Id}")]
 public partial class RootLinkOperationWithParameter : IOperation
 {
     public required string Id { get; init; }
+
+    public OkResult Handle()
+    {
+        return new OkResult("All OK");
+    }
 }
