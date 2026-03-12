@@ -18,9 +18,10 @@ public static class EndpointRouteBuilderExtensions
     /// <param name="endpoints">The endpoint builder to register with.</param>
     /// <param name="basePath">A base path to prepend to all routes.</param>
     /// <returns>A builder that allows adding metadata / conventions to all mapped endpoints.</returns>
-    public static IEndpointConventionBuilder MapBlueprintApi<T>(
+    public static IEndpointConventionBuilder MapBlueprintApi<T, TExec>(
         this IEndpointRouteBuilder endpoints,
-        string basePath) where T : BlueprintAppExecutor, new()
+        string basePath) where T : BlueprintApp, new()
+                         where TExec : BlueprintAppExecutor
     {
         // Ensure ends with a slash, but only one
         basePath = basePath.TrimEnd('/') + '/';
@@ -33,10 +34,10 @@ public static class EndpointRouteBuilderExtensions
 
         // var apiOperationExecutor = endpoints.ServiceProvider.GetRequiredService<IApiOperationExecutor>();
 
-        RequestDelegate requestDelegate = new BlueprintApiRouter(
+        RequestDelegate requestDelegate = new BlueprintApiRouter<TExec>(
             endpoints.ServiceProvider,
             runtimeModel,
-            endpoints.ServiceProvider.GetRequiredService<ILogger<BlueprintApiRouter>>(),
+            endpoints.ServiceProvider.GetRequiredService<ILogger<BlueprintApiRouter<TExec>>>(),
             httpOptions,
             basePath).RouteAsync;
 
@@ -57,7 +58,7 @@ public static class EndpointRouteBuilderExtensions
         //     builders.Add(builder);
         // }
 
-        foreach (var operation in runtimeModel.App.Operations)
+        foreach (var operation in runtimeModel.Operations)
         {
             foreach (var url in operation.Urls)
             {
@@ -72,23 +73,23 @@ public static class EndpointRouteBuilderExtensions
         return new BlueprintEndpointRouteBuilder(builders);
     }
 
-    private class BlueprintApiRouter
+    private class BlueprintApiRouter<TExec> where TExec : BlueprintAppExecutor
     {
         private readonly IServiceProvider _rootServiceProvider;
-        private readonly BlueprintAppExecutor _appExecutor;
-        private readonly ILogger<BlueprintApiRouter> _logger;
+        private readonly BlueprintApp _app;
+        private readonly ILogger<BlueprintApiRouter<TExec>> _logger;
         private readonly BlueprintHttpOptions _httpOptions;
         private readonly string _basePath;
 
         public BlueprintApiRouter(
             IServiceProvider rootServiceProvider,
-            BlueprintAppExecutor appExecutor,
-            ILogger<BlueprintApiRouter> logger,
+            BlueprintApp app,
+            ILogger<BlueprintApiRouter<TExec>> logger,
             BlueprintHttpOptions httpOptions,
             string basePath)
         {
             this._rootServiceProvider = rootServiceProvider;
-            this._appExecutor = appExecutor;
+            this._app = app;
             this._logger = logger;
             this._httpOptions = httpOptions;
             this._basePath = basePath;
@@ -127,7 +128,7 @@ public static class EndpointRouteBuilderExtensions
 
             var apiContext = new ApiOperationContext(
                 nestedContainer.ServiceProvider,
-                this._appExecutor.App,
+                this._app,
                 operation,
                 httpContext.RequestAborted)
             {
@@ -145,7 +146,7 @@ public static class EndpointRouteBuilderExtensions
             //
             // httpContext.SetBaseUri(baseUri);
 
-            var result = await this._appExecutor.GetPipeline(operation.OperationType).ExecuteAsync(apiContext);
+            var result = await nestedContainer.ServiceProvider.GetRequiredService<TExec>().GetPipeline(operation.OperationType).ExecuteAsync(apiContext);
 
             // We want to immediately execute the result to allow it to write to the HTTP response
             await result.ExecuteAsync(apiContext);

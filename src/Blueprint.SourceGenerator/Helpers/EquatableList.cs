@@ -38,6 +38,12 @@ public readonly struct EquatableList<T> : IEquatable<EquatableList<T>>, IEnumera
     public int Count => this._list.Count;
 
     /// <summary>
+    /// Gets the element at the specified index.
+    /// </summary>
+    /// <param name="index">The index of the element to get.</param>
+    public T this[int index] => this._list[index];
+
+    /// <summary>
     /// Checks whether two <see cref="EquatableList{T}"/> values are the same.
     /// </summary>
     /// <param name="left">The first <see cref="EquatableList{T}"/> value.</param>

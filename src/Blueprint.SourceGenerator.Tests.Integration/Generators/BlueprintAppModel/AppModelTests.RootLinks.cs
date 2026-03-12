@@ -1,4 +1,5 @@
 using Blueprint.Model;
+using Blueprint.Runtime.Exec;
 using Blueprint.SourceGenerator.Tests.Integration.Generators.OperationDescriptors;
 using FluentAssertions;
 
@@ -16,4 +17,10 @@ public class AppModelTests
     }
 }
 
-public partial class OperationToScan : IOperation;
+public partial class OperationToScan : IOperation
+{
+    public OkResult Handle()
+    {
+        return new OkResult("All OK");
+    }
+}

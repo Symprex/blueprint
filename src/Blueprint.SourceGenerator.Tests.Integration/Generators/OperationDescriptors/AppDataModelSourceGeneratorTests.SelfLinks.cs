@@ -1,5 +1,6 @@
 using Blueprint.Model;
 using Blueprint.Model.Attributes;
+using Blueprint.Runtime.Exec;
 using FluentAssertions;
 
 namespace Blueprint.SourceGenerator.Tests.Integration.Generators.OperationDescriptors;
@@ -62,7 +63,13 @@ public class AppDataModelSourceGeneratorSelfLinksTests
 }
 
 [SelfLink(typeof(SelfLinkOperationWithNoParametersApiResource), "/self/test")]
-public partial class SelfLinkOperationWithNoParameters : IOperation;
+public partial class SelfLinkOperationWithNoParameters : IOperation
+{
+    public OkResult Handle()
+    {
+        return new OkResult("All OK");
+    }
+}
 
 public partial class SelfLinkOperationWithNoParametersApiResource : ApiResource;
 
@@ -70,6 +77,11 @@ public partial class SelfLinkOperationWithNoParametersApiResource : ApiResource;
 public partial class SelfLinkOperationWithParameter : IOperation
 {
     public required string Id { get; init; }
+
+    public OkResult Handle()
+    {
+        return new OkResult("All OK");
+    }
 }
 
 public partial class SelfLinkOperationWithParameterApiResource : ApiResource
@@ -81,6 +93,11 @@ public partial class SelfLinkOperationWithParameterApiResource : ApiResource
 public partial class SelfLinkOperationWithMatchingParameter : IOperation
 {
     public required string Id { get; init; }
+
+    public OkResult Handle()
+    {
+        return new OkResult("All OK");
+    }
 }
 
 public partial class SelfLinkOperationWithMatchingParameterApiResource : ApiResource
@@ -92,6 +109,11 @@ public partial class SelfLinkOperationWithMatchingParameterApiResource : ApiReso
 public partial class SelfLinkOperationWithMappedParameter : IOperation
 {
     public required string RouteId { get; init; }
+
+    public OkResult Handle()
+    {
+        return new OkResult("All OK");
+    }
 }
 
 public partial class SelfLinkOperationWithMappedParameterApiResource : ApiResource
