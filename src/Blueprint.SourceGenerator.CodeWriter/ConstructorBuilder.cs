@@ -137,6 +137,21 @@ namespace Blueprint.SourceGenerator.CodeWriter
             return this;
         }
 
+        public ConstructorBuilder WithBaseCallArguments(params string[] arguments)
+        {
+            _baseCall = () =>
+            {
+                if (arguments is null || arguments.Length == 0)
+                {
+                    return ": base()";
+                }
+
+                return $": base({string.Join(", ", arguments)})";
+            };
+
+            return this;
+        }
+
         public ConstructorBuilder WithBaseCall(Dictionary<string, string> parameters)
         {
             foreach (var parameter in parameters)

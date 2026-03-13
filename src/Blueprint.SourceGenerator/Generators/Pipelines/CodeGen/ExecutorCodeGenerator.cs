@@ -1,5 +1,5 @@
+using Blueprint.SourceGenerator.CodeWriter;
 using Blueprint.SourceGenerator.Generators.Pipelines.Model;
-using Blueprint.SourceGenerator.Helpers;
 
 namespace Blueprint.SourceGenerator.Generators.Pipelines;
 
@@ -13,34 +13,26 @@ internal static class ExecutorCodeGenerator
     /// </summary>
     public static string GenerateExecutor(PipelineCompilationModel model)
     {
-        var writer = new SourceWriter();
+        var codeBuilder = CodeBuilder.Create(model.AppNamespace);
 
-        // Namespace
-        writer.Block($"namespace {model.AppNamespace}");
+        var classBuilder = codeBuilder.AddClass($"{model.AppTypeName}Executor")
+            .MakePublicClass()
+            .SetBaseClass("Blueprint.BlueprintAppExecutor");
 
-        // Class declaration
-        writer.Block($"public partial class {model.AppTypeName}Executor : Blueprint.BlueprintAppExecutor");
+        classBuilder.AddConstructor()
+            .AddParameter("Microsoft.Extensions.Logging.ILoggerFactory", "loggerFactory")
+            .AddParameter($"{model.AppNamespace}.{model.AppTypeName}", "app")
+            .WithBaseCallArguments("app")
+            .WithBody(
+                writer =>
+                {
+                    foreach (var handler in model.Handlers)
+                    {
+                        var pipelineType = $"Blueprint.Generated.{handler.PipelineClassName}";
+                        writer.AppendLine($"this.Register(typeof({handler.OperationTypeFullName}), new {pipelineType}(loggerFactory));");
+                    }
+                });
 
-        // Constructor - need special formatting for multi-line signature
-        writer.Indent().Append($"public {model.AppTypeName}Executor(").Append(SourceWriter.NewLine);
-        writer.Indent().Indent().Append("Microsoft.Extensions.Logging.ILoggerFactory loggerFactory,").Append(SourceWriter.NewLine);
-        writer.Indent().Indent().Append($"{model.AppNamespace}.{model.AppTypeName} app)").Append(SourceWriter.NewLine);
-        writer.Indent().Indent().Append(": base(app)").Append(SourceWriter.NewLine);
-        writer.Block(string.Empty); // Start constructor body
-
-        // Register all pipelines
-        foreach (var handler in model.Handlers)
-        {
-            var pipelineType = $"Blueprint.Generated.{handler.PipelineClassName}";
-            writer.WriteLine($"this.Register(typeof({handler.OperationTypeFullName}), new {pipelineType}(loggerFactory));");
-        }
-
-        writer.FinishBlock(); // End constructor
-
-        writer.FinishBlock(); // End class
-
-        writer.FinishBlock(); // End namespace
-
-        return writer.Code();
+        return codeBuilder.Build();
     }
 }
