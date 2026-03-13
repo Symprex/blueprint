@@ -10,13 +10,16 @@ public class TestApp : BlueprintApp
 {
     public TestApp()
     {
-        this.RegisterOperation<TestQuery>();
-             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [Error:CS1061] 'TestApp' does not contain a definition for 'RegisterOperation' and no accessible extension method 'RegisterOperation' accepting a first argument of type 'TestApp' could be found (are you missing a using directive or an assembly reference?)
+        this.Register(TestQuery.Configure());
     }
 }
 
 public class TestQuery : IQuery<string>
-                         ^^^^^^^^^^^^^^ [Error:CS0535] 'TestQuery' does not implement interface member 'IOperation.Configure()'
 {
+    public static ApiOperationDescriptor Configure()
+    {
+        return new ApiOperationDescriptor(typeof(TestQuery), nameof(TestQuery), "Tests");
+    }
+
     public static string Invoke() => "test";
 }

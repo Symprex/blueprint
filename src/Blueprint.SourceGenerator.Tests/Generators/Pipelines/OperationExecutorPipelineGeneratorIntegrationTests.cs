@@ -27,6 +27,11 @@ public class OperationExecutorPipelineGeneratorIntegrationTests
 
                      public class TestQuery : IQuery<string>
                      {
+                         public static ApiOperationDescriptor Configure()
+                         {
+                             return new ApiOperationDescriptor(typeof(TestQuery), nameof(TestQuery), "Tests");
+                         }
+
                          public static Task<string> InvokeAsync()
                          {
                              return Task.FromResult("Hello World");
@@ -53,12 +58,17 @@ public class OperationExecutorPipelineGeneratorIntegrationTests
                      {
                          public TestApp()
                          {
-                             this.RegisterOperation<TestQuery>();
+                             this.Register(TestQuery.Configure());
                          }
                      }
 
                      public class TestQuery : IQuery<string>
                      {
+                         public static ApiOperationDescriptor Configure()
+                         {
+                             return new ApiOperationDescriptor(typeof(TestQuery), nameof(TestQuery), "Tests");
+                         }
+
                          public string Value { get; set; }
 
                          public Task<string> HandleAsync()
@@ -88,15 +98,20 @@ public class OperationExecutorPipelineGeneratorIntegrationTests
                      {
                          public TestApp()
                          {
-                             this.RegisterOperation<TestQuery>();
+                             this.Register(TestQuery.Configure());
                          }
                      }
 
                      public class TestQuery : IQuery<string>
                      {
+                         public static ApiOperationDescriptor Configure()
+                         {
+                             return new ApiOperationDescriptor(typeof(TestQuery), nameof(TestQuery), "Tests");
+                         }
+
                          public static Task<string> InvokeAsync(ApiOperationContext context)
                          {
-                             return Task.FromResult("Context: " + context.DataModel.Name);
+                             return Task.FromResult("Context: " + context.App.GetType().Name);
                          }
                      }
                      """;
@@ -121,7 +136,7 @@ public class OperationExecutorPipelineGeneratorIntegrationTests
                      {
                          public TestApp()
                          {
-                             this.RegisterOperation<TestQuery>();
+                             this.Register(TestQuery.Configure());
                          }
                      }
 
@@ -132,6 +147,11 @@ public class OperationExecutorPipelineGeneratorIntegrationTests
 
                      public class TestQuery : IQuery<string>
                      {
+                         public static ApiOperationDescriptor Configure()
+                         {
+                             return new ApiOperationDescriptor(typeof(TestQuery), nameof(TestQuery), "Tests");
+                         }
+
                          public static Task<string> InvokeAsync(IMyService service, ILogger<TestQuery> logger)
                          {
                              logger.LogInformation("Getting value");
@@ -159,12 +179,17 @@ public class OperationExecutorPipelineGeneratorIntegrationTests
                      {
                          public TestApp()
                          {
-                             this.RegisterOperation<TestCommand>();
+                             this.Register(TestCommand.Configure());
                          }
                      }
 
                      public class TestCommand : ICommand<string>
                      {
+                         public static ApiOperationDescriptor Configure()
+                         {
+                             return new ApiOperationDescriptor(typeof(TestCommand), nameof(TestCommand), "Tests");
+                         }
+
                          public string Name { get; set; }
                      }
 
@@ -196,7 +221,7 @@ public class OperationExecutorPipelineGeneratorIntegrationTests
                      {
                          public TestApp()
                          {
-                             this.RegisterOperation<TestCommand>();
+                             this.Register(TestCommand.Configure());
                          }
                      }
 
@@ -207,6 +232,11 @@ public class OperationExecutorPipelineGeneratorIntegrationTests
 
                      public class TestCommand : ICommand<bool>
                      {
+                         public static ApiOperationDescriptor Configure()
+                         {
+                             return new ApiOperationDescriptor(typeof(TestCommand), nameof(TestCommand), "Tests");
+                         }
+
                          public string Value { get; set; }
                      }
 
@@ -238,12 +268,17 @@ public class OperationExecutorPipelineGeneratorIntegrationTests
                      {
                          public TestApp()
                          {
-                             this.RegisterOperation<TestQuery>();
+                             this.Register(TestQuery.Configure());
                          }
                      }
 
                      public class TestQuery : IQuery<int>
                      {
+                         public static ApiOperationDescriptor Configure()
+                         {
+                             return new ApiOperationDescriptor(typeof(TestQuery), nameof(TestQuery), "Tests");
+                         }
+
                          public static int Invoke()
                          {
                              return 42;
@@ -270,13 +305,18 @@ public class OperationExecutorPipelineGeneratorIntegrationTests
                      {
                          public TestApp()
                          {
-                             this.RegisterOperation<GetUserQuery>();
-                             this.RegisterOperation<CreateUserCommand>();
+                             this.Register(GetUserQuery.Configure());
+                             this.Register(CreateUserCommand.Configure());
                          }
                      }
 
                      public class GetUserQuery : IQuery<string>
                      {
+                         public static ApiOperationDescriptor Configure()
+                         {
+                             return new ApiOperationDescriptor(typeof(GetUserQuery), nameof(GetUserQuery), "Tests");
+                         }
+
                          public static Task<string> InvokeAsync()
                          {
                              return Task.FromResult("User");
@@ -285,6 +325,11 @@ public class OperationExecutorPipelineGeneratorIntegrationTests
 
                      public class CreateUserCommand : ICommand<bool>
                      {
+                         public static ApiOperationDescriptor Configure()
+                         {
+                             return new ApiOperationDescriptor(typeof(CreateUserCommand), nameof(CreateUserCommand), "Tests");
+                         }
+
                          public string Name { get; set; }
                          
                          public static Task<bool> HandleAsync()
@@ -312,12 +357,17 @@ public class OperationExecutorPipelineGeneratorIntegrationTests
                      {
                          public TestApp()
                          {
-                             this.RegisterOperation<TestQuery>();
+                             this.Register(TestQuery.Configure());
                          }
                      }
 
                      public class TestQuery : IQuery<string>
                      {
+                         public static ApiOperationDescriptor Configure()
+                         {
+                             return new ApiOperationDescriptor(typeof(TestQuery), nameof(TestQuery), "Tests");
+                         }
+
                          // No handler method
                      }
                      """;
@@ -340,12 +390,17 @@ public class OperationExecutorPipelineGeneratorIntegrationTests
                      {
                          public TestApp()
                          {
-                             this.RegisterOperation<TestQuery>();
+                             this.Register(TestQuery.Configure());
                          }
                      }
 
                      public class TestQuery : IQuery<string>
                      {
+                         public static ApiOperationDescriptor Configure()
+                         {
+                             return new ApiOperationDescriptor(typeof(TestQuery), nameof(TestQuery), "Tests");
+                         }
+
                          public static string Invoke() => "test";
                      }
                      """;
@@ -356,7 +411,7 @@ public class OperationExecutorPipelineGeneratorIntegrationTests
 
     private static GenerationResult Compile(string source)
     {
-        return TestHelpers.Compile<OperationExecutorPipelineSourceGenerator>(source);
+        return TestHelpers.Compile<OperationExecutorPipelineSourceGenerator>(source, assertCacheability: false);
     }
 }
 
