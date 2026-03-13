@@ -3,10 +3,16 @@ using Xunit;
 
 namespace Blueprint.SourceGenerator.CodeWriter.Tests;
 
+/// <summary>
+/// Tests for low-level <see cref="CodeWriter"/> rendering and extension helpers.
+/// </summary>
 public class CodeWriterTests
 {
     private static readonly string NewLine = Environment.NewLine;
     
+    /// <summary>
+    /// Verifies that appended text is emitted without additional formatting.
+    /// </summary>
     [Fact]
     public void GenerateCodeWriter()
     {
@@ -17,6 +23,9 @@ public class CodeWriterTests
         Assert.Equal("test", sut.Render());
     }
 
+    /// <summary>
+    /// Verifies that nested block writers render balanced braces and indentation.
+    /// </summary>
     [Fact]
     public void GenerateCodeSubBlock()
     {
@@ -40,6 +49,9 @@ public class CodeWriterTests
         Assert.Equal(expected, r);
     }
 
+    /// <summary>
+    /// Verifies fluent <c>if/else</c> helpers render the expected conditional blocks.
+    /// </summary>
     [Fact]
     public void GenerateIfElse()
     {
@@ -61,5 +73,42 @@ public class CodeWriterTests
                        "}" + NewLine;
         var r = writer.Render();
         Assert.Equal(expected, r);
+    }
+
+    /// <summary>
+    /// Verifies callback-based block helpers render statements in the expected scope.
+    /// </summary>
+    [Fact]
+    public void GenerateBlockWithCallback()
+    {
+        var writer = new CodeWriter(IndentStyle.Tabs);
+
+        writer.Block(
+            "try",
+            w =>
+            {
+                w.DeclareVar("value", "42");
+                w.Return("value");
+            });
+
+        writer.Catch(
+            "System.Exception ex",
+            w =>
+            {
+                w.Assign("_lastError", "ex");
+            });
+
+        var expected = "try" + NewLine +
+                       "{" + NewLine +
+                       "\tvar value = 42;" + NewLine +
+                       "\treturn value;" + NewLine +
+                       "}" + NewLine +
+                       "catch (System.Exception ex)" + NewLine +
+                       "{" + NewLine +
+                       "\t_lastError = ex;" + NewLine +
+                       "}" + NewLine;
+
+        var rendered = writer.Render();
+        Assert.Equal(expected, rendered);
     }
 }

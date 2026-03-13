@@ -82,7 +82,7 @@ internal static class PipelineCodeGenerator
     {
         pipelineClass.AddConstructor()
             .AddParameter("Microsoft.Extensions.Logging.ILoggerFactory", "loggerFactory")
-            .WithBody(writer => writer.AppendLine($"_logger = loggerFactory.CreateLogger(\"{handler.PipelineClassName}\");"));
+            .WithBody(writer => writer.Assign("_logger", $"loggerFactory.CreateLogger(\"{handler.PipelineClassName}\")"));
     }
 
     private static void AddExecuteAsyncMethod(ClassBuilder pipelineClass, OperationHandlerModel handler)
@@ -96,16 +96,16 @@ internal static class PipelineCodeGenerator
                 writer =>
                 {
                     writer.AppendLine($"using var activity = Blueprint.Diagnostics.BlueprintActivitySource.ActivitySource.StartActivity(\"{handler.OperationTypeName}Pipeline\", System.Diagnostics.ActivityKind.Internal);");
-                    writer.AppendLine($"var operation = ({handler.OperationTypeFullName})context.Operation;");
+                    writer.DeclareVar("operation", $"({handler.OperationTypeFullName})context.Operation");
                     writer.NewLine();
 
-                    using (writer.Block("try"))
-                    {
-                        writer.AppendLine($"_ApiOperationExecuting(_logger, \"{handler.OperationTypeName}\", null);");
-                        writer.NewLine();
-
-                        WriteHandlerInvocation(writer, handler);
-                    }
+                    writer.Try(
+                        tryWriter =>
+                        {
+                            tryWriter.AppendLine($"_ApiOperationExecuting(_logger, \"{handler.OperationTypeName}\", null);");
+                            tryWriter.NewLine();
+                            WriteHandlerInvocation(tryWriter, handler);
+                        });
 
                     WriteExceptionHandling(writer);
                 });
@@ -118,7 +118,9 @@ internal static class PipelineCodeGenerator
             switch (param.Source)
             {
                 case ParameterSource.FromDependencyInjection:
-                    writer.AppendLine($"var {param.VariableName} = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<{param.ParameterTypeName}>(context.ServiceProvider);");
+                    writer.DeclareVar(
+                        param.VariableName,
+                        $"Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<{param.ParameterTypeName}>(context.ServiceProvider)");
                     break;
             }
         }
@@ -152,67 +154,82 @@ internal static class PipelineCodeGenerator
         {
             if (handler.IsHandlerStatic)
             {
-                writer.AppendLine($"var handlerResult = {(handler.IsHandlerAsync ? "await " : string.Empty)}{handler.OperationTypeFullName}.{handler.HandlerMethodName}({string.Join(", ", parameterList)});");
+                writer.DeclareVar("handlerResult", $"{(handler.IsHandlerAsync ? "await " : string.Empty)}{handler.OperationTypeFullName}.{handler.HandlerMethodName}({string.Join(", ", parameterList)})");
             }
             else
             {
-                writer.AppendLine($"var handlerResult = {(handler.IsHandlerAsync ? "await " : string.Empty)}operation.{handler.HandlerMethodName}({string.Join(", ", parameterList)});");
+                writer.DeclareVar("handlerResult", $"{(handler.IsHandlerAsync ? "await " : string.Empty)}operation.{handler.HandlerMethodName}({string.Join(", ", parameterList)})");
             }
         }
         else
         {
             var handlerVarName = char.ToLowerInvariant(handler.HandlerClassName![0]) + handler.HandlerClassName.Substring(1);
 
-            writer.AppendLine($"var {handlerVarName} = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<{handler.HandlerClassFullName}>(context.ServiceProvider);");
-            using (writer.Block($"if ({handlerVarName} == null)"))
-            {
-                writer.AppendLine($"{handlerVarName} = Microsoft.Extensions.DependencyInjection.ActivatorUtilities.CreateInstance<{handler.HandlerClassFullName}>(context.ServiceProvider);");
-            }
+            writer.DeclareVar(
+                handlerVarName,
+                $"Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<{handler.HandlerClassFullName}>(context.ServiceProvider)");
+            writer.If(
+                $"{handlerVarName} == null",
+                ifWriter =>
+                {
+                    ifWriter.Assign(
+                        handlerVarName,
+                        $"Microsoft.Extensions.DependencyInjection.ActivatorUtilities.CreateInstance<{handler.HandlerClassFullName}>(context.ServiceProvider)");
+                });
 
             writer.NewLine();
 
             var allParams = new List<string> { "operation" };
             allParams.AddRange(parameterList);
 
-            writer.AppendLine($"var handlerResult = {(handler.IsHandlerAsync ? "await " : string.Empty)}{handlerVarName}.{handler.HandlerMethodName}({string.Join(", ", allParams)});");
+            writer.DeclareVar("handlerResult", $"{(handler.IsHandlerAsync ? "await " : string.Empty)}{handlerVarName}.{handler.HandlerMethodName}({string.Join(", ", allParams)})");
         }
 
         writer.NewLine();
-        writer.AppendLine("return new Blueprint.Runtime.Exec.OkResult(handlerResult);");
+        writer.Return("new Blueprint.Runtime.Exec.OkResult(handlerResult)");
     }
 
     private static void WriteExceptionHandling(ICodeWriter writer)
     {
-        using (writer.Block("catch (Blueprint.Validation.ValidationException e)"))
-        {
-            writer.AppendLine("context.Activity?.SetTag(\"otel.status_code\", \"OK\");");
-            writer.AppendLine("return new Blueprint.Middleware.ValidationFailedOperationResult(e.ValidationResults);");
-        }
-
-        using (writer.Block("catch (System.ComponentModel.DataAnnotations.ValidationException e)"))
-        {
-            writer.AppendLine("context.Activity?.SetTag(\"otel.status_code\", \"OK\");");
-            writer.AppendLine("return Blueprint.Middleware.ValidationMiddlewareBuilder.ToValidationFailedOperationResult(e);");
-        }
-
-        using (writer.Block("catch (System.Exception e)"))
-        {
-            using (writer.Block("if (e is Blueprint.ApiException apiException && apiException.HttpStatus < 500)"))
+        writer.Catch(
+            "Blueprint.Validation.ValidationException e",
+            catchWriter =>
             {
-                writer.AppendLine("_NonException(_logger, e.Message, e);");
-                writer.AppendLine("context.Activity?.SetTag(\"otel.status_code\", \"OK\");");
-            }
+                catchWriter.AppendLine("context.Activity?.SetTag(\"otel.status_code\", \"OK\");");
+                catchWriter.Return("new Blueprint.Middleware.ValidationFailedOperationResult(e.ValidationResults)");
+            });
 
-            using (writer.Block("else"))
+        writer.Catch(
+            "System.ComponentModel.DataAnnotations.ValidationException e",
+            catchWriter =>
             {
-                writer.AppendLine("Blueprint.Diagnostics.BlueprintActivitySource.RecordException(context.Activity, e, false);");
-                writer.AppendLine("_UnhandledException(_logger, e.Message, e);");
-                writer.AppendLine("context.Activity?.SetTag(\"otel.status_code\", \"ERROR\");");
-                writer.AppendLine("context.Activity?.SetTag(\"otel.status_description\", e.Message);");
-            }
+                catchWriter.AppendLine("context.Activity?.SetTag(\"otel.status_code\", \"OK\");");
+                catchWriter.Return("Blueprint.Middleware.ValidationMiddlewareBuilder.ToValidationFailedOperationResult(e)");
+            });
 
-            writer.NewLine();
-            writer.AppendLine("return new Blueprint.UnhandledExceptionOperationResult(e);");
-        }
+        writer.Catch(
+            "System.Exception e",
+            catchWriter =>
+            {
+                catchWriter.If(
+                    "e is Blueprint.ApiException apiException && apiException.HttpStatus < 500",
+                    ifWriter =>
+                    {
+                        ifWriter.AppendLine("_NonException(_logger, e.Message, e);");
+                        ifWriter.AppendLine("context.Activity?.SetTag(\"otel.status_code\", \"OK\");");
+                    });
+
+                catchWriter.Else(
+                    elseWriter =>
+                    {
+                        elseWriter.AppendLine("Blueprint.Diagnostics.BlueprintActivitySource.RecordException(context.Activity, e, false);");
+                        elseWriter.AppendLine("_UnhandledException(_logger, e.Message, e);");
+                        elseWriter.AppendLine("context.Activity?.SetTag(\"otel.status_code\", \"ERROR\");");
+                        elseWriter.AppendLine("context.Activity?.SetTag(\"otel.status_description\", e.Message);");
+                    });
+
+                catchWriter.NewLine();
+                catchWriter.Return("new Blueprint.UnhandledExceptionOperationResult(e)");
+            });
     }
 }
