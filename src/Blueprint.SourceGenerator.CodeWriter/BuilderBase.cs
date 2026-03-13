@@ -7,7 +7,7 @@ using System.Linq;
 namespace Blueprint.SourceGenerator.CodeWriter
 {
     /// <summary>
-    /// Represents builder base.
+    /// Provides the rendering infrastructure shared by builders that need pragma warning suppression around emitted source.
     /// </summary>
     public abstract class BuilderBase : IBuilder
     {

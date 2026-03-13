@@ -7,7 +7,7 @@ using System;
 namespace Blueprint.SourceGenerator.CodeWriter
 {
     /// <summary>
-    /// Represents switch case builder.
+    /// Builds the body for a single case within a SwitchBuilder.
     /// </summary>
     public sealed class SwitchCaseBuilder : IBuilder
     {
@@ -18,8 +18,8 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <summary>
         /// Initializes a new instance of the <see cref="SwitchCaseBuilder"/> class.
         /// </summary>
-        /// <param name="parent">The parent value.</param>
-        /// <param name="case">The case value.</param>
+        /// <param name="parent">The parent used by this operation.</param>
+        /// <param name="case">The case used by this operation.</param>
         public SwitchCaseBuilder(SwitchBuilder parent, string @case)
         {
             _parent = parent;
@@ -27,10 +27,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Configures content.
+        /// Supplies the callback that writes the statements for this switch case.
         /// </summary>
-        /// <param name="contentDelegate">The content delegate value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="contentDelegate">A callback that writes the statements or expression for this case.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public SwitchBuilder WithContent(Action<ICodeWriter> contentDelegate)
         {
             _content = contentDelegate ?? EmptyBody;
@@ -38,10 +38,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Configures expression.
+        /// Configures the expression emitted for this switch-expression case.
         /// </summary>
-        /// <param name="returnValue">The return value value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="returnValue">The expression to emit for this switch-expression arm.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public SwitchBuilder WithExpression(string returnValue = "null")
         {
             _content = w => w.Append($"{_case} => {returnValue}");

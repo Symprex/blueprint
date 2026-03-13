@@ -8,7 +8,7 @@ using System.Collections.Generic;
 namespace Blueprint.SourceGenerator.CodeWriter
 {
     /// <summary>
-    /// Represents switch builder.
+    /// Collects switch cases and writes a switch statement back to an ICodeWriter when the builder is closed.
     /// </summary>
     public sealed class SwitchBuilder
     {
@@ -25,10 +25,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Adds case.
+        /// Adds a case to the switch builder and returns a builder for its body.
         /// </summary>
-        /// <param name="case">The case value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="case">The case label or pattern to emit.</param>
+        /// <returns>The builder for the newly added generated declaration.</returns>
         public SwitchCaseBuilder AddCase(string @case)
         {
             var builder = new SwitchCaseBuilder(this, @case);
@@ -37,9 +37,9 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Performs the close operation.
+        /// Writes the collected switch cases to the underlying writer and returns it.
         /// </summary>
-        /// <returns>The generated result.</returns>
+        /// <returns>The underlying writer so additional source can be emitted.</returns>
         public ICodeWriter Close()
         {
             if (Expression)

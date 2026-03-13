@@ -31,10 +31,10 @@ namespace Blueprint.SourceGenerator.CodeWriter.Internals
             };
 
         /// <summary>
-        /// Gets globally qualified type name.
+        /// Formats a namespace or type symbol as a globally qualified type name suitable for generated source.
         /// </summary>
-        /// <param name="symbol">The symbol value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="symbol">The symbol to format.</param>
+        /// <returns>The globally qualified type name to emit for the supplied symbol.</returns>
         public static string GetGloballyQualifiedTypeName(this INamespaceOrTypeSymbol symbol)
         {
             var value = GetFullMetadataName(symbol);
@@ -51,10 +51,10 @@ namespace Blueprint.SourceGenerator.CodeWriter.Internals
         }
 
         /// <summary>
-        /// Gets full metadata name.
+        /// Builds the metadata name for a namespace or type symbol, including nesting and generic arguments.
         /// </summary>
-        /// <param name="symbol">The symbol value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="symbol">The symbol whose metadata name should be composed.</param>
+        /// <returns>The metadata name for the supplied symbol.</returns>
         public static string GetFullMetadataName(this INamespaceOrTypeSymbol symbol)
         {
             ISymbol s = symbol;
@@ -100,10 +100,10 @@ namespace Blueprint.SourceGenerator.CodeWriter.Internals
         }
 
         /// <summary>
-        /// Gets full name.
+        /// Builds the CLR-style full name for a namespace or type symbol.
         /// </summary>
-        /// <param name="type">The type value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="type">The symbol whose full name should be composed.</param>
+        /// <returns>The CLR-style full name for the supplied symbol.</returns>
         public static string GetFullName(this INamespaceOrTypeSymbol type)
         {
             if (type is IArrayTypeSymbol arrayType)

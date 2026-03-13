@@ -10,7 +10,7 @@ using Microsoft.CodeAnalysis;
 namespace Blueprint.SourceGenerator.CodeWriter
 {
     /// <summary>
-    /// Builds record declarations and record property metadata.
+    /// Builds a generated record declaration and the properties that it emits.
     /// </summary>
     public sealed class RecordBuilder : BuilderBase<RecordBuilder>
     {
@@ -24,21 +24,36 @@ namespace Blueprint.SourceGenerator.CodeWriter
             Builder = codeBuilder;
         }
 
+        /// <summary>
+        /// Gets the record name that will be emitted.
+        /// </summary>
         public string Name { get; }
 
+        /// <summary>
+        /// Gets the fully qualified record name composed from the owning namespace and the record name.
+        /// </summary>
         public string FullyQualifiedName => $"{Builder.Namespace}.{Name}";
 
+        /// <summary>
+        /// Gets the CodeBuilder that owns this generated record.
+        /// </summary>
         public CodeBuilder Builder { get; internal set; }
 
+        /// <summary>
+        /// Gets the accessibility that will be emitted for the generated record.
+        /// </summary>
         public Accessibility? AccessModifier { get; private set; }
 
+        /// <summary>
+        /// Gets how properties will be emitted for the generated record.
+        /// </summary>
         public RecordPropertyType PropertyType { get; private set; } = RecordPropertyType.Positional;
 
         /// <summary>
-        /// Sets an XML summary comment for the generated record.
+        /// Sets the XML summary that will be emitted for the generated record.
         /// </summary>
-        /// <param name="summary">The summary value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="summary">The text to place inside the emitted summary documentation.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public RecordBuilder WithSummary(string summary)
         {
             _xmlDoc = new SummaryDocumentationComment { Summary = summary };
@@ -47,10 +62,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Configures <inheritdoc/> XML documentation for the generated record.
+        /// Configures the generated record to emit inheritdoc XML instead of explicit text.
         /// </summary>
-        /// <param name="inherit">The inherit value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="inherit">Set to <see langword="true"/> to emit <c>&lt;inheritdoc/&gt;</c> for the generated record. The parameter keeps the fluent API readable in conditional code paths.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public RecordBuilder WithInheritDoc(bool inherit = true)
         {
             _xmlDoc = new InheritDocumentationComment();
@@ -58,10 +73,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Configures <inheritdoc/> XML documentation for the generated record.
+        /// Configures the generated declaration to emit inheritdoc XML targeting a specific cref.
         /// </summary>
-        /// <param name="from">The from value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="from">The member or type to reference from the emitted inheritdoc cref.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public RecordBuilder WithInheritDoc(string from)
         {
             _xmlDoc = new InheritDocumentationComment { InheritFrom = from };
@@ -69,9 +84,9 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Configures the record to emit positional properties.
+        /// Configures the generated record to emit positional properties.
         /// </summary>
-        /// <returns>The generated result.</returns>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public RecordBuilder UsePositionalProperties()
         {
             PropertyType = RecordPropertyType.Positional;
@@ -79,9 +94,9 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Configures the record to emit init-only properties.
+        /// Configures the generated record to emit init-only properties.
         /// </summary>
-        /// <returns>The generated result.</returns>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public RecordBuilder UseInitProperties()
         {
             PropertyType = RecordPropertyType.Init;
@@ -89,12 +104,12 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Adds a property definition to the record being built.
+        /// Adds a property definition to the generated record and returns its builder.
         /// </summary>
-        /// <param name="type">The property type name.</param>
-        /// <param name="name">The property name.</param>
-        /// <param name="accessModifier">The access modifier applied to the property.</param>
-        /// <returns>The created <see cref="RecordPropertyBuilder"/> for additional configuration.</returns>
+        /// <param name="type">The C# type text to emit for the generated record property.</param>
+        /// <param name="name">The property name to emit for the generated record property.</param>
+        /// <param name="accessModifier">The accessibility modifier to emit.</param>
+        /// <returns>The builder for the newly added generated declaration.</returns>
         public RecordPropertyBuilder AddProperty(string type,
             string name,
             Accessibility accessModifier = Accessibility.Public)
@@ -105,22 +120,22 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Marks public record.
+        /// Sets the generated record to public accessibility.
         /// </summary>
-        /// <returns>The generated result.</returns>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public RecordBuilder MakePublicRecord() => WithAccessModifier(Accessibility.Public);
 
         /// <summary>
-        /// Marks internal record.
+        /// Sets the generated record to internal accessibility.
         /// </summary>
-        /// <returns>The generated result.</returns>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public RecordBuilder MakeInternalRecord() => WithAccessModifier(Accessibility.Internal);
 
         /// <summary>
-        /// Configures access modifier.
+        /// Sets the accessibility emitted for the generated record.
         /// </summary>
-        /// <param name="accessModifier">The access modifier value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="accessModifier">The accessibility modifier to emit.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public RecordBuilder WithAccessModifier(Accessibility accessModifier)
         {
             AccessModifier = accessModifier;
@@ -128,9 +143,9 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Builds build.
+        /// Renders the owning CodeBuilder and returns the generated C# source text.
         /// </summary>
-        /// <returns>The generated result.</returns>
+        /// <returns>The rendered C# source text.</returns>
         public string Build() => Builder.Build();
 
         internal override void Write(in CodeWriter writer)
@@ -158,10 +173,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Adds namespace import.
+        /// Registers a namespace import on the generated file that owns this record.
         /// </summary>
-        /// <param name="importedNamespace">The imported namespace value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="importedNamespace">The namespace to emit as a using directive so referenced types do not need to be fully qualified.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public override RecordBuilder AddNamespaceImport(string importedNamespace)
         {
             Builder.AddNamespaceImport(importedNamespace);
@@ -169,10 +184,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Adds namespace import.
+        /// Registers a namespace import on the generated file that owns this record.
         /// </summary>
-        /// <param name="symbol">The symbol value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="symbol">The Roslyn symbol whose namespace or type information should be mirrored into generated source.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public override RecordBuilder AddNamespaceImport(ISymbol symbol)
         {
             Builder.AddNamespaceImport(symbol);
@@ -180,10 +195,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Adds namespace import.
+        /// Registers a namespace import on the generated file that owns this record.
         /// </summary>
-        /// <param name="symbol">The symbol value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="symbol">The Roslyn symbol whose namespace or type information should be mirrored into generated source.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public override RecordBuilder AddNamespaceImport(INamespaceSymbol symbol)
         {
             Builder.AddNamespaceImport(symbol);
@@ -191,10 +206,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Adds assembly attribute.
+        /// Queues an assembly-level attribute on the generated file that owns this record.
         /// </summary>
-        /// <param name="attribute">The attribute value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="attribute">The attribute to inspect or emit.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public override RecordBuilder AddAssemblyAttribute(string attribute)
         {
             Builder.AddAssemblyAttribute(attribute);

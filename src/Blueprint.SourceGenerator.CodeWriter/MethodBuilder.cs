@@ -11,7 +11,8 @@ using Microsoft.CodeAnalysis;
 namespace Blueprint.SourceGenerator.CodeWriter
 {
     /// <summary>
-    /// Builds method signatures, metadata, and emitted method bodies.
+    /// Builds a generated method.
+    /// Configure the signature first, then use <c>WithBody</c> and the <see cref="ICodeWriterExtensions"/> helpers to describe the emitted statements without hand-writing raw source.
     /// </summary>
     public class MethodBuilder : BuilderBase<MethodBuilder>, IBuilder, IParameterized<MethodBuilder>
     {
@@ -34,16 +35,34 @@ namespace Blueprint.SourceGenerator.CodeWriter
         List<ParameterBuilder<MethodBuilder>> IParameterized<MethodBuilder>.Parameters => _parameters;
         MethodBuilder IParameterized<MethodBuilder>.Parent => this;
 
+        /// <summary>
+        /// Gets the parameters currently configured for the generated method signature.
+        /// </summary>
         public IReadOnlyCollection<ParameterBuilder<MethodBuilder>> Parameters => _parameters;
 
+        /// <summary>
+        /// Gets the method name that will be emitted.
+        /// </summary>
         public string Name { get; }
 
+        /// <summary>
+        /// Gets the return type that will be emitted for the generated method.
+        /// </summary>
         public string? ReturnType { get; private set; }
 
+        /// <summary>
+        /// Gets a value indicating whether the generated method will be emitted with the async modifier.
+        /// </summary>
         public bool IsAsync { get; private set; }
 
+        /// <summary>
+        /// Gets a value indicating whether the generated method will be emitted with the abstract modifier.
+        /// </summary>
         public bool IsAbstract { get; private set; }
 
+        /// <summary>
+        /// Gets a value indicating whether the configured body callback actually emits any statements.
+        /// </summary>
         public bool HasBody
         {
             get
@@ -57,17 +76,26 @@ namespace Blueprint.SourceGenerator.CodeWriter
             }
         }
 
+        /// <summary>
+        /// Gets the ClassBuilder that owns this generated method.
+        /// </summary>
         public ClassBuilder Class { get; }
 
+        /// <summary>
+        /// Gets the accessibility that will be emitted for the generated method.
+        /// </summary>
         public Accessibility? AccessModifier { get; private set; }
 
+        /// <summary>
+        /// Gets a value indicating whether the generated method will be emitted with the static modifier.
+        /// </summary>
         public bool IsStatic { get; private set; }
 
         /// <summary>
-        /// Configures summary.
+        /// Sets the XML summary that will be emitted for the generated method.
         /// </summary>
-        /// <param name="summary">The summary value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="summary">The caller-facing description of what the generated method does or when it should be used.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public MethodBuilder WithSummary(string summary)
         {
             if (_xmlDoc is null || _xmlDoc is not SummaryDocumentationComment summaryDoc)
@@ -79,10 +107,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Configures inherit doc.
+        /// Configures the generated method to emit inheritdoc XML instead of explicit text.
         /// </summary>
-        /// <param name="inherit">The inherit value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="inherit">Set to <see langword="true"/> to emit <c>&lt;inheritdoc/&gt;</c> for the generated method. The parameter keeps the fluent API readable in conditional code paths.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public MethodBuilder WithInheritDoc(bool inherit = true)
         {
             _xmlDoc = new InheritDocumentationComment();
@@ -90,10 +118,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Configures inherit doc.
+        /// Configures the generated declaration to emit inheritdoc XML targeting a specific cref.
         /// </summary>
-        /// <param name="from">The from value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="from">The member or type to reference from the emitted inheritdoc cref.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public MethodBuilder WithInheritDoc(string from)
         {
             _xmlDoc = new InheritDocumentationComment { InheritFrom = from };
@@ -101,11 +129,11 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Configures parameter doc.
+        /// Adds or replaces XML documentation for a parameter on the generated method.
         /// </summary>
-        /// <param name="paramName">The param name value.</param>
-        /// <param name="documentation">The documentation value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="paramName">The name of the generated parameter whose XML documentation should be updated.</param>
+        /// <param name="documentation">The guidance to emit for callers consuming that generated parameter.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public MethodBuilder WithParameterDoc(string paramName, string documentation)
         {
             if (_xmlDoc is null)
@@ -120,19 +148,19 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Adds generic.
+        /// Adds a generic type parameter to the generated method and optionally configures its constraints.
         /// </summary>
-        /// <param name="name">The name value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="name">The generic parameter name to add to the method signature.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public MethodBuilder AddGeneric(string name) =>
             AddGeneric(name, _ => { });
 
         /// <summary>
-        /// Adds generic.
+        /// Adds a generic type parameter to the generated method and optionally configures its constraints.
         /// </summary>
-        /// <param name="name">The name value.</param>
-        /// <param name="configureBuilder">The configure builder value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="name">The generic parameter name to add to the method signature.</param>
+        /// <param name="configureBuilder">A callback that can add the emitted <c>where</c> constraints before the generic is attached.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public MethodBuilder AddGeneric(string name, Action<GenericBuilder> configureBuilder)
         {
             if (configureBuilder is null)
@@ -149,10 +177,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Adds namespace import.
+        /// Registers a namespace import on the generated file that owns this method.
         /// </summary>
-        /// <param name="importedNamespace">The imported namespace value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="importedNamespace">The namespace to emit as a using directive so referenced types do not need to be fully qualified.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public override MethodBuilder AddNamespaceImport(string importedNamespace)
         {
             Class.AddNamespaceImport(importedNamespace);
@@ -160,30 +188,30 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Adds namespace import.
+        /// Registers a namespace import on the generated file that owns this method.
         /// </summary>
-        /// <param name="symbol">The symbol value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="symbol">The Roslyn symbol whose namespace or type information should be mirrored into generated source.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public override MethodBuilder AddNamespaceImport(ISymbol symbol)
         {
             return AddNamespaceImport(symbol.ContainingNamespace);
         }
 
         /// <summary>
-        /// Adds namespace import.
+        /// Registers a namespace import on the generated file that owns this method.
         /// </summary>
-        /// <param name="symbol">The symbol value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="symbol">The Roslyn symbol whose namespace or type information should be mirrored into generated source.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public override MethodBuilder AddNamespaceImport(INamespaceSymbol symbol)
         {
             return AddNamespaceImport(symbol.ToString());
         }
 
         /// <summary>
-        /// Adds assembly attribute.
+        /// Queues an assembly-level attribute on the generated file that owns this method.
         /// </summary>
-        /// <param name="attribute">The attribute value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="attribute">The attribute to inspect or emit.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public override MethodBuilder AddAssemblyAttribute(string attribute)
         {
             Class.AddAssemblyAttribute(attribute);
@@ -191,20 +219,20 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Adds property.
+        /// Adds a sibling property to the owning class while continuing fluent method configuration.
         /// </summary>
-        /// <param name="name">The name value.</param>
-        /// <param name="accessModifier">The access modifier value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="name">The generated name to emit.</param>
+        /// <param name="accessModifier">The accessibility modifier to emit.</param>
+        /// <returns>The builder for the newly added generated declaration.</returns>
         public PropertyBuilder AddProperty(string name, Accessibility? accessModifier = null)
         {
             return Class.AddProperty(name, accessModifier);
         }
 
         /// <summary>
-        /// Marks async.
+        /// Marks the generated method as async.
         /// </summary>
-        /// <returns>The generated result.</returns>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public MethodBuilder MakeAsync()
         {
             IsAsync = true;
@@ -212,10 +240,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Sets whether the generated method is abstract.
+        /// Sets whether the generated method should be emitted with the abstract modifier.
         /// </summary>
-        /// <param name="isAbstract">The is abstract value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="isAbstract">True to emit the generated declaration as abstract; otherwise false.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public MethodBuilder Abstract(bool isAbstract = true)
         {
             IsAbstract = isAbstract;
@@ -223,34 +251,34 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Marks public method.
+        /// Sets the generated method to public accessibility.
         /// </summary>
-        /// <returns>The generated result.</returns>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public MethodBuilder MakePublicMethod() => WithAccessModifier(Accessibility.Public);
 
         /// <summary>
-        /// Marks private method.
+        /// Sets the generated method to private accessibility.
         /// </summary>
-        /// <returns>The generated result.</returns>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public MethodBuilder MakePrivateMethod() => WithAccessModifier(Accessibility.Private);
 
         /// <summary>
-        /// Marks protected method.
+        /// Sets the generated method to protected accessibility.
         /// </summary>
-        /// <returns>The generated result.</returns>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public MethodBuilder MakeProtectedMethod() => WithAccessModifier(Accessibility.Protected);
 
         /// <summary>
-        /// Marks internal method.
+        /// Sets the generated method to internal accessibility.
         /// </summary>
-        /// <returns>The generated result.</returns>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public MethodBuilder MakeInternalMethod() => WithAccessModifier(Accessibility.Internal);
 
         /// <summary>
-        /// Configures access modifier.
+        /// Sets the accessibility emitted for the generated method.
         /// </summary>
-        /// <param name="accessModifier">The access modifier value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="accessModifier">The accessibility modifier to emit.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public MethodBuilder WithAccessModifier(Accessibility accessModifier)
         {
             AccessModifier = accessModifier;
@@ -258,10 +286,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Sets whether the generated method is emitted with the override modifier.
+        /// Sets whether the generated method should be emitted with the override modifier.
         /// </summary>
-        /// <param name="override">The override value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="override">True to emit the generated declaration with the override modifier; otherwise false.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public MethodBuilder Override(bool @override = true)
         {
             _override = @override;
@@ -269,9 +297,9 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Marks static method.
+        /// Marks the generated method as static.
         /// </summary>
-        /// <returns>The generated result.</returns>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public MethodBuilder MakeStaticMethod()
         {
             IsStatic = true;
@@ -279,9 +307,9 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Marks virtual method.
+        /// Marks the generated method as virtual.
         /// </summary>
-        /// <returns>The generated result.</returns>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public MethodBuilder MakeVirtualMethod()
         {
             _virtual = true;
@@ -289,10 +317,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Adds attribute.
+        /// Adds attribute to the current generated method.
         /// </summary>
-        /// <param name="attribute">The attribute value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="attribute">The attribute to inspect or emit.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public MethodBuilder AddAttribute(string attribute)
         {
             var sanitized = attribute.Replace("[", string.Empty).Replace("]", string.Empty);
@@ -303,10 +331,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Configures body.
+        /// Supplies the callback that writes the generated method body.
         /// </summary>
-        /// <param name="writerDelegate">The writer delegate value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="writerDelegate">A callback that writes the generated method body.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public MethodBuilder WithBody(Action<ICodeWriter> writerDelegate)
         {
             _methodBodyWriter = writerDelegate;
@@ -314,10 +342,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Configures return type.
+        /// Sets the return type emitted for the generated method.
         /// </summary>
-        /// <param name="returnType">The return type value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="returnType">The return type used by this operation.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public MethodBuilder WithReturnType(string returnType)
         {
             ReturnType = returnType;

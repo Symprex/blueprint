@@ -30,10 +30,10 @@ namespace Blueprint.SourceGenerator.CodeWriter.Internals
         };
 
         /// <summary>
-        /// Gets type name.
+        /// Formats a Roslyn type symbol as the C# type name that should be emitted by CodeWriter.
         /// </summary>
-        /// <param name="symbol">The symbol value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="symbol">The Roslyn type symbol to format.</param>
+        /// <returns>The C# type name that should be emitted for the supplied symbol.</returns>
         public static string GetTypeName(this ITypeSymbol symbol)
         {
             if (symbol.ContainingNamespace.Name == "System" && _mappings.ContainsKey(symbol.Name))
@@ -43,10 +43,10 @@ namespace Blueprint.SourceGenerator.CodeWriter.Internals
         }
 
         /// <summary>
-        /// Gets type name.
+        /// Formats a CLR type as the C# type name that should be emitted by CodeWriter.
         /// </summary>
-        /// <param name="type">The type value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="type">The CLR type to format.</param>
+        /// <returns>The C# type name that should be emitted for the supplied CLR type.</returns>
         public static string GetTypeName(this Type type)
         {
             if (type.Namespace == "System" && _mappings.ContainsKey(type.Name))

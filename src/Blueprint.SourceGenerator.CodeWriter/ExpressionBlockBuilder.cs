@@ -3,7 +3,7 @@ using System;
 namespace Blueprint.SourceGenerator.CodeWriter
 {
     /// <summary>
-    /// Represents expression block builder.
+    /// Helps populate loop-style blocks such as for, while, and foreach statements against an ICodeWriter.
     /// </summary>
     public sealed class ExpressionBlockBuilder
     {
@@ -17,10 +17,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Configures body.
+        /// Writes the body of the generated control-flow block and then returns the underlying writer.
         /// </summary>
-        /// <param name="innerWrite">The inner write value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="innerWrite">A callback that writes the statements inside the generated block.</param>
+        /// <returns>The underlying writer so additional source can be emitted.</returns>
         public ICodeWriter WithBody(Action<ICodeWriter> innerWrite)
         {
             using (_writer.Block(_blockCode))

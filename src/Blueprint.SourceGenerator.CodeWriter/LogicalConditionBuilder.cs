@@ -9,7 +9,7 @@ using System.Linq;
 namespace Blueprint.SourceGenerator.CodeWriter
 {
     /// <summary>
-    /// Represents logical condition builder.
+    /// Builds chained if/else if/else blocks before writing them back to an ICodeWriter.
     /// </summary>
     public sealed class LogicalConditionBuilder
     {
@@ -30,10 +30,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Configures body.
+        /// Supplies the callback that writes the body for this conditional branch.
         /// </summary>
-        /// <param name="innerWrite">The inner write value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="innerWrite">A callback that writes the statements for this conditional branch.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public LogicalConditionBuilder WithBody(Action<ICodeWriter> innerWrite)
         {
             _innerWrite = innerWrite;
@@ -41,10 +41,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Performs the else if operation.
+        /// Adds an else-if branch to the current conditional chain.
         /// </summary>
-        /// <param name="condition">The condition value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="condition">The condition expression that controls when this block is emitted.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public LogicalConditionBuilder ElseIf(string condition)
         {
             var builder = new LogicalConditionBuilder(_writer, condition, "else if", this);
@@ -53,11 +53,11 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Performs the else if operation.
+        /// Adds an else-if branch to the current conditional chain.
         /// </summary>
-        /// <param name="condition">The condition value.</param>
-        /// <param name="innerWrite">The inner write value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="condition">The condition expression that controls when this block is emitted.</param>
+        /// <param name="innerWrite">A callback that writes the nested statements for this generated block.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public LogicalConditionBuilder ElseIf(string condition, Action<ICodeWriter> innerWrite)
         {
             var builder = new LogicalConditionBuilder(_writer, condition, "else if", this)
@@ -67,9 +67,9 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Performs the else operation.
+        /// Adds an else branch to the current conditional chain.
         /// </summary>
-        /// <returns>The generated result.</returns>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public LogicalConditionBuilder Else()
         {
             var builder = new LogicalConditionBuilder(_writer, null, "else", this);
@@ -78,10 +78,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Performs the else operation.
+        /// Adds an else branch to the current conditional chain.
         /// </summary>
-        /// <param name="innerWrite">The inner write value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="innerWrite">A callback that writes the nested statements for this generated block.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public LogicalConditionBuilder Else(Action<ICodeWriter> innerWrite)
         {
             var builder = new LogicalConditionBuilder(_writer, null, "else", this)
@@ -91,9 +91,9 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Ends if.
+        /// Writes the accumulated conditional chain and returns the underlying writer.
         /// </summary>
-        /// <returns>The generated result.</returns>
+        /// <returns>The underlying writer so additional source can be emitted.</returns>
         public ICodeWriter EndIf()
         {
             if (_parent != null)

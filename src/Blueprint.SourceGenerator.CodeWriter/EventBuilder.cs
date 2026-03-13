@@ -9,7 +9,7 @@ using Microsoft.CodeAnalysis;
 namespace Blueprint.SourceGenerator.CodeWriter
 {
     /// <summary>
-    /// Represents event builder.
+    /// Builds a generated event declaration, including delegate type, accessibility, and custom add/remove behavior.
     /// </summary>
     public class EventBuilder : BuilderBase<EventBuilder>
     {
@@ -26,15 +26,21 @@ namespace Blueprint.SourceGenerator.CodeWriter
             Class = @class;
         }
 
+        /// <summary>
+        /// Gets the event name that will be emitted.
+        /// </summary>
         public string Name { get; }
 
+        /// <summary>
+        /// Gets the ClassBuilder that owns this generated event.
+        /// </summary>
         public ClassBuilder Class { get; }
 
         /// <summary>
-        /// Marks static.
+        /// Sets whether the generated event should be emitted as static.
         /// </summary>
-        /// <param name="isStatic">The is static value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="isStatic">True to emit the generated event as static; otherwise false.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public EventBuilder MakeStatic(bool isStatic = true)
         {
             _static = isStatic;
@@ -42,10 +48,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Configures backing field.
+        /// Configures add and remove accessors that delegate to the supplied backing field.
         /// </summary>
-        /// <param name="backingField">The backing field value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="backingField">The backing field expression that the generated event accessors should use.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public ClassBuilder WithBackingField(string backingField)
         {
             return WithAddExpression($"{backingField} += value")
@@ -54,10 +60,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Configures add handler.
+        /// Supplies the callback that writes the generated add accessor body.
         /// </summary>
-        /// <param name="addDelegate">The add delegate value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="addDelegate">A callback that writes the generated add accessor body.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public EventBuilder WithAddHandler(Action<ICodeWriter> addDelegate)
         {
             void BlockHandler(ICodeWriter writer)
@@ -71,10 +77,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Configures add expression.
+        /// Sets an expression-bodied add accessor for the generated event.
         /// </summary>
-        /// <param name="addDelegateExpression">The add delegate expression value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="addDelegateExpression">The expression to emit for the generated accessor.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public EventBuilder WithAddExpression(string addDelegateExpression)
         {
             _addHandlerDelegate = w => w.AppendLine($"add => {addDelegateExpression};");
@@ -82,10 +88,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Configures remove handler.
+        /// Supplies the callback that writes the generated remove accessor body.
         /// </summary>
-        /// <param name="addDelegate">The add delegate value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="addDelegate">A callback that writes the generated add accessor body.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public EventBuilder WithRemoveHandler(Action<ICodeWriter> addDelegate)
         {
             void BlockHandler(ICodeWriter writer)
@@ -99,10 +105,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Configures remove expression.
+        /// Sets an expression-bodied remove accessor for the generated event.
         /// </summary>
-        /// <param name="addDelegateExpression">The add delegate expression value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="addDelegateExpression">The expression to emit for the generated accessor.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public EventBuilder WithRemoveExpression(string addDelegateExpression)
         {
             _removeHandlerDelegate = w => w.AppendLine($"remove => {addDelegateExpression};");
@@ -110,10 +116,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Configures explicit implementation.
+        /// Configures the generated event to be emitted as an explicit interface implementation.
         /// </summary>
-        /// <param name="inferfaceName">The inferface name value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="inferfaceName">The interface name to use for explicit event implementation.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public EventBuilder WithExplicitImplementation(string @inferfaceName)
         {
             _explicitImplementation = inferfaceName;
@@ -121,12 +127,12 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Configures default explicit implementation.
+        /// Builds the common explicit-interface event pattern, including a backing field event.
         /// </summary>
-        /// <param name="interfaceName">The interface name value.</param>
-        /// <param name="backingFieldAccessibility">The backing field accessibility value.</param>
-        /// <param name="backingFieldName">The backing field name value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="interfaceName">The interface name to use for explicit event implementation.</param>
+        /// <param name="backingFieldAccessibility">The accessibility to use for the generated backing event field.</param>
+        /// <param name="backingFieldName">The field name to use for the generated backing event field.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public ClassBuilder WithDefaultExplicitImplementation(string @interfaceName, Accessibility backingFieldAccessibility = Accessibility.Private, string? backingFieldName = null)
         {
             if (backingFieldName is null || string.IsNullOrEmpty(backingFieldName))
@@ -141,10 +147,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Configures delegate handler.
+        /// Sets the delegate type emitted for the generated event.
         /// </summary>
-        /// <param name="handlerType">The handler type value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="handlerType">The event delegate type to emit.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public EventBuilder WithDelegateHandler(string handlerType)
         {
             _eventDelegateType = handlerType;
@@ -152,10 +158,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Configures delegate handler.
+        /// Sets the delegate type emitted for the generated event.
         /// </summary>
-        /// <param name="handlerType">The handler type value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="handlerType">The event delegate type to emit.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public EventBuilder WithDelegateHandler(INamedTypeSymbol handlerType)
         {
             _eventDelegateType = handlerType.Name;
@@ -163,10 +169,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Configures accessibility.
+        /// Sets the accessibility emitted for the generated event.
         /// </summary>
-        /// <param name="accessibility">The accessibility value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="accessibility">The accessibility modifier to emit.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public EventBuilder WithAccessibility(Accessibility accessibility)
         {
             _declaredAccessibility = accessibility;
@@ -174,9 +180,9 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Marks public.
+        /// Sets the generated event to public accessibility.
         /// </summary>
-        /// <returns>The generated result.</returns>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public EventBuilder MakePublic()
         {
             _declaredAccessibility = Accessibility.Public;
@@ -184,9 +190,9 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Marks protected.
+        /// Sets the generated event to protected accessibility.
         /// </summary>
-        /// <returns>The generated result.</returns>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public EventBuilder MakeProtected()
         {
             _declaredAccessibility = Accessibility.Protected;
@@ -194,9 +200,9 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Marks private.
+        /// Sets the generated event to private accessibility.
         /// </summary>
-        /// <returns>The generated result.</returns>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public EventBuilder MakePrivate()
         {
             _declaredAccessibility = Accessibility.Private;
@@ -204,9 +210,9 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Marks internal.
+        /// Sets the generated event to internal accessibility.
         /// </summary>
-        /// <returns>The generated result.</returns>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public EventBuilder MakeInternal()
         {
             _declaredAccessibility = Accessibility.Internal;
@@ -214,9 +220,9 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Marks internal protected.
+        /// Sets the generated event to protected internal accessibility.
         /// </summary>
-        /// <returns>The generated result.</returns>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public EventBuilder MakeInternalProtected()
         {
             _declaredAccessibility = Accessibility.ProtectedAndInternal;
@@ -224,10 +230,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Adds assembly attribute.
+        /// Queues an assembly-level attribute on the generated file that owns this event.
         /// </summary>
-        /// <param name="attribute">The attribute value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="attribute">The attribute to inspect or emit.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public override EventBuilder AddAssemblyAttribute(string attribute)
         {
             Class.AddAssemblyAttribute(attribute);
@@ -235,10 +241,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Adds namespace import.
+        /// Registers a namespace import on the generated file that owns this event.
         /// </summary>
-        /// <param name="importedNamespace">The imported namespace value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="importedNamespace">The namespace to emit as a using directive so referenced types do not need to be fully qualified.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public override EventBuilder AddNamespaceImport(string importedNamespace)
         {
             Class.AddNamespaceImport(importedNamespace);
@@ -246,10 +252,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Adds namespace import.
+        /// Registers a namespace import on the generated file that owns this event.
         /// </summary>
-        /// <param name="symbol">The symbol value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="symbol">The Roslyn symbol whose namespace or type information should be mirrored into generated source.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public override EventBuilder AddNamespaceImport(ISymbol symbol)
         {
             Class.AddNamespaceImport(symbol);
@@ -257,10 +263,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Adds namespace import.
+        /// Registers a namespace import on the generated file that owns this event.
         /// </summary>
-        /// <param name="symbol">The symbol value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="symbol">The Roslyn symbol whose namespace or type information should be mirrored into generated source.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public override EventBuilder AddNamespaceImport(INamespaceSymbol symbol)
         {
             Class.AddNamespaceImport(symbol);

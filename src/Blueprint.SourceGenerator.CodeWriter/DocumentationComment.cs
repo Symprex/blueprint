@@ -11,9 +11,9 @@ namespace Blueprint.SourceGenerator.CodeWriter
     internal abstract class DocumentationComment
     {
         /// <summary>
-        /// Writes write.
+        /// Writes the current documentation model to the supplied code writer.
         /// </summary>
-        /// <param name="writer">The writer value.</param>
+        /// <param name="writer">The writer that receives the XML documentation output.</param>
         public abstract void Write(in CodeWriter writer);
     }
 
@@ -22,9 +22,9 @@ namespace Blueprint.SourceGenerator.CodeWriter
         internal string? InheritFrom { get; set; }
 
         /// <summary>
-        /// Writes write.
+        /// Writes an <c>&lt;inheritdoc/&gt;</c> element to the supplied code writer.
         /// </summary>
-        /// <param name="writer">The writer value.</param>
+        /// <param name="writer">The writer that receives the XML documentation output.</param>
         public override void Write(in CodeWriter writer)
         {
             writer.AppendLine($"/// <inheritdoc {(InheritFrom is null ? string.Empty : $"cref=\"{InheritFrom}\"")}/>");
@@ -36,9 +36,9 @@ namespace Blueprint.SourceGenerator.CodeWriter
         internal string? Summary { get; set; }
 
         /// <summary>
-        /// Writes write.
+        /// Writes a <c>&lt;summary&gt;</c> element to the supplied code writer.
         /// </summary>
-        /// <param name="writer">The writer value.</param>
+        /// <param name="writer">The writer that receives the XML documentation output.</param>
         public override void Write(in CodeWriter writer)
         {
             if (Summary is null || string.IsNullOrEmpty(Summary))
@@ -59,10 +59,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         private readonly Dictionary<string, string> parameterDocs = new Dictionary<string, string>();
 
         /// <summary>
-        /// Adds parameter.
+        /// Adds or replaces XML documentation for a named parameter.
         /// </summary>
-        /// <param name="parameterName">The parameter name value.</param>
-        /// <param name="documentationComment">The documentation comment value.</param>
+        /// <param name="parameterName">The name of the parameter whose documentation should be emitted.</param>
+        /// <param name="documentationComment">The text to emit inside the generated <c>&lt;param&gt;</c> element.</param>
         public void AddParameter(string parameterName, string documentationComment)
         {
             parameterDocs[parameterName] = documentationComment;
@@ -78,9 +78,9 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Writes write.
+        /// Writes the summary and parameter documentation to the supplied code writer.
         /// </summary>
-        /// <param name="writer">The writer value.</param>
+        /// <param name="writer">The writer that receives the XML documentation output.</param>
         public override void Write(in CodeWriter writer)
         {
             base.Write(writer);

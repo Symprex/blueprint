@@ -11,7 +11,8 @@ using Microsoft.CodeAnalysis;
 namespace Blueprint.SourceGenerator.CodeWriter
 {
     /// <summary>
-    /// Builds constructor signatures, base calls, and constructor bodies.
+    /// Builds a generated constructor.
+    /// Use it to declare parameters, chain to <c>this</c> or <c>base</c> constructors, and describe the emitted body without assembling constructor source by hand.
     /// </summary>
     public sealed class ConstructorBuilder : BuilderBase<ConstructorBuilder>, IParameterized<ConstructorBuilder>
     {
@@ -34,19 +35,28 @@ namespace Blueprint.SourceGenerator.CodeWriter
 
         ConstructorBuilder IParameterized<ConstructorBuilder>.Parent => this;
 
+        /// <summary>
+        /// Gets the parameters currently configured for the generated constructor signature.
+        /// </summary>
         public IReadOnlyCollection<ParameterBuilder<ConstructorBuilder>> Parameters => _parameters;
 
+        /// <summary>
+        /// Gets the accessibility that will be emitted for the generated constructor.
+        /// </summary>
         public Accessibility? AccessModifier { get; }
 
+        /// <summary>
+        /// Gets the ClassBuilder that owns this generated constructor.
+        /// </summary>
         public ClassBuilder Class { get; }
 
         internal int Count => _parameters.Count;
 
         /// <summary>
-        /// Configures summary.
+        /// Sets the XML summary that will be emitted for the generated constructor.
         /// </summary>
-        /// <param name="summary">The summary value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="summary">The caller-facing description of why the generated constructor exists or what it initializes.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public ConstructorBuilder WithSummary(string summary)
         {
             if (_xmlDoc is not null && _xmlDoc is SummaryDocumentationComment summaryComment)
@@ -58,10 +68,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Configures inherit doc.
+        /// Configures the generated constructor to emit inheritdoc XML instead of explicit text.
         /// </summary>
-        /// <param name="inherit">The inherit value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="inherit">Set to <see langword="true"/> to emit <c>&lt;inheritdoc/&gt;</c> for the generated constructor. The parameter keeps the fluent API readable in conditional code paths.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public ConstructorBuilder WithInheritDoc(bool inherit = true)
         {
             _xmlDoc = new InheritDocumentationComment();
@@ -69,10 +79,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Configures inherit doc.
+        /// Configures the generated declaration to emit inheritdoc XML targeting a specific cref.
         /// </summary>
-        /// <param name="from">The from value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="from">The member or type to reference from the emitted inheritdoc cref.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public ConstructorBuilder WithInheritDoc(string from)
         {
             _xmlDoc = new InheritDocumentationComment { InheritFrom = from };
@@ -80,11 +90,11 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Configures parameter doc.
+        /// Adds or replaces XML documentation for a parameter on the generated constructor.
         /// </summary>
-        /// <param name="paramName">The param name value.</param>
-        /// <param name="documentation">The documentation value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="paramName">The name of the generated parameter whose XML documentation should be updated.</param>
+        /// <param name="documentation">The guidance to emit for callers consuming that generated parameter.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public ConstructorBuilder WithParameterDoc(string paramName, string documentation)
         {
             if (_xmlDoc is not null && _xmlDoc is not ParameterDocumentationComment)
@@ -98,10 +108,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Adds assembly attribute.
+        /// Queues an assembly-level attribute on the generated file that owns this constructor.
         /// </summary>
-        /// <param name="attribute">The attribute value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="attribute">The attribute to inspect or emit.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public override ConstructorBuilder AddAssemblyAttribute(string attribute)
         {
             Class.AddAssemblyAttribute(attribute);
@@ -109,10 +119,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Adds attribute.
+        /// Adds an attribute to the generated constructor if it is not already present.
         /// </summary>
-        /// <param name="attribute">The attribute value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="attribute">The attribute to inspect or emit.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public ConstructorBuilder AddAttribute(string attribute)
         {
             var sanitized = attribute.Replace("[", string.Empty).Replace("]", string.Empty);
@@ -123,10 +133,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Configures body.
+        /// Supplies the callback that writes the generated constructor body.
         /// </summary>
-        /// <param name="writerDelegate">The writer delegate value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="writerDelegate">A callback that writes the generated constructor body, typically by using <see cref="ICodeWriterExtensions"/> helpers to express statements and control flow.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public ConstructorBuilder WithBody(Action<ICodeWriter> writerDelegate)
         {
             _methodBodyWriter = writerDelegate;
@@ -134,9 +144,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Configures this call.
+        /// Configures the generated constructor to chain to another constructor on the same type.
         /// </summary>
-        /// <returns>The generated result.</returns>
+        /// <remarks>Use this overload when the target constructor takes no arguments.</remarks>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public ConstructorBuilder WithThisCall()
         {
             _baseCall = () => ": this()";
@@ -144,10 +155,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Configures this call.
+        /// Configures the generated constructor to chain to another constructor on the same type while also declaring matching parameters on this constructor.
         /// </summary>
-        /// <param name="parameters">The parameters value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="parameters">The parameter-type-to-argument mapping to declare on this constructor and forward into the emitted <c>this(...)</c> call.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public ConstructorBuilder WithThisCall(Dictionary<string, string> parameters)
         {
             foreach(var parameter in parameters)
@@ -164,10 +175,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Configures this call.
+        /// Configures the generated constructor to chain to another constructor on the same type.
         /// </summary>
-        /// <param name="parameters">The parameters value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="parameters">The parameters or argument expressions to mirror into generated source.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public ConstructorBuilder WithThisCall(IEnumerable<IParameterSymbol> parameters)
         {
             var dict = new Dictionary<string, string>();
@@ -180,19 +191,20 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Configures this call.
+        /// Configures the generated constructor to chain to another constructor on the same type.
         /// </summary>
-        /// <param name="baseConstructor">The base constructor value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="baseConstructor">The base constructor used by this operation.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public ConstructorBuilder WithThisCall(IMethodSymbol baseConstructor)
         {
             return WithThisCall(baseConstructor.Parameters);
         }
 
         /// <summary>
-        /// Configures base call.
+        /// Configures the generated constructor to chain to a base-type constructor.
         /// </summary>
-        /// <returns>The generated result.</returns>
+        /// <remarks>Use this overload when the base constructor takes no arguments.</remarks>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public ConstructorBuilder WithBaseCall()
         {
             _baseCall = () => ": base()";
@@ -200,10 +212,11 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Configures base call arguments.
+        /// Configures an explicit base-constructor call using the supplied argument expressions only.
         /// </summary>
-        /// <param name="arguments">The arguments value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="arguments">The argument expressions to pass to the emitted <c>base(...)</c> call.</param>
+        /// <remarks>Prefer this overload when this constructor already declared its own parameters and you only need to control the forwarded arguments.</remarks>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public ConstructorBuilder WithBaseCallArguments(params string[] arguments)
         {
             _baseCall = () =>
@@ -220,10 +233,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Configures base call.
+        /// Configures the generated constructor to chain to a base-type constructor while also declaring matching parameters on this constructor.
         /// </summary>
-        /// <param name="parameters">The parameters value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="parameters">The parameter-type-to-argument mapping to declare on this constructor and forward into the emitted <c>base(...)</c> call.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public ConstructorBuilder WithBaseCall(Dictionary<string, string> parameters)
         {
             foreach (var parameter in parameters)
@@ -240,10 +253,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Configures base call.
+        /// Configures the generated constructor to chain to a base-type constructor.
         /// </summary>
-        /// <param name="parameters">The parameters value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="parameters">The parameters or argument expressions to mirror into generated source.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public ConstructorBuilder WithBaseCall(IEnumerable<IParameterSymbol> parameters)
         {
             var dict = new Dictionary<string, string>();
@@ -256,20 +269,20 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Configures base call.
+        /// Configures the generated constructor to chain to a base-type constructor.
         /// </summary>
-        /// <param name="baseConstructor">The base constructor value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="baseConstructor">The base constructor used by this operation.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public ConstructorBuilder WithBaseCall(IMethodSymbol baseConstructor)
         {
             return WithBaseCall(baseConstructor.Parameters);
         }
 
         /// <summary>
-        /// Adds namespace import.
+        /// Registers a namespace import on the generated file that owns this constructor.
         /// </summary>
-        /// <param name="namespaceImport">The namespace import value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="namespaceImport">The namespace import used by this operation.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public override ConstructorBuilder AddNamespaceImport(string namespaceImport)
         {
             Class.AddNamespaceImport(namespaceImport);
@@ -277,30 +290,30 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Adds namespace import.
+        /// Registers a namespace import on the generated file that owns this constructor.
         /// </summary>
-        /// <param name="symbol">The symbol value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="symbol">The Roslyn symbol whose namespace or type information should be mirrored into generated source.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public override ConstructorBuilder AddNamespaceImport(ISymbol symbol)
         {
             return AddNamespaceImport(symbol.ContainingNamespace);
         }
 
         /// <summary>
-        /// Adds namespace import.
+        /// Registers a namespace import on the generated file that owns this constructor.
         /// </summary>
-        /// <param name="symbol">The symbol value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="symbol">The Roslyn symbol whose namespace or type information should be mirrored into generated source.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public override ConstructorBuilder AddNamespaceImport(INamespaceSymbol symbol)
         {
             return AddNamespaceImport(symbol.ToString());
         }
 
         /// <summary>
-        /// Adds constructor.
+        /// Adds constructor to the current generated constructor.
         /// </summary>
-        /// <param name="accessModifier">The access modifier value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="accessModifier">The accessibility modifier to emit.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public ConstructorBuilder AddConstructor(Accessibility? accessModifier = null)
         {
             return Class.AddConstructor(accessModifier);

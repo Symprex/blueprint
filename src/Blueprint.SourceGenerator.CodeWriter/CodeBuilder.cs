@@ -11,7 +11,8 @@ using Microsoft.CodeAnalysis;
 namespace Blueprint.SourceGenerator.CodeWriter
 {
     /// <summary>
-    /// Builds C# source output including namespace directives and generated type declarations.
+    /// Builds a complete C# source file.
+    /// Create one builder per generated file, queue the declarations you want to emit, and then call <c>Build()</c> to render the final source text.
     /// </summary>
     public sealed class CodeBuilder
     {
@@ -32,29 +33,47 @@ the code is regenerated.";
             IndentStyle = indentStyle;
         }
 
+        /// <summary>
+        /// Gets the namespace that the generated file will emit, or null when generating in the global namespace.
+        /// </summary>
         public string? Namespace { get; }
 
+        /// <summary>
+        /// Gets the indentation style used when rendering the generated file.
+        /// </summary>
         public IndentStyle IndentStyle { get; }
 
+        /// <summary>
+        /// Gets the class declarations currently queued on the file builder.
+        /// </summary>
         public IReadOnlyList<ClassBuilder> Classes => _builders.OfType<ClassBuilder>().ToList();
 
+        /// <summary>
+        /// Gets the record declarations currently queued on the file builder.
+        /// </summary>
         public IReadOnlyList<RecordBuilder> Records => _builders.OfType<RecordBuilder>().ToList();
 
+        /// <summary>
+        /// Gets the enum declarations currently queued on the file builder.
+        /// </summary>
         public IReadOnlyList<EnumBuilder> Enums => _builders.OfType<EnumBuilder>().ToList();
 
+        /// <summary>
+        /// Gets the delegate declarations currently queued on the file builder.
+        /// </summary>
         public IReadOnlyList<DelegateBuilder> Delegates => _builders.OfType<DelegateBuilder>().ToList();
 
         /// <summary>
-        /// Enables top-level namespace generation for the output.
+        /// Switches the generated file to file-scoped namespace syntax.
         /// </summary>
-        /// <returns>The generated result.</returns>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public CodeBuilder TopLevelNamespace() => TopLevelNamespace(true);
 
         /// <summary>
-        /// Sets whether generated code should emit a top-level namespace declaration.
+        /// Switches between file-scoped and block-scoped namespace syntax for the generated file.
         /// </summary>
-        /// <param name="topLevel">The top level value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="topLevel"><see langword="true"/> to emit modern file-scoped syntax; <see langword="false"/> to keep the classic braced namespace form.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public CodeBuilder TopLevelNamespace(bool topLevel)
         {
             _topLevel = topLevel;
@@ -62,16 +81,16 @@ the code is regenerated.";
         }
 
         /// <summary>
-        /// Sets the nullable context mode for generated output.
+        /// Sets the nullable directive emitted near the top of the generated file so the generated code matches the intended nullability policy.
         /// </summary>
-        /// <returns>The generated result.</returns>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public CodeBuilder Nullable() => Nullable(NullableState.Enable);
 
         /// <summary>
-        /// Enables nullable context in generated output.
+        /// Sets the nullable directive emitted near the top of the generated file so the generated code matches the intended nullability policy.
         /// </summary>
-        /// <param name="nullable">The nullable value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="nullable">The nullable directive mode to emit before the generated declarations.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public CodeBuilder Nullable(NullableState nullable)
         {
             _nullable = nullable;
@@ -79,38 +98,38 @@ the code is regenerated.";
         }
 
         /// <summary>
-        /// Creates in global namespace.
+        /// Creates a file builder for declarations that intentionally live in the global namespace.
         /// </summary>
-        /// <param name="indentStyle">The indent style value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="indentStyle">The indentation style to use when rendering generated source.</param>
+        /// <returns>A new builder initialized from the supplied context.</returns>
         public static CodeBuilder CreateInGlobalNamespace(IndentStyle indentStyle = IndentStyle.Spaces) =>
             new CodeBuilder(indentStyle: indentStyle)
                 .TopLevelNamespace();
 
         /// <summary>
-        /// Creates create.
+        /// Creates the usual entry point for a generated file that targets a known CLR namespace.
         /// </summary>
-        /// <param name="clrNamespace">The clr namespace value.</param>
-        /// <param name="indentStyle">The indent style value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="clrNamespace">The namespace that the generated file should target.</param>
+        /// <param name="indentStyle">The indentation style to use when rendering generated source.</param>
+        /// <returns>A new builder initialized from the supplied context.</returns>
         public static CodeBuilder Create(string clrNamespace, IndentStyle indentStyle = IndentStyle.Spaces) =>
             new CodeBuilder(clrNamespace, indentStyle);
 
         /// <summary>
-        /// Creates create.
+        /// Creates the usual entry point for a generated file that targets a Roslyn namespace symbol.
         /// </summary>
-        /// <param name="namespaceSymbol">The namespace symbol value.</param>
-        /// <param name="indentStyle">The indent style value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="namespaceSymbol">The Roslyn namespace symbol that identifies the namespace to generate into.</param>
+        /// <param name="indentStyle">The indentation style to use when rendering generated source.</param>
+        /// <returns>A new builder initialized from the supplied context.</returns>
         public static CodeBuilder Create(INamespaceSymbol namespaceSymbol, IndentStyle indentStyle = IndentStyle.Spaces) =>
             Create(namespaceSymbol.ToString(), indentStyle);
 
         /// <summary>
-        /// Creates create.
+        /// Creates a class builder seeded from an existing Roslyn type symbol.
         /// </summary>
-        /// <param name="typeSymbol">The type symbol value.</param>
-        /// <param name="indentStyle">The indent style value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="typeSymbol">The Roslyn type symbol whose namespace, name, accessibility, and kind should seed the generated builder.</param>
+        /// <param name="indentStyle">The indentation style to use when rendering generated source.</param>
+        /// <returns>A new builder initialized from the supplied context.</returns>
         public static ClassBuilder Create(ITypeSymbol typeSymbol, IndentStyle indentStyle = IndentStyle.Spaces)
         {
             var builder = Create(typeSymbol.ContainingNamespace, indentStyle);
@@ -120,10 +139,10 @@ the code is regenerated.";
         }
 
         /// <summary>
-        /// Adds namespace import.
+        /// Registers a namespace to emit as a using directive in the generated file.
         /// </summary>
-        /// <param name="importedNamespace">The imported namespace value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="importedNamespace">The namespace to emit as a using directive so later declarations can reference its types without full qualification.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public CodeBuilder AddNamespaceImport(string importedNamespace)
         {
             var value = Regex.Replace(importedNamespace, @"^using\w+", string.Empty).Replace(";", string.Empty);
@@ -134,30 +153,30 @@ the code is regenerated.";
         }
 
         /// <summary>
-        /// Adds namespace import.
+        /// Registers a namespace to emit as a using directive in the generated file.
         /// </summary>
-        /// <param name="symbol">The symbol value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="symbol">The Roslyn symbol whose namespace or type information should be mirrored into generated source.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public CodeBuilder AddNamespaceImport(ISymbol symbol)
         {
             return AddNamespaceImport(symbol.ContainingNamespace.ToString());
         }
 
         /// <summary>
-        /// Adds namespace import.
+        /// Registers a namespace to emit as a using directive in the generated file.
         /// </summary>
-        /// <param name="symbol">The symbol value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="symbol">The Roslyn symbol whose namespace or type information should be mirrored into generated source.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public CodeBuilder AddNamespaceImport(INamespaceSymbol symbol)
         {
             return AddNamespaceImport(symbol.ToString());
         }
 
         /// <summary>
-        /// Adds assembly attribute.
+        /// Queues an assembly-level attribute to emit before the generated declarations.
         /// </summary>
-        /// <param name="attribute">The attribute value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="attribute">The attribute to inspect or emit.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public CodeBuilder AddAssemblyAttribute(string attribute)
         {
             _assemblyAttributes.Add(attribute);
@@ -165,10 +184,10 @@ the code is regenerated.";
         }
 
         /// <summary>
-        /// Adds class.
+        /// Adds a class declaration to the generated file and returns a builder for its members.
         /// </summary>
-        /// <param name="name">The name value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="name">The type name to emit for the generated class.</param>
+        /// <returns>The builder for the newly added generated declaration.</returns>
         public ClassBuilder AddClass(string name)
         {
             var builder = new ClassBuilder(name, this);
@@ -177,10 +196,10 @@ the code is regenerated.";
         }
 
         /// <summary>
-        /// Adds class.
+        /// Adds a class declaration to the generated file and returns a builder for its members.
         /// </summary>
-        /// <param name="symbol">The symbol value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="symbol">The Roslyn symbol whose namespace or type information should be mirrored into generated source.</param>
+        /// <returns>The builder for the newly added generated declaration.</returns>
         public ClassBuilder AddClass(ITypeSymbol symbol)
         {
             return AddClass(symbol.Name);
@@ -194,10 +213,10 @@ the code is regenerated.";
         }
 
         /// <summary>
-        /// Adds record.
+        /// Adds a record declaration to the generated file and returns a builder for its members.
         /// </summary>
-        /// <param name="name">The name value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="name">The type name to emit for the generated record.</param>
+        /// <returns>The builder for the newly added generated declaration.</returns>
         public RecordBuilder AddRecord(string name)
         {
             var builder = new RecordBuilder(name, this);
@@ -213,10 +232,10 @@ the code is regenerated.";
         }
 
         /// <summary>
-        /// Adds enum.
+        /// Adds an enum declaration to the generated file and returns a builder for its values.
         /// </summary>
-        /// <param name="name">The name value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="name">The type name to emit for the generated enum.</param>
+        /// <returns>The builder for the newly added generated declaration.</returns>
         public EnumBuilder AddEnum(string name)
         {
             var builder = new EnumBuilder(name, this);
@@ -232,10 +251,10 @@ the code is regenerated.";
         }
 
         /// <summary>
-        /// Adds delegate.
+        /// Adds a delegate declaration to the generated file and returns a builder for its signature.
         /// </summary>
-        /// <param name="name">The name value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="name">The type name to emit for the generated delegate.</param>
+        /// <returns>The builder for the newly added generated declaration.</returns>
         public DelegateBuilder AddDelegate(string name)
         {
             var builder = new DelegateBuilder(name, this);
@@ -244,10 +263,10 @@ the code is regenerated.";
         }
 
         /// <summary>
-        /// Configures auto generated message.
+        /// Sets the auto-generated comment emitted at the top of the generated file.
         /// </summary>
-        /// <param name="message">The message value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="message">The custom auto-generated comment text to emit at the top of the file.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public CodeBuilder WithAutoGeneratedMessage(string message)
         {
             _autoGeneratedMessage = message;
@@ -255,7 +274,7 @@ the code is regenerated.";
         }
 
         /// <summary>
-        /// Clears all accumulated imports, attributes, and type builders.
+        /// Clears all queued declarations, using directives, and assembly attributes so the builder can be reused.
         /// </summary>
         public void Clear()
         {
@@ -339,9 +358,9 @@ the code is regenerated.";
         }
 
         /// <summary>
-        /// Builds build.
+        /// Renders the configured declarations into a complete C# source file.
         /// </summary>
-        /// <returns>The generated result.</returns>
+        /// <returns>The rendered C# source text.</returns>
         public string Build()
         {
             var writer = BuildInternal();
@@ -349,9 +368,9 @@ the code is regenerated.";
         }
 
         /// <summary>
-        /// Converts string.
+        /// Formats the current generated file as string source.
         /// </summary>
-        /// <returns>The generated result.</returns>
+        /// <returns>The generated source fragment represented by the current builder.</returns>
         public override string ToString()
         {
             return Build();

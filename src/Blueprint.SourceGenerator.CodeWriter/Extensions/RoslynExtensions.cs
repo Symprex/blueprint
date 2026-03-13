@@ -6,17 +6,16 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 namespace Blueprint.SourceGenerator.CodeWriter.Extensions;
 
 /// <summary>
-/// Represents roslyn extensions.
+/// Provides small Roslyn helpers that convert syntax and attribute data into values useful during code generation.
 /// </summary>
 public static class RoslynExtensions
 {
     /// <summary>
-    /// Method to get the <see cref="ISymbol"/> from a <see cref="BaseTypeDeclarationSyntax"/>
+    /// Resolves the declared symbol for a type declaration syntax node.
     /// </summary>
-    /// <typeparam name="TSymbol">The symbol that you want that derives from <see cref="ISymbol"/></typeparam>
-    /// <param name="compilation">The <see cref="Compilation"/></param>
-    /// <param name="declarationSyntax">The <see cref="BaseTypeDeclarationSyntax"/>that you want to convert to symbol.</param>
-    /// <returns>The desired Symbol.</returns>
+    /// <param name="compilation">The compilation whose semantic model should be used when resolving symbols.</param>
+    /// <param name="declarationSyntax">The type declaration syntax node whose symbol should be resolved.</param>
+    /// <returns>The declared symbol for the supplied type declaration, or <see langword="null"/> when Roslyn cannot resolve one.</returns>
     public static TSymbol? GetSymbol<TSymbol>(this Compilation compilation, BaseTypeDeclarationSyntax declarationSyntax)
         where TSymbol : ISymbol
     {
@@ -25,11 +24,11 @@ public static class RoslynExtensions
     }
 
     /// <summary>
-    /// Returns the value of a named attribute as a <see cref="TypedConstant"/>. If no attribute with the given name is found, this method returns <c>null</c>.
+    /// Looks up a named attribute argument and returns its TypedConstant value.
     /// </summary>
-    /// <param name="attribute">The attribute whose value is to be returned.</param>
-    /// <param name="name">The name of the attribute to be returned.</param>
-    /// <returns>The value of the named attribute, or <c>null</c> if no such attribute is found.</returns>
+    /// <param name="attribute">The attribute to inspect.</param>
+    /// <param name="name">The named argument to look up.</param>
+    /// <returns>The named attribute argument value, or the default TypedConstant when no matching argument exists.</returns>
     public static TypedConstant GetAttributeValueByName(this AttributeData attribute, string name)
     {
         return attribute.NamedArguments.SingleOrDefault(arg => arg.Key == name).Value;
@@ -37,12 +36,12 @@ public static class RoslynExtensions
 
 
     /// <summary>
-    /// Returns the value of an attribute with the given name as a string. If no attribute with the specified name is found, the default value of "null" is returned.
+    /// Looks up a named attribute argument and returns it as a string, falling back to a placeholder when missing.
     /// </summary>
     /// <param name="attribute">The attribute to inspect.</param>
-    /// <param name="name">The name of the attribute value to retrieve.</param>
-    /// <param name="placeholder">The default value to return if the attribute value is null.</param>
-    /// <returns>The attribute value as a string, or the specified default value if the attribute is not found or its value is null.</returns>
+    /// <param name="name">The named argument to look up.</param>
+    /// <param name="placeholder">The fallback string to return when the requested attribute value is missing or null.</param>
+    /// <returns>The attribute value as a string, or <paramref name="placeholder"/> when the named argument is missing or null.</returns>
     public static string GetAttributeValueByNameAsString(this AttributeData attribute, string name, string placeholder = "null")
     {
         var data = attribute.NamedArguments.SingleOrDefault(kvp => kvp.Key == name).Value;

@@ -10,16 +10,17 @@ using Microsoft.CodeAnalysis;
 namespace Blueprint.SourceGenerator.CodeWriter
 {
     /// <summary>
-    /// Represents parameterized extensions.
+    /// Adds the common parameter-construction helpers used by fluent builders such as methods, constructors, and delegates.
+    /// Prefer these overloads when you want to append parameters quickly without constructing <see cref="ParameterBuilder{T}"/> instances manually.
     /// </summary>
     public static class ParameterizedExtensions
     {
         /// <summary>
-        /// Adds parameter.
+        /// Adds a parameter to the current generated signature.
         /// </summary>
-        /// <param name="parameterized">The parameterized value.</param>
-        /// <param name="typeName">The type name value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="parameterized">The builder whose parameter list should be updated.</param>
+        /// <param name="typeName">The C# type text to emit.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public static T AddParameter<T>(this IParameterized<T> parameterized, string typeName)
             where T : BuilderBase<T>, IParameterized<T>
         {
@@ -27,11 +28,11 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Adds parameter.
+        /// Adds a parameter to the current generated signature.
         /// </summary>
-        /// <param name="parameterized">The parameterized value.</param>
-        /// <param name="typeSymbol">The type symbol value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="parameterized">The builder whose parameter list should be updated.</param>
+        /// <param name="typeSymbol">The Roslyn type symbol to convert into emitted type text.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public static T AddParameter<T>(this IParameterized<T> parameterized, ITypeSymbol typeSymbol)
             where T : BuilderBase<T>, IParameterized<T>
         {
@@ -40,12 +41,12 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Adds parameter.
+        /// Adds a parameter to the current generated signature.
         /// </summary>
-        /// <param name="parameterized">The parameterized value.</param>
-        /// <param name="typeName">The type name value.</param>
-        /// <param name="parameterName">The parameter name value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="parameterized">The builder whose parameter list should be updated.</param>
+        /// <param name="typeName">The C# type text to emit.</param>
+        /// <param name="parameterName">The parameter name to emit. When omitted, a name is inferred from the type.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public static T AddParameter<T>(this IParameterized<T> parameterized, string typeName, string parameterName)
             where T : BuilderBase<T>, IParameterized<T>
         {
@@ -53,12 +54,12 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Adds parameter.
+        /// Adds a parameter to the current generated signature.
         /// </summary>
-        /// <param name="parameterized">The parameterized value.</param>
-        /// <param name="typeSymbol">The type symbol value.</param>
-        /// <param name="parameterName">The parameter name value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="parameterized">The builder whose parameter list should be updated.</param>
+        /// <param name="typeSymbol">The Roslyn type symbol to convert into emitted type text.</param>
+        /// <param name="parameterName">The parameter name to emit. When omitted, a name is inferred from the type.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public static T AddParameter<T>(this IParameterized<T> parameterized, ITypeSymbol typeSymbol, string parameterName)
             where T : BuilderBase<T>, IParameterized<T>
         {
@@ -67,13 +68,13 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Adds parameter.
+        /// Adds a parameter to the current generated signature.
         /// </summary>
-        /// <param name="parameterized">The parameterized value.</param>
-        /// <param name="typeName">The type name value.</param>
-        /// <param name="parameterName">The parameter name value.</param>
-        /// <param name="index">The index value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="parameterized">The builder whose parameter list should be updated.</param>
+        /// <param name="typeName">The C# type text to emit.</param>
+        /// <param name="parameterName">The parameter name to emit. When omitted, a name is inferred from the type.</param>
+        /// <param name="index">The zero-based insertion index. Use -1 to append the parameter.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public static T AddParameter<T>(this IParameterized<T> parameterized, string typeName, string parameterName, int index)
             where T : BuilderBase<T>, IParameterized<T>
         {
@@ -81,13 +82,13 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Adds parameter.
+        /// Adds a parameter to the current generated signature.
         /// </summary>
-        /// <param name="parameterized">The parameterized value.</param>
-        /// <param name="typeSymbol">The type symbol value.</param>
-        /// <param name="parameterName">The parameter name value.</param>
-        /// <param name="index">The index value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="parameterized">The builder whose parameter list should be updated.</param>
+        /// <param name="typeSymbol">The Roslyn type symbol to convert into emitted type text.</param>
+        /// <param name="parameterName">The parameter name to emit. When omitted, a name is inferred from the type.</param>
+        /// <param name="index">The zero-based insertion index. Use -1 to append the parameter.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public static T AddParameter<T>(this IParameterized<T> parameterized, ITypeSymbol typeSymbol, string parameterName, int index)
             where T : BuilderBase<T>, IParameterized<T>
         {
@@ -96,14 +97,14 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Adds parameter with default value.
+        /// Adds a parameter to the current generated signature and emits a default value.
         /// </summary>
-        /// <param name="parameterized">The parameterized value.</param>
-        /// <param name="typeName">The type name value.</param>
-        /// <param name="parameterName">The parameter name value.</param>
-        /// <param name="defaultValue">The default value value.</param>
-        /// <param name="index">The index value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="parameterized">The builder whose parameter list should be updated.</param>
+        /// <param name="typeName">The C# type text to emit.</param>
+        /// <param name="parameterName">The parameter name to emit. When omitted, a name is inferred from the type.</param>
+        /// <param name="defaultValue">The default value to emit in generated source.</param>
+        /// <param name="index">The zero-based insertion index. Use -1 to append the parameter.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public static T AddParameterWithDefaultValue<T>(this IParameterized<T> parameterized, string typeName, string? parameterName = null, object? defaultValue = null, int index = -1)
             where T : BuilderBase<T>, IParameterized<T>
         {
@@ -113,14 +114,14 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Adds parameter with default value.
+        /// Adds a parameter to the current generated signature and emits a default value.
         /// </summary>
-        /// <param name="parameterized">The parameterized value.</param>
-        /// <param name="typeSymbol">The type symbol value.</param>
-        /// <param name="parameterName">The parameter name value.</param>
-        /// <param name="defaultValue">The default value value.</param>
-        /// <param name="index">The index value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="parameterized">The builder whose parameter list should be updated.</param>
+        /// <param name="typeSymbol">The Roslyn type symbol to convert into emitted type text.</param>
+        /// <param name="parameterName">The parameter name to emit. When omitted, a name is inferred from the type.</param>
+        /// <param name="defaultValue">The default value to emit in generated source.</param>
+        /// <param name="index">The zero-based insertion index. Use -1 to append the parameter.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public static T AddParameterWithDefaultValue<T>(this IParameterized<T> parameterized, ITypeSymbol typeSymbol, string? parameterName = null, object? defaultValue = null, int index = -1)
             where T : BuilderBase<T>, IParameterized<T>
         {
@@ -129,13 +130,13 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Adds parameter with default value.
+        /// Adds a parameter to the current generated signature and emits a default value.
         /// </summary>
-        /// <param name="parameterized">The parameterized value.</param>
-        /// <param name="typeName">The type name value.</param>
-        /// <param name="parameterName">The parameter name value.</param>
-        /// <param name="index">The index value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="parameterized">The builder whose parameter list should be updated.</param>
+        /// <param name="typeName">The C# type text to emit.</param>
+        /// <param name="parameterName">The parameter name to emit. When omitted, a name is inferred from the type.</param>
+        /// <param name="index">The zero-based insertion index. Use -1 to append the parameter.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public static T AddParameterWithDefaultValue<T>(this IParameterized<T> parameterized, string typeName, string? parameterName = null, int index = -1)
             where T : BuilderBase<T>, IParameterized<T>
         {
@@ -145,13 +146,13 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Adds parameter with default value.
+        /// Adds a parameter to the current generated signature and emits a default value.
         /// </summary>
-        /// <param name="parameterized">The parameterized value.</param>
-        /// <param name="typeSymbol">The type symbol value.</param>
-        /// <param name="parameterName">The parameter name value.</param>
-        /// <param name="index">The index value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="parameterized">The builder whose parameter list should be updated.</param>
+        /// <param name="typeSymbol">The Roslyn type symbol to convert into emitted type text.</param>
+        /// <param name="parameterName">The parameter name to emit. When omitted, a name is inferred from the type.</param>
+        /// <param name="index">The zero-based insertion index. Use -1 to append the parameter.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public static T AddParameterWithDefaultValue<T>(this IParameterized<T> parameterized, ITypeSymbol typeSymbol, string? parameterName = null, int index = -1)
             where T : BuilderBase<T>, IParameterized<T>
         {
@@ -160,13 +161,13 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Adds parameter with null value.
+        /// Adds a parameter to the current generated signature and emits a null default value.
         /// </summary>
-        /// <param name="parameterized">The parameterized value.</param>
-        /// <param name="typeName">The type name value.</param>
-        /// <param name="parameterName">The parameter name value.</param>
-        /// <param name="index">The index value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="parameterized">The builder whose parameter list should be updated.</param>
+        /// <param name="typeName">The C# type text to emit.</param>
+        /// <param name="parameterName">The parameter name to emit. When omitted, a name is inferred from the type.</param>
+        /// <param name="index">The zero-based insertion index. Use -1 to append the parameter.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public static T AddParameterWithNullValue<T>(this IParameterized<T> parameterized, string typeName, string? parameterName = null, int index = -1)
             where T : BuilderBase<T>, IParameterized<T>
         {
@@ -176,13 +177,13 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Adds parameter with null value.
+        /// Adds a parameter to the current generated signature and emits a null default value.
         /// </summary>
-        /// <param name="parameterized">The parameterized value.</param>
-        /// <param name="typeSymbol">The type symbol value.</param>
-        /// <param name="parameterName">The parameter name value.</param>
-        /// <param name="index">The index value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="parameterized">The builder whose parameter list should be updated.</param>
+        /// <param name="typeSymbol">The Roslyn type symbol to convert into emitted type text.</param>
+        /// <param name="parameterName">The parameter name to emit. When omitted, a name is inferred from the type.</param>
+        /// <param name="index">The zero-based insertion index. Use -1 to append the parameter.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public static T AddParameterWithNullValue<T>(this IParameterized<T> parameterized, ITypeSymbol typeSymbol, string? parameterName = null, int index = -1)
             where T : BuilderBase<T>, IParameterized<T>
         {
@@ -191,11 +192,11 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Adds parameter.
+        /// Adds a parameter to the current generated signature.
         /// </summary>
-        /// <param name="parameterized">The parameterized value.</param>
-        /// <param name="parameter">The parameter value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="parameterized">The builder whose parameter list should be updated.</param>
+        /// <param name="parameter">The Roslyn parameter symbol to mirror into generated source.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public static T AddParameter<T>(this IParameterized<T> parameterized, IParameterSymbol parameter)
             where T : BuilderBase<T>, IParameterized<T>
         {
@@ -206,11 +207,11 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Adds parameters.
+        /// Adds multiple Roslyn parameters to the current generated signature.
         /// </summary>
-        /// <param name="parameterized">The parameterized value.</param>
-        /// <param name="parameters">The parameters value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="parameterized">The builder whose parameter list should be updated.</param>
+        /// <param name="parameters">The parameters or argument expressions to mirror into generated source.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public static T AddParameters<T>(this IParameterized<T> parameterized, IEnumerable<IParameterSymbol> parameters)
             where T : BuilderBase<T>, IParameterized<T>
         {

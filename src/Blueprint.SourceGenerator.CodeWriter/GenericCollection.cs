@@ -7,9 +7,9 @@ namespace Blueprint.SourceGenerator.CodeWriter
     internal class GenericCollection : List<GenericBuilder>
     {
         /// <summary>
-        /// Converts string.
+        /// Formats the generic parameter list used in a declaration header.
         /// </summary>
-        /// <returns>The generated result.</returns>
+        /// <returns>The generic parameter list, or an empty string when no generic parameters have been configured.</returns>
         public override string ToString()
         {
             if (!this.Any())
@@ -19,9 +19,9 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Performs the contraints operation.
+        /// Formats the configured generic constraints as individual <c>where</c> clauses.
         /// </summary>
-        /// <returns>The generated result.</returns>
+        /// <returns>The non-empty constraint clauses that should be emitted after the declaration header.</returns>
         public string[] Contraints() =>
             this.Select(x => x.ToString())
                 .Where(x => !string.IsNullOrEmpty(x))

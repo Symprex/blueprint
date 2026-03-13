@@ -3,7 +3,7 @@ using System.Collections.Generic;
 namespace Blueprint.SourceGenerator.CodeWriter
 {
     /// <summary>
-    /// Represents generic builder.
+    /// Builds generic parameter constraints so declarations can emit valid where clauses.
     /// </summary>
     public sealed class GenericBuilder
     {
@@ -17,12 +17,15 @@ namespace Blueprint.SourceGenerator.CodeWriter
             _constraints = new List<string>();
         }
 
+        /// <summary>
+        /// Gets the generic type parameter name that this builder configures.
+        /// </summary>
         public string Name { get; }
 
         /// <summary>
-        /// Performs the new operation.
+        /// Adds the new() generic constraint.
         /// </summary>
-        /// <returns>The generated result.</returns>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public GenericBuilder New()
         {
             _newDefault = true;
@@ -30,9 +33,9 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Performs the class operation.
+        /// Adds the class generic constraint.
         /// </summary>
-        /// <returns>The generated result.</returns>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public GenericBuilder Class()
         {
             _isClass = true;
@@ -40,10 +43,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Adds constraint.
+        /// Adds an additional generic constraint if it has not already been recorded.
         /// </summary>
-        /// <param name="constraint">The constraint value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="constraint">The constraint used by this operation.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public GenericBuilder AddConstraint(string constraint)
         {
             switch (constraint)
@@ -60,9 +63,9 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Converts string.
+        /// Formats the configured generic constraints as a C# where clause.
         /// </summary>
-        /// <returns>The generated result.</returns>
+        /// <returns>The generated source fragment represented by the current builder.</returns>
         public override string ToString()
         {
             if (_isClass)

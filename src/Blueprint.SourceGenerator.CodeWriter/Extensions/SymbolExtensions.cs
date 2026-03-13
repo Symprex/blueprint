@@ -6,15 +6,15 @@ using Microsoft.CodeAnalysis;
 namespace Blueprint.SourceGenerator.CodeWriter.Extensions;
 
 /// <summary>
-/// Represents symbol extensions.
+/// Provides Roslyn symbol helpers for turning type information into code-friendly names and nullability metadata.
 /// </summary>
 public static class SymbolExtensions
 {
     /// <summary>
-    /// Gets qualified type name.
+    /// Formats a type symbol as a fully qualified name suitable for generated source.
     /// </summary>
-    /// <param name="typeSymbol">The type symbol value.</param>
-    /// <returns>The generated result.</returns>
+    /// <param name="typeSymbol">The Roslyn type symbol to convert into emitted type text.</param>
+    /// <returns>The fully qualified type name formatted for generated source.</returns>
     public static string GetQualifiedTypeName(this ITypeSymbol typeSymbol)
     {
         var type = typeSymbol.GetTypeName();
@@ -56,10 +56,10 @@ public static class SymbolExtensions
     }
 
     /// <summary>
-    /// Performs the is nullable operation.
+    /// Determines whether a Roslyn type symbol should be treated as nullable when generating code.
     /// </summary>
-    /// <param name="type">The type value.</param>
-    /// <returns>The generated result.</returns>
+    /// <param name="type">The type to emit in generated source.</param>
+    /// <returns>True when the inspected type should be treated as nullable in generated code; otherwise false.</returns>
     public static bool IsNullable(this ITypeSymbol type)
     {
         if (type.NullableAnnotation == NullableAnnotation.Annotated)
@@ -70,11 +70,11 @@ public static class SymbolExtensions
     }
 
     /// <summary>
-    /// Performs the is nullable operation.
+    /// Determines whether a Roslyn type symbol should be treated as nullable when generating code.
     /// </summary>
-    /// <param name="type">The type value.</param>
-    /// <param name="nullableType">The nullable type value.</param>
-    /// <returns>The generated result.</returns>
+    /// <param name="type">The type to emit in generated source.</param>
+    /// <param name="nullableType">The nullable type used by this operation.</param>
+    /// <returns>True when the inspected type should be treated as nullable in generated code; otherwise false.</returns>
     public static bool IsNullable(this ITypeSymbol type, out ITypeSymbol? nullableType)
     {
         if (type.IsNullable())

@@ -7,7 +7,7 @@ using Microsoft.CodeAnalysis;
 namespace Blueprint.SourceGenerator.CodeWriter;
 
 /// <summary>
-/// Represents delegate builder.
+/// Builds a generated delegate declaration, including parameters, return type, attributes, and XML documentation.
 /// </summary>
 public sealed class DelegateBuilder : BuilderBase<DelegateBuilder>, IParameterized<DelegateBuilder>
 {
@@ -26,19 +26,31 @@ public sealed class DelegateBuilder : BuilderBase<DelegateBuilder>, IParameteriz
 
     List<ParameterBuilder<DelegateBuilder>> IParameterized<DelegateBuilder>.Parameters => _parameters;
 
+    /// <summary>
+    /// Gets the delegate name that will be emitted.
+    /// </summary>
     public string Name { get; }
 
+    /// <summary>
+    /// Gets the CodeBuilder that owns this generated delegate.
+    /// </summary>
     public CodeBuilder Builder { get; internal set; }
 
+    /// <summary>
+    /// Gets the accessibility that will be emitted for the generated delegate.
+    /// </summary>
     public Accessibility? AccessModifier { get; private set; }
 
+    /// <summary>
+    /// Gets the return type that will be emitted for the generated delegate.
+    /// </summary>
     public string? ReturnType { get; private set; }
 
     /// <summary>
-    /// Configures summary.
+    /// Sets the XML summary that will be emitted for the generated delegate.
     /// </summary>
-    /// <param name="summary">The summary value.</param>
-    /// <returns>The generated result.</returns>
+    /// <param name="summary">The text to place inside the emitted summary documentation.</param>
+    /// <returns>The same builder so fluent configuration can continue.</returns>
     public DelegateBuilder WithSummary(string summary)
     {
         if (_xmlDoc is null || _xmlDoc is not SummaryDocumentationComment summaryDoc)
@@ -50,11 +62,11 @@ public sealed class DelegateBuilder : BuilderBase<DelegateBuilder>, IParameteriz
     }
 
     /// <summary>
-    /// Configures parameter doc.
+    /// Adds or replaces XML documentation for a parameter on the generated delegate.
     /// </summary>
-    /// <param name="paramName">The param name value.</param>
-    /// <param name="documentation">The documentation value.</param>
-    /// <returns>The generated result.</returns>
+    /// <param name="paramName">The name of the generated parameter whose XML documentation should be updated.</param>
+    /// <param name="documentation">The text to emit inside the generated param XML element.</param>
+    /// <returns>The same builder so fluent configuration can continue.</returns>
     public DelegateBuilder WithParameterDoc(string paramName, string documentation)
     {
         if (_xmlDoc is null)
@@ -69,19 +81,19 @@ public sealed class DelegateBuilder : BuilderBase<DelegateBuilder>, IParameteriz
     }
 
     /// <summary>
-    /// Adds generic.
+    /// Adds a generic type parameter to the generated delegate and optionally configures its constraints.
     /// </summary>
-    /// <param name="name">The name value.</param>
-    /// <returns>The generated result.</returns>
+    /// <param name="name">The generated name to emit.</param>
+    /// <returns>The same builder so fluent configuration can continue.</returns>
     public DelegateBuilder AddGeneric(string name) =>
             AddGeneric(name, _ => { });
 
     /// <summary>
-    /// Adds generic.
+    /// Adds a generic type parameter to the generated delegate and optionally configures its constraints.
     /// </summary>
-    /// <param name="name">The name value.</param>
-    /// <param name="configureBuilder">The configure builder value.</param>
-    /// <returns>The generated result.</returns>
+    /// <param name="name">The generated name to emit.</param>
+    /// <param name="configureBuilder">A callback that can further configure the newly created builder before it is attached.</param>
+    /// <returns>The same builder so fluent configuration can continue.</returns>
     public DelegateBuilder AddGeneric(string name, Action<GenericBuilder> configureBuilder)
     {
         if (configureBuilder is null)
@@ -98,22 +110,22 @@ public sealed class DelegateBuilder : BuilderBase<DelegateBuilder>, IParameteriz
     }
 
     /// <summary>
-    /// Marks public delegate.
+    /// Sets the generated delegate to public accessibility.
     /// </summary>
-    /// <returns>The generated result.</returns>
+    /// <returns>The same builder so fluent configuration can continue.</returns>
     public DelegateBuilder MakePublicDelegate() => WithAccessModifier(Accessibility.Public);
 
     /// <summary>
-    /// Marks internal delegate.
+    /// Sets the generated delegate to internal accessibility.
     /// </summary>
-    /// <returns>The generated result.</returns>
+    /// <returns>The same builder so fluent configuration can continue.</returns>
     public DelegateBuilder MakeInternalDelegate() => WithAccessModifier(Accessibility.Internal);
 
     /// <summary>
-    /// Configures access modifier.
+    /// Sets the accessibility emitted for the generated delegate.
     /// </summary>
-    /// <param name="accessModifier">The access modifier value.</param>
-    /// <returns>The generated result.</returns>
+    /// <param name="accessModifier">The accessibility modifier to emit.</param>
+    /// <returns>The same builder so fluent configuration can continue.</returns>
     public DelegateBuilder WithAccessModifier(Accessibility accessModifier)
     {
         AccessModifier = accessModifier;
@@ -121,10 +133,10 @@ public sealed class DelegateBuilder : BuilderBase<DelegateBuilder>, IParameteriz
     }
 
     /// <summary>
-    /// Adds attribute.
+    /// Adds an attribute to the generated delegate if it is not already present.
     /// </summary>
-    /// <param name="attribute">The attribute value.</param>
-    /// <returns>The generated result.</returns>
+    /// <param name="attribute">The attribute to inspect or emit.</param>
+    /// <returns>The same builder so fluent configuration can continue.</returns>
     public DelegateBuilder AddAttribute(string attribute)
     {
         var sanitized = attribute.Replace("[", string.Empty).Replace("]", string.Empty);
@@ -135,10 +147,10 @@ public sealed class DelegateBuilder : BuilderBase<DelegateBuilder>, IParameteriz
     }
 
     /// <summary>
-    /// Adds assembly attribute.
+    /// Queues an assembly-level attribute on the generated file that owns this delegate.
     /// </summary>
-    /// <param name="attribute">The attribute value.</param>
-    /// <returns>The generated result.</returns>
+    /// <param name="attribute">The attribute to inspect or emit.</param>
+    /// <returns>The same builder so fluent configuration can continue.</returns>
     public override DelegateBuilder AddAssemblyAttribute(string attribute)
     {
         Builder.AddAssemblyAttribute(attribute);
@@ -146,10 +158,10 @@ public sealed class DelegateBuilder : BuilderBase<DelegateBuilder>, IParameteriz
     }
 
     /// <summary>
-    /// Adds namespace import.
+    /// Registers a namespace import on the generated file that owns this delegate.
     /// </summary>
-    /// <param name="importedNamespace">The imported namespace value.</param>
-    /// <returns>The generated result.</returns>
+    /// <param name="importedNamespace">The namespace to emit as a using directive so referenced types do not need to be fully qualified.</param>
+    /// <returns>The same builder so fluent configuration can continue.</returns>
     public override DelegateBuilder AddNamespaceImport(string importedNamespace)
     {
         Builder.AddNamespaceImport(importedNamespace);
@@ -157,10 +169,10 @@ public sealed class DelegateBuilder : BuilderBase<DelegateBuilder>, IParameteriz
     }
 
     /// <summary>
-    /// Adds namespace import.
+    /// Registers a namespace import on the generated file that owns this delegate.
     /// </summary>
-    /// <param name="symbol">The symbol value.</param>
-    /// <returns>The generated result.</returns>
+    /// <param name="symbol">The Roslyn symbol whose namespace or type information should be mirrored into generated source.</param>
+    /// <returns>The same builder so fluent configuration can continue.</returns>
     public override DelegateBuilder AddNamespaceImport(ISymbol symbol)
     {
         Builder.AddNamespaceImport(symbol);
@@ -168,10 +180,10 @@ public sealed class DelegateBuilder : BuilderBase<DelegateBuilder>, IParameteriz
     }
 
     /// <summary>
-    /// Adds namespace import.
+    /// Registers a namespace import on the generated file that owns this delegate.
     /// </summary>
-    /// <param name="symbol">The symbol value.</param>
-    /// <returns>The generated result.</returns>
+    /// <param name="symbol">The Roslyn symbol whose namespace or type information should be mirrored into generated source.</param>
+    /// <returns>The same builder so fluent configuration can continue.</returns>
     public override DelegateBuilder AddNamespaceImport(INamespaceSymbol symbol)
     {
         Builder.AddNamespaceImport(symbol);
@@ -179,10 +191,10 @@ public sealed class DelegateBuilder : BuilderBase<DelegateBuilder>, IParameteriz
     }
 
     /// <summary>
-    /// Configures return type.
+    /// Sets the return type emitted for the generated delegate.
     /// </summary>
-    /// <param name="returnType">The return type value.</param>
-    /// <returns>The generated result.</returns>
+    /// <param name="returnType">The return type used by this operation.</param>
+    /// <returns>The same builder so fluent configuration can continue.</returns>
     public DelegateBuilder WithReturnType(string returnType)
     {
         ReturnType = returnType;

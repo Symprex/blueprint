@@ -10,7 +10,8 @@ using Microsoft.CodeAnalysis;
 namespace Blueprint.SourceGenerator.CodeWriter
 {
     /// <summary>
-    /// Builds property and field declarations for generated types.
+    /// Builds a generated property or field declaration.
+    /// Use the value and accessor helpers to decide whether the member is emitted as an auto-property, a backed property, a readonly field, or a const field.
     /// </summary>
     public class PropertyBuilder : IBuilder
     {
@@ -44,21 +45,36 @@ namespace Blueprint.SourceGenerator.CodeWriter
             Class = builder;
         }
 
+        /// <summary>
+        /// Gets the member name that will be emitted for the generated property or field.
+        /// </summary>
         public string Name { get; }
 
+        /// <summary>
+        /// Gets the type text that will be emitted for the generated property or field.
+        /// </summary>
         public string? Type { get; private set; }
 
+        /// <summary>
+        /// Gets the ClassBuilder that owns this generated property or field.
+        /// </summary>
         public ClassBuilder Class { get; }
 
+        /// <summary>
+        /// Gets the accessibility that will be emitted for the generated property or field.
+        /// </summary>
         public Accessibility? AccessModifier { get; private set; }
 
+        /// <summary>
+        /// Gets a value indicating whether the generated property or field will be emitted with the static modifier.
+        /// </summary>
         public bool IsStatic { get; private set; }
 
         /// <summary>
-        /// Configures summary.
+        /// Sets the XML summary that will be emitted for the generated property or field.
         /// </summary>
-        /// <param name="summary">The summary value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="summary">The caller-facing description of what the generated member represents.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public PropertyBuilder WithSummary(string summary)
         {
             _xmlDoc = new SummaryDocumentationComment { Summary = summary };
@@ -66,10 +82,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Configures inherit doc.
+        /// Configures the generated property or field to emit inheritdoc XML instead of explicit text.
         /// </summary>
-        /// <param name="inherit">The inherit value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="inherit">Set to <see langword="true"/> to emit <c>&lt;inheritdoc/&gt;</c> for the generated property. The parameter keeps the fluent API readable in conditional code paths.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public PropertyBuilder WithInheritDoc(bool inherit = true)
         {
             _xmlDoc = new InheritDocumentationComment();
@@ -77,10 +93,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Configures inherit doc.
+        /// Configures the generated declaration to emit inheritdoc XML targeting a specific cref.
         /// </summary>
-        /// <param name="from">The from value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="from">The member or type to reference from the emitted inheritdoc cref.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public PropertyBuilder WithInheritDoc(string from)
         {
             _xmlDoc = new InheritDocumentationComment { InheritFrom = from };
@@ -88,10 +104,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Adds namespace import.
+        /// Registers a namespace import on the generated file that owns this property or field.
         /// </summary>
-        /// <param name="importedNamespace">The imported namespace value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="importedNamespace">The namespace to emit as a using directive so referenced types do not need to be fully qualified.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public PropertyBuilder AddNamespaceImport(string importedNamespace)
         {
             Class.AddNamespaceImport(importedNamespace);
@@ -99,30 +115,30 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Adds namespace import.
+        /// Registers a namespace import on the generated file that owns this property or field.
         /// </summary>
-        /// <param name="symbol">The symbol value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="symbol">The Roslyn symbol whose namespace or type information should be mirrored into generated source.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public PropertyBuilder AddNamespaceImport(ISymbol symbol)
         {
             return AddNamespaceImport(symbol.ContainingNamespace.ToString());
         }
 
         /// <summary>
-        /// Adds namespace import.
+        /// Registers a namespace import on the generated file that owns this property or field.
         /// </summary>
-        /// <param name="symbol">The symbol value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="symbol">The Roslyn symbol whose namespace or type information should be mirrored into generated source.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public PropertyBuilder AddNamespaceImport(INamespaceSymbol symbol)
         {
             return AddNamespaceImport(symbol.ToString());
         }
 
         /// <summary>
-        /// Sets type.
+        /// Sets the type emitted for the generated property or field.
         /// </summary>
-        /// <param name="type">The type value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="type">The C# type text to emit for the generated property or field.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public PropertyBuilder SetType(string type)
         {
             Type = type;
@@ -130,10 +146,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Sets type.
+        /// Sets the type emitted for the generated property or field.
         /// </summary>
-        /// <param name="symbol">The symbol value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="symbol">The Roslyn symbol whose namespace or type information should be mirrored into generated source.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public PropertyBuilder SetType(INamedTypeSymbol symbol)
         {
             return AddNamespaceImport(symbol.ContainingNamespace)
@@ -141,10 +157,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Sets type.
+        /// Sets the type emitted for the generated property or field.
         /// </summary>
-        /// <param name="type">The type value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="type">The C# type text to emit for the generated property or field.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public PropertyBuilder SetType(Type type)
         {
             return AddNamespaceImport(type.Namespace)
@@ -152,40 +168,40 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Sets type.
+        /// Sets the type emitted for the generated property or field.
         /// </summary>
-        /// <returns>The generated result.</returns>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public PropertyBuilder SetType<T>() => SetType(typeof(T));
 
         /// <summary>
-        /// Marks public property.
+        /// Sets the generated property or field to public accessibility.
         /// </summary>
-        /// <returns>The generated result.</returns>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public PropertyBuilder MakePublicProperty() => WithAccessModifier(Accessibility.Public);
 
         /// <summary>
-        /// Marks private property.
+        /// Sets the generated property or field to private accessibility.
         /// </summary>
-        /// <returns>The generated result.</returns>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public PropertyBuilder MakePrivateProperty() => WithAccessModifier(Accessibility.Private);
 
         /// <summary>
-        /// Marks protected property.
+        /// Sets the generated property or field to protected accessibility.
         /// </summary>
-        /// <returns>The generated result.</returns>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public PropertyBuilder MakeProtectedProperty() => WithAccessModifier(Accessibility.Protected);
 
         /// <summary>
-        /// Marks internal property.
+        /// Sets the generated property or field to internal accessibility.
         /// </summary>
-        /// <returns>The generated result.</returns>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public PropertyBuilder MakeInternalProperty() => WithAccessModifier(Accessibility.Internal);
 
         /// <summary>
-        /// Configures access modifier.
+        /// Sets the accessibility emitted for the generated property or field.
         /// </summary>
-        /// <param name="accessModifier">The access modifier value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="accessModifier">The accessibility modifier to emit.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public PropertyBuilder WithAccessModifier(Accessibility accessModifier)
         {
             AccessModifier = accessModifier;
@@ -193,10 +209,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Sets whether the generated property is emitted with the override modifier.
+        /// Sets whether the generated property should be emitted with the override modifier.
         /// </summary>
-        /// <param name="override">The override value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="override">True to emit the generated declaration with the override modifier; otherwise false.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public PropertyBuilder Override(bool @override = true)
         {
             _override = @override;
@@ -204,9 +220,9 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Marks static.
+        /// Marks the generated property or field as static.
         /// </summary>
-        /// <returns>The generated result.</returns>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public PropertyBuilder MakeStatic()
         {
             IsStatic = true;
@@ -219,9 +235,9 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Marks virtual property.
+        /// Marks the generated property as virtual.
         /// </summary>
-        /// <returns>The generated result.</returns>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public PropertyBuilder MakeVirtualProperty()
         {
             _virtual = true;
@@ -229,10 +245,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Adds attribute.
+        /// Adds an attribute to the generated property or field if it is not already present.
         /// </summary>
-        /// <param name="attribute">The attribute value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="attribute">The attribute to inspect or emit.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public PropertyBuilder AddAttribute(string attribute)
         {
             var sanitized = attribute.Replace("[", string.Empty).Replace("]", string.Empty);
@@ -243,9 +259,9 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Converts this member to a get-only auto-property and returns the parent class builder.
+        /// Switches the member to a get-only auto-property and returns the parent class builder.
         /// </summary>
-        /// <returns>The generated result.</returns>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public ClassBuilder UseGetOnlyAutoProp()
         {
             _autoprops = true;
@@ -254,17 +270,17 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Converts this member to an auto-property and returns the parent class builder.
+        /// Switches the member to an auto-property and returns the parent class builder.
         /// </summary>
-        /// <returns>The generated result.</returns>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public ClassBuilder UseAutoProps() =>
             UseAutoProps(null);
 
         /// <summary>
-        /// Converts this member to an auto-property and returns the parent class builder.
+        /// Switches the member to an auto-property and returns the parent class builder.
         /// </summary>
-        /// <param name="setterAccessibility">The setter accessibility value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="setterAccessibility">The setter accessibility used by this operation.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public ClassBuilder UseAutoProps(Accessibility? setterAccessibility)
         {
             _autoprops = true;
@@ -273,10 +289,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Configures getter expression.
+        /// Sets an expression-bodied getter for the generated property.
         /// </summary>
-        /// <param name="expression">The expression value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="expression">The header expression to emit before the generated block body.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public PropertyBuilder WithGetterExpression(string expression)
         {
             _getterExpression = expression;
@@ -285,10 +301,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Configures getter.
+        /// Supplies the callback that writes the generated getter body.
         /// </summary>
-        /// <param name="getterBody">The getter body value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="getterBody">The getter body used by this operation.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public PropertyBuilder WithGetter(Action<ICodeWriter> getterBody)
         {
             _getter = getterBody;
@@ -296,10 +312,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Configures setter expression.
+        /// Sets an expression-bodied setter for the generated property.
         /// </summary>
-        /// <param name="expression">The expression value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="expression">The header expression to emit before the generated block body.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public PropertyBuilder WithSetterExpression(string expression)
         {
             _setterExpression = expression;
@@ -307,10 +323,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Configures setter.
+        /// Supplies the callback that writes the generated setter body.
         /// </summary>
-        /// <param name="setterBody">The setter body value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="setterBody">The setter body used by this operation.</param>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
         public PropertyBuilder WithSetter(Action<ICodeWriter> setterBody)
         {
             _setter = setterBody;
@@ -318,11 +334,11 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Configures const value.
+        /// Converts the member into a constant-style field and assigns the supplied value.
         /// </summary>
-        /// <param name="value">The value value.</param>
-        /// <param name="valueType">The value type value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="value">The literal value text to emit for the generated field.</param>
+        /// <param name="valueType">Controls how the supplied value should be interpreted when the field is rendered.</param>
+        /// <returns>The parent class builder so type construction can continue.</returns>
         public ClassBuilder WithConstValue(string value, ValueType valueType = ValueType.UserSpecified)
         {
             _value = value;
@@ -332,19 +348,19 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Configures readonly value.
+        /// Configures the member to emit a readonly field with the supplied initializer.
         /// </summary>
-        /// <param name="valueType">The value type value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="valueType">Controls how the generated readonly value should be interpreted when the field is rendered.</param>
+        /// <returns>The parent class builder so type construction can continue.</returns>
         public ClassBuilder WithReadonlyValue(ValueType valueType = ValueType.UserSpecified) =>
             WithReadonlyValue(null, valueType);
 
         /// <summary>
-        /// Configures readonly value.
+        /// Configures the member to emit a readonly field with the supplied initializer.
         /// </summary>
-        /// <param name="value">The value value.</param>
-        /// <param name="valueType">The value type value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="value">The initializer text to emit for the readonly field, or <see langword="null"/> to omit it.</param>
+        /// <param name="valueType">Controls how the supplied value should be interpreted when the field is rendered.</param>
+        /// <returns>The parent class builder so type construction can continue.</returns>
         public ClassBuilder WithReadonlyValue(string? value, ValueType valueType = ValueType.UserSpecified)
         {
             _value = value;
@@ -354,11 +370,11 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Configures value.
+        /// Configures the member to emit the supplied value when rendered.
         /// </summary>
-        /// <param name="value">The value value.</param>
-        /// <param name="valueType">The value type value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="value">The value expression to emit for the generated backing field or property initializer.</param>
+        /// <param name="valueType">Controls how the supplied value should be interpreted when the member is rendered.</param>
+        /// <returns>The parent class builder so type construction can continue.</returns>
         public ClassBuilder WithValue(string? value, ValueType valueType = ValueType.UserSpecified)
         {
             _value = value;
@@ -368,19 +384,19 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
-        /// Marks backing field.
+        /// Converts the current member into a backing field declaration and optionally assigns an initializer.
         /// </summary>
-        /// <param name="defaultValue">The default value value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="defaultValue">The initializer to emit for the generated backing field, or <see langword="null"/> to omit one.</param>
+        /// <returns>The parent class builder so type construction can continue.</returns>
         public ClassBuilder MakeBackingField(string? defaultValue = null) =>
             WithValue(defaultValue);
 
         /// <summary>
-        /// Configures backing field.
+        /// Creates a companion backing field for the current property and returns the field builder for additional customization.
         /// </summary>
-        /// <param name="defaultValue">The default value value.</param>
-        /// <param name="accessModifier">The access modifier value.</param>
-        /// <returns>The generated result.</returns>
+        /// <param name="defaultValue">The initializer to emit for the backing field, or <see langword="null"/> to omit one.</param>
+        /// <param name="accessModifier">The accessibility to use for the generated backing field.</param>
+        /// <returns>The builder for the generated backing field.</returns>
         public PropertyBuilder WithBackingField(string? defaultValue = null, Accessibility? accessModifier = null)
         {
             var name = $"_{char.ToLower(Name[0])}{Name.Substring(1)}";
