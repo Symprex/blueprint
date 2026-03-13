@@ -227,17 +227,17 @@ public class ParameterAnalyzerTests
 
         // Assert
         parameters.Count.Should().Be(4);
-        
+
         parameters[0].ParameterName.Should().Be("context");
         parameters[0].Source.Should().Be(ParameterSource.FromContext);
-        
+
         parameters[1].ParameterName.Should().Be("app");
         parameters[1].Source.Should().Be(ParameterSource.FromContextProperty);
         parameters[1].ContextPropertyName.Should().Be("App");
-        
+
         parameters[2].ParameterName.Should().Be("service");
         parameters[2].Source.Should().Be(ParameterSource.FromDependencyInjection);
-        
+
         parameters[3].ParameterName.Should().Be("token");
         parameters[3].Source.Should().Be(ParameterSource.FromContextProperty);
         parameters[3].ContextPropertyName.Should().Be("OperationCancelled");

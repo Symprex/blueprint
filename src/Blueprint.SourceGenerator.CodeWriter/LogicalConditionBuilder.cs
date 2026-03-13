@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-
 #pragma warning disable IDE0079
 #pragma warning disable IDE0090
 #pragma warning disable IDE1006
@@ -22,11 +18,11 @@ namespace Blueprint.SourceGenerator.CodeWriter
 
         internal LogicalConditionBuilder(ICodeWriter writer, string? condition, string @operator = "if", LogicalConditionBuilder? parent = null)
         {
-            _writer = writer;
-            _condition = condition;
-            _operator = @operator;
-            _parent = parent;
-            _builders = new Queue<LogicalConditionBuilder>();
+            this._writer = writer;
+            this._condition = condition;
+            this._operator = @operator;
+            this._parent = parent;
+            this._builders = new Queue<LogicalConditionBuilder>();
         }
 
         /// <summary>
@@ -36,7 +32,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public LogicalConditionBuilder WithBody(Action<ICodeWriter> innerWrite)
         {
-            _innerWrite = innerWrite;
+            this._innerWrite = innerWrite;
             return this;
         }
 
@@ -47,8 +43,8 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public LogicalConditionBuilder ElseIf(string condition)
         {
-            var builder = new LogicalConditionBuilder(_writer, condition, "else if", this);
-            _builders.Enqueue(builder);
+            var builder = new LogicalConditionBuilder(this._writer, condition, "else if", this);
+            this._builders.Enqueue(builder);
             return builder;
         }
 
@@ -60,9 +56,9 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public LogicalConditionBuilder ElseIf(string condition, Action<ICodeWriter> innerWrite)
         {
-            var builder = new LogicalConditionBuilder(_writer, condition, "else if", this)
+            var builder = new LogicalConditionBuilder(this._writer, condition, "else if", this)
                 .WithBody(innerWrite);
-            _builders.Enqueue(builder);
+            this._builders.Enqueue(builder);
             return builder;
         }
 
@@ -72,8 +68,8 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public LogicalConditionBuilder Else()
         {
-            var builder = new LogicalConditionBuilder(_writer, null, "else", this);
-            _builders.Enqueue(builder);
+            var builder = new LogicalConditionBuilder(this._writer, null, "else", this);
+            this._builders.Enqueue(builder);
             return builder;
         }
 
@@ -84,9 +80,9 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public LogicalConditionBuilder Else(Action<ICodeWriter> innerWrite)
         {
-            var builder = new LogicalConditionBuilder(_writer, null, "else", this)
+            var builder = new LogicalConditionBuilder(this._writer, null, "else", this)
                 .WithBody(innerWrite);
-            _builders.Enqueue(builder);
+            this._builders.Enqueue(builder);
             return builder;
         }
 
@@ -96,26 +92,30 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The underlying writer so additional source can be emitted.</returns>
         public ICodeWriter EndIf()
         {
-            if (_parent != null)
-                _parent.EndIf();
+            if (this._parent != null)
+            {
+                this._parent.EndIf();
+            }
             else
-                WriteInternal();
+            {
+                this.WriteInternal();
+            }
 
-            return _writer;
+            return this._writer;
         }
 
         private void WriteInternal()
         {
-            var expression = string.IsNullOrEmpty(_condition) ? _operator : $"{_operator} ({_condition})";
-            using (_writer.Block(expression))
+            var expression = string.IsNullOrEmpty(this._condition) ? this._operator : $"{this._operator} ({this._condition})";
+            using (this._writer.Block(expression))
             {
-                _innerWrite?.Invoke(_writer);
+                this._innerWrite?.Invoke(this._writer);
             }
 
 
-            while (_builders.Any())
+            while (this._builders.Any())
             {
-                var builder = _builders.Dequeue();
+                var builder = this._builders.Dequeue();
                 builder.WriteInternal();
             }
         }

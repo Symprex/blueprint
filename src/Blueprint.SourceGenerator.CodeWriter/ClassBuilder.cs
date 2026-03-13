@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Text.RegularExpressions;
 using Blueprint.SourceGenerator.CodeWriter.Internals;
 using Microsoft.CodeAnalysis;
@@ -34,9 +31,9 @@ namespace Blueprint.SourceGenerator.CodeWriter
 
         internal ClassBuilder(string className, CodeBuilder codeBuilder, bool partial = true)
         {
-            Name = className;
-            Builder = codeBuilder;
-            _isPartial = partial;
+            this.Name = className;
+            this.Builder = codeBuilder;
+            this._isPartial = partial;
         }
 
         /// <summary>
@@ -47,27 +44,27 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <summary>
         /// Gets the fully qualified type name composed from the owning namespace and the generated type name.
         /// </summary>
-        public string FullyQualifiedName => $"{Builder.Namespace}.{Name}";
+        public string FullyQualifiedName => $"{this.Builder.Namespace}.{this.Name}";
 
         /// <summary>
         /// Gets the constructors currently configured for the generated type.
         /// </summary>
-        public IReadOnlyList<ConstructorBuilder> Constructors => _constructors;
+        public IReadOnlyList<ConstructorBuilder> Constructors => this._constructors;
 
         /// <summary>
         /// Gets the properties currently configured for the generated type.
         /// </summary>
-        public IReadOnlyList<PropertyBuilder> Properties => _properties;
+        public IReadOnlyList<PropertyBuilder> Properties => this._properties;
 
         /// <summary>
         /// Gets the methods currently configured for the generated type.
         /// </summary>
-        public IReadOnlyList<MethodBuilder> Methods => _methods;
+        public IReadOnlyList<MethodBuilder> Methods => this._methods;
 
         /// <summary>
         /// Gets the nested types currently configured for the generated type.
         /// </summary>
-        public IReadOnlyList<ClassBuilder> NestedClasses => _nestedClass.ToList();
+        public IReadOnlyList<ClassBuilder> NestedClasses => this._nestedClass.ToList();
 
         /// <summary>
         /// Gets the root CodeBuilder that owns this generated type.
@@ -111,7 +108,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public ClassBuilder WithSummary(string summary)
         {
-            _xmlDoc = new SummaryDocumentationComment { Summary = summary };
+            this._xmlDoc = new SummaryDocumentationComment { Summary = summary };
             return this;
         }
 
@@ -122,7 +119,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public ClassBuilder WithInheritDoc(bool inherit = true)
         {
-            _xmlDoc = new InheritDocumentationComment();
+            this._xmlDoc = new InheritDocumentationComment();
             return this;
         }
 
@@ -133,7 +130,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public ClassBuilder WithInheritDoc(string from)
         {
-            _xmlDoc = new InheritDocumentationComment { InheritFrom = from };
+            this._xmlDoc = new InheritDocumentationComment { InheritFrom = from };
             return this;
         }
 
@@ -143,7 +140,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public ClassBuilder Sealed()
         {
-            IsSealed = true;
+            this.IsSealed = true;
             return this;
         }
 
@@ -153,7 +150,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public ClassBuilder IsStruct()
         {
-            Kind = TypeKind.Struct;
+            this.Kind = TypeKind.Struct;
             return this;
         }
 
@@ -164,7 +161,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public ClassBuilder OfType(TypeKind kind)
         {
-            Kind = kind;
+            this.Kind = kind;
             return this;
         }
 
@@ -175,12 +172,12 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public ClassBuilder SetBaseClass(string baseClass)
         {
-            BaseClass = baseClass;
+            this.BaseClass = baseClass;
 
-            if(BaseClass.Contains("."))
+            if (this.BaseClass.Contains("."))
             {
                 var className = baseClass.Split('.').Last();
-                AddNamespaceImport(Regex.Replace(baseClass, @$"\.{className}", string.Empty));
+                this.AddNamespaceImport(Regex.Replace(baseClass, @$"\.{className}", string.Empty));
             }
 
             return this;
@@ -193,14 +190,14 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public ClassBuilder SetBaseClass(INamedTypeSymbol symbol)
         {
-            if(symbol.Name == Name)
+            if (symbol.Name == this.Name)
             {
-                BaseClass = $"global::{symbol.GetFullMetadataName()}";
+                this.BaseClass = $"global::{symbol.GetFullMetadataName()}";
                 return this;
             }
 
-            BaseClass = symbol.Name;
-            return AddNamespaceImport(symbol.ContainingNamespace);
+            this.BaseClass = symbol.Name;
+            return this.AddNamespaceImport(symbol.ContainingNamespace);
         }
 
         /// <summary>
@@ -208,8 +205,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// </summary>
         /// <param name="name">The generated name to emit.</param>
         /// <returns>The same builder so fluent configuration can continue.</returns>
-        public ClassBuilder AddGeneric(string name) =>
-            AddGeneric(name, _ => { });
+        public ClassBuilder AddGeneric(string name)
+        {
+            return this.AddGeneric(name, _ => { });
+        }
 
         /// <summary>
         /// Adds a generic type parameter to the generated type and optionally configures its constraints.
@@ -219,16 +218,22 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public ClassBuilder AddGeneric(string name, Action<GenericBuilder> configureBuilder)
         {
-            if(configureBuilder is null)
+            if (configureBuilder is null)
+            {
                 throw new ArgumentNullException(nameof(configureBuilder));
+            }
             else if (string.IsNullOrEmpty(name))
+            {
                 throw new ArgumentNullException(nameof(name));
-            else if (_generics.Any(x => x.Name == name))
+            }
+            else if (this._generics.Any(x => x.Name == name))
+            {
                 throw new ArgumentException($"The argument {name} already exists");
+            }
 
             var builder = new GenericBuilder(name);
             configureBuilder(builder);
-            _generics.Add(builder);
+            this._generics.Add(builder);
             return this;
         }
 
@@ -239,7 +244,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public override ClassBuilder AddAssemblyAttribute(string attribute)
         {
-            Builder.AddAssemblyAttribute(attribute);
+            this.Builder.AddAssemblyAttribute(attribute);
             return this;
         }
 
@@ -251,8 +256,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         public ClassBuilder AddAttribute(string attribute)
         {
             var sanitized = attribute.Replace("[", string.Empty).Replace("]", string.Empty);
-            if (!_attributes.Contains(sanitized))
-                _attributes.Add(sanitized);
+            if (!this._attributes.Contains(sanitized))
+            {
+                this._attributes.Add(sanitized);
+            }
 
             return this;
         }
@@ -264,7 +271,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public override ClassBuilder AddNamespaceImport(string importedNamespace)
         {
-            Builder.AddNamespaceImport(importedNamespace);
+            this.Builder.AddNamespaceImport(importedNamespace);
             return this;
         }
 
@@ -275,7 +282,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public override ClassBuilder AddNamespaceImport(ISymbol symbol)
         {
-            Builder.AddNamespaceImport(symbol);
+            this.Builder.AddNamespaceImport(symbol);
             return this;
         }
 
@@ -286,7 +293,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public override ClassBuilder AddNamespaceImport(INamespaceSymbol symbol)
         {
-            Builder.AddNamespaceImport(symbol);
+            this.Builder.AddNamespaceImport(symbol);
             return this;
         }
 
@@ -297,12 +304,12 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public ClassBuilder AddInterface(string interfaceName)
         {
-            _interfaces.Add(interfaceName);
+            this._interfaces.Add(interfaceName);
 
             if (interfaceName.Contains('.'))
             {
                 var name = interfaceName.Split('.').Last();
-                return AddNamespaceImport(Regex.Replace(interfaceName, @$"\.{name}$", string.Empty));
+                return this.AddNamespaceImport(Regex.Replace(interfaceName, @$"\.{name}$", string.Empty));
             }
 
             return this;
@@ -315,8 +322,8 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public ClassBuilder AddInterface(ITypeSymbol symbol)
         {
-            _interfaces.Add(symbol.Name);
-            return AddNamespaceImport(symbol);
+            this._interfaces.Add(symbol.Name);
+            return this.AddNamespaceImport(symbol);
         }
 
         /// <summary>
@@ -327,10 +334,14 @@ namespace Blueprint.SourceGenerator.CodeWriter
         public ClassBuilder AddInterfaces(IEnumerable<string> interfaces)
         {
             if (interfaces is null)
+            {
                 return this;
+            }
 
             foreach (var interfaceName in interfaces)
-                AddInterface(interfaceName);
+            {
+                this.AddInterface(interfaceName);
+            }
 
             return this;
         }
@@ -343,10 +354,14 @@ namespace Blueprint.SourceGenerator.CodeWriter
         public ClassBuilder AddInterfaces(IEnumerable<INamedTypeSymbol> interfaces)
         {
             if (interfaces is null)
+            {
                 return this;
+            }
 
             foreach (var symbol in interfaces)
-                AddInterface(symbol);
+            {
+                this.AddInterface(symbol);
+            }
 
             return this;
         }
@@ -359,7 +374,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         public ConstructorBuilder AddConstructor(Accessibility? accessModifier = null)
         {
             var builder = new ConstructorBuilder(accessModifier, this);
-            _constructors.Add(builder);
+            this._constructors.Add(builder);
             return builder;
         }
 
@@ -371,9 +386,9 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The builder for the newly added generated declaration.</returns>
         public ConstructorBuilder AddConstructor(IMethodSymbol baseConstructor, Accessibility? accessModifier = null)
         {
-            var builder = AddConstructor(accessModifier)
+            var builder = this.AddConstructor(accessModifier)
                 .AddParameters(baseConstructor.Parameters);
-            _constructors.Add(builder);
+            this._constructors.Add(builder);
             return builder;
         }
 
@@ -386,7 +401,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         public MethodBuilder AddMethod(string name, Accessibility? accessModifier = null)
         {
             var builder = new MethodBuilder(name, accessModifier, this);
-            _methods.Add(builder);
+            this._methods.Add(builder);
             return builder;
         }
 
@@ -399,7 +414,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         public PropertyBuilder AddProperty(string name, Accessibility? accessModifier = null)
         {
             var builder = new PropertyBuilder(name, accessModifier, this);
-            _properties.Add(builder);
+            this._properties.Add(builder);
             return builder;
         }
 
@@ -411,7 +426,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         public EventBuilder AddEvent(string eventName)
         {
             var builder = new EventBuilder(this, eventName);
-            _events.Add(builder);
+            this._events.Add(builder);
             return builder;
         }
 
@@ -419,13 +434,19 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// Sets the generated type to public accessibility.
         /// </summary>
         /// <returns>The same builder so fluent configuration can continue.</returns>
-        public ClassBuilder MakePublicClass() => WithAccessModifier(Accessibility.Public);
+        public ClassBuilder MakePublicClass()
+        {
+            return this.WithAccessModifier(Accessibility.Public);
+        }
 
         /// <summary>
         /// Sets the generated type to internal accessibility.
         /// </summary>
         /// <returns>The same builder so fluent configuration can continue.</returns>
-        public ClassBuilder MakeInternalClass() => WithAccessModifier(Accessibility.Internal);
+        public ClassBuilder MakeInternalClass()
+        {
+            return this.WithAccessModifier(Accessibility.Internal);
+        }
 
         /// <summary>
         /// Sets the accessibility emitted for the generated type.
@@ -434,7 +455,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public ClassBuilder WithAccessModifier(Accessibility accessModifier)
         {
-            AccessModifier = accessModifier;
+            this.AccessModifier = accessModifier;
             return this;
         }
 
@@ -444,7 +465,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public ClassBuilder MakeStaticClass()
         {
-            IsStatic = true;
+            this.IsStatic = true;
             return this;
         }
 
@@ -455,7 +476,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public ClassBuilder Abstract(bool isAbstract = true)
         {
-            IsAbstract = isAbstract;
+            this.IsAbstract = isAbstract;
             return this;
         }
 
@@ -465,8 +486,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <param name="name">The nested type name to emit.</param>
         /// <param name="accessModifier">The accessibility modifier to emit.</param>
         /// <returns>The same builder so fluent configuration can continue.</returns>
-        public ClassBuilder AddNestedClass(string name, Accessibility? accessModifier = null) =>
-            AddNestedClass(name, false, accessModifier);
+        public ClassBuilder AddNestedClass(string name, Accessibility? accessModifier = null)
+        {
+            return this.AddNestedClass(name, false, accessModifier);
+        }
 
         /// <summary>
         /// Adds a nested class to the generated type and returns its builder.
@@ -477,11 +500,13 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public ClassBuilder AddNestedClass(string name, bool partial, Accessibility? accessModifier = null)
         {
-            var builder = new ClassBuilder(name, Builder, partial);
+            var builder = new ClassBuilder(name, this.Builder, partial);
             if (accessModifier.HasValue)
+            {
                 builder.WithAccessModifier(accessModifier.Value);
+            }
 
-            _nestedClass.Enqueue(builder);
+            this._nestedClass.Enqueue(builder);
             return builder;
         }
 
@@ -493,11 +518,13 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The builder for the newly added generated declaration.</returns>
         public DelegateBuilder AddNestedDelegate(string name, Accessibility? accessModifier = null)
         {
-            var builder = new DelegateBuilder(name, Builder);
+            var builder = new DelegateBuilder(name, this.Builder);
             if (accessModifier.HasValue)
+            {
                 builder.WithAccessModifier(accessModifier.Value);
+            }
 
-            _nestedDelegates.Enqueue(builder);
+            this._nestedDelegates.Enqueue(builder);
             return builder;
         }
 
@@ -505,7 +532,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// Renders the owning CodeBuilder and returns the generated C# source text.
         /// </summary>
         /// <returns>The rendered C# source text.</returns>
-        public string Build() => Builder.Build();
+        public string Build()
+        {
+            return this.Builder.Build();
+        }
 
         /// <summary>
         /// Preserves property insertion order instead of sorting generated properties by name.
@@ -513,92 +543,94 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public ClassBuilder DontSortPropertiesByName()
         {
-            _propertiesOrderBy = _ => "";
+            this._propertiesOrderBy = _ => "";
             return this;
         }
 
         internal override void Write(in CodeWriter writer)
         {
-            _xmlDoc?.Write(writer);
+            this._xmlDoc?.Write(writer);
 
-            WriteClassAttributes(_classAttributes, writer);
+            WriteClassAttributes(this._classAttributes, writer);
 
-            var staticDeclaration = IsStatic ? "static " : string.Empty;
+            var staticDeclaration = this.IsStatic ? "static " : string.Empty;
 
             var queue = new Queue<string>();
-            if (!string.IsNullOrEmpty(BaseClass))
+            if (!string.IsNullOrEmpty(this.BaseClass))
             {
-                queue.Enqueue(BaseClass!);
+                queue.Enqueue(this.BaseClass!);
             }
 
-            foreach (var inter in _interfaces.Where(x => !string.IsNullOrEmpty(x)).Distinct().OrderBy(x => x))
+            foreach (var inter in this._interfaces.Where(x => !string.IsNullOrEmpty(x)).Distinct().OrderBy(x => x))
             {
                 queue.Enqueue(inter);
             }
 
             var extra = queue.Any() ? $": {string.Join(", ", queue)}" : string.Empty;
 
-            foreach (var attr in _attributes)
+            foreach (var attr in this._attributes)
             {
                 writer.AppendLine($"[{attr}]");
             }
 
-            if (_methods.Any(x => x.IsAbstract))
-                IsAbstract = true;
+            if (this._methods.Any(x => x.IsAbstract))
+            {
+                this.IsAbstract = true;
+            }
 
             var classDeclaration = new[] {
-                AccessModifier.Code(),
-                IsStatic ? "static" : null,
-                IsSealed ? "sealed" : null,
-                IsAbstract ? "abstract" : null,
-                _isPartial ? "partial" : null,
-                Kind.ToString().ToLowerInvariant(),
-                $"{Name}{_generics}",
+                this.AccessModifier.Code(),
+                this.IsStatic ? "static" : null,
+                this.IsSealed ? "sealed" : null,
+                this.IsAbstract ? "abstract" : null,
+                this._isPartial ? "partial" : null,
+                this.Kind.ToString().ToLowerInvariant(),
+                $"{this.Name}{this._generics}",
                 extra
             };
 
-            using (writer.Block(string.Join(" ", classDeclaration.Where(x => !string.IsNullOrEmpty(x))), _generics.Contraints()))
+            using (writer.Block(string.Join(" ", classDeclaration.Where(x => !string.IsNullOrEmpty(x))), this._generics.Contraints()))
             {
                 var hadOutput = false;
-                hadOutput = InvokeBuilderWrite(_nestedDelegates, ref hadOutput, in writer);
-                hadOutput = InvokeBuilderWrite(_events, ref hadOutput, writer);
-                var orderBy = _propertiesOrderBy ?? (x => x.Name);
+                hadOutput = InvokeBuilderWrite(this._nestedDelegates, ref hadOutput, in writer);
+                hadOutput = InvokeBuilderWrite(this._events, ref hadOutput, writer);
+                var orderBy = this._propertiesOrderBy ?? (x => x.Name);
                 hadOutput = InvokeBuilderWrite(
-                    _properties.Where(x => x.FieldTypeValue == PropertyBuilder.FieldType.Const && x.IsStatic == false)
+                    this._properties.Where(x => x.FieldTypeValue == PropertyBuilder.FieldType.Const && x.IsStatic == false)
                         .OrderBy(orderBy),
                     ref hadOutput,
                     writer,
                     true);
                 hadOutput = InvokeBuilderWrite(
-                    _properties.Where(x => x.FieldTypeValue == PropertyBuilder.FieldType.Const && x.IsStatic == true)
+                    this._properties.Where(x => x.FieldTypeValue == PropertyBuilder.FieldType.Const && x.IsStatic == true)
                         .OrderBy(orderBy),
                     ref hadOutput,
                     writer,
                     true);
                 hadOutput = InvokeBuilderWrite(
-                    _properties.Where(x => x.FieldTypeValue == PropertyBuilder.FieldType.ReadOnly)
+                    this._properties.Where(x => x.FieldTypeValue == PropertyBuilder.FieldType.ReadOnly)
                         .OrderBy(orderBy),
                     ref hadOutput,
                     writer,
                     true);
                 hadOutput = InvokeBuilderWrite(
-                    _properties.Where(x => x.FieldTypeValue == PropertyBuilder.FieldType.Default)
+                    this._properties.Where(x => x.FieldTypeValue == PropertyBuilder.FieldType.Default)
                         .OrderBy(orderBy),
                     ref hadOutput,
                     writer,
                     true);
-                hadOutput = InvokeBuilderWrite(_constructors.OrderBy(x => x.Parameters.Count), ref hadOutput, writer);
+                hadOutput = InvokeBuilderWrite(this._constructors.OrderBy(x => x.Parameters.Count), ref hadOutput, writer);
                 hadOutput = InvokeBuilderWrite(
-                    _properties.Where(x => x.FieldTypeValue == PropertyBuilder.FieldType.Property)
+                    this._properties.Where(x => x.FieldTypeValue == PropertyBuilder.FieldType.Property)
                         .OrderBy(orderBy),
                     ref hadOutput,
                     writer);
                 hadOutput = InvokeBuilderWrite(
-                    _methods.OrderBy(x => x.Name)
+                    this._methods.OrderBy(x => x.Name)
                         .ThenBy(x => x.Parameters.Count),
                     ref hadOutput,
                     writer);
-                InvokeBuilderWrite(_nestedClass, ref hadOutput, writer);
+                InvokeBuilderWrite(this._nestedClass, ref hadOutput, writer);
             }
         }
 
@@ -614,14 +646,20 @@ namespace Blueprint.SourceGenerator.CodeWriter
             where T : IBuilder
         {
             if (builders is null || !builders.Any())
+            {
                 return hadOutput;
+            }
 
             if (hadOutput)
+            {
                 writer.NewLine();
+            }
 
             var queue = new Queue<T>();
             foreach (var builder in builders)
+            {
                 queue.Enqueue(builder);
+            }
 
             while (queue.Any())
             {
@@ -629,7 +667,9 @@ namespace Blueprint.SourceGenerator.CodeWriter
                 builder.Write(writer);
 
                 if (!group && queue.Any())
+                {
                     writer.NewLine();
+                }
             }
 
             return true;

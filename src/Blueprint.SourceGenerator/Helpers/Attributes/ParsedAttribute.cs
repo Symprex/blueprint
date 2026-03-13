@@ -26,23 +26,11 @@ public class ParsedAttribute
     /// <exception cref="InvalidOperationException">If the constructor argument cannot be found.</exception>
     public ParsedAttributeConstructorArgument<TGeneratorType> GetConstructorArgument<TType, TGeneratorType>(MarkerAttributeConstructorArgument<TType, TGeneratorType> definition)
     {
-        var foundArgument = this._constructorArguments.SingleOrDefault(a => a.Definition.Name == definition.Name);
-
-        if (foundArgument == null)
-        {
-            throw new InvalidOperationException($"Cannot find constructor argument {definition.Name}");
-        }
-
-        if (foundArgument.Value is null)
-        {
-            throw new InvalidOperationException($"Constructor argument {definition.Name} cannot be null");
-        }
-
-        if (foundArgument.Value is not TGeneratorType)
-        {
-            throw new InvalidOperationException($"Constructor argument {definition.Name} is of type {foundArgument.Value?.GetType().Name} but expected {typeof(TGeneratorType).Name}");
-        }
-
-        return new ParsedAttributeConstructorArgument<TGeneratorType>(definition, foundArgument.Location, (TGeneratorType)foundArgument.Value!);
+        var foundArgument = this._constructorArguments.SingleOrDefault(a => a.Definition.Name == definition.Name) ?? throw new InvalidOperationException($"Cannot find constructor argument {definition.Name}");
+        return foundArgument.Value is null
+            ? throw new InvalidOperationException($"Constructor argument {definition.Name} cannot be null")
+            : foundArgument.Value is not TGeneratorType
+            ? throw new InvalidOperationException($"Constructor argument {definition.Name} is of type {foundArgument.Value?.GetType().Name} but expected {typeof(TGeneratorType).Name}")
+            : new ParsedAttributeConstructorArgument<TGeneratorType>(definition, foundArgument.Location, (TGeneratorType)foundArgument.Value!);
     }
 }

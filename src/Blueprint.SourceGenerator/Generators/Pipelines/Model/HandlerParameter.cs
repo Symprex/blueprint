@@ -1,5 +1,3 @@
-using Microsoft.CodeAnalysis;
-
 namespace Blueprint.SourceGenerator.Generators.Pipelines.Model;
 
 /// <summary>
@@ -23,17 +21,11 @@ public sealed record HandlerParameter(
     /// <inheritdoc />
     public bool Equals(HandlerParameter? other)
     {
-        if (ReferenceEquals(null, other))
-        {
-            return false;
-        }
-
-        if (ReferenceEquals(this, other))
-        {
-            return true;
-        }
-
-        return this.ParameterName == other.ParameterName &&
+        return other is null
+            ? false
+            : ReferenceEquals(this, other)
+            ? true
+            : this.ParameterName == other.ParameterName &&
                this.ParameterTypeName == other.ParameterTypeName &&
                this.Source == other.Source &&
                this.ContextPropertyName == other.ContextPropertyName;

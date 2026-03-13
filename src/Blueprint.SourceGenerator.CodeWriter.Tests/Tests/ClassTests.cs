@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Threading;
 using Microsoft.CodeAnalysis;
 using Xunit;
 using Xunit.Abstractions;
@@ -20,7 +19,7 @@ namespace Blueprint.SourceGenerator.CodeWriter.Tests
                 .AddClass("SampleAbstractClass")
                 .Abstract();
 
-            MakeAssertion(builder);
+            this.MakeAssertion(builder);
         }
 
         [Fact]
@@ -30,7 +29,7 @@ namespace Blueprint.SourceGenerator.CodeWriter.Tests
                 .AddClass("SimpleGenericClass")
                 .AddGeneric("T");
 
-            MakeAssertion(builder);
+            this.MakeAssertion(builder);
         }
 
         [Fact]
@@ -40,7 +39,7 @@ namespace Blueprint.SourceGenerator.CodeWriter.Tests
                 .AddClass("GenericClassWithConstraint")
                 .AddGeneric("T", b => b.AddConstraint("IFoo"));
 
-            MakeAssertion(builder);
+            this.MakeAssertion(builder);
         }
 
         [Fact]
@@ -50,7 +49,7 @@ namespace Blueprint.SourceGenerator.CodeWriter.Tests
                 .AddClass("InternalClass")
                 .WithAccessModifier(Accessibility.Internal);
 
-            MakeAssertion(builder);
+            this.MakeAssertion(builder);
         }
 
         [Fact]
@@ -65,7 +64,7 @@ namespace Blueprint.SourceGenerator.CodeWriter.Tests
                     .AddClass("InternalClass")
                     .WithAccessModifier(Accessibility.Internal);
 
-                MakeAssertion(builder);
+                this.MakeAssertion(builder);
             }
             finally
             {
@@ -85,7 +84,7 @@ namespace Blueprint.SourceGenerator.CodeWriter.Tests
                      .New();
                 });
 
-            MakeAssertion(builder);
+            this.MakeAssertion(builder);
         }
 
         [Fact]
@@ -95,7 +94,7 @@ namespace Blueprint.SourceGenerator.CodeWriter.Tests
                 .TopLevelNamespace()
                 .AddClass("TopLevelNamespace");
 
-            MakeAssertion(builder);
+            this.MakeAssertion(builder);
         }
 
         [Fact]
@@ -105,7 +104,7 @@ namespace Blueprint.SourceGenerator.CodeWriter.Tests
                 .Nullable(NullableState.Enable)
                 .AddClass("NullableClass");
 
-            MakeAssertion(builder);
+            this.MakeAssertion(builder);
         }
 
         [Fact]
@@ -114,7 +113,7 @@ namespace Blueprint.SourceGenerator.CodeWriter.Tests
             var builder = CodeBuilder.CreateInGlobalNamespace()
                 .AddClass("ClassInGlobalNamespace");
 
-            MakeAssertion(builder);
+            this.MakeAssertion(builder);
         }
 
         [Fact]
@@ -127,7 +126,7 @@ namespace Blueprint.SourceGenerator.CodeWriter.Tests
             builder.AddProperty("PropB", Accessibility.Public).SetType<string>();
             builder.AddProperty("PropA", Accessibility.Public).SetType<string>();
 
-            MakeAssertion(builder);
+            this.MakeAssertion(builder);
         }
 
         [Fact]
@@ -144,7 +143,7 @@ namespace Blueprint.SourceGenerator.CodeWriter.Tests
 
             builder.DontSortPropertiesByName();
 
-            MakeAssertion(builder);
+            this.MakeAssertion(builder);
         }
     }
 }

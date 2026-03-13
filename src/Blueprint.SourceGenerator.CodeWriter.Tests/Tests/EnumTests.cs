@@ -20,7 +20,7 @@ namespace Blueprint.SourceGenerator.CodeWriter.Tests
                     .AddValue("Value2")
                     .Enum;
 
-            MakeAssertion(builder);
+            this.MakeAssertion(builder);
         }
 
         [Fact]
@@ -33,7 +33,7 @@ namespace Blueprint.SourceGenerator.CodeWriter.Tests
                     .AddValue("Value2", 99)
                     .Enum;
 
-            MakeAssertion(builder);
+            this.MakeAssertion(builder);
         }
 
         [Fact]
@@ -49,7 +49,7 @@ namespace Blueprint.SourceGenerator.CodeWriter.Tests
                         .AddAttribute(@"Description(""Bar"")")
                     .Enum;
 
-            MakeAssertion(builder);
+            this.MakeAssertion(builder);
         }
     }
 }

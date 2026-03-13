@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-using System.Linq;
 using Blueprint.SourceGenerator.CodeWriter.Internals;
 using Microsoft.CodeAnalysis;
 
@@ -200,10 +198,9 @@ namespace Blueprint.SourceGenerator.CodeWriter
         public static T AddParameter<T>(this IParameterized<T> parameterized, IParameterSymbol parameter)
             where T : BuilderBase<T>, IParameterized<T>
         {
-            if (parameter.HasExplicitDefaultValue)
-                return parameterized.AddParameterWithDefaultValue(parameter.Type, parameter.Name, parameter.ExplicitDefaultValue);
-
-            return parameterized.AddParameter(parameter.Type, parameter.Name);
+            return parameter.HasExplicitDefaultValue
+                ? parameterized.AddParameterWithDefaultValue(parameter.Type, parameter.Name, parameter.ExplicitDefaultValue)
+                : parameterized.AddParameter(parameter.Type, parameter.Name);
         }
 
         /// <summary>
@@ -216,10 +213,14 @@ namespace Blueprint.SourceGenerator.CodeWriter
             where T : BuilderBase<T>, IParameterized<T>
         {
             if (parameters is null || !parameters.Any())
+            {
                 return parameterized.Parent;
+            }
 
             foreach (var parameter in parameters)
+            {
                 parameterized.AddParameter(parameter);
+            }
 
             return parameterized.Parent;
         }
@@ -228,7 +229,9 @@ namespace Blueprint.SourceGenerator.CodeWriter
             where T : BuilderBase<T>, IParameterized<T>
         {
             if (parameterized.Parameters.Any(p => p.Type == parameter.Type && p.Name == parameter.Name))
+            {
                 return parameterized.Parent;
+            }
 
             if (index > -1)
             {

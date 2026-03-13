@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using Microsoft.CodeAnalysis;
 
 #pragma warning disable IDE0079
@@ -36,10 +34,9 @@ namespace Blueprint.SourceGenerator.CodeWriter.Internals
         /// <returns>The C# type name that should be emitted for the supplied symbol.</returns>
         public static string GetTypeName(this ITypeSymbol symbol)
         {
-            if (symbol.ContainingNamespace.Name == "System" && _mappings.ContainsKey(symbol.Name))
-                return _mappings[symbol.Name];
-
-            return symbol.GetFullMetadataName();
+            return symbol.ContainingNamespace.Name == "System" && _mappings.ContainsKey(symbol.Name)
+                ? _mappings[symbol.Name]
+                : symbol.GetFullMetadataName();
         }
 
         /// <summary>
@@ -49,10 +46,7 @@ namespace Blueprint.SourceGenerator.CodeWriter.Internals
         /// <returns>The C# type name that should be emitted for the supplied CLR type.</returns>
         public static string GetTypeName(this Type type)
         {
-            if (type.Namespace == "System" && _mappings.ContainsKey(type.Name))
-                return _mappings[type.Name];
-
-            return type.FullName;
+            return type.Namespace == "System" && _mappings.ContainsKey(type.Name) ? _mappings[type.Name] : type.FullName;
         }
     }
 }

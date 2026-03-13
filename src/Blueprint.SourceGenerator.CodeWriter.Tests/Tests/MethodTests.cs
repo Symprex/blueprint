@@ -19,7 +19,7 @@ namespace Blueprint.SourceGenerator.CodeWriter.Tests
                 .Abstract()
                 .Class;
 
-            MakeAssertion(builder);
+            this.MakeAssertion(builder);
         }
 
         [Fact]
@@ -29,11 +29,11 @@ namespace Blueprint.SourceGenerator.CodeWriter.Tests
                 .AddClass("SamplePrimitiveParameter")
                 .AddMethod("MyPrimitiveMethod")
                 .MakePublicMethod()
-                .AddParameter(GetSymbol("System", "String"), "myParameter")
+                .AddParameter(this.GetSymbol("System", "String"), "myParameter")
                 .WithBody(x => x.AppendLine(@"Console.WriteLine(""Hello {0}"", myParameter);"))
                 .Class;
 
-            MakeAssertion(builder);
+            this.MakeAssertion(builder);
         }
 
         [Fact]
@@ -48,7 +48,7 @@ namespace Blueprint.SourceGenerator.CodeWriter.Tests
                 .MakePublicMethod()
                 .Class;
 
-            MakeAssertion(builder);
+            this.MakeAssertion(builder);
         }
     }
 }

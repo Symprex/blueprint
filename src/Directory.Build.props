@@ -17,6 +17,7 @@
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
 
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
 
     <CodeAnalysisRuleset>$(MSBuildThisFileDirectory)Rules.ruleset</CodeAnalysisRuleset>
     <CodeAnalysisDictionary>$(MSBuildThisFileDirectory)CustomDictionary.xml</CodeAnalysisDictionary>

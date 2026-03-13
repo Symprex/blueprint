@@ -1,5 +1,3 @@
-using System;
-
 #pragma warning disable IDE0079
 #pragma warning disable IDE0090
 #pragma warning disable IDE1006
@@ -22,8 +20,8 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <param name="case">The case used by this operation.</param>
         public SwitchCaseBuilder(SwitchBuilder parent, string @case)
         {
-            _parent = parent;
-            _case = @case;
+            this._parent = parent;
+            this._case = @case;
         }
 
         /// <summary>
@@ -33,8 +31,8 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public SwitchBuilder WithContent(Action<ICodeWriter> contentDelegate)
         {
-            _content = contentDelegate ?? EmptyBody;
-            return _parent;
+            this._content = contentDelegate ?? EmptyBody;
+            return this._parent;
         }
 
         /// <summary>
@@ -44,21 +42,21 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public SwitchBuilder WithExpression(string returnValue = "null")
         {
-            _content = w => w.Append($"{_case} => {returnValue}");
-            return _parent;
+            this._content = w => w.Append($"{this._case} => {returnValue}");
+            return this._parent;
         }
 
         void IBuilder.Write(in CodeWriter writer)
         {
-            if (_parent.Expression)
+            if (this._parent.Expression)
             {
-                _content?.Invoke(writer);
+                this._content?.Invoke(writer);
             }
             else
             {
-                writer.AppendLine($"case {_case}:");
+                writer.AppendLine($"case {this._case}:");
                 writer.IncreaseIndent();
-                _content?.Invoke(writer);
+                this._content?.Invoke(writer);
                 writer.AppendLine("break;");
                 writer.DecreaseIndent();
             }

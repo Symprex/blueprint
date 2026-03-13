@@ -14,10 +14,22 @@ The repository combines:
 
 - .NET SDK `8.0.206` (see `global.json`)
 
+## Local setup
+
+Run these once in a fresh clone to restore the local tools and install the Git hooks used by this repository:
+
+```powershell
+dotnet tool restore
+dotnet husky install
+```
+
+The `pre-commit` hook uses Husky.NET to run `dotnet format Blueprint.sln --no-restore --include <staged .cs files>` before each commit, then re-stages the formatted files so the commit contains the cleaned-up code.
+
 ## Build and test
 
 ```powershell
 dotnet build .\Blueprint.sln
+dotnet format .\Blueprint.sln --no-restore
 dotnet test .\src\Blueprint.SourceGenerator.Tests\Blueprint.SourceGenerator.Tests.csproj
 dotnet test .\src\Blueprint.SourceGenerator.CodeWriter.Tests\Blueprint.SourceGenerator.CodeWriter.Tests.csproj
 dotnet test .\src\Blueprint.SourceGenerator.Tests.Integration\Blueprint.SourceGenerator.Tests.Integration.csproj
@@ -27,6 +39,12 @@ Run a single test with a filter, for example:
 
 ```powershell
 dotnet test .\src\Blueprint.SourceGenerator.Tests\Blueprint.SourceGenerator.Tests.csproj --filter "FullyQualifiedName~AppDataModelSourceGeneratorTests.When_not_partial_then_reports_diagnostic"
+```
+
+For a focused format pass after small changes:
+
+```powershell
+dotnet format .\Blueprint.sln --no-restore --include src\Blueprint.SourceGenerator\Generators\App\AppDataModelSourceGenerator.cs
 ```
 
 ## How the pieces fit together

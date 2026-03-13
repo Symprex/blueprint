@@ -1,5 +1,4 @@
 using System.Text;
-using Blueprint.SourceGenerator.Generators.Pipelines.Model;
 using Blueprint.SourceGenerator.Helpers;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -75,17 +74,11 @@ public sealed partial class OperationExecutorPipelineSourceGenerator : IIncremen
     {
         public bool Equals(AppInfo? other)
         {
-            if (ReferenceEquals(null, other))
-            {
-                return false;
-            }
-
-            if (ReferenceEquals(this, other))
-            {
-                return true;
-            }
-
-            return this.AppTypeName == other.AppTypeName &&
+            return other is null
+                ? false
+                : ReferenceEquals(this, other)
+                ? true
+                : this.AppTypeName == other.AppTypeName &&
                    this.AppNamespace == other.AppNamespace &&
                    SymbolEqualityComparer.Default.Equals(this.AppType, other.AppType);
         }

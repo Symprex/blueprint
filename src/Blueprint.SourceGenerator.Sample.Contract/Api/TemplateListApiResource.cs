@@ -9,15 +9,14 @@ public partial class TemplateListApiResource : ApiResource
 {
     // For JSON
     private TemplateListApiResource()
+        : this([])
     {
     }
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="TemplateApiResource"/> class.
+    /// Initializes a new instance of the <see cref="TemplateListApiResource"/> class.
     /// </summary>
-    /// <param name="id">The id of this template.</param>
-    /// <param name="htmlSource">The HTML source of this template</param>
-    /// <param name="plainTextSource">The plain text source of this template.</param>
+    /// <param name="templates">The templates included in the resource.</param>
     public TemplateListApiResource(TemplateApiResource[] templates)
     {
         this.Templates = templates;

@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-
 namespace Blueprint.SourceGenerator.CodeWriter
 {
     /// <summary>
@@ -13,8 +11,8 @@ namespace Blueprint.SourceGenerator.CodeWriter
 
         internal GenericBuilder(string name)
         {
-            Name = name;
-            _constraints = new List<string>();
+            this.Name = name;
+            this._constraints = new List<string>();
         }
 
         /// <summary>
@@ -28,7 +26,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public GenericBuilder New()
         {
-            _newDefault = true;
+            this._newDefault = true;
             return this;
         }
 
@@ -38,7 +36,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public GenericBuilder Class()
         {
-            _isClass = true;
+            this._isClass = true;
             return this;
         }
 
@@ -51,11 +49,14 @@ namespace Blueprint.SourceGenerator.CodeWriter
         {
             switch (constraint)
             {
-                case "new()": return New();
-                case "class": return Class();
+                case "new()": return this.New();
+                case "class": return this.Class();
                 default:
-                    if (!(string.IsNullOrWhiteSpace(constraint) || _constraints.Contains(constraint)))
-                        _constraints.Add(constraint);
+                    if (!(string.IsNullOrWhiteSpace(constraint) || this._constraints.Contains(constraint)))
+                    {
+                        this._constraints.Add(constraint);
+                    }
+
                     break;
             }
 
@@ -68,16 +69,18 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The generated source fragment represented by the current builder.</returns>
         public override string ToString()
         {
-            if (_isClass)
-                _constraints.Insert(0, "class");
-            if (_newDefault)
-                _constraints.Insert(0, "new()");
+            if (this._isClass)
+            {
+                this._constraints.Insert(0, "class");
+            }
 
-            var output = string.Join(", ", _constraints).Trim();
-            if(string.IsNullOrEmpty(output))
-                return string.Empty;
+            if (this._newDefault)
+            {
+                this._constraints.Insert(0, "new()");
+            }
 
-            return $"where {Name} : {output}";
+            var output = string.Join(", ", this._constraints).Trim();
+            return string.IsNullOrEmpty(output) ? string.Empty : $"where {this.Name} : {output}";
         }
     }
 }

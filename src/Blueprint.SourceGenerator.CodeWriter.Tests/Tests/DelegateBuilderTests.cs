@@ -18,7 +18,7 @@ namespace Blueprint.SourceGenerator.CodeWriter.Tests
                 .AddDelegate("DelegateInTopLevelNamespace")
                 .MakePublicDelegate();
 
-            MakeAssertion(builder);
+            this.MakeAssertion(builder);
         }
 
         [Fact]
@@ -31,7 +31,7 @@ namespace Blueprint.SourceGenerator.CodeWriter.Tests
                 .AddGeneric("TView", x => x.AddConstraint("View"))
                 .AddGeneric("TViewModel", x => x.AddConstraint("class"));
 
-            MakeAssertion(builder);
+            this.MakeAssertion(builder);
         }
 
         [Fact]
@@ -44,7 +44,7 @@ namespace Blueprint.SourceGenerator.CodeWriter.Tests
                 .AddParameter("string", "message")
                 .AddParameter("int", "number");
 
-            MakeAssertion(builder);
+            this.MakeAssertion(builder);
         }
     }
 }

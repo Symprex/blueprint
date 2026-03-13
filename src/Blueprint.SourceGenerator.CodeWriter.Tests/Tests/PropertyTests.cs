@@ -22,7 +22,7 @@ namespace Blueprint.SourceGenerator.CodeWriter.Tests
     }
 }
 ";
-            AreEqual(expected, builder);
+            this.AreEqual(expected, builder);
         }
 
         [Fact]
@@ -42,7 +42,7 @@ namespace Blueprint.SourceGenerator.CodeWriter.Tests
     }
 }
 ";
-            AreEqual(expected, builder);
+            this.AreEqual(expected, builder);
         }
 
         [Fact]
@@ -63,7 +63,7 @@ namespace Blueprint.SourceGenerator.CodeWriter.Tests
     }
 }
 ";
-            AreEqual(expected, builder);
+            this.AreEqual(expected, builder);
         }
 
         [Fact]
@@ -84,7 +84,7 @@ namespace Blueprint.SourceGenerator.CodeWriter.Tests
     }
 }
 ";
-            AreEqual(expected, builder);
+            this.AreEqual(expected, builder);
         }
 
         [Fact]
@@ -106,7 +106,7 @@ namespace Blueprint.SourceGenerator.CodeWriter.Tests
     }
 }
 ";
-            AreEqual(expected, builder);
+            this.AreEqual(expected, builder);
         }
 
         [Fact]
@@ -127,7 +127,7 @@ namespace Blueprint.SourceGenerator.CodeWriter.Tests
     }
 }
 ";
-            AreEqual(expected, builder);
+            this.AreEqual(expected, builder);
         }
 
         [Fact]
@@ -149,7 +149,7 @@ namespace Blueprint.SourceGenerator.CodeWriter.Tests
 }
 ";
 
-            AreEqual(expected, builder);
+            this.AreEqual(expected, builder);
         }
 
         [Fact]
@@ -171,7 +171,7 @@ namespace Blueprint.SourceGenerator.CodeWriter.Tests
 }
 ";
 
-            AreEqual(expected, builder);
+            this.AreEqual(expected, builder);
         }
 
         [Fact]
@@ -194,7 +194,7 @@ namespace Blueprint.SourceGenerator.CodeWriter.Tests
     }
 }
 ";
-            AreEqual(expected, builder);
+            this.AreEqual(expected, builder);
         }
 
         [Fact]
@@ -217,7 +217,7 @@ namespace Blueprint.SourceGenerator.CodeWriter.Tests
     }
 }
 ";
-            AreEqual(expected, builder);
+            this.AreEqual(expected, builder);
         }
 
         private void AreEqual(string expected, ClassBuilder builder)

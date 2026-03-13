@@ -1,5 +1,3 @@
-using System;
-using System.Linq;
 using Blueprint.SourceGenerator.CodeWriter.Internals;
 using Microsoft.CodeAnalysis;
 
@@ -62,10 +60,9 @@ public static class SymbolExtensions
     /// <returns>True when the inspected type should be treated as nullable in generated code; otherwise false.</returns>
     public static bool IsNullable(this ITypeSymbol type)
     {
-        if (type.NullableAnnotation == NullableAnnotation.Annotated)
-            return true;
-
-        return ((type as INamedTypeSymbol)?.IsGenericType ?? false)
+        return type.NullableAnnotation == NullableAnnotation.Annotated
+            ? true
+            : ((type as INamedTypeSymbol)?.IsGenericType ?? false)
             && type.OriginalDefinition.ToDisplayString().Equals("System.Nullable<T>", StringComparison.OrdinalIgnoreCase);
     }
 

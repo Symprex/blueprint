@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using Blueprint.SourceGenerator.CodeWriter.Internals;
 using Microsoft.CodeAnalysis;
 
@@ -40,9 +38,9 @@ namespace Blueprint.SourceGenerator.CodeWriter
 
         internal PropertyBuilder(string name, Accessibility? accessModifier, ClassBuilder builder)
         {
-            Name = name;
-            AccessModifier = accessModifier;
-            Class = builder;
+            this.Name = name;
+            this.AccessModifier = accessModifier;
+            this.Class = builder;
         }
 
         /// <summary>
@@ -77,7 +75,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public PropertyBuilder WithSummary(string summary)
         {
-            _xmlDoc = new SummaryDocumentationComment { Summary = summary };
+            this._xmlDoc = new SummaryDocumentationComment { Summary = summary };
             return this;
         }
 
@@ -88,7 +86,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public PropertyBuilder WithInheritDoc(bool inherit = true)
         {
-            _xmlDoc = new InheritDocumentationComment();
+            this._xmlDoc = new InheritDocumentationComment();
             return this;
         }
 
@@ -99,7 +97,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public PropertyBuilder WithInheritDoc(string from)
         {
-            _xmlDoc = new InheritDocumentationComment { InheritFrom = from };
+            this._xmlDoc = new InheritDocumentationComment { InheritFrom = from };
             return this;
         }
 
@@ -110,7 +108,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public PropertyBuilder AddNamespaceImport(string importedNamespace)
         {
-            Class.AddNamespaceImport(importedNamespace);
+            this.Class.AddNamespaceImport(importedNamespace);
             return this;
         }
 
@@ -121,7 +119,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public PropertyBuilder AddNamespaceImport(ISymbol symbol)
         {
-            return AddNamespaceImport(symbol.ContainingNamespace.ToString());
+            return this.AddNamespaceImport(symbol.ContainingNamespace.ToString());
         }
 
         /// <summary>
@@ -131,7 +129,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public PropertyBuilder AddNamespaceImport(INamespaceSymbol symbol)
         {
-            return AddNamespaceImport(symbol.ToString());
+            return this.AddNamespaceImport(symbol.ToString());
         }
 
         /// <summary>
@@ -141,7 +139,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public PropertyBuilder SetType(string type)
         {
-            Type = type;
+            this.Type = type;
             return this;
         }
 
@@ -152,7 +150,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public PropertyBuilder SetType(INamedTypeSymbol symbol)
         {
-            return AddNamespaceImport(symbol.ContainingNamespace)
+            return this.AddNamespaceImport(symbol.ContainingNamespace)
                 .SetType(symbol.GetTypeName());
         }
 
@@ -163,7 +161,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public PropertyBuilder SetType(Type type)
         {
-            return AddNamespaceImport(type.Namespace)
+            return this.AddNamespaceImport(type.Namespace)
                 .SetType(type.GetTypeName());
         }
 
@@ -171,31 +169,46 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// Sets the type emitted for the generated property or field.
         /// </summary>
         /// <returns>The same builder so fluent configuration can continue.</returns>
-        public PropertyBuilder SetType<T>() => SetType(typeof(T));
+        public PropertyBuilder SetType<T>()
+        {
+            return this.SetType(typeof(T));
+        }
 
         /// <summary>
         /// Sets the generated property or field to public accessibility.
         /// </summary>
         /// <returns>The same builder so fluent configuration can continue.</returns>
-        public PropertyBuilder MakePublicProperty() => WithAccessModifier(Accessibility.Public);
+        public PropertyBuilder MakePublicProperty()
+        {
+            return this.WithAccessModifier(Accessibility.Public);
+        }
 
         /// <summary>
         /// Sets the generated property or field to private accessibility.
         /// </summary>
         /// <returns>The same builder so fluent configuration can continue.</returns>
-        public PropertyBuilder MakePrivateProperty() => WithAccessModifier(Accessibility.Private);
+        public PropertyBuilder MakePrivateProperty()
+        {
+            return this.WithAccessModifier(Accessibility.Private);
+        }
 
         /// <summary>
         /// Sets the generated property or field to protected accessibility.
         /// </summary>
         /// <returns>The same builder so fluent configuration can continue.</returns>
-        public PropertyBuilder MakeProtectedProperty() => WithAccessModifier(Accessibility.Protected);
+        public PropertyBuilder MakeProtectedProperty()
+        {
+            return this.WithAccessModifier(Accessibility.Protected);
+        }
 
         /// <summary>
         /// Sets the generated property or field to internal accessibility.
         /// </summary>
         /// <returns>The same builder so fluent configuration can continue.</returns>
-        public PropertyBuilder MakeInternalProperty() => WithAccessModifier(Accessibility.Internal);
+        public PropertyBuilder MakeInternalProperty()
+        {
+            return this.WithAccessModifier(Accessibility.Internal);
+        }
 
         /// <summary>
         /// Sets the accessibility emitted for the generated property or field.
@@ -204,7 +217,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public PropertyBuilder WithAccessModifier(Accessibility accessModifier)
         {
-            AccessModifier = accessModifier;
+            this.AccessModifier = accessModifier;
             return this;
         }
 
@@ -215,7 +228,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public PropertyBuilder Override(bool @override = true)
         {
-            _override = @override;
+            this._override = @override;
             return this;
         }
 
@@ -225,10 +238,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public PropertyBuilder MakeStatic()
         {
-            IsStatic = true;
-            if (string.IsNullOrEmpty(_getterExpression))
+            this.IsStatic = true;
+            if (string.IsNullOrEmpty(this._getterExpression))
             {
-                FieldTypeValue = FieldType.Const;
+                this.FieldTypeValue = FieldType.Const;
             }
 
             return this;
@@ -240,7 +253,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public PropertyBuilder MakeVirtualProperty()
         {
-            _virtual = true;
+            this._virtual = true;
             return this;
         }
 
@@ -252,8 +265,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         public PropertyBuilder AddAttribute(string attribute)
         {
             var sanitized = attribute.Replace("[", string.Empty).Replace("]", string.Empty);
-            if (!_attributes.Contains(sanitized))
-                _attributes.Add(sanitized);
+            if (!this._attributes.Contains(sanitized))
+            {
+                this._attributes.Add(sanitized);
+            }
 
             return this;
         }
@@ -264,17 +279,19 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public ClassBuilder UseGetOnlyAutoProp()
         {
-            _autoprops = true;
-            _getOnly = true;
-            return Class;
+            this._autoprops = true;
+            this._getOnly = true;
+            return this.Class;
         }
 
         /// <summary>
         /// Switches the member to an auto-property and returns the parent class builder.
         /// </summary>
         /// <returns>The same builder so fluent configuration can continue.</returns>
-        public ClassBuilder UseAutoProps() =>
-            UseAutoProps(null);
+        public ClassBuilder UseAutoProps()
+        {
+            return this.UseAutoProps(null);
+        }
 
         /// <summary>
         /// Switches the member to an auto-property and returns the parent class builder.
@@ -283,9 +300,9 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public ClassBuilder UseAutoProps(Accessibility? setterAccessibility)
         {
-            _autoprops = true;
-            _setterAccessibility = setterAccessibility;
-            return Class;
+            this._autoprops = true;
+            this._setterAccessibility = setterAccessibility;
+            return this.Class;
         }
 
         /// <summary>
@@ -295,8 +312,8 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public PropertyBuilder WithGetterExpression(string expression)
         {
-            _getterExpression = expression;
-            FieldTypeValue = FieldType.Property;
+            this._getterExpression = expression;
+            this.FieldTypeValue = FieldType.Property;
             return this;
         }
 
@@ -307,7 +324,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public PropertyBuilder WithGetter(Action<ICodeWriter> getterBody)
         {
-            _getter = getterBody;
+            this._getter = getterBody;
             return this;
         }
 
@@ -318,7 +335,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public PropertyBuilder WithSetterExpression(string expression)
         {
-            _setterExpression = expression;
+            this._setterExpression = expression;
             return this;
         }
 
@@ -329,7 +346,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public PropertyBuilder WithSetter(Action<ICodeWriter> setterBody)
         {
-            _setter = setterBody;
+            this._setter = setterBody;
             return this;
         }
 
@@ -341,10 +358,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The parent class builder so type construction can continue.</returns>
         public ClassBuilder WithConstValue(string value, ValueType valueType = ValueType.UserSpecified)
         {
-            _value = value;
-            FieldTypeValue = FieldType.Const;
-            PropertyValueType = valueType;
-            return Class;
+            this._value = value;
+            this.FieldTypeValue = FieldType.Const;
+            this.PropertyValueType = valueType;
+            return this.Class;
         }
 
         /// <summary>
@@ -352,8 +369,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// </summary>
         /// <param name="valueType">Controls how the generated readonly value should be interpreted when the field is rendered.</param>
         /// <returns>The parent class builder so type construction can continue.</returns>
-        public ClassBuilder WithReadonlyValue(ValueType valueType = ValueType.UserSpecified) =>
-            WithReadonlyValue(null, valueType);
+        public ClassBuilder WithReadonlyValue(ValueType valueType = ValueType.UserSpecified)
+        {
+            return this.WithReadonlyValue(null, valueType);
+        }
 
         /// <summary>
         /// Configures the member to emit a readonly field with the supplied initializer.
@@ -363,10 +382,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The parent class builder so type construction can continue.</returns>
         public ClassBuilder WithReadonlyValue(string? value, ValueType valueType = ValueType.UserSpecified)
         {
-            _value = value;
-            FieldTypeValue = FieldType.ReadOnly;
-            PropertyValueType = valueType;
-            return Class;
+            this._value = value;
+            this.FieldTypeValue = FieldType.ReadOnly;
+            this.PropertyValueType = valueType;
+            return this.Class;
         }
 
         /// <summary>
@@ -377,10 +396,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The parent class builder so type construction can continue.</returns>
         public ClassBuilder WithValue(string? value, ValueType valueType = ValueType.UserSpecified)
         {
-            _value = value;
-            FieldTypeValue = FieldType.Default;
-            PropertyValueType = valueType;
-            return Class;
+            this._value = value;
+            this.FieldTypeValue = FieldType.Default;
+            this.PropertyValueType = valueType;
+            return this.Class;
         }
 
         /// <summary>
@@ -388,8 +407,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// </summary>
         /// <param name="defaultValue">The initializer to emit for the generated backing field, or <see langword="null"/> to omit one.</param>
         /// <returns>The parent class builder so type construction can continue.</returns>
-        public ClassBuilder MakeBackingField(string? defaultValue = null) =>
-            WithValue(defaultValue);
+        public ClassBuilder MakeBackingField(string? defaultValue = null)
+        {
+            return this.WithValue(defaultValue);
+        }
 
         /// <summary>
         /// Creates a companion backing field for the current property and returns the field builder for additional customization.
@@ -399,9 +420,9 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The builder for the generated backing field.</returns>
         public PropertyBuilder WithBackingField(string? defaultValue = null, Accessibility? accessModifier = null)
         {
-            var name = $"_{char.ToLower(Name[0])}{Name.Substring(1)}";
-            var builder = Class.AddProperty(name, accessModifier ?? Accessibility.Private);
-            builder.Type = Type;
+            var name = $"_{char.ToLower(this.Name[0])}{this.Name.Substring(1)}";
+            var builder = this.Class.AddProperty(name, accessModifier ?? Accessibility.Private);
+            builder.Type = this.Type;
             builder.FieldTypeValue = FieldType.Default;
             builder.WithValue(defaultValue);
 
@@ -410,45 +431,53 @@ namespace Blueprint.SourceGenerator.CodeWriter
 
         void IBuilder.Write(in CodeWriter writer)
         {
-            _xmlDoc?.Write(writer);
+            this._xmlDoc?.Write(writer);
 
-            foreach (var attribute in _attributes)
+            foreach (var attribute in this._attributes)
+            {
                 writer.AppendLine($"[{attribute}]");
+            }
 
-            var value = PropertyValueType switch
+            var value = this.PropertyValueType switch
             {
                 ValueType.Null => "null",
                 ValueType.Default => "default",
-                _ => _value
+                _ => this._value
             };
 
-            if (Type is null || string.IsNullOrEmpty(Type))
-                throw new ArgumentNullException($"There is no 'Type' Specified for {Name}");
+            if (this.Type is null || string.IsNullOrEmpty(this.Type))
+            {
+                throw new ArgumentNullException($"There is no 'Type' Specified for {this.Name}");
+            }
 
-            var type = Type.Trim();
-            var name = Name.Trim();
-            var _static = IsStatic ? " static" : null;
+            var type = this.Type.Trim();
+            var name = this.Name.Trim();
+            var _static = this.IsStatic ? " static" : null;
             var isNew = name == nameof(Equals) ? " new" : string.Empty;
             string? additionalModifier = null;
-            if (_virtual)
-                additionalModifier = "virtual";
-            else if (_override)
-                additionalModifier = "override";
-
-            var output = (FieldTypeValue switch
+            if (this._virtual)
             {
-                FieldType.Const => $"{AccessModifier.Code()}{isNew} const {type} {name}",
-                FieldType.ReadOnly => $"{AccessModifier.Code()}{isNew}{_static} readonly {type} {name}",
+                additionalModifier = "virtual";
+            }
+            else if (this._override)
+            {
+                additionalModifier = "override";
+            }
+
+            var output = (this.FieldTypeValue switch
+            {
+                FieldType.Const => $"{this.AccessModifier.Code()}{isNew} const {type} {name}",
+                FieldType.ReadOnly => $"{this.AccessModifier.Code()}{isNew}{_static} readonly {type} {name}",
                 _ => additionalModifier is null
-                    ? $"{AccessModifier.Code()}{isNew}{_static} {type} {name}"
-                    : $"{AccessModifier.Code()} {additionalModifier} {type} {name}"
+                    ? $"{this.AccessModifier.Code()}{isNew}{_static} {type} {name}"
+                    : $"{this.AccessModifier.Code()} {additionalModifier} {type} {name}"
             }).Trim();
 
             var maxCharacters = (value?.StartsWith("\"") ?? false) ? 9 : 5;
 
-            if(FieldTypeValue != FieldType.Property)
+            if (this.FieldTypeValue != FieldType.Property)
             {
-                if(string.IsNullOrEmpty(value) && FieldTypeValue != FieldType.Const)
+                if (string.IsNullOrEmpty(value) && this.FieldTypeValue != FieldType.Const)
                 {
                     writer.AppendLine($"{output};");
                 }
@@ -466,29 +495,29 @@ namespace Blueprint.SourceGenerator.CodeWriter
 
                 return;
             }
-            else if(_autoprops)
+            else if (this._autoprops)
             {
-                if (_getOnly)
+                if (this._getOnly)
                 {
                     writer.AppendLine($"{output} {{ get; }}");
                     return;
                 }
 
-                var set = $"{_setterAccessibility.Code()} set".Trim();
+                var set = $"{this._setterAccessibility.Code()} set".Trim();
                 writer.AppendLine($"{output} {{ get; {set}; }}");
                 return;
             }
 
-            if(!string.IsNullOrEmpty(_getterExpression) &&
-                string.IsNullOrEmpty(_setterExpression) &&
-                _setter is null)
+            if (!string.IsNullOrEmpty(this._getterExpression) &&
+                string.IsNullOrEmpty(this._setterExpression) &&
+                this._setter is null)
             {
-                writer.AppendLine($"{output} => {_getterExpression};");
+                writer.AppendLine($"{output} => {this._getterExpression};");
                 return;
             }
 
-            if(string.IsNullOrEmpty(_getterExpression) && string.IsNullOrEmpty(_setterExpression) &&
-                _getter is null && _setter is null)
+            if (string.IsNullOrEmpty(this._getterExpression) && string.IsNullOrEmpty(this._setterExpression) &&
+                this._getter is null && this._setter is null)
             {
                 writer.AppendLine($"{output};");
                 return;
@@ -496,27 +525,27 @@ namespace Blueprint.SourceGenerator.CodeWriter
 
             using (writer.Block(output))
             {
-                if(!string.IsNullOrEmpty(_getterExpression))
+                if (!string.IsNullOrEmpty(this._getterExpression))
                 {
-                    writer.AppendLine($"get => {_getterExpression};");
+                    writer.AppendLine($"get => {this._getterExpression};");
                 }
-                else if(_getter != null)
+                else if (this._getter != null)
                 {
                     using (writer.Block("get"))
                     {
-                        _getter.Invoke(writer);
+                        this._getter.Invoke(writer);
                     }
                 }
 
-                if (!string.IsNullOrEmpty(_setterExpression))
+                if (!string.IsNullOrEmpty(this._setterExpression))
                 {
-                    writer.AppendLine($"set => {_setterExpression};");
+                    writer.AppendLine($"set => {this._setterExpression};");
                 }
-                else if (_setter != null)
+                else if (this._setter != null)
                 {
                     using (writer.Block("set"))
                     {
-                        _setter.Invoke(writer);
+                        this._setter.Invoke(writer);
                     }
                 }
             }

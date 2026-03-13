@@ -39,12 +39,9 @@ public class OkResult : OperationResult
     /// <exception cref="InvalidCastException">If the object is not the correct type.</exception>
     public override T1 Unwrap<T1>()
     {
-        if (this.Content is T1 result)
-        {
-            return result;
-        }
-
-        throw new InvalidCastException("Cannot cast object of type " + this.Content.GetType().Name + " to " + typeof(T1).Name);
+        return this.Content is T1 result
+            ? result
+            : throw new InvalidCastException("Cannot cast object of type " + this.Content.GetType().Name + " to " + typeof(T1).Name);
     }
 }
 

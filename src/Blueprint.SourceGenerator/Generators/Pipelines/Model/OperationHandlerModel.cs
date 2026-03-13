@@ -1,5 +1,4 @@
 using Blueprint.SourceGenerator.Helpers;
-using Microsoft.CodeAnalysis;
 
 namespace Blueprint.SourceGenerator.Generators.Pipelines.Model;
 
@@ -51,17 +50,11 @@ public sealed record OperationHandlerModel(
     /// <inheritdoc />
     public bool Equals(OperationHandlerModel? other)
     {
-        if (ReferenceEquals(null, other))
-        {
-            return false;
-        }
-
-        if (ReferenceEquals(this, other))
-        {
-            return true;
-        }
-
-        return this.OperationTypeName == other.OperationTypeName &&
+        return other is null
+            ? false
+            : ReferenceEquals(this, other)
+            ? true
+            : this.OperationTypeName == other.OperationTypeName &&
                this.OperationTypeFullName == other.OperationTypeFullName &&
                this.OperationNamespace == other.OperationNamespace &&
                this.HandlerType == other.HandlerType &&

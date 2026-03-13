@@ -54,12 +54,9 @@ public sealed partial class OperationExecutorPipelineSourceGenerator
             new EquatableList<OperationHandlerModel>(handlers.ToArray()));
 
         // Return success with any warnings
-        if (diagnostics.Count > 0)
-        {
-            return new Result<PipelineCompilationModel>(model, new EquatableList<DiagnosticInfo>(diagnostics.ToArray()));
-        }
-
-        return Result.Success(model);
+        return diagnostics.Count > 0
+            ? new Result<PipelineCompilationModel>(model, new EquatableList<DiagnosticInfo>(diagnostics.ToArray()))
+            : Result.Success(model);
     }
 
     /// <summary>

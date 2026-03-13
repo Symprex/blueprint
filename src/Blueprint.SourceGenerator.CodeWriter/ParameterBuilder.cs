@@ -14,7 +14,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
     {
         internal ParameterBuilder(T parent)
         {
-            Parent = parent;
+            this.Parent = parent;
         }
 
         /// <summary>
@@ -49,7 +49,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public ParameterBuilder<T> WithType(string typeName)
         {
-            Type = typeName;
+            this.Type = typeName;
             return this;
         }
 
@@ -60,16 +60,18 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public ParameterBuilder<T> WithType(INamedTypeSymbol symbol)
         {
-            Parent.AddNamespaceImport(symbol);
-            return WithType(symbol.Name);
+            this.Parent.AddNamespaceImport(symbol);
+            return this.WithType(symbol.Name);
         }
 
         /// <summary>
         /// Sets the default value emitted for the generated parameter.
         /// </summary>
         /// <returns>The same builder so fluent configuration can continue.</returns>
-        public ParameterBuilder<T> WithDefaultValue() =>
-            WithDefaultValue("default");
+        public ParameterBuilder<T> WithDefaultValue()
+        {
+            return this.WithDefaultValue("default");
+        }
 
         /// <summary>
         /// Sets the default value emitted for the generated parameter.
@@ -78,8 +80,8 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public ParameterBuilder<T> WithDefaultValue(string defaultValue)
         {
-            DefaultValue = defaultValue;
-            HasDefaultValue = true;
+            this.DefaultValue = defaultValue;
+            this.HasDefaultValue = true;
             return this;
         }
 
@@ -88,15 +90,19 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// </summary>
         /// <param name="value">The value to emit or configure.</param>
         /// <returns>The same builder so fluent configuration can continue.</returns>
-        public ParameterBuilder<T> WithDefaultValue(object? value) =>
-            WithDefaultValue($"{value}");
+        public ParameterBuilder<T> WithDefaultValue(object? value)
+        {
+            return this.WithDefaultValue($"{value}");
+        }
 
         /// <summary>
         /// Configures the generated parameter to use null as its default value.
         /// </summary>
         /// <returns>The same builder so fluent configuration can continue.</returns>
-        public ParameterBuilder<T> WithNullDefault() =>
-            WithDefaultValue("null");
+        public ParameterBuilder<T> WithNullDefault()
+        {
+            return this.WithDefaultValue("null");
+        }
 
         /// <summary>
         /// Formats the parameter as C# signature text.
@@ -104,9 +110,11 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The generated source fragment represented by the current builder.</returns>
         public override string ToString()
         {
-            var output = $"{Type} {Name}";
-            if (HasDefaultValue)
-                output += $"= {DefaultValue}";
+            var output = $"{this.Type} {this.Name}";
+            if (this.HasDefaultValue)
+            {
+                output += $"= {this.DefaultValue}";
+            }
 
             return output;
         }
@@ -119,7 +127,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         public override bool Equals(object obj)
         {
             return obj != null && obj is ParameterBuilder<T> builder &&
-                builder.Type == Type && builder.Name == Name;
+                builder.Type == this.Type && builder.Name == this.Name;
         }
 
         /// <summary>
@@ -128,7 +136,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>A hash code based on the emitted parameter text.</returns>
         public override int GetHashCode()
         {
-            return ToString().GetHashCode();
+            return this.ToString().GetHashCode();
         }
     }
 }

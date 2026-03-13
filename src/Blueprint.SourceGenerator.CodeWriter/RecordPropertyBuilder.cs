@@ -51,10 +51,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <param name="record">The record builder that owns this property.</param>
         public RecordPropertyBuilder(string type, string name, Accessibility accessModifier, RecordBuilder record)
         {
-            Type = type;
-            Name = name;
-            AccessModifier = accessModifier;
-            Record = record;
+            this.Type = type;
+            this.Name = name;
+            this.AccessModifier = accessModifier;
+            this.Record = record;
         }
 
         /// <summary>
@@ -63,9 +63,11 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The generated source fragment represented by the current builder.</returns>
         public override string ToString()
         {
-            var output = $"{Type} {Name}";
-            if (HasDefaultValue)
-                output += $" = {DefaultValue}";
+            var output = $"{this.Type} {this.Name}";
+            if (this.HasDefaultValue)
+            {
+                output += $" = {this.DefaultValue}";
+            }
 
             return output;
         }
@@ -76,7 +78,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The positional property declaration text.</returns>
         public string ToPositionalProperty()
         {
-            return ToString();
+            return this.ToString();
         }
 
         /// <summary>
@@ -85,8 +87,8 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The init-only property declaration text.</returns>
         public string ToInitProperty()
         {
-            string defaultValue = HasDefaultValue ? $" = {DefaultValue};" : string.Empty;
-            return $"{AccessModifier.Code()} {Type} {Name} {{ get; init; }}{defaultValue}";
+            var defaultValue = this.HasDefaultValue ? $" = {this.DefaultValue};" : string.Empty;
+            return $"{this.AccessModifier.Code()} {this.Type} {this.Name} {{ get; init; }}{defaultValue}";
         }
 
         /// <summary>
@@ -96,8 +98,8 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public RecordPropertyBuilder WithDefaultValue(string defaultValue)
         {
-            DefaultValue = defaultValue;
-            HasDefaultValue = true;
+            this.DefaultValue = defaultValue;
+            this.HasDefaultValue = true;
             return this;
         }
 
@@ -106,7 +108,9 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// </summary>
         /// <param name="value">The value to emit or configure.</param>
         /// <returns>The same builder so fluent configuration can continue.</returns>
-        public RecordPropertyBuilder WithDefaultValue(object value) =>
-            WithDefaultValue($"{value}");
+        public RecordPropertyBuilder WithDefaultValue(object value)
+        {
+            return this.WithDefaultValue($"{value}");
+        }
     }
 }

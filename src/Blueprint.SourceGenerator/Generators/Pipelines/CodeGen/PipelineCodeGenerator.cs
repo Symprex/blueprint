@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-using System.Linq;
 using Blueprint.SourceGenerator.CodeWriter;
 using Blueprint.SourceGenerator.Generators.Pipelines.Model;
 
@@ -87,28 +85,33 @@ internal static class PipelineCodeGenerator
 
     private static void AddExecuteAsyncMethod(ClassBuilder pipelineClass, OperationHandlerModel handler)
     {
-        pipelineClass.AddMethod("ExecuteAsync")
+        var executeMethod = pipelineClass.AddMethod("ExecuteAsync")
             .MakePublicMethod()
-            .MakeAsync()
             .WithReturnType("System.Threading.Tasks.Task<Blueprint.OperationResult>")
-            .AddParameter("Blueprint.Runtime.Exec.ApiOperationContext", "context")
-            .WithBody(
-                writer =>
-                {
-                    writer.AppendLine($"using var activity = Blueprint.Diagnostics.BlueprintActivitySource.ActivitySource.StartActivity(\"{handler.OperationTypeName}Pipeline\", System.Diagnostics.ActivityKind.Internal);");
-                    writer.DeclareVar("operation", $"({handler.OperationTypeFullName})context.Operation");
-                    writer.NewLine();
+            .AddParameter("Blueprint.Runtime.Exec.ApiOperationContext", "context");
 
-                    writer.Try(
-                        tryWriter =>
-                        {
-                            tryWriter.AppendLine($"_ApiOperationExecuting(_logger, \"{handler.OperationTypeName}\", null);");
-                            tryWriter.NewLine();
-                            WriteHandlerInvocation(tryWriter, handler);
-                        });
+        if (handler.IsHandlerAsync)
+        {
+            executeMethod.MakeAsync();
+        }
 
-                    WriteExceptionHandling(writer);
-                });
+        executeMethod.WithBody(
+            writer =>
+            {
+                writer.AppendLine($"using var activity = Blueprint.Diagnostics.BlueprintActivitySource.ActivitySource.StartActivity(\"{handler.OperationTypeName}Pipeline\", System.Diagnostics.ActivityKind.Internal);");
+                writer.DeclareVar("operation", $"({handler.OperationTypeFullName})context.Operation");
+                writer.NewLine();
+
+                writer.Try(
+                    tryWriter =>
+                    {
+                        tryWriter.AppendLine($"_ApiOperationExecuting(_logger, \"{handler.OperationTypeName}\", null);");
+                        tryWriter.NewLine();
+                        WriteHandlerInvocation(tryWriter, handler);
+                    });
+
+                WriteExceptionHandling(writer, handler.IsHandlerAsync);
+            });
     }
 
     private static void WriteHandlerInvocation(ICodeWriter writer, OperationHandlerModel handler)
@@ -186,17 +189,17 @@ internal static class PipelineCodeGenerator
         }
 
         writer.NewLine();
-        writer.Return("new Blueprint.Runtime.Exec.OkResult(handlerResult)");
+        writer.Return(WrapOperationResult("new Blueprint.Runtime.Exec.OkResult(handlerResult)", handler.IsHandlerAsync));
     }
 
-    private static void WriteExceptionHandling(ICodeWriter writer)
+    private static void WriteExceptionHandling(ICodeWriter writer, bool isHandlerAsync)
     {
         writer.Catch(
             "Blueprint.Validation.ValidationException e",
             catchWriter =>
             {
                 catchWriter.AppendLine("context.Activity?.SetTag(\"otel.status_code\", \"OK\");");
-                catchWriter.Return("new Blueprint.Middleware.ValidationFailedOperationResult(e.ValidationResults)");
+                catchWriter.Return(WrapOperationResult("new Blueprint.Middleware.ValidationFailedOperationResult(e.ValidationResults)", isHandlerAsync));
             });
 
         writer.Catch(
@@ -204,7 +207,7 @@ internal static class PipelineCodeGenerator
             catchWriter =>
             {
                 catchWriter.AppendLine("context.Activity?.SetTag(\"otel.status_code\", \"OK\");");
-                catchWriter.Return("Blueprint.Middleware.ValidationMiddlewareBuilder.ToValidationFailedOperationResult(e)");
+                catchWriter.Return(WrapOperationResult("Blueprint.Middleware.ValidationMiddlewareBuilder.ToValidationFailedOperationResult(e)", isHandlerAsync));
             });
 
         writer.Catch(
@@ -229,7 +232,14 @@ internal static class PipelineCodeGenerator
                     });
 
                 catchWriter.NewLine();
-                catchWriter.Return("new Blueprint.UnhandledExceptionOperationResult(e)");
+                catchWriter.Return(WrapOperationResult("new Blueprint.UnhandledExceptionOperationResult(e)", isHandlerAsync));
             });
+    }
+
+    private static string WrapOperationResult(string operationResultExpression, bool isHandlerAsync)
+    {
+        return isHandlerAsync
+            ? operationResultExpression
+            : $"System.Threading.Tasks.Task.FromResult<Blueprint.OperationResult>({operationResultExpression})";
     }
 }

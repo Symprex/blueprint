@@ -1,4 +1,3 @@
-using System;
 using Blueprint.SourceGenerator.CodeWriter.Internals;
 using Microsoft.CodeAnalysis;
 
@@ -22,8 +21,8 @@ namespace Blueprint.SourceGenerator.CodeWriter
 
         internal EventBuilder(ClassBuilder @class, string eventName)
         {
-            Name = eventName;
-            Class = @class;
+            this.Name = eventName;
+            this.Class = @class;
         }
 
         /// <summary>
@@ -43,7 +42,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public EventBuilder MakeStatic(bool isStatic = true)
         {
-            _static = isStatic;
+            this._static = isStatic;
             return this;
         }
 
@@ -54,7 +53,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public ClassBuilder WithBackingField(string backingField)
         {
-            return WithAddExpression($"{backingField} += value")
+            return this.WithAddExpression($"{backingField} += value")
                 .WithRemoveExpression($"{backingField} -= value")
                 .Class;
         }
@@ -69,10 +68,12 @@ namespace Blueprint.SourceGenerator.CodeWriter
             void BlockHandler(ICodeWriter writer)
             {
                 using (writer.Block("add"))
+                {
                     addDelegate?.Invoke(writer);
+                }
             }
 
-            _addHandlerDelegate = BlockHandler;
+            this._addHandlerDelegate = BlockHandler;
             return this;
         }
 
@@ -83,7 +84,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public EventBuilder WithAddExpression(string addDelegateExpression)
         {
-            _addHandlerDelegate = w => w.AppendLine($"add => {addDelegateExpression};");
+            this._addHandlerDelegate = w => w.AppendLine($"add => {addDelegateExpression};");
             return this;
         }
 
@@ -97,10 +98,12 @@ namespace Blueprint.SourceGenerator.CodeWriter
             void BlockHandler(ICodeWriter writer)
             {
                 using (writer.Block("remove"))
+                {
                     addDelegate?.Invoke(writer);
+                }
             }
 
-            _removeHandlerDelegate = BlockHandler;
+            this._removeHandlerDelegate = BlockHandler;
             return this;
         }
 
@@ -111,7 +114,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public EventBuilder WithRemoveExpression(string addDelegateExpression)
         {
-            _removeHandlerDelegate = w => w.AppendLine($"remove => {addDelegateExpression};");
+            this._removeHandlerDelegate = w => w.AppendLine($"remove => {addDelegateExpression};");
             return this;
         }
 
@@ -122,7 +125,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public EventBuilder WithExplicitImplementation(string @inferfaceName)
         {
-            _explicitImplementation = inferfaceName;
+            this._explicitImplementation = inferfaceName;
             return this;
         }
 
@@ -136,13 +139,15 @@ namespace Blueprint.SourceGenerator.CodeWriter
         public ClassBuilder WithDefaultExplicitImplementation(string @interfaceName, Accessibility backingFieldAccessibility = Accessibility.Private, string? backingFieldName = null)
         {
             if (backingFieldName is null || string.IsNullOrEmpty(backingFieldName))
-                backingFieldName = $"_{char.ToLower(Name[0])}{Name.Substring(1)}";
+            {
+                backingFieldName = $"_{char.ToLower(this.Name[0])}{this.Name.Substring(1)}";
+            }
 
-            return WithExplicitImplementation(interfaceName)
+            return this.WithExplicitImplementation(interfaceName)
                 .WithBackingField(backingFieldName)
                 .AddEvent(backingFieldName)
                 .WithAccessibility(backingFieldAccessibility)
-                .WithDelegateHandler(_eventDelegateType)
+                .WithDelegateHandler(this._eventDelegateType)
                 .Class;
         }
 
@@ -153,7 +158,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public EventBuilder WithDelegateHandler(string handlerType)
         {
-            _eventDelegateType = handlerType;
+            this._eventDelegateType = handlerType;
             return this;
         }
 
@@ -164,8 +169,8 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public EventBuilder WithDelegateHandler(INamedTypeSymbol handlerType)
         {
-            _eventDelegateType = handlerType.Name;
-            return AddNamespaceImport(handlerType);
+            this._eventDelegateType = handlerType.Name;
+            return this.AddNamespaceImport(handlerType);
         }
 
         /// <summary>
@@ -175,7 +180,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public EventBuilder WithAccessibility(Accessibility accessibility)
         {
-            _declaredAccessibility = accessibility;
+            this._declaredAccessibility = accessibility;
             return this;
         }
 
@@ -185,7 +190,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public EventBuilder MakePublic()
         {
-            _declaredAccessibility = Accessibility.Public;
+            this._declaredAccessibility = Accessibility.Public;
             return this;
         }
 
@@ -195,7 +200,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public EventBuilder MakeProtected()
         {
-            _declaredAccessibility = Accessibility.Protected;
+            this._declaredAccessibility = Accessibility.Protected;
             return this;
         }
 
@@ -205,7 +210,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public EventBuilder MakePrivate()
         {
-            _declaredAccessibility = Accessibility.Private;
+            this._declaredAccessibility = Accessibility.Private;
             return this;
         }
 
@@ -215,7 +220,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public EventBuilder MakeInternal()
         {
-            _declaredAccessibility = Accessibility.Internal;
+            this._declaredAccessibility = Accessibility.Internal;
             return this;
         }
 
@@ -225,7 +230,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public EventBuilder MakeInternalProtected()
         {
-            _declaredAccessibility = Accessibility.ProtectedAndInternal;
+            this._declaredAccessibility = Accessibility.ProtectedAndInternal;
             return this;
         }
 
@@ -236,7 +241,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public override EventBuilder AddAssemblyAttribute(string attribute)
         {
-            Class.AddAssemblyAttribute(attribute);
+            this.Class.AddAssemblyAttribute(attribute);
             return this;
         }
 
@@ -247,7 +252,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public override EventBuilder AddNamespaceImport(string importedNamespace)
         {
-            Class.AddNamespaceImport(importedNamespace);
+            this.Class.AddNamespaceImport(importedNamespace);
             return this;
         }
 
@@ -258,7 +263,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public override EventBuilder AddNamespaceImport(ISymbol symbol)
         {
-            Class.AddNamespaceImport(symbol);
+            this.Class.AddNamespaceImport(symbol);
             return this;
         }
 
@@ -269,20 +274,20 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public override EventBuilder AddNamespaceImport(INamespaceSymbol symbol)
         {
-            Class.AddNamespaceImport(symbol);
+            this.Class.AddNamespaceImport(symbol);
             return this;
         }
 
         internal override void Write(in CodeWriter writer)
         {
-            var @static = _static ? "static " : string.Empty;
-            var eventDeclaration = $"{_declaredAccessibility.Code()} {@static}event {_eventDelegateType} {Name}";
-            if(!string.IsNullOrEmpty(_explicitImplementation))
+            var @static = this._static ? "static " : string.Empty;
+            var eventDeclaration = $"{this._declaredAccessibility.Code()} {@static}event {this._eventDelegateType} {this.Name}";
+            if (!string.IsNullOrEmpty(this._explicitImplementation))
             {
-                eventDeclaration = $"event {@static}{_eventDelegateType} {_explicitImplementation}.{Name}";
+                eventDeclaration = $"event {@static}{this._eventDelegateType} {this._explicitImplementation}.{this.Name}";
             }
 
-            if(_addHandlerDelegate is null || _removeHandlerDelegate is null)
+            if (this._addHandlerDelegate is null || this._removeHandlerDelegate is null)
             {
                 writer.AppendLine($"{eventDeclaration};");
                 return;
@@ -290,8 +295,8 @@ namespace Blueprint.SourceGenerator.CodeWriter
 
             using (writer.Block(eventDeclaration))
             {
-                _addHandlerDelegate(writer);
-                _removeHandlerDelegate(writer);
+                this._addHandlerDelegate(writer);
+                this._removeHandlerDelegate(writer);
             }
         }
     }

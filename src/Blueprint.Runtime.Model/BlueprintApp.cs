@@ -110,15 +110,12 @@ public class BlueprintApp
     /// <exception cref="InvalidOperationException">If no operation of the specified type has been registered.</exception>
     public IEnumerable<ApiOperationLink> GetLinksForOperation(Type operationType)
     {
-        if (!this._allOperations.TryGetValue(operationType, out var operationDescriptor))
-        {
-            throw new InvalidOperationException(
-                $"Cannot get links for operation '{operationType.Name}' as it has not been registered.");
-        }
-
-        return !this._operationTypeToLinks.TryGetValue(operationDescriptor.OperationType, out var operation) ?
+        return !this._allOperations.TryGetValue(operationType, out var operationDescriptor)
+            ? throw new InvalidOperationException(
+                $"Cannot get links for operation '{operationType.Name}' as it has not been registered.")
+            : (IEnumerable<ApiOperationLink>)(!this._operationTypeToLinks.TryGetValue(operationDescriptor.OperationType, out var operation) ?
             [] :
-            operation;
+            operation);
     }
 
     /// <summary>
@@ -166,16 +163,13 @@ public class BlueprintApp
     /// <exception cref="InvalidOperationException">If no operation descriptor exists.</exception>
     public ApiOperationDescriptor FindOperation(Type operationType)
     {
-        if (!this.TryFindOperation(operationType, out var found))
-        {
-            throw new InvalidOperationException(@$"Could not find an operation of the type {operationType.FullName}.
+        return !this.TryFindOperation(operationType, out var found)
+            ? throw new InvalidOperationException(@$"Could not find an operation of the type {operationType.FullName}.
 
 Make sure that it has been correctly registered through the use of the .Operations(...) configuration method at startup.
 
-Operations will be found polymorphically, meaning an operation could be registered as an interface with the model but found as a concrete implementation type at runtime");
-        }
-
-        return found;
+Operations will be found polymorphically, meaning an operation could be registered as an interface with the model but found as a concrete implementation type at runtime")
+            : found;
     }
 
     /// <summary>

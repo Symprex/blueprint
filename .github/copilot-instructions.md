@@ -2,8 +2,17 @@
 
 ## Build and test commands
 
+- `dotnet tool restore`  
+  Restores local repository tools such as Husky.NET. Run this in a fresh clone before relying on the pre-commit hook.
+
+- `dotnet husky install`  
+  Installs the repository's Git hooks for the current clone. Run this once after restoring tools so staged `.cs` files are auto-formatted on commit.
+
 - `dotnet build .\Blueprint.sln`  
   Use this for repo-wide validation. There is no separate lint command; compiler analyzers and StyleCop rules run during build, and `Directory.Build.props` enables warnings-as-errors across the repo.
+
+- `dotnet format .\Blueprint.sln --no-restore`  
+  Run this after changing C# or MSBuild files so code style is normalized before validation or commit.
 
 - `dotnet test .\src\Blueprint.SourceGenerator.Tests\Blueprint.SourceGenerator.Tests.csproj`  
   Runs the main unit and snapshot tests for the generators plus runtime-model tests.
@@ -17,6 +26,7 @@
 - Single-test examples:
   - `dotnet test .\src\Blueprint.SourceGenerator.Tests\Blueprint.SourceGenerator.Tests.csproj --filter "FullyQualifiedName~AppDataModelSourceGeneratorTests.When_not_partial_then_reports_diagnostic"`
   - `dotnet test .\src\Blueprint.SourceGenerator.CodeWriter.Tests\Blueprint.SourceGenerator.CodeWriter.Tests.csproj --filter "FullyQualifiedName~CodeWriterTests"`
+  - `dotnet format .\Blueprint.sln --no-restore --include src\Blueprint.SourceGenerator\Generators\App\AppDataModelSourceGenerator.cs`
 
 ## High-level architecture
 
@@ -47,6 +57,10 @@
 - Snapshot baselines live under `src\Blueprint.SourceGenerator.Tests\Generators\*\Snapshots\*.verified.txt`. When intentional generator output changes occur, review the corresponding `.received.*` file and then promote it to `.verified.*`; do not update snapshots without reviewing the generated diff.
 
 - Follow a TDD mindset for all changes. Start by identifying the relevant existing test, snapshot, or validation path; add or update that safety net first when behaviour changes; then implement and finish by rerunning the targeted tests before broader validation.
+
+- This repo uses Husky.NET to run `dotnet format Blueprint.sln --no-restore --include ${staged}` on staged `.cs` files during `pre-commit` once hooks are installed, then re-stages the formatted files before the commit continues.
+
+- After changing `.cs`, `.csproj`, `.props`, `.targets`, or `.editorconfig` files, still run `dotnet format` before commit in agent workflows. Prefer `dotnet format .\Blueprint.sln --no-restore --include <changed files>` for narrow changes, and format the whole solution when edits are broad.
 
 - Repo-wide style comes from `src\.editorconfig` and `src\Stylecop.json`: C# uses 4 spaces, `using` directives stay outside namespaces, private fields use an underscore prefix, `this.` qualification is preferred, async methods must end with `Async`, nullable is enabled, and preview C# features are allowed.
 

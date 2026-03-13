@@ -154,22 +154,22 @@ public static class TestHelpers
         references.Add(MetadataReference.CreateFromFile(typeof(HttpRequestMessage).Assembly.Location));
         references.Add(MetadataReference.CreateFromFile(typeof(System.Net.Http.Headers.AuthenticationHeaderValue).Assembly.Location));
         references.Add(MetadataReference.CreateFromFile(typeof(Blueprint.Model.ICommand).Assembly.Location));
-        
+
         // Add Blueprint.Runtime explicitly for types used in generated code
         references.Add(MetadataReference.CreateFromFile(typeof(Blueprint.OperationResult).Assembly.Location));
         references.Add(MetadataReference.CreateFromFile(typeof(Blueprint.Runtime.Exec.ApiOperationContext).Assembly.Location));
-        
+
         // Add System.ComponentModel.Annotations for ValidationResult
         references.Add(MetadataReference.CreateFromFile(typeof(System.ComponentModel.DataAnnotations.ValidationResult).Assembly.Location));
-        
+
         // Add Microsoft.Extensions.Logging for LoggerMessage.Define, ILogger, ILoggerFactory
         references.Add(MetadataReference.CreateFromFile(typeof(Microsoft.Extensions.Logging.ILogger).Assembly.Location));
         references.Add(MetadataReference.CreateFromFile(typeof(Microsoft.Extensions.Logging.LoggerMessage).Assembly.Location));
         references.Add(MetadataReference.CreateFromFile(typeof(Microsoft.Extensions.Logging.Abstractions.NullLogger).Assembly.Location));
-        
+
         // Add Microsoft.Extensions.DependencyInjection for IServiceProvider
         references.Add(MetadataReference.CreateFromFile(typeof(Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions).Assembly.Location));
-        
+
         // Add System.Diagnostics.DiagnosticSource for Activity tracing
         references.Add(MetadataReference.CreateFromFile(typeof(System.Diagnostics.Activity).Assembly.Location));
 

@@ -1,6 +1,3 @@
-using System.Collections.Generic;
-using System.Linq;
-
 #pragma warning disable IDE0079
 #pragma warning disable IDE0090
 #pragma warning disable IDE1006
@@ -17,9 +14,9 @@ namespace Blueprint.SourceGenerator.CodeWriter
 
         internal EnumValueBuilder(string name, EnumBuilder builder, int? value)
         {
-            Name = name;
-            Value = value;
-            Enum = builder;
+            this.Name = name;
+            this.Value = value;
+            this.Enum = builder;
         }
 
         /// <summary>
@@ -44,7 +41,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public EnumValueBuilder WithSummary(string summary)
         {
-            _xmlDoc = new SummaryDocumentationComment { Summary = summary };
+            this._xmlDoc = new SummaryDocumentationComment { Summary = summary };
             return this;
         }
 
@@ -55,7 +52,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public EnumValueBuilder WithInheritDoc(bool inherit = true)
         {
-            _xmlDoc = new InheritDocumentationComment();
+            this._xmlDoc = new InheritDocumentationComment();
             return this;
         }
 
@@ -66,7 +63,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public EnumValueBuilder WithInheritDoc(string from)
         {
-            _xmlDoc = new InheritDocumentationComment { InheritFrom = from };
+            this._xmlDoc = new InheritDocumentationComment { InheritFrom = from };
             return this;
         }
 
@@ -78,7 +75,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public EnumValueBuilder AddValue(string value, int? numericValue = null)
         {
-            return Enum.AddValue(value, numericValue);
+            return this.Enum.AddValue(value, numericValue);
         }
 
         /// <summary>
@@ -89,25 +86,27 @@ namespace Blueprint.SourceGenerator.CodeWriter
         public EnumValueBuilder AddAttribute(string attribute)
         {
             var sanitized = attribute.Replace("[", string.Empty).Replace("]", string.Empty);
-            if (!_attributes.Contains(sanitized))
-                _attributes.Add(sanitized);
+            if (!this._attributes.Contains(sanitized))
+            {
+                this._attributes.Add(sanitized);
+            }
 
             return this;
         }
 
         void IBuilder.Write(in CodeWriter writer)
         {
-            _xmlDoc?.Write(writer);
+            this._xmlDoc?.Write(writer);
 
-            foreach (var attr in _attributes.OrderBy(x => x))
+            foreach (var attr in this._attributes.OrderBy(x => x))
             {
                 writer.AppendLine($"[{attr}]");
             }
 
-            writer.Append(Name);
-            if (Value.HasValue)
+            writer.Append(this.Name);
+            if (this.Value.HasValue)
             {
-                writer.AppendUnindented($" = {Value}");
+                writer.AppendUnindented($" = {this.Value}");
             }
         }
     }

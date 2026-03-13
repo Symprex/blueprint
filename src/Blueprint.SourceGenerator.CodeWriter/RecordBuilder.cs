@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-using System.Linq;
 using Blueprint.SourceGenerator.CodeWriter.Internals;
 using Microsoft.CodeAnalysis;
 
@@ -20,8 +18,8 @@ namespace Blueprint.SourceGenerator.CodeWriter
 
         internal RecordBuilder(string name, CodeBuilder codeBuilder)
         {
-            Name = name;
-            Builder = codeBuilder;
+            this.Name = name;
+            this.Builder = codeBuilder;
         }
 
         /// <summary>
@@ -32,7 +30,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <summary>
         /// Gets the fully qualified record name composed from the owning namespace and the record name.
         /// </summary>
-        public string FullyQualifiedName => $"{Builder.Namespace}.{Name}";
+        public string FullyQualifiedName => $"{this.Builder.Namespace}.{this.Name}";
 
         /// <summary>
         /// Gets the CodeBuilder that owns this generated record.
@@ -56,7 +54,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public RecordBuilder WithSummary(string summary)
         {
-            _xmlDoc = new SummaryDocumentationComment { Summary = summary };
+            this._xmlDoc = new SummaryDocumentationComment { Summary = summary };
 
             return this;
         }
@@ -68,7 +66,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public RecordBuilder WithInheritDoc(bool inherit = true)
         {
-            _xmlDoc = new InheritDocumentationComment();
+            this._xmlDoc = new InheritDocumentationComment();
             return this;
         }
 
@@ -79,7 +77,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public RecordBuilder WithInheritDoc(string from)
         {
-            _xmlDoc = new InheritDocumentationComment { InheritFrom = from };
+            this._xmlDoc = new InheritDocumentationComment { InheritFrom = from };
             return this;
         }
 
@@ -89,7 +87,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public RecordBuilder UsePositionalProperties()
         {
-            PropertyType = RecordPropertyType.Positional;
+            this.PropertyType = RecordPropertyType.Positional;
             return this;
         }
 
@@ -99,7 +97,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public RecordBuilder UseInitProperties()
         {
-            PropertyType = RecordPropertyType.Init;
+            this.PropertyType = RecordPropertyType.Init;
             return this;
         }
 
@@ -115,7 +113,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
             Accessibility accessModifier = Accessibility.Public)
         {
             var prop = new RecordPropertyBuilder(type, name, accessModifier, this);
-            _properties.Add(prop);
+            this._properties.Add(prop);
             return prop;
         }
 
@@ -123,13 +121,19 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// Sets the generated record to public accessibility.
         /// </summary>
         /// <returns>The same builder so fluent configuration can continue.</returns>
-        public RecordBuilder MakePublicRecord() => WithAccessModifier(Accessibility.Public);
+        public RecordBuilder MakePublicRecord()
+        {
+            return this.WithAccessModifier(Accessibility.Public);
+        }
 
         /// <summary>
         /// Sets the generated record to internal accessibility.
         /// </summary>
         /// <returns>The same builder so fluent configuration can continue.</returns>
-        public RecordBuilder MakeInternalRecord() => WithAccessModifier(Accessibility.Internal);
+        public RecordBuilder MakeInternalRecord()
+        {
+            return this.WithAccessModifier(Accessibility.Internal);
+        }
 
         /// <summary>
         /// Sets the accessibility emitted for the generated record.
@@ -138,7 +142,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public RecordBuilder WithAccessModifier(Accessibility accessModifier)
         {
-            AccessModifier = accessModifier;
+            this.AccessModifier = accessModifier;
             return this;
         }
 
@@ -146,20 +150,25 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// Renders the owning CodeBuilder and returns the generated C# source text.
         /// </summary>
         /// <returns>The rendered C# source text.</returns>
-        public string Build() => Builder.Build();
+        public string Build()
+        {
+            return this.Builder.Build();
+        }
 
         internal override void Write(in CodeWriter writer)
         {
-            _xmlDoc?.Write(writer);
+            this._xmlDoc?.Write(writer);
 
-            foreach (var attribute in _attributes)
-                writer.AppendLine($"[{attribute}]");
-
-            if (PropertyType == RecordPropertyType.Init)
+            foreach (var attribute in this._attributes)
             {
-                using (writer.Block($"{AccessModifier.Code()} record {Name}"))
+                writer.AppendLine($"[{attribute}]");
+            }
+
+            if (this.PropertyType == RecordPropertyType.Init)
+            {
+                using (writer.Block($"{this.AccessModifier.Code()} record {this.Name}"))
                 {
-                    foreach (RecordPropertyBuilder property in _properties)
+                    foreach (var property in this._properties)
                     {
                         writer.AppendLine(property.ToInitProperty());
                     }
@@ -168,8 +177,8 @@ namespace Blueprint.SourceGenerator.CodeWriter
                 return;
             }
 
-            var properties = _properties.Any() ? string.Join(", ", _properties.Select(x => x.ToPositionalProperty())) : string.Empty;
-            writer.AppendLine($"{AccessModifier.Code()} record {Name}({properties});");
+            var properties = this._properties.Any() ? string.Join(", ", this._properties.Select(x => x.ToPositionalProperty())) : string.Empty;
+            writer.AppendLine($"{this.AccessModifier.Code()} record {this.Name}({properties});");
         }
 
         /// <summary>
@@ -179,7 +188,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public override RecordBuilder AddNamespaceImport(string importedNamespace)
         {
-            Builder.AddNamespaceImport(importedNamespace);
+            this.Builder.AddNamespaceImport(importedNamespace);
             return this;
         }
 
@@ -190,7 +199,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public override RecordBuilder AddNamespaceImport(ISymbol symbol)
         {
-            Builder.AddNamespaceImport(symbol);
+            this.Builder.AddNamespaceImport(symbol);
             return this;
         }
 
@@ -201,7 +210,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public override RecordBuilder AddNamespaceImport(INamespaceSymbol symbol)
         {
-            Builder.AddNamespaceImport(symbol);
+            this.Builder.AddNamespaceImport(symbol);
             return this;
         }
 
@@ -212,7 +221,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public override RecordBuilder AddAssemblyAttribute(string attribute)
         {
-            Builder.AddAssemblyAttribute(attribute);
+            this.Builder.AddAssemblyAttribute(attribute);
             return this;
         }
     }

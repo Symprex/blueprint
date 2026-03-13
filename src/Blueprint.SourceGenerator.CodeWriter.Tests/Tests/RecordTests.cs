@@ -23,7 +23,7 @@ public class RecordTests : TestBase
             .WithDefaultValue(1)
             .Record;
 
-        MakeAssertion(builder);
+        this.MakeAssertion(builder);
     }
 
     [Fact]
@@ -41,6 +41,6 @@ public class RecordTests : TestBase
             .WithDefaultValue(1)
             .Record;
 
-        MakeAssertion(builder);
+        this.MakeAssertion(builder);
     }
 }

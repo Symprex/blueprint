@@ -117,12 +117,9 @@ public class ApiOperationDescriptor
     /// <exception cref="InvalidOperationException">If no such feature data exists.</exception>
     public TFeatureData? GetFeatureData<TFeatureData>()
     {
-        if (this.TryGetFeatureData<TFeatureData>(out var featureData) == false)
-        {
-            throw new InvalidOperationException($"Could not find feature data of type {typeof(TFeatureData).FullName} for {this.OperationType}");
-        }
-
-        return featureData;
+        return this.TryGetFeatureData<TFeatureData>(out var featureData) == false
+            ? throw new InvalidOperationException($"Could not find feature data of type {typeof(TFeatureData).FullName} for {this.OperationType}")
+            : featureData;
     }
 
     /// <summary>
@@ -169,11 +166,6 @@ public class ApiOperationDescriptor
     {
         var instance = Activator.CreateInstance(this.OperationType);
 
-        if (instance is null)
-        {
-            throw new InvalidOperationException($"Could not create instance of type {this.OperationType}");
-        }
-
-        return instance;
+        return instance is null ? throw new InvalidOperationException($"Could not create instance of type {this.OperationType}") : instance;
     }
 }

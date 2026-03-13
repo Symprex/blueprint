@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -49,12 +48,7 @@ public class MarkerAttribute(string fullName, AttributeUsageAttribute? usage = n
 
         var byName = attribs.SingleOrDefault(a => a.AttributeClass?.Name == this.Name);
 
-        if (byName == null)
-        {
-            return null;
-        }
-
-        return this.Parse(typeSymbol, byName);
+        return byName == null ? null : this.Parse(typeSymbol, byName);
     }
 
     /// <summary>
@@ -134,16 +128,29 @@ public class MarkerAttribute(string fullName, AttributeUsageAttribute? usage = n
 
         sb.AppendLine($"/// <summary>\n/// {this.Documentation}\n/// </summary>");
 
-        foreach (var arg in this.ConstructorArguments)
-        {
-            sb.AppendLine($"/// <param name=\"{arg.Name.ToLower()}\">{arg.Documentation}</param>");
-        }
-
         sb.AppendLine($"[System.AttributeUsage(System.AttributeTargets.{(usage?.ValidOn ?? AttributeTargets.Class).ToString()}, AllowMultiple = {ToBooleanString(usage?.AllowMultiple ?? false)}, Inherited = {ToBooleanString(usage?.Inherited ?? true)})]");
         sb.AppendLine("// MarkerAttribute");
-        sb.Append($"internal sealed class {this.Name}(");
-        sb.Append(string.Join(", ", this.ConstructorArguments.Select(a => $"{a.Type} {a.Name.ToLower()}")));
-        sb.Append(") : global::System.Attribute;");
+
+        if (this.ConstructorArguments.Count == 0)
+        {
+            sb.AppendLine($"internal sealed class {this.Name} : global::System.Attribute;");
+            return sb.ToString();
+        }
+
+        sb.AppendLine($"internal sealed class {this.Name} : global::System.Attribute");
+        sb.AppendLine("{");
+        sb.AppendLine($"    /// <summary>");
+        sb.AppendLine($"    /// Initializes a new instance of the <see cref=\"{this.Name}\"/> class.");
+        sb.AppendLine($"    /// </summary>");
+        foreach (var arg in this.ConstructorArguments)
+        {
+            sb.AppendLine($"    /// <param name=\"{arg.Name.ToLower()}\">{arg.Documentation}</param>");
+        }
+
+        sb.AppendLine($"    public {this.Name}({string.Join(", ", this.ConstructorArguments.Select(a => $"{a.Type} {a.Name.ToLower()}"))})");
+        sb.AppendLine("    {");
+        sb.AppendLine("    }");
+        sb.Append('}');
 
         return sb.ToString();
     }

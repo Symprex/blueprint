@@ -6,35 +6,37 @@
 # All files
 [*]
 indent_style = space
-
-# Microsoft .NET properties
-csharp_new_line_before_members_in_object_initializers = true
-
-# ReSharper properties
-resharper_wrap_object_and_collection_initializer_style = chop_always
-resharper_apply_auto_detected_rules=false
-resharper_autodetect_indent_settings=true
-resharper_space_within_single_line_array_initializer_braces=true
-resharper_wrap_array_initializer_style=chop_always
-resharper_wrap_object_and_collection_initializer_style=chop_always
-resharper_max_initializer_elements_on_line=1
-resharper_place_accessorholder_attribute_on_same_line=false
-resharper_place_field_attribute_on_same_line=false
-
-# Code files
-[*.csproj]
-indent_size = 2
-
-# Code files
-[*.{cs, csx}]
 indent_size = 4
-insert_final_newline = true
+
+max_line_length = 300
+
+trim_trailing_whitespace = true
 
 ###############################
 # .NET Coding Conventions     #
 ###############################
 
 [*.cs]
+# Microsoft .NET properties
+csharp_using_directive_placement = outside_namespace:silent
+
+# ReSharper properties
+resharper_trailing_comma_in_multiline_lists = true
+resharper_wrap_arguments_style = wrap_if_long
+resharper_keep_existing_invocation_parens_arrangement = true
+resharper_wrap_after_invocation_lpar = false
+resharper_apply_auto_detected_rules = false
+resharper_autodetect_indent_settings = true
+resharper_space_within_single_line_array_initializer_braces = true
+resharper_wrap_array_initializer_style = chop_if_long
+resharper_wrap_object_and_collection_initializer_style = chop_always
+resharper_max_initializer_elements_on_line = 1
+resharper_place_accessorholder_attribute_on_same_line = false
+resharper_place_field_attribute_on_same_line = false
+
+insert_final_newline = true
+resharper_csharp_max_line_length = 300
+
 # Organize usings
 dotnet_sort_system_directives_first = true
 dotnet_separate_import_directive_groups = false
@@ -68,14 +70,13 @@ dotnet_style_coalesce_expression = true:warning
 dotnet_style_prefer_is_null_check_over_reference_equality_method = true:warning
 dotnet_style_prefer_inferred_tuple_names = true:warning
 dotnet_style_prefer_inferred_anonymous_type_member_names = true:warning
-dotnet_style_prefer_auto_properties = true:warning
-dotnet_style_prefer_conditional_expression_over_assignment = true:warning
-dotnet_style_prefer_conditional_expression_over_return = true:warning
+dotnet_style_prefer_auto_properties = true:silent
+dotnet_style_prefer_conditional_expression_over_assignment = true:none
+dotnet_style_prefer_conditional_expression_over_return = true:none
 
 ###############################
 # Naming Conventions          #
 ###############################
-
 
 # Underscore-prefixed instance fields
 dotnet_naming_rule.instance_fields_should_be_pascal_case_with_underscore.severity = warning
@@ -114,7 +115,6 @@ dotnet_naming_style.pascal_case_style.capitalization = pascal_case
 # C# Code Style Rules         #
 ###############################
 
-[*.cs]
 # var preferences
 csharp_style_var_for_built_in_types = true:warning
 csharp_style_var_when_type_is_apparent = true:warning
@@ -141,8 +141,8 @@ csharp_preferred_modifier_order = public, private, protected, internal, static, 
 
 # Expression-level preferences
 csharp_prefer_braces = true:warning
-csharp_style_deconstructed_variable_declaration = true:warning
-csharp_prefer_simple_default_expression = true:warning
+csharp_style_deconstructed_variable_declaration = true:suggestion
+csharp_prefer_simple_default_expression = true:suggestion
 csharp_style_pattern_local_over_anonymous_function = true:warning
 csharp_style_inlined_variable_declaration = true:warning
 
@@ -182,3 +182,128 @@ csharp_space_after_dot = false
 # Wrapping preferences
 csharp_preserve_single_line_statements = true
 csharp_preserve_single_line_blocks = true
+
+#############################
+# C# Analysis Rules         #
+#############################
+
+#CA1032: Implement standard exception constructors (https://docs.microsoft.com/en-gb/dotnet/fundamentals/code-analysis/quality-rules/ca1032)
+dotnet_diagnostic.ca1032.severity = silent
+
+# CA1062: Validate arguments of public methods (https://docs.microsoft.com/en-gb/dotnet/fundamentals/code-analysis/quality-rules/ca1062)
+dotnet_diagnostic.ca1062.severity = silent
+
+# CA1014: Mark assemblies with CLSCompliantAttribute (https://docs.microsoft.com/en-gb/dotnet/fundamentals/code-analysis/quality-rules/ca1014)
+dotnet_diagnostic.ca1014.severity = silent
+
+# CA1303: Do not pass literals as localized parameters (https://docs.microsoft.com/en-gb/dotnet/fundamentals/code-analysis/quality-rules/ca1303)
+dotnet_diagnostic.ca1303.severity = silent
+
+# CA2007: Do not directly await a Task (https://docs.microsoft.com/en-gb/dotnet/fundamentals/code-analysis/quality-rules/ca2007)
+dotnet_diagnostic.ca2007.severity = silent
+
+# CA2227: Collection properties should be read only (https://docs.microsoft.com/en-gb/dotnet/fundamentals/code-analysis/quality-rules/ca2227)
+dotnet_diagnostic.ca2227.severity = silent
+
+# CA1002: Do not expose generic lists (https://docs.microsoft.com/en-gb/dotnet/fundamentals/code-analysis/quality-rules/ca1002)
+dotnet_diagnostic.ca1002.severity = silent
+
+# CA1054: URI parameters should not be strings (https://docs.microsoft.com/en-gb/dotnet/fundamentals/code-analysis/quality-rules/ca1054)
+dotnet_diagnostic.ca1054.severity = silent
+
+# CA1055: URI return values should not be strings (https://docs.microsoft.com/en-gb/dotnet/fundamentals/code-analysis/quality-rules/ca1055)
+dotnet_diagnostic.ca1055.severity = silent
+
+# CA1056: URI properties should not be strings (https://docs.microsoft.com/en-gb/dotnet/fundamentals/code-analysis/quality-rules/ca1056)
+dotnet_diagnostic.ca1056.severity = silent
+
+# CA1819: Properties should not return arrays (https://docs.microsoft.com/en-gb/dotnet/fundamentals/code-analysis/quality-rules/ca1819)
+dotnet_diagnostic.ca1819.severity = silent
+
+# CA2237: Mark ISerializable types with SerializableAttribute (https://docs.microsoft.com/en-gb/dotnet/fundamentals/code-analysis/quality-rules/ca2237)
+dotnet_diagnostic.ca2237.severity = silent
+
+# CA1716: Identifiers should not match keywords (https://docs.microsoft.com/en-gb/dotnet/fundamentals/code-analysis/quality-rules/ca1716)
+dotnet_diagnostic.ca1716.severity = silent
+
+# CA1307: Specify StringComparison for clarity (https://docs.microsoft.com/en-gb/dotnet/fundamentals/code-analysis/quality-rules/ca1307)
+dotnet_diagnostic.ca1307.severity = silent
+
+# CA1812: Avoid uninstantiated internal classes (https://docs.microsoft.com/en-gb/dotnet/fundamentals/code-analysis/quality-rules/ca1812)
+dotnet_diagnostic.ca1812.severity = silent
+
+# CA2214: Do not call overridable methods in constructors (https://docs.microsoft.com/en-gb/dotnet/fundamentals/code-analysis/quality-rules/ca2214)
+dotnet_diagnostic.ca2214.severity = silent
+
+# CA1033: Interface methods should be callable by child types (https://docs.microsoft.com/en-gb/dotnet/fundamentals/code-analysis/quality-rules/ca1033)
+dotnet_diagnostic.ca1033.severity = silent
+
+# CA2225: Operator overloads have named alternates (https://docs.microsoft.com/en-gb/dotnet/fundamentals/code-analysis/quality-rules/ca2225)
+dotnet_diagnostic.ca2225.severity = silent
+
+# CA1308: Normalize strings to uppercase (https://docs.microsoft.com/en-gb/dotnet/fundamentals/code-analysis/quality-rules/ca1308)
+dotnet_diagnostic.ca1308.severity = silent
+
+# CA1034: Nested types should not be visible (https://docs.microsoft.com/en-gb/dotnet/fundamentals/code-analysis/quality-rules/ca1034)
+dotnet_diagnostic.ca1034.severity = silent
+
+# CA1711: Identifiers should not have incorrect suffix (https://docs.microsoft.com/en-gb/dotnet/fundamentals/code-analysis/quality-rules/ca1711)
+dotnet_code_quality.ca1711.allowed_suffixes = EventHandler
+
+#CA1848: For improved performance, use the LoggerMessage delegates instead of calling x
+dotnet_diagnostic.ca1848.severity = silent
+
+#CA2008: Do not create tasks without passing a TaskScheduler (https://learn.microsoft.com/en-us/dotnet/fundamentals/code-analysis/quality-rules/ca2008)
+dotnet_diagnostic.ca2008.severity = silent
+
+#CA1040: Avoid empty interfaces (https://learn.microsoft.com/en-us/dotnet/fundamentals/code-analysis/quality-rules/ca1040)
+dotnet_diagnostic.ca1040.severity = silent
+
+#CA1860: Prefer comparing 'Count' to 0 rather than using 'Any()', both for clarity and for performance (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/quality-rules/ca1860)
+dotnet_diagnostic.ca1860.severity = silent
+
+#IDE0270: Null check can be simplified (https://learn.microsoft.com/en-us/dotnet/fundamentals/code-analysis/style-rules/ide0029-ide0030-ide0270)
+dotnet_diagnostic.IDE0029.severity = none
+dotnet_diagnostic.IDE0030.severity = none
+dotnet_diagnostic.IDE0270.severity = none
+
+# Unnecessary using directive
+dotnet_diagnostic.IDE0005.severity = error
+
+dotnet_diagnostic.SA1116.severity = none
+dotnet_diagnostic.SA1121.severity = none
+dotnet_diagnostic.SA1204.severity = none
+dotnet_diagnostic.SA1210.severity = none
+dotnet_diagnostic.SA1302.severity = none
+dotnet_diagnostic.SA1312.severity = none
+dotnet_diagnostic.SA1500.severity = none
+dotnet_diagnostic.SA1503.severity = none
+dotnet_diagnostic.SA1505.severity = none
+dotnet_diagnostic.SA1513.severity = none
+dotnet_diagnostic.SA1520.severity = none
+dotnet_diagnostic.SA1600.severity = none
+dotnet_diagnostic.SA1602.severity = none
+dotnet_diagnostic.SA1649.severity = none
+
+###############################
+# YAML Code Style Rules       #
+###############################
+
+[*.{yml,yaml}]
+indent_size = 2
+
+###############################
+# CSPROJ Code Style Rules     #
+###############################
+
+[*.{csproj,props}]
+indent_size = 2
+
+############
+# Markdown #
+############
+[*.md]
+trim_trailing_whitespace = false
+
+[*.json]
+indent_size = 2

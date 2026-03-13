@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-using System.Linq;
 using Blueprint.SourceGenerator.CodeWriter.Internals;
 using Microsoft.CodeAnalysis;
 
@@ -20,8 +18,8 @@ namespace Blueprint.SourceGenerator.CodeWriter
 
         internal EnumBuilder(string name, CodeBuilder builder)
         {
-            Name = name;
-            Builder = builder;
+            this.Name = name;
+            this.Builder = builder;
         }
 
         /// <summary>
@@ -37,7 +35,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <summary>
         /// Gets the fully qualified enum name composed from the owning namespace and the enum name.
         /// </summary>
-        public string FullyQualifiedName => $"{Builder.Namespace}.{Name}";
+        public string FullyQualifiedName => $"{this.Builder.Namespace}.{this.Name}";
 
         /// <summary>
         /// Gets the accessibility that will be emitted for the generated enum.
@@ -51,7 +49,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public EnumBuilder WithSummary(string summary)
         {
-            _xmlDoc = new SummaryDocumentationComment { Summary = summary };
+            this._xmlDoc = new SummaryDocumentationComment { Summary = summary };
             return this;
         }
 
@@ -62,7 +60,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public EnumBuilder WithInheritDoc(bool inherit = true)
         {
-            _xmlDoc = new InheritDocumentationComment();
+            this._xmlDoc = new InheritDocumentationComment();
             return this;
         }
 
@@ -73,7 +71,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public EnumBuilder WithInheritDoc(string from)
         {
-            _xmlDoc = new InheritDocumentationComment { InheritFrom = from };
+            this._xmlDoc = new InheritDocumentationComment { InheritFrom = from };
             return this;
         }
 
@@ -86,7 +84,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         public EnumValueBuilder AddValue(string name, int? numericValue = null)
         {
             var builder = new EnumValueBuilder(name, this, numericValue);
-            _values.Add(builder);
+            this._values.Add(builder);
             return builder;
         }
 
@@ -97,7 +95,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public EnumBuilder AddNamespaceImport(string importedNamespace)
         {
-            Builder.AddNamespaceImport(importedNamespace);
+            this.Builder.AddNamespaceImport(importedNamespace);
             return this;
         }
 
@@ -108,7 +106,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public EnumBuilder AddNamespaceImport(ISymbol symbol)
         {
-            Builder.AddNamespaceImport(symbol);
+            this.Builder.AddNamespaceImport(symbol);
             return this;
         }
 
@@ -119,7 +117,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public EnumBuilder AddNamespaceImport(INamespaceSymbol symbol)
         {
-            Builder.AddNamespaceImport(symbol);
+            this.Builder.AddNamespaceImport(symbol);
             return this;
         }
 
@@ -131,8 +129,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         public EnumBuilder AddAttribute(string attribute)
         {
             var sanitized = attribute.Replace("[", string.Empty).Replace("]", string.Empty);
-            if (!_attributes.Contains(sanitized))
-                _attributes.Add(sanitized);
+            if (!this._attributes.Contains(sanitized))
+            {
+                this._attributes.Add(sanitized);
+            }
 
             return this;
         }
@@ -141,13 +141,19 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// Sets the generated enum to public accessibility.
         /// </summary>
         /// <returns>The same builder so fluent configuration can continue.</returns>
-        public EnumBuilder MakePublicEnum() => WithAccessModifier(Accessibility.Public);
+        public EnumBuilder MakePublicEnum()
+        {
+            return this.WithAccessModifier(Accessibility.Public);
+        }
 
         /// <summary>
         /// Sets the generated enum to internal accessibility.
         /// </summary>
         /// <returns>The same builder so fluent configuration can continue.</returns>
-        public EnumBuilder MakeInternalEnum() => WithAccessModifier(Accessibility.Internal);
+        public EnumBuilder MakeInternalEnum()
+        {
+            return this.WithAccessModifier(Accessibility.Internal);
+        }
 
         /// <summary>
         /// Sets the accessibility emitted for the generated enum.
@@ -156,7 +162,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public EnumBuilder WithAccessModifier(Accessibility accessModifier)
         {
-            AccessModifier = accessModifier;
+            this.AccessModifier = accessModifier;
             return this;
         }
 
@@ -164,28 +170,31 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// Renders the owning CodeBuilder and returns the generated C# source text.
         /// </summary>
         /// <returns>The rendered C# source text.</returns>
-        public string Build() => Builder.Build();
+        public string Build()
+        {
+            return this.Builder.Build();
+        }
 
         void IBuilder.Write(in CodeWriter writer)
         {
-            _xmlDoc?.Write(writer);
+            this._xmlDoc?.Write(writer);
 
             var queue = new Queue<IBuilder>();
-            _values.OrderBy(x => x.Value)
+            this._values.OrderBy(x => x.Value)
                 //.ThenBy(x => x.Name)
                 .ToList()
                 .ForEach(x => queue.Enqueue(x));
 
-            foreach(var attr in _attributes.OrderBy(x => x))
+            foreach (var attr in this._attributes.OrderBy(x => x))
             {
                 writer.AppendLine($"[{attr}]");
             }
 
             var parts = new[]
             {
-                AccessModifier.Code(),
+                this.AccessModifier.Code(),
                 "enum",
-                Name
+                this.Name
             };
 
             using (writer.Block(string.Join(" ", parts.Where(x => !string.IsNullOrEmpty(x)))))

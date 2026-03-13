@@ -68,13 +68,10 @@ public sealed class ApiResourceSourceGenerator : IIncrementalGenerator, ITracked
 
         var isPartial = classNode.Modifiers.Any(SyntaxKind.PartialKeyword);
 
-        if (!isPartial)
-        {
-            return Result<ClassToGenerate>.Failure(
-                    new DiagnosticInfo(_missingPartialModifierRule, classNode.Identifier.GetLocation(), [model.Name]));
-        }
-
-        return Result.Success(
+        return !isPartial
+            ? Result<ClassToGenerate>.Failure(
+                    new DiagnosticInfo(_missingPartialModifierRule, classNode.Identifier.GetLocation(), [model.Name]))
+            : Result.Success(
             new ClassToGenerate(
                 model.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
                 model.ContainingNamespace.ToDisplayString(),

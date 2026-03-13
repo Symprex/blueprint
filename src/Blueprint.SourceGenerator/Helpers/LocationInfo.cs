@@ -59,16 +59,10 @@ public sealed record LocationInfo(string FilePath, TextSpan TextSpan, LinePositi
     public static LocationInfo CreateFrom(Location location)
     {
         // We cannot create a "proper" LocationInfo if this comes from a metadata location as much of it is missing
-        if (location.IsInMetadata)
-        {
-            return new LocationInfo(location.MetadataModule?.Name ?? string.Empty, location.SourceSpan, location.GetLineSpan().Span);
-        }
-
-        if (location.SourceTree is null)
-        {
-            throw new InvalidOperationException("Cannot create LocationInfo from a location with no SourceTree");
-        }
-
-        return new LocationInfo(location.SourceTree.FilePath, location.SourceSpan, location.GetLineSpan().Span);
+        return location.IsInMetadata
+            ? new LocationInfo(location.MetadataModule?.Name ?? string.Empty, location.SourceSpan, location.GetLineSpan().Span)
+            : location.SourceTree is null
+            ? throw new InvalidOperationException("Cannot create LocationInfo from a location with no SourceTree")
+            : new LocationInfo(location.SourceTree.FilePath, location.SourceSpan, location.GetLineSpan().Span);
     }
 }

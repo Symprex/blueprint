@@ -1,4 +1,3 @@
-using System.Linq;
 using Blueprint.SourceGenerator.CodeWriter.Extensions;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -9,8 +8,8 @@ namespace Blueprint.SourceGenerator.CodeWriter.Tests;
 
 public class RoslynExtensionTests
 {
-    readonly string _placeholder = "null";
-    readonly string _notFoundName = "NotFoundAttribute";
+    private readonly string _placeholder = "null";
+    private readonly string _notFoundName = "NotFoundAttribute";
 
     [Fact]
     public void GetSymbol_ReturnsSymbol_ForGivenDeclarationSyntax()
@@ -100,7 +99,7 @@ public class RoslynExtensionTests
         var attribute = symbol.GetAttributes().First();
 
         // act
-        var actual = RoslynExtensions.GetAttributeValueByName(attribute, _notFoundName);
+        var actual = RoslynExtensions.GetAttributeValueByName(attribute, this._notFoundName);
 
         // assert
         Assert.Null(actual.Value);
@@ -174,9 +173,9 @@ public class RoslynExtensionTests
         var attribute = symbol.GetAttributes().First();
 
         //// act
-        var actual = RoslynExtensions.GetAttributeValueByNameAsString(attribute, _notFoundName);
+        var actual = RoslynExtensions.GetAttributeValueByNameAsString(attribute, this._notFoundName);
 
         //// assert
-        Assert.Equal(_placeholder, actual);
+        Assert.Equal(this._placeholder, actual);
     }
 }

@@ -1,4 +1,3 @@
-using System.IO;
 using Microsoft.CodeAnalysis;
 using Moq;
 using Xunit;
@@ -14,39 +13,39 @@ namespace Blueprint.SourceGenerator.CodeWriter.Tests
 
         protected TestBase(ITestOutputHelper testOutput)
         {
-            testOutputHelper = testOutput;
+            this.testOutputHelper = testOutput;
         }
 
         protected void MakeAssertion(EnumBuilder builder)
         {
-            MakeAssertion(builder.Name, builder.Builder.Build());
+            this.MakeAssertion(builder.Name, builder.Builder.Build());
         }
 
         protected void MakeAssertion(ClassBuilder builder)
         {
-            MakeAssertion(builder.Name, builder.Builder.Build());
+            this.MakeAssertion(builder.Name, builder.Builder.Build());
         }
 
         protected void MakeAssertion(RecordBuilder builder)
         {
-            MakeAssertion(builder.Name, builder.Builder.Build());
+            this.MakeAssertion(builder.Name, builder.Builder.Build());
         }
 
         protected void MakeAssertion(DelegateBuilder builder)
         {
-            MakeAssertion(builder.Name, builder.Builder.Build());
+            this.MakeAssertion(builder.Name, builder.Builder.Build());
         }
 
         protected void MakeAssertion(CodeBuilder builder, string fileName)
         {
-            MakeAssertion(fileName, builder.Build());
+            this.MakeAssertion(fileName, builder.Build());
         }
 
         private void MakeAssertion(string name, string actual)
         {
             var file = File.ReadAllText(Path.Combine("SampleCode", $"{name}.cs"));
-            testOutputHelper.WriteLine("*** ACTUAL OUTPUT ***");
-            testOutputHelper.WriteLine(actual);
+            this.testOutputHelper.WriteLine("*** ACTUAL OUTPUT ***");
+            this.testOutputHelper.WriteLine(actual);
 
             Assert.Equal(file, actual, ignoreLineEndingDifferences: true);
         }

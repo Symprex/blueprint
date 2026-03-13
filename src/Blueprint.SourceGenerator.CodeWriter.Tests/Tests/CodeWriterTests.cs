@@ -1,4 +1,3 @@
-using System;
 using Xunit;
 
 namespace Blueprint.SourceGenerator.CodeWriter.Tests;
@@ -9,7 +8,7 @@ namespace Blueprint.SourceGenerator.CodeWriter.Tests;
 public class CodeWriterTests
 {
     private static readonly string NewLine = Environment.NewLine;
-    
+
     /// <summary>
     /// Verifies that appended text is emitted without additional formatting.
     /// </summary>
@@ -32,7 +31,7 @@ public class CodeWriterTests
         var sut = new CodeWriter(IndentStyle.Tabs);
 
         var ifBlock = sut.BlockWriter("if (true)");
-        var elseBlock = sut.BlockWriter(("else"));
+        var elseBlock = sut.BlockWriter("else");
 
         ifBlock.AppendLine("CrashTheSystem();");
         elseBlock.AppendLine("DontCrashTheSystem();");

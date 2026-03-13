@@ -34,11 +34,8 @@ public class BlueprintAppExecutor
     /// <exception cref="InvalidOperationException">If no operation of the specified type has been registered.</exception>
     public IOperationExecutorPipeline GetPipeline(Type operationType)
     {
-        if (!this._allOperations.TryGetValue(operationType, out var pipeline))
-        {
-            throw new InvalidOperationException($"Cannot find a registered operation with the name '{operationType}'.");
-        }
-
-        return pipeline;
+        return !this._allOperations.TryGetValue(operationType, out var pipeline)
+            ? throw new InvalidOperationException($"Cannot find a registered operation with the name '{operationType}'.")
+            : pipeline;
     }
 }

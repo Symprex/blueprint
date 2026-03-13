@@ -28,7 +28,7 @@ namespace Blueprint.Generated
             _logger = loggerFactory.CreateLogger("TestQueryExecutorPipeline");
         }
 
-        public async System.Threading.Tasks.Task<Blueprint.OperationResult> ExecuteAsync(Blueprint.Runtime.Exec.ApiOperationContext context)
+        public System.Threading.Tasks.Task<Blueprint.OperationResult> ExecuteAsync(Blueprint.Runtime.Exec.ApiOperationContext context)
         {
             using var activity = Blueprint.Diagnostics.BlueprintActivitySource.ActivitySource.StartActivity("TestQueryPipeline", System.Diagnostics.ActivityKind.Internal);
             var operation = (global::TestNamespace.TestQuery)context.Operation;
@@ -39,17 +39,17 @@ namespace Blueprint.Generated
 
                 var handlerResult = global::TestNamespace.TestQuery.Invoke();
 
-                return new Blueprint.Runtime.Exec.OkResult(handlerResult);
+                return System.Threading.Tasks.Task.FromResult<Blueprint.OperationResult>(new Blueprint.Runtime.Exec.OkResult(handlerResult));
             }
             catch (Blueprint.Validation.ValidationException e)
             {
                 context.Activity?.SetTag("otel.status_code", "OK");
-                return new Blueprint.Middleware.ValidationFailedOperationResult(e.ValidationResults);
+                return System.Threading.Tasks.Task.FromResult<Blueprint.OperationResult>(new Blueprint.Middleware.ValidationFailedOperationResult(e.ValidationResults));
             }
             catch (System.ComponentModel.DataAnnotations.ValidationException e)
             {
                 context.Activity?.SetTag("otel.status_code", "OK");
-                return Blueprint.Middleware.ValidationMiddlewareBuilder.ToValidationFailedOperationResult(e);
+                return System.Threading.Tasks.Task.FromResult<Blueprint.OperationResult>(Blueprint.Middleware.ValidationMiddlewareBuilder.ToValidationFailedOperationResult(e));
             }
             catch (System.Exception e)
             {
@@ -66,7 +66,7 @@ namespace Blueprint.Generated
                     context.Activity?.SetTag("otel.status_description", e.Message);
                 }
 
-                return new Blueprint.UnhandledExceptionOperationResult(e);
+                return System.Threading.Tasks.Task.FromResult<Blueprint.OperationResult>(new Blueprint.UnhandledExceptionOperationResult(e));
             }
         }
     }

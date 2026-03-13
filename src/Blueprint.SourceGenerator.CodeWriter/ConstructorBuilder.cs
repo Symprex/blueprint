@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using Blueprint.SourceGenerator.CodeWriter.Internals;
 using Microsoft.CodeAnalysis;
 
@@ -26,19 +23,19 @@ namespace Blueprint.SourceGenerator.CodeWriter
 
         internal ConstructorBuilder(Accessibility? accessModifier, ClassBuilder classBuilder)
         {
-            AccessModifier = accessModifier;
-            Class = classBuilder;
-            _baseCall = () => string.Empty;
+            this.AccessModifier = accessModifier;
+            this.Class = classBuilder;
+            this._baseCall = () => string.Empty;
         }
 
-        List<ParameterBuilder<ConstructorBuilder>> IParameterized<ConstructorBuilder>.Parameters => _parameters;
+        List<ParameterBuilder<ConstructorBuilder>> IParameterized<ConstructorBuilder>.Parameters => this._parameters;
 
         ConstructorBuilder IParameterized<ConstructorBuilder>.Parent => this;
 
         /// <summary>
         /// Gets the parameters currently configured for the generated constructor signature.
         /// </summary>
-        public IReadOnlyCollection<ParameterBuilder<ConstructorBuilder>> Parameters => _parameters;
+        public IReadOnlyCollection<ParameterBuilder<ConstructorBuilder>> Parameters => this._parameters;
 
         /// <summary>
         /// Gets the accessibility that will be emitted for the generated constructor.
@@ -50,7 +47,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// </summary>
         public ClassBuilder Class { get; }
 
-        internal int Count => _parameters.Count;
+        internal int Count => this._parameters.Count;
 
         /// <summary>
         /// Sets the XML summary that will be emitted for the generated constructor.
@@ -59,10 +56,14 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public ConstructorBuilder WithSummary(string summary)
         {
-            if (_xmlDoc is not null && _xmlDoc is SummaryDocumentationComment summaryComment)
+            if (this._xmlDoc is not null && this._xmlDoc is SummaryDocumentationComment summaryComment)
+            {
                 summaryComment.Summary = summary;
+            }
             else
-                _xmlDoc = new ParameterDocumentationComment { Summary = summary };
+            {
+                this._xmlDoc = new ParameterDocumentationComment { Summary = summary };
+            }
 
             return this;
         }
@@ -74,7 +75,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public ConstructorBuilder WithInheritDoc(bool inherit = true)
         {
-            _xmlDoc = new InheritDocumentationComment();
+            this._xmlDoc = new InheritDocumentationComment();
             return this;
         }
 
@@ -85,7 +86,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public ConstructorBuilder WithInheritDoc(string from)
         {
-            _xmlDoc = new InheritDocumentationComment { InheritFrom = from };
+            this._xmlDoc = new InheritDocumentationComment { InheritFrom = from };
             return this;
         }
 
@@ -97,12 +98,13 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public ConstructorBuilder WithParameterDoc(string paramName, string documentation)
         {
-            if (_xmlDoc is not null && _xmlDoc is not ParameterDocumentationComment)
+            if (this._xmlDoc is not null && this._xmlDoc is not ParameterDocumentationComment)
+            {
                 throw new Exception("Documentation Comment has already been initialized using an InheritDoc.");
+            }
 
-            var parameterDoc = _xmlDoc as ParameterDocumentationComment;
-            if(parameterDoc is not null)
-                parameterDoc.AddParameter(paramName, documentation);
+            var parameterDoc = this._xmlDoc as ParameterDocumentationComment;
+            parameterDoc?.AddParameter(paramName, documentation);
 
             return this;
         }
@@ -114,7 +116,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public override ConstructorBuilder AddAssemblyAttribute(string attribute)
         {
-            Class.AddAssemblyAttribute(attribute);
+            this.Class.AddAssemblyAttribute(attribute);
             return this;
         }
 
@@ -126,8 +128,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         public ConstructorBuilder AddAttribute(string attribute)
         {
             var sanitized = attribute.Replace("[", string.Empty).Replace("]", string.Empty);
-            if (!_attributes.Contains(sanitized))
-                _attributes.Add(sanitized);
+            if (!this._attributes.Contains(sanitized))
+            {
+                this._attributes.Add(sanitized);
+            }
 
             return this;
         }
@@ -139,7 +143,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public ConstructorBuilder WithBody(Action<ICodeWriter> writerDelegate)
         {
-            _methodBodyWriter = writerDelegate;
+            this._methodBodyWriter = writerDelegate;
             return this;
         }
 
@@ -150,7 +154,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public ConstructorBuilder WithThisCall()
         {
-            _baseCall = () => ": this()";
+            this._baseCall = () => ": this()";
             return this;
         }
 
@@ -161,12 +165,12 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public ConstructorBuilder WithThisCall(Dictionary<string, string> parameters)
         {
-            foreach(var parameter in parameters)
+            foreach (var parameter in parameters)
             {
                 this.AddParameter(parameter.Key, parameter.Value);
             }
 
-            _baseCall = () =>
+            this._baseCall = () =>
             {
                 var output = parameters.Select(x => x.Value);
                 return $": this({string.Join(", ", output)})";
@@ -184,10 +188,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
             var dict = new Dictionary<string, string>();
             foreach (var parameter in parameters ?? Array.Empty<IParameterSymbol>())
             {
-                AddNamespaceImport(parameter.Type);
+                this.AddNamespaceImport(parameter.Type);
                 dict.Add(parameter.Type.Name, parameter.Name);
             }
-            return WithThisCall(dict);
+            return this.WithThisCall(dict);
         }
 
         /// <summary>
@@ -197,7 +201,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public ConstructorBuilder WithThisCall(IMethodSymbol baseConstructor)
         {
-            return WithThisCall(baseConstructor.Parameters);
+            return this.WithThisCall(baseConstructor.Parameters);
         }
 
         /// <summary>
@@ -207,7 +211,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public ConstructorBuilder WithBaseCall()
         {
-            _baseCall = () => ": base()";
+            this._baseCall = () => ": base()";
             return this;
         }
 
@@ -219,14 +223,9 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public ConstructorBuilder WithBaseCallArguments(params string[] arguments)
         {
-            _baseCall = () =>
+            this._baseCall = () =>
             {
-                if (arguments is null || arguments.Length == 0)
-                {
-                    return ": base()";
-                }
-
-                return $": base({string.Join(", ", arguments)})";
+                return arguments is null || arguments.Length == 0 ? ": base()" : $": base({string.Join(", ", arguments)})";
             };
 
             return this;
@@ -244,7 +243,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
                 this.AddParameter(parameter.Key, parameter.Value);
             }
 
-            _baseCall = () =>
+            this._baseCall = () =>
             {
                 var output = parameters.Select(x => x.Value);
                 return $": base({string.Join(", ", output)})";
@@ -262,10 +261,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
             var dict = new Dictionary<string, string>();
             foreach (var parameter in parameters ?? Array.Empty<IParameterSymbol>())
             {
-                AddNamespaceImport(parameter.Type);
+                this.AddNamespaceImport(parameter.Type);
                 dict.Add(parameter.Type.Name, parameter.Name);
             }
-            return WithBaseCall(dict);
+            return this.WithBaseCall(dict);
         }
 
         /// <summary>
@@ -275,7 +274,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public ConstructorBuilder WithBaseCall(IMethodSymbol baseConstructor)
         {
-            return WithBaseCall(baseConstructor.Parameters);
+            return this.WithBaseCall(baseConstructor.Parameters);
         }
 
         /// <summary>
@@ -285,7 +284,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public override ConstructorBuilder AddNamespaceImport(string namespaceImport)
         {
-            Class.AddNamespaceImport(namespaceImport);
+            this.Class.AddNamespaceImport(namespaceImport);
             return this;
         }
 
@@ -296,7 +295,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public override ConstructorBuilder AddNamespaceImport(ISymbol symbol)
         {
-            return AddNamespaceImport(symbol.ContainingNamespace);
+            return this.AddNamespaceImport(symbol.ContainingNamespace);
         }
 
         /// <summary>
@@ -306,7 +305,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public override ConstructorBuilder AddNamespaceImport(INamespaceSymbol symbol)
         {
-            return AddNamespaceImport(symbol.ToString());
+            return this.AddNamespaceImport(symbol.ToString());
         }
 
         /// <summary>
@@ -316,28 +315,32 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public ConstructorBuilder AddConstructor(Accessibility? accessModifier = null)
         {
-            return Class.AddConstructor(accessModifier);
+            return this.Class.AddConstructor(accessModifier);
         }
 
         internal override void Write(in CodeWriter writer)
         {
-            if(_xmlDoc is ParameterDocumentationComment parameterDocumentation)
-                parameterDocumentation.RemoveUnusedParameters(_parameters);
+            if (this._xmlDoc is ParameterDocumentationComment parameterDocumentation)
+            {
+                parameterDocumentation.RemoveUnusedParameters(this._parameters);
+            }
 
-            _xmlDoc?.Write(writer);
+            this._xmlDoc?.Write(writer);
 
-            foreach (var attribute in _attributes)
+            foreach (var attribute in this._attributes)
+            {
                 writer.AppendLine($"[{attribute}]");
+            }
 
-            var modifier = AccessModifier switch
+            var modifier = this.AccessModifier switch
             {
-                null => Class.AccessModifier.ToString().ToLowerInvariant(),
-                _ => AccessModifier.Code()
+                null => this.Class.AccessModifier.ToString().ToLowerInvariant(),
+                _ => this.AccessModifier.Code()
             };
-            var parameters = _parameters.Any() ? string.Join(", ", _parameters.Select(x => x.ToString())) : string.Empty;
-            using(writer.Block($"{modifier} {Class.Name}({parameters})", _baseCall.Invoke()))
+            var parameters = this._parameters.Any() ? string.Join(", ", this._parameters.Select(x => x.ToString())) : string.Empty;
+            using (writer.Block($"{modifier} {this.Class.Name}({parameters})", this._baseCall.Invoke()))
             {
-                _methodBodyWriter?.Invoke(writer);
+                this._methodBodyWriter?.Invoke(writer);
             }
         }
     }

@@ -1,8 +1,9 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<RuleSet Name="Symprex Rules" ToolsVersion="14.0">
+<RuleSet Name="Symprex Rules" ToolsVersion="16.0">
   <IncludeAll Action="Warning" />
 
   <Rules AnalyzerId="Microsoft.Analyzers.ManagedCodeAnalysis" RuleNamespace="Microsoft.Rules.Managed">
+    <Rule Id="CA1014" Action="None" /> <!-- Mark assemblies with CLSCompliantAttribute -->
     <Rule Id="CS1591" Action="None" /> <!-- Remove the CS* for requiring documentation as we use StyleCop as more specific -->
     <Rule Id="CS8632" Action="None" /> <!-- The annotation for nullable reference types should only be used in code within a '#nullable' annotations context -->
     <Rule Id="CS0693" Action="None" /> <!-- Type parameter 'T' has the same name as the type parameter from outer type 'JsonConverterForResourceEventOfT<T>' -->
@@ -15,7 +16,9 @@
 
     <Rule Id="SA1127" Action="None"/> <!-- Generic constraints should be on their own line -->
 
+    <Rule Id="SA1201" Action="None" /> <!-- Elements may be ordered for readability rather than strict kind grouping -->
     <Rule Id="SA1202" Action="None" /> <!-- Scoped members need to be public, protected, internal, private ordering -->
+    <Rule Id="SA1204" Action="None" /> <!-- Member ordering bug in StyleCop.Analyzers -->
 
     <Rule Id="SA1402" Action="None"/> <!-- File may only contain a single type -->
 
@@ -33,6 +36,7 @@
     <Rule Id="SA1649" Action="None" /> <!-- TODO: Remove this when upgraded past beta 205 of StyleCop.Analyzers (record syntax breaks this) -->
     <Rule Id="SA1518" Action="None" /> <!-- TODO: File is required to end with a single newline character -->
 
+    <Rule Id="SA0001" Action="None" /> <!-- XML comment analysis is disabled due to project configuration -->
     <Rule Id="RS2008" Action="None" /> <!-- Enable analyzer release tracking for the analyzer project containing rule XXX -->
   </Rules>
 </RuleSet>

@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using Blueprint.SourceGenerator.CodeWriter.Internals;
 using Microsoft.CodeAnalysis;
 
@@ -18,13 +15,13 @@ public sealed class DelegateBuilder : BuilderBase<DelegateBuilder>, IParameteriz
 
     internal DelegateBuilder(string name, CodeBuilder builder)
     {
-        Name = name;
-        Builder = builder;
+        this.Name = name;
+        this.Builder = builder;
     }
 
     DelegateBuilder IParameterized<DelegateBuilder>.Parent => this;
 
-    List<ParameterBuilder<DelegateBuilder>> IParameterized<DelegateBuilder>.Parameters => _parameters;
+    List<ParameterBuilder<DelegateBuilder>> IParameterized<DelegateBuilder>.Parameters => this._parameters;
 
     /// <summary>
     /// Gets the delegate name that will be emitted.
@@ -53,10 +50,14 @@ public sealed class DelegateBuilder : BuilderBase<DelegateBuilder>, IParameteriz
     /// <returns>The same builder so fluent configuration can continue.</returns>
     public DelegateBuilder WithSummary(string summary)
     {
-        if (_xmlDoc is null || _xmlDoc is not SummaryDocumentationComment summaryDoc)
-            _xmlDoc = new ParameterDocumentationComment { Summary = summary };
+        if (this._xmlDoc is null || this._xmlDoc is not SummaryDocumentationComment summaryDoc)
+        {
+            this._xmlDoc = new ParameterDocumentationComment { Summary = summary };
+        }
         else
+        {
             summaryDoc.Summary = summary;
+        }
 
         return this;
     }
@@ -69,11 +70,15 @@ public sealed class DelegateBuilder : BuilderBase<DelegateBuilder>, IParameteriz
     /// <returns>The same builder so fluent configuration can continue.</returns>
     public DelegateBuilder WithParameterDoc(string paramName, string documentation)
     {
-        if (_xmlDoc is null)
-            _xmlDoc = new ParameterDocumentationComment();
+        if (this._xmlDoc is null)
+        {
+            this._xmlDoc = new ParameterDocumentationComment();
+        }
 
-        if (_xmlDoc is not ParameterDocumentationComment parameterDoc)
+        if (this._xmlDoc is not ParameterDocumentationComment parameterDoc)
+        {
             throw new Exception("DocumentationComment has already been initialized with a non ParameterDocumentationComment");
+        }
 
         parameterDoc.AddParameter(paramName, documentation);
 
@@ -85,8 +90,10 @@ public sealed class DelegateBuilder : BuilderBase<DelegateBuilder>, IParameteriz
     /// </summary>
     /// <param name="name">The generated name to emit.</param>
     /// <returns>The same builder so fluent configuration can continue.</returns>
-    public DelegateBuilder AddGeneric(string name) =>
-            AddGeneric(name, _ => { });
+    public DelegateBuilder AddGeneric(string name)
+    {
+        return this.AddGeneric(name, _ => { });
+    }
 
     /// <summary>
     /// Adds a generic type parameter to the generated delegate and optionally configures its constraints.
@@ -97,15 +104,21 @@ public sealed class DelegateBuilder : BuilderBase<DelegateBuilder>, IParameteriz
     public DelegateBuilder AddGeneric(string name, Action<GenericBuilder> configureBuilder)
     {
         if (configureBuilder is null)
+        {
             throw new ArgumentNullException(nameof(configureBuilder));
+        }
         else if (string.IsNullOrEmpty(name))
+        {
             throw new ArgumentNullException(nameof(name));
-        else if (_generics.Any(x => x.Name == name))
+        }
+        else if (this._generics.Any(x => x.Name == name))
+        {
             throw new ArgumentException($"The argument {name} already exists");
+        }
 
         var builder = new GenericBuilder(name);
         configureBuilder(builder);
-        _generics.Add(builder);
+        this._generics.Add(builder);
         return this;
     }
 
@@ -113,13 +126,19 @@ public sealed class DelegateBuilder : BuilderBase<DelegateBuilder>, IParameteriz
     /// Sets the generated delegate to public accessibility.
     /// </summary>
     /// <returns>The same builder so fluent configuration can continue.</returns>
-    public DelegateBuilder MakePublicDelegate() => WithAccessModifier(Accessibility.Public);
+    public DelegateBuilder MakePublicDelegate()
+    {
+        return this.WithAccessModifier(Accessibility.Public);
+    }
 
     /// <summary>
     /// Sets the generated delegate to internal accessibility.
     /// </summary>
     /// <returns>The same builder so fluent configuration can continue.</returns>
-    public DelegateBuilder MakeInternalDelegate() => WithAccessModifier(Accessibility.Internal);
+    public DelegateBuilder MakeInternalDelegate()
+    {
+        return this.WithAccessModifier(Accessibility.Internal);
+    }
 
     /// <summary>
     /// Sets the accessibility emitted for the generated delegate.
@@ -128,7 +147,7 @@ public sealed class DelegateBuilder : BuilderBase<DelegateBuilder>, IParameteriz
     /// <returns>The same builder so fluent configuration can continue.</returns>
     public DelegateBuilder WithAccessModifier(Accessibility accessModifier)
     {
-        AccessModifier = accessModifier;
+        this.AccessModifier = accessModifier;
         return this;
     }
 
@@ -140,8 +159,10 @@ public sealed class DelegateBuilder : BuilderBase<DelegateBuilder>, IParameteriz
     public DelegateBuilder AddAttribute(string attribute)
     {
         var sanitized = attribute.Replace("[", string.Empty).Replace("]", string.Empty);
-        if (!_attributes.Contains(sanitized))
-            _attributes.Add(sanitized);
+        if (!this._attributes.Contains(sanitized))
+        {
+            this._attributes.Add(sanitized);
+        }
 
         return this;
     }
@@ -153,7 +174,7 @@ public sealed class DelegateBuilder : BuilderBase<DelegateBuilder>, IParameteriz
     /// <returns>The same builder so fluent configuration can continue.</returns>
     public override DelegateBuilder AddAssemblyAttribute(string attribute)
     {
-        Builder.AddAssemblyAttribute(attribute);
+        this.Builder.AddAssemblyAttribute(attribute);
         return this;
     }
 
@@ -164,7 +185,7 @@ public sealed class DelegateBuilder : BuilderBase<DelegateBuilder>, IParameteriz
     /// <returns>The same builder so fluent configuration can continue.</returns>
     public override DelegateBuilder AddNamespaceImport(string importedNamespace)
     {
-        Builder.AddNamespaceImport(importedNamespace);
+        this.Builder.AddNamespaceImport(importedNamespace);
         return this;
     }
 
@@ -175,7 +196,7 @@ public sealed class DelegateBuilder : BuilderBase<DelegateBuilder>, IParameteriz
     /// <returns>The same builder so fluent configuration can continue.</returns>
     public override DelegateBuilder AddNamespaceImport(ISymbol symbol)
     {
-        Builder.AddNamespaceImport(symbol);
+        this.Builder.AddNamespaceImport(symbol);
         return this;
     }
 
@@ -186,7 +207,7 @@ public sealed class DelegateBuilder : BuilderBase<DelegateBuilder>, IParameteriz
     /// <returns>The same builder so fluent configuration can continue.</returns>
     public override DelegateBuilder AddNamespaceImport(INamespaceSymbol symbol)
     {
-        Builder.AddNamespaceImport(symbol);
+        this.Builder.AddNamespaceImport(symbol);
         return this;
     }
 
@@ -197,40 +218,47 @@ public sealed class DelegateBuilder : BuilderBase<DelegateBuilder>, IParameteriz
     /// <returns>The same builder so fluent configuration can continue.</returns>
     public DelegateBuilder WithReturnType(string returnType)
     {
-        ReturnType = returnType;
+        this.ReturnType = returnType;
         return this;
     }
 
     internal override void Write(in CodeWriter writer)
     {
-        if (_xmlDoc is ParameterDocumentationComment parameterDocumentation)
-            parameterDocumentation.RemoveUnusedParameters(_parameters);
+        if (this._xmlDoc is ParameterDocumentationComment parameterDocumentation)
+        {
+            parameterDocumentation.RemoveUnusedParameters(this._parameters);
+        }
 
-        _xmlDoc?.Write(writer);
+        this._xmlDoc?.Write(writer);
 
-        foreach (var attribute in _attributes)
+        foreach (var attribute in this._attributes)
+        {
             writer.AppendLine($"[{attribute}]");
+        }
 
-        var parameters = _parameters.Any() ? string.Join(", ", _parameters.Select(x => x.ToString())) : string.Empty;
+        var parameters = this._parameters.Any() ? string.Join(", ", this._parameters.Select(x => x.ToString())) : string.Empty;
         var parts = new string?[]
         {
-            AccessModifier.Code(),
+            this.AccessModifier.Code(),
             "delegate",
-            ReturnType is null || string.IsNullOrEmpty(ReturnType) ? "void" : ReturnType.Trim(),
-            $"{Name}{_generics}({parameters})",
+            this.ReturnType is null || string.IsNullOrEmpty(this.ReturnType) ? "void" : this.ReturnType.Trim(),
+            $"{this.Name}{this._generics}({parameters})",
         }.Where(x => !string.IsNullOrEmpty(x));
 
         var output = string.Join(" ", parts);
-        var constraints = _generics.Contraints();
-        if(constraints.Any())
+        var constraints = this._generics.Contraints();
+        if (constraints.Any())
         {
             writer.AppendLine(output);
             writer.IncreaseIndent();
-            for(int i = 0; i < constraints.Length; i++)
+            for (var i = 0; i < constraints.Length; i++)
             {
                 var constraint = constraints[i];
                 if (i + 1 == constraints.Length)
+                {
                     constraint += ";";
+                }
+
                 writer.AppendLine(constraint);
             }
             writer.DecreaseIndent();

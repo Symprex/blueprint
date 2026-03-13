@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Text;
 
 #pragma warning disable IDE0008
@@ -26,8 +23,8 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <param name="startingLevel">The initial indentation depth for the writer.</param>
         public CodeWriter(IndentStyle indentStyle, int startingLevel = 0)
         {
-            _indentStyle = indentStyle;
-            Indent = indentStyle switch
+            this._indentStyle = indentStyle;
+            this.Indent = indentStyle switch
             {
                 IndentStyle.Tabs => "\t",
                 _ => "    "
@@ -37,12 +34,18 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <summary>
         /// Increases indentation for subsequently emitted lines.
         /// </summary>
-        public void IncreaseIndent() => _extraIndent++;
+        public void IncreaseIndent()
+        {
+            this._extraIndent++;
+        }
 
         /// <summary>
         /// Decreases indentation for subsequently emitted lines.
         /// </summary>
-        public void DecreaseIndent() => _extraIndent--;
+        public void DecreaseIndent()
+        {
+            this._extraIndent--;
+        }
 
         /// <summary>
         /// Writes a block header, emits an opening brace, and returns the writer so disposal can close the block.
@@ -52,19 +55,21 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>An <see cref="IDisposable"/> that closes the block when disposed.</returns>
         public IDisposable Block(string value, params string[] constraints)
         {
-            AppendLine(value.TrimEnd());
-            _indentLevel++;
+            this.AppendLine(value.TrimEnd());
+            this._indentLevel++;
             foreach (var constraint in constraints)
             {
                 if (string.IsNullOrEmpty(constraint))
+                {
                     continue;
+                }
 
-                AppendLine(constraint);
+                this.AppendLine(constraint);
             }
 
-            _indentLevel--;
-            AppendLine("{");
-            _indentLevel++;
+            this._indentLevel--;
+            this.AppendLine("{");
+            this._indentLevel++;
             return this;
         }
 
@@ -75,23 +80,23 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>A writer that emits inside the requested nested block.</returns>
         public ICodeWriter BlockWriter(string? originalLine)
         {
-            var writer = new CodeWriter(_indentStyle, _indentLevel);
+            var writer = new CodeWriter(this._indentStyle, this._indentLevel);
             if (originalLine is { })
             {
                 writer.AppendLine(originalLine);
             }
             writer.AppendLine("{");
             writer._indentLevel++;
-            _blocks.Add((null, writer));
+            this._blocks.Add((null, writer));
             return writer;
         }
 
         private StringBuilder EnsureStringBuilder()
         {
-            if (_blocks.LastOrDefault().StringBuilder is not { } sb)
+            if (this._blocks.LastOrDefault().StringBuilder is not { } sb)
             {
                 sb = new StringBuilder();
-                _blocks.Add((sb, null));
+                this._blocks.Add((sb, null));
             }
 
             return sb;
@@ -103,7 +108,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <param name="value">The text fragment to append.</param>
         public void Append(string value)
         {
-            EnsureStringBuilder().Append(GetIndentedValue(value.TrimEnd()));
+            this.EnsureStringBuilder().Append(this.GetIndentedValue(value.TrimEnd()));
         }
 
         /// <summary>
@@ -112,7 +117,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <param name="value">The text fragment to append exactly as provided.</param>
         public void AppendUnindented(string value)
         {
-            EnsureStringBuilder().Append(value.TrimEnd());
+            this.EnsureStringBuilder().Append(value.TrimEnd());
         }
 
         /// <summary>
@@ -120,7 +125,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// </summary>
         public void NewLine()
         {
-            EnsureStringBuilder().AppendLine();
+            this.EnsureStringBuilder().AppendLine();
         }
 
         /// <summary>
@@ -129,7 +134,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <param name="value">The line content to emit.</param>
         public void AppendLine(string value)
         {
-            EnsureStringBuilder().AppendLine(GetIndentedValue(value.TrimEnd()));
+            this.EnsureStringBuilder().AppendLine(this.GetIndentedValue(value.TrimEnd()));
         }
 
         /// <summary>
@@ -138,14 +143,16 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <param name="value">The line content to emit exactly as provided.</param>
         public void AppendUnindentedLine(string value)
         {
-            EnsureStringBuilder().AppendLine(value.TrimEnd());
+            this.EnsureStringBuilder().AppendLine(value.TrimEnd());
         }
 
         private string GetIndentedValue(string value)
         {
             var indent = string.Empty;
-            for (var i = 0; i < _indentLevel + _extraIndent; i++)
-                indent += Indent;
+            for (var i = 0; i < this._indentLevel + this._extraIndent; i++)
+            {
+                indent += this.Indent;
+            }
 
             return indent + value;
         }
@@ -155,10 +162,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// </summary>
         public void Dispose()
         {
-            if (_indentLevel > 0)
+            if (this._indentLevel > 0)
             {
-                _indentLevel--;
-                EnsureStringBuilder().AppendLine(GetIndentedValue("}"));
+                this._indentLevel--;
+                this.EnsureStringBuilder().AppendLine(this.GetIndentedValue("}"));
             }
         }
 
@@ -170,7 +177,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         {
             var result = new StringBuilder();
 
-            foreach (var block in _blocks)
+            foreach (var block in this._blocks)
             {
                 if (block.StringBuilder is { })
                 {
@@ -184,7 +191,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
                 }
             }
 
-            Dispose();
+            this.Dispose();
 
             return result.ToString();
         }

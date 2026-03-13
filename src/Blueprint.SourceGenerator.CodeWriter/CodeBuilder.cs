@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Text.RegularExpressions;
 using Microsoft.CodeAnalysis;
 
@@ -29,8 +26,8 @@ the code is regenerated.";
 
         private CodeBuilder(string? clrNamespace = null, IndentStyle indentStyle = IndentStyle.Spaces)
         {
-            Namespace = clrNamespace;
-            IndentStyle = indentStyle;
+            this.Namespace = clrNamespace;
+            this.IndentStyle = indentStyle;
         }
 
         /// <summary>
@@ -46,28 +43,31 @@ the code is regenerated.";
         /// <summary>
         /// Gets the class declarations currently queued on the file builder.
         /// </summary>
-        public IReadOnlyList<ClassBuilder> Classes => _builders.OfType<ClassBuilder>().ToList();
+        public IReadOnlyList<ClassBuilder> Classes => this._builders.OfType<ClassBuilder>().ToList();
 
         /// <summary>
         /// Gets the record declarations currently queued on the file builder.
         /// </summary>
-        public IReadOnlyList<RecordBuilder> Records => _builders.OfType<RecordBuilder>().ToList();
+        public IReadOnlyList<RecordBuilder> Records => this._builders.OfType<RecordBuilder>().ToList();
 
         /// <summary>
         /// Gets the enum declarations currently queued on the file builder.
         /// </summary>
-        public IReadOnlyList<EnumBuilder> Enums => _builders.OfType<EnumBuilder>().ToList();
+        public IReadOnlyList<EnumBuilder> Enums => this._builders.OfType<EnumBuilder>().ToList();
 
         /// <summary>
         /// Gets the delegate declarations currently queued on the file builder.
         /// </summary>
-        public IReadOnlyList<DelegateBuilder> Delegates => _builders.OfType<DelegateBuilder>().ToList();
+        public IReadOnlyList<DelegateBuilder> Delegates => this._builders.OfType<DelegateBuilder>().ToList();
 
         /// <summary>
         /// Switches the generated file to file-scoped namespace syntax.
         /// </summary>
         /// <returns>The same builder so fluent configuration can continue.</returns>
-        public CodeBuilder TopLevelNamespace() => TopLevelNamespace(true);
+        public CodeBuilder TopLevelNamespace()
+        {
+            return this.TopLevelNamespace(true);
+        }
 
         /// <summary>
         /// Switches between file-scoped and block-scoped namespace syntax for the generated file.
@@ -76,7 +76,7 @@ the code is regenerated.";
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public CodeBuilder TopLevelNamespace(bool topLevel)
         {
-            _topLevel = topLevel;
+            this._topLevel = topLevel;
             return this;
         }
 
@@ -84,7 +84,10 @@ the code is regenerated.";
         /// Sets the nullable directive emitted near the top of the generated file so the generated code matches the intended nullability policy.
         /// </summary>
         /// <returns>The same builder so fluent configuration can continue.</returns>
-        public CodeBuilder Nullable() => Nullable(NullableState.Enable);
+        public CodeBuilder Nullable()
+        {
+            return this.Nullable(NullableState.Enable);
+        }
 
         /// <summary>
         /// Sets the nullable directive emitted near the top of the generated file so the generated code matches the intended nullability policy.
@@ -93,7 +96,7 @@ the code is regenerated.";
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public CodeBuilder Nullable(NullableState nullable)
         {
-            _nullable = nullable;
+            this._nullable = nullable;
             return this;
         }
 
@@ -102,9 +105,11 @@ the code is regenerated.";
         /// </summary>
         /// <param name="indentStyle">The indentation style to use when rendering generated source.</param>
         /// <returns>A new builder initialized from the supplied context.</returns>
-        public static CodeBuilder CreateInGlobalNamespace(IndentStyle indentStyle = IndentStyle.Spaces) =>
-            new CodeBuilder(indentStyle: indentStyle)
+        public static CodeBuilder CreateInGlobalNamespace(IndentStyle indentStyle = IndentStyle.Spaces)
+        {
+            return new CodeBuilder(indentStyle: indentStyle)
                 .TopLevelNamespace();
+        }
 
         /// <summary>
         /// Creates the usual entry point for a generated file that targets a known CLR namespace.
@@ -112,8 +117,10 @@ the code is regenerated.";
         /// <param name="clrNamespace">The namespace that the generated file should target.</param>
         /// <param name="indentStyle">The indentation style to use when rendering generated source.</param>
         /// <returns>A new builder initialized from the supplied context.</returns>
-        public static CodeBuilder Create(string clrNamespace, IndentStyle indentStyle = IndentStyle.Spaces) =>
-            new CodeBuilder(clrNamespace, indentStyle);
+        public static CodeBuilder Create(string clrNamespace, IndentStyle indentStyle = IndentStyle.Spaces)
+        {
+            return new CodeBuilder(clrNamespace, indentStyle);
+        }
 
         /// <summary>
         /// Creates the usual entry point for a generated file that targets a Roslyn namespace symbol.
@@ -121,8 +128,10 @@ the code is regenerated.";
         /// <param name="namespaceSymbol">The Roslyn namespace symbol that identifies the namespace to generate into.</param>
         /// <param name="indentStyle">The indentation style to use when rendering generated source.</param>
         /// <returns>A new builder initialized from the supplied context.</returns>
-        public static CodeBuilder Create(INamespaceSymbol namespaceSymbol, IndentStyle indentStyle = IndentStyle.Spaces) =>
-            Create(namespaceSymbol.ToString(), indentStyle);
+        public static CodeBuilder Create(INamespaceSymbol namespaceSymbol, IndentStyle indentStyle = IndentStyle.Spaces)
+        {
+            return Create(namespaceSymbol.ToString(), indentStyle);
+        }
 
         /// <summary>
         /// Creates a class builder seeded from an existing Roslyn type symbol.
@@ -146,8 +155,10 @@ the code is regenerated.";
         public CodeBuilder AddNamespaceImport(string importedNamespace)
         {
             var value = Regex.Replace(importedNamespace, @"^using\w+", string.Empty).Replace(";", string.Empty);
-            if (!_namespaceImports.Contains(value))
-                _namespaceImports.Add(value);
+            if (!this._namespaceImports.Contains(value))
+            {
+                this._namespaceImports.Add(value);
+            }
 
             return this;
         }
@@ -159,7 +170,7 @@ the code is regenerated.";
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public CodeBuilder AddNamespaceImport(ISymbol symbol)
         {
-            return AddNamespaceImport(symbol.ContainingNamespace.ToString());
+            return this.AddNamespaceImport(symbol.ContainingNamespace.ToString());
         }
 
         /// <summary>
@@ -169,7 +180,7 @@ the code is regenerated.";
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public CodeBuilder AddNamespaceImport(INamespaceSymbol symbol)
         {
-            return AddNamespaceImport(symbol.ToString());
+            return this.AddNamespaceImport(symbol.ToString());
         }
 
         /// <summary>
@@ -179,7 +190,7 @@ the code is regenerated.";
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public CodeBuilder AddAssemblyAttribute(string attribute)
         {
-            _assemblyAttributes.Add(attribute);
+            this._assemblyAttributes.Add(attribute);
             return this;
         }
 
@@ -191,7 +202,7 @@ the code is regenerated.";
         public ClassBuilder AddClass(string name)
         {
             var builder = new ClassBuilder(name, this);
-            _builders.Enqueue(builder);
+            this._builders.Enqueue(builder);
             return builder;
         }
 
@@ -202,12 +213,12 @@ the code is regenerated.";
         /// <returns>The builder for the newly added generated declaration.</returns>
         public ClassBuilder AddClass(ITypeSymbol symbol)
         {
-            return AddClass(symbol.Name);
+            return this.AddClass(symbol.Name);
         }
 
         internal ClassBuilder AddClass(ClassBuilder builder)
         {
-            _builders.Enqueue(builder);
+            this._builders.Enqueue(builder);
             builder.Builder = this;
             return builder;
         }
@@ -220,13 +231,13 @@ the code is regenerated.";
         public RecordBuilder AddRecord(string name)
         {
             var builder = new RecordBuilder(name, this);
-            _builders.Enqueue(builder);
+            this._builders.Enqueue(builder);
             return builder;
         }
 
         internal RecordBuilder AddRecord(RecordBuilder builder)
         {
-            _builders.Enqueue(builder);
+            this._builders.Enqueue(builder);
             builder.Builder = this;
             return builder;
         }
@@ -239,13 +250,13 @@ the code is regenerated.";
         public EnumBuilder AddEnum(string name)
         {
             var builder = new EnumBuilder(name, this);
-            _builders.Enqueue(builder);
+            this._builders.Enqueue(builder);
             return builder;
         }
 
         internal EnumBuilder AddEnum(EnumBuilder builder)
         {
-            _builders.Enqueue(builder);
+            this._builders.Enqueue(builder);
             builder.Builder = this;
             return builder;
         }
@@ -258,7 +269,7 @@ the code is regenerated.";
         public DelegateBuilder AddDelegate(string name)
         {
             var builder = new DelegateBuilder(name, this);
-            _builders.Enqueue(builder);
+            this._builders.Enqueue(builder);
             return builder;
         }
 
@@ -269,7 +280,7 @@ the code is regenerated.";
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public CodeBuilder WithAutoGeneratedMessage(string message)
         {
-            _autoGeneratedMessage = message;
+            this._autoGeneratedMessage = message;
             return this;
         }
 
@@ -278,26 +289,26 @@ the code is regenerated.";
         /// </summary>
         public void Clear()
         {
-            _namespaceImports.Clear();
-            _assemblyAttributes.Clear();
-            _builders.Clear();
+            this._namespaceImports.Clear();
+            this._assemblyAttributes.Clear();
+            this._builders.Clear();
         }
 
         private CodeWriter BuildInternal()
         {
-            var writer = new CodeWriter(IndentStyle);
+            var writer = new CodeWriter(this.IndentStyle);
             writer.AppendLine("//------------------------------------------------------------------------------");
             writer.AppendLine("// <auto-generated>");
-            var autoGeneratedMessage = string.IsNullOrEmpty(_autoGeneratedMessage) ? DefaultAutoGeneratedMessage : _autoGeneratedMessage;
+            var autoGeneratedMessage = string.IsNullOrEmpty(this._autoGeneratedMessage) ? DefaultAutoGeneratedMessage : this._autoGeneratedMessage;
             var lines = Regex.Replace(autoGeneratedMessage, @"\r\n", "\n").Split('\n');
-            foreach(var line in lines)
+            foreach (var line in lines)
             {
                 writer.AppendLine($"//     {line}".Trim());
             }
             writer.AppendLine("// </auto-generated>");
             writer.AppendLine("//------------------------------------------------------------------------------");
             writer.NewLine();
-            var namespaces = _namespaceImports.Distinct().ToList();
+            var namespaces = this._namespaceImports.Distinct().ToList();
             var systemNamespaces = GetImports(ref namespaces, x => x.StartsWith("System"));
             var nonsystemNamespaces = GetImports(ref namespaces, x => !x.StartsWith("System") && !x.Contains("=") && !x.Contains("static"));
             var namespaceAlias = GetImports(ref namespaces, x => x.Contains("="));
@@ -307,28 +318,32 @@ the code is regenerated.";
             WriteNamespace(namespaceAlias, ref writer);
             WriteNamespace(namespaces, ref writer);
 
-            if(_namespaceImports.Count > 0)
-                writer.NewLine();
-
-            if(_nullable != NullableState.Default)
-                writer.AppendLine($"#nullable {_nullable}".ToLowerInvariant());
-
-            WriteAssemblyAttributes(_assemblyAttributes, ref writer);
-            if(_topLevel)
+            if (this._namespaceImports.Count > 0)
             {
-                if (Namespace is not null)
+                writer.NewLine();
+            }
+
+            if (this._nullable != NullableState.Default)
+            {
+                writer.AppendLine($"#nullable {this._nullable}".ToLowerInvariant());
+            }
+
+            WriteAssemblyAttributes(this._assemblyAttributes, ref writer);
+            if (this._topLevel)
+            {
+                if (this.Namespace is not null)
                 {
-                    writer.AppendLine($"namespace {Namespace};");
+                    writer.AppendLine($"namespace {this.Namespace};");
                     writer.NewLine();
                 }
 
-                WriteBody(writer);
+                this.WriteBody(writer);
                 return writer;
             }
 
-            using (writer.Block($"namespace {Namespace}"))
+            using (writer.Block($"namespace {this.Namespace}"))
             {
-                WriteBody(writer);
+                this.WriteBody(writer);
             }
 
             return writer;
@@ -336,7 +351,7 @@ the code is regenerated.";
 
         private void WriteBody(CodeWriter writer)
         {
-            var clone = new Queue<IBuilder>(_builders);
+            var clone = new Queue<IBuilder>(this._builders);
 
             while (clone.Any())
             {
@@ -344,7 +359,9 @@ the code is regenerated.";
                 output.Write(writer);
 
                 if (clone.Any())
+                {
                     writer.NewLine();
+                }
             }
         }
 
@@ -352,7 +369,9 @@ the code is regenerated.";
         {
             var output = namespaces.Where(predicate).ToArray();
             foreach (var str in output)
+            {
                 namespaces.Remove(str);
+            }
 
             return output.OrderBy(x => x);
         }
@@ -363,7 +382,7 @@ the code is regenerated.";
         /// <returns>The rendered C# source text.</returns>
         public string Build()
         {
-            var writer = BuildInternal();
+            var writer = this.BuildInternal();
             return writer.Render();
         }
 
@@ -373,7 +392,7 @@ the code is regenerated.";
         /// <returns>The generated source fragment represented by the current builder.</returns>
         public override string ToString()
         {
-            return Build();
+            return this.Build();
         }
 
         private static void WriteAssemblyAttributes(IEnumerable<string> assemblyAttributes, ref CodeWriter writer)
@@ -386,7 +405,9 @@ the code is regenerated.";
             foreach (var attr in assemblyAttributes.Distinct().OrderBy(x => x))
             {
                 if (string.IsNullOrEmpty(attr))
+                {
                     continue;
+                }
 
                 var output = attr;
                 if (attr[0] != '[' || !attr.StartsWith("[assembly:"))
@@ -402,7 +423,9 @@ the code is regenerated.";
         private static void WriteNamespace(IEnumerable<string> namespaces, ref CodeWriter writer)
         {
             foreach (var import in namespaces)
+            {
                 writer.AppendLine($"using {import};");
+            }
         }
     }
 }

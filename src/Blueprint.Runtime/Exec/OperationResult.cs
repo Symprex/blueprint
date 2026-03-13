@@ -26,12 +26,9 @@ public abstract class OperationResult
     {
         // Handle the case of wanting to "unwrap" to an actual result type (typical in HTTP clients or integration
         // tests). For example calling `Unwrap<PlainTextResult>()` on a `PlainTextResult` would return the result itself.
-        if (this is T asType)
-        {
-            return asType;
-        }
-
-        throw new InvalidOperationException(
+        return this is T asType
+            ? asType
+            : throw new InvalidOperationException(
             $"Unable to unwrap operation result of type {this.GetType().Name} to {typeof(T).Name}.");
     }
 }

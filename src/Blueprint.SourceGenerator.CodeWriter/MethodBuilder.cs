@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using Blueprint.SourceGenerator.CodeWriter.Internals;
 using Microsoft.CodeAnalysis;
 
@@ -27,18 +24,18 @@ namespace Blueprint.SourceGenerator.CodeWriter
 
         internal MethodBuilder(string name, Accessibility? accessModifier, ClassBuilder builder)
         {
-            Name = name;
-            AccessModifier = accessModifier;
-            Class = builder;
+            this.Name = name;
+            this.AccessModifier = accessModifier;
+            this.Class = builder;
         }
 
-        List<ParameterBuilder<MethodBuilder>> IParameterized<MethodBuilder>.Parameters => _parameters;
+        List<ParameterBuilder<MethodBuilder>> IParameterized<MethodBuilder>.Parameters => this._parameters;
         MethodBuilder IParameterized<MethodBuilder>.Parent => this;
 
         /// <summary>
         /// Gets the parameters currently configured for the generated method signature.
         /// </summary>
-        public IReadOnlyCollection<ParameterBuilder<MethodBuilder>> Parameters => _parameters;
+        public IReadOnlyCollection<ParameterBuilder<MethodBuilder>> Parameters => this._parameters;
 
         /// <summary>
         /// Gets the method name that will be emitted.
@@ -67,11 +64,13 @@ namespace Blueprint.SourceGenerator.CodeWriter
         {
             get
             {
-                if (_methodBodyWriter is null)
+                if (this._methodBodyWriter is null)
+                {
                     return false;
+                }
 
                 var writer = new CodeWriter(IndentStyle.Spaces);
-                _methodBodyWriter(writer);
+                this._methodBodyWriter(writer);
                 return !string.IsNullOrEmpty(writer.ToString());
             }
         }
@@ -98,10 +97,14 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public MethodBuilder WithSummary(string summary)
         {
-            if (_xmlDoc is null || _xmlDoc is not SummaryDocumentationComment summaryDoc)
-                _xmlDoc = new ParameterDocumentationComment { Summary = summary };
+            if (this._xmlDoc is null || this._xmlDoc is not SummaryDocumentationComment summaryDoc)
+            {
+                this._xmlDoc = new ParameterDocumentationComment { Summary = summary };
+            }
             else
+            {
                 summaryDoc.Summary = summary;
+            }
 
             return this;
         }
@@ -113,7 +116,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public MethodBuilder WithInheritDoc(bool inherit = true)
         {
-            _xmlDoc = new InheritDocumentationComment();
+            this._xmlDoc = new InheritDocumentationComment();
             return this;
         }
 
@@ -124,7 +127,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public MethodBuilder WithInheritDoc(string from)
         {
-            _xmlDoc = new InheritDocumentationComment { InheritFrom = from };
+            this._xmlDoc = new InheritDocumentationComment { InheritFrom = from };
             return this;
         }
 
@@ -136,11 +139,15 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public MethodBuilder WithParameterDoc(string paramName, string documentation)
         {
-            if (_xmlDoc is null)
-                _xmlDoc = new ParameterDocumentationComment();
+            if (this._xmlDoc is null)
+            {
+                this._xmlDoc = new ParameterDocumentationComment();
+            }
 
-            if (_xmlDoc is not ParameterDocumentationComment parameterDoc)
+            if (this._xmlDoc is not ParameterDocumentationComment parameterDoc)
+            {
                 throw new Exception("DocumentationComment has already been initialized with a non ParameterDocumentationComment");
+            }
 
             parameterDoc.AddParameter(paramName, documentation);
 
@@ -152,8 +159,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// </summary>
         /// <param name="name">The generic parameter name to add to the method signature.</param>
         /// <returns>The same builder so fluent configuration can continue.</returns>
-        public MethodBuilder AddGeneric(string name) =>
-            AddGeneric(name, _ => { });
+        public MethodBuilder AddGeneric(string name)
+        {
+            return this.AddGeneric(name, _ => { });
+        }
 
         /// <summary>
         /// Adds a generic type parameter to the generated method and optionally configures its constraints.
@@ -164,15 +173,21 @@ namespace Blueprint.SourceGenerator.CodeWriter
         public MethodBuilder AddGeneric(string name, Action<GenericBuilder> configureBuilder)
         {
             if (configureBuilder is null)
+            {
                 throw new ArgumentNullException(nameof(configureBuilder));
+            }
             else if (string.IsNullOrEmpty(name))
+            {
                 throw new ArgumentNullException(nameof(name));
-            else if (_generics.Any(x => x.Name == name))
+            }
+            else if (this._generics.Any(x => x.Name == name))
+            {
                 throw new ArgumentException($"The argument {name} already exists");
+            }
 
             var builder = new GenericBuilder(name);
             configureBuilder(builder);
-            _generics.Add(builder);
+            this._generics.Add(builder);
             return this;
         }
 
@@ -183,7 +198,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public override MethodBuilder AddNamespaceImport(string importedNamespace)
         {
-            Class.AddNamespaceImport(importedNamespace);
+            this.Class.AddNamespaceImport(importedNamespace);
             return this;
         }
 
@@ -194,7 +209,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public override MethodBuilder AddNamespaceImport(ISymbol symbol)
         {
-            return AddNamespaceImport(symbol.ContainingNamespace);
+            return this.AddNamespaceImport(symbol.ContainingNamespace);
         }
 
         /// <summary>
@@ -204,7 +219,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public override MethodBuilder AddNamespaceImport(INamespaceSymbol symbol)
         {
-            return AddNamespaceImport(symbol.ToString());
+            return this.AddNamespaceImport(symbol.ToString());
         }
 
         /// <summary>
@@ -214,7 +229,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public override MethodBuilder AddAssemblyAttribute(string attribute)
         {
-            Class.AddAssemblyAttribute(attribute);
+            this.Class.AddAssemblyAttribute(attribute);
             return this;
         }
 
@@ -226,7 +241,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The builder for the newly added generated declaration.</returns>
         public PropertyBuilder AddProperty(string name, Accessibility? accessModifier = null)
         {
-            return Class.AddProperty(name, accessModifier);
+            return this.Class.AddProperty(name, accessModifier);
         }
 
         /// <summary>
@@ -235,7 +250,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public MethodBuilder MakeAsync()
         {
-            IsAsync = true;
+            this.IsAsync = true;
             return this;
         }
 
@@ -246,7 +261,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public MethodBuilder Abstract(bool isAbstract = true)
         {
-            IsAbstract = isAbstract;
+            this.IsAbstract = isAbstract;
             return this;
         }
 
@@ -254,25 +269,37 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// Sets the generated method to public accessibility.
         /// </summary>
         /// <returns>The same builder so fluent configuration can continue.</returns>
-        public MethodBuilder MakePublicMethod() => WithAccessModifier(Accessibility.Public);
+        public MethodBuilder MakePublicMethod()
+        {
+            return this.WithAccessModifier(Accessibility.Public);
+        }
 
         /// <summary>
         /// Sets the generated method to private accessibility.
         /// </summary>
         /// <returns>The same builder so fluent configuration can continue.</returns>
-        public MethodBuilder MakePrivateMethod() => WithAccessModifier(Accessibility.Private);
+        public MethodBuilder MakePrivateMethod()
+        {
+            return this.WithAccessModifier(Accessibility.Private);
+        }
 
         /// <summary>
         /// Sets the generated method to protected accessibility.
         /// </summary>
         /// <returns>The same builder so fluent configuration can continue.</returns>
-        public MethodBuilder MakeProtectedMethod() => WithAccessModifier(Accessibility.Protected);
+        public MethodBuilder MakeProtectedMethod()
+        {
+            return this.WithAccessModifier(Accessibility.Protected);
+        }
 
         /// <summary>
         /// Sets the generated method to internal accessibility.
         /// </summary>
         /// <returns>The same builder so fluent configuration can continue.</returns>
-        public MethodBuilder MakeInternalMethod() => WithAccessModifier(Accessibility.Internal);
+        public MethodBuilder MakeInternalMethod()
+        {
+            return this.WithAccessModifier(Accessibility.Internal);
+        }
 
         /// <summary>
         /// Sets the accessibility emitted for the generated method.
@@ -281,7 +308,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public MethodBuilder WithAccessModifier(Accessibility accessModifier)
         {
-            AccessModifier = accessModifier;
+            this.AccessModifier = accessModifier;
             return this;
         }
 
@@ -292,7 +319,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public MethodBuilder Override(bool @override = true)
         {
-            _override = @override;
+            this._override = @override;
             return this;
         }
 
@@ -302,7 +329,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public MethodBuilder MakeStaticMethod()
         {
-            IsStatic = true;
+            this.IsStatic = true;
             return this;
         }
 
@@ -312,7 +339,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public MethodBuilder MakeVirtualMethod()
         {
-            _virtual = true;
+            this._virtual = true;
             return this;
         }
 
@@ -324,8 +351,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         public MethodBuilder AddAttribute(string attribute)
         {
             var sanitized = attribute.Replace("[", string.Empty).Replace("]", string.Empty);
-            if (!_attributes.Contains(sanitized))
-                _attributes.Add(sanitized);
+            if (!this._attributes.Contains(sanitized))
+            {
+                this._attributes.Add(sanitized);
+            }
 
             return this;
         }
@@ -337,7 +366,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public MethodBuilder WithBody(Action<ICodeWriter> writerDelegate)
         {
-            _methodBodyWriter = writerDelegate;
+            this._methodBodyWriter = writerDelegate;
             return this;
         }
 
@@ -348,45 +377,59 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public MethodBuilder WithReturnType(string returnType)
         {
-            ReturnType = returnType;
+            this.ReturnType = returnType;
             return this;
         }
 
         internal override void Write(in CodeWriter writer)
         {
-            var output = ReturnType is null || string.IsNullOrEmpty(ReturnType) ? "void" : ReturnType.Trim();
-            if (IsAsync)
+            var output = this.ReturnType is null || string.IsNullOrEmpty(this.ReturnType) ? "void" : this.ReturnType.Trim();
+            if (this.IsAsync)
+            {
                 output = $"async {output}";
+            }
 
-            if (_override)
+            if (this._override)
+            {
                 output = $"override {output}";
-            else if (_virtual)
+            }
+            else if (this._virtual)
+            {
                 output = $"virtual {output}";
-            else if (IsAbstract)
+            }
+            else if (this.IsAbstract)
+            {
                 output = $"abstract {output}";
-            else if (IsStatic)
+            }
+            else if (this.IsStatic)
+            {
                 output = $"static {output}";
+            }
 
-            var parameters = string.Join(", ", _parameters.Select(x => x.ToString()));
-            output = $"{AccessModifier.Code()} {output} {Name}{_generics}({parameters})";
+            var parameters = string.Join(", ", this._parameters.Select(x => x.ToString()));
+            output = $"{this.AccessModifier.Code()} {output} {this.Name}{this._generics}({parameters})";
 
-            if(_xmlDoc is ParameterDocumentationComment parameterDocumentation)
-                parameterDocumentation.RemoveUnusedParameters(_parameters);
+            if (this._xmlDoc is ParameterDocumentationComment parameterDocumentation)
+            {
+                parameterDocumentation.RemoveUnusedParameters(this._parameters);
+            }
 
-            _xmlDoc?.Write(writer);
+            this._xmlDoc?.Write(writer);
 
-            foreach (var attribute in _attributes)
+            foreach (var attribute in this._attributes)
+            {
                 writer.AppendLine($"[{attribute}]");
+            }
 
-            if (IsAbstract)
+            if (this.IsAbstract)
             {
                 writer.AppendLine($"{output.Trim()};");
                 return;
             }
 
-            using (writer.Block(output.Trim(), _generics.Contraints()))
+            using (writer.Block(output.Trim(), this._generics.Contraints()))
             {
-                _methodBodyWriter?.Invoke(writer);
+                this._methodBodyWriter?.Invoke(writer);
             }
         }
     }

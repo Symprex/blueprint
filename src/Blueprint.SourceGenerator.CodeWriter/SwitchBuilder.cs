@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-
 #pragma warning disable IDE0079
 #pragma warning disable IDE0090
 #pragma warning disable IDE1006
@@ -19,9 +16,9 @@ namespace Blueprint.SourceGenerator.CodeWriter
 
         internal SwitchBuilder(ICodeWriter writer, string switchOn, bool expression)
         {
-            _writer = writer;
-            _switchOn = switchOn;
-            Expression = expression;
+            this._writer = writer;
+            this._switchOn = switchOn;
+            this.Expression = expression;
         }
 
         /// <summary>
@@ -32,7 +29,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         public SwitchCaseBuilder AddCase(string @case)
         {
             var builder = new SwitchCaseBuilder(this, @case);
-            _switchCases.Add(builder);
+            this._switchCases.Add(builder);
             return builder;
         }
 
@@ -42,18 +39,23 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The underlying writer so additional source can be emitted.</returns>
         public ICodeWriter Close()
         {
-            if (Expression)
-                WriterExpressionSwitchCase();
-            else if(_writer is CodeWriter codeWriter)
-                WriteClassicSwitchCase(codeWriter);
-            return _writer;
+            if (this.Expression)
+            {
+                this.WriterExpressionSwitchCase();
+            }
+            else if (this._writer is CodeWriter codeWriter)
+            {
+                this.WriteClassicSwitchCase(codeWriter);
+            }
+
+            return this._writer;
         }
 
         private void WriteClassicSwitchCase(CodeWriter writer)
         {
-            using (_writer.Block($"switch({_switchOn})"))
+            using (this._writer.Block($"switch({this._switchOn})"))
             {
-                foreach (IBuilder @case in _switchCases)
+                foreach (IBuilder @case in this._switchCases)
                 {
                     @case.Write(writer);
                 }

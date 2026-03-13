@@ -5,4 +5,4 @@
 /// </summary>
 [System.AttributeUsage(System.AttributeTargets.Property, AllowMultiple = true, Inherited = false)]
 // MarkerAttribute
-internal sealed class GeneratedAttribute() : global::System.Attribute;
+internal sealed class GeneratedAttribute : global::System.Attribute;

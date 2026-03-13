@@ -3,7 +3,15 @@
 /// <summary>
 /// This is a generated attribute.
 /// </summary>
-/// <param name="url">The route for this link, may contain placeholders.</param>
 [System.AttributeUsage(System.AttributeTargets.Class, AllowMultiple = false, Inherited = true)]
 // MarkerAttribute
-internal sealed class GeneratedAttribute(System.String url) : global::System.Attribute;
+internal sealed class GeneratedAttribute : global::System.Attribute
+{
+    /// <summary>
+    /// Initializes a new instance of the <see cref="GeneratedAttribute"/> class.
+    /// </summary>
+    /// <param name="url">The route for this link, may contain placeholders.</param>
+    public GeneratedAttribute(System.String url)
+    {
+    }
+}

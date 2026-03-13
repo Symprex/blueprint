@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Text;
 using Blueprint.SourceGenerator.CodeWriter.Extensions;
 using Microsoft.CodeAnalysis;
@@ -38,11 +35,11 @@ namespace Blueprint.SourceGenerator.CodeWriter.Internals
         public static string GetGloballyQualifiedTypeName(this INamespaceOrTypeSymbol symbol)
         {
             var value = GetFullMetadataName(symbol);
-            if(_fullNamesMaping.Any(x => x.Value == value))
+            if (_fullNamesMaping.Any(x => x.Value == value))
             {
                 return _fullNamesMaping.First(x => x.Value == value).Key;
             }
-            else if(_fullNamesMaping.Any(x => x.Value == $"System.Nullable`1[{value}]"))
+            else if (_fullNamesMaping.Any(x => x.Value == $"System.Nullable`1[{value}]"))
             {
                 return _fullNamesMaping.First(x => x.Value == $"System.Nullable`1[{value}]").Key + "?";
             }
@@ -88,7 +85,7 @@ namespace Blueprint.SourceGenerator.CodeWriter.Internals
             if (namedType?.TypeArguments.Any() ?? false)
             {
                 var genericArgs = string.Join(",", namedType.TypeArguments.Select(GetFullMetadataName));
-                sb.Append($"[{ genericArgs }]");
+                sb.Append($"[{genericArgs}]");
             }
 
             return sb.ToString();
@@ -118,7 +115,7 @@ namespace Blueprint.SourceGenerator.CodeWriter.Internals
 
             var name = type.ToDisplayString() ?? string.Empty;
 
-            if (!_fullNamesMaping.TryGetValue(name, out string output))
+            if (!_fullNamesMaping.TryGetValue(name, out var output))
             {
                 output = name;
             }

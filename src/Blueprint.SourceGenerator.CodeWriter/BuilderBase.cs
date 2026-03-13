@@ -1,6 +1,3 @@
-using System.Collections.Generic;
-using System.Linq;
-
 #pragma warning disable IDE0008
 #pragma warning disable IDE0090
 #nullable enable
@@ -17,15 +14,15 @@ namespace Blueprint.SourceGenerator.CodeWriter
 
         void IBuilder.Write(in CodeWriter writer)
         {
-            var warnings = string.Join(", ", _pragmaWarnings.Distinct());
-            if(_pragmaWarnings.Any())
+            var warnings = string.Join(", ", this._pragmaWarnings.Distinct());
+            if (this._pragmaWarnings.Any())
             {
                 writer.AppendUnindentedLine($"#pragma warning disable {warnings}");
             }
 
-            Write(writer);
+            this.Write(writer);
 
-            if (_pragmaWarnings.Any())
+            if (this._pragmaWarnings.Any())
             {
                 writer.AppendUnindentedLine($"#pragma warning restore {warnings}");
             }

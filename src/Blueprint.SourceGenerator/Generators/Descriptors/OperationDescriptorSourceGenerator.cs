@@ -83,13 +83,10 @@ public sealed class OperationDescriptorSourceGenerator : IIncrementalGenerator, 
 
         var isPartial = classNode.Modifiers.Any(SyntaxKind.PartialKeyword);
 
-        if (!isPartial)
-        {
-            return Result<OperationClassToGenerate>.Failure(
-                new DiagnosticInfo(_missingPartialModifierRule, classNode.Identifier.GetLocation(), [model.Name]));
-        }
-
-        return Result.Success(
+        return !isPartial
+            ? Result<OperationClassToGenerate>.Failure(
+                new DiagnosticInfo(_missingPartialModifierRule, classNode.Identifier.GetLocation(), [model.Name]))
+            : Result.Success(
             new OperationClassToGenerate(
                 model.ToString(),
                 model.ContainingNamespace.ToDisplayString(),
@@ -117,12 +114,7 @@ public sealed class OperationDescriptorSourceGenerator : IIncrementalGenerator, 
 
         var failures = operationConfigurationModel.Diagnostics.ToArray();
 
-        if (failures.Length > 0)
-        {
-            return Result<OperationToRegisterModel>.Failure(failures);
-        }
-
-        return Result.Success(operationToRegisterModel);
+        return failures.Length > 0 ? Result<OperationToRegisterModel>.Failure(failures) : Result.Success(operationToRegisterModel);
     }
 
     private static string GenerateDescriptorClass(

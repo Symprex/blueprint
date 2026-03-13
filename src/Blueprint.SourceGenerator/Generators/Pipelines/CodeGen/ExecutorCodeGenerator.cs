@@ -1,5 +1,4 @@
 using Blueprint.SourceGenerator.CodeWriter;
-using Blueprint.SourceGenerator.Generators.Pipelines.Model;
 
 namespace Blueprint.SourceGenerator.Generators.Pipelines;
 

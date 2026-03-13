@@ -1,5 +1,3 @@
-using System;
-
 namespace Blueprint.SourceGenerator.CodeWriter
 {
     /// <summary>
@@ -12,8 +10,8 @@ namespace Blueprint.SourceGenerator.CodeWriter
 
         internal ExpressionBlockBuilder(ICodeWriter writer, string block)
         {
-            _writer = writer;
-            _blockCode = block;
+            this._writer = writer;
+            this._blockCode = block;
         }
 
         /// <summary>
@@ -23,12 +21,12 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The underlying writer so additional source can be emitted.</returns>
         public ICodeWriter WithBody(Action<ICodeWriter> innerWrite)
         {
-            using (_writer.Block(_blockCode))
+            using (this._writer.Block(this._blockCode))
             {
-                innerWrite?.Invoke(_writer);
+                innerWrite?.Invoke(this._writer);
             }
 
-            return _writer;
+            return this._writer;
         }
     }
 }

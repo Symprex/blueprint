@@ -1,4 +1,3 @@
-using System;
 using Microsoft.CodeAnalysis;
 
 #nullable enable
@@ -45,11 +44,8 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public T DisableWarning(string buildCode)
         {
-            _pragmaWarnings.Add(buildCode);
-            if (this is T thisAsT)
-                return thisAsT;
-
-            throw new InvalidOperationException($"The Builder must be of type {typeof(T).FullName}");
+            this._pragmaWarnings.Add(buildCode);
+            return this is T thisAsT ? thisAsT : throw new InvalidOperationException($"The Builder must be of type {typeof(T).FullName}");
         }
     }
 }

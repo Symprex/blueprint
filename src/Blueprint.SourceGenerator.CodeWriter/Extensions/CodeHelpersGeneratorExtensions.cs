@@ -1,4 +1,3 @@
-using System.Linq;
 using System.Text;
 using Blueprint.SourceGenerator.CodeWriter;
 using Microsoft.CodeAnalysis.CSharp;
@@ -19,9 +18,11 @@ public static class CodeHelpersGeneratorExtensions
     public static void AddSource(this GeneratorExecutionContext context, CodeBuilder builder)
     {
         if (string.IsNullOrEmpty(builder.Namespace) || builder.Namespace is null)
+        {
             return;
+        }
 
-        if(builder.Classes.Count == 1 && builder.Enums.Count == 0 && builder.Records.Count == 0)
+        if (builder.Classes.Count == 1 && builder.Enums.Count == 0 && builder.Records.Count == 0)
         {
             context.AddSource(builder.Classes.First());
             return;

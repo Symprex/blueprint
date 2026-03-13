@@ -15,8 +15,10 @@ namespace Blueprint.SourceGenerator.CodeWriter.Tests
         [Fact]
         public void GeneratesSingleGenericOutput()
         {
-            var collection = new GenericCollection();
-            collection.Add(new GenericBuilder("T"));
+            var collection = new GenericCollection
+            {
+                new GenericBuilder("T"),
+            };
 
             Assert.Equal("<T>", collection.ToString());
         }
@@ -24,9 +26,11 @@ namespace Blueprint.SourceGenerator.CodeWriter.Tests
         [Fact]
         public void GeneratesGenericListOutput()
         {
-            var collection = new GenericCollection();
-            collection.Add(new GenericBuilder("TKey"));
-            collection.Add(new GenericBuilder("TValue"));
+            var collection = new GenericCollection
+            {
+                new GenericBuilder("TKey"),
+                new GenericBuilder("TValue"),
+            };
 
             Assert.Equal("<TKey, TValue>", collection.ToString());
         }

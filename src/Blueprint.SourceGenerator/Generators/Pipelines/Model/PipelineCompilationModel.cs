@@ -1,6 +1,5 @@
 using Blueprint.SourceGenerator.Generators.Pipelines.Model;
 using Blueprint.SourceGenerator.Helpers;
-using Microsoft.CodeAnalysis;
 
 namespace Blueprint.SourceGenerator.Generators.Pipelines;
 
@@ -18,17 +17,11 @@ public sealed record PipelineCompilationModel(
     /// <inheritdoc />
     public bool Equals(PipelineCompilationModel? other)
     {
-        if (ReferenceEquals(null, other))
-        {
-            return false;
-        }
-
-        if (ReferenceEquals(this, other))
-        {
-            return true;
-        }
-
-        return this.AppTypeName == other.AppTypeName &&
+        return other is null
+            ? false
+            : ReferenceEquals(this, other)
+            ? true
+            : this.AppTypeName == other.AppTypeName &&
                this.AppNamespace == other.AppNamespace &&
                this.Handlers == other.Handlers;
     }
