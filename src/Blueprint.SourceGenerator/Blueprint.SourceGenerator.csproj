@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
     <IsRoslynComponent>true</IsRoslynComponent>
@@ -11,7 +11,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="AvantiPoint.CodeGenHelpers" Version="2.0.30-pre" PrivateAssets="all" GeneratePathProperty="true"/>
     <PackageReference Include="JetBrains.Annotations" Version="2024.3.0" PrivateAssets="all" />
     <PackageReference Include="Meziantou.Polyfill" Version="1.0.42">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -20,6 +19,10 @@
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.9.2" PrivateAssets="all" />
     <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="3.11.0" PrivateAssets="all" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Blueprint.SourceGenerator.CodeWriter\Blueprint.SourceGenerator.CodeWriter.csproj" />
   </ItemGroup>
 
   <!-- See https://github.com/dotnet/roslyn/discussions/47517#discussioncomment-3542590 for why the below is necessary -->
@@ -33,11 +36,10 @@
   <PropertyGroup>
     <GetTargetPathDependsOn>$(GetTargetPathDependsOn);GetDependencyTargetPaths</GetTargetPathDependsOn>
   </PropertyGroup>
-  
+
   <Target Name="GetDependencyTargetPaths">
     <ItemGroup>
-      <!-- AvantiPoint.CodeGenHelpers will generate a path property because we did the GeneratePathProperty="true"-->
-      <TargetPathWithTargetPlatformMoniker Include="$(PKGAvantiPoint_CodeGenHelpers)\lib\netstandard2.0\*.dll" IncludeRuntimeDependency="false" />
+      <TargetPathWithTargetPlatformMoniker Include="$(MSBuildThisFileDirectory)..\Blueprint.SourceGenerator.CodeWriter\bin\$(Configuration)\netstandard2.0\Blueprint.SourceGenerator.CodeWriter.dll" IncludeRuntimeDependency="false" />
     </ItemGroup>
   </Target>
 </Project>

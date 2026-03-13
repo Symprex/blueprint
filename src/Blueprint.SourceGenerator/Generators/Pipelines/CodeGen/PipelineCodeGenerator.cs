@@ -1,5 +1,7 @@
+using System.Collections.Generic;
+using System.Linq;
+using Blueprint.SourceGenerator.CodeWriter;
 using Blueprint.SourceGenerator.Generators.Pipelines.Model;
-using Blueprint.SourceGenerator.Helpers;
 
 namespace Blueprint.SourceGenerator.Generators.Pipelines;
 
@@ -13,112 +15,121 @@ internal static class PipelineCodeGenerator
     /// </summary>
     public static string GeneratePipeline(OperationHandlerModel handler)
     {
-        var writer = new SourceWriter();
+        var codeBuilder = CodeBuilder.Create("Blueprint.Generated");
 
-        // Namespace
-        writer.Block("namespace Blueprint.Generated");
+        var pipelineClass = codeBuilder.AddClass(handler.PipelineClassName)
+            .MakePublicClass()
+            .AddInterface("Blueprint.IOperationExecutorPipeline");
 
-        // Class declaration
-        writer.Block($"public class {handler.PipelineClassName} : Blueprint.IOperationExecutorPipeline");
+        AddLoggingFields(pipelineClass);
+        AddLoggerField(pipelineClass);
+        AddConstructor(pipelineClass, handler);
+        AddExecuteAsyncMethod(pipelineClass, handler);
 
-        // Add logging fields
-        AddLoggingFields(writer);
-        writer.BlankLine();
-
-        // Add logger instance field
-        writer.WriteLine("private readonly Microsoft.Extensions.Logging.ILogger _logger;");
-        writer.BlankLine();
-
-        // Add constructor
-        AddConstructor(writer, handler);
-        writer.BlankLine();
-
-        // Add ExecuteAsync method
-        AddExecuteAsyncMethod(writer, handler);
-
-        writer.FinishBlock(); // End class
-        writer.FinishBlock(); // End namespace
-
-        return writer.Code();
+        return codeBuilder.Build();
     }
 
-    private static void AddLoggingFields(SourceWriter writer)
+    private static void AddLoggingFields(ClassBuilder pipelineClass)
     {
-        // LoggerMessage.Define for structured logging - these are multi-line initializers
-        writer.Indent().Append("private static readonly System.Action<Microsoft.Extensions.Logging.ILogger, string, System.Exception> _ApiOperationExecuting =").Append(SourceWriter.NewLine);
-        writer.Indent().Indent().Append("Microsoft.Extensions.Logging.LoggerMessage.Define<System.String>(").Append(SourceWriter.NewLine);
-        writer.Indent().Indent().Indent().Append("Microsoft.Extensions.Logging.LogLevel.Debug,").Append(SourceWriter.NewLine);
-        writer.Indent().Indent().Indent().Append("new Microsoft.Extensions.Logging.EventId(1, \"ApiOperationExecuting\"),").Append(SourceWriter.NewLine);
-        writer.Indent().Indent().Indent().Append("\"Executing API operation {OperationType} with handler\");").Append(SourceWriter.NewLine);
-        writer.BlankLine();
-
-        writer.Indent().Append("private static readonly System.Action<Microsoft.Extensions.Logging.ILogger, string, System.Exception> _NonException =").Append(SourceWriter.NewLine);
-        writer.Indent().Indent().Append("Microsoft.Extensions.Logging.LoggerMessage.Define<System.String>(").Append(SourceWriter.NewLine);
-        writer.Indent().Indent().Indent().Append("Microsoft.Extensions.Logging.LogLevel.Information,").Append(SourceWriter.NewLine);
-        writer.Indent().Indent().Indent().Append("new Microsoft.Extensions.Logging.EventId(4, \"Non500Exception\"),").Append(SourceWriter.NewLine);
-        writer.Indent().Indent().Indent().Append("\"A non-5xx ApiException has occurred with message {ExceptionMessage}\");").Append(SourceWriter.NewLine);
-        writer.BlankLine();
-
-        writer.Indent().Append("private static readonly System.Action<Microsoft.Extensions.Logging.ILogger, string, System.Exception> _UnhandledException =").Append(SourceWriter.NewLine);
-        writer.Indent().Indent().Append("Microsoft.Extensions.Logging.LoggerMessage.Define<System.String>(").Append(SourceWriter.NewLine);
-        writer.Indent().Indent().Indent().Append("Microsoft.Extensions.Logging.LogLevel.Error,").Append(SourceWriter.NewLine);
-        writer.Indent().Indent().Indent().Append("new Microsoft.Extensions.Logging.EventId(5, \"UnhandledException\"),").Append(SourceWriter.NewLine);
-        writer.Indent().Indent().Indent().Append("\"An unhandled exception has occurred with message {ExceptionMessage}\");").Append(SourceWriter.NewLine);
+        AddLoggingField(
+            pipelineClass,
+            "_ApiOperationExecuting",
+            "Debug",
+            1,
+            "ApiOperationExecuting",
+            "Executing API operation {OperationType} with handler");
+        AddLoggingField(
+            pipelineClass,
+            "_NonException",
+            "Information",
+            4,
+            "Non500Exception",
+            "A non-5xx ApiException has occurred with message {ExceptionMessage}");
+        AddLoggingField(
+            pipelineClass,
+            "_UnhandledException",
+            "Error",
+            5,
+            "UnhandledException",
+            "An unhandled exception has occurred with message {ExceptionMessage}");
     }
 
-    private static void AddConstructor(SourceWriter writer, OperationHandlerModel handler)
+    private static void AddLoggingField(
+        ClassBuilder pipelineClass,
+        string fieldName,
+        string logLevel,
+        int eventId,
+        string eventName,
+        string message)
     {
-        writer.Block($"public {handler.PipelineClassName}(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory)");
-        writer.WriteLine($"_logger = loggerFactory.CreateLogger(\"{handler.PipelineClassName}\");");
-        writer.FinishBlock();
+        pipelineClass.AddProperty(fieldName)
+            .MakePrivateProperty()
+            .MakeStatic()
+            .SetType("System.Action<Microsoft.Extensions.Logging.ILogger, string, System.Exception>")
+            .WithReadonlyValue(
+                $"Microsoft.Extensions.Logging.LoggerMessage.Define<System.String>(Microsoft.Extensions.Logging.LogLevel.{logLevel}, new Microsoft.Extensions.Logging.EventId({eventId}, \"{eventName}\"), \"{message}\")");
     }
 
-    private static void AddExecuteAsyncMethod(SourceWriter writer, OperationHandlerModel handler)
+    private static void AddLoggerField(ClassBuilder pipelineClass)
     {
-        writer.Block("public async System.Threading.Tasks.Task<Blueprint.OperationResult> ExecuteAsync(Blueprint.Runtime.Exec.ApiOperationContext context)");
-
-        // Activity tracing
-        writer.WriteLine($"using var activity = Blueprint.Diagnostics.BlueprintActivitySource.ActivitySource.StartActivity(\"{handler.OperationTypeName}Pipeline\", System.Diagnostics.ActivityKind.Internal);");
-        writer.WriteLine($"var operation = ({handler.OperationTypeFullName})context.Operation;");
-        writer.BlankLine();
-
-        // Try-catch block
-        writer.Block("try");
-
-        // Log execution
-        writer.WriteLine($"_ApiOperationExecuting(_logger, \"{handler.OperationTypeName}\", null);");
-        writer.BlankLine();
-
-        // Generate handler invocation
-        GenerateHandlerInvocation(writer, handler);
-
-        writer.FinishBlock(); // End try
-
-        // Exception handling
-        AddExceptionHandling(writer);
-
-        writer.FinishBlock(); // End ExecuteAsync
+        pipelineClass.AddProperty("_logger")
+            .MakePrivateProperty()
+            .SetType("Microsoft.Extensions.Logging.ILogger")
+            .WithReadonlyValue();
     }
 
-    private static void GenerateHandlerInvocation(SourceWriter writer, OperationHandlerModel handler)
+    private static void AddConstructor(ClassBuilder pipelineClass, OperationHandlerModel handler)
     {
-        // Resolve all parameters first
+        pipelineClass.AddConstructor()
+            .AddParameter("Microsoft.Extensions.Logging.ILoggerFactory", "loggerFactory")
+            .WithBody(writer => writer.Assign("_logger", $"loggerFactory.CreateLogger(\"{handler.PipelineClassName}\")"));
+    }
+
+    private static void AddExecuteAsyncMethod(ClassBuilder pipelineClass, OperationHandlerModel handler)
+    {
+        pipelineClass.AddMethod("ExecuteAsync")
+            .MakePublicMethod()
+            .MakeAsync()
+            .WithReturnType("System.Threading.Tasks.Task<Blueprint.OperationResult>")
+            .AddParameter("Blueprint.Runtime.Exec.ApiOperationContext", "context")
+            .WithBody(
+                writer =>
+                {
+                    writer.AppendLine($"using var activity = Blueprint.Diagnostics.BlueprintActivitySource.ActivitySource.StartActivity(\"{handler.OperationTypeName}Pipeline\", System.Diagnostics.ActivityKind.Internal);");
+                    writer.DeclareVar("operation", $"({handler.OperationTypeFullName})context.Operation");
+                    writer.NewLine();
+
+                    writer.Try(
+                        tryWriter =>
+                        {
+                            tryWriter.AppendLine($"_ApiOperationExecuting(_logger, \"{handler.OperationTypeName}\", null);");
+                            tryWriter.NewLine();
+                            WriteHandlerInvocation(tryWriter, handler);
+                        });
+
+                    WriteExceptionHandling(writer);
+                });
+    }
+
+    private static void WriteHandlerInvocation(ICodeWriter writer, OperationHandlerModel handler)
+    {
         foreach (var param in handler.Parameters)
         {
             switch (param.Source)
             {
                 case ParameterSource.FromDependencyInjection:
-                    writer.WriteLine($"var {param.VariableName} = context.ServiceProvider.GetRequiredService<{param.ParameterTypeName}>();");
+                    writer.DeclareVar(
+                        param.VariableName,
+                        $"Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<{param.ParameterTypeName}>(context.ServiceProvider)");
                     break;
             }
         }
 
         if (handler.Parameters.Any(p => p.Source == ParameterSource.FromDependencyInjection))
         {
-            writer.BlankLine();
+            writer.NewLine();
         }
 
-        // Build parameter list
         var parameterList = new List<string>();
         foreach (var param in handler.Parameters)
         {
@@ -139,66 +150,86 @@ internal static class PipelineCodeGenerator
             }
         }
 
-        // Generate invocation based on handler type
         if (handler.IsInline)
         {
-            // Inline handler
             if (handler.IsHandlerStatic)
             {
-                writer.WriteLine($"var handlerResult = {(handler.IsHandlerAsync ? "await " : string.Empty)}{handler.OperationTypeFullName}.{handler.HandlerMethodName}({string.Join(", ", parameterList)});");
+                writer.DeclareVar("handlerResult", $"{(handler.IsHandlerAsync ? "await " : string.Empty)}{handler.OperationTypeFullName}.{handler.HandlerMethodName}({string.Join(", ", parameterList)})");
             }
             else
             {
-                writer.WriteLine($"var handlerResult = {(handler.IsHandlerAsync ? "await " : string.Empty)}operation.{handler.HandlerMethodName}({string.Join(", ", parameterList)});");
+                writer.DeclareVar("handlerResult", $"{(handler.IsHandlerAsync ? "await " : string.Empty)}operation.{handler.HandlerMethodName}({string.Join(", ", parameterList)})");
             }
         }
         else
         {
-            // External handler - need to instantiate or get from DI
             var handlerVarName = char.ToLowerInvariant(handler.HandlerClassName![0]) + handler.HandlerClassName.Substring(1);
 
-            writer.WriteLine($"var {handlerVarName} = context.ServiceProvider.GetService<{handler.HandlerClassFullName}>();");
-            writer.Block($"if ({handlerVarName} == null)");
-            writer.WriteLine($"{handlerVarName} = Microsoft.Extensions.DependencyInjection.ActivatorUtilities.CreateInstance<{handler.HandlerClassFullName}>(context.ServiceProvider);");
-            writer.FinishBlock();
-            writer.BlankLine();
+            writer.DeclareVar(
+                handlerVarName,
+                $"Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<{handler.HandlerClassFullName}>(context.ServiceProvider)");
+            writer.If(
+                $"{handlerVarName} == null",
+                ifWriter =>
+                {
+                    ifWriter.Assign(
+                        handlerVarName,
+                        $"Microsoft.Extensions.DependencyInjection.ActivatorUtilities.CreateInstance<{handler.HandlerClassFullName}>(context.ServiceProvider)");
+                });
 
-            // Add the operation as first parameter for external handlers
+            writer.NewLine();
+
             var allParams = new List<string> { "operation" };
             allParams.AddRange(parameterList);
 
-            writer.WriteLine($"var handlerResult = {(handler.IsHandlerAsync ? "await " : string.Empty)}{handlerVarName}.{handler.HandlerMethodName}({string.Join(", ", allParams)});");
+            writer.DeclareVar("handlerResult", $"{(handler.IsHandlerAsync ? "await " : string.Empty)}{handlerVarName}.{handler.HandlerMethodName}({string.Join(", ", allParams)})");
         }
 
-        writer.BlankLine();
-        writer.WriteLine("return new Blueprint.Runtime.Exec.OkResult(handlerResult);");
+        writer.NewLine();
+        writer.Return("new Blueprint.Runtime.Exec.OkResult(handlerResult)");
     }
 
-    private static void AddExceptionHandling(SourceWriter writer)
+    private static void WriteExceptionHandling(ICodeWriter writer)
     {
-        writer.Block("catch (Blueprint.Validation.ValidationException e)");
-        writer.WriteLine("context.Activity?.SetTag(\"otel.status_code\", \"OK\");");
-        writer.WriteLine("return new Blueprint.Middleware.ValidationFailedOperationResult(e.ValidationResults);");
-        writer.FinishBlock();
+        writer.Catch(
+            "Blueprint.Validation.ValidationException e",
+            catchWriter =>
+            {
+                catchWriter.AppendLine("context.Activity?.SetTag(\"otel.status_code\", \"OK\");");
+                catchWriter.Return("new Blueprint.Middleware.ValidationFailedOperationResult(e.ValidationResults)");
+            });
 
-        writer.Block("catch (System.ComponentModel.DataAnnotations.ValidationException e)");
-        writer.WriteLine("context.Activity?.SetTag(\"otel.status_code\", \"OK\");");
-        writer.WriteLine("return Blueprint.Middleware.ValidationMiddlewareBuilder.ToValidationFailedOperationResult(e);");
-        writer.FinishBlock();
+        writer.Catch(
+            "System.ComponentModel.DataAnnotations.ValidationException e",
+            catchWriter =>
+            {
+                catchWriter.AppendLine("context.Activity?.SetTag(\"otel.status_code\", \"OK\");");
+                catchWriter.Return("Blueprint.Middleware.ValidationMiddlewareBuilder.ToValidationFailedOperationResult(e)");
+            });
 
-        writer.Block("catch (System.Exception e)");
-        writer.Block("if (e is Blueprint.ApiException apiException && apiException.HttpStatus < 500)");
-        writer.WriteLine("_NonException(_logger, e.Message, e);");
-        writer.WriteLine("context.Activity?.SetTag(\"otel.status_code\", \"OK\");");
-        writer.FinishBlock();
-        writer.Block("else");
-        writer.WriteLine("Blueprint.Diagnostics.BlueprintActivitySource.RecordException(context.Activity, e, false);");
-        writer.WriteLine("_UnhandledException(_logger, e.Message, e);");
-        writer.WriteLine("context.Activity?.SetTag(\"otel.status_code\", \"ERROR\");");
-        writer.WriteLine("context.Activity?.SetTag(\"otel.status_description\", e.Message);");
-        writer.FinishBlock();
-        writer.BlankLine();
-        writer.WriteLine("return new Blueprint.UnhandledExceptionOperationResult(e);");
-        writer.FinishBlock();
+        writer.Catch(
+            "System.Exception e",
+            catchWriter =>
+            {
+                catchWriter.If(
+                    "e is Blueprint.ApiException apiException && apiException.HttpStatus < 500",
+                    ifWriter =>
+                    {
+                        ifWriter.AppendLine("_NonException(_logger, e.Message, e);");
+                        ifWriter.AppendLine("context.Activity?.SetTag(\"otel.status_code\", \"OK\");");
+                    });
+
+                catchWriter.Else(
+                    elseWriter =>
+                    {
+                        elseWriter.AppendLine("Blueprint.Diagnostics.BlueprintActivitySource.RecordException(context.Activity, e, false);");
+                        elseWriter.AppendLine("_UnhandledException(_logger, e.Message, e);");
+                        elseWriter.AppendLine("context.Activity?.SetTag(\"otel.status_code\", \"ERROR\");");
+                        elseWriter.AppendLine("context.Activity?.SetTag(\"otel.status_description\", e.Message);");
+                    });
+
+                catchWriter.NewLine();
+                catchWriter.Return("new Blueprint.UnhandledExceptionOperationResult(e)");
+            });
     }
 }

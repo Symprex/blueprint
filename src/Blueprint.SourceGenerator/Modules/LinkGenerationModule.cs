@@ -1,7 +1,7 @@
 using System.Text.RegularExpressions;
+using Blueprint.SourceGenerator.CodeWriter;
 using Blueprint.SourceGenerator.Generators.Descriptors;
 using Blueprint.SourceGenerator.Helpers;
-using CodeGenHelpers;
 using Microsoft.CodeAnalysis;
 
 namespace Blueprint.SourceGenerator.Modules;

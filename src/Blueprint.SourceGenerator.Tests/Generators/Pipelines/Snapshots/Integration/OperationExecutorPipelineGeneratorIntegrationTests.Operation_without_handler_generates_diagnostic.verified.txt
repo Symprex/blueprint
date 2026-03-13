@@ -1,1 +1,25 @@
-﻿
+﻿File: Input0.cs
+using Blueprint;
+using Blueprint.Model;
+
+namespace TestNamespace;
+
+[BlueprintAppScan]
+public partial class TestApp : BlueprintApp
+{
+    public TestApp()
+    {
+        this.Register(TestQuery.Configure());
+    }
+}
+
+public class TestQuery : IQuery<string>
+             ^^^^^^^^^ [Error:BP100] The operation 'TestQuery' does not have a handler method
+{
+    public static ApiOperationDescriptor Configure()
+    {
+        return new ApiOperationDescriptor(typeof(TestQuery), nameof(TestQuery), "Tests");
+    }
+
+    // No handler method
+}
