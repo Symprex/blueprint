@@ -7,6 +7,9 @@ using Microsoft.CodeAnalysis;
 #nullable enable
 namespace Blueprint.SourceGenerator.CodeWriter
 {
+    /// <summary>
+    /// Represents record property builder.
+    /// </summary>
     public class RecordPropertyBuilder
     {
         public string Type { get; }
@@ -16,6 +19,13 @@ namespace Blueprint.SourceGenerator.CodeWriter
         public object? DefaultValue { get; private set; }
         public Accessibility? AccessModifier { get; private set; }
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="RecordPropertyBuilder"/> class.
+        /// </summary>
+        /// <param name="type">The type value.</param>
+        /// <param name="name">The name value.</param>
+        /// <param name="accessModifier">The access modifier value.</param>
+        /// <param name="record">The record value.</param>
         public RecordPropertyBuilder(string type, string name, Accessibility accessModifier, RecordBuilder record)
         {
             Type = type;
@@ -24,6 +34,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
             Record = record;
         }
 
+        /// <summary>
+        /// Converts string.
+        /// </summary>
+        /// <returns>The generated result.</returns>
         public override string ToString()
         {
             var output = $"{Type} {Name}";
@@ -33,17 +47,30 @@ namespace Blueprint.SourceGenerator.CodeWriter
             return output;
         }
 
+        /// <summary>
+        /// Converts positional property.
+        /// </summary>
+        /// <returns>The generated result.</returns>
         public string ToPositionalProperty()
         {
             return ToString();
         }
 
+        /// <summary>
+        /// Converts init property.
+        /// </summary>
+        /// <returns>The generated result.</returns>
         public string ToInitProperty()
         {
             string defaultValue = HasDefaultValue ? $" = {DefaultValue};" : string.Empty;
             return $"{AccessModifier.Code()} {Type} {Name} {{ get; init; }}{defaultValue}";
         }
 
+        /// <summary>
+        /// Configures default value.
+        /// </summary>
+        /// <param name="defaultValue">The default value value.</param>
+        /// <returns>The generated result.</returns>
         public RecordPropertyBuilder WithDefaultValue(string defaultValue)
         {
             DefaultValue = defaultValue;
@@ -51,6 +78,11 @@ namespace Blueprint.SourceGenerator.CodeWriter
             return this;
         }
 
+        /// <summary>
+        /// Configures default value.
+        /// </summary>
+        /// <param name="value">The value value.</param>
+        /// <returns>The generated result.</returns>
         public RecordPropertyBuilder WithDefaultValue(object value) =>
             WithDefaultValue($"{value}");
     }

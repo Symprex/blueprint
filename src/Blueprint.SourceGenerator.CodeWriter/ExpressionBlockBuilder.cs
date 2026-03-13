@@ -2,6 +2,9 @@ using System;
 
 namespace Blueprint.SourceGenerator.CodeWriter
 {
+    /// <summary>
+    /// Represents expression block builder.
+    /// </summary>
     public sealed class ExpressionBlockBuilder
     {
         private ICodeWriter _writer { get; }
@@ -13,6 +16,11 @@ namespace Blueprint.SourceGenerator.CodeWriter
             _blockCode = block;
         }
 
+        /// <summary>
+        /// Configures body.
+        /// </summary>
+        /// <param name="innerWrite">The inner write value.</param>
+        /// <returns>The generated result.</returns>
         public ICodeWriter WithBody(Action<ICodeWriter> innerWrite)
         {
             using (_writer.Block(_blockCode))

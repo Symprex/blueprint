@@ -29,6 +29,11 @@ namespace Blueprint.SourceGenerator.CodeWriter.Internals
             { "String", "string" }
         };
 
+        /// <summary>
+        /// Gets type name.
+        /// </summary>
+        /// <param name="symbol">The symbol value.</param>
+        /// <returns>The generated result.</returns>
         public static string GetTypeName(this ITypeSymbol symbol)
         {
             if (symbol.ContainingNamespace.Name == "System" && _mappings.ContainsKey(symbol.Name))
@@ -37,6 +42,11 @@ namespace Blueprint.SourceGenerator.CodeWriter.Internals
             return symbol.GetFullMetadataName();
         }
 
+        /// <summary>
+        /// Gets type name.
+        /// </summary>
+        /// <param name="type">The type value.</param>
+        /// <returns>The generated result.</returns>
         public static string GetTypeName(this Type type)
         {
             if (type.Namespace == "System" && _mappings.ContainsKey(type.Name))

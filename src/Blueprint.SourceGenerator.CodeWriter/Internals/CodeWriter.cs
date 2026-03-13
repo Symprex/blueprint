@@ -19,6 +19,11 @@ namespace Blueprint.SourceGenerator.CodeWriter
         private int _extraIndent = 0;
         private readonly List<(StringBuilder? StringBuilder, CodeWriter? Writer)> _blocks = new();
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="CodeWriter"/> class.
+        /// </summary>
+        /// <param name="indentStyle">The indent style value.</param>
+        /// <param name="startingLevel">The starting level value.</param>
         public CodeWriter(IndentStyle indentStyle, int startingLevel = 0)
         {
             _indentStyle = indentStyle;
@@ -29,10 +34,22 @@ namespace Blueprint.SourceGenerator.CodeWriter
             };
         }
 
+        /// <summary>
+        /// Performs the increase indent operation.
+        /// </summary>
         public void IncreaseIndent() => _extraIndent++;
 
+        /// <summary>
+        /// Performs the decrease indent operation.
+        /// </summary>
         public void DecreaseIndent() => _extraIndent--;
 
+        /// <summary>
+        /// Performs the block operation.
+        /// </summary>
+        /// <param name="value">The value value.</param>
+        /// <param name="constraints">The constraints value.</param>
+        /// <returns>The generated result.</returns>
         public IDisposable Block(string value, params string[] constraints)
         {
             AppendLine(value.TrimEnd());
@@ -51,6 +68,11 @@ namespace Blueprint.SourceGenerator.CodeWriter
             return this;
         }
 
+        /// <summary>
+        /// Performs the block writer operation.
+        /// </summary>
+        /// <param name="originalLine">The original line value.</param>
+        /// <returns>The generated result.</returns>
         public ICodeWriter BlockWriter(string? originalLine)
         {
             var writer = new CodeWriter(_indentStyle, _indentLevel);
@@ -75,26 +97,45 @@ namespace Blueprint.SourceGenerator.CodeWriter
             return sb;
         }
 
+        /// <summary>
+        /// Appends append.
+        /// </summary>
+        /// <param name="value">The value value.</param>
         public void Append(string value)
         {
             EnsureStringBuilder().Append(GetIndentedValue(value.TrimEnd()));
         }
 
+        /// <summary>
+        /// Appends unindented.
+        /// </summary>
+        /// <param name="value">The value value.</param>
         public void AppendUnindented(string value)
         {
             EnsureStringBuilder().Append(value.TrimEnd());
         }
 
+        /// <summary>
+        /// Performs the new line operation.
+        /// </summary>
         public void NewLine()
         {
             EnsureStringBuilder().AppendLine();
         }
 
+        /// <summary>
+        /// Appends line.
+        /// </summary>
+        /// <param name="value">The value value.</param>
         public void AppendLine(string value)
         {
             EnsureStringBuilder().AppendLine(GetIndentedValue(value.TrimEnd()));
         }
 
+        /// <summary>
+        /// Appends unindented line.
+        /// </summary>
+        /// <param name="value">The value value.</param>
         public void AppendUnindentedLine(string value)
         {
             EnsureStringBuilder().AppendLine(value.TrimEnd());
@@ -109,6 +150,9 @@ namespace Blueprint.SourceGenerator.CodeWriter
             return indent + value;
         }
 
+        /// <summary>
+        /// Performs the dispose operation.
+        /// </summary>
         public void Dispose()
         {
             if (_indentLevel > 0)
@@ -118,6 +162,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
             }
         }
 
+        /// <summary>
+        /// Renders render.
+        /// </summary>
+        /// <returns>The generated result.</returns>
         public string Render()
         {
             var result = new StringBuilder();

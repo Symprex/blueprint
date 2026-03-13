@@ -9,14 +9,29 @@ using Microsoft.CodeAnalysis;
 #nullable enable
 namespace Blueprint.SourceGenerator.CodeWriter
 {
+    /// <summary>
+    /// Represents parameterized extensions.
+    /// </summary>
     public static class ParameterizedExtensions
     {
+        /// <summary>
+        /// Adds parameter.
+        /// </summary>
+        /// <param name="parameterized">The parameterized value.</param>
+        /// <param name="typeName">The type name value.</param>
+        /// <returns>The generated result.</returns>
         public static T AddParameter<T>(this IParameterized<T> parameterized, string typeName)
             where T : BuilderBase<T>, IParameterized<T>
         {
             return parameterized.AddParameterInternal(GetParameter(parameterized.Parent, typeName, null), -1);
         }
 
+        /// <summary>
+        /// Adds parameter.
+        /// </summary>
+        /// <param name="parameterized">The parameterized value.</param>
+        /// <param name="typeSymbol">The type symbol value.</param>
+        /// <returns>The generated result.</returns>
         public static T AddParameter<T>(this IParameterized<T> parameterized, ITypeSymbol typeSymbol)
             where T : BuilderBase<T>, IParameterized<T>
         {
@@ -24,12 +39,26 @@ namespace Blueprint.SourceGenerator.CodeWriter
             return parameterized.AddParameter(typeSymbol.Name);
         }
 
+        /// <summary>
+        /// Adds parameter.
+        /// </summary>
+        /// <param name="parameterized">The parameterized value.</param>
+        /// <param name="typeName">The type name value.</param>
+        /// <param name="parameterName">The parameter name value.</param>
+        /// <returns>The generated result.</returns>
         public static T AddParameter<T>(this IParameterized<T> parameterized, string typeName, string parameterName)
             where T : BuilderBase<T>, IParameterized<T>
         {
             return parameterized.AddParameterInternal(GetParameter(parameterized.Parent, typeName, parameterName), -1);
         }
 
+        /// <summary>
+        /// Adds parameter.
+        /// </summary>
+        /// <param name="parameterized">The parameterized value.</param>
+        /// <param name="typeSymbol">The type symbol value.</param>
+        /// <param name="parameterName">The parameter name value.</param>
+        /// <returns>The generated result.</returns>
         public static T AddParameter<T>(this IParameterized<T> parameterized, ITypeSymbol typeSymbol, string parameterName)
             where T : BuilderBase<T>, IParameterized<T>
         {
@@ -37,12 +66,28 @@ namespace Blueprint.SourceGenerator.CodeWriter
             return parameterized.AddParameter(typeSymbol.GetGloballyQualifiedTypeName(), parameterName);
         }
 
+        /// <summary>
+        /// Adds parameter.
+        /// </summary>
+        /// <param name="parameterized">The parameterized value.</param>
+        /// <param name="typeName">The type name value.</param>
+        /// <param name="parameterName">The parameter name value.</param>
+        /// <param name="index">The index value.</param>
+        /// <returns>The generated result.</returns>
         public static T AddParameter<T>(this IParameterized<T> parameterized, string typeName, string parameterName, int index)
             where T : BuilderBase<T>, IParameterized<T>
         {
             return parameterized.AddParameterInternal(GetParameter(parameterized.Parent, typeName, parameterName), index);
         }
 
+        /// <summary>
+        /// Adds parameter.
+        /// </summary>
+        /// <param name="parameterized">The parameterized value.</param>
+        /// <param name="typeSymbol">The type symbol value.</param>
+        /// <param name="parameterName">The parameter name value.</param>
+        /// <param name="index">The index value.</param>
+        /// <returns>The generated result.</returns>
         public static T AddParameter<T>(this IParameterized<T> parameterized, ITypeSymbol typeSymbol, string parameterName, int index)
             where T : BuilderBase<T>, IParameterized<T>
         {
@@ -50,6 +95,15 @@ namespace Blueprint.SourceGenerator.CodeWriter
             return parameterized.AddParameter(typeSymbol.Name, parameterName, index);
         }
 
+        /// <summary>
+        /// Adds parameter with default value.
+        /// </summary>
+        /// <param name="parameterized">The parameterized value.</param>
+        /// <param name="typeName">The type name value.</param>
+        /// <param name="parameterName">The parameter name value.</param>
+        /// <param name="defaultValue">The default value value.</param>
+        /// <param name="index">The index value.</param>
+        /// <returns>The generated result.</returns>
         public static T AddParameterWithDefaultValue<T>(this IParameterized<T> parameterized, string typeName, string? parameterName = null, object? defaultValue = null, int index = -1)
             where T : BuilderBase<T>, IParameterized<T>
         {
@@ -58,6 +112,15 @@ namespace Blueprint.SourceGenerator.CodeWriter
             return parameterized.AddParameterInternal(parameter, index);
         }
 
+        /// <summary>
+        /// Adds parameter with default value.
+        /// </summary>
+        /// <param name="parameterized">The parameterized value.</param>
+        /// <param name="typeSymbol">The type symbol value.</param>
+        /// <param name="parameterName">The parameter name value.</param>
+        /// <param name="defaultValue">The default value value.</param>
+        /// <param name="index">The index value.</param>
+        /// <returns>The generated result.</returns>
         public static T AddParameterWithDefaultValue<T>(this IParameterized<T> parameterized, ITypeSymbol typeSymbol, string? parameterName = null, object? defaultValue = null, int index = -1)
             where T : BuilderBase<T>, IParameterized<T>
         {
@@ -65,6 +128,14 @@ namespace Blueprint.SourceGenerator.CodeWriter
             return parameterized.AddParameterWithDefaultValue(typeSymbol.Name, parameterName, defaultValue, index);
         }
 
+        /// <summary>
+        /// Adds parameter with default value.
+        /// </summary>
+        /// <param name="parameterized">The parameterized value.</param>
+        /// <param name="typeName">The type name value.</param>
+        /// <param name="parameterName">The parameter name value.</param>
+        /// <param name="index">The index value.</param>
+        /// <returns>The generated result.</returns>
         public static T AddParameterWithDefaultValue<T>(this IParameterized<T> parameterized, string typeName, string? parameterName = null, int index = -1)
             where T : BuilderBase<T>, IParameterized<T>
         {
@@ -73,6 +144,14 @@ namespace Blueprint.SourceGenerator.CodeWriter
             return parameterized.AddParameterInternal(parameter, index);
         }
 
+        /// <summary>
+        /// Adds parameter with default value.
+        /// </summary>
+        /// <param name="parameterized">The parameterized value.</param>
+        /// <param name="typeSymbol">The type symbol value.</param>
+        /// <param name="parameterName">The parameter name value.</param>
+        /// <param name="index">The index value.</param>
+        /// <returns>The generated result.</returns>
         public static T AddParameterWithDefaultValue<T>(this IParameterized<T> parameterized, ITypeSymbol typeSymbol, string? parameterName = null, int index = -1)
             where T : BuilderBase<T>, IParameterized<T>
         {
@@ -80,6 +159,14 @@ namespace Blueprint.SourceGenerator.CodeWriter
             return parameterized.AddParameterWithDefaultValue(typeSymbol, parameterName, index);
         }
 
+        /// <summary>
+        /// Adds parameter with null value.
+        /// </summary>
+        /// <param name="parameterized">The parameterized value.</param>
+        /// <param name="typeName">The type name value.</param>
+        /// <param name="parameterName">The parameter name value.</param>
+        /// <param name="index">The index value.</param>
+        /// <returns>The generated result.</returns>
         public static T AddParameterWithNullValue<T>(this IParameterized<T> parameterized, string typeName, string? parameterName = null, int index = -1)
             where T : BuilderBase<T>, IParameterized<T>
         {
@@ -88,6 +175,14 @@ namespace Blueprint.SourceGenerator.CodeWriter
             return parameterized.AddParameterInternal(parameter, index);
         }
 
+        /// <summary>
+        /// Adds parameter with null value.
+        /// </summary>
+        /// <param name="parameterized">The parameterized value.</param>
+        /// <param name="typeSymbol">The type symbol value.</param>
+        /// <param name="parameterName">The parameter name value.</param>
+        /// <param name="index">The index value.</param>
+        /// <returns>The generated result.</returns>
         public static T AddParameterWithNullValue<T>(this IParameterized<T> parameterized, ITypeSymbol typeSymbol, string? parameterName = null, int index = -1)
             where T : BuilderBase<T>, IParameterized<T>
         {
@@ -95,6 +190,12 @@ namespace Blueprint.SourceGenerator.CodeWriter
             return parameterized.AddParameterWithNullValue(typeSymbol.Name, parameterName, index);
         }
 
+        /// <summary>
+        /// Adds parameter.
+        /// </summary>
+        /// <param name="parameterized">The parameterized value.</param>
+        /// <param name="parameter">The parameter value.</param>
+        /// <returns>The generated result.</returns>
         public static T AddParameter<T>(this IParameterized<T> parameterized, IParameterSymbol parameter)
             where T : BuilderBase<T>, IParameterized<T>
         {
@@ -104,6 +205,12 @@ namespace Blueprint.SourceGenerator.CodeWriter
             return parameterized.AddParameter(parameter.Type, parameter.Name);
         }
 
+        /// <summary>
+        /// Adds parameters.
+        /// </summary>
+        /// <param name="parameterized">The parameterized value.</param>
+        /// <param name="parameters">The parameters value.</param>
+        /// <returns>The generated result.</returns>
         public static T AddParameters<T>(this IParameterized<T> parameterized, IEnumerable<IParameterSymbol> parameters)
             where T : BuilderBase<T>, IParameterized<T>
         {

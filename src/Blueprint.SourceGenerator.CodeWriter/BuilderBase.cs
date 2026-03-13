@@ -6,6 +6,9 @@ using System.Linq;
 #nullable enable
 namespace Blueprint.SourceGenerator.CodeWriter
 {
+    /// <summary>
+    /// Represents builder base.
+    /// </summary>
     public abstract class BuilderBase : IBuilder
     {
         protected readonly List<string> _pragmaWarnings = new List<string>();

@@ -5,8 +5,16 @@ using Microsoft.CodeAnalysis;
 
 namespace Blueprint.SourceGenerator.CodeWriter.Extensions;
 
+/// <summary>
+/// Represents symbol extensions.
+/// </summary>
 public static class SymbolExtensions
 {
+    /// <summary>
+    /// Gets qualified type name.
+    /// </summary>
+    /// <param name="typeSymbol">The type symbol value.</param>
+    /// <returns>The generated result.</returns>
     public static string GetQualifiedTypeName(this ITypeSymbol typeSymbol)
     {
         var type = typeSymbol.GetTypeName();
@@ -47,6 +55,11 @@ public static class SymbolExtensions
         return fullyQualifiedName;
     }
 
+    /// <summary>
+    /// Performs the is nullable operation.
+    /// </summary>
+    /// <param name="type">The type value.</param>
+    /// <returns>The generated result.</returns>
     public static bool IsNullable(this ITypeSymbol type)
     {
         if (type.NullableAnnotation == NullableAnnotation.Annotated)
@@ -56,6 +69,12 @@ public static class SymbolExtensions
             && type.OriginalDefinition.ToDisplayString().Equals("System.Nullable<T>", StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// Performs the is nullable operation.
+    /// </summary>
+    /// <param name="type">The type value.</param>
+    /// <param name="nullableType">The nullable type value.</param>
+    /// <returns>The generated result.</returns>
     public static bool IsNullable(this ITypeSymbol type, out ITypeSymbol? nullableType)
     {
         if (type.IsNullable())

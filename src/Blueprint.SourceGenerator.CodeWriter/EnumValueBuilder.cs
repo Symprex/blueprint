@@ -7,6 +7,9 @@ using System.Linq;
 #nullable enable
 namespace Blueprint.SourceGenerator.CodeWriter
 {
+    /// <summary>
+    /// Represents enum value builder.
+    /// </summary>
     public class EnumValueBuilder : IBuilder
     {
         private readonly List<string> _attributes = new List<string>();
@@ -25,29 +28,55 @@ namespace Blueprint.SourceGenerator.CodeWriter
 
         public EnumBuilder Enum { get; }
 
+        /// <summary>
+        /// Configures summary.
+        /// </summary>
+        /// <param name="summary">The summary value.</param>
+        /// <returns>The generated result.</returns>
         public EnumValueBuilder WithSummary(string summary)
         {
             _xmlDoc = new SummaryDocumentationComment { Summary = summary };
             return this;
         }
 
+        /// <summary>
+        /// Configures inherit doc.
+        /// </summary>
+        /// <param name="inherit">The inherit value.</param>
+        /// <returns>The generated result.</returns>
         public EnumValueBuilder WithInheritDoc(bool inherit = true)
         {
             _xmlDoc = new InheritDocumentationComment();
             return this;
         }
 
+        /// <summary>
+        /// Configures inherit doc.
+        /// </summary>
+        /// <param name="from">The from value.</param>
+        /// <returns>The generated result.</returns>
         public EnumValueBuilder WithInheritDoc(string from)
         {
             _xmlDoc = new InheritDocumentationComment { InheritFrom = from };
             return this;
         }
 
+        /// <summary>
+        /// Adds value.
+        /// </summary>
+        /// <param name="value">The value value.</param>
+        /// <param name="numericValue">The numeric value value.</param>
+        /// <returns>The generated result.</returns>
         public EnumValueBuilder AddValue(string value, int? numericValue = null)
         {
             return Enum.AddValue(value, numericValue);
         }
 
+        /// <summary>
+        /// Adds attribute.
+        /// </summary>
+        /// <param name="attribute">The attribute value.</param>
+        /// <returns>The generated result.</returns>
         public EnumValueBuilder AddAttribute(string attribute)
         {
             var sanitized = attribute.Replace("[", string.Empty).Replace("]", string.Empty);

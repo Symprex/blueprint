@@ -10,6 +10,9 @@ using Microsoft.CodeAnalysis;
 #nullable enable
 namespace Blueprint.SourceGenerator.CodeWriter
 {
+    /// <summary>
+    /// Builds method signatures, metadata, and emitted method bodies.
+    /// </summary>
     public class MethodBuilder : BuilderBase<MethodBuilder>, IBuilder, IParameterized<MethodBuilder>
     {
         private readonly List<string> _attributes = new List<string>();
@@ -60,6 +63,11 @@ namespace Blueprint.SourceGenerator.CodeWriter
 
         public bool IsStatic { get; private set; }
 
+        /// <summary>
+        /// Configures summary.
+        /// </summary>
+        /// <param name="summary">The summary value.</param>
+        /// <returns>The generated result.</returns>
         public MethodBuilder WithSummary(string summary)
         {
             if (_xmlDoc is null || _xmlDoc is not SummaryDocumentationComment summaryDoc)
@@ -70,18 +78,34 @@ namespace Blueprint.SourceGenerator.CodeWriter
             return this;
         }
 
+        /// <summary>
+        /// Configures inherit doc.
+        /// </summary>
+        /// <param name="inherit">The inherit value.</param>
+        /// <returns>The generated result.</returns>
         public MethodBuilder WithInheritDoc(bool inherit = true)
         {
             _xmlDoc = new InheritDocumentationComment();
             return this;
         }
 
+        /// <summary>
+        /// Configures inherit doc.
+        /// </summary>
+        /// <param name="from">The from value.</param>
+        /// <returns>The generated result.</returns>
         public MethodBuilder WithInheritDoc(string from)
         {
             _xmlDoc = new InheritDocumentationComment { InheritFrom = from };
             return this;
         }
 
+        /// <summary>
+        /// Configures parameter doc.
+        /// </summary>
+        /// <param name="paramName">The param name value.</param>
+        /// <param name="documentation">The documentation value.</param>
+        /// <returns>The generated result.</returns>
         public MethodBuilder WithParameterDoc(string paramName, string documentation)
         {
             if (_xmlDoc is null)
@@ -95,9 +119,20 @@ namespace Blueprint.SourceGenerator.CodeWriter
             return this;
         }
 
+        /// <summary>
+        /// Adds generic.
+        /// </summary>
+        /// <param name="name">The name value.</param>
+        /// <returns>The generated result.</returns>
         public MethodBuilder AddGeneric(string name) =>
             AddGeneric(name, _ => { });
 
+        /// <summary>
+        /// Adds generic.
+        /// </summary>
+        /// <param name="name">The name value.</param>
+        /// <param name="configureBuilder">The configure builder value.</param>
+        /// <returns>The generated result.</returns>
         public MethodBuilder AddGeneric(string name, Action<GenericBuilder> configureBuilder)
         {
             if (configureBuilder is null)
@@ -113,77 +148,151 @@ namespace Blueprint.SourceGenerator.CodeWriter
             return this;
         }
 
+        /// <summary>
+        /// Adds namespace import.
+        /// </summary>
+        /// <param name="importedNamespace">The imported namespace value.</param>
+        /// <returns>The generated result.</returns>
         public override MethodBuilder AddNamespaceImport(string importedNamespace)
         {
             Class.AddNamespaceImport(importedNamespace);
             return this;
         }
 
+        /// <summary>
+        /// Adds namespace import.
+        /// </summary>
+        /// <param name="symbol">The symbol value.</param>
+        /// <returns>The generated result.</returns>
         public override MethodBuilder AddNamespaceImport(ISymbol symbol)
         {
             return AddNamespaceImport(symbol.ContainingNamespace);
         }
 
+        /// <summary>
+        /// Adds namespace import.
+        /// </summary>
+        /// <param name="symbol">The symbol value.</param>
+        /// <returns>The generated result.</returns>
         public override MethodBuilder AddNamespaceImport(INamespaceSymbol symbol)
         {
             return AddNamespaceImport(symbol.ToString());
         }
 
+        /// <summary>
+        /// Adds assembly attribute.
+        /// </summary>
+        /// <param name="attribute">The attribute value.</param>
+        /// <returns>The generated result.</returns>
         public override MethodBuilder AddAssemblyAttribute(string attribute)
         {
             Class.AddAssemblyAttribute(attribute);
             return this;
         }
 
+        /// <summary>
+        /// Adds property.
+        /// </summary>
+        /// <param name="name">The name value.</param>
+        /// <param name="accessModifier">The access modifier value.</param>
+        /// <returns>The generated result.</returns>
         public PropertyBuilder AddProperty(string name, Accessibility? accessModifier = null)
         {
             return Class.AddProperty(name, accessModifier);
         }
 
+        /// <summary>
+        /// Marks async.
+        /// </summary>
+        /// <returns>The generated result.</returns>
         public MethodBuilder MakeAsync()
         {
             IsAsync = true;
             return this;
         }
 
+        /// <summary>
+        /// Sets whether the generated method is abstract.
+        /// </summary>
+        /// <param name="isAbstract">The is abstract value.</param>
+        /// <returns>The generated result.</returns>
         public MethodBuilder Abstract(bool isAbstract = true)
         {
             IsAbstract = isAbstract;
             return this;
         }
 
+        /// <summary>
+        /// Marks public method.
+        /// </summary>
+        /// <returns>The generated result.</returns>
         public MethodBuilder MakePublicMethod() => WithAccessModifier(Accessibility.Public);
 
+        /// <summary>
+        /// Marks private method.
+        /// </summary>
+        /// <returns>The generated result.</returns>
         public MethodBuilder MakePrivateMethod() => WithAccessModifier(Accessibility.Private);
 
+        /// <summary>
+        /// Marks protected method.
+        /// </summary>
+        /// <returns>The generated result.</returns>
         public MethodBuilder MakeProtectedMethod() => WithAccessModifier(Accessibility.Protected);
 
+        /// <summary>
+        /// Marks internal method.
+        /// </summary>
+        /// <returns>The generated result.</returns>
         public MethodBuilder MakeInternalMethod() => WithAccessModifier(Accessibility.Internal);
 
+        /// <summary>
+        /// Configures access modifier.
+        /// </summary>
+        /// <param name="accessModifier">The access modifier value.</param>
+        /// <returns>The generated result.</returns>
         public MethodBuilder WithAccessModifier(Accessibility accessModifier)
         {
             AccessModifier = accessModifier;
             return this;
         }
 
+        /// <summary>
+        /// Sets whether the generated method is emitted with the override modifier.
+        /// </summary>
+        /// <param name="override">The override value.</param>
+        /// <returns>The generated result.</returns>
         public MethodBuilder Override(bool @override = true)
         {
             _override = @override;
             return this;
         }
 
+        /// <summary>
+        /// Marks static method.
+        /// </summary>
+        /// <returns>The generated result.</returns>
         public MethodBuilder MakeStaticMethod()
         {
             IsStatic = true;
             return this;
         }
 
+        /// <summary>
+        /// Marks virtual method.
+        /// </summary>
+        /// <returns>The generated result.</returns>
         public MethodBuilder MakeVirtualMethod()
         {
             _virtual = true;
             return this;
         }
 
+        /// <summary>
+        /// Adds attribute.
+        /// </summary>
+        /// <param name="attribute">The attribute value.</param>
+        /// <returns>The generated result.</returns>
         public MethodBuilder AddAttribute(string attribute)
         {
             var sanitized = attribute.Replace("[", string.Empty).Replace("]", string.Empty);
@@ -193,12 +302,22 @@ namespace Blueprint.SourceGenerator.CodeWriter
             return this;
         }
 
+        /// <summary>
+        /// Configures body.
+        /// </summary>
+        /// <param name="writerDelegate">The writer delegate value.</param>
+        /// <returns>The generated result.</returns>
         public MethodBuilder WithBody(Action<ICodeWriter> writerDelegate)
         {
             _methodBodyWriter = writerDelegate;
             return this;
         }
 
+        /// <summary>
+        /// Configures return type.
+        /// </summary>
+        /// <param name="returnType">The return type value.</param>
+        /// <returns>The generated result.</returns>
         public MethodBuilder WithReturnType(string returnType)
         {
             ReturnType = returnType;

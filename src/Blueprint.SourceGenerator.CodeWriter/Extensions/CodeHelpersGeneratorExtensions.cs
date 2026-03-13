@@ -6,6 +6,9 @@ using Microsoft.CodeAnalysis.Text;
 
 namespace Microsoft.CodeAnalysis;
 
+/// <summary>
+/// Represents code helpers generator extensions.
+/// </summary>
 public static class CodeHelpersGeneratorExtensions
 {
     /// <summary>
@@ -94,39 +97,78 @@ public static class CodeHelpersGeneratorExtensions
         context.AddSource($"{builder.FullyQualifiedName}.g.cs", source);
     }
 
+    /// <summary>
+    /// Adds source.
+    /// </summary>
+    /// <param name="context">The context value.</param>
+    /// <param name="builder">The builder value.</param>
     public static void AddSource(this SourceProductionContext context, ClassBuilder builder)
     {
         var source = SourceText(builder.Builder, null);
         context.AddSource($"{builder.FullyQualifiedName}.g.cs", source);
     }
 
+    /// <summary>
+    /// Adds source.
+    /// </summary>
+    /// <param name="context">The context value.</param>
+    /// <param name="builder">The builder value.</param>
     public static void AddSource(this SourceProductionContext context, EnumBuilder builder)
     {
         var source = SourceText(builder.Builder, null);
         context.AddSource($"{builder.FullyQualifiedName}.g.cs", source);
     }
 
+    /// <summary>
+    /// Adds source.
+    /// </summary>
+    /// <param name="context">The context value.</param>
+    /// <param name="builder">The builder value.</param>
     public static void AddSource(this SourceProductionContext context, RecordBuilder builder)
     {
         var source = SourceText(builder.Builder, null);
         context.AddSource($"{builder.FullyQualifiedName}.g.cs", source);
     }
 
+    /// <summary>
+    /// Builds build.
+    /// </summary>
+    /// <param name="builder">The builder value.</param>
+    /// <param name="options">The options value.</param>
+    /// <returns>The generated result.</returns>
     public static SourceText Build(this CodeBuilder builder, ParseOptions options)
     {
         return SourceText(builder, options);
     }
 
+    /// <summary>
+    /// Builds build.
+    /// </summary>
+    /// <param name="builder">The builder value.</param>
+    /// <param name="options">The options value.</param>
+    /// <returns>The generated result.</returns>
     public static SourceText Build(this ClassBuilder builder, ParseOptions options)
     {
         return SourceText(builder.Builder, options);
     }
 
+    /// <summary>
+    /// Builds build.
+    /// </summary>
+    /// <param name="builder">The builder value.</param>
+    /// <param name="options">The options value.</param>
+    /// <returns>The generated result.</returns>
     public static SourceText Build(this EnumBuilder builder, ParseOptions options)
     {
         return SourceText(builder.Builder, options);
     }
 
+    /// <summary>
+    /// Builds build.
+    /// </summary>
+    /// <param name="builder">The builder value.</param>
+    /// <param name="options">The options value.</param>
+    /// <returns>The generated result.</returns>
     public static SourceText Build(this RecordBuilder builder, ParseOptions options)
     {
         return SourceText(builder.Builder, options);

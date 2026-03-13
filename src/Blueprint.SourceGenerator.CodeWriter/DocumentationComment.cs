@@ -10,6 +10,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
 {
     internal abstract class DocumentationComment
     {
+        /// <summary>
+        /// Writes write.
+        /// </summary>
+        /// <param name="writer">The writer value.</param>
         public abstract void Write(in CodeWriter writer);
     }
 
@@ -17,6 +21,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
     {
         internal string? InheritFrom { get; set; }
 
+        /// <summary>
+        /// Writes write.
+        /// </summary>
+        /// <param name="writer">The writer value.</param>
         public override void Write(in CodeWriter writer)
         {
             writer.AppendLine($"/// <inheritdoc {(InheritFrom is null ? string.Empty : $"cref=\"{InheritFrom}\"")}/>");
@@ -27,6 +35,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
     {
         internal string? Summary { get; set; }
 
+        /// <summary>
+        /// Writes write.
+        /// </summary>
+        /// <param name="writer">The writer value.</param>
         public override void Write(in CodeWriter writer)
         {
             if (Summary is null || string.IsNullOrEmpty(Summary))
@@ -46,6 +58,11 @@ namespace Blueprint.SourceGenerator.CodeWriter
     {
         private readonly Dictionary<string, string> parameterDocs = new Dictionary<string, string>();
 
+        /// <summary>
+        /// Adds parameter.
+        /// </summary>
+        /// <param name="parameterName">The parameter name value.</param>
+        /// <param name="documentationComment">The documentation comment value.</param>
         public void AddParameter(string parameterName, string documentationComment)
         {
             parameterDocs[parameterName] = documentationComment;
@@ -60,6 +77,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
                 parameterDocs.Remove(parameter.Key);
         }
 
+        /// <summary>
+        /// Writes write.
+        /// </summary>
+        /// <param name="writer">The writer value.</param>
         public override void Write(in CodeWriter writer)
         {
             base.Write(writer);

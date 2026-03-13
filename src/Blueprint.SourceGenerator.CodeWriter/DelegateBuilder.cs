@@ -6,6 +6,9 @@ using Microsoft.CodeAnalysis;
 
 namespace Blueprint.SourceGenerator.CodeWriter;
 
+/// <summary>
+/// Represents delegate builder.
+/// </summary>
 public sealed class DelegateBuilder : BuilderBase<DelegateBuilder>, IParameterized<DelegateBuilder>
 {
     private ParameterDocumentationComment? _xmlDoc;
@@ -31,6 +34,11 @@ public sealed class DelegateBuilder : BuilderBase<DelegateBuilder>, IParameteriz
 
     public string? ReturnType { get; private set; }
 
+    /// <summary>
+    /// Configures summary.
+    /// </summary>
+    /// <param name="summary">The summary value.</param>
+    /// <returns>The generated result.</returns>
     public DelegateBuilder WithSummary(string summary)
     {
         if (_xmlDoc is null || _xmlDoc is not SummaryDocumentationComment summaryDoc)
@@ -41,6 +49,12 @@ public sealed class DelegateBuilder : BuilderBase<DelegateBuilder>, IParameteriz
         return this;
     }
 
+    /// <summary>
+    /// Configures parameter doc.
+    /// </summary>
+    /// <param name="paramName">The param name value.</param>
+    /// <param name="documentation">The documentation value.</param>
+    /// <returns>The generated result.</returns>
     public DelegateBuilder WithParameterDoc(string paramName, string documentation)
     {
         if (_xmlDoc is null)
@@ -54,9 +68,20 @@ public sealed class DelegateBuilder : BuilderBase<DelegateBuilder>, IParameteriz
         return this;
     }
 
+    /// <summary>
+    /// Adds generic.
+    /// </summary>
+    /// <param name="name">The name value.</param>
+    /// <returns>The generated result.</returns>
     public DelegateBuilder AddGeneric(string name) =>
             AddGeneric(name, _ => { });
 
+    /// <summary>
+    /// Adds generic.
+    /// </summary>
+    /// <param name="name">The name value.</param>
+    /// <param name="configureBuilder">The configure builder value.</param>
+    /// <returns>The generated result.</returns>
     public DelegateBuilder AddGeneric(string name, Action<GenericBuilder> configureBuilder)
     {
         if (configureBuilder is null)
@@ -72,16 +97,34 @@ public sealed class DelegateBuilder : BuilderBase<DelegateBuilder>, IParameteriz
         return this;
     }
 
+    /// <summary>
+    /// Marks public delegate.
+    /// </summary>
+    /// <returns>The generated result.</returns>
     public DelegateBuilder MakePublicDelegate() => WithAccessModifier(Accessibility.Public);
 
+    /// <summary>
+    /// Marks internal delegate.
+    /// </summary>
+    /// <returns>The generated result.</returns>
     public DelegateBuilder MakeInternalDelegate() => WithAccessModifier(Accessibility.Internal);
 
+    /// <summary>
+    /// Configures access modifier.
+    /// </summary>
+    /// <param name="accessModifier">The access modifier value.</param>
+    /// <returns>The generated result.</returns>
     public DelegateBuilder WithAccessModifier(Accessibility accessModifier)
     {
         AccessModifier = accessModifier;
         return this;
     }
 
+    /// <summary>
+    /// Adds attribute.
+    /// </summary>
+    /// <param name="attribute">The attribute value.</param>
+    /// <returns>The generated result.</returns>
     public DelegateBuilder AddAttribute(string attribute)
     {
         var sanitized = attribute.Replace("[", string.Empty).Replace("]", string.Empty);
@@ -91,30 +134,55 @@ public sealed class DelegateBuilder : BuilderBase<DelegateBuilder>, IParameteriz
         return this;
     }
 
+    /// <summary>
+    /// Adds assembly attribute.
+    /// </summary>
+    /// <param name="attribute">The attribute value.</param>
+    /// <returns>The generated result.</returns>
     public override DelegateBuilder AddAssemblyAttribute(string attribute)
     {
         Builder.AddAssemblyAttribute(attribute);
         return this;
     }
 
+    /// <summary>
+    /// Adds namespace import.
+    /// </summary>
+    /// <param name="importedNamespace">The imported namespace value.</param>
+    /// <returns>The generated result.</returns>
     public override DelegateBuilder AddNamespaceImport(string importedNamespace)
     {
         Builder.AddNamespaceImport(importedNamespace);
         return this;
     }
 
+    /// <summary>
+    /// Adds namespace import.
+    /// </summary>
+    /// <param name="symbol">The symbol value.</param>
+    /// <returns>The generated result.</returns>
     public override DelegateBuilder AddNamespaceImport(ISymbol symbol)
     {
         Builder.AddNamespaceImport(symbol);
         return this;
     }
 
+    /// <summary>
+    /// Adds namespace import.
+    /// </summary>
+    /// <param name="symbol">The symbol value.</param>
+    /// <returns>The generated result.</returns>
     public override DelegateBuilder AddNamespaceImport(INamespaceSymbol symbol)
     {
         Builder.AddNamespaceImport(symbol);
         return this;
     }
 
+    /// <summary>
+    /// Configures return type.
+    /// </summary>
+    /// <param name="returnType">The return type value.</param>
+    /// <returns>The generated result.</returns>
     public DelegateBuilder WithReturnType(string returnType)
     {
         ReturnType = returnType;

@@ -10,6 +10,9 @@ using Microsoft.CodeAnalysis;
 #nullable enable
 namespace Blueprint.SourceGenerator.CodeWriter
 {
+    /// <summary>
+    /// Builds constructor signatures, base calls, and constructor bodies.
+    /// </summary>
     public sealed class ConstructorBuilder : BuilderBase<ConstructorBuilder>, IParameterized<ConstructorBuilder>
     {
         private readonly List<ParameterBuilder<ConstructorBuilder>> _parameters = new List<ParameterBuilder<ConstructorBuilder>>();
@@ -39,6 +42,11 @@ namespace Blueprint.SourceGenerator.CodeWriter
 
         internal int Count => _parameters.Count;
 
+        /// <summary>
+        /// Configures summary.
+        /// </summary>
+        /// <param name="summary">The summary value.</param>
+        /// <returns>The generated result.</returns>
         public ConstructorBuilder WithSummary(string summary)
         {
             if (_xmlDoc is not null && _xmlDoc is SummaryDocumentationComment summaryComment)
@@ -49,18 +57,34 @@ namespace Blueprint.SourceGenerator.CodeWriter
             return this;
         }
 
+        /// <summary>
+        /// Configures inherit doc.
+        /// </summary>
+        /// <param name="inherit">The inherit value.</param>
+        /// <returns>The generated result.</returns>
         public ConstructorBuilder WithInheritDoc(bool inherit = true)
         {
             _xmlDoc = new InheritDocumentationComment();
             return this;
         }
 
+        /// <summary>
+        /// Configures inherit doc.
+        /// </summary>
+        /// <param name="from">The from value.</param>
+        /// <returns>The generated result.</returns>
         public ConstructorBuilder WithInheritDoc(string from)
         {
             _xmlDoc = new InheritDocumentationComment { InheritFrom = from };
             return this;
         }
 
+        /// <summary>
+        /// Configures parameter doc.
+        /// </summary>
+        /// <param name="paramName">The param name value.</param>
+        /// <param name="documentation">The documentation value.</param>
+        /// <returns>The generated result.</returns>
         public ConstructorBuilder WithParameterDoc(string paramName, string documentation)
         {
             if (_xmlDoc is not null && _xmlDoc is not ParameterDocumentationComment)
@@ -73,12 +97,22 @@ namespace Blueprint.SourceGenerator.CodeWriter
             return this;
         }
 
+        /// <summary>
+        /// Adds assembly attribute.
+        /// </summary>
+        /// <param name="attribute">The attribute value.</param>
+        /// <returns>The generated result.</returns>
         public override ConstructorBuilder AddAssemblyAttribute(string attribute)
         {
             Class.AddAssemblyAttribute(attribute);
             return this;
         }
 
+        /// <summary>
+        /// Adds attribute.
+        /// </summary>
+        /// <param name="attribute">The attribute value.</param>
+        /// <returns>The generated result.</returns>
         public ConstructorBuilder AddAttribute(string attribute)
         {
             var sanitized = attribute.Replace("[", string.Empty).Replace("]", string.Empty);
@@ -88,18 +122,32 @@ namespace Blueprint.SourceGenerator.CodeWriter
             return this;
         }
 
+        /// <summary>
+        /// Configures body.
+        /// </summary>
+        /// <param name="writerDelegate">The writer delegate value.</param>
+        /// <returns>The generated result.</returns>
         public ConstructorBuilder WithBody(Action<ICodeWriter> writerDelegate)
         {
             _methodBodyWriter = writerDelegate;
             return this;
         }
 
+        /// <summary>
+        /// Configures this call.
+        /// </summary>
+        /// <returns>The generated result.</returns>
         public ConstructorBuilder WithThisCall()
         {
             _baseCall = () => ": this()";
             return this;
         }
 
+        /// <summary>
+        /// Configures this call.
+        /// </summary>
+        /// <param name="parameters">The parameters value.</param>
+        /// <returns>The generated result.</returns>
         public ConstructorBuilder WithThisCall(Dictionary<string, string> parameters)
         {
             foreach(var parameter in parameters)
@@ -115,6 +163,11 @@ namespace Blueprint.SourceGenerator.CodeWriter
             return this;
         }
 
+        /// <summary>
+        /// Configures this call.
+        /// </summary>
+        /// <param name="parameters">The parameters value.</param>
+        /// <returns>The generated result.</returns>
         public ConstructorBuilder WithThisCall(IEnumerable<IParameterSymbol> parameters)
         {
             var dict = new Dictionary<string, string>();
@@ -126,17 +179,31 @@ namespace Blueprint.SourceGenerator.CodeWriter
             return WithThisCall(dict);
         }
 
+        /// <summary>
+        /// Configures this call.
+        /// </summary>
+        /// <param name="baseConstructor">The base constructor value.</param>
+        /// <returns>The generated result.</returns>
         public ConstructorBuilder WithThisCall(IMethodSymbol baseConstructor)
         {
             return WithThisCall(baseConstructor.Parameters);
         }
 
+        /// <summary>
+        /// Configures base call.
+        /// </summary>
+        /// <returns>The generated result.</returns>
         public ConstructorBuilder WithBaseCall()
         {
             _baseCall = () => ": base()";
             return this;
         }
 
+        /// <summary>
+        /// Configures base call arguments.
+        /// </summary>
+        /// <param name="arguments">The arguments value.</param>
+        /// <returns>The generated result.</returns>
         public ConstructorBuilder WithBaseCallArguments(params string[] arguments)
         {
             _baseCall = () =>
@@ -152,6 +219,11 @@ namespace Blueprint.SourceGenerator.CodeWriter
             return this;
         }
 
+        /// <summary>
+        /// Configures base call.
+        /// </summary>
+        /// <param name="parameters">The parameters value.</param>
+        /// <returns>The generated result.</returns>
         public ConstructorBuilder WithBaseCall(Dictionary<string, string> parameters)
         {
             foreach (var parameter in parameters)
@@ -167,6 +239,11 @@ namespace Blueprint.SourceGenerator.CodeWriter
             return this;
         }
 
+        /// <summary>
+        /// Configures base call.
+        /// </summary>
+        /// <param name="parameters">The parameters value.</param>
+        /// <returns>The generated result.</returns>
         public ConstructorBuilder WithBaseCall(IEnumerable<IParameterSymbol> parameters)
         {
             var dict = new Dictionary<string, string>();
@@ -178,27 +255,52 @@ namespace Blueprint.SourceGenerator.CodeWriter
             return WithBaseCall(dict);
         }
 
+        /// <summary>
+        /// Configures base call.
+        /// </summary>
+        /// <param name="baseConstructor">The base constructor value.</param>
+        /// <returns>The generated result.</returns>
         public ConstructorBuilder WithBaseCall(IMethodSymbol baseConstructor)
         {
             return WithBaseCall(baseConstructor.Parameters);
         }
 
+        /// <summary>
+        /// Adds namespace import.
+        /// </summary>
+        /// <param name="namespaceImport">The namespace import value.</param>
+        /// <returns>The generated result.</returns>
         public override ConstructorBuilder AddNamespaceImport(string namespaceImport)
         {
             Class.AddNamespaceImport(namespaceImport);
             return this;
         }
 
+        /// <summary>
+        /// Adds namespace import.
+        /// </summary>
+        /// <param name="symbol">The symbol value.</param>
+        /// <returns>The generated result.</returns>
         public override ConstructorBuilder AddNamespaceImport(ISymbol symbol)
         {
             return AddNamespaceImport(symbol.ContainingNamespace);
         }
 
+        /// <summary>
+        /// Adds namespace import.
+        /// </summary>
+        /// <param name="symbol">The symbol value.</param>
+        /// <returns>The generated result.</returns>
         public override ConstructorBuilder AddNamespaceImport(INamespaceSymbol symbol)
         {
             return AddNamespaceImport(symbol.ToString());
         }
 
+        /// <summary>
+        /// Adds constructor.
+        /// </summary>
+        /// <param name="accessModifier">The access modifier value.</param>
+        /// <returns>The generated result.</returns>
         public ConstructorBuilder AddConstructor(Accessibility? accessModifier = null)
         {
             return Class.AddConstructor(accessModifier);

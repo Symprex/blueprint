@@ -5,6 +5,9 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace Blueprint.SourceGenerator.CodeWriter.Extensions;
 
+/// <summary>
+/// Represents roslyn extensions.
+/// </summary>
 public static class RoslynExtensions
 {
     /// <summary>

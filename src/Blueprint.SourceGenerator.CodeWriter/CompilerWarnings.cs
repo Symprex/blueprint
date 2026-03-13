@@ -1,5 +1,8 @@
 namespace Blueprint.SourceGenerator.CodeWriter
 {
+    /// <summary>
+    /// Represents compiler warnings.
+    /// </summary>
     public class CompilerWarnings
     {
         /// <summary>

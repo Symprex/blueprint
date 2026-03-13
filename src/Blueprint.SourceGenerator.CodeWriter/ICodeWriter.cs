@@ -2,6 +2,9 @@ using System;
 
 namespace Blueprint.SourceGenerator.CodeWriter
 {
+    /// <summary>
+    /// Defines the contract for icode writer.
+    /// </summary>
     public interface ICodeWriter
     {
         void Append(string value);

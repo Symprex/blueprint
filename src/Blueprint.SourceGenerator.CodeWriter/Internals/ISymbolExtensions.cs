@@ -30,6 +30,11 @@ namespace Blueprint.SourceGenerator.CodeWriter.Internals
                 { "bool",       typeof(bool).ToString()    },
             };
 
+        /// <summary>
+        /// Gets globally qualified type name.
+        /// </summary>
+        /// <param name="symbol">The symbol value.</param>
+        /// <returns>The generated result.</returns>
         public static string GetGloballyQualifiedTypeName(this INamespaceOrTypeSymbol symbol)
         {
             var value = GetFullMetadataName(symbol);
@@ -45,6 +50,11 @@ namespace Blueprint.SourceGenerator.CodeWriter.Internals
             return value;
         }
 
+        /// <summary>
+        /// Gets full metadata name.
+        /// </summary>
+        /// <param name="symbol">The symbol value.</param>
+        /// <returns>The generated result.</returns>
         public static string GetFullMetadataName(this INamespaceOrTypeSymbol symbol)
         {
             ISymbol s = symbol;
@@ -89,6 +99,11 @@ namespace Blueprint.SourceGenerator.CodeWriter.Internals
             return s is INamespaceSymbol symbol && symbol.IsGlobalNamespace;
         }
 
+        /// <summary>
+        /// Gets full name.
+        /// </summary>
+        /// <param name="type">The type value.</param>
+        /// <returns>The generated result.</returns>
         public static string GetFullName(this INamespaceOrTypeSymbol type)
         {
             if (type is IArrayTypeSymbol arrayType)

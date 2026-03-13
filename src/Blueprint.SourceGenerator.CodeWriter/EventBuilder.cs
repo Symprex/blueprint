@@ -8,6 +8,9 @@ using Microsoft.CodeAnalysis;
 #nullable enable
 namespace Blueprint.SourceGenerator.CodeWriter
 {
+    /// <summary>
+    /// Represents event builder.
+    /// </summary>
     public class EventBuilder : BuilderBase<EventBuilder>
     {
         private Accessibility _declaredAccessibility = Accessibility.Public;
@@ -27,12 +30,22 @@ namespace Blueprint.SourceGenerator.CodeWriter
 
         public ClassBuilder Class { get; }
 
+        /// <summary>
+        /// Marks static.
+        /// </summary>
+        /// <param name="isStatic">The is static value.</param>
+        /// <returns>The generated result.</returns>
         public EventBuilder MakeStatic(bool isStatic = true)
         {
             _static = isStatic;
             return this;
         }
 
+        /// <summary>
+        /// Configures backing field.
+        /// </summary>
+        /// <param name="backingField">The backing field value.</param>
+        /// <returns>The generated result.</returns>
         public ClassBuilder WithBackingField(string backingField)
         {
             return WithAddExpression($"{backingField} += value")
@@ -40,6 +53,11 @@ namespace Blueprint.SourceGenerator.CodeWriter
                 .Class;
         }
 
+        /// <summary>
+        /// Configures add handler.
+        /// </summary>
+        /// <param name="addDelegate">The add delegate value.</param>
+        /// <returns>The generated result.</returns>
         public EventBuilder WithAddHandler(Action<ICodeWriter> addDelegate)
         {
             void BlockHandler(ICodeWriter writer)
@@ -52,12 +70,22 @@ namespace Blueprint.SourceGenerator.CodeWriter
             return this;
         }
 
+        /// <summary>
+        /// Configures add expression.
+        /// </summary>
+        /// <param name="addDelegateExpression">The add delegate expression value.</param>
+        /// <returns>The generated result.</returns>
         public EventBuilder WithAddExpression(string addDelegateExpression)
         {
             _addHandlerDelegate = w => w.AppendLine($"add => {addDelegateExpression};");
             return this;
         }
 
+        /// <summary>
+        /// Configures remove handler.
+        /// </summary>
+        /// <param name="addDelegate">The add delegate value.</param>
+        /// <returns>The generated result.</returns>
         public EventBuilder WithRemoveHandler(Action<ICodeWriter> addDelegate)
         {
             void BlockHandler(ICodeWriter writer)
@@ -70,18 +98,35 @@ namespace Blueprint.SourceGenerator.CodeWriter
             return this;
         }
 
+        /// <summary>
+        /// Configures remove expression.
+        /// </summary>
+        /// <param name="addDelegateExpression">The add delegate expression value.</param>
+        /// <returns>The generated result.</returns>
         public EventBuilder WithRemoveExpression(string addDelegateExpression)
         {
             _removeHandlerDelegate = w => w.AppendLine($"remove => {addDelegateExpression};");
             return this;
         }
 
+        /// <summary>
+        /// Configures explicit implementation.
+        /// </summary>
+        /// <param name="inferfaceName">The inferface name value.</param>
+        /// <returns>The generated result.</returns>
         public EventBuilder WithExplicitImplementation(string @inferfaceName)
         {
             _explicitImplementation = inferfaceName;
             return this;
         }
 
+        /// <summary>
+        /// Configures default explicit implementation.
+        /// </summary>
+        /// <param name="interfaceName">The interface name value.</param>
+        /// <param name="backingFieldAccessibility">The backing field accessibility value.</param>
+        /// <param name="backingFieldName">The backing field name value.</param>
+        /// <returns>The generated result.</returns>
         public ClassBuilder WithDefaultExplicitImplementation(string @interfaceName, Accessibility backingFieldAccessibility = Accessibility.Private, string? backingFieldName = null)
         {
             if (backingFieldName is null || string.IsNullOrEmpty(backingFieldName))
@@ -95,72 +140,127 @@ namespace Blueprint.SourceGenerator.CodeWriter
                 .Class;
         }
 
+        /// <summary>
+        /// Configures delegate handler.
+        /// </summary>
+        /// <param name="handlerType">The handler type value.</param>
+        /// <returns>The generated result.</returns>
         public EventBuilder WithDelegateHandler(string handlerType)
         {
             _eventDelegateType = handlerType;
             return this;
         }
 
+        /// <summary>
+        /// Configures delegate handler.
+        /// </summary>
+        /// <param name="handlerType">The handler type value.</param>
+        /// <returns>The generated result.</returns>
         public EventBuilder WithDelegateHandler(INamedTypeSymbol handlerType)
         {
             _eventDelegateType = handlerType.Name;
             return AddNamespaceImport(handlerType);
         }
 
+        /// <summary>
+        /// Configures accessibility.
+        /// </summary>
+        /// <param name="accessibility">The accessibility value.</param>
+        /// <returns>The generated result.</returns>
         public EventBuilder WithAccessibility(Accessibility accessibility)
         {
             _declaredAccessibility = accessibility;
             return this;
         }
 
+        /// <summary>
+        /// Marks public.
+        /// </summary>
+        /// <returns>The generated result.</returns>
         public EventBuilder MakePublic()
         {
             _declaredAccessibility = Accessibility.Public;
             return this;
         }
 
+        /// <summary>
+        /// Marks protected.
+        /// </summary>
+        /// <returns>The generated result.</returns>
         public EventBuilder MakeProtected()
         {
             _declaredAccessibility = Accessibility.Protected;
             return this;
         }
 
+        /// <summary>
+        /// Marks private.
+        /// </summary>
+        /// <returns>The generated result.</returns>
         public EventBuilder MakePrivate()
         {
             _declaredAccessibility = Accessibility.Private;
             return this;
         }
 
+        /// <summary>
+        /// Marks internal.
+        /// </summary>
+        /// <returns>The generated result.</returns>
         public EventBuilder MakeInternal()
         {
             _declaredAccessibility = Accessibility.Internal;
             return this;
         }
 
+        /// <summary>
+        /// Marks internal protected.
+        /// </summary>
+        /// <returns>The generated result.</returns>
         public EventBuilder MakeInternalProtected()
         {
             _declaredAccessibility = Accessibility.ProtectedAndInternal;
             return this;
         }
 
+        /// <summary>
+        /// Adds assembly attribute.
+        /// </summary>
+        /// <param name="attribute">The attribute value.</param>
+        /// <returns>The generated result.</returns>
         public override EventBuilder AddAssemblyAttribute(string attribute)
         {
             Class.AddAssemblyAttribute(attribute);
             return this;
         }
 
+        /// <summary>
+        /// Adds namespace import.
+        /// </summary>
+        /// <param name="importedNamespace">The imported namespace value.</param>
+        /// <returns>The generated result.</returns>
         public override EventBuilder AddNamespaceImport(string importedNamespace)
         {
             Class.AddNamespaceImport(importedNamespace);
             return this;
         }
 
+        /// <summary>
+        /// Adds namespace import.
+        /// </summary>
+        /// <param name="symbol">The symbol value.</param>
+        /// <returns>The generated result.</returns>
         public override EventBuilder AddNamespaceImport(ISymbol symbol)
         {
             Class.AddNamespaceImport(symbol);
             return this;
         }
 
+        /// <summary>
+        /// Adds namespace import.
+        /// </summary>
+        /// <param name="symbol">The symbol value.</param>
+        /// <returns>The generated result.</returns>
         public override EventBuilder AddNamespaceImport(INamespaceSymbol symbol)
         {
             Class.AddNamespaceImport(symbol);

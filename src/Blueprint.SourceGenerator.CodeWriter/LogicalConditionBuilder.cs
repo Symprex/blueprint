@@ -8,6 +8,9 @@ using System.Linq;
 #nullable enable
 namespace Blueprint.SourceGenerator.CodeWriter
 {
+    /// <summary>
+    /// Represents logical condition builder.
+    /// </summary>
     public sealed class LogicalConditionBuilder
     {
         private ICodeWriter _writer { get; }
@@ -26,12 +29,22 @@ namespace Blueprint.SourceGenerator.CodeWriter
             _builders = new Queue<LogicalConditionBuilder>();
         }
 
+        /// <summary>
+        /// Configures body.
+        /// </summary>
+        /// <param name="innerWrite">The inner write value.</param>
+        /// <returns>The generated result.</returns>
         public LogicalConditionBuilder WithBody(Action<ICodeWriter> innerWrite)
         {
             _innerWrite = innerWrite;
             return this;
         }
 
+        /// <summary>
+        /// Performs the else if operation.
+        /// </summary>
+        /// <param name="condition">The condition value.</param>
+        /// <returns>The generated result.</returns>
         public LogicalConditionBuilder ElseIf(string condition)
         {
             var builder = new LogicalConditionBuilder(_writer, condition, "else if", this);
@@ -39,6 +52,12 @@ namespace Blueprint.SourceGenerator.CodeWriter
             return builder;
         }
 
+        /// <summary>
+        /// Performs the else if operation.
+        /// </summary>
+        /// <param name="condition">The condition value.</param>
+        /// <param name="innerWrite">The inner write value.</param>
+        /// <returns>The generated result.</returns>
         public LogicalConditionBuilder ElseIf(string condition, Action<ICodeWriter> innerWrite)
         {
             var builder = new LogicalConditionBuilder(_writer, condition, "else if", this)
@@ -47,6 +66,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
             return builder;
         }
 
+        /// <summary>
+        /// Performs the else operation.
+        /// </summary>
+        /// <returns>The generated result.</returns>
         public LogicalConditionBuilder Else()
         {
             var builder = new LogicalConditionBuilder(_writer, null, "else", this);
@@ -54,6 +77,11 @@ namespace Blueprint.SourceGenerator.CodeWriter
             return builder;
         }
 
+        /// <summary>
+        /// Performs the else operation.
+        /// </summary>
+        /// <param name="innerWrite">The inner write value.</param>
+        /// <returns>The generated result.</returns>
         public LogicalConditionBuilder Else(Action<ICodeWriter> innerWrite)
         {
             var builder = new LogicalConditionBuilder(_writer, null, "else", this)
@@ -62,6 +90,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
             return builder;
         }
 
+        /// <summary>
+        /// Ends if.
+        /// </summary>
+        /// <returns>The generated result.</returns>
         public ICodeWriter EndIf()
         {
             if (_parent != null)

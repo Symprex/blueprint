@@ -12,6 +12,9 @@ using Microsoft.CodeAnalysis;
 #nullable enable
 namespace Blueprint.SourceGenerator.CodeWriter
 {
+    /// <summary>
+    /// Builds class or struct declarations and their members.
+    /// </summary>
     public sealed class ClassBuilder : BuilderBase<ClassBuilder>
     {
         private readonly List<string> _attributes = new List<string>();
@@ -61,42 +64,75 @@ namespace Blueprint.SourceGenerator.CodeWriter
 
         public bool IsSealed { get; private set; }
 
+        /// <summary>
+        /// Sets an XML summary comment for the generated type.
+        /// </summary>
+        /// <param name="summary">The summary value.</param>
+        /// <returns>The generated result.</returns>
         public ClassBuilder WithSummary(string summary)
         {
             _xmlDoc = new SummaryDocumentationComment { Summary = summary };
             return this;
         }
 
+        /// <summary>
+        /// Configures <inheritdoc/> XML documentation for the generated type.
+        /// </summary>
+        /// <param name="inherit">The inherit value.</param>
+        /// <returns>The generated result.</returns>
         public ClassBuilder WithInheritDoc(bool inherit = true)
         {
             _xmlDoc = new InheritDocumentationComment();
             return this;
         }
 
+        /// <summary>
+        /// Configures <inheritdoc/> XML documentation for the generated type.
+        /// </summary>
+        /// <param name="from">The from value.</param>
+        /// <returns>The generated result.</returns>
         public ClassBuilder WithInheritDoc(string from)
         {
             _xmlDoc = new InheritDocumentationComment { InheritFrom = from };
             return this;
         }
 
+        /// <summary>
+        /// Marks the generated type as sealed.
+        /// </summary>
+        /// <returns>The generated result.</returns>
         public ClassBuilder Sealed()
         {
             IsSealed = true;
             return this;
         }
 
+        /// <summary>
+        /// Marks the generated declaration as a struct.
+        /// </summary>
+        /// <returns>The generated result.</returns>
         public ClassBuilder IsStruct()
         {
             Kind = TypeKind.Struct;
             return this;
         }
 
+        /// <summary>
+        /// Sets the generated declaration kind.
+        /// </summary>
+        /// <param name="kind">The kind value.</param>
+        /// <returns>The generated result.</returns>
         public ClassBuilder OfType(TypeKind kind)
         {
             Kind = kind;
             return this;
         }
 
+        /// <summary>
+        /// Sets base class.
+        /// </summary>
+        /// <param name="baseClass">The base class value.</param>
+        /// <returns>The generated result.</returns>
         public ClassBuilder SetBaseClass(string baseClass)
         {
             BaseClass = baseClass;
@@ -110,6 +146,11 @@ namespace Blueprint.SourceGenerator.CodeWriter
             return this;
         }
 
+        /// <summary>
+        /// Sets base class.
+        /// </summary>
+        /// <param name="symbol">The symbol value.</param>
+        /// <returns>The generated result.</returns>
         public ClassBuilder SetBaseClass(INamedTypeSymbol symbol)
         {
             if(symbol.Name == Name)
@@ -122,9 +163,20 @@ namespace Blueprint.SourceGenerator.CodeWriter
             return AddNamespaceImport(symbol.ContainingNamespace);
         }
 
+        /// <summary>
+        /// Adds generic.
+        /// </summary>
+        /// <param name="name">The name value.</param>
+        /// <returns>The generated result.</returns>
         public ClassBuilder AddGeneric(string name) =>
             AddGeneric(name, _ => { });
 
+        /// <summary>
+        /// Adds generic.
+        /// </summary>
+        /// <param name="name">The name value.</param>
+        /// <param name="configureBuilder">The configure builder value.</param>
+        /// <returns>The generated result.</returns>
         public ClassBuilder AddGeneric(string name, Action<GenericBuilder> configureBuilder)
         {
             if(configureBuilder is null)
@@ -140,12 +192,22 @@ namespace Blueprint.SourceGenerator.CodeWriter
             return this;
         }
 
+        /// <summary>
+        /// Adds assembly attribute.
+        /// </summary>
+        /// <param name="attribute">The attribute value.</param>
+        /// <returns>The generated result.</returns>
         public override ClassBuilder AddAssemblyAttribute(string attribute)
         {
             Builder.AddAssemblyAttribute(attribute);
             return this;
         }
 
+        /// <summary>
+        /// Adds attribute.
+        /// </summary>
+        /// <param name="attribute">The attribute value.</param>
+        /// <returns>The generated result.</returns>
         public ClassBuilder AddAttribute(string attribute)
         {
             var sanitized = attribute.Replace("[", string.Empty).Replace("]", string.Empty);
@@ -155,24 +217,44 @@ namespace Blueprint.SourceGenerator.CodeWriter
             return this;
         }
 
+        /// <summary>
+        /// Adds namespace import.
+        /// </summary>
+        /// <param name="importedNamespace">The imported namespace value.</param>
+        /// <returns>The generated result.</returns>
         public override ClassBuilder AddNamespaceImport(string importedNamespace)
         {
             Builder.AddNamespaceImport(importedNamespace);
             return this;
         }
 
+        /// <summary>
+        /// Adds namespace import.
+        /// </summary>
+        /// <param name="symbol">The symbol value.</param>
+        /// <returns>The generated result.</returns>
         public override ClassBuilder AddNamespaceImport(ISymbol symbol)
         {
             Builder.AddNamespaceImport(symbol);
             return this;
         }
 
+        /// <summary>
+        /// Adds namespace import.
+        /// </summary>
+        /// <param name="symbol">The symbol value.</param>
+        /// <returns>The generated result.</returns>
         public override ClassBuilder AddNamespaceImport(INamespaceSymbol symbol)
         {
             Builder.AddNamespaceImport(symbol);
             return this;
         }
 
+        /// <summary>
+        /// Adds interface.
+        /// </summary>
+        /// <param name="interfaceName">The interface name value.</param>
+        /// <returns>The generated result.</returns>
         public ClassBuilder AddInterface(string interfaceName)
         {
             _interfaces.Add(interfaceName);
@@ -186,12 +268,22 @@ namespace Blueprint.SourceGenerator.CodeWriter
             return this;
         }
 
+        /// <summary>
+        /// Adds interface.
+        /// </summary>
+        /// <param name="symbol">The symbol value.</param>
+        /// <returns>The generated result.</returns>
         public ClassBuilder AddInterface(ITypeSymbol symbol)
         {
             _interfaces.Add(symbol.Name);
             return AddNamespaceImport(symbol);
         }
 
+        /// <summary>
+        /// Adds interfaces.
+        /// </summary>
+        /// <param name="interfaces">The interfaces value.</param>
+        /// <returns>The generated result.</returns>
         public ClassBuilder AddInterfaces(IEnumerable<string> interfaces)
         {
             if (interfaces is null)
@@ -203,6 +295,11 @@ namespace Blueprint.SourceGenerator.CodeWriter
             return this;
         }
 
+        /// <summary>
+        /// Adds interfaces.
+        /// </summary>
+        /// <param name="interfaces">The interfaces value.</param>
+        /// <returns>The generated result.</returns>
         public ClassBuilder AddInterfaces(IEnumerable<INamedTypeSymbol> interfaces)
         {
             if (interfaces is null)
@@ -214,6 +311,11 @@ namespace Blueprint.SourceGenerator.CodeWriter
             return this;
         }
 
+        /// <summary>
+        /// Adds constructor.
+        /// </summary>
+        /// <param name="accessModifier">The access modifier value.</param>
+        /// <returns>The generated result.</returns>
         public ConstructorBuilder AddConstructor(Accessibility? accessModifier = null)
         {
             var builder = new ConstructorBuilder(accessModifier, this);
@@ -221,6 +323,12 @@ namespace Blueprint.SourceGenerator.CodeWriter
             return builder;
         }
 
+        /// <summary>
+        /// Adds constructor.
+        /// </summary>
+        /// <param name="baseConstructor">The base constructor value.</param>
+        /// <param name="accessModifier">The access modifier value.</param>
+        /// <returns>The generated result.</returns>
         public ConstructorBuilder AddConstructor(IMethodSymbol baseConstructor, Accessibility? accessModifier = null)
         {
             var builder = AddConstructor(accessModifier)
@@ -229,6 +337,12 @@ namespace Blueprint.SourceGenerator.CodeWriter
             return builder;
         }
 
+        /// <summary>
+        /// Adds method.
+        /// </summary>
+        /// <param name="name">The name value.</param>
+        /// <param name="accessModifier">The access modifier value.</param>
+        /// <returns>The generated result.</returns>
         public MethodBuilder AddMethod(string name, Accessibility? accessModifier = null)
         {
             var builder = new MethodBuilder(name, accessModifier, this);
@@ -236,6 +350,12 @@ namespace Blueprint.SourceGenerator.CodeWriter
             return builder;
         }
 
+        /// <summary>
+        /// Adds property.
+        /// </summary>
+        /// <param name="name">The name value.</param>
+        /// <param name="accessModifier">The access modifier value.</param>
+        /// <returns>The generated result.</returns>
         public PropertyBuilder AddProperty(string name, Accessibility? accessModifier = null)
         {
             var builder = new PropertyBuilder(name, accessModifier, this);
@@ -243,6 +363,11 @@ namespace Blueprint.SourceGenerator.CodeWriter
             return builder;
         }
 
+        /// <summary>
+        /// Adds event.
+        /// </summary>
+        /// <param name="eventName">The event name value.</param>
+        /// <returns>The generated result.</returns>
         public EventBuilder AddEvent(string eventName)
         {
             var builder = new EventBuilder(this, eventName);
@@ -250,31 +375,66 @@ namespace Blueprint.SourceGenerator.CodeWriter
             return builder;
         }
 
+        /// <summary>
+        /// Marks public class.
+        /// </summary>
+        /// <returns>The generated result.</returns>
         public ClassBuilder MakePublicClass() => WithAccessModifier(Accessibility.Public);
 
+        /// <summary>
+        /// Marks internal class.
+        /// </summary>
+        /// <returns>The generated result.</returns>
         public ClassBuilder MakeInternalClass() => WithAccessModifier(Accessibility.Internal);
 
+        /// <summary>
+        /// Configures access modifier.
+        /// </summary>
+        /// <param name="accessModifier">The access modifier value.</param>
+        /// <returns>The generated result.</returns>
         public ClassBuilder WithAccessModifier(Accessibility accessModifier)
         {
             AccessModifier = accessModifier;
             return this;
         }
 
+        /// <summary>
+        /// Marks static class.
+        /// </summary>
+        /// <returns>The generated result.</returns>
         public ClassBuilder MakeStaticClass()
         {
             IsStatic = true;
             return this;
         }
 
+        /// <summary>
+        /// Sets whether the generated type is abstract.
+        /// </summary>
+        /// <param name="isAbstract">The is abstract value.</param>
+        /// <returns>The generated result.</returns>
         public ClassBuilder Abstract(bool isAbstract = true)
         {
             IsAbstract = isAbstract;
             return this;
         }
 
+        /// <summary>
+        /// Adds nested class.
+        /// </summary>
+        /// <param name="name">The name value.</param>
+        /// <param name="accessModifier">The access modifier value.</param>
+        /// <returns>The generated result.</returns>
         public ClassBuilder AddNestedClass(string name, Accessibility? accessModifier = null) =>
             AddNestedClass(name, false, accessModifier);
 
+        /// <summary>
+        /// Adds nested class.
+        /// </summary>
+        /// <param name="name">The name value.</param>
+        /// <param name="partial">The partial value.</param>
+        /// <param name="accessModifier">The access modifier value.</param>
+        /// <returns>The generated result.</returns>
         public ClassBuilder AddNestedClass(string name, bool partial, Accessibility? accessModifier = null)
         {
             var builder = new ClassBuilder(name, Builder, partial);
@@ -285,6 +445,12 @@ namespace Blueprint.SourceGenerator.CodeWriter
             return builder;
         }
 
+        /// <summary>
+        /// Adds nested delegate.
+        /// </summary>
+        /// <param name="name">The name value.</param>
+        /// <param name="accessModifier">The access modifier value.</param>
+        /// <returns>The generated result.</returns>
         public DelegateBuilder AddNestedDelegate(string name, Accessibility? accessModifier = null)
         {
             var builder = new DelegateBuilder(name, Builder);
@@ -295,8 +461,16 @@ namespace Blueprint.SourceGenerator.CodeWriter
             return builder;
         }
 
+        /// <summary>
+        /// Builds the current code output and returns the generated source text.
+        /// </summary>
+        /// <returns>The generated result.</returns>
         public string Build() => Builder.Build();
 
+        /// <summary>
+        /// Disables property-name sorting and preserves insertion order.
+        /// </summary>
+        /// <returns>The generated result.</returns>
         public ClassBuilder DontSortPropertiesByName()
         {
             _propertiesOrderBy = _ => "";
