@@ -60,13 +60,7 @@
 
 - This repo uses Husky.NET to run `dotnet format Blueprint.sln --no-restore --include ${staged}` on staged `.cs` files during `pre-commit` once hooks are installed, then re-stages the formatted files before the commit continues.
 
-- After changing `.cs`, `.csproj`, `.props`, `.targets`, or `.editorconfig` files, still run `dotnet format` before commit in agent workflows. Prefer `dotnet format .\Blueprint.sln --no-restore --include <changed files>` for narrow changes, and format the whole solution when edits are broad.
-
 - Repo-wide style comes from `src\.editorconfig` and `src\Stylecop.json`: C# uses 4 spaces, `using` directives stay outside namespaces, private fields use an underscore prefix, `this.` qualification is preferred, async methods must end with `Async`, nullable is enabled, and preview C# features are allowed.
-
-- XML documentation is not globally required by StyleCop here (`documentExposedElements` is disabled). Do not add blanket XML docs just to satisfy analyzers; match the documentation level already present in the area you are editing unless the task is explicitly about docs.
-
-- The repo vendors `Blueprint.SourceGenerator.CodeWriter` locally instead of depending on the old external CodeGenHelpers package. Prefer the local CodeWriter API and project references when changing generator output or packaging.
 
 - If you change link, URL, or marker-attribute generation, update both the module layer (`IBlueprintSourceGeneratorModule` / `LinkGenerationModule`) and the descriptor generator so analysis-time metadata and emitted descriptor code stay in sync.
 
