@@ -144,6 +144,7 @@ That redesign starts in [`foundation-module-system/plan.md`](foundation-module-s
 - Prefer compile-time markers, conventions, and generated defaults over preserving legacy fluent activation APIs one-to-one.
 - Treat HTTP as implying OpenAPI. `ConfigureOpenApi` may remain, but `AddOpenApi` should not be the long-term activation switch.
 - Treat auth, authorisation, and link generation as always architecturally available capabilities that compile away when unused. Keep explicit configuration hooks only for behavior that cannot be inferred statically.
+- Prefer generated auth/access descriptors, generated binders, and generated access manifests over runtime regex/reflection template expansion and separate access-report tools.
 - Do not treat general nested execution parity as a goal. First redesign resource-event self-query and only add a narrow internal re-query path if a simpler model cannot preserve the required behavior.
 - Keep the shared result model host agnostic. Typed results such as `OkResult<T>` remain part of the public contract, while hosts such as HTTP translate semantic results plus attachable hints such as `ETag` and cache control. See [`result-model-and-host-translation/plan.md`](result-model-and-host-translation/plan.md).
 - Resource events use concrete contract-level result types, typed one-of-many response contracts, and an explicit separation between event body and event identity. See [`resource-model-links-and-post-processing/plan.md`](resource-model-links-and-post-processing/plan.md).

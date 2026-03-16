@@ -28,13 +28,15 @@ Move all operation discovery, host inclusion, and feature-data enrichment to com
 
 ## Runtime support to build
 
-- Richer generated `ApiOperationDescriptor` instances that carry precomputed feature data.
+- Richer generated `ApiOperationDescriptor` instances that carry precomputed feature data, including explicit auth/access metadata and provenance.
 - Generated app registration that knows which operations belong to which host/app.
 - A descriptor model that can support HTTP, background-task, message-host, link, validation, auth, and OpenAPI metadata without runtime scanning.
 - Resource metadata generation (`ApiResourceSourceGenerator`) as part of the overall descriptor story, not a disconnected extra.
+- `[FromResource(...)]` expansion is a descriptor-enrichment step: the generator must inline the referenced operation's permission/scope metadata while keeping the dependent operation's own declared `resourceKeyTemplate`; see `authentication-and-authorisation/plan.md` for the full auth metadata model.
 - Success/response contract metadata that captures what legacy `IReturn<TResponse>` and host conventions relied on, so downstream modules can reason about response bodies, error shapes, and serializer needs.
 - Flattened operation outcomes that expand `Results<T1, ...>` into concrete per-outcome descriptor metadata while keeping the raw wrapper as a generator-internal concern.
 - Descriptor metadata for same-status outcome groups when a compile-time-safe discriminator exists, especially generated `eventId`-based resource-event groups.
+- Descriptor metadata should be rich enough to drive auth/access build artifacts and generated test inputs without separate runtime rediscovery passes.
 
 ## Consumer configuration and activation
 
@@ -81,6 +83,7 @@ This should replace the need to infer discovery outcomes from runtime model obje
 - Avoid runtime type scanning and reflection-based host filtering.
 - Keep `IQuery<T>` / `ICommand<T>` as the consumer-facing contract surface, but let descriptor generation expand `Results<T1, ...>` into flattened outcomes for downstream modules.
 - Let descriptor generation carry same-status discriminator metadata forward rather than forcing HTTP/OpenAPI layers to rediscover it.
+- Let descriptor generation carry explicit auth/access metadata and provenance forward rather than forcing runtime authorisers or external tools to rediscover it.
 
 ## Sequencing
 

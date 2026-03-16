@@ -55,8 +55,10 @@ Likely changes:
 
 - `{Auth:...}` and property-template expansion move into compile-time-generated code
 - `[FromResource(...)]` becomes compile-time-resolved metadata
+- hidden access-mode and any-of permission semantics become explicit generated auth metadata instead of being implied by runtime authoriser behavior
 - `SetTenantMiddleware`-style behavior becomes generated property hydration where possible
 - DB-backed ownership/resource expansion remains consumer-space rather than core Blueprint behavior
+- convention-style auth completeness checks and one-fixture-per-operation patterns give way to analyzers, generated manifests, and parameterized test scaffolding
 
 ### 5. Validation surface is trimmed
 
@@ -92,6 +94,7 @@ Plan a `Blueprint.Migration.Analyzers` package or equivalent that can:
 - flag unsupported nested-execution assumptions
 - identify legacy validation attributes that should migrate to DataAnnotations or custom consumer validators
 - validate `[FromResource(...)]`, resource templates, and auth placeholder usage against the new compile-time rules
+- detect operations whose legacy auth story depends on implicit access-mode or template-expansion behavior that the new generator makes explicit
 - rewrite or flag legacy `OperationsHandlerScanner` / grouped-handler references as that behavior moves into core Blueprint
 
 ### Upgrade report / manifest
