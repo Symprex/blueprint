@@ -37,6 +37,7 @@ Unify resource metadata, links, and resource-related post-processing into a sour
 - resource-event processing hooks
 - generated key-to-self-link binders for resource events
 - explicit resource-event envelope/shape helpers for snapshot, partial, tombstone, and deleted-key flows
+- generated serialized event-identity metadata for body-bearing resource-event responses so HTTP/OpenAPI/client layers can discriminate same-status event unions safely
 
 ## Consumer configuration and activation
 
@@ -80,6 +81,7 @@ This plan now contains the canonical resource-event direction directly rather th
 11. `ChangedValues` is removed entirely; no passthrough, no optional support
 12. the audit contract is save-only; no read-back, no `GetCurrentDataAsync`
 13. if a temporary key-only created/updated bridge is still required during migration, gate it with analyzers and treat it as transitional rather than as a new runtime facility
+14. body-bearing resource-event outcomes may share an HTTP status code when the generated response body carries a compile-time-stable serialized `eventId`; key-only/no-body outcomes do not participate in that carve-out and must remain separately discriminable
 
 ### Canonical authoring surface
 
@@ -108,6 +110,7 @@ Authoring rules:
 - if the event has no full resource body, require `[ResourceEventKey]`
 - if the event uses a partial body plus explicit identity, require `[ResourceEventBody]` and `[ResourceEventKey]`
 - the generator owns the framework boilerplate and `EventId` generation; authors do not hand-author framework inheritance for event shapes
+- body-bearing event responses always expose the generated event identity needed for transport/OpenAPI/client discrimination; authors do not hand-author that envelope metadata
 
 ### Canonical handler surface
 
@@ -141,6 +144,8 @@ If richer enrichment is required, the handler should call the relevant service d
 - generated body-bearing and identity-only event-shape plumbing must match the declared family resource/key model
 - partial payload shapes must be explicit and diagnosable
 - legacy `SelfQuery`-based event construction should be analyzer- and code-fix-driven to the new shapes
+- same-status resource-event union groups may only auto-discriminate when every member in the group is body-bearing and exposes the generated serialized `eventId`
+- same-status groups that mix body-bearing and key-only/no-body resource-event outcomes are compile-time errors
 
 ## Observability and debuggability
 
@@ -167,6 +172,7 @@ If richer enrichment is required, the handler should call the relevant service d
 - Return one concrete resource-event result per execution path. Do not adopt a simultaneous event-batch model.
 - Build resource-event results on top of the shared host-agnostic result model described in `../result-model-and-host-translation/plan.md`.
 - `EventId` is generated from `resourceObject + "." + reason`. Handler authors never compose it.
+- The generated serialized `eventId` is the default same-status discriminator for body-bearing HTTP resource-event unions.
 - First-class partial and deleted-key shapes for resource events.
 - Do not preserve a projector or re-query facility as the default resource-event path.
 

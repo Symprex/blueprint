@@ -33,6 +33,8 @@ Move all operation discovery, host inclusion, and feature-data enrichment to com
 - A descriptor model that can support HTTP, background-task, message-host, link, validation, auth, and OpenAPI metadata without runtime scanning.
 - Resource metadata generation (`ApiResourceSourceGenerator`) as part of the overall descriptor story, not a disconnected extra.
 - Success/response contract metadata that captures what legacy `IReturn<TResponse>` and host conventions relied on, so downstream modules can reason about response bodies, error shapes, and serializer needs.
+- Flattened operation outcomes that expand `Results<T1, ...>` into concrete per-outcome descriptor metadata while keeping the raw wrapper as a generator-internal concern.
+- Descriptor metadata for same-status outcome groups when a compile-time-safe discriminator exists, especially generated `eventId`-based resource-event groups.
 
 ## Consumer configuration and activation
 
@@ -55,6 +57,8 @@ The legacy fluent builder can remain as a thin configuration API, but discovery 
 - unsupported response-shape inference for downstream modules
 - invalid resource metadata generation assumptions
 - response-contract inference failures where HTTP/OpenAPI/output-formatting modules need a known success type
+- union outcome metadata that cannot be flattened into an unambiguous descriptor shape
+- same-status flattened outcome groups that do not have a compile-time-safe discriminator strategy
 
 ## Observability and debuggability
 
@@ -75,6 +79,8 @@ This should replace the need to infer discovery outcomes from runtime model obje
 - Treat `ApiResourceSourceGenerator` as part of the descriptor/discovery model, not as an isolated special case.
 - Treat `ApiOperations` / grouped handler discovery as core Blueprint functionality rather than as a separate package concern.
 - Avoid runtime type scanning and reflection-based host filtering.
+- Keep `IQuery<T>` / `ICommand<T>` as the consumer-facing contract surface, but let descriptor generation expand `Results<T1, ...>` into flattened outcomes for downstream modules.
+- Let descriptor generation carry same-status discriminator metadata forward rather than forcing HTTP/OpenAPI layers to rediscover it.
 
 ## Sequencing
 

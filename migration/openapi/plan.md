@@ -3,7 +3,7 @@
 - Status: Planned
 - Priority: P2
 - Classification: Core HTTP capability
-- Depends on: `../operation-discovery-and-descriptors/plan.md`, `../http-host-and-message-population/plan.md`, `../resource-model-links-and-post-processing/plan.md`
+- Depends on: `../operation-discovery-and-descriptors/plan.md`, `../result-model-and-host-translation/plan.md`, `../http-host-and-message-population/plan.md`, `../resource-model-links-and-post-processing/plan.md`
 
 ## Why this module exists
 
@@ -23,6 +23,7 @@ Generate OpenAPI documents from the same compile-time metadata that drives endpo
 ## Runtime support to build
 
 - an OpenAPI document builder driven by generated descriptors
+- response/outcome metadata driven by flattened descriptor outcomes rather than by raw `Results<T1, ...>` wrappers
 - response/body schema metadata that avoids reflection where possible
 - explicit integration with `System.Text.Json` source-generation metadata
 - optional runtime post-configuration hooks for titles, tags, and schema processors
@@ -44,6 +45,10 @@ Planned direction:
 - OpenAPI is exposed as part of the HTTP host rather than requiring a normal Blueprint operation just to retrieve the document
 - if compatibility requires a query-shaped endpoint during migration, treat it as a thin shim over the HTTP host's generated OpenAPI surface rather than as the core model
 - operation grouping metadata such as `ApiOperations` should inform tags and grouping in the generated document
+- OpenAPI should consume flattened per-operation outcomes from descriptors, not reason about `Results<T1, ...>` wrappers directly
+- HTTP-visible unions should default to one response entry per distinct status code; same-status unions require explicit discriminator metadata
+- body-bearing resource-event unions are the main generated exception: when every member of a same-status group exposes the generated serialized `eventId`, emit a same-status `oneOf` with discriminator metadata rather than forcing manual configuration
+- cross-cutting outcomes from auth/validation/error modules must merge with operation-specific outcomes in the final OpenAPI contract
 
 ## Compile-time checks to add
 
@@ -52,6 +57,9 @@ Planned direction:
 - body/response types not covered by serializer context or schema generation strategy
 - unsupported schema shapes that should fail fast instead of producing incomplete OpenAPI
 - HTTP operations that cannot produce a valid OpenAPI contract from the available metadata
+- same-status union outcomes without an explicit discriminator strategy
+- same-status resource-event groups that include a key-only/no-body outcome or otherwise lack a generated serialized `eventId` discriminator
+- descriptor outcomes that are incomplete for generated client-safe response contracts
 
 ## Observability and debuggability
 
@@ -66,6 +74,9 @@ Planned direction:
 - Lean on serializer metadata rather than separate ad-hoc reflection whenever possible.
 - Use OpenAPI generation as a forcing function for descriptor completeness.
 - Treat audit sensitivity markers such as `[Sensitive]` as audit/logging concerns by default; any OpenAPI hiding/redaction behavior must be an explicit documentation policy, not an accidental side effect.
+- Treat flattened outcomes as the canonical OpenAPI input shape.
+- Require distinct HTTP status codes by default for union outcomes; only explicit discriminator metadata allows same-status `oneOf` contracts.
+- Allow body-bearing resource-event unions to satisfy that same-status requirement through generated `eventId` discriminator metadata rather than manual per-operation wiring.
 
 ## Sequencing
 
