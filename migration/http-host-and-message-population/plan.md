@@ -1,0 +1,89 @@
+# HTTP host and message population
+
+- Status: Planned
+- Priority: P1
+- Classification: Core host
+- Depends on: `../foundation-module-system/plan.md`, `../operation-discovery-and-descriptors/plan.md`, `../pipeline-composition-and-execution/plan.md`
+
+## Why this module exists
+
+HTTP is the primary host and the main consumer-facing contract surface. The legacy library combined `HttpHost`, message-population sources, result executors, formatters, and route metadata. The source-generated rewrite must preserve those semantics while moving route/binding decisions to compile time.
+
+## Evidence
+
+- Legacy: `D:\Projects\Signature365\src\Blueprint\Blueprint.Http\HttpHost.cs`
+- Legacy: `D:\Projects\Signature365\src\Blueprint\Blueprint.Http\BlueprintApiBuilderExtensions.cs`
+- Legacy: `D:\Projects\Signature365\src\Blueprint\Blueprint\Middleware\MessagePopulationMiddlewareBuilder.cs`
+- Legacy: `D:\Projects\Signature365\src\Blueprint\Blueprint.Http\MessagePopulation\HttpBodyMessagePopulationSource.cs`
+- Legacy: `D:\Projects\Signature365\src\Blueprint\Blueprint.Http\MessagePopulation\HttpRouteMessagePopulationSource.cs`
+- Legacy generated output: `D:\Projects\Signature365\src\Apps\AdminPortal\Symprex.Signature365.AdminPortal\Internal\Generated\Blueprint\GetOpenApiQueryExecutorPipeline.cs`
+- Current: `src\Blueprint.Runtime\Http\ApplicationBuilderExtensions.cs`
+- Current: `src\Blueprint.SourceGenerator\Modules\LinkGenerationModule.cs`
+
+## Migration goal
+
+Produce a source-generated HTTP host that knows, at compile time:
+
+- which operations are HTTP-visible
+- which route and method each operation uses
+- where each property comes from (route, body, query, header, cookie, form, ambient context)
+- which result executor/output formatter path applies
+- which serializer context is required
+
+## Runtime support to build
+
+- Endpoint mapping for generated apps
+- Generated message-population plan per operation
+- Generated result-execution plan per operation result type
+- Minimal runtime helpers for body parsing, formatter selection, and HTTP context access
+- Strong `System.Text.Json` source-generation alignment for request/response bodies
+- Output formatter and content-negotiation support that can still choose among enabled formatters at runtime without giving up compile-time knowledge of supported result shapes
+
+## Consumer configuration and activation
+
+Preserve or replace with thin source-generated equivalents:
+
+- `.Http(...)`
+- `.AddResourceEvents<T>()`
+- `[Link]`
+- `[HttpMethod(...)]`
+- `[FromBody]`, `[FromQuery]`, `[FromHeader]`, `[FromCookie]`
+
+The consumer should still be able to express the API contract declaratively; the generator should turn that into a deterministic binding plan.
+
+`AddHateoasLinks()` should not remain the long-term activation switch. Link generation should be architecturally available whenever resource/link metadata exists and should compile away when it does not.
+
+## Compile-time checks to add
+
+- route placeholders map to real operation properties
+- binding source conflicts for the same property
+- unsupported body-binding shapes
+- missing serializer context coverage for HTTP payloads
+- result type has no known HTTP execution strategy
+- operation marked for HTTP without route metadata
+- GET/POST semantics that conflict with configured binding behavior
+- no formatter can satisfy the declared HTTP response contract
+
+## Observability and debuggability
+
+Generate or expose:
+
+- route table manifest
+- per-operation binding plan
+- serializer context dependencies
+- result-execution mapping
+- the OpenAPI contract view that will be emitted for the same operations
+- enabled formatters and content-negotiation behavior
+- developer-friendly diagnostics for binding failures and unsupported shapes
+
+## Explicit decisions
+
+- Prefer compile-time binding plans over runtime source iteration.
+- Keep host visibility as compile-time metadata.
+- Push JSON metadata and schema friendliness toward `System.Text.Json` source generation.
+- Treat HTTP as implying OpenAPI generation and publication. `ConfigureOpenApi` may remain, but `AddOpenApi` should not be required to make the HTTP host complete.
+- Treat HTTP as the main path, but not the only host concept in the system.
+
+## Sequencing
+
+Implement early because many other modules depend on HTTP feature data, request context, and result handling behavior.

@@ -1,0 +1,158 @@
+# Breaking changes and migration tooling
+
+- Status: Planned
+- Priority: P0
+- Classification: Cross-cutting rollout
+- Depends on: `../foundation-module-system/plan.md` for initial strategy; analyzer and code-fix details then evolve alongside operation and pipeline design
+
+## Why this module exists
+
+The rewrite is allowed to make deliberate breaking changes where the new source-generated model is substantially better, but that only works if migration is mechanical and well-instrumented.
+
+Without explicit migration tooling, we would trade legacy runtime complexity for consumer pain, documentation debt, and high-friction upgrades across Symprex applications.
+
+## Evidence
+
+- Widespread legacy activation usage across Signature365 HTTP applications: `.AddAuthentication(...)`, `.AddAuthorisation()`, and `.AddOpenApi(...)`
+- Partial usage of `.AddHateoasLinks()`, showing that some current activation APIs represent optional customization rather than a capability that should be architecturally absent
+- `D:\Projects\Signature365\src\Core\Symprex.Signature365.Common.Core\Authorisation\FromResourceAttribute.cs` plus usage scan showing `[FromResource(...)]` appears 154 times
+- Usage scan showing `{Auth:...}` placeholders appear 140 times
+- `D:\Projects\Signature365\src\Blueprint\Blueprint.Http\Middleware\ResourceEventHandler.cs` showing the current nested-execution trigger is resource-event self-query rather than a broad public feature
+
+## Migration goal
+
+Make every deliberate breaking change explicit, classify whether it is analyzer-fixable or documentation-guided, and ship automated tooling so the legacy Blueprint-to-source-generated transition is mostly mechanical.
+
+## Breaking changes currently expected
+
+### 1. Activation APIs become configuration APIs
+
+Likely changes:
+
+- `AddOpenApi()` stops being the way OpenAPI appears; HTTP implies OpenAPI
+- `AddAuthentication()` and `AddAuthorisation()` stop being feature toggles and become configuration hooks or disappear
+- `AddHateoasLinks()` stops being required to turn on link generation when link metadata already exists
+
+### 2. General nested execution is removed or narrowed heavily
+
+Likely changes:
+
+- no public/general `ExecuteNestedAsync` parity story
+- resource-event self-query is redesigned first
+- any surviving internal re-query path is narrow and not part of the ordinary extension surface
+
+### 3. Runtime scanner/builder extension points give way to compile-time modules
+
+Likely changes:
+
+- runtime scanner-style hooks are replaced by source-generator modules and descriptor/pipeline contributors
+- `ApiOperations` / grouped handler discovery moves into core rather than remaining a consumer add-on
+- consumer customization prefers generator packages over runtime frame injection
+
+### 4. Resource/auth magic is reduced
+
+Likely changes:
+
+- `{Auth:...}` and property-template expansion move into compile-time-generated code
+- `[FromResource(...)]` becomes compile-time-resolved metadata
+- `SetTenantMiddleware`-style behavior becomes generated property hydration where possible
+- DB-backed ownership/resource expansion remains consumer-space rather than core Blueprint behavior
+
+### 5. Validation surface is trimmed
+
+Likely changes:
+
+- DataAnnotations becomes the primary validation contract
+- only a focused Blueprint-specific validator subset remains strategic
+- low-value legacy validators become compatibility aliases or migration targets
+
+### 6. Integration boundaries become stricter
+
+Likely changes:
+
+- Rebus and Marten stop being implied future core packages
+- Blueprint provides seams; consumers or companion packages provide the concrete integrations
+
+### 7. `ApiOperations` / `OperationsHandlerScanner` moves into core
+
+Likely changes:
+
+- the grouped-handler discovery story moves from Symprex consumer-space into core Blueprint
+- Symprex packages may need a compatibility wrapper or forwarding type during transition
+- migration tooling must detect old references and rewrite them to the new core shape where possible
+
+## Tooling to build
+
+### Roslyn analyzers and code fixes
+
+Plan a `Blueprint.Migration.Analyzers` package or equivalent that can:
+
+- flag legacy activation calls that no longer match the target architecture
+- remove or replace builder calls mechanically where the new behavior is defaulted
+- flag unsupported nested-execution assumptions
+- identify legacy validation attributes that should migrate to DataAnnotations or custom consumer validators
+- validate `[FromResource(...)]`, resource templates, and auth placeholder usage against the new compile-time rules
+- rewrite or flag legacy `OperationsHandlerScanner` / grouped-handler references as that behavior moves into core Blueprint
+
+### Upgrade report / manifest
+
+Provide a migration report that classifies findings into:
+
+- auto-fixable
+- configuration required
+- consumer-extension rewrite required
+- manual design review required
+
+The report should be readable by both humans and AI agents and point to the relevant migration documentation.
+
+### Compatibility shims
+
+Where useful, ship short-lived compatibility shims that:
+
+- keep source compatibility long enough for analyzers/code fixes to run
+- emit targeted diagnostics explaining the preferred replacement
+- avoid silently preserving legacy runtime behavior that the new architecture deliberately removes
+
+## Consumer configuration and activation
+
+Migration tooling should assume the end state is:
+
+- compile-time capability discovery and generation first
+- explicit configuration only for non-inferable behavior
+- consumer-owned generator packages for deep extension scenarios
+
+The tooling should therefore prefer deleting unnecessary activators over inventing new ones.
+
+## Release strategy
+
+Plan the rollout as an analyzer-led major-version change:
+
+- ship analyzers and migration reports early so applications can clean up usage before the final cutover
+- batch the deliberate source-breaking changes into a clearly signposted major version of the source-generated Blueprint stack
+- allow temporary compatibility shims in Symprex-owned packages only where they reduce migration friction without preserving unwanted runtime architecture long-term
+
+## Compile-time checks to add
+
+- legacy activation APIs used in ways that no longer have architectural meaning
+- consumer code still depending on general nested-execution concepts
+- resource/auth templates that cannot be satisfied by compile-time generation
+- consumer-specific integrations that need a package/module but only have runtime middleware today
+- validation attributes that no longer belong in the supported Blueprint subset
+
+## Observability and debuggability
+
+- per-project migration manifest
+- list of automated fixes applied versus remaining manual actions
+- diagnostics that explain *why* an API changed, not just *that* it changed
+- cross-links from diagnostics into these migration plans and future upgrade guidance
+
+## Explicit decisions
+
+- Breaking changes are acceptable when they materially improve determinism, AOT-friendliness, and long-term maintainability.
+- Mechanical migrations are preferable to preserving low-value legacy APIs indefinitely.
+- Migration analyzers/code fixes are part of the deliverable, not optional polish.
+- Migration reports must help both humans and AI agents understand unresolved blockers quickly.
+
+## Sequencing
+
+Start this work alongside the foundation design. The analyzer/code-fix surface can ship incrementally as architectural decisions become stable, but the migration story must be planned from the start rather than after implementation.
