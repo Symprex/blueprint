@@ -30,7 +30,7 @@ Generate pipelines from a `PipelinePlan` that can combine:
 
 - ordered middleware contributions
 - handler discovery and invocation plans
-- result transformation
+- result normalization and transformation
 - exception translation
 - a shared executor shell
 - post-execution behavior
@@ -39,6 +39,7 @@ Generate pipelines from a `PipelinePlan` that can combine:
 
 - Generated pipeline types and app executors
 - A stable shared executor shell/runtime helper for activity, logging, exception translation, and cleanup
+- Host-agnostic result normalization so handler returns become semantic result values rather than immediately executed host results
 - Handler invocation support for:
   - inline methods
   - external handler classes
@@ -47,6 +48,8 @@ Generate pipelines from a `PipelinePlan` that can combine:
   - optional alternate handler sources/scanners
 
 The runtime should remain thin; most execution shape should already be decided at generation time.
+
+The result model should also become host agnostic. Generated pipelines should produce semantic result values; host packages such as HTTP then execute or translate those values.
 
 ## Shared executor shell
 
@@ -68,6 +71,7 @@ Planning decision:
 - generated pipelines should continue to satisfy a stable runtime execution contract equivalent to the current `IOperationExecutorPipeline`
 - tests, programmatic execution, HTTP dispatch, and future non-HTTP hosts should all target that stable contract
 - the shared executor shell sits *under* that contract and should not force consumers to learn a second public abstraction just to execute an operation
+- the pipeline should not hard-code `new OkResult(handlerResult)` as the universal outcome shape; it should preserve explicit result types, normalize plain values into semantic success results, and leave host execution to the active host
 
 ## Replacing general nested execution
 
@@ -152,6 +156,7 @@ Generated code comments are useful, but a structured plan/manifest is even bette
 - Introduce a common executor shell so cross-cutting scaffolding is shared instead of duplicated.
 - Treat general nested execution parity as out of scope unless a narrower internal re-query path proves insufficient.
 - Treat `ApiOperations` / `OperationsHandlerScanner` behavior as core pipeline discovery functionality.
+- Make result handling data-first and host agnostic. Pipelines produce semantic result values; hosts execute them.
 
 ## Sequencing
 

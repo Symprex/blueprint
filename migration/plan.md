@@ -78,22 +78,23 @@ That redesign starts in [`foundation-module-system/plan.md`](foundation-module-s
 
 3. [`operation-discovery-and-descriptors`](operation-discovery-and-descriptors/plan.md)
 4. [`pipeline-composition-and-execution`](pipeline-composition-and-execution/plan.md)
-5. [`error-model-and-exception-handling`](error-model-and-exception-handling/plan.md)
-6. [`http-host-and-message-population`](http-host-and-message-population/plan.md)
-7. [`validation`](validation/plan.md)
-8. [`authentication-and-authorisation`](authentication-and-authorisation/plan.md)
-9. [`auditing-and-observability`](auditing-and-observability/plan.md)
+5. [`result-model-and-host-translation`](result-model-and-host-translation/plan.md)
+6. [`error-model-and-exception-handling`](error-model-and-exception-handling/plan.md)
+7. [`http-host-and-message-population`](http-host-and-message-population/plan.md)
+8. [`validation`](validation/plan.md)
+9. [`authentication-and-authorisation`](authentication-and-authorisation/plan.md)
+10. [`auditing-and-observability`](auditing-and-observability/plan.md)
 
 ### Phase 2 - Resource and API shape parity
 
-10. [`resource-model-links-and-post-processing`](resource-model-links-and-post-processing/plan.md)
-11. [`openapi`](openapi/plan.md)
+11. [`resource-model-links-and-post-processing`](resource-model-links-and-post-processing/plan.md)
+12. [`openapi`](openapi/plan.md)
 
 ### Phase 3 - Non-HTTP and consumer-space capability
 
-12. [`background-tasks`](background-tasks/plan.md)
-13. [`persistence-and-transaction-coordination`](persistence-and-transaction-coordination/plan.md)
-14. [`messaging-and-integration-hosts`](messaging-and-integration-hosts/plan.md)
+13. [`background-tasks`](background-tasks/plan.md)
+14. [`persistence-and-transaction-coordination`](persistence-and-transaction-coordination/plan.md)
+15. [`messaging-and-integration-hosts`](messaging-and-integration-hosts/plan.md)
 
 ## Module map
 
@@ -103,6 +104,7 @@ That redesign starts in [`foundation-module-system/plan.md`](foundation-module-s
 | [`breaking-changes-and-migration-tooling`](breaking-changes-and-migration-tooling/plan.md) | P0 | Cross-cutting rollout | Makes deliberate breaking changes explicit and ensures they are backed by analyzers, code fixes, and migration reporting. |
 | [`operation-discovery-and-descriptors`](operation-discovery-and-descriptors/plan.md) | P1 | Core | Reintroduces host-aware operation discovery, feature data, descriptor enrichment, and app registration. |
 | [`pipeline-composition-and-execution`](pipeline-composition-and-execution/plan.md) | P1 | Core | Replaces the monolithic pipeline generator with an ordered execution plan plus a shared executor shell. |
+| [`result-model-and-host-translation`](result-model-and-host-translation/plan.md) | P1 | Core/result | Defines the host-agnostic result model, typed unions, and the translation boundary between semantic results and active hosts such as HTTP. |
 | [`error-model-and-exception-handling`](error-model-and-exception-handling/plan.md) | P1 | Core | Makes success/failure contracts, exception translation, and documented error responses explicit instead of hard-coded. |
 | [`http-host-and-message-population`](http-host-and-message-population/plan.md) | P1 | Core host | Rebuilds HTTP exposure, input binding, result execution, and serializer-aware request/response handling. |
 | [`validation`](validation/plan.md) | P1 | Core middleware | Moves validation toward generated, DataAnnotations-first plans while keeping only a focused compatibility subset of Blueprint-specific validators. |
@@ -120,6 +122,7 @@ That redesign starts in [`foundation-module-system/plan.md`](foundation-module-s
 - [ ] Breaking changes and migration-tooling strategy agreed
 - [ ] Operation discovery, host filtering, and descriptor feature model implemented
 - [ ] Execution planning supports ordered stage contributions, a shared executor shell, and the replacement for general nested execution
+- [ ] Shared host-agnostic result model, typed unions, and host translation boundary agreed
 - [ ] Error model, exception translation, and declared failure responses agreed
 - [ ] HTTP host and binding parity reached
 - [ ] Validation parity reached
@@ -142,14 +145,14 @@ That redesign starts in [`foundation-module-system/plan.md`](foundation-module-s
 - Treat HTTP as implying OpenAPI. `ConfigureOpenApi` may remain, but `AddOpenApi` should not be the long-term activation switch.
 - Treat auth, authorisation, and link generation as always architecturally available capabilities that compile away when unused. Keep explicit configuration hooks only for behavior that cannot be inferred statically.
 - Do not treat general nested execution parity as a goal. First redesign resource-event self-query and only add a narrow internal re-query path if a simpler model cannot preserve the required behavior.
-- The round-3 resource-event deep dive recommends removing `SelfQuery` entirely, removing `ChangedValues` entirely (not optional — gone), using a save-only audit sink (`IResourceEventSink.SaveAsync`), and generating **named methods per event reason** within explicit event-family anchors. Each reason carries its `ChangeType` and reason string in an `[EventReason]` attribute; `EventId` is generated from `resourceObject + "." + reason`. See [`resource-model-links-and-post-processing/resource-events-no-nested-design-round-3.md`](resource-model-links-and-post-processing/resource-events-no-nested-design-round-3.md).
+- Keep the shared result model host agnostic. Typed results such as `OkResult<T>` remain part of the public contract, while hosts such as HTTP translate semantic results plus attachable hints such as `ETag` and cache control. See [`result-model-and-host-translation/plan.md`](result-model-and-host-translation/plan.md).
+- Resource events use concrete contract-level result types, typed one-of-many response contracts, and an explicit separation between event body and event identity. See [`resource-model-links-and-post-processing/plan.md`](resource-model-links-and-post-processing/plan.md).
 - Treat `ResourceExpand`, Rebus, Marten, and DB-backed ownership/resource-key expansion as consumer-space concerns. Their existence proves the seam, not the core package boundary.
 
 ## Open questions to resolve during implementation
 
 - What is the smallest public authoring API that still makes consumer-owned generator packages practical?
 - How thin can the remaining builder/configuration surface become without making migration ergonomically worse than necessary?
-- Which event-family declaration anchor gives the best balance of flexibility and simplicity: explicit family anchors in host namespaces, or generation directly from resource types?
 - Which legacy validation attributes should remain as compatibility aliases, and which should be analyzer-guided migrations to DataAnnotations or custom consumer validators?
 - How much constrained runtime middleware fallback is worth supporting for consumer-only extensions that cannot justify a full generator package?
 

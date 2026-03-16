@@ -3,7 +3,7 @@
 - Status: Planned
 - Priority: P1
 - Classification: Core host
-- Depends on: `../foundation-module-system/plan.md`, `../operation-discovery-and-descriptors/plan.md`, `../pipeline-composition-and-execution/plan.md`
+- Depends on: `../foundation-module-system/plan.md`, `../operation-discovery-and-descriptors/plan.md`, `../pipeline-composition-and-execution/plan.md`, `../result-model-and-host-translation/plan.md`
 
 ## Why this module exists
 
@@ -29,13 +29,15 @@ Produce a source-generated HTTP host that knows, at compile time:
 - where each property comes from (route, body, query, header, cookie, form, ambient context)
 - which result executor/output formatter path applies
 - which serializer context is required
+- which host-agnostic result shapes and HTTP hints it must execute
 
 ## Runtime support to build
 
 - Endpoint mapping for generated apps
 - Generated message-population plan per operation
 - Generated result-execution plan per operation result type
-- Minimal runtime helpers for body parsing, formatter selection, and HTTP context access
+- Host executors/adapters that translate semantic result types plus attached HTTP hints into status code, headers, and body behavior
+- Minimal runtime helpers for body parsing, formatter selection, HTTP context access, and host-hint application
 - Strong `System.Text.Json` source-generation alignment for request/response bodies
 - Output formatter and content-negotiation support that can still choose among enabled formatters at runtime without giving up compile-time knowledge of supported result shapes
 
@@ -60,6 +62,7 @@ The consumer should still be able to express the API contract declaratively; the
 - unsupported body-binding shapes
 - missing serializer context coverage for HTTP payloads
 - result type has no known HTTP execution strategy
+- unsupported or conflicting attached HTTP hints for the declared result shape
 - operation marked for HTTP without route metadata
 - GET/POST semantics that conflict with configured binding behavior
 - no formatter can satisfy the declared HTTP response contract
@@ -83,6 +86,8 @@ Generate or expose:
 - Push JSON metadata and schema friendliness toward `System.Text.Json` source generation.
 - Treat HTTP as implying OpenAPI generation and publication. `ConfigureOpenApi` may remain, but `AddOpenApi` should not be required to make the HTTP host complete.
 - Treat HTTP as the main path, but not the only host concept in the system.
+- Keep core result types host agnostic. The HTTP host owns status-code/header/body translation for those results.
+- Support typed success results plus attachable HTTP hints such as `ETag` and cache control without requiring result types to embed HTTP execution behavior.
 
 ## Sequencing
 

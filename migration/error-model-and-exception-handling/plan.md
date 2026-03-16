@@ -3,7 +3,7 @@
 - Status: Planned
 - Priority: P1
 - Classification: Core
-- Depends on: `../foundation-module-system/plan.md`, `../operation-discovery-and-descriptors/plan.md`, `../pipeline-composition-and-execution/plan.md`
+- Depends on: `../foundation-module-system/plan.md`, `../operation-discovery-and-descriptors/plan.md`, `../pipeline-composition-and-execution/plan.md`, `../result-model-and-host-translation/plan.md`
 
 ## Why this module exists
 
@@ -25,14 +25,14 @@ The current rewrite only hard-codes a few catch blocks in the generated pipeline
 
 ## Migration goal
 
-Make failure outcomes part of the compile-time contract so the shared executor shell, HTTP result handling, and OpenAPI generation all work from the same declared error model.
+Make failure outcomes part of the compile-time contract so the shared executor shell, host result handling, and OpenAPI generation all work from the same declared error model.
 
 ## Runtime support to build
 
 - shared executor-shell exception boundaries that invoke pipeline exception translators deterministically
 - pipeline exception translators that map known exception families to operation results
 - a descriptor-level failure metadata model
-- host-aware mapping from operation result/failure type to HTTP status and response body
+- host-aware mapping from semantic failure result type to HTTP status and response body
 - support for package-provided exception translators when needed
 
 ## Consumer configuration and activation
@@ -64,6 +64,7 @@ Consumers should be able to declare failure semantics once and have execution, H
 - Treat documented failure outcomes as part of the public API contract.
 - Keep a generic unhandled-exception fallback, but make the important known error paths explicit.
 - Let the shared executor shell own the default try/catch/finally structure so per-operation code only expresses declared differences.
+- Keep failure results host agnostic. HTTP status and response-body translation belong to the active host, not to the result type itself.
 
 ## Sequencing
 
