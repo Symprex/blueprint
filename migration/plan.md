@@ -12,6 +12,7 @@ The target is **consumer-contract compatibility**, not byte-for-byte pipeline pa
 - Do not re-introduce runtime C# generation + compilation.
 - Preserve the important consumer-facing shapes: commands, queries, resources, HTTP attributes, auth/validation attributes, and operation handling semantics, while allowing low-value builder and activation APIs to change when a mechanical migration path exists.
 - Prefer compile-time diagnostics over runtime failures whenever the generator can know the answer.
+- Treat compile-time, IDE/build, and runtime scale as first-class architecture concerns and protect them with deterministic harnesses.
 - Treat observability, generated inspection surfaces, and AI-friendly diagnostics as first-class deliverables.
 - Avoid rebuilding the old frame system wholesale; use `Blueprint.SourceGenerator.CodeWriter` and intermediate planning models instead.
 - Prefer compile-time defaults plus thin configuration hooks over runtime feature toggles when a capability is effectively always on in real applications.
@@ -69,32 +70,34 @@ That redesign starts in [`foundation-module-system/plan.md`](foundation-module-s
 
 ## Recommended phased order
 
-### Phase 0 - Foundation and migration safety
+### Phase 0 - Foundation, migration safety, and scale
 
 1. [`foundation-module-system`](foundation-module-system/plan.md)
 2. [`breaking-changes-and-migration-tooling`](breaking-changes-and-migration-tooling/plan.md)
+3. [`performance-and-scale`](performance-and-scale/plan.md)
 
 ### Phase 1 - Core parity path
 
-3. [`operation-discovery-and-descriptors`](operation-discovery-and-descriptors/plan.md)
-4. [`pipeline-composition-and-execution`](pipeline-composition-and-execution/plan.md)
-5. [`result-model-and-host-translation`](result-model-and-host-translation/plan.md)
-6. [`error-model-and-exception-handling`](error-model-and-exception-handling/plan.md)
-7. [`http-host-and-message-population`](http-host-and-message-population/plan.md)
-8. [`validation`](validation/plan.md)
-9. [`authentication-and-authorisation`](authentication-and-authorisation/plan.md)
-10. [`auditing-and-observability`](auditing-and-observability/plan.md)
+4. [`operation-discovery-and-descriptors`](operation-discovery-and-descriptors/plan.md)
+5. [`pipeline-composition-and-execution`](pipeline-composition-and-execution/plan.md)
+6. [`result-model-and-host-translation`](result-model-and-host-translation/plan.md)
+7. [`error-model-and-exception-handling`](error-model-and-exception-handling/plan.md)
+8. [`http-host-and-message-population`](http-host-and-message-population/plan.md)
+9. [`validation`](validation/plan.md)
+10. [`authentication-and-authorisation`](authentication-and-authorisation/plan.md)
+11. [`auditing-and-observability`](auditing-and-observability/plan.md)
+12. [`reference-app-and-end-to-end-example`](reference-app-and-end-to-end-example/plan.md) - start Layer 1 once the core HTTP path is runnable; later layers close after Phase 2 capabilities land
 
 ### Phase 2 - Resource and API shape parity
 
-11. [`resource-model-links-and-post-processing`](resource-model-links-and-post-processing/plan.md)
-12. [`openapi`](openapi/plan.md)
+13. [`resource-model-links-and-post-processing`](resource-model-links-and-post-processing/plan.md)
+14. [`openapi`](openapi/plan.md)
 
 ### Phase 3 - Non-HTTP and consumer-space capability
 
-13. [`background-tasks`](background-tasks/plan.md)
-14. [`persistence-and-transaction-coordination`](persistence-and-transaction-coordination/plan.md)
-15. [`messaging-and-integration-hosts`](messaging-and-integration-hosts/plan.md)
+15. [`background-tasks`](background-tasks/plan.md)
+16. [`persistence-and-transaction-coordination`](persistence-and-transaction-coordination/plan.md)
+17. [`messaging-and-integration-hosts`](messaging-and-integration-hosts/plan.md)
 
 ## Module map
 
@@ -102,6 +105,7 @@ That redesign starts in [`foundation-module-system/plan.md`](foundation-module-s
 | --- | --- | --- | --- |
 | [`foundation-module-system`](foundation-module-system/plan.md) | P0 | Core architecture | Replaces the legacy frame/middleware composition model with a source-generator-native module model. |
 | [`breaking-changes-and-migration-tooling`](breaking-changes-and-migration-tooling/plan.md) | P0 | Cross-cutting rollout | Makes deliberate breaking changes explicit and ensures they are backed by analyzers, code fixes, and migration reporting. |
+| [`performance-and-scale`](performance-and-scale/plan.md) | P0 | Cross-cutting engineering system | Protects compile-time, IDE/build, and runtime behavior with deterministic scale harnesses plus scheduled benchmarks. |
 | [`operation-discovery-and-descriptors`](operation-discovery-and-descriptors/plan.md) | P1 | Core | Reintroduces host-aware operation discovery, feature data, descriptor enrichment, and app registration. |
 | [`pipeline-composition-and-execution`](pipeline-composition-and-execution/plan.md) | P1 | Core | Replaces the monolithic pipeline generator with an ordered execution plan plus a shared executor shell. |
 | [`result-model-and-host-translation`](result-model-and-host-translation/plan.md) | P1 | Core/result | Defines the host-agnostic result model, typed unions, and the translation boundary between semantic results and active hosts such as HTTP. |
@@ -112,6 +116,7 @@ That redesign starts in [`foundation-module-system/plan.md`](foundation-module-s
 | [`auditing-and-observability`](auditing-and-observability/plan.md) | P1 | Cross-cutting | Makes logs, traces, audits, and generated inspection surfaces part of the baseline architecture. |
 | [`resource-model-links-and-post-processing`](resource-model-links-and-post-processing/plan.md) | P2 | Core/resource | Covers `ApiResource` metadata, links, resource events, and resource-aware post-processing. |
 | [`openapi`](openapi/plan.md) | P2 | Core HTTP capability | Rebuilds OpenAPI generation from the same source-generated descriptors and serializer metadata that power the HTTP host. |
+| [`reference-app-and-end-to-end-example`](reference-app-and-end-to-end-example/plan.md) | P1 | Cross-cutting reference surface | Defines the curated runnable sample that demonstrates the intended consumer story and doubles as an end-to-end regression surface. |
 | [`background-tasks`](background-tasks/plan.md) | P3 | Optional host/module | Restores background-task scheduling and execution as a first-class non-HTTP host. |
 | [`persistence-and-transaction-coordination`](persistence-and-transaction-coordination/plan.md) | P3 | Consumer-space integration seam | Provides the generic hooks needed for save-changes, transaction scopes, and outbox patterns without making Marten or another store a core dependency. |
 | [`messaging-and-integration-hosts`](messaging-and-integration-hosts/plan.md) | P3 | Consumer-space extension seam | Reintroduces alternate hosts and package-owned integrations such as Rebus-style message handling without forcing them into core Blueprint. |
@@ -120,16 +125,19 @@ That redesign starts in [`foundation-module-system/plan.md`](foundation-module-s
 
 - [ ] Foundation module system and pipeline-planning abstractions agreed
 - [ ] Breaking changes and migration-tooling strategy agreed
+- [ ] Compile-time, IDE/build, and runtime scale strategy agreed
 - [ ] Operation discovery, host filtering, and descriptor feature model implemented
 - [ ] Execution planning supports ordered stage contributions, a shared executor shell, and the replacement for general nested execution
 - [ ] Shared host-agnostic result model, typed unions, and host translation boundary agreed
 - [ ] Error model, exception translation, and declared failure responses agreed
 - [ ] HTTP host and binding parity reached
+- [ ] Reference app Layer 1 is runnable with real handlers
 - [ ] Validation parity reached
 - [ ] Authentication and authorisation parity reached
 - [ ] Auditing, logging, tracing, and generated debug surfaces agreed
 - [ ] Resource metadata, link generation, and no-nested resource-event contract agreed
 - [ ] OpenAPI generation strategy agreed
+- [ ] Reference app and end-to-end consumer story agreed
 - [ ] Background task host strategy agreed
 - [ ] Persistence/transaction seams agreed
 - [ ] Messaging/integration host seams agreed
@@ -148,6 +156,7 @@ That redesign starts in [`foundation-module-system/plan.md`](foundation-module-s
 - Do not treat general nested execution parity as a goal. First redesign resource-event self-query and only add a narrow internal re-query path if a simpler model cannot preserve the required behavior.
 - Keep the shared result model host agnostic. Typed results such as `OkResult<T>` remain part of the public contract, while hosts such as HTTP translate semantic results plus attachable hints such as `ETag` and cache control. See [`result-model-and-host-translation/plan.md`](result-model-and-host-translation/plan.md).
 - Resource events use concrete contract-level result types, typed one-of-many response contracts, and an explicit separation between event body and event identity. See [`resource-model-links-and-post-processing/plan.md`](resource-model-links-and-post-processing/plan.md).
+- Keep the human-facing reference app small and curated; use synthetic generated fixtures for large-scale benchmark and stress scenarios.
 - Treat `ResourceExpand`, Rebus, Marten, and DB-backed ownership/resource-key expansion as consumer-space concerns. Their existence proves the seam, not the core package boundary.
 
 ## Open questions to resolve during implementation
@@ -165,4 +174,6 @@ The migration plan is only successful if it leaves us with:
 - a prioritized, dependency-aware module inventory
 - explicit package-boundary decisions for core vs optional vs consumer-specific functionality
 - a plan for deliberate breaking changes backed by automated migration tooling
+- a plan for deterministic scale and performance feedback before Signature365-sized migrations begin
+- a realistic reference app target that demonstrates the intended consumer experience end to end
 - a plan for deterministic diagnostics, test harnesses, and generated debug surfaces alongside each module
