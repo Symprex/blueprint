@@ -110,6 +110,36 @@ That is not just instrumentation noise. It supports the repository's expectation
 
 When changing generator behavior, preserve both correctness and cacheability.
 
+## Planned target architecture
+
+The current implementation is intentionally smaller than the target architecture described in `/migration`.
+
+The future-state direction is:
+
+- modules contribute to explicit planning models, not directly to ad-hoc generated strings
+- descriptor, pipeline, host, registration, and manifest contributions stay separate but coordinated
+- a thin shared executor shell owns outer scaffolding while per-operation plans own operation-specific behavior
+- generated manifests and inspection surfaces explain the built API shape for humans, CI, and AI agents
+
+Representative planned models:
+
+- `OperationModel`
+- `DescriptorPlan`
+- `PipelinePlan`
+- `ExecutionShellPlan`
+- `AppRegistrationPlan`
+- generated manifest/inspection models
+
+Representative planned contributor seams:
+
+- descriptor contributors
+- pipeline contributors
+- host contributors
+- app-registration contributors
+- debug/manifest contributors
+
+The migration plans are the authority for the exact future-state shape. This document should describe both the current implementation and the agreed target direction so future work does not drift between the two.
+
 ## Architectural guardrails
 
 - Prefer new compile-time metadata over new runtime discovery.

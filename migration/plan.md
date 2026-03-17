@@ -75,29 +75,30 @@ That redesign starts in [`foundation-module-system/plan.md`](foundation-module-s
 1. [`foundation-module-system`](foundation-module-system/plan.md)
 2. [`breaking-changes-and-migration-tooling`](breaking-changes-and-migration-tooling/plan.md)
 3. [`performance-and-scale`](performance-and-scale/plan.md)
+4. [`generated-manifests-and-inspection-surfaces`](generated-manifests-and-inspection-surfaces/plan.md)
 
 ### Phase 1 - Core parity path
 
-4. [`operation-discovery-and-descriptors`](operation-discovery-and-descriptors/plan.md)
-5. [`pipeline-composition-and-execution`](pipeline-composition-and-execution/plan.md)
-6. [`result-model-and-host-translation`](result-model-and-host-translation/plan.md)
-7. [`error-model-and-exception-handling`](error-model-and-exception-handling/plan.md)
-8. [`http-host-and-message-population`](http-host-and-message-population/plan.md)
-9. [`validation`](validation/plan.md)
-10. [`authentication-and-authorisation`](authentication-and-authorisation/plan.md)
-11. [`auditing-and-observability`](auditing-and-observability/plan.md)
-12. [`reference-app-and-end-to-end-example`](reference-app-and-end-to-end-example/plan.md) - start Layer 1 once the core HTTP path is runnable; later layers close after Phase 2 capabilities land
+5. [`operation-discovery-and-descriptors`](operation-discovery-and-descriptors/plan.md)
+6. [`pipeline-composition-and-execution`](pipeline-composition-and-execution/plan.md)
+7. [`result-model-and-host-translation`](result-model-and-host-translation/plan.md)
+8. [`error-model-and-exception-handling`](error-model-and-exception-handling/plan.md)
+9. [`http-host-and-message-population`](http-host-and-message-population/plan.md)
+10. [`validation`](validation/plan.md)
+11. [`authentication-and-authorisation`](authentication-and-authorisation/plan.md)
+12. [`auditing-and-observability`](auditing-and-observability/plan.md)
+13. [`reference-app-and-end-to-end-example`](reference-app-and-end-to-end-example/plan.md) - start Layer 1 once the core HTTP path is runnable; later layers close after Phase 2 capabilities land
 
 ### Phase 2 - Resource and API shape parity
 
-13. [`resource-model-links-and-post-processing`](resource-model-links-and-post-processing/plan.md)
-14. [`openapi`](openapi/plan.md)
+14. [`resource-model-links-and-post-processing`](resource-model-links-and-post-processing/plan.md)
+15. [`openapi`](openapi/plan.md)
 
 ### Phase 3 - Non-HTTP and consumer-space capability
 
-15. [`background-tasks`](background-tasks/plan.md)
-16. [`persistence-and-transaction-coordination`](persistence-and-transaction-coordination/plan.md)
-17. [`messaging-and-integration-hosts`](messaging-and-integration-hosts/plan.md)
+16. [`background-tasks`](background-tasks/plan.md)
+17. [`persistence-and-transaction-coordination`](persistence-and-transaction-coordination/plan.md)
+18. [`messaging-and-integration-hosts`](messaging-and-integration-hosts/plan.md)
 
 ## Module map
 
@@ -106,6 +107,7 @@ That redesign starts in [`foundation-module-system/plan.md`](foundation-module-s
 | [`foundation-module-system`](foundation-module-system/plan.md) | P0 | Core architecture | Replaces the legacy frame/middleware composition model with a source-generator-native module model. |
 | [`breaking-changes-and-migration-tooling`](breaking-changes-and-migration-tooling/plan.md) | P0 | Cross-cutting rollout | Makes deliberate breaking changes explicit and ensures they are backed by analyzers, code fixes, and migration reporting. |
 | [`performance-and-scale`](performance-and-scale/plan.md) | P0 | Cross-cutting engineering system | Protects compile-time, IDE/build, and runtime behavior with deterministic scale harnesses plus scheduled benchmarks. |
+| [`generated-manifests-and-inspection-surfaces`](generated-manifests-and-inspection-surfaces/plan.md) | P0 | Cross-cutting architecture support | Defines the common contract for generated manifests, build artifacts, and runtime inspection surfaces. |
 | [`operation-discovery-and-descriptors`](operation-discovery-and-descriptors/plan.md) | P1 | Core | Reintroduces host-aware operation discovery, feature data, descriptor enrichment, and app registration. |
 | [`pipeline-composition-and-execution`](pipeline-composition-and-execution/plan.md) | P1 | Core | Replaces the monolithic pipeline generator with an ordered execution plan plus a shared executor shell. |
 | [`result-model-and-host-translation`](result-model-and-host-translation/plan.md) | P1 | Core/result | Defines the host-agnostic result model, typed unions, and the translation boundary between semantic results and active hosts such as HTTP. |
@@ -126,6 +128,7 @@ That redesign starts in [`foundation-module-system/plan.md`](foundation-module-s
 - [ ] Foundation module system and pipeline-planning abstractions agreed
 - [ ] Breaking changes and migration-tooling strategy agreed
 - [ ] Compile-time, IDE/build, and runtime scale strategy agreed
+- [ ] Generated manifest and inspection-surface contract agreed
 - [ ] Operation discovery, host filtering, and descriptor feature model implemented
 - [ ] Execution planning supports ordered stage contributions, a shared executor shell, and the replacement for general nested execution
 - [ ] Shared host-agnostic result model, typed unions, and host translation boundary agreed
@@ -157,6 +160,7 @@ That redesign starts in [`foundation-module-system/plan.md`](foundation-module-s
 - Keep the shared result model host agnostic. Typed results such as `OkResult<T>` remain part of the public contract, while hosts such as HTTP translate semantic results plus attachable hints such as `ETag` and cache control. See [`result-model-and-host-translation/plan.md`](result-model-and-host-translation/plan.md).
 - Resource events use concrete contract-level result types, typed one-of-many response contracts, and an explicit separation between event body and event identity. See [`resource-model-links-and-post-processing/plan.md`](resource-model-links-and-post-processing/plan.md).
 - Keep the human-facing reference app small and curated; use synthetic generated fixtures for large-scale benchmark and stress scenarios.
+- Keep generated manifests and inspection surfaces machine-readable and canonical so runtime tooling, CI, and AI agents can all project from the same underlying data.
 - Treat `ResourceExpand`, Rebus, Marten, and DB-backed ownership/resource-key expansion as consumer-space concerns. Their existence proves the seam, not the core package boundary.
 
 ## Open questions to resolve during implementation
@@ -165,6 +169,8 @@ That redesign starts in [`foundation-module-system/plan.md`](foundation-module-s
 - How thin can the remaining builder/configuration surface become without making migration ergonomically worse than necessary?
 - Which legacy validation attributes should remain as compatibility aliases, and which should be analyzer-guided migrations to DataAnnotations or custom consumer validators?
 - How much constrained runtime middleware fallback is worth supporting for consumer-only extensions that cannot justify a full generator package?
+- What is the canonical `JsonSerializerContext` ownership, aggregation, and validation story across contracts, hosts, and companion packages?
+- How should `IQuery<T>` / `ICommand<T>` / `IReturn<T>` metadata interact with `Results<T1, ...>` so descriptors, OpenAPI, and generated clients all see the expanded contract consistently?
 
 ## Success criteria
 

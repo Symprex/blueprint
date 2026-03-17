@@ -115,6 +115,8 @@ Expectations:
 - `dotnet format --diagnostics ...` applies safe code fixes where supported
 - a second build leaves only configuration-required or manual-review findings
 
+Until that project exists, treat these commands as the intended final workflow shape rather than something that should already run in this repository today.
+
 ## Layer 3 - Codemod CLI
 
 Once `Blueprint.Codemod` exists, large refactors should support both dry-run and apply modes:
@@ -127,6 +129,8 @@ dotnet build .\Blueprint.sln
 ```
 
 The dry-run must be reviewable before apply. Applying a codemod without a dry-run report should be the exception, not the default.
+
+Until that tool exists, treat this layer as planned workflow guidance, not as a runnable command contract.
 
 ## CI verification mode
 

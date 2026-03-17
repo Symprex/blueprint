@@ -25,17 +25,15 @@ Make every deliberate breaking change explicit, classify whether it is analyzer-
 
 ## Recommended consumer-app migration workflow
 
-The concrete migration path for a Signature365 app should be:
+The canonical execution workflow for migrating a Signature365 app lives in `docs\refactoring-workflow.md`.
 
-1. **Baseline capture** of the legacy app surface and representative behavior
-2. **Dry-run analysis** with analyzers and codemod reporting
-3. **Safe auto-fix application** for mechanical rewrites only
-4. **Manual migration work** in the dependency order defined by the main migration plans
-5. **Generated-stack cutover**
-6. **Equivalence verification** against the captured baseline
-7. **Cleanup** of temporary shims and legacy-only wiring
+This plan owns:
 
-This plan owns the categories, target architecture, and tooling expectations for that workflow. The detailed execution runbook and artifact locations live in `docs\refactoring-workflow.md`.
+- why the migration is allowed to break source/runtime shape
+- what kinds of changes should be analyzer-fixable versus documentation-guided
+- what tooling and artifact classes must exist
+
+The workflow document owns the step-by-step execution runbook, commands, and artifact locations.
 
 Required per-app artifacts should include:
 
@@ -104,6 +102,8 @@ Likely changes:
 - the grouped-handler discovery story moves from Symprex consumer-space into core Blueprint
 - Symprex packages may need a compatibility wrapper or forwarding type during transition
 - migration tooling must detect old references and rewrite them to the new core shape where possible
+
+This move should be treated as a precondition for the main operation-discovery and pipeline-composition implementation work, because both plans assume grouped-handler discovery is already part of core Blueprint rather than an external add-on.
 
 ## Tooling to build
 
@@ -176,6 +176,12 @@ Where useful, ship short-lived compatibility shims that:
 - keep source compatibility long enough for analyzers/code fixes to run
 - emit targeted diagnostics explaining the preferred replacement
 - avoid silently preserving legacy runtime behavior that the new architecture deliberately removes
+
+Each shim should also declare:
+
+- the migration diagnostic or analyzer family that replaces it
+- the intended replacement API or pattern
+- the explicit removal gate, for example "remove after the first analyzer-led migration release and at least one Symprex app has completed the cutover path"
 
 ## Consumer configuration and activation
 

@@ -30,7 +30,7 @@ Move to a DataAnnotations-first, source-generated validation model that keeps th
 
 - A generated property-validation plan per operation
 - Generated DataAnnotations-style validation code, using the .NET options-validation generator approach as the reference pattern for what "generated validation instead of reflective validation" should look like
-- A stable `ValidationFailedOperationResult` path
+- A stable semantic validation-failure path, with `ValidationFailedOperationResult` available as a migration alias where needed while the shared result model converges on canonical data-first names
 - Minimal runtime helpers only where truly required for async/contextual validators
 - Optional validation-source registration for package-provided validators
 - Compatibility handling for the retained Blueprint-specific validator subset

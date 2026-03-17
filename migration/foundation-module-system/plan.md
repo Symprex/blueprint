@@ -68,6 +68,44 @@ The implementation work should assume a concrete capability split along these li
 
 This is a planning sketch, not a locked API, but later module plans should assume hooks of roughly this shape exist.
 
+### 1b. Minimum viable Phase 0 slice
+
+This module is the main implementation blocker, so it needs a deliberately small first milestone instead of one giant "finish the foundation" goal.
+
+The minimum slice that should land before downstream module implementation starts is:
+
+- a capability split for:
+  - `IDescriptorContributor`
+  - `IPipelineContributor`
+  - `IHostContributor`
+  - `IAppRegistrationContributor`
+  - `IDebugManifestContributor`
+- a first set of planning models:
+  - `OperationModel`
+  - `DescriptorPlan`
+  - `PipelinePlan`
+  - `AppRegistrationPlan`
+  - `GeneratedDebugManifest`
+- a cross-operation lookup seam so contributors can reason about referenced operations instead of only the current operation in isolation
+- an adapter path from the current `IBlueprintSourceGeneratorModule` shape into the new capability model so the existing `LinkGenerationModule` remains the migration reference example rather than throwaway code
+
+If this slice is not explicit, every downstream module will invent the bit of foundation it needs and the architecture will drift before the first real phase is complete.
+
+### 1c. Module ordering and package composition contract
+
+Consumer-owned generator packages are only a real goal if module composition is deterministic and documented.
+
+Planning direction:
+
+- `BlueprintSourceGenerationConfig` remains the explicit composition root
+- modules carry explicit ordering/category metadata
+- contributors may declare hard dependencies on other contributors or stages
+- core modules run before consumer modules by default unless an explicit dependency edge requires different ordering
+- conflicting ordering or duplicate unique contributors become compile-time diagnostics
+- the public module/composition surface needs an explicit compatibility promise so companion packages know what can change only in a major version
+
+Treat this as a foundation requirement, not Phase 3 polish. Persistence, messaging, and consumer-owned extensions all depend on it.
+
 ### 2. Introduce intermediate planning models
 
 Modules should mostly contribute to plans, not directly write ad-hoc strings:
@@ -189,7 +227,27 @@ Legacy middleware could register exception handlers and finally frames. The new 
 - guaranteed cleanup/finalization
 - controlled participation in the shared executor shell
 
-### 5a. Hosts are a first-class concept
+### 5a. Shared executor shell scope boundary
+
+The shared executor shell should stay deliberately thin.
+
+It should own:
+
+- outer activity/logging scope setup
+- top-level exception boundary
+- guaranteed cleanup/finalization
+- shell-level manifest/debug metadata
+
+It should not own:
+
+- operation-specific handler invocation
+- operation-specific validation or auth decisions
+- per-operation result normalization rules
+- arbitrary package-specific business logic
+
+Cross-cutting modules may participate in the shell, but the shell must not become a renamed version of the old monolithic frame graph.
+
+### 5b. Hosts are a first-class concept
 
 Do not leave host modeling as an open architectural question.
 
@@ -225,7 +283,15 @@ The new system should be configured through an explicit module list/config objec
 - Consider a reusable package for composing modules and exposing a stable public authoring API for module authors.
 - Prefer builder helpers that configure modules and register runtime services; do not depend on runtime scanning to discover modules.
 - Treat legacy activation calls for effectively always-on capabilities as migration inputs, not as the target architecture.
-- Consider a constrained runtime middleware fallback for consumer-only extensions that cannot justify a custom generator package, with clear trade-offs called out (less analyzable, less optimizable, not the preferred path).
+- A constrained runtime middleware fallback is acceptable only as an explicit escape hatch for consumer-only extensions that cannot justify a custom generator package.
+
+Fallback boundary:
+
+- runtime middleware must occupy declared stage slots
+- it must not invent generated variable contracts for later compile-time contributors
+- it must not silently participate in the shared executor shell boundary
+- it must be configured explicitly, never discovered by scanning
+- it should carry diagnostics or documentation that point consumers toward generator-module migration for long-term use
 
 ## Compile-time checks and diagnostics
 
@@ -246,6 +312,8 @@ The foundation layer should generate inspection artifacts for humans and AI agen
 - applied module list per app
 - generated service/variable usage summary
 - host exposure summary
+
+The cross-module schema, file layout, and runtime/build ownership rules for those artifacts should be aligned with `../generated-manifests-and-inspection-surfaces/plan.md` rather than being reinvented per module.
 
 This should make it easy to answer "why did this operation get this generated code?" without reading raw generated C# first.
 

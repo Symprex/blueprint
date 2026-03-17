@@ -148,6 +148,27 @@ Plan for a deterministic fixture generator that can emit:
 
 That generator should feed both the compile-time and runtime harnesses so they measure the same architectural shapes.
 
+Treat this fixture generator as an explicit first-milestone deliverable, not a later convenience.
+
+Minimum expectations:
+
+- deterministic inputs for operation count, feature mix, and project topology
+- a repeatable mutation model for "single operation changed", "shared contract changed", and similar invalidation scenarios
+- outputs that can feed both compile-time tests and runtime benchmark surfaces without hand-maintained large samples
+
+## First milestone definition
+
+The first performance milestone should be concrete enough that future implementation work can start without reopening planning.
+
+Minimum deliverables:
+
+- a deterministic synthetic fixture generator
+- medium-scale compile-time cacheability and invalidation-locality tests
+- a documented way to capture design-time-build and normal-build telemetry
+- a first benchmark or measurement surface for the known runtime registration hotspots
+
+Do not block the first milestone on a complete benchmark suite, CI history, or every future runtime path being measurable on day one.
+
 ## Known hotspots to redesign before Tier 3
 
 Not every scale issue should wait for a benchmark to tell us it exists.

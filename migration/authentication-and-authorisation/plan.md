@@ -3,7 +3,7 @@
 - Status: Planned
 - Priority: P1
 - Classification: Core middleware
-- Depends on: `../foundation-module-system/plan.md`, `../operation-discovery-and-descriptors/plan.md`, `../pipeline-composition-and-execution/plan.md`, `../http-host-and-message-population/plan.md`
+- Depends on: descriptor/auth-metadata design depends on `../foundation-module-system/plan.md`, `../operation-discovery-and-descriptors/plan.md`, and `../pipeline-composition-and-execution/plan.md`; HTTP runtime execution then also depends on `../http-host-and-message-population/plan.md`
 
 ## Why this module exists
 
@@ -169,6 +169,8 @@ That means:
 - per-user auth-manifest endpoints project from the static manifest plus the current principal, rather than iterating every operation and re-running discovery logic
 - snapshot tests and generated matrix tests consume the same manifest data the runtime surfaces expose
 
+The shared artifact naming, schema, and ownership rules for these manifests should align with `../generated-manifests-and-inspection-surfaces/plan.md`.
+
 ## Resource permission design
 
 Split the problem into four layers:
@@ -230,6 +232,27 @@ Planned direction:
 - make the generated manifests readable enough that humans and AI agents can answer "who can call this and why?" without reverse-engineering runtime helpers
 - make the descriptor itself snapshot-friendly so tests can assert auth shape directly without reproducing convention logic
 - make the shared generated auth test harness execute the full generated auth plan (scope path plus claims path), not just the claims path
+
+## Phase 1 scope boundary
+
+The first implementation pass should stay focused on the core auth contract and generated execution path.
+
+Phase 1 scope:
+
+- `AuthorizationDescriptor` (or final equivalent)
+- compile-time lowering of auth/resource metadata
+- generated auth stages in the pipeline plan
+- `operations.auth`-style per-operation manifest output
+- compile-time `[FromResource(...)]` modeling
+
+Later or separate projection work:
+
+- consumer role/service-principal projection layers
+- `roles.access`-style derived manifests
+- generated consumer-specific access-matrix scaffolding
+- successors to broad consumer reporting tools such as `RolesToApiOperationsCreator`
+
+That split keeps the core auth work from being blocked on projection/reporting decisions that sit one layer above it.
 
 ## Observability and debuggability
 

@@ -3,7 +3,7 @@
 - Status: Planned
 - Priority: P1
 - Classification: Core/result
-- Depends on: `../foundation-module-system/plan.md`, `../pipeline-composition-and-execution/plan.md`
+- Depends on: `../foundation-module-system/plan.md`; co-designed with `../pipeline-composition-and-execution/plan.md` so result taxonomy and normalization rules are agreed before either implementation hard-codes them
 
 ## Why this module exists
 
@@ -44,6 +44,24 @@ That means:
 - typed unions (`Results<T1, ...>`) become part of the public contract surface
 - resource-event results become concrete contract-level result types
 - HTTP semantics travel as attachable hints rather than as hard-coded execution behavior on the result classes themselves
+
+## Breaking change path from self-executing results
+
+The current runtime result shape is an active architectural contradiction:
+
+- `OperationResult` owns `ExecuteAsync(...)`
+- concrete runtime results still look host-executing rather than host-translated
+
+This plan should therefore treat the change as an explicit breaking-change workstream, not as a quiet refactor.
+
+Planning direction:
+
+- semantic result types become data-first and host agnostic
+- hosts gain explicit translation/execution responsibility
+- direct `OperationResult.ExecuteAsync(...)` use becomes a migration target rather than the long-term contract
+- legacy runtime result types such as `ValidationFailedOperationResult` become migration aliases or shims for the canonical semantic names where that reduces migration pain
+
+This breaking change needs to stay aligned with `../breaking-changes-and-migration-tooling/plan.md` so analyzers, code fixes, and compatibility shims can be planned deliberately instead of after implementation starts.
 
 ## Canonical result taxonomy
 
@@ -154,6 +172,20 @@ Canonical normalization rules:
 Important edge rule:
 
 - plain-value handlers returning nullable reference/value types should be a diagnostic error rather than silently normalizing `null`
+
+### 3a. First implementation slice
+
+The first result-model implementation pass should stay narrow enough to unblock the rest of Phase 1 safely.
+
+Minimum scope:
+
+- the initial `Results<T1, ...>` public shape
+- static handler-return normalization into semantic results
+- the first flattened-outcome descriptor model
+- a migration path away from self-executing runtime results
+- the first diagnostics for unsupported union members and ambiguous nullable plain-value returns
+
+Later result families and host-specific conveniences should build on that slice rather than blocking it.
 
 ### 4. Typed unions are part of the public result contract
 
@@ -308,6 +340,7 @@ For generated clients and HTTP-visible unions, the model also needs an ambiguity
 - Keep host-specific result families such as explicit status-only or plain-text HTTP results in host packages rather than promoting them into the core taxonomy.
 - Require distinct HTTP status codes by default for HTTP-visible unions; same-status unions require explicit discriminator opt-in.
 - Allow body-bearing resource-event unions to auto-satisfy the same-status rule through a generated serialized `eventId` discriminator; key-only/no-body event outcomes are not part of that carve-out.
+- Treat legacy `ValidationFailedOperationResult`-style names as compatibility aliases where needed, but converge the semantic model on canonical data-first result names.
 
 ## Open questions to resolve
 
@@ -318,4 +351,4 @@ For generated clients and HTTP-visible unions, the model also needs an ambiguity
 
 ## Sequencing
 
-Implement after the pipeline plan is stable enough to define result normalization, but before HTTP, error handling, OpenAPI, and the full resource-event model depend on a stable result contract.
+Close the result taxonomy and normalization rules together with the pipeline plan before HTTP, error handling, OpenAPI, and the full resource-event model depend on a stable result contract.
