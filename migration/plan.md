@@ -1,185 +1,1023 @@
-# Blueprint source-generated migration plan
+# Blueprint source-generated migration orchestrator plan
 
 ## Purpose
 
-This is the working migration tracker for bringing the legacy Blueprint library at `D:\Projects\Signature365\src\Blueprint` across to the source-generated rewrite in this repository.
+This is the master execution plan for moving the legacy Blueprint library and its Signature365 usage model onto the source-generated Blueprint stack in this repository.
 
-The target is **consumer-contract compatibility**, not byte-for-byte pipeline parity. Generated executors may look very different from the legacy frame-based output so long as runtime behavior remains compatible and the new implementation is more deterministic, analyzable, and AOT-friendly.
+Use this file as the **ordering, dependency, and delivery contract** for future implementation work. The detailed design intent still lives in the module plans under `migration\*\plan.md`, but this document decides:
 
-## Non-negotiables
+- what gets done first
+- which workstreams can run in parallel
+- which gates must close before later phases begin
+- what "done" means for each workstream
+- what tests, benchmarks, artifacts, and docs are mandatory
+- how an AI orchestrator should delegate work to sub-agents and reviews
+
+The target is **consumer-contract compatibility**, not byte-for-byte parity with the legacy frame-based runtime. The new stack may generate very different code as long as it preserves the important consumer semantics and is more deterministic, inspectable, and AOT-friendly.
+
+## Source material this plan consolidates
+
+- `migration\plan.md` and all module plans under `migration\`
+- `docs\guiding-principles.md`
+- `docs\architecture.md`
+- `docs\compile-time-validation.md`
+- `docs\observability-and-dev-experience.md`
+- `docs\refactoring-workflow.md`
+- `docs\implementation-checklists.md`
+- the current source-generator/runtime code called out in the existing migration documents
+
+## Non-negotiable engineering rules
 
 - Keep pushing work from runtime into source generation, analyzers, and deterministic build-time models.
-- Do not re-introduce runtime C# generation + compilation.
-- Preserve the important consumer-facing shapes: commands, queries, resources, HTTP attributes, auth/validation attributes, and operation handling semantics, while allowing low-value builder and activation APIs to change when a mechanical migration path exists.
-- Prefer compile-time diagnostics over runtime failures whenever the generator can know the answer.
-- Treat compile-time, IDE/build, and runtime scale as first-class architecture concerns and protect them with deterministic harnesses.
-- Treat observability, generated inspection surfaces, and AI-friendly diagnostics as first-class deliverables.
-- Avoid rebuilding the old frame system wholesale; use `Blueprint.SourceGenerator.CodeWriter` and intermediate planning models instead.
-- Prefer compile-time defaults plus thin configuration hooks over runtime feature toggles when a capability is effectively always on in real applications.
-- Optimize first for Symprex's migration path, while keeping the seams generic enough that Blueprint remains usable outside Symprex.
+- Do not reintroduce runtime C# generation or runtime assembly compilation.
+- Preserve the important consumer-facing contracts: operations, resources, HTTP attributes, auth/validation semantics, grouped-handler discovery, and result behavior.
+- Prefer compile-time diagnostics over runtime surprises whenever the generator can know the answer.
+- Keep the runtime AOT-friendly, reflection-light, and explainable.
+- Treat observability, generated manifests, and AI-friendly inspection surfaces as part of the feature, not follow-up work.
+- Keep the human-facing reference app curated and readable; use synthetic fixtures for scale and stress testing.
+- Prefer deliberate breaking changes with analyzers/codemods over accidental compatibility drift.
 
-## Evidence base
+## How a future orchestrator should use this plan
 
-### Current source-generated repository
+1. Read this file first.
+2. Read the detailed module plan for the selected workstream before making changes.
+3. Do not start a workstream until every listed dependency is complete or an explicit human override is recorded.
+4. Implement the smallest reviewable slice that can satisfy a meaningful acceptance criterion.
+5. Follow the TDD-first execution loop below for every slice.
+6. Update docs and machine-readable artifacts in the same change.
+7. Use the sub-agent guidance in this file to split investigation, implementation, testing, and review work.
+8. At every major design gate, request human review before declaring the phase complete.
 
-- `src\Blueprint.SourceGenerator\Modules\IBlueprintSourceGeneratorModule.cs`
-- `src\Blueprint.SourceGenerator\Modules\LinkGenerationModule.cs`
-- `src\Blueprint.SourceGenerator\Generators\Descriptors\OperationDescriptorSourceGenerator.cs`
-- `src\Blueprint.SourceGenerator\Generators\Pipelines\CodeGen\PipelineCodeGenerator.cs`
-- `src\Blueprint.SourceGenerator\Generators\ApiResources\ApiResourceSourceGenerator.cs`
+## TDD-first execution loop
 
-### Legacy Blueprint core
+Every workstream and sub-task should follow this loop unless it is purely documentation-only:
 
-- `D:\Projects\Signature365\src\Blueprint\Blueprint\IMiddlewareBuilder.cs`
-- `D:\Projects\Signature365\src\Blueprint\Blueprint\MiddlewareBuilderContext.cs`
-- `D:\Projects\Signature365\src\Blueprint\Blueprint\Configuration\PipelineBuilder.cs`
-- `D:\Projects\Signature365\src\Blueprint\Blueprint\Configuration\BlueprintApiBuilder.cs`
-- `D:\Projects\Signature365\src\Blueprint\Blueprint\Configuration\IOperationScannerConvention.cs`
-- `D:\Projects\Signature365\src\Blueprint\Blueprint\Middleware\IOperationExecutorBuilderScanner.cs`
-- `D:\Projects\Signature365\src\Blueprint\Blueprint.Http\HttpHost.cs`
-- `D:\Projects\Signature365\src\Blueprint\Blueprint\CodeGennedExecutor.cs`
-- `D:\Projects\Signature365\src\Blueprint\Blueprint.Http\Middleware\ResourceEventHandler.cs`
+1. Define the slice and copy its acceptance criteria into the task description.
+2. Add a failing executable proof first:
+   - unit test
+   - snapshot test
+   - integration test
+   - analyzer/code-fix test
+   - benchmark harness or telemetry capture
+3. Implement the smallest slice needed to make the proof pass.
+4. Run targeted `dotnet format`, build, and the relevant tests.
+5. Review the **generated diff**, not only the handwritten source diff.
+6. Update docs, manifests, SARIF/JSON reports, or benchmark artifacts that changed.
+7. Run a review agent for risky architectural or cross-cutting changes.
+8. Only then move to the next slice.
 
-### Signature365 extension examples
+If a slice cannot be tested first, the orchestrator must explain why and add the earliest possible automated proof immediately after the first implementation step.
 
-- `D:\Projects\Signature365\src\Core\Symprex.Signature365.Common.Core\Api\OperationsHandlerScanner.cs`
-- `D:\Projects\Signature365\src\Core\Symprex.Signature365.BlueprintRebus\RebusHandleMessageOperationExecutorBuilderScanner.cs`
-- `D:\Projects\Signature365\src\Core\Symprex.Signature365.Common\Data\Marten\SaveMartenChangesMiddleware.cs`
-- `D:\Projects\Signature365\src\Core\Symprex.Signature365.Common\Data\Marten\UseMartenAsOutboxMiddleware.cs`
-- `D:\Projects\Signature365\src\Core\Symprex.Signature365.Common\Api\ResourceExpandMiddleware.cs`
-- `D:\Projects\Signature365\src\Core\Symprex.Signature365.Common\Api\SetTenantMiddleware.cs`
-- `D:\Projects\Signature365\src\Core\Symprex.Signature365.Common.Core\Authorisation\ResourceAttribute.cs`
-- `D:\Projects\Signature365\src\Core\Symprex.Signature365.Common.Core\Authorisation\FromResourceAttribute.cs`
+## Snapshot and diagnostic registration policy
 
-## The biggest architectural gap to close
+- Snapshot baselines are never auto-approved just because tests pass.
+- New or changed snapshot baselines require an intentional generated-diff review plus `code-review` agent or human sign-off before commit.
+- If a slice introduces diagnostics, reserve the ID or ID range in `docs\compile-time-validation.md` before implementation starts.
+- If a slice adds a new doc surface or changes documentation navigation, update `docs\README.md` in the same change.
 
-The current rewrite has a **descriptor-oriented module hook**. The legacy system has a **full pipeline composition model** with stages, matching rules, variable discovery, exception/finally hooks, host conventions, handler scanners, and a shared execution story that was spread across generated code rather than modeled explicitly.
+## Global definition of ready
 
-The migration therefore is not just "implement more modules". It requires a cross-cutting redesign so modules can contribute to:
+A work item is ready only when:
 
-1. operation discovery and host inclusion
-2. descriptor metadata and diagnostics
-3. pipeline composition and stage ordering
-4. variable discovery and reusable local/service/context values
-5. a shared executor shell for activity, logging, exception translation, and cleanup
-6. post-execution processing
-7. optional runtime services and consumer-space extension packages
-8. deliberate breaking changes plus automated migration tooling
+- [ ] All upstream dependencies listed in this plan are done.
+- [ ] The relevant `migration\...\plan.md` file has been read.
+- [ ] The target failing proof is chosen up front.
+- [ ] Any new diagnostic IDs/ranges have been reserved in `docs\compile-time-validation.md`.
+- [ ] Required docs and artifact updates are identified.
+- [ ] Any ambiguity in the detailed module plan has been resolved by updating the plan or asking for human guidance.
+- [ ] The slice is small enough to review in one pass.
 
-That redesign starts in [`foundation-module-system/plan.md`](foundation-module-system/plan.md) and is made safe to adopt through [`breaking-changes-and-migration-tooling/plan.md`](breaking-changes-and-migration-tooling/plan.md).
+## Global definition of done
 
-## Recommended phased order
+A work item is done only when:
+
+- [ ] All listed acceptance criteria are met.
+- [ ] Relevant tests, snapshots, and/or benchmarks pass.
+- [ ] Incremental-generator cacheability remains protected where the generator pipeline changed.
+- [ ] `dotnet format` has been run on touched code.
+- [ ] Generated diffs and snapshot changes were reviewed intentionally.
+- [ ] New or changed snapshot baselines received `code-review` agent or human sign-off.
+- [ ] Required docs were updated in the same change.
+- [ ] `docs\README.md` was updated if documentation navigation or scope changed.
+- [ ] Required machine-readable artifacts were produced or updated.
+- [ ] A review agent has checked risky changes.
+- [ ] A human review gate was requested if the work crossed a phase boundary or changed a public architectural contract.
+
+## Mandatory artifact contract
+
+These outputs are part of the implementation, not optional extras:
+
+- Generated source snapshot diffs for generator changes
+- Machine-readable manifests for operations/routes/auth/results/links as those surfaces land
+- OpenAPI output for HTTP-capable phases
+- Migration artifacts for consumer migration work:
+  - SARIF diagnostics
+  - codemod JSON report
+  - short markdown summary
+  - before/after manifest and equivalence reports
+- Performance and scale artifacts:
+  - `.binlog`
+  - generator/analyzer timing summaries
+  - invalidation-locality summaries
+  - benchmark output for runtime hot paths
+
+## Phase order and hard gates
 
 ### Phase 0 - Foundation, migration safety, and scale
 
-1. [`foundation-module-system`](foundation-module-system/plan.md)
-2. [`breaking-changes-and-migration-tooling`](breaking-changes-and-migration-tooling/plan.md)
-3. [`performance-and-scale`](performance-and-scale/plan.md)
-4. [`generated-manifests-and-inspection-surfaces`](generated-manifests-and-inspection-surfaces/plan.md)
+No downstream feature work should be treated as "real" until Phase 0 closes.
 
-### Phase 1 - Core parity path
+**Phase 0 exit gate**
 
-5. [`operation-discovery-and-descriptors`](operation-discovery-and-descriptors/plan.md)
-6. [`pipeline-composition-and-execution`](pipeline-composition-and-execution/plan.md)
-7. [`result-model-and-host-translation`](result-model-and-host-translation/plan.md)
-8. [`error-model-and-exception-handling`](error-model-and-exception-handling/plan.md)
-9. [`http-host-and-message-population`](http-host-and-message-population/plan.md)
-10. [`validation`](validation/plan.md)
-11. [`authentication-and-authorisation`](authentication-and-authorisation/plan.md)
-12. [`auditing-and-observability`](auditing-and-observability/plan.md)
-13. [`reference-app-and-end-to-end-example`](reference-app-and-end-to-end-example/plan.md) - start Layer 1 once the core HTTP path is runnable; later layers close after Phase 2 capabilities land
+- [ ] Foundation module system minimum viable slice is implemented.
+- [ ] Migration diagnostic ranges, report classes, and analyzer/codemod direction are defined.
+- [ ] Tier 2 compile-time scale harness exists and is running deterministically.
+- [ ] Generated manifest envelope/schema contract is agreed and reviewable.
+- [ ] Benchmark baselines for the known `BlueprintApp` hotspots exist in a reviewable artifact location before Phase 1 starts.
+- [ ] The Phase 0 review artifact set exists: manifest schema/example, synthetic fixture example, Tier 2 test evidence, and hotspot benchmark baseline.
 
-### Phase 2 - Resource and API shape parity
+### Phase 1 - Core HTTP parity path
 
-14. [`resource-model-links-and-post-processing`](resource-model-links-and-post-processing/plan.md)
-15. [`openapi`](openapi/plan.md)
+This phase ends when the repository can prove a coherent source-generated HTTP execution path, not just isolated generators. Full OpenAPI parity still closes in Phase 2, but Phase 1 must leave the architecture ready for HTTP-implied OpenAPI.
 
-### Phase 3 - Non-HTTP and consumer-space capability
+**Phase 1 exit gate**
 
-16. [`background-tasks`](background-tasks/plan.md)
-17. [`persistence-and-transaction-coordination`](persistence-and-transaction-coordination/plan.md)
-18. [`messaging-and-integration-hosts`](messaging-and-integration-hosts/plan.md)
+- [ ] Operation discovery, pipeline composition, result model, error model, HTTP host, validation, auth, and observability all work together.
+- [ ] The reference app is runnable with real handlers and deterministic seeded behavior.
+- [ ] At least one end-to-end reference-app test exercises discovery -> pipeline -> result -> error -> HTTP host -> validation/auth/observability together.
+- [ ] The re-query decision gate is explicitly closed.
+- [ ] Generated inspection surfaces are good enough for humans and AI agents to inspect the app surface.
+- [ ] The Phase 1 review artifact set exists: route/host manifest, auth/result manifest, generated diff review, and end-to-end test evidence.
 
-## Module map
+### Phase 2 - Resource/API shape parity
 
-| Module | Priority | Classification | Why it exists |
+This phase closes the richer API surface expected by consumer apps.
+
+**Phase 2 exit gate**
+
+- [ ] Resource metadata, link generation, post-processing, and resource-event behavior are implemented with a deliberate no-general-nested-execution story.
+- [ ] OpenAPI is generated automatically from the same source-generated metadata used by the HTTP host.
+- [ ] The reference app and artifacts demonstrate these capabilities end to end.
+- [ ] The Phase 2 review artifact set exists: resource/link manifest, OpenAPI artifact, and post-processing/resource-event test evidence.
+
+### Phase 3 - Non-HTTP and consumer-space extensibility
+
+This phase proves that the architecture is general, not HTTP-only.
+
+**Phase 3 exit gate**
+
+- [ ] At least one non-HTTP host works through the shared module/contributor model.
+- [ ] At least one consumer-space integration seam is proven with a realistic package-style example.
+- [ ] The migration tooling and extension seams are credible enough for Signature365-style migrations beyond the reference app.
+- [ ] The Phase 3 review artifact set exists: non-HTTP host manifest, companion-package worked example, and a realistic migration dry-run/report sample.
+
+## Dependency summary
+
+| Workstream | Depends on |
+| --- | --- |
+| Foundation module system | None |
+| Breaking changes and migration tooling | Foundation design direction |
+| Performance and scale | No hard blocker for first milestone; evolves with foundation/core work |
+| Generated manifests and inspection surfaces | Foundation design direction |
+| Operation discovery and descriptors | Foundation module system |
+| Pipeline composition and execution | Foundation + operation discovery + provisional result contract from workstream 7 |
+| Result model and host translation | Foundation + operation discovery + pipeline design loop; must be agreed before pipeline/HTTP/error/OpenAPI contracts freeze |
+| Error model and exception handling | Foundation + operation discovery + pipeline composition + result model |
+| HTTP host and message population | Foundation + operation discovery + pipeline composition + result model |
+| Validation | Foundation + operation discovery + pipeline composition |
+| Authentication and authorisation | Foundation + operation discovery + pipeline composition + HTTP host |
+| Auditing and observability | Foundation + shared shell design; starts early and evolves with Phase 1 modules |
+| Reference app and end-to-end example | Pipeline composition + HTTP host for Layer 1; broadens with later modules |
+| Resource model, links, and post-processing | Phase 1 core + re-query decision gate |
+| OpenAPI | Phase 1 core + resource model/result/serializer decisions |
+| Background tasks | Foundation + operation discovery + pipeline composition |
+| Persistence and transaction coordination | Foundation + typed variable registry + pipeline composition |
+| Messaging and integration hosts | Foundation + operation discovery + pipeline composition + background tasks |
+
+## Global sub-agent guidance
+
+### Required skill loading for .NET work
+
+Before planning or implementation, load:
+
+1. `using-dotnet`
+2. `dotnet-advisor`
+3. `dotnet-csharp`
+4. `dotnet-tooling`, `dotnet-testing`, and/or `dotnet-devops` as the workstream requires
+
+### Recommended sub-agent roles
+
+- Use an `explore` agent first for large workstreams to synthesize the relevant migration docs, code paths, and existing tests.
+- Use a `general-purpose` agent for multi-file implementation and architectural reasoning.
+- Use a `task` agent for build, format, test, and benchmark commands so the main context stays clean.
+- Use a `code-review` agent after risky architectural changes, before phase exits, and before merging broad migration-tooling changes.
+- Always use the agent handoff contract below when delegating work.
+
+### Recommended review pattern
+
+For architecture, plans, or risky cross-cutting changes:
+
+- one strong reasoning model from one family
+- one strong reasoning model from a different family
+- one faster/skeptical model to look for ambiguity and missing operational detail
+
+The goal is not "three approvals". The goal is to surface blind spots before humans review.
+
+### Agent handoff contract
+
+When delegating a workstream, include:
+
+- the relevant section from this plan
+- the linked detailed module plan(s)
+- explicit dependencies
+- acceptance criteria
+- failing-proof expectations
+- required docs/artifacts
+- known open questions or gates that must not be silently decided
+
+### Escalation rules
+
+- If the detailed module plan is too vague to produce executable acceptance criteria, stop and refine the plan or ask for human guidance before coding.
+- If a dependency conflict appears between this file and a module plan, do not silently reinterpret the order; reconcile the plans or escalate.
+- If a slice cannot start with a failing proof and it touches a public contract, security behavior, dependency order, or phase gate, get human approval before proceeding.
+- If a change would weaken compile-time determinism, cacheability, or inspection-surface quality, treat that as a design issue, not an implementation shortcut.
+
+## Workstreams in execution order
+
+## 1. Foundation module system
+
+**Priority:** P0  
+**Detailed plan:** `migration\foundation-module-system\plan.md`  
+**Depends on:** none
+
+### Checklist
+
+- [ ] Write and run a failing proof for the current slice before implementation.
+- [ ] Split `IBlueprintSourceGeneratorModule` into capability-oriented contributor seams.
+- [ ] Introduce planning models such as `OperationModel`, `DescriptorPlan`, `PipelinePlan`, `ExecutionShellPlan`, `AppRegistrationPlan`, and `GeneratedDebugManifest`.
+- [ ] Reintroduce ordered pipeline stages: Setup, Population, Authentication, Authorisation, Validation, Execution, PostExecution, Cleanup.
+- [ ] Add a typed variable registry for DI services, locals, context values, and cross-module produced values.
+- [ ] Add cross-operation lookup so contributors can reason about referenced operations.
+- [ ] Define module ordering, dependency declaration, and conflict diagnostics.
+- [ ] Provide an adapter path so the current `LinkGenerationModule` survives as the first migrated example.
+
+### Acceptance criteria
+
+- [ ] Existing module behavior can flow through the new contributor model without ad-hoc generator hacks.
+- [ ] Downstream modules can contribute descriptor, pipeline, host, app-registration, and debug-manifest data through explicit seams.
+- [ ] Ordering conflicts and duplicate unique contributors fail deterministically at compile time.
+- [ ] Typed variable production/consumption is explicit enough for persistence/messaging scenarios.
+- [ ] Generator cacheability does not regress when the adapter path is enabled.
+
+### Tests and benchmarks
+
+- [ ] Unit tests for ordering rules, dependency edges, and variable-registry behavior.
+- [ ] Snapshot tests for plan-model-driven output.
+- [ ] Cacheability-sensitive tests using `TestHelpers.Compile<T>()`.
+- [ ] Medium-scale fixture run proving the new foundation does not explode invalidation breadth.
+- [ ] Integration test for the persistence/outbox worked example described in the foundation plan's cross-module variable-sharing guidance.
+
+### Docs and artifacts
+
+- [ ] Update `docs\architecture.md` with the contributor model and planning-model flow.
+- [ ] Update `docs\implementation-checklists.md` if the new module pattern changes the standard workflow.
+- [ ] Update `docs\compile-time-validation.md` if new diagnostic families are introduced.
+
+### Sub-agent guidance
+
+- Use `explore` to trace current module seams and the legacy middleware/pipeline model.
+- Use a strong `general-purpose` agent for the contributor API and planning-model design.
+- Use `task` for focused test runs while iterating the adapter path.
+- Require `code-review` before freezing any public contributor API.
+
+## 2. Breaking changes and migration tooling
+
+**Priority:** P0  
+**Detailed plan:** `migration\breaking-changes-and-migration-tooling\plan.md`  
+**Depends on:** foundation direction
+
+### Checklist
+
+- [ ] Write and run a failing proof for the current slice before implementation.
+- [ ] Define the deliberate breaking changes and classify them by migration strategy.
+- [ ] Reserve and document migration diagnostic ranges such as `BPMIG001`-`BPMIG399`.
+- [ ] Plan and scaffold `Blueprint.Migration.Analyzers`.
+- [ ] Plan and scaffold `Blueprint.Codemod`.
+- [ ] Define SARIF, JSON, and markdown report schemas.
+- [ ] Define compatibility-shim policy, lifetime, and removal gates.
+- [ ] Align the execution workflow with `docs\refactoring-workflow.md`.
+
+### Acceptance criteria
+
+- [ ] The highest-value breaking changes are explicit rather than implicit.
+- [ ] Safe auto-fixes have an analyzer/code-fix path.
+- [ ] Larger stateful rewrites have a codemod dry-run/apply path.
+- [ ] Report output is machine-readable, stable, and reviewable by humans and AI agents.
+- [ ] A migrated consumer app can be classified into auto-fixable, configuration-required, consumer-extension rewrite, and manual-review buckets.
+
+### Tests and benchmarks
+
+- [ ] Analyzer diagnostic tests.
+- [ ] Code-fix tests with before/after coverage.
+- [ ] JSON/SARIF schema validation tests.
+- [ ] Dry-run idempotency tests for the codemod CLI.
+- [ ] Sample-app migration report review before broad rollout.
+
+### Docs and artifacts
+
+- [ ] Update `docs\refactoring-workflow.md` with the concrete migration workflow and artifact locations.
+- [ ] Update `docs\compile-time-validation.md` with migration diagnostic guidance.
+- [ ] Add examples of expected migration artifacts once the tooling lands.
+
+### Sub-agent guidance
+
+- Use `explore` to inventory legacy activation APIs, nested execution assumptions, validation attributes, and grouped-handler usage.
+- Use a `general-purpose` agent for analyzer/codemod design.
+- Use a testing-focused agent or `task` runs for analyzer/code-fix test suites.
+- Require `code-review` before any analyzer is allowed to rewrite code at solution scale.
+
+## 3. Performance and scale
+
+**Priority:** P0  
+**Detailed plan:** `migration\performance-and-scale\plan.md`  
+**Depends on:** no hard blocker for the first milestone; then evolves with foundation/core work
+
+### Checklist
+
+- [ ] Write and run a failing proof for the current slice before implementation.
+- [ ] Build a deterministic synthetic fixture generator for Blueprint apps and operations.
+- [ ] Add Tier 2 compile-time cacheability and invalidation-locality tests.
+- [ ] Add build/design-time telemetry capture and reporting.
+- [ ] Benchmark known runtime hotspots such as `BlueprintApp` registration and operation lookup.
+- [ ] Define PR-lane versus scheduled/manual benchmark lanes.
+- [ ] Add stress/soak tests for concurrent dispatch, startup, and manifest/OpenAPI generation.
+
+### Acceptance criteria
+
+- [ ] Medium-scale compile-time locality is measured and gated in CI.
+- [ ] Build telemetry can explain cold, no-op, and single-edit behavior.
+- [ ] Runtime hotspot measurements exist for known registration/lookup bottlenecks.
+- [ ] A reviewable benchmark baseline exists for the known `BlueprintApp` hotspots before Phase 1 starts.
+- [ ] The fixture generator feeds both compile-time and runtime harnesses.
+- [ ] Tier 3 readiness has an explicit measurement plan before Signature365-scale migration starts.
+
+### Tests and benchmarks
+
+- [ ] Cacheability and invalidation-locality tests.
+- [ ] Build telemetry capture with `.binlog` and timing summaries.
+- [ ] BenchmarkDotNet or equivalent runtime benchmarks for startup, dispatch, and shell overhead.
+- [ ] Stress tests for concurrent and high-volume paths.
+
+### Docs and artifacts
+
+- [ ] Update `docs\observability-and-dev-experience.md` with measurement and artifact expectations if needed.
+- [ ] Keep benchmark artifact locations and lane expectations documented.
+- [ ] Publish benchmark/telemetry outputs in a reviewable format.
+
+### Sub-agent guidance
+
+- Use `general-purpose` for harness design.
+- Use `task` for long-running builds/benchmarks.
+- Use `code-review` to check whether measurements are representative and whether gates are deterministic.
+
+## 4. Generated manifests and inspection surfaces
+
+**Priority:** P0  
+**Detailed plan:** `migration\generated-manifests-and-inspection-surfaces\plan.md`  
+**Depends on:** foundation direction
+
+### Checklist
+
+- [ ] Write and run a failing proof for the current slice before implementation.
+- [ ] Deliver the Phase 0 contract first: envelope, versioning, ownership, naming, and contributor-collision rules.
+- [ ] Define a shared manifest envelope and naming/versioning contract.
+- [ ] Define how modules contribute without schema collisions.
+- [ ] Make JSON the canonical representation and define projections to markdown/endpoints/tooling.
+- [ ] Ensure runtime inspection projects from build-time data rather than recomputing.
+- [ ] Align manifest output with migration reports, OpenAPI, and performance artifacts.
+
+### Acceptance criteria
+
+- [ ] The schema is stable enough to snapshot and publish.
+- [ ] Phase 0 can close with the shared contract agreed even if later modules still need to populate richer payloads incrementally.
+- [ ] At least one real module contributes manifest data through the shared contract.
+- [ ] Humans and AI agents can answer "what exists?" and "why?" without reverse-engineering generated code.
+- [ ] Runtime inspection does not invent or recompute conflicting data.
+
+### Tests and benchmarks
+
+- [ ] Snapshot tests for manifest shape and content.
+- [ ] Schema validation tests.
+- [ ] Compatibility tests for multiple module contributors.
+
+### Docs and artifacts
+
+- [ ] Update `docs\observability-and-dev-experience.md`.
+- [ ] Update `docs\architecture.md` with manifest generation flow.
+- [ ] Publish schema/example artifacts in Phase 0 and richer reference-app artifacts incrementally later.
+
+### Sub-agent guidance
+
+- Use `explore` to compare current inspection surfaces with the target contract.
+- Use `general-purpose` for schema and contributor-model work.
+- Use `code-review` before stabilizing schema names or versioning.
+
+## 5. Operation discovery and descriptors
+
+**Priority:** P1  
+**Detailed plan:** `migration\operation-discovery-and-descriptors\plan.md`  
+**Depends on:** foundation module system
+
+### Checklist
+
+- [ ] Write and run a failing proof for the current slice before implementation.
+- [ ] Move operation discovery fully to compile time.
+- [ ] Make operation inclusion host-aware.
+- [ ] Enrich descriptors with auth, result, resource, and feature metadata.
+- [ ] Flatten `Results<T1, ...>` and related outcome contracts for downstream consumers.
+- [ ] Resolve `[FromResource(...)]` into descriptor metadata.
+- [ ] Move grouped-handler discovery (`ApiOperations` / `OperationsHandlerScanner`) into core Blueprint.
+- [ ] Keep app registration generated from descriptors rather than runtime discovery.
+
+### Acceptance criteria
+
+- [ ] No runtime scanner is required to discover operations for the supported path.
+- [ ] Descriptors carry enough metadata for HTTP, auth, validation, links, OpenAPI, and manifests.
+- [ ] Grouped handlers work from core Blueprint, not only from Symprex consumer code.
+- [ ] Missing or invalid operation metadata fails with actionable diagnostics.
+
+### Tests and benchmarks
+
+- [ ] Descriptor-generation snapshot tests.
+- [ ] Diagnostics tests for invalid operations or metadata.
+- [ ] Cacheability-sensitive tests for one-operation edits.
+- [ ] Medium-scale discovery tests to guard invalidation breadth.
+
+### Docs and artifacts
+
+- [ ] Update `docs\architecture.md`.
+- [ ] Update `docs\compile-time-validation.md` if new descriptor diagnostics land.
+- [ ] Update migration tooling guidance if consumer references to grouped-handler types must be rewritten.
+
+### Sub-agent guidance
+
+- Use `explore` to map current discovery paths in both this repo and Signature365.
+- Use `general-purpose` for descriptor-model implementation.
+- Use `task` for snapshot and targeted test loops.
+
+## 6. Pipeline composition and execution
+
+**Priority:** P1  
+**Detailed plan:** `migration\pipeline-composition-and-execution\plan.md`  
+**Depends on:** foundation + operation discovery + provisional result contract from workstream 7
+
+Run this as a paired design loop with workstream 7. Do not freeze pipeline, HTTP, error, or OpenAPI behavior until the semantic result contract is agreed.
+
+### Checklist
+
+- [ ] Write and run a failing proof for the current slice before implementation.
+- [ ] Replace the monolithic pipeline generator with modular stage contributions.
+- [ ] Implement the shared executor shell for activity, logging, exception handling, and cleanup.
+- [ ] Support handler discovery for inline handlers, external handlers, and grouped handlers.
+- [ ] Define result normalization and post-execution contribution points.
+- [ ] Close the re-query decision gate explicitly before resource work starts.
+
+### Acceptance criteria
+
+- [ ] A pipeline can be composed from ordered contributors without hard-coded feature interleaving.
+- [ ] The shared shell owns the cross-cutting behavior consistently.
+- [ ] At least one middleware-style module plugs into the new pipeline path cleanly.
+- [ ] The re-query/nested-execution decision is documented and testable.
+
+### Tests and benchmarks
+
+- [ ] Snapshot tests for generated pipelines and executors.
+- [ ] Integration tests proving handler invocation through the generated pipeline.
+- [ ] Cacheability tests for pipeline-generation changes.
+- [ ] Early runtime measurements for shell overhead.
+
+### Docs and artifacts
+
+- [ ] Update `docs\architecture.md` with the stage model and shell flow.
+- [ ] Update `docs\observability-and-dev-experience.md` if tracing/logging hooks move.
+
+### Sub-agent guidance
+
+- Use a strong `general-purpose` agent for architecture and implementation.
+- Use `task` for repeated build/test cycles.
+- Require `code-review` before declaring the shared shell stable.
+
+## 7. Result model and host translation
+
+**Priority:** P1  
+**Detailed plan:** `migration\result-model-and-host-translation\plan.md`  
+**Depends on:** foundation + operation discovery + pipeline design loop with workstream 6
+
+Run this as a paired design loop with workstream 6. The result contract must be locked before pipeline, HTTP, error, or OpenAPI contracts are treated as stable.
+
+### Checklist
+
+- [ ] Write and run a failing proof for the current slice before implementation.
+- [ ] Define host-agnostic semantic result types and metadata.
+- [ ] Define attachable host hints such as ETag/cache-control without host leakage into core result types.
+- [ ] Align flattened result metadata with descriptors and future OpenAPI.
+- [ ] Define host translation seams for HTTP and later non-HTTP hosts.
+
+### Acceptance criteria
+
+- [ ] Pipelines return semantic results rather than host-specific outcomes.
+- [ ] HTTP translation is isolated and testable.
+- [ ] Descriptor, result, and OpenAPI models agree on the flattened outcome contract.
+- [ ] The public result story is coherent enough for sample code and future package authors.
+
+### Tests and benchmarks
+
+- [ ] Unit tests for result translation and union handling.
+- [ ] Snapshot tests for generated result metadata.
+- [ ] Integration tests for success and not-found/conflict style paths.
+
+### Docs and artifacts
+
+- [ ] Update `docs\architecture.md`.
+- [ ] Update any sample/reference documentation that exposes the preferred result contract.
+
+### Sub-agent guidance
+
+- Use `general-purpose` for the contract design.
+- Use `task` for integration verification.
+- Use `code-review` if result changes affect public API shapes.
+
+## 8. Error model and exception handling
+
+**Priority:** P1  
+**Detailed plan:** `migration\error-model-and-exception-handling\plan.md`  
+**Depends on:** foundation + operation discovery + pipeline composition + result model
+
+### Checklist
+
+- [ ] Write and run a failing proof for the current slice before implementation.
+- [ ] Define explicit success/failure contracts.
+- [ ] Define ordered exception translators.
+- [ ] Define how failure metadata feeds result translation and documentation.
+- [ ] Integrate exception handling with the shared executor shell.
+
+### Acceptance criteria
+
+- [ ] Expected exceptions translate deterministically to semantic failures.
+- [ ] Unexpected exceptions still flow through consistent shell-owned logging/telemetry.
+- [ ] Failure contracts are visible to hosts and OpenAPI generation.
+
+### Tests and benchmarks
+
+- [ ] Unit tests for translator ordering and fallback behavior.
+- [ ] Integration tests for representative failure paths.
+- [ ] Snapshot coverage if generated error metadata or executor code changes.
+
+### Docs and artifacts
+
+- [ ] Update `docs\architecture.md` if the failure model becomes part of the public design story.
+- [ ] Update `docs\observability-and-dev-experience.md` for error telemetry expectations.
+
+### Sub-agent guidance
+
+- Use `general-purpose` for design and implementation.
+- Use `code-review` to look for swallowed exceptions, inconsistent failure semantics, or host leakage.
+
+## 9. HTTP host and message population
+
+**Priority:** P1  
+**Detailed plan:** `migration\http-host-and-message-population\plan.md`  
+**Depends on:** foundation + operation discovery + pipeline composition + result model
+
+### Checklist
+
+- [ ] Write and run a failing proof for the current slice before implementation.
+- [ ] Generate HTTP-visible operation metadata at compile time.
+- [ ] Generate parameter-binding/message-population plans.
+- [ ] Generate result execution plans for supported semantic result shapes.
+- [ ] Align with `System.Text.Json` source generation and serializer-context validation.
+- [ ] Remove runtime source iteration for supported binding scenarios.
+
+### Acceptance criteria
+
+- [ ] The generated HTTP host can execute real sample operations end to end.
+- [ ] Binding and result execution are driven from generated plans, not runtime reflection loops.
+- [ ] Missing serializer/binding requirements fail at build time with good diagnostics.
+- [ ] Routing, binding, and result translation are snapshot- and integration-testable.
+
+### Tests and benchmarks
+
+- [ ] Integration tests for route execution, binding, and result handling.
+- [ ] Snapshot tests for generated host/binder/result-executor output.
+- [ ] Cacheability tests for HTTP plan changes.
+- [ ] Smoke allocation/startup checks for mapped endpoints.
+
+### Docs and artifacts
+
+- [ ] Update `docs\architecture.md`.
+- [ ] Update `docs\compile-time-validation.md` with HTTP binding/serializer diagnostics.
+- [ ] Publish reference-app route and host manifests once stable.
+
+### Sub-agent guidance
+
+- Use `general-purpose` for host/binding implementation.
+- Use `task` for integration tests and smoke benchmarks.
+- Bring in `dotnet-testing` guidance for HTTP integration coverage.
+
+## 10. Validation
+
+**Priority:** P1  
+**Detailed plan:** `migration\validation\plan.md`  
+**Depends on:** foundation + operation discovery + pipeline composition
+
+### Checklist
+
+- [ ] Write and run a failing proof for the current slice before implementation.
+- [ ] Move validation toward source-generated, DataAnnotations-first plans.
+- [ ] Preserve only the strategic Blueprint-specific validators called out in the plan.
+- [ ] Provide compatibility aliases where they reduce friction and remain clear.
+- [ ] Emit semantic validation-failure results rather than ad-hoc runtime behavior.
+- [ ] Add a registration seam for package-provided validation sources if needed.
+
+### Acceptance criteria
+
+- [ ] Supported validators generate deterministic validation plans.
+- [ ] Unsupported or deprecated validator shapes fail with clear migration guidance.
+- [ ] Validation failures surface through the shared result/error story.
+- [ ] Validation work remains compatible with compile-time diagnostics and manifests.
+
+### Tests and benchmarks
+
+- [ ] Unit tests for validator planning and execution.
+- [ ] Diagnostics tests for unsupported validator usage.
+- [ ] Integration tests for invalid input paths.
+- [ ] Snapshot coverage for validation plans where useful.
+
+### Docs and artifacts
+
+- [ ] Update `docs\compile-time-validation.md`.
+- [ ] Update `docs\implementation-checklists.md` if validation workflow expectations change.
+
+### Sub-agent guidance
+
+- Use `general-purpose` for generator/runtime implementation.
+- Use `task` or testing-focused help for the validator matrix and failure-path tests.
+
+## 11. Authentication and authorisation
+
+**Priority:** P1  
+**Detailed plan:** `migration\authentication-and-authorisation\plan.md`  
+**Depends on:** foundation + operation discovery + pipeline composition + HTTP host
+
+### Checklist
+
+- [ ] Write and run a failing proof for the current slice before implementation.
+- [ ] Generate explicit `AuthorizationDescriptor` metadata per operation.
+- [ ] Support JWT scope checks and resource-key claim matching as separate generated paths.
+- [ ] Generate `{Auth:...}` and property-template expansion from compile-time metadata.
+- [ ] Preserve the important public attributes and semantics.
+- [ ] Provide seams for user-context loading and consumer-owned ownership/resource resolvers.
+
+### Acceptance criteria
+
+- [ ] Auth checks are explicit, inspectable, and testable per operation.
+- [ ] Descriptor/manifests explain auth provenance and requirements.
+- [ ] Core Blueprint owns the compile-time auth contract; consumer packages own role/ownership models that cannot be generalized.
+- [ ] The implementation does not hide behavior inside magic runtime expansion rules.
+
+### Tests and benchmarks
+
+- [ ] Unit tests for auth-descriptor generation and permission-expansion logic.
+- [ ] Integration tests for allow-anonymous, authenticated, authorized, and denied paths.
+- [ ] Snapshot/manifests for auth metadata.
+- [ ] Runtime smoke checks for auth overhead once the path exists.
+
+### Docs and artifacts
+
+- [ ] Update `docs\architecture.md`.
+- [ ] Update `docs\observability-and-dev-experience.md` if access metadata becomes inspectable.
+- [ ] Update `docs\compile-time-validation.md` with auth-related diagnostics.
+
+### Sub-agent guidance
+
+- Use `explore` to inventory legacy Signature365 auth/resource patterns before coding.
+- Use `general-purpose` for the descriptor/check generation path.
+- Require `code-review` for any security-sensitive behavior or public attribute compatibility decision.
+
+## 12. Auditing and observability
+
+**Priority:** P1  
+**Detailed plan:** `migration\auditing-and-observability\plan.md`  
+**Depends on:** foundation + shared shell design; starts during foundation/pipeline work and evolves with the Phase 1 modules
+
+### Checklist
+
+- [ ] Write and run a failing proof for the current slice before implementation.
+- [ ] Add shared tracing/activity conventions through the executor shell.
+- [ ] Add structured logging using the preferred generated/runtime approach.
+- [ ] Define generated inspection surfaces for modules, stages, auth, and execution plans.
+- [ ] Keep the outputs OTLP/OpenTelemetry-friendly.
+
+### Acceptance criteria
+
+- [ ] Every generated operation participates in consistent tracing/logging hooks.
+- [ ] Inspection surfaces explain the registered API and generated execution story.
+- [ ] Observability work is designed into the shared shell rather than bolted on afterward.
+
+### Tests and benchmarks
+
+- [ ] Integration tests or assertions around emitted metadata/logging hooks where feasible.
+- [ ] Snapshot tests for manifests/inspection output.
+- [ ] Runtime smoke verification that the shared shell keeps observability overhead predictable.
+
+### Docs and artifacts
+
+- [ ] Update `docs\observability-and-dev-experience.md`.
+- [ ] Update `docs\architecture.md` if shell-owned observability changes the core flow.
+
+### Sub-agent guidance
+
+- Use `general-purpose` for integration across shell, manifests, and runtime.
+- Use `code-review` to look for inconsistent logging, missing correlation metadata, or duplicated shell work.
+
+## 13. Reference app and end-to-end example
+
+**Priority:** P1  
+**Detailed plan:** `migration\reference-app-and-end-to-end-example\plan.md`  
+**Depends on:** Layer 1 depends on pipeline composition + HTTP host; the fuller app evolves with later modules
+
+| Layer | Purpose | Depends on | Gate |
 | --- | --- | --- | --- |
-| [`foundation-module-system`](foundation-module-system/plan.md) | P0 | Core architecture | Replaces the legacy frame/middleware composition model with a source-generator-native module model. |
-| [`breaking-changes-and-migration-tooling`](breaking-changes-and-migration-tooling/plan.md) | P0 | Cross-cutting rollout | Makes deliberate breaking changes explicit and ensures they are backed by analyzers, code fixes, and migration reporting. |
-| [`performance-and-scale`](performance-and-scale/plan.md) | P0 | Cross-cutting engineering system | Protects compile-time, IDE/build, and runtime behavior with deterministic scale harnesses plus scheduled benchmarks. |
-| [`generated-manifests-and-inspection-surfaces`](generated-manifests-and-inspection-surfaces/plan.md) | P0 | Cross-cutting architecture support | Defines the common contract for generated manifests, build artifacts, and runtime inspection surfaces. |
-| [`operation-discovery-and-descriptors`](operation-discovery-and-descriptors/plan.md) | P1 | Core | Reintroduces host-aware operation discovery, feature data, descriptor enrichment, and app registration. |
-| [`pipeline-composition-and-execution`](pipeline-composition-and-execution/plan.md) | P1 | Core | Replaces the monolithic pipeline generator with an ordered execution plan plus a shared executor shell. |
-| [`result-model-and-host-translation`](result-model-and-host-translation/plan.md) | P1 | Core/result | Defines the host-agnostic result model, typed unions, and the translation boundary between semantic results and active hosts such as HTTP. |
-| [`error-model-and-exception-handling`](error-model-and-exception-handling/plan.md) | P1 | Core | Makes success/failure contracts, exception translation, and documented error responses explicit instead of hard-coded. |
-| [`http-host-and-message-population`](http-host-and-message-population/plan.md) | P1 | Core host | Rebuilds HTTP exposure, input binding, result execution, and serializer-aware request/response handling. |
-| [`validation`](validation/plan.md) | P1 | Core middleware | Moves validation toward generated, DataAnnotations-first plans while keeping only a focused compatibility subset of Blueprint-specific validators. |
-| [`authentication-and-authorisation`](authentication-and-authorisation/plan.md) | P1 | Core middleware | Restores authentication, user-context loading, and authorisation semantics with compile-time resource-permission analysis. |
-| [`auditing-and-observability`](auditing-and-observability/plan.md) | P1 | Cross-cutting | Makes logs, traces, audits, and generated inspection surfaces part of the baseline architecture. |
-| [`resource-model-links-and-post-processing`](resource-model-links-and-post-processing/plan.md) | P2 | Core/resource | Covers `ApiResource` metadata, links, resource events, and resource-aware post-processing. |
-| [`openapi`](openapi/plan.md) | P2 | Core HTTP capability | Rebuilds OpenAPI generation from the same source-generated descriptors and serializer metadata that power the HTTP host. |
-| [`reference-app-and-end-to-end-example`](reference-app-and-end-to-end-example/plan.md) | P1 | Cross-cutting reference surface | Defines the curated runnable sample that demonstrates the intended consumer story and doubles as an end-to-end regression surface. |
-| [`background-tasks`](background-tasks/plan.md) | P3 | Optional host/module | Restores background-task scheduling and execution as a first-class non-HTTP host. |
-| [`persistence-and-transaction-coordination`](persistence-and-transaction-coordination/plan.md) | P3 | Consumer-space integration seam | Provides the generic hooks needed for save-changes, transaction scopes, and outbox patterns without making Marten or another store a core dependency. |
-| [`messaging-and-integration-hosts`](messaging-and-integration-hosts/plan.md) | P3 | Consumer-space extension seam | Reintroduces alternate hosts and package-owned integrations such as Rebus-style message handling without forcing them into core Blueprint. |
+| Layer 1 | Runnable generated HTTP sample with real handlers and deterministic seeded data | Pipeline composition + HTTP host | Required for Phase 1 exit |
+| Layer 2 | Validation, auth, links, richer results, manifests, and inspection surfaces in one coherent app | Phase 1 core modules | Required before broader consumer migration confidence |
+| Layer 3 | OpenAPI, resource/post-processing examples, and any carefully chosen extension examples | Phase 2 modules | Required for Phase 2 exit |
 
-## Tracking checklist
+### Checklist
 
-- [ ] Foundation module system and pipeline-planning abstractions agreed
-- [ ] Breaking changes and migration-tooling strategy agreed
-- [ ] Compile-time, IDE/build, and runtime scale strategy agreed
-- [ ] Generated manifest and inspection-surface contract agreed
-- [ ] Operation discovery, host filtering, and descriptor feature model implemented
-- [ ] Execution planning supports ordered stage contributions, a shared executor shell, and the replacement for general nested execution
-- [ ] Shared host-agnostic result model, typed unions, and host translation boundary agreed
-- [ ] Error model, exception translation, and declared failure responses agreed
-- [ ] HTTP host and binding parity reached
-- [ ] Reference app Layer 1 is runnable with real handlers
-- [ ] Validation parity reached
-- [ ] Authentication and authorisation parity reached
-- [ ] Auditing, logging, tracing, and generated debug surfaces agreed
-- [ ] Resource metadata, link generation, and no-nested resource-event contract agreed
-- [ ] OpenAPI generation strategy agreed
-- [ ] Reference app and end-to-end consumer story agreed
-- [ ] Background task host strategy agreed
-- [ ] Persistence/transaction seams agreed
-- [ ] Messaging/integration host seams agreed
+- [ ] Write and run a failing proof for the current slice before implementation.
+- [ ] Replace `NotImplementedException` handlers with deterministic in-memory behavior.
+- [ ] Make the sample runnable end to end with the generated HTTP path.
+- [ ] Grow the sample into a curated 10-20 operation app in the templates domain.
+- [ ] Add validation, auth, link, result, and OpenAPI examples in deliberate layers.
+- [ ] Add snapshot-tested manifests and integration tests.
+- [ ] Add a sample-specific README once the app is genuinely useful.
 
-## Explicit design decisions already made
+### Acceptance criteria
 
-- **Do not** port `FramesCollection`, `Frame`, `SyncFrame`, and `AsyncFrame` as the dominant authoring model.
-- **Do** preserve the useful behaviors those types enabled: ordered stage contributions, variable reuse, and try/catch/finally participation.
-- Use `Blueprint.SourceGenerator.CodeWriter` for final rendering, but keep most module contributions declarative until the final write step.
-- Keep module composition explicit through configuration rather than implicit assembly scanning.
-- Treat `ApiOperations` / `OperationsHandlerScanner` behavior as core functionality, not as an optional example package.
-- Prefer compile-time markers, conventions, and generated defaults over preserving legacy fluent activation APIs one-to-one.
-- Treat HTTP as implying OpenAPI. `ConfigureOpenApi` may remain, but `AddOpenApi` should not be the long-term activation switch.
-- Treat auth, authorisation, and link generation as always architecturally available capabilities that compile away when unused. Keep explicit configuration hooks only for behavior that cannot be inferred statically.
-- Prefer generated auth/access descriptors, generated binders, and generated access manifests over runtime regex/reflection template expansion and separate access-report tools.
-- Do not treat general nested execution parity as a goal. First redesign resource-event self-query and only add a narrow internal re-query path if a simpler model cannot preserve the required behavior.
-- Keep the shared result model host agnostic. Typed results such as `OkResult<T>` remain part of the public contract, while hosts such as HTTP translate semantic results plus attachable hints such as `ETag` and cache control. See [`result-model-and-host-translation/plan.md`](result-model-and-host-translation/plan.md).
-- Resource events use concrete contract-level result types, typed one-of-many response contracts, and an explicit separation between event body and event identity. See [`resource-model-links-and-post-processing/plan.md`](resource-model-links-and-post-processing/plan.md).
-- Keep the human-facing reference app small and curated; use synthetic generated fixtures for large-scale benchmark and stress scenarios.
-- Keep generated manifests and inspection surfaces machine-readable and canonical so runtime tooling, CI, and AI agents can all project from the same underlying data.
-- Treat `ResourceExpand`, Rebus, Marten, and DB-backed ownership/resource-key expansion as consumer-space concerns. Their existence proves the seam, not the core package boundary.
+- [ ] The sample demonstrates the preferred future consumer story, not only generator internals.
+- [ ] The app remains infrastructure-light and deterministic.
+- [ ] Layer 1 is complete before claiming HTTP parity.
+- [ ] Later layers prove validation, auth, links, observability, and OpenAPI in one coherent app.
 
-## Open questions to resolve during implementation
+### Tests and benchmarks
 
-- What is the smallest public authoring API that still makes consumer-owned generator packages practical?
-- How thin can the remaining builder/configuration surface become without making migration ergonomically worse than necessary?
-- Which legacy validation attributes should remain as compatibility aliases, and which should be analyzer-guided migrations to DataAnnotations or custom consumer validators?
-- How much constrained runtime middleware fallback is worth supporting for consumer-only extensions that cannot justify a full generator package?
-- What is the canonical `JsonSerializerContext` ownership, aggregation, and validation story across contracts, hosts, and companion packages?
-- How should `IQuery<T>` / `ICommand<T>` / `IReturn<T>` metadata interact with `Results<T1, ...>` so descriptors, OpenAPI, and generated clients all see the expanded contract consistently?
+- [ ] End-to-end integration tests for happy and key failure paths.
+- [ ] Snapshot tests for routes, links, manifests, and OpenAPI as those land.
+- [ ] Smoke tests for preferred host wiring and app startup.
 
-## Success criteria
+### Docs and artifacts
 
-The migration plan is only successful if it leaves us with:
+- [ ] Add/update the sample README.
+- [ ] Publish sample manifests and OpenAPI artifacts.
+- [ ] Optionally add a small before/after migration note once migration tooling exists.
 
-- a clear architectural route from the current descriptor-only module hook to a full source-generated module system
-- a prioritized, dependency-aware module inventory
-- explicit package-boundary decisions for core vs optional vs consumer-specific functionality
-- a plan for deliberate breaking changes backed by automated migration tooling
-- a plan for deterministic scale and performance feedback before Signature365-sized migrations begin
-- a realistic reference app target that demonstrates the intended consumer experience end to end
-- a plan for deterministic diagnostics, test harnesses, and generated debug surfaces alongside each module
+### Sub-agent guidance
+
+- Use `general-purpose` for consumer-facing sample design and implementation.
+- Use `task` for integration test runs.
+- Use `code-review` for ergonomics and readability before treating the sample as canonical.
+
+## 14. Resource model, links, and post-processing
+
+**Priority:** P2  
+**Detailed plan:** `migration\resource-model-links-and-post-processing\plan.md`  
+**Depends on:** Phase 1 core + re-query decision gate
+
+### Checklist
+
+- [ ] Write and run a failing proof for the current slice before implementation.
+- [ ] Rebuild `ApiResource` metadata and link generation on top of descriptors/plans.
+- [ ] Add generated link visibility and discriminator handling.
+- [ ] Design resource-aware post-processing against the new pipeline/result model.
+- [ ] Finalize the resource-event story without restoring general nested execution.
+- [ ] Define concrete resource-event result contracts where needed.
+
+### Acceptance criteria
+
+- [ ] Links and resource metadata are generated from the same canonical data model as the rest of the stack.
+- [ ] Resource-event behavior is explicit and testable.
+- [ ] Any surviving narrow re-query path is documented, internal, and justified by concrete scenarios.
+- [ ] Manifests and OpenAPI stay consistent with the resource model.
+
+### Tests and benchmarks
+
+- [ ] Snapshot tests for links/resource metadata.
+- [ ] Integration tests for post-processing and resource-event paths.
+- [ ] Performance smoke checks for link-heavy scenarios if string/template handling becomes hot.
+
+### Docs and artifacts
+
+- [ ] Update `docs\architecture.md`.
+- [ ] Update `docs\compile-time-validation.md` if link/resource diagnostics evolve.
+- [ ] Publish resource/link manifests from the reference app.
+
+### Sub-agent guidance
+
+- Use `explore` to gather the exact legacy resource-event and link behaviors before implementation.
+- Use a strong `general-purpose` agent for design and implementation.
+- Require `code-review` at the re-query decision gate.
+
+## 15. OpenAPI
+
+**Priority:** P2  
+**Detailed plan:** `migration\openapi\plan.md`  
+**Depends on:** Phase 1 core + resource/result/serializer decisions
+
+### Checklist
+
+- [ ] Write and run a failing proof for the current slice before implementation.
+- [ ] Generate OpenAPI from the same descriptors, result metadata, and serializer metadata used by the HTTP host.
+- [ ] Complete the long-term move to HTTP-implied OpenAPI generation by the end of Phase 2.
+- [ ] Preserve a customization seam such as `ConfigureOpenApi` only where it still adds value.
+- [ ] Treat OpenAPI output as a reviewable artifact, not an opaque side effect.
+
+### Acceptance criteria
+
+- [ ] OpenAPI does not require a separate parallel contract model.
+- [ ] The generated output matches the actual HTTP/result/resource behavior.
+- [ ] HTTP operations produce OpenAPI automatically unless deliberately disabled for a documented reason.
+
+### Tests and benchmarks
+
+- [ ] Snapshot tests for OpenAPI output.
+- [ ] Schema validation for generated documents.
+- [ ] Integration tests or comparison checks using the reference app.
+
+### Docs and artifacts
+
+- [ ] Update `docs\architecture.md`.
+- [ ] Update the sample/reference documentation with OpenAPI expectations.
+- [ ] Publish reference-app OpenAPI output as an artifact.
+
+### Sub-agent guidance
+
+- Use `general-purpose` for implementation.
+- Use `task` for snapshot/schema validation runs.
+- Use `code-review` before calling the HTTP contract story complete.
+
+## 16. Background tasks
+
+**Priority:** P3  
+**Detailed plan:** `migration\background-tasks\plan.md`  
+**Depends on:** foundation + operation discovery + pipeline composition
+
+### Checklist
+
+- [ ] Write and run a failing proof for the current slice before implementation.
+- [ ] Define non-HTTP host metadata for background-task operations.
+- [ ] Reuse the shared pipeline/result/error model where appropriate.
+- [ ] Define scheduling/execution semantics and inspection surfaces.
+
+### Acceptance criteria
+
+- [ ] Background work proves the architecture is not HTTP-specific.
+- [ ] Host inclusion/execution is still driven by generated metadata.
+- [ ] Inspection surfaces explain the registered background-task operations clearly.
+
+### Tests and benchmarks
+
+- [ ] Integration tests for scheduling/execution behavior.
+- [ ] Snapshot/manifests for background-task registration.
+
+### Docs and artifacts
+
+- [ ] Update `docs\architecture.md`.
+- [ ] Update observability docs if task execution adds special telemetry patterns.
+
+### Sub-agent guidance
+
+- Use `general-purpose` for host design.
+- Use `task` for test runs.
+
+## 17. Persistence and transaction coordination
+
+**Priority:** P3  
+**Detailed plan:** `migration\persistence-and-transaction-coordination\plan.md`  
+**Depends on:** foundation + typed variable registry + pipeline composition
+
+### Checklist
+
+- [ ] Write and run a failing proof for the current slice before implementation.
+- [ ] Define generic save-changes/transaction/outbox seams.
+- [ ] Prove cross-module variable sharing for persistence scenarios.
+- [ ] Keep concrete store packages out of core Blueprint.
+- [ ] Provide at least one worked example based on a realistic Signature365-style scenario.
+
+### Acceptance criteria
+
+- [ ] The variable registry supports shared locals/DI values across persistence contributors.
+- [ ] The core package remains store-agnostic.
+- [ ] A companion package example proves the seam is usable in practice.
+
+### Tests and benchmarks
+
+- [ ] Unit tests for variable consumption/production ordering.
+- [ ] Integration tests for a worked persistence pipeline.
+- [ ] Performance smoke checks if persistence-related shell work adds overhead.
+
+### Docs and artifacts
+
+- [ ] Update `docs\architecture.md`.
+- [ ] Document the extension seam and worked example in the appropriate repo docs.
+
+### Sub-agent guidance
+
+- Use `explore` to compare legacy persistence/outbox middleware with the new variable-registry model.
+- Use `general-purpose` for seam implementation.
+- Use `code-review` before treating the extension boundary as stable.
+
+## 18. Messaging and integration hosts
+
+**Priority:** P3  
+**Detailed plan:** `migration\messaging-and-integration-hosts\plan.md`  
+**Depends on:** foundation + operation discovery + pipeline composition + background tasks
+
+### Checklist
+
+- [ ] Write and run a failing proof for the current slice before implementation.
+- [ ] Define host metadata and registration for message/integration handlers.
+- [ ] Keep message-host concerns in companion packages where appropriate.
+- [ ] Prove that alternate hosts can reuse the core descriptor/pipeline/result model.
+
+### Acceptance criteria
+
+- [ ] Alternate hosts work without contaminating the core HTTP architecture.
+- [ ] Package-owned integrations are feasible and documented.
+- [ ] The seam is strong enough for Rebus-style or similar integrations later.
+
+### Tests and benchmarks
+
+- [ ] Integration tests for host registration/execution.
+- [ ] Snapshot/manifests for host metadata.
+
+### Docs and artifacts
+
+- [ ] Update `docs\architecture.md`.
+- [ ] Document the package-owned integration pattern in repo docs once the seam exists.
+
+### Sub-agent guidance
+
+- Use `general-purpose` for design and implementation.
+- Use `task` for integration validation.
+- Use `code-review` before widening the public host-extension surface.
+
+## Standing design decisions the orchestrator should not silently revisit
+
+- Do not port `FramesCollection`, `Frame`, `SyncFrame`, and `AsyncFrame` as the dominant authoring model.
+- Use `Blueprint.SourceGenerator.CodeWriter` for final rendering, but keep most behavior declarative in planning models until the final write step.
+- Keep module composition explicit through configuration rather than assembly scanning.
+- Treat grouped-handler discovery as core Blueprint capability, not a Symprex-only add-on.
+- Long-term target: HTTP implies OpenAPI once Phase 2 completes.
+- Do not treat general nested execution parity as a goal; solve the specific resource-event scenario deliberately.
+- Keep the result model host-agnostic.
+- Keep manifests canonical and machine-readable.
+- Keep consumer-specific integrations such as Marten/Rebus/resource-expansion ownership in companion packages or consumer space unless there is a strong reason to move them into core.
+
+## Open questions that require explicit decisions
+
+| Question | Blocks | Must resolve before |
+| --- | --- | --- |
+| What is the smallest stable public contributor surface that still enables consumer-owned generator packages? | Consumer-owned extension packages, persistence, messaging | Phase 3 public seam freeze |
+| What is the canonical `JsonSerializerContext` ownership and validation story? | HTTP host, OpenAPI, result translation | Phase 1 HTTP contract freeze |
+| How should `IQuery<T>` / `ICommand<T>` / `IReturn<T>` metadata align with flattened `Results<T1, ...>` outcomes? | Operation discovery, result model, OpenAPI | Result/pipeline contract freeze |
+| How much constrained runtime middleware fallback, if any, is worth allowing? | Foundation module system, migration tooling, extension guidance | Phase 0 exit |
+| Can resource-event scenarios be solved without any explicit internal re-query path? | Resource model, links, and post-processing | Phase 1 re-query decision gate |
+
+## Human review gates
+
+Treat any dependency reorder, public contributor API change, serializer-context ownership decision, result contract change, auth/security behavior change, or weakening of compile-time guarantees as a major design gate.
+
+Human review is required before closing:
+
+- [ ] Foundation contributor API and planning-model contract
+- [ ] Result model and host translation contract
+- [ ] Re-query decision gate
+- [ ] Authentication/authorisation compatibility model
+- [ ] Phase 0 exit
+- [ ] Phase 1 exit
+- [ ] Phase 2 exit
+- [ ] First analyzer-led migration release plan
+
+## Final checklist for the future orchestrator
+
+- [ ] Work in the phase order defined here unless a human approves a deviation.
+- [ ] Use failing tests/diagnostics/benchmarks first.
+- [ ] Use the agent handoff contract when delegating work.
+- [ ] Keep each slice small and reviewable.
+- [ ] Preserve generator cacheability and invalidation locality.
+- [ ] Never approve snapshot baselines blindly; require intentional review.
+- [ ] Review generated diffs intentionally.
+- [ ] Update docs in the same change.
+- [ ] Emit machine-readable artifacts for migrations, manifests, and benchmarks.
+- [ ] Use sub-agents deliberately for exploration, implementation, testing, and review.
+- [ ] Ask for human review at every major architectural gate.
