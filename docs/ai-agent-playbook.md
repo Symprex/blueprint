@@ -64,6 +64,7 @@ When adding feedback, prefer formats that a human or AI can act on quickly:
 - precise source locations
 - structured manifests or registries
 - generated outputs that can be diffed
+- SARIF and JSON reports for larger refactors or migrations
 - telemetry and metadata that explain the active surface
 
 Vague prose is weaker than a concrete diagnostic, a failing snapshot, or a generated manifest.
@@ -114,6 +115,15 @@ It means:
 - then writing the result back into code, diagnostics, tests, docs, or tooling, including repo-local tools that validate or explain the codebase better
 
 Future agents should inherit a better repo, not just a patched one.
+
+## Large-scale refactoring workflow
+
+When a refactor is too large for ordinary local edits:
+
+- choose the lightest safe layer from `docs\refactoring-workflow.md`
+- prefer Roslyn analyzers/code fixes or a workspace-based codemod over regex/manual batch edits
+- require a dry-run and a machine-readable report for large codemods
+- update the refactoring workflow docs if the toolchain, commands, or artifact contract changes
 
 ## Good outputs for large API surfaces
 

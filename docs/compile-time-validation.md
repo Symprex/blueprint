@@ -24,6 +24,21 @@ If the compiler or generator can detect a bad configuration, it should do so wit
 
 These diagnostics should stay stable and descriptive because they are part of the repo's human and AI feedback loop.
 
+### Migration and refactoring diagnostics
+
+Large-scale migrations should use a dedicated diagnostic range rather than mixing mechanically-fixable migration findings into the ordinary generator IDs.
+
+Planned direction:
+
+| Range | Meaning |
+| --- | --- |
+| `BPMIG001`-`BPMIG099` | auto-fixable migration diagnostics |
+| `BPMIG100`-`BPMIG199` | configuration-required migration findings |
+| `BPMIG200`-`BPMIG299` | consumer-extension rewrites or custom migration work |
+| `BPMIG300+` | manual design-review items that should not be silently auto-fixed |
+
+Migration diagnostics should be paired with machine-readable reporting such as SARIF so that larger refactors remain reviewable and automatable.
+
 ### Link and route validation
 
 `LinkGenerationModule` defines `BPLG001` through `BPLG003` (`src\Blueprint.SourceGenerator\Modules\LinkGenerationModule.cs`):
@@ -43,6 +58,12 @@ When adding new diagnostics:
 3. Include concrete type, member, route, or configuration names in the message.
 4. Make the fix path obvious from the message or description.
 5. Choose severity intentionally. If generation would be wrong or unsafe, fail the build.
+
+For migration diagnostics specifically:
+
+6. Be explicit about whether the finding is auto-fixable, configuration-required, or manual-review-only.
+7. Point to the relevant migration plan when the fix is not fully mechanical.
+8. Prefer reports that can be consumed by both CI and AI agents without log scraping.
 
 Good diagnostics here should help both humans and AI agents repair the issue quickly.
 

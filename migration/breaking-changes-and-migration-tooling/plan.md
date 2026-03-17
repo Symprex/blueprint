@@ -23,6 +23,28 @@ Without explicit migration tooling, we would trade legacy runtime complexity for
 
 Make every deliberate breaking change explicit, classify whether it is analyzer-fixable or documentation-guided, and ship automated tooling so the legacy Blueprint-to-source-generated transition is mostly mechanical.
 
+## Recommended consumer-app migration workflow
+
+The concrete migration path for a Signature365 app should be:
+
+1. **Baseline capture** of the legacy app surface and representative behavior
+2. **Dry-run analysis** with analyzers and codemod reporting
+3. **Safe auto-fix application** for mechanical rewrites only
+4. **Manual migration work** in the dependency order defined by the main migration plans
+5. **Generated-stack cutover**
+6. **Equivalence verification** against the captured baseline
+7. **Cleanup** of temporary shims and legacy-only wiring
+
+This plan owns the categories, target architecture, and tooling expectations for that workflow. The detailed execution runbook and artifact locations live in `docs\refactoring-workflow.md`.
+
+Required per-app artifacts should include:
+
+- legacy baseline manifests and OpenAPI output before changes
+- migration SARIF and codemod reports during the rewrite
+- generated/manifests/OpenAPI/equivalence reports after cutover
+
+The migration is not complete until the equivalence review passes and the temporary shims can be removed.
+
 ## Breaking changes currently expected
 
 ### 1. Activation APIs become configuration APIs
@@ -97,6 +119,38 @@ Plan a `Blueprint.Migration.Analyzers` package or equivalent that can:
 - detect operations whose legacy auth story depends on implicit access-mode or template-expansion behavior that the new generator makes explicit
 - rewrite or flag legacy `OperationsHandlerScanner` / grouped-handler references as that behavior moves into core Blueprint
 
+Recommended libraries:
+
+- `Microsoft.CodeAnalysis.CSharp`
+- `Microsoft.CodeAnalysis.CSharp.Workspaces`
+- `Microsoft.CodeAnalysis.Analyzers`
+- Roslyn analyzer/code-fix test packages for deterministic diagnostics and fix coverage
+
+Preferred execution flow:
+
+- `dotnet build` to surface migration diagnostics and emit SARIF
+- `dotnet format --diagnostics ...` to apply safe code fixes at solution scale
+- a second `dotnet build` to confirm only manual-review or configuration-required findings remain
+
+### Workspace codemod CLI
+
+Plan a `Blueprint.Codemod` tool or equivalent for migrations that are too large or stateful for a normal code fix.
+
+Recommended libraries:
+
+- `Microsoft.Build.Locator`
+- `Microsoft.CodeAnalysis.Workspaces.MSBuild`
+- `Microsoft.CodeAnalysis.CSharp.Workspaces`
+- `System.CommandLine`
+
+Required capabilities:
+
+- solution loading without IDE dependence
+- dry-run mode
+- machine-readable report output
+- human-readable summary output
+- apply mode followed by normal build/test/format validation
+
 ### Upgrade report / manifest
 
 Provide a migration report that classifies findings into:
@@ -107,6 +161,13 @@ Provide a migration report that classifies findings into:
 - manual design review required
 
 The report should be readable by both humans and AI agents and point to the relevant migration documentation.
+
+Preferred artifacts:
+
+- SARIF for diagnostics
+- JSON for codemod/refactor reports
+- a short markdown summary for quick review
+- before/after app manifests and equivalence reports for migrated consumer apps
 
 ### Compatibility shims
 
@@ -148,6 +209,8 @@ Plan the rollout as an analyzer-led major-version change:
 - list of automated fixes applied versus remaining manual actions
 - diagnostics that explain *why* an API changed, not just *that* it changed
 - cross-links from diagnostics into these migration plans and future upgrade guidance
+- documented commands and artifact locations in `docs\refactoring-workflow.md`
+- explicit before/after artifacts that let reviewers compare a migrated app against its legacy baseline
 
 ## Explicit decisions
 
@@ -155,6 +218,8 @@ Plan the rollout as an analyzer-led major-version change:
 - Mechanical migrations are preferable to preserving low-value legacy APIs indefinitely.
 - Migration analyzers/code fixes are part of the deliverable, not optional polish.
 - Migration reports must help both humans and AI agents understand unresolved blockers quickly.
+- Large structural refactors should default to Roslyn-aware analyzers/code fixes or a workspace codemod CLI, not undocumented regex/manual batch editing.
+- The detailed execution workflow belongs in `docs\refactoring-workflow.md`; this plan owns the architectural and rollout side.
 
 ## Sequencing
 

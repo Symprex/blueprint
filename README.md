@@ -24,6 +24,7 @@ Start with:
 - `docs\guiding-principles.md` for the compile-time-first design direction
 - `docs\architecture.md` for the generator/runtime flow
 - `docs\observability-and-dev-experience.md` for telemetry and inspection guidance
+- `docs\refactoring-workflow.md` for larger refactors and migration-tooling workflow
 - `docs\implementation-checklists.md` for recurring change checklists
 
 This `README.md` intentionally stays brief. If a change affects architecture, diagnostics, observability, or developer tooling, update the relevant `/docs` file in the same change.

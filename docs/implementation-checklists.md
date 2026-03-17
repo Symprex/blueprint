@@ -58,6 +58,17 @@ They are intentionally short and repeatable so future humans and AI agents can u
 - [ ] Design tooling so it helps both humans and AI agents answer "what exists?" and "why?" quickly.
 - [ ] If a tool closes a recurring confusion gap, document the new workflow in `/docs`.
 
+## Breaking change or migration work
+
+- [ ] Choose the right refactoring layer from `docs\refactoring-workflow.md` before making bulk changes.
+- [ ] For a consumer-app migration, capture the legacy baseline before applying fixes.
+- [ ] Prefer Roslyn analyzers/code fixes or a codemod CLI over regex-first structural edits.
+- [ ] For large codemods, produce and review a dry-run report before applying changes.
+- [ ] Emit machine-readable migration artifacts (`.sarif`, `.json`) and a short human-readable summary.
+- [ ] For an app migration, produce and review the before/after manifests, OpenAPI, and equivalence report.
+- [ ] Run build, formatting, relevant tests, and snapshot review after the refactor.
+- [ ] Update the migration plan and `docs\refactoring-workflow.md` if the workflow, commands, or artifact contract changes.
+
 ## Final validation checklist
 
 - [ ] Run the relevant tests, snapshots, and formatting flow.
