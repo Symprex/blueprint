@@ -26,6 +26,17 @@ The target is **consumer-contract compatibility**, not byte-for-byte parity with
 - `docs\implementation-checklists.md`
 - the current source-generator/runtime code called out in the existing migration documents
 
+## Current status and next recommended step
+
+- Planning and orchestration guidance are complete.
+- The repository is ready to start implementation work at **Phase 0 / Workstream 1: Foundation module system**.
+- The next session should treat `migration\foundation-module-system\plan.md` as the immediate detailed execution target, while keeping `migration\plan.md` as the ordering and safety contract.
+- The first implementation slice should stay narrow:
+  - define the minimum viable contributor-capability split
+  - add failing tests for ordering/dependency behavior and the first variable-registry expectations
+  - preserve the current `LinkGenerationModule` through an adapter path rather than replacing it wholesale
+- Before widening scope beyond the first slice, the next session should confirm that the foundation design still aligns with the Phase 0 exit gate, performance harness expectations, and manifest contract requirements.
+
 ## Non-negotiable engineering rules
 
 - Keep pushing work from runtime into source generation, analyzers, and deterministic build-time models.
