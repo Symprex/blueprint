@@ -89,18 +89,34 @@ then the relevant `/docs` file should be updated in the same change.
 - Start in `docs/README.md`.
 - Read the most relevant detailed docs for the change.
 - Identify the build, snapshot, and generator harness you expect to exercise.
+- For any feature, bugfix, refactor, or behavior change, use the repo-local `test-driven-development` skill mindset first: write the failing proof before production edits and watch it fail for the right reason.
 
 ### While you change code
 
 - Favor compile-time enforcement over runtime repair.
 - Keep runtime behavior simple and inspectable.
 - Reuse the existing generator and CodeWriter patterns before inventing ad-hoc output logic.
+- For new planning helpers, registries, or orchestration seams, cover the happy path, the failure/diagnostic path, and the determinism edge cases that keep generation stable.
 
 ### After tools or humans give feedback
 
+- If something fails unexpectedly, use the `systematic-debugging` skill mindset before proposing fixes: investigate the root cause first, then change the smallest thing that proves the hypothesis.
 - fix the immediate issue
 - decide whether a stronger diagnostic, test, doc, or tool should exist
 - add the improvement when it is reasonable and directly related
+
+### Before you ask for commit-level human review
+
+- Use the `verification-before-completion` skill mindset before any success claim: rerun the fresh verification command, read the output, and only then say the slice is passing or ready for review.
+- Finish your own review pass first, including tests, formatting, generated-output review, and any review-agent follow-up that the slice needs.
+- Generate a visual review handoff with the `visual-explainer` skill before commit for any migration-plan slice or phase gate.
+- Treat that visual handoff as part of the artifact set, not as a presentation extra. It should show:
+  - the architectural delta and why it matters
+  - key code snippets and file touch points
+  - representative generated outputs or artifacts such as pipelines, descriptors, manifests, reports, or fixture outputs
+  - review findings already addressed plus any remaining risks or confidence gaps
+  - explicit feedback prompts for the human reviewer that should be fed back into the next AI review round before commit
+- Open the generated HTML locally and confirm it is readable before handing off to a human.
 
 ## What "self-learning" means here
 

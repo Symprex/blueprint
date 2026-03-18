@@ -1,7 +1,7 @@
 using System.Text.RegularExpressions;
 using Blueprint.SourceGenerator.CodeWriter;
-using Blueprint.SourceGenerator.Generators.Descriptors;
 using Blueprint.SourceGenerator.Helpers;
+using Blueprint.SourceGenerator.Planning;
 using Microsoft.CodeAnalysis;
 
 namespace Blueprint.SourceGenerator.Modules;
@@ -9,8 +9,20 @@ namespace Blueprint.SourceGenerator.Modules;
 /// <summary>
 /// A module that will configure URLs and links for operations.
 /// </summary>
-public class LinkGenerationModule : IBlueprintSourceGeneratorModule
+public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitializationContributor, IDescriptorContributor
 {
+    public string ModuleId => nameof(LinkGenerationModule);
+
+    public BlueprintModuleCategory Category => BlueprintModuleCategory.Core;
+
+    public string ContributorId => nameof(LinkGenerationModule);
+
+    public int Order => 0;
+
+    public bool IsUnique => true;
+
+    public IReadOnlyList<string> DependsOn { get; } = [];
+
     private static readonly DiagnosticDescriptor _missingPlaceholderError = new(
         id: "BPLG001",
         title: "Link format is invalid",
@@ -45,30 +57,15 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule
         SelfLinkAttributeDescriptor.Instance.AddSource(initializationContext);
     }
 
-    /// <inheritdoc/>
-    public void ConfigureModel(OperationConfigurationModel registration)
+    /// <inheritdoc />
+    public void Contribute(DescriptorContributorContext context)
     {
         var linkRegistrations = new List<UrlRegistration>();
 
-        LookForRootLinks(registration, linkRegistrations);
-        LookForSelfLinks(registration, linkRegistrations);
+        LookForRootLinks(context, linkRegistrations);
+        LookForSelfLinks(context, linkRegistrations);
 
-        // Ensure that we do not have any duplicate URLs
-        // foreach (var duplicates in linkRegistrations.GroupBy(r => NormaliseRouteParamsUrl(r.Url)).Where(g => g.Count() > 1))
-        // {
-        //     foreach (var r in duplicates)
-        //     {
-        //         var duplicateRegistrationsAsString = string.Join(
-        //             ", ",
-        //             duplicates.Where(dr => dr != r).Select(dr => dr.Registration.TypeSymbol.ToString()));
-        //
-        //         r.Registration.AddDiagnostic(
-        //             new DiagnosticInfo(
-        //                 _duplicateUrlError,
-        //                 r.LocationInfo,
-        //                 [r.Url, duplicateRegistrationsAsString]));
-        //     }
-        // }
+        context.Plan.AddRenderStep(codeWriter => RenderDescriptor(codeWriter, context.Plan));
     }
 
     // Normalise away the parameter names, so that we can compare URLs with different property names (as utimately they are
@@ -78,25 +75,24 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule
         return _placeholderRegex.Replace(url, "{<prop>}");
     }
 
-    /// <inheritdoc/>
-    public void ConfigureDescriptor(ICodeWriter codeWriter, OperationToRegisterModel registration)
+    private static void RenderDescriptor(ICodeWriter codeWriter, DescriptorPlan plan)
     {
-        foreach (var r in registration.GetMetadatas<UrlRegistration>())
+        foreach (var r in plan.GetMetadata<UrlRegistration>())
         {
             codeWriter.AppendLine($"this.AddUrl(new global::Blueprint.Model.ApiOperationUrl(\"{r.Url}\"));");
         }
 
-        foreach (var r in registration.GetMetadatas<LinkRegistration>())
+        foreach (var r in plan.GetMetadata<LinkRegistration>())
         {
             codeWriter.AppendLine($"this.AddLink(new global::Blueprint.Model.ApiOperationLink(this, \"{r.Url}\", \"{r.Url}\", \"{r.Rel}\", typeof({r.ResourceType})));");
         }
     }
 
     private static void LookForRootLinks(
-        OperationConfigurationModel registrationModel,
+        DescriptorContributorContext context,
         List<UrlRegistration> linkRegistrations)
     {
-        var rootLinkAttribute = RootLinkAttributeDescriptor.Instance.ParseSingle(registrationModel.TypeSymbol);
+        var rootLinkAttribute = RootLinkAttributeDescriptor.Instance.ParseSingle(context.Operation.TypeSymbol);
 
         if (rootLinkAttribute == null)
         {
@@ -115,25 +111,25 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule
             {
                 var placeholderName = placeholder.Value.Trim('{', '}');
 
-                if (registrationModel.TypeSymbol.GetMembers().Any(m => m.Name == placeholderName) == false)
+                if (context.Operation.TypeSymbol.GetMembers().Any(m => m.Name == placeholderName) == false)
                 {
                     var argumentLocationInfo = locationInfo.WithSubRange(placeholder.Index + 2, placeholder.Length - 2);
-                    registrationModel.AddDiagnostic(CreatePlaceholderMissingDiagnostic(registrationModel.TypeSymbol, placeholderName, argumentLocationInfo));
+                    context.Plan.AddDiagnostic(CreatePlaceholderMissingDiagnostic(context.Operation.TypeSymbol, placeholderName, argumentLocationInfo));
                 }
             }
         }
 
-        var urlRegistration = new UrlRegistration(url, locationInfo, registrationModel);
+        var urlRegistration = new UrlRegistration(url, locationInfo);
 
         linkRegistrations.Add(urlRegistration);
-        registrationModel.OperationToRegisterModel.AddMetadata(urlRegistration);
+        context.Plan.AddMetadata(urlRegistration);
     }
 
     private static void LookForSelfLinks(
-        OperationConfigurationModel registrationModel,
+        DescriptorContributorContext context,
         List<UrlRegistration> linkRegistrations)
     {
-        var selfLinkAttributes = SelfLinkAttributeDescriptor.Instance.ParseAll(registrationModel.TypeSymbol);
+        var selfLinkAttributes = SelfLinkAttributeDescriptor.Instance.ParseAll(context.Operation.TypeSymbol);
 
         foreach (var selfLinkAttribute in selfLinkAttributes)
         {
@@ -142,11 +138,11 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule
 
             if (resourceType is not INamedTypeSymbol resourceTypeSymbol || resourceTypeSymbol.AllInterfaces.Any(i => i.Name == "ILinkableResource") == false)
             {
-                registrationModel.AddDiagnostic(
+                context.Plan.AddDiagnostic(
                     new DiagnosticInfo(
                         _notLinkableResourceError,
                         resourceLocation,
-                        [resourceType.ToDisplayString(), registrationModel.TypeSymbol.ToDisplayString()]));
+                        [resourceType.ToDisplayString(), context.Operation.TypeSymbol.ToDisplayString()]));
 
                 continue;
             }
@@ -170,10 +166,10 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule
 
                         // First, make sure the route property exists
                         if (TryFindMember(
-                                registrationModel.TypeSymbol,
+                                context.Operation.TypeSymbol,
                                 routePropertyName,
                                 argumentLocationInfo,
-                                registrationModel))
+                                context.Plan))
                         {
                             // Now, make sure the resource has the route name OR the alternate name. We will only do this
                             // check if the operation check passes
@@ -181,10 +177,10 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule
                             {
                                 // No resource property name given, make sure the route param also exists on the resource
                                 TryFindMember(
-                                    registrationModel.TypeSymbol,
+                                    resourceTypeSymbol,
                                     routePropertyName,
                                     argumentLocationInfo,
-                                    registrationModel);
+                                    context.Plan);
                             }
                             else
                             {
@@ -193,7 +189,7 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule
                                     resourceTypeSymbol,
                                     resourcePropertyName!,
                                     argumentLocationInfo,
-                                    registrationModel);
+                                    context.Plan);
                             }
                         }
 
@@ -201,27 +197,27 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule
                     });
             }
 
-            if (registrationModel.Diagnostics.Any())
+            if (context.Plan.Diagnostics.Any())
             {
                 return;
             }
 
-            var urlRegistration = new UrlRegistration(normalisedUrl, urlLocation, registrationModel);
-            var linkRegistration = new LinkRegistration(normalisedUrl, "self", resourceTypeSymbol, urlLocation, registrationModel);
+            var urlRegistration = new UrlRegistration(normalisedUrl, urlLocation);
+            var linkRegistration = new LinkRegistration(normalisedUrl, "self", resourceTypeSymbol, urlLocation);
 
             linkRegistrations.Add(urlRegistration);
-            registrationModel.OperationToRegisterModel.AddMetadata(urlRegistration);
-            registrationModel.OperationToRegisterModel.AddMetadata(linkRegistration);
+            context.Plan.AddMetadata(urlRegistration);
+            context.Plan.AddMetadata(linkRegistration);
         }
     }
 
-    private static bool TryFindMember(INamedTypeSymbol namedTypeSymbol, string placeholderName, LocationInfo argumentLocationInfo, OperationConfigurationModel operationConfigurationModel)
+    private static bool TryFindMember(INamedTypeSymbol namedTypeSymbol, string placeholderName, LocationInfo argumentLocationInfo, DescriptorPlan descriptorPlan)
     {
         var memberExists = namedTypeSymbol.GetMembers().Any(m => m.Name == placeholderName);
 
         if (!memberExists)
         {
-            operationConfigurationModel.AddDiagnostic(
+            descriptorPlan.AddDiagnostic(
                 CreatePlaceholderMissingDiagnostic(
                     namedTypeSymbol,
                     placeholderName,
@@ -239,7 +235,7 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule
             [placeholderName, namedType.Name]);
     }
 
-    private sealed record UrlRegistration(string Url, LocationInfo? LocationInfo, OperationConfigurationModel Registration);
+    private sealed record UrlRegistration(string Url, LocationInfo? LocationInfo);
 
-    private sealed record LinkRegistration(string Url, string Rel, INamedTypeSymbol ResourceType, LocationInfo LocationInfo, OperationConfigurationModel Registration);
+    private sealed record LinkRegistration(string Url, string Rel, INamedTypeSymbol ResourceType, LocationInfo LocationInfo);
 }

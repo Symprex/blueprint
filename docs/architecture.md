@@ -121,6 +121,14 @@ The future-state direction is:
 - a thin shared executor shell owns outer scaffolding while per-operation plans own operation-specific behavior
 - generated manifests and inspection surfaces explain the built API shape for humans, CI, and AI agents
 
+The first Phase 0 foundation slice now exists in the current implementation:
+
+- `BlueprintSourceGenerationConfig.BuildExecutionPlan()` resolves ordered contributors and validates composition with deterministic diagnostics (`BPMOD001`-`BPMOD003`)
+- `LinkGenerationModule` is now the first real post-initialization and descriptor contributor routed through the execution plan instead of being hard-coded directly into descriptor generation
+- initial planning models now exist for `OperationModel`, `DescriptorPlan`, `PipelinePlan`, `AppRegistrationPlan`, `GeneratedDebugManifest`, and `VariableRegistry`
+
+At this stage only the descriptor and post-initialization seams are executed end-to-end. The other contributor capabilities and planning models are deliberately scaffolded so later migration slices can fill them in without reinventing the foundation contract.
+
 Representative planned models:
 
 - `OperationModel`

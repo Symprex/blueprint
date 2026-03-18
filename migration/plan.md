@@ -34,7 +34,7 @@ The target is **consumer-contract compatibility**, not byte-for-byte parity with
 - The first implementation slice should stay narrow:
   - define the minimum viable contributor-capability split
   - add failing tests for ordering/dependency behavior and the first variable-registry expectations
-  - preserve the current `LinkGenerationModule` through an adapter path rather than replacing it wholesale
+  - convert `LinkGenerationModule` into the first real contributor rather than carrying a legacy adapter by default
 - Before widening scope beyond the first slice, the next session should confirm that the foundation design still aligns with the Phase 0 exit gate, performance harness expectations, and manifest contract requirements.
 
 ## Non-negotiable engineering rules
@@ -54,10 +54,11 @@ The target is **consumer-contract compatibility**, not byte-for-byte parity with
 2. Read the detailed module plan for the selected workstream before making changes.
 3. Do not start a workstream until every listed dependency is complete or an explicit human override is recorded.
 4. Implement the smallest reviewable slice that can satisfy a meaningful acceptance criterion.
-5. Follow the TDD-first execution loop below for every slice.
+5. Follow the TDD-first execution loop below for every slice, using the repo-local `test-driven-development`, `systematic-debugging`, and `verification-before-completion` skills when relevant.
 6. Update docs and machine-readable artifacts in the same change.
 7. Use the sub-agent guidance in this file to split investigation, implementation, testing, and review work.
 8. At every major design gate, request human review before declaring the phase complete.
+9. After a slice reaches local done and passes self-review, generate a visual human-review handoff with `visual-explainer` before commit or before moving to the next phase gate.
 
 ## TDD-first execution loop
 
@@ -70,12 +71,16 @@ Every workstream and sub-task should follow this loop unless it is purely docume
    - integration test
    - analyzer/code-fix test
    - benchmark harness or telemetry capture
+   - use `test-driven-development` discipline to prove the test fails for the right reason before production edits
 3. Implement the smallest slice needed to make the proof pass.
 4. Run targeted `dotnet format`, build, and the relevant tests.
-5. Review the **generated diff**, not only the handwritten source diff.
-6. Update docs, manifests, SARIF/JSON reports, or benchmark artifacts that changed.
-7. Run a review agent for risky architectural or cross-cutting changes.
-8. Only then move to the next slice.
+5. If the proof or build behaves unexpectedly, use `systematic-debugging` discipline before proposing fixes.
+6. Review the **generated diff**, not only the handwritten source diff.
+7. Update docs, manifests, SARIF/JSON reports, or benchmark artifacts that changed.
+8. Run a review agent for risky architectural or cross-cutting changes.
+9. Create a `visual-explainer` review document for the completed slice, including architecture, key snippets, representative outputs/artifacts, review findings, and explicit feedback prompts for the human reviewer.
+10. Use `verification-before-completion` discipline before any success or handoff claim: rerun the fresh verification commands, read the output, then report status.
+11. Only then move to the next slice.
 
 If a slice cannot be tested first, the orchestrator must explain why and add the earliest possible automated proof immediately after the first implementation step.
 
@@ -112,6 +117,8 @@ A work item is done only when:
 - [ ] `docs\README.md` was updated if documentation navigation or scope changed.
 - [ ] Required machine-readable artifacts were produced or updated.
 - [ ] A review agent has checked risky changes.
+- [ ] A `visual-explainer` HTML review artifact was created after self-review and before commit/handoff.
+- [ ] The visual review artifact includes architecture, key snippets, representative outputs/artifacts, review findings, open concerns, and feedback prompts for the human reviewer.
 - [ ] A human review gate was requested if the work crossed a phase boundary or changed a public architectural contract.
 
 ## Mandatory artifact contract
@@ -119,6 +126,7 @@ A work item is done only when:
 These outputs are part of the implementation, not optional extras:
 
 - Generated source snapshot diffs for generator changes
+- Visual HTML review documents for completed migration slices and phase gates, suitable for human review before commit
 - Machine-readable manifests for operations/routes/auth/results/links as those surfaces land
 - OpenAPI output for HTTP-capable phases
 - Migration artifacts for consumer migration work:
@@ -270,7 +278,7 @@ When delegating a workstream, include:
 - [ ] Add a typed variable registry for DI services, locals, context values, and cross-module produced values.
 - [ ] Add cross-operation lookup so contributors can reason about referenced operations.
 - [ ] Define module ordering, dependency declaration, and conflict diagnostics.
-- [ ] Provide an adapter path so the current `LinkGenerationModule` survives as the first migrated example.
+- [ ] Keep `LinkGenerationModule` as the first real contributor example; add a dedicated migration adapter only if another module truly needs staged compatibility support.
 
 ### Acceptance criteria
 
@@ -278,11 +286,12 @@ When delegating a workstream, include:
 - [ ] Downstream modules can contribute descriptor, pipeline, host, app-registration, and debug-manifest data through explicit seams.
 - [ ] Ordering conflicts and duplicate unique contributors fail deterministically at compile time.
 - [ ] Typed variable production/consumption is explicit enough for persistence/messaging scenarios.
-- [ ] Generator cacheability does not regress when the adapter path is enabled.
+- [ ] Generator cacheability does not regress when direct contributor routing is enabled.
 
 ### Tests and benchmarks
 
 - [ ] Unit tests for ordering rules, dependency edges, and variable-registry behavior.
+- [ ] Tests for planning helpers cover happy paths, failure/diagnostic paths, and determinism edge cases.
 - [ ] Snapshot tests for plan-model-driven output.
 - [ ] Cacheability-sensitive tests using `TestHelpers.Compile<T>()`.
 - [ ] Medium-scale fixture run proving the new foundation does not explode invalidation breadth.
@@ -294,11 +303,17 @@ When delegating a workstream, include:
 - [ ] Update `docs\implementation-checklists.md` if the new module pattern changes the standard workflow.
 - [ ] Update `docs\compile-time-validation.md` if new diagnostic families are introduced.
 
+### Durable progress
+
+- The first foundation slice now introduces contributor capability interfaces, `BlueprintSourceGenerationConfig.BuildExecutionPlan()` ordering/dependency validation with `BPMOD001`-`BPMOD003`, initial planning models (`OperationModel`, `DescriptorPlan`, `PipelinePlan`, `AppRegistrationPlan`, `GeneratedDebugManifest`, and `VariableRegistry`), and a real-contributor conversion of `LinkGenerationModule` through the new execution plan.
+- Planning and variable-registry coverage now exercises happy paths, failure/diagnostic paths, and determinism edge cases for the implemented foundation behaviors.
+- Next slice: activate pipeline contributors next, because ordered stages and variable sharing are the highest-risk remaining foundation seam.
+
 ### Sub-agent guidance
 
 - Use `explore` to trace current module seams and the legacy middleware/pipeline model.
 - Use a strong `general-purpose` agent for the contributor API and planning-model design.
-- Use `task` for focused test runs while iterating the adapter path.
+- Use `task` for focused test runs while iterating contributor activation slices.
 - Require `code-review` before freezing any public contributor API.
 
 ## 2. Breaking changes and migration tooling

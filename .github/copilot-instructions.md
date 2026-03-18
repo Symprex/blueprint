@@ -42,6 +42,21 @@
   - `docs/ai-agent-playbook.md`
   - `docs/implementation-checklists.md`
 
+## Migration review handoff
+
+- For migration-plan work, finish each completed slice with a self-review and then a `visual-explainer` HTML review document before commit or phase handoff.
+- That review document should highlight the architectural delta, interesting code snippets, representative generated outputs or artifacts, validation evidence, review findings, open concerns, and concrete questions for the human reviewer.
+- Treat human feedback from that visual review as input for another AI review/fix round before committing.
+
+## TDD and verification expectations
+
+- Everything in this repository follows TDD for implementation work: write the failing proof first, watch it fail for the right reason, then make the minimum production change.
+- Push toward the repo-local skills when relevant:
+  - `test-driven-development` before feature, bugfix, refactor, or behavior-change edits
+  - `systematic-debugging` before fixing any unexpected test/build/runtime failure
+  - `verification-before-completion` before claiming success, moving on, or preparing to commit
+- For new planning helpers, registries, and orchestration seams, aim test coverage at happy paths, failure/diagnostic paths, and determinism edge cases.
+
 ## High-level architecture
 
 - `Blueprint.Runtime.Model` is the contract layer. It defines CQRS operation interfaces, descriptors, links, and the `BlueprintApp` registry.

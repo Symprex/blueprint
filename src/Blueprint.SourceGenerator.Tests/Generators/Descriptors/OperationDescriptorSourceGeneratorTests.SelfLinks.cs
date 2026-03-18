@@ -80,6 +80,28 @@ public class OperationDescriptorSourceGeneratorTestsSelfLinkTests
     }
 
     [Fact]
+    public async Task When_unmapped_param_not_found_on_resource_then_fails()
+    {
+        // language=csharp
+        var source = """
+                     [SelfLink(typeof(ApiResourceWithoutProps), "/operations/a/{Id}")]
+                     public partial class OperationA : IOperation 
+                     {
+                         public required string Id { get; set; }
+                     }
+
+                     public class ApiResourceWithoutProps : ApiResource 
+                     {
+                         // Not auto-generated because we are not running that generator
+                         public override string Object => "resource";
+                     }
+                     """;
+
+        await OperationDescriptorSourceGeneratorTests.Compile(source)
+            .VerifyCompilationFailedAsync(OperationDescriptorSourceGeneratorTests.SnapshotsFolder);
+    }
+
+    [Fact]
     public async Task When_mapped_self_link_on_operation_then_url_registered_without_mapping()
     {
         // language=csharp

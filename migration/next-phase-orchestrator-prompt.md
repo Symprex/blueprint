@@ -15,6 +15,12 @@ Read these files first, in this order:
 
 If .NET skills are available in this session, load the .NET routing/baseline skills first and then load the testing/tooling/devops skills you need for the current slice.
 
+If the repo-local skills `test-driven-development`, `systematic-debugging`, and `verification-before-completion` are available in the session, use them at the right points:
+
+- `test-driven-development` before production edits
+- `systematic-debugging` before fixing unexpected failures
+- `verification-before-completion` before any success claim or handoff
+
 Execution goals:
 
 - Start at the next ready work in `migration\plan.md`.
@@ -32,6 +38,7 @@ Non-negotiable operating rules:
   - integration test
   - analyzer/code-fix test
   - or benchmark/telemetry harness where that is the correct proof
+- Follow strict TDD: no production code before a failing proof has been observed failing for the right reason.
 - Preserve incremental-generator cacheability. If generator behavior changes, use the existing cacheability-sensitive harness.
 - Review generated diffs intentionally. Never approve snapshot baselines blindly.
 - Update docs and machine-readable artifacts in the same change.
@@ -79,7 +86,7 @@ Definition of success for this session:
 Immediate expected first slice:
 
 - Focus on the minimum viable foundation-module-system slice.
-- Favor contributor-capability split, ordering/dependency behavior, variable-registry expectations, and an adapter path for `LinkGenerationModule`.
+- Favor contributor-capability split, ordering/dependency behavior, variable-registry expectations, and a real contributor path for `LinkGenerationModule` rather than a default legacy adapter.
 - Do not widen into unrelated Phase 1 or Phase 2 implementation unless the current slice explicitly requires it and the dependency chain is satisfied.
 
 When you begin, first summarize:

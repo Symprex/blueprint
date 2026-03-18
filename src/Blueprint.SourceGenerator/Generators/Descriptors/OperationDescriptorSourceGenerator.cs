@@ -3,6 +3,7 @@ using Blueprint.SourceGenerator.CodeWriter;
 using Blueprint.SourceGenerator.Generators.ApiResources;
 using Blueprint.SourceGenerator.Helpers;
 using Blueprint.SourceGenerator.Modules;
+using Blueprint.SourceGenerator.Planning;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -27,14 +28,28 @@ public sealed class OperationDescriptorSourceGenerator : IIncrementalGenerator, 
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         var config = new BlueprintSourceGenerationConfig([new LinkGenerationModule()]);
+        var executionPlanResult = config.BuildExecutionPlan();
 
         context.RegisterPostInitializationOutput(i =>
             {
-                foreach (var module in config.Modules)
+                if (executionPlanResult.Value is null)
                 {
-                    module.RegisterMarkerAttributes(i);
+                    return;
+                }
+
+                foreach (var contributor in executionPlanResult.Value.PostInitializationContributors)
+                {
+                    contributor.RegisterMarkerAttributes(i);
                 }
             });
+
+        var executionPlanProvider = context.ParseOptionsProvider
+            .Select((_, _) => executionPlanResult)
+            .WithTrackingName(Stages.ExecutionPlan);
+
+        context.RegisterSourceOutput(
+            executionPlanProvider,
+            (spc, result) => result.ReportDiagnostics(spc));
 
         var classProvider = context.SyntaxProvider
             .CreateSyntaxProvider(
@@ -49,7 +64,8 @@ public sealed class OperationDescriptorSourceGenerator : IIncrementalGenerator, 
             .WithTrackingName(Stages.CombineWithCompilation);
 
         var configuredModels = combinedProvider
-            .Select((x, _) => Configure(x, config))
+            .Combine(executionPlanProvider)
+            .Select((x, _) => Configure(x.Left, x.Right))
             .WithTrackingName(Stages.Configuration);
 
         context.RegisterSourceOutput(
@@ -64,8 +80,8 @@ public sealed class OperationDescriptorSourceGenerator : IIncrementalGenerator, 
                 }
 
                 spc.AddSource(
-                    $"{classToGenerate.TypeName}_Descriptor.g.cs",
-                    SourceText.From(GenerateDescriptorClass(classToGenerate, config), Encoding.UTF8));
+                    $"{classToGenerate.Operation.TypeName}_Descriptor.g.cs",
+                    SourceText.From(GenerateDescriptorClass(classToGenerate), Encoding.UTF8));
             });
     }
 
@@ -93,39 +109,53 @@ public sealed class OperationDescriptorSourceGenerator : IIncrementalGenerator, 
                 model.Name));
     }
 
-    private static Result<OperationToRegisterModel> Configure((Result<OperationClassToGenerate> Result, Compilation Compilation) context, BlueprintSourceGenerationConfig config)
+    private static Result<DescriptorPlan> Configure(
+        (Result<OperationClassToGenerate> Result, Compilation Compilation) context,
+        Result<BlueprintModuleExecutionPlan> executionPlanResult)
     {
         var (result, compilation) = context;
 
         if (result.Value is null)
         {
-            return Result<OperationToRegisterModel>.Failure(result.Diagnostics);
+            return Result<DescriptorPlan>.Failure(result.Diagnostics);
         }
 
-        var operationImplementationType = compilation.GetTypeByMetadataName(result.Value.FullClassName);
+        return ConfigureDescriptorPlan(result.Value.FullClassName, compilation, executionPlanResult);
+    }
 
-        var operationToRegisterModel = new OperationToRegisterModel(operationImplementationType!.Name, operationImplementationType.ContainingNamespace.ToDisplayString());
-        var operationConfigurationModel = new OperationConfigurationModel(operationImplementationType, operationToRegisterModel);
-
-        foreach (var module in config.Modules)
+    private static Result<DescriptorPlan> ConfigureDescriptorPlan(
+        string operationFullClassName,
+        Compilation compilation,
+        Result<BlueprintModuleExecutionPlan> executionPlanResult)
+    {
+        if (executionPlanResult.Value is null)
         {
-            module.ConfigureModel(operationConfigurationModel);
+            return Result<DescriptorPlan>.Failure(executionPlanResult.Diagnostics);
         }
 
-        var failures = operationConfigurationModel.Diagnostics.ToArray();
+        var operationImplementationType = compilation.GetTypeByMetadataName(operationFullClassName);
+        var operationModel = OperationModel.Create(operationImplementationType!);
+        var descriptorPlan = new DescriptorPlan(operationModel);
+        var operationLookup = new CompilationOperationLookup(compilation);
 
-        return failures.Length > 0 ? Result<OperationToRegisterModel>.Failure(failures) : Result.Success(operationToRegisterModel);
+        foreach (var contributor in executionPlanResult.Value.DescriptorContributors)
+        {
+            contributor.Contribute(new DescriptorContributorContext(operationModel, descriptorPlan, operationLookup));
+        }
+
+        var failures = descriptorPlan.Diagnostics.ToArray();
+
+        return failures.Length > 0 ? Result<DescriptorPlan>.Failure(failures) : Result.Success(descriptorPlan);
     }
 
     private static string GenerateDescriptorClass(
-        OperationToRegisterModel registration,
-        BlueprintSourceGenerationConfig config)
+        DescriptorPlan plan)
     {
-        var descriptorClassName = registration.TypeName + "Descriptor";
+        var descriptorClassName = plan.Operation.TypeName + "Descriptor";
 
-        var codeBuilder = CodeBuilder.Create(registration.Namespace);
+        var codeBuilder = CodeBuilder.Create(plan.Operation.Namespace);
 
-        var wrapperClass = codeBuilder.AddClass(registration.TypeName)
+        var wrapperClass = codeBuilder.AddClass(plan.Operation.TypeName)
             .WithAccessModifier(Accessibility.Public);
 
         wrapperClass.AddMethod("Configure")
@@ -147,17 +177,11 @@ public sealed class OperationDescriptorSourceGenerator : IIncrementalGenerator, 
             .SetBaseClass("global::Blueprint.Model.ApiOperationDescriptor")
             .AddConstructor(Accessibility.Public)
             .WithBaseCall(baseParameters)
-            .WithBody(b =>
-                {
-                    foreach (var module in config.Modules)
-                    {
-                        module.ConfigureDescriptor(b, registration);
-                    }
-                });
+            .WithBody(plan.Render);
 
         // The keys do not matter, they are not used when generating the base call
-        baseParameters.Add("type", "typeof(" + registration.TypeName + ")");
-        baseParameters.Add("name", "\"" + registration.TypeName + "\"");
+        baseParameters.Add("type", "typeof(" + plan.Operation.TypeName + ")");
+        baseParameters.Add("name", "\"" + plan.Operation.TypeName + "\"");
         baseParameters.Add("where", "\"Source Generated\"");
 
         return codeBuilder.Build();
@@ -172,6 +196,7 @@ public sealed class OperationDescriptorSourceGenerator : IIncrementalGenerator, 
     private static class Stages
     {
         public const string InitialExtraction = nameof(InitialExtraction);
+        public const string ExecutionPlan = nameof(ExecutionPlan);
         public const string CombineWithCompilation = nameof(CombineWithCompilation);
         public const string Configuration = nameof(Configuration);
     }

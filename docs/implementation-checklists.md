@@ -23,10 +23,12 @@ They are intentionally short and repeatable so future humans and AI agents can u
 ## New generator or module work
 
 - [ ] Check whether the change belongs in descriptor generation, app registration, pipeline generation, or a module.
-- [ ] If a module is the right seam, implement the behavior through `IBlueprintSourceGeneratorModule`.
+- [ ] If a module is the right seam, implement the behavior through the contributor seam rooted at `IBlueprintSourceGeneratorModule` and resolved by `BlueprintSourceGenerationConfig.BuildExecutionPlan()`.
+- [ ] Prefer real contributor implementations over temporary legacy adapters; add a migration adapter only when another module truly needs staged compatibility scaffolding.
 - [ ] Add or refine diagnostics with stable IDs and actionable messages.
 - [ ] Preserve incremental-generator cacheability and rerun the cache-sensitive test harness.
 - [ ] Prefer CodeWriter helpers over ad-hoc string concatenation.
+- [ ] For new planning helpers, registries, or contributor-ordering logic, add tests for happy paths, failure/diagnostic paths, and determinism edge cases.
 
 ## New validation or diagnostic work
 
@@ -74,4 +76,5 @@ They are intentionally short and repeatable so future humans and AI agents can u
 - [ ] Run the relevant tests, snapshots, and formatting flow.
 - [ ] Review the generated diff, not just the source diff.
 - [ ] Make sure the docs and harness changes match the implementation.
+- [ ] Re-run the final verification commands immediately before claiming success or commit readiness.
 - [ ] Leave the repository easier to change correctly than it was before.

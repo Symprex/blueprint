@@ -1,6 +1,6 @@
 # Foundation module system
 
-- Status: Planned
+- Status: In progress
 - Priority: P0
 - Classification: Core architecture
 - Depends on: none
@@ -87,7 +87,7 @@ The minimum slice that should land before downstream module implementation start
   - `AppRegistrationPlan`
   - `GeneratedDebugManifest`
 - a cross-operation lookup seam so contributors can reason about referenced operations instead of only the current operation in isolation
-- an adapter path from the current `IBlueprintSourceGeneratorModule` shape into the new capability model so the existing `LinkGenerationModule` remains the migration reference example rather than throwaway code
+- convert the current `LinkGenerationModule` into the first real contributor so it remains the migration reference example without carrying a legacy compatibility interface by default
 
 If this slice is not explicit, every downstream module will invent the bit of foundation it needs and the architecture will drift before the first real phase is complete.
 
@@ -105,6 +105,25 @@ Planning direction:
 - the public module/composition surface needs an explicit compatibility promise so companion packages know what can change only in a major version
 
 Treat this as a foundation requirement, not Phase 3 polish. Persistence, messaging, and consumer-owned extensions all depend on it.
+
+### 1d. Durable progress
+
+The initial minimum slice now exists in the repository:
+
+- `IBlueprintSourceGeneratorModule` is now a root contract with capability-oriented contributor seams and an execution-plan builder in `BlueprintSourceGenerationConfig`
+- contributor ordering, dependency validation, and duplicate-unique detection now fail deterministically with `BPMOD001`-`BPMOD003`
+- `LinkGenerationModule` is now the first real contributor flowing through post-initialization and descriptor execution instead of being wired directly in the generator
+- initial planning scaffolds now exist for `OperationModel`, `DescriptorPlan`, `PipelinePlan`, `AppRegistrationPlan`, `GeneratedDebugManifest`, and `VariableRegistry`
+- planning and variable-registry tests now cover happy paths, failure paths, and determinism edge cases for the currently implemented behavior
+
+Current limitation:
+
+- only the descriptor and post-initialization seams are exercised end-to-end in the generator
+- pipeline, host, app-registration, and debug-manifest contributors currently exist as capability seams and planning scaffolds for follow-on slices
+
+Next slice:
+
+- activate pipeline contributors next, because pipeline stages and variable sharing are the highest-risk remaining foundation seam after descriptor routing
 
 ### 2. Introduce intermediate planning models
 

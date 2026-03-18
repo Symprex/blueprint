@@ -85,18 +85,33 @@ When adding a new validation rule, add or update the matching deterministic test
 - snapshot tests when generated output changes
 - cacheability-sensitive tests when the generator pipeline changes
 
+For new planning helpers and registries, do not stop at a single happy-path assertion. Cover:
+
+- the expected happy path
+- the failure or diagnostic path
+- determinism edge cases such as duplicate producers, dependency cycles, ordering ties, or ambiguous metadata
+
 ## What should be validated at compile time
 
 The preferred targets for future validation include:
 
 - route-template placeholders and mapped resource properties
 - marker-attribute arguments
+- contributor composition rules such as duplicate unique contributors, missing contributor dependencies, and cyclic contributor ordering
 - serializer and `JsonSerializerContext` completeness for API-facing contracts
 - handler parameter resolution rules
 - generated metadata or manifest completeness
 - inspection-surface consistency for large APIs
 
 If a feature depends on a string, type name, metadata shape, or serializer contract that is knowable during generation, the long-term goal is to validate it before the app runs.
+
+The foundation module system now reserves `BPMOD001`-`BPMOD003` for contributor-composition diagnostics:
+
+- duplicate unique contributors
+- missing contributor dependencies
+- cyclic contributor dependency graphs
+
+These are compile-time failures because non-deterministic module composition would make generated output unstable and hard to inspect.
 
 ## Human- and AI-friendly diagnostics
 
