@@ -45,6 +45,11 @@
       "source": "novotnyllc/dotnet-artisan",
       "sourceType": "github",
       "computedHash": "9ac0c3f10391d6ed42372f54c244d3fcc67dde988c9eee81af0f93819a264e3a"
+    },
+    "visual-explainer": {
+      "source": "nicobailon/visual-explainer",
+      "sourceType": "github",
+      "computedHash": "fbbe18c13659a2576e76ab2f17f83eebdfa24daf4faceae206dd61cd32d4fb53"
     }
   }
 }
