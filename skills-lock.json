@@ -65,6 +65,11 @@
       "source": "nicobailon/visual-explainer",
       "sourceType": "github",
       "computedHash": "fbbe18c13659a2576e76ab2f17f83eebdfa24daf4faceae206dd61cd32d4fb53"
+    },
+    "writing-skills": {
+      "source": "obra/superpowers",
+      "sourceType": "github",
+      "computedHash": "90371e81ed49a9d9a5eb5a36f62e75586939253f85096e8d50fd1f6b8bacf2a8"
     }
   }
 }
