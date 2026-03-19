@@ -26,16 +26,18 @@ internal static class PipelinePlanBuilder
             contributor.Contribute(new PipelineContributorContext(operationModel, pipelinePlan, operationLookup));
         }
 
-        foreach (var requirement in pipelinePlan.VariableRegistry.GetUnsatisfiedRequirements())
+        foreach (var unsatisfiedRequirement in pipelinePlan.VariableRegistry.GetUnsatisfiedRequirements(pipelinePlan.Contributions))
         {
             pipelinePlan.AddDiagnostic(
                 new DiagnosticInfo(
                     FoundationModuleDiagnosticDescriptors.MissingRequiredVariable,
                     (Location?)null,
                     [
-                        requirement.ConsumerId,
-                        requirement.Key.Purpose,
-                        requirement.Key.TypeName,
+                        unsatisfiedRequirement.Requirement.ConsumerId,
+                        unsatisfiedRequirement.Requirement.Key.Purpose,
+                        unsatisfiedRequirement.Requirement.Key.TypeName,
+                        unsatisfiedRequirement.RequiredBy?.ToString() ?? "unknown",
+                        unsatisfiedRequirement.EarliestAvailableFrom?.ToString() ?? "not configured",
                     ]));
         }
 

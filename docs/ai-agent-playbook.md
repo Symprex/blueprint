@@ -55,6 +55,7 @@ For this repo that means:
 - `/docs` is the detailed source of truth
 - `README.md` and `.github/copilot-instructions.md` should point into `/docs`
 - architecture, diagnostics, observability expectations, and implementation checklists should not live only in chat history
+- for migration-plan work, durable sequencing or review decisions belong in `migration\plan.md` and the relevant `migration\...\plan.md` file, not only in session-local state such as chat, SQL todos, or the session `plan.md`
 
 ### 4. Prefer machine-actionable outputs
 
@@ -111,6 +112,8 @@ then the relevant `/docs` file should be updated in the same change.
 - Use the `verification-before-completion` skill mindset before any success claim: rerun the fresh verification command, read the output, and only then say the slice is passing or ready for review.
 - Finish your own review pass first, including tests, formatting, generated-output review, and any review-agent follow-up that the slice needs.
 - Generate a visual review handoff with the `visual-explainer` skill before commit for any migration-plan slice or phase gate.
+- If review closes a decision about ordering, next slice selection, or architecture direction, write that decision back into `migration\plan.md` before ending the session.
+- If a slice is obviously complete and no review gate remains open, make a small, focused git commit before switching to unrelated work or ending the session.
 - Treat that visual handoff as part of the artifact set, not as a presentation extra. It should show:
   - the architectural delta and why it matters
   - key code snippets and file touch points
@@ -118,6 +121,7 @@ then the relevant `/docs` file should be updated in the same change.
   - review findings already addressed plus any remaining risks or confidence gaps
   - explicit feedback prompts for the human reviewer that should be fed back into the next AI review round before commit
 - Open the generated HTML locally and confirm it is readable before handing off to a human.
+- When handing a review question to a human, do not present a raw question alone; give your recommendation first, include 2-3 concrete options when useful, and mention any material consulted-agent agreement or dissent.
 
 ## What "self-learning" means here
 

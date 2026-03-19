@@ -65,6 +65,7 @@ They are intentionally short and repeatable so future humans and AI agents can u
 ## Breaking change or migration work
 
 - [ ] Choose the right refactoring layer from `docs\refactoring-workflow.md` before making bulk changes.
+- [ ] Write any approved sequencing, slice-selection, or architecture decisions back into `migration\plan.md` and the relevant `migration\...\plan.md` file before ending the session.
 - [ ] For a consumer-app migration, capture the legacy baseline before applying fixes.
 - [ ] Prefer Roslyn analyzers/code fixes or a codemod CLI over regex-first structural edits.
 - [ ] For large codemods, produce and review a dry-run report before applying changes.
@@ -79,4 +80,5 @@ They are intentionally short and repeatable so future humans and AI agents can u
 - [ ] Review the generated diff, not just the source diff.
 - [ ] Make sure the docs and harness changes match the implementation.
 - [ ] Re-run the final verification commands immediately before claiming success or commit readiness.
+- [ ] If the slice is obviously complete and no review gate remains open, make a small, focused git commit before switching tasks or ending the session.
 - [ ] Leave the repository easier to change correctly than it was before.

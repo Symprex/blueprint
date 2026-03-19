@@ -161,3 +161,10 @@ Generated code comments are useful, but a structured plan/manifest is even bette
 ## Sequencing
 
 This is one of the first implementation modules. Validation, auth, HTTP, resources, tasks, persistence, and messaging all depend on it.
+
+Approved first activation slice:
+
+- route `HandlerExecutionContributor` through the activated seam first
+- use `src\Blueprint.SourceGenerator.Tests\Generators\Pipelines\OperationExecutorPipelineGeneratorIntegrationTests.cs` as the primary failing-proof harness
+- keep the slice narrow: move handler invocation and the produced handler-result variable through the seam before widening into validation, exception translation, result normalization, or host-specific work
+- preserve the current result-wrapping behavior for this slice so the broader result-model direction remains an explicit later gate rather than an accidental early freeze

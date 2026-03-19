@@ -50,15 +50,58 @@ public sealed class VariableRegistry
     }
 
     /// <summary>
-    /// Gets the required variables that have no matching provision.
+    /// Gets the required variables that have no matching provision or are only available after the consumer stage.
     /// </summary>
+    /// <param name="contributions">The planned pipeline contributions for the current operation.</param>
     /// <returns>The unsatisfied requirements.</returns>
-    public IReadOnlyList<VariableRequirement> GetUnsatisfiedRequirements()
+    public IReadOnlyList<UnsatisfiedVariableRequirement> GetUnsatisfiedRequirements(IReadOnlyList<PipelineContribution> contributions)
     {
+        var earliestContributionStages = contributions
+            .GroupBy(contribution => contribution.ContributorId, StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Min(contribution => contribution.Stage),
+                StringComparer.Ordinal);
+
         return this._requirements
             .Where(requirement => requirement.IsRequired)
-            .Where(requirement => this._provisions.Any(provision => provision.Key == requirement.Key) == false)
+            .Select(requirement => this.GetUnsatisfiedRequirement(requirement, earliestContributionStages))
+            .Where(result => result is not null)
+            .Select(result => result!)
             .ToArray();
+    }
+
+    private UnsatisfiedVariableRequirement? GetUnsatisfiedRequirement(
+        VariableRequirement requirement,
+        IReadOnlyDictionary<string, PipelineStage> earliestContributionStages)
+    {
+        var matchingProvisions = this._provisions
+            .Where(provision => provision.Key == requirement.Key)
+            .OrderBy(provision => provision.AvailableFrom)
+            .ToArray();
+
+        earliestContributionStages.TryGetValue(requirement.ConsumerId, out var requiredBy);
+        var hasRequiredStage = earliestContributionStages.ContainsKey(requirement.ConsumerId);
+
+        if (matchingProvisions.Length == 0)
+        {
+            return new UnsatisfiedVariableRequirement(
+                requirement,
+                hasRequiredStage ? requiredBy : null,
+                EarliestAvailableFrom: null);
+        }
+
+        var earliestProvision = matchingProvisions[0];
+
+        if (hasRequiredStage && earliestProvision.AvailableFrom > requiredBy)
+        {
+            return new UnsatisfiedVariableRequirement(
+                requirement,
+                requiredBy,
+                earliestProvision.AvailableFrom);
+        }
+
+        return null;
     }
 }
 
@@ -96,6 +139,17 @@ public sealed record VariableRequirement(
     VariableKey Key,
     string ConsumerId,
     bool IsRequired);
+
+/// <summary>
+/// Describes a required variable that is missing or only available too late for the consumer.
+/// </summary>
+/// <param name="Requirement">The unsatisfied requirement.</param>
+/// <param name="RequiredBy">The earliest stage at which the consumer contributes to the pipeline.</param>
+/// <param name="EarliestAvailableFrom">The earliest stage at which a matching provision becomes available.</param>
+public sealed record UnsatisfiedVariableRequirement(
+    VariableRequirement Requirement,
+    PipelineStage? RequiredBy,
+    PipelineStage? EarliestAvailableFrom);
 
 /// <summary>
 /// Identifies where a variable comes from.

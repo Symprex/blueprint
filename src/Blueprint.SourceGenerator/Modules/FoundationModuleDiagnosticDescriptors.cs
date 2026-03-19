@@ -36,9 +36,9 @@ internal static class FoundationModuleDiagnosticDescriptors
     public static readonly DiagnosticDescriptor MissingRequiredVariable = new(
         id: "BPMOD004",
         title: "Missing required variable",
-        messageFormat: "The contributor '{0}' requires variable '{1}' of type '{2}', but no matching provision is configured",
+        messageFormat: "The contributor '{0}' requires variable '{1}' of type '{2}' by stage '{3}', but the earliest matching provision is available from '{4}'",
         category: Category,
         DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "Required pipeline variables must be provided by at least one configured contributor.");
+        description: "Required pipeline variables must be provided and available no later than the consuming contributor stage.");
 }

@@ -57,6 +57,21 @@ public class OperationDescriptorSourceGeneratorTests
     }
 
     [Fact]
+    public void When_pipeline_variable_is_only_available_after_consumer_stage_then_reports_module_diagnostic()
+    {
+        var compilation = CreateCompilation();
+        var config = new BlueprintSourceGenerationConfig(
+        [
+            new ConsumingPipelineModule(),
+            new LateProvidingPipelineModule(),
+        ]);
+        var result = config.BuildPipelinePlan("TestNamespace.IncludedOperation", compilation);
+
+        result.Value.Should().BeNull();
+        result.Diagnostics.Select(d => d.ToDiagnostic().Id).Should().Contain("BPMOD004");
+    }
+
+    [Fact]
     public void When_pipeline_variable_is_provided_then_shared_plan_builds_in_dependency_order()
     {
         var compilation = CreateCompilation();
@@ -200,6 +215,33 @@ public class OperationDescriptorSourceGeneratorTests
                     new VariableKey("global::Marten.IDocumentSession", "document-session"),
                     ConsumerId: this.ContributorId,
                     IsRequired: true));
+        }
+    }
+
+    private sealed class LateProvidingPipelineModule : IBlueprintSourceGeneratorModule, IPipelineContributor
+    {
+        public string ModuleId => nameof(LateProvidingPipelineModule);
+
+        public BlueprintModuleCategory Category => BlueprintModuleCategory.Core;
+
+        public string ContributorId => "provider";
+
+        public int Order => 100;
+
+        public bool IsUnique => true;
+
+        public IReadOnlyList<string> DependsOn { get; } = [];
+
+        public void Contribute(PipelineContributorContext context)
+        {
+            context.Plan.AddContribution(new PipelineContribution(PipelineStage.PostExecution, this.ContributorId, "Provide a session too late"));
+            context.Plan.VariableRegistry.RegisterProvision(
+                new VariableProvision(
+                    new VariableKey("global::Marten.IDocumentSession", "document-session"),
+                    ProducerId: this.ContributorId,
+                    AvailableFrom: PipelineStage.PostExecution,
+                    SourceKind: VariableSourceKind.Service,
+                    Lifetime: VariableLifetime.Local));
         }
     }
 }

@@ -42,10 +42,13 @@ Non-negotiable operating rules:
 - Preserve incremental-generator cacheability. If generator behavior changes, use the existing cacheability-sensitive harness.
 - Review generated diffs intentionally. Never approve snapshot baselines blindly.
 - Update docs and machine-readable artifacts in the same change.
-- Keep `migration\plan.md` updated only with durable progress and next-step information, not session noise.
+- Keep `migration\plan.md` fully up to date with durable progress, approved decisions, and next-step information, not session noise.
+- Session `plan.md`, SQL todos, and chat checkpoints are working state only. Any durable decision about sequencing, approved slices, review outcomes, or human direction MUST be written explicitly to `migration\plan.md` and the relevant `migration\...\plan.md` file before handoff or stop.
+- When a slice is obviously complete, review-closed, and verification-passing, create a small, focused git commit before starting unrelated work or ending the session. If a human review gate is still open, stop before committing and record that explicitly.
 
 Resumability contract:
 
+- Treat `migration\plan.md` and the relevant module plan as the cross-session source of truth. Do not assume any prior session-local state will still be available.
 - At the start of the session, identify the exact slice you are taking on and record it in SQL todos.
 - At the end of every meaningful work step, leave a checkpoint in your response with:
   - `Completed`
@@ -53,6 +56,7 @@ Resumability contract:
   - `Next slice`
   - `Open risks`
   - `Human input needed`
+- If a human or review-agent decision changes the approved next slice, architecture direction, or gating status, persist that decision into `migration\plan.md` before ending the session.
 - If the context window gets tight, compact the session and restate the checkpoint clearly before continuing.
 - If you stop for any reason, do not just trail off. Either continue working, or explicitly say why you are blocked and what the next operator action should be.
 
@@ -74,7 +78,7 @@ Safety and escalation rules:
 - If a slice cannot start with a failing proof and it touches a public contract, security behavior, dependency order, serializer ownership, result semantics, or a phase gate, stop and ask for help before coding.
 - If you hit unexpected repository changes that you did not make, stop and ask for help immediately.
 - If a human review gate is reached, stop and ask for review instead of silently continuing into the next architectural decision.
-- If you are blocked, use the structured question flow/tooling available to ask for the smallest decision needed to proceed. Do not abandon the task silently.
+- If you are blocked, use the structured question flow/tooling available to ask for the smallest decision needed to proceed. Give your recommendation first, include 2-3 concrete options when useful, cite consulted-agent input where relevant, and do not abandon the task silently.
 
 Definition of success for this session:
 
@@ -82,12 +86,14 @@ Definition of success for this session:
 - You validate it with tests/build/formatting appropriate to the slice.
 - You update any required docs/artifacts.
 - You leave the repository and the migration plan easier to resume from than they were at session start.
+- Any approved review or human decision from the session is written explicitly into `migration\plan.md` before handoff.
+- Any obviously completed, review-closed slice is captured in a small, focused git commit unless an open review gate or explicit user instruction says otherwise.
 
 Immediate expected first slice:
 
-- Focus on the minimum viable foundation-module-system slice.
-- Favor contributor-capability split, ordering/dependency behavior, variable-registry expectations, and a real contributor path for `LinkGenerationModule` rather than a default legacy adapter.
-- Do not widen into unrelated Phase 1 or Phase 2 implementation unless the current slice explicitly requires it and the dependency chain is satisfied.
+- Focus on the approved next foundation/pipeline slice: route `HandlerExecutionContributor` through the activated seam as the first production pipeline contributor.
+- Use the existing pipeline integration harness as the failing-proof starting point, especially `src\Blueprint.SourceGenerator.Tests\Generators\Pipelines\OperationExecutorPipelineGeneratorIntegrationTests.cs`.
+- Keep the scope narrow: move handler invocation plus the produced handler-result variable through the contributor seam first; defer validation, exception translation, result normalization, host wiring, and broader Phase 1 work unless the dependency chain explicitly requires more.
 
 When you begin, first summarize:
 

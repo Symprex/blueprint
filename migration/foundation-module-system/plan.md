@@ -119,12 +119,15 @@ The initial minimum slice now exists in the repository:
 Current limitation:
 
 - descriptor, post-initialization, and pipeline planning/validation seams are now exercised end-to-end in descriptor generation
-- pipeline contributors now use a typed `IPipelineContributor.Contribute(PipelineContributorContext)` contract, and missing required variables fail deterministically with `BPMOD004`
+- pipeline contributors now use a typed `IPipelineContributor.Contribute(PipelineContributorContext)` contract, and required variables fail deterministically with stage-aware `BPMOD004` validation based on the consuming contributor's earliest planned stage
 - host, app-registration, and debug-manifest contributors currently exist as capability seams and planning scaffolds for follow-on slices
+- the live executor pipeline generator still hard-codes handler invocation, logging, and exception/result behavior instead of consuming a first production pipeline contributor
 
 Next slice:
 
-- make pipeline variable validation stage-aware and route the first production pipeline contributor through the activated seam before widening into host, app-registration, or debug-manifest work
+- approved decision: route `HandlerExecutionContributor` through the activated seam as the first production pipeline contributor
+- start from the existing pipeline integration harness as the failing proof, especially `src\Blueprint.SourceGenerator.Tests\Generators\Pipelines\OperationExecutorPipelineGeneratorIntegrationTests.cs`
+- keep the initial scope to handler invocation plus the produced handler-result variable; defer validation, exception translation, result normalization, host wiring, and debug-manifest work to later slices
 
 ### 2. Introduce intermediate planning models
 

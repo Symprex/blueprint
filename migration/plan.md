@@ -29,13 +29,21 @@ The target is **consumer-contract compatibility**, not byte-for-byte parity with
 ## Current status and next recommended step
 
 - Planning and orchestration guidance are complete.
-- The repository is ready to start implementation work at **Phase 0 / Workstream 1: Foundation module system**.
+- The initial minimum **Phase 0 / Workstream 1: Foundation module system** slice has landed, including contributor capability splits, deterministic execution-plan diagnostics, `LinkGenerationModule` contributor routing, planning models, and stage-aware pipeline variable validation.
 - The next session should treat `migration\foundation-module-system\plan.md` as the immediate detailed execution target, while keeping `migration\plan.md` as the ordering and safety contract.
-- The first implementation slice should stay narrow:
-  - define the minimum viable contributor-capability split
-  - add failing tests for ordering/dependency behavior and the first variable-registry expectations
-  - convert `LinkGenerationModule` into the first real contributor rather than carrying a legacy adapter by default
+- The next approved implementation slice is to route `HandlerExecutionContributor` through the activated seam as the first production pipeline contributor.
+- That slice should stay narrow:
+  - start from the existing pipeline integration harness as the failing proof, especially `src\Blueprint.SourceGenerator.Tests\Generators\Pipelines\OperationExecutorPipelineGeneratorIntegrationTests.cs`
+  - move handler invocation and the produced handler-result variable through the contributor seam first
+  - avoid widening into validation, exception translation, result normalization, host wiring, or debug-manifest work in the same slice unless the dependency chain explicitly requires it
+- This approved slice is a narrow seam-activation step, not a freeze of the broader result-model direction. It may proceed while preserving the current result-wrapping behavior and deferring host-agnostic result redesign.
 - Before widening scope beyond the first slice, the next session should confirm that the foundation design still aligns with the Phase 0 exit gate, performance harness expectations, and manifest contract requirements.
+
+## Durable decision rule
+
+- `migration\plan.md` is the cross-session source of truth for migration ordering, approved next slices, and human/review decisions.
+- Session-local state such as chat history, session `plan.md`, SQL todos, or transient review artifacts is not sufficient to carry a decision into the next orchestrator session.
+- If a human or review step approves a next slice, changes architectural direction, or closes a gate, record that decision here and in the relevant `migration\...\plan.md` file before the session ends.
 
 ## Non-negotiable engineering rules
 
@@ -59,6 +67,8 @@ The target is **consumer-contract compatibility**, not byte-for-byte parity with
 7. Use the sub-agent guidance in this file to split investigation, implementation, testing, and review work.
 8. At every major design gate, request human review before declaring the phase complete.
 9. After a slice reaches local done and passes self-review, generate a visual human-review handoff with `visual-explainer` before commit or before moving to the next phase gate.
+10. If review closes a decision about sequencing, slice selection, or architecture direction, write that decision explicitly into `migration\plan.md` before ending the session.
+11. If a slice is obviously complete, review-closed, and verification-passing, make a small, focused git commit before switching to unrelated work or ending the session. If a review gate remains open, stop short of commit and record why.
 
 ## TDD-first execution loop
 
@@ -80,9 +90,16 @@ Every workstream and sub-task should follow this loop unless it is purely docume
 8. Run a review agent for risky architectural or cross-cutting changes.
 9. Create a `visual-explainer` review document for the completed slice, including architecture, key snippets, representative outputs/artifacts, review findings, and explicit feedback prompts for the human reviewer.
 10. Use `verification-before-completion` discipline before any success or handoff claim: rerun the fresh verification commands, read the output, then report status.
-11. Only then move to the next slice.
+11. If the slice is review-closed, create a small, focused git commit for it before moving on.
+12. Only then move to the next slice.
 
 If a slice cannot be tested first, the orchestrator must explain why and add the earliest possible automated proof immediately after the first implementation step.
+
+When a review or design question must be asked, do not leave it as a raw question alone. Present:
+
+1. the recommended answer
+2. 2-3 concrete options when useful
+3. consulted-agent input or dissent when it materially affects the recommendation
 
 ## Snapshot and diagnostic registration policy
 
@@ -120,6 +137,8 @@ A work item is done only when:
 - [ ] A `visual-explainer` HTML review artifact was created after self-review and before commit/handoff.
 - [ ] The visual review artifact includes architecture, key snippets, representative outputs/artifacts, review findings, open concerns, and feedback prompts for the human reviewer.
 - [ ] A human review gate was requested if the work crossed a phase boundary or changed a public architectural contract.
+- [ ] Any approved review or human decision that affects next steps or architecture direction was written into `migration\plan.md` and the relevant `migration\...\plan.md` file.
+- [ ] If no review gate remained open, the completed slice was captured in a small, focused git commit, or the reason for not committing was recorded explicitly.
 
 ## Mandatory artifact contract
 
@@ -199,7 +218,7 @@ This phase proves that the architecture is general, not HTTP-only.
 | Performance and scale | No hard blocker for first milestone; evolves with foundation/core work |
 | Generated manifests and inspection surfaces | Foundation design direction |
 | Operation discovery and descriptors | Foundation module system |
-| Pipeline composition and execution | Foundation + operation discovery + provisional result contract from workstream 7 |
+| Pipeline composition and execution | Foundation + operation discovery + provisional result contract from workstream 7; the approved narrow `HandlerExecutionContributor` seam-activation slice may proceed earlier only if it preserves the current result-wrapping behavior and does not freeze the broader result-model direction |
 | Result model and host translation | Foundation + operation discovery + pipeline design loop; must be agreed before pipeline/HTTP/error/OpenAPI contracts freeze |
 | Error model and exception handling | Foundation + operation discovery + pipeline composition + result model |
 | HTTP host and message population | Foundation + operation discovery + pipeline composition + result model |
@@ -307,8 +326,9 @@ When delegating a workstream, include:
 
 - The first foundation slice now introduces contributor capability interfaces, `BlueprintSourceGenerationConfig.BuildExecutionPlan()` ordering/dependency validation with `BPMOD001`-`BPMOD003`, initial planning models (`OperationModel`, `DescriptorPlan`, `PipelinePlan`, `AppRegistrationPlan`, `GeneratedDebugManifest`, and `VariableRegistry`), and a real-contributor conversion of `LinkGenerationModule` through the new execution plan.
 - Planning and variable-registry coverage now exercises happy paths, failure/diagnostic paths, and determinism edge cases for the implemented foundation behaviors.
-- Pipeline contributors now expose a typed `IPipelineContributor.Contribute(PipelineContributorContext)` contract, and descriptor generation activates `ConfigurePipelinePlan()` so unsatisfied required variables fail deterministically with `BPMOD004`.
-- Next slice: make pipeline variable validation stage-aware and route the first production pipeline contributor through the activated seam before widening into host, app-registration, or debug-manifest contributors.
+- Pipeline contributors now expose a typed `IPipelineContributor.Contribute(PipelineContributorContext)` contract, and descriptor generation activates `ConfigurePipelinePlan()` so required variables fail deterministically with stage-aware `BPMOD004`.
+- Approved next slice: route `HandlerExecutionContributor` through the activated seam as the first production pipeline contributor.
+- Scope guard for that slice: use the existing pipeline integration harness as the failing proof, move handler invocation plus the produced handler-result variable through the seam, and defer validation, exception translation, result normalization, and host wiring to later slices.
 
 ### Sub-agent guidance
 
