@@ -85,6 +85,8 @@ When adding a new validation rule, add or update the matching deterministic test
 - snapshot tests when generated output changes
 - cacheability-sensitive tests when the generator pipeline changes
 
+Those tests should prove behavior through supported seams. Do not use reflection in tests to assert that a contract exists or to invoke private/internal helpers. If a behavior is hard to verify without doing that, improve the public or otherwise supported seam first and then test through that seam.
+
 For new planning helpers and registries, do not stop at a single happy-path assertion. Cover:
 
 - the expected happy path
@@ -105,13 +107,14 @@ The preferred targets for future validation include:
 
 If a feature depends on a string, type name, metadata shape, or serializer contract that is knowable during generation, the long-term goal is to validate it before the app runs.
 
-The foundation module system now reserves `BPMOD001`-`BPMOD003` for contributor-composition diagnostics:
+The foundation module system now reserves `BPMOD001`-`BPMOD004` for contributor-composition and pipeline-planning diagnostics:
 
 - duplicate unique contributors
 - missing contributor dependencies
 - cyclic contributor dependency graphs
+- missing required pipeline variables discovered during pipeline-plan validation
 
-These are compile-time failures because non-deterministic module composition would make generated output unstable and hard to inspect.
+These are compile-time failures because non-deterministic module composition or unresolved required pipeline variables would make generated output unstable and hard to inspect. Stage-aware availability validation remains follow-on work.
 
 ## Human- and AI-friendly diagnostics
 

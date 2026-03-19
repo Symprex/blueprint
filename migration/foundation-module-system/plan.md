@@ -118,12 +118,13 @@ The initial minimum slice now exists in the repository:
 
 Current limitation:
 
-- only the descriptor and post-initialization seams are exercised end-to-end in the generator
-- pipeline, host, app-registration, and debug-manifest contributors currently exist as capability seams and planning scaffolds for follow-on slices
+- descriptor, post-initialization, and pipeline planning/validation seams are now exercised end-to-end in descriptor generation
+- pipeline contributors now use a typed `IPipelineContributor.Contribute(PipelineContributorContext)` contract, and missing required variables fail deterministically with `BPMOD004`
+- host, app-registration, and debug-manifest contributors currently exist as capability seams and planning scaffolds for follow-on slices
 
 Next slice:
 
-- activate pipeline contributors next, because pipeline stages and variable sharing are the highest-risk remaining foundation seam after descriptor routing
+- make pipeline variable validation stage-aware and route the first production pipeline contributor through the activated seam before widening into host, app-registration, or debug-manifest work
 
 ### 2. Introduce intermediate planning models
 

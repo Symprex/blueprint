@@ -124,10 +124,12 @@ The future-state direction is:
 The first Phase 0 foundation slice now exists in the current implementation:
 
 - `BlueprintSourceGenerationConfig.BuildExecutionPlan()` resolves ordered contributors and validates composition with deterministic diagnostics (`BPMOD001`-`BPMOD003`)
+- `BlueprintSourceGenerationConfig.BuildPipelinePlan(...)` is the supported seam for constructing and validating a per-operation `PipelinePlan` outside private generator helpers
 - `LinkGenerationModule` is now the first real post-initialization and descriptor contributor routed through the execution plan instead of being hard-coded directly into descriptor generation
 - initial planning models now exist for `OperationModel`, `DescriptorPlan`, `PipelinePlan`, `AppRegistrationPlan`, `GeneratedDebugManifest`, and `VariableRegistry`
+- `IPipelineContributor` now exposes a typed `Contribute(PipelineContributorContext)` seam, and descriptor generation runs `ConfigurePipelinePlan()` to build pipeline planning state and report `BPMOD004` for unsatisfied required variables
 
-At this stage only the descriptor and post-initialization seams are executed end-to-end. The other contributor capabilities and planning models are deliberately scaffolded so later migration slices can fill them in without reinventing the foundation contract.
+At this stage post-initialization, descriptor, and pipeline planning/validation seams are executed end-to-end in descriptor generation. The executor-pipeline generator is not yet routed through module planning, and host, app-registration, plus debug-manifest contributors are still deliberately scaffolded so later migration slices can fill them in without reinventing the foundation contract.
 
 Representative planned models:
 

@@ -25,7 +25,7 @@ public class AppDataModelSourceGeneratorRootLinkTests
     }
 }
 
-[RootLink("/test")]
+[Blueprint.Model.Attributes.RootLink("/test")]
 public partial class RootLinkOperationWithNoParameters : IOperation
 {
     public OkResult Handle()
@@ -34,7 +34,7 @@ public partial class RootLinkOperationWithNoParameters : IOperation
     }
 }
 
-[RootLink("/test/{Id}")]
+[Blueprint.Model.Attributes.RootLink("/test/{Id}")]
 public partial class RootLinkOperationWithParameter : IOperation
 {
     public required string Id { get; init; }

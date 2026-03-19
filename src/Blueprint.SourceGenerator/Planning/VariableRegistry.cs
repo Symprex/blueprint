@@ -48,6 +48,18 @@ public sealed class VariableRegistry
     {
         this._requirements.Add(requirement);
     }
+
+    /// <summary>
+    /// Gets the required variables that have no matching provision.
+    /// </summary>
+    /// <returns>The unsatisfied requirements.</returns>
+    public IReadOnlyList<VariableRequirement> GetUnsatisfiedRequirements()
+    {
+        return this._requirements
+            .Where(requirement => requirement.IsRequired)
+            .Where(requirement => this._provisions.Any(provision => provision.Key == requirement.Key) == false)
+            .ToArray();
+    }
 }
 
 /// <summary>

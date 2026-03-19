@@ -61,7 +61,7 @@ public class AppDataModelSourceGeneratorSelfLinksTests
     }
 }
 
-[SelfLink(typeof(SelfLinkOperationWithNoParametersApiResource), "/self/test")]
+[Blueprint.Model.Attributes.SelfLink(typeof(SelfLinkOperationWithNoParametersApiResource), "/self/test")]
 public partial class SelfLinkOperationWithNoParameters : IOperation
 {
     public OkResult Handle()
@@ -72,7 +72,7 @@ public partial class SelfLinkOperationWithNoParameters : IOperation
 
 public partial class SelfLinkOperationWithNoParametersApiResource : ApiResource;
 
-[SelfLink(typeof(SelfLinkOperationWithParameterApiResource), "/self/test/{Id}")]
+[Blueprint.Model.Attributes.SelfLink(typeof(SelfLinkOperationWithParameterApiResource), "/self/test/{Id}")]
 public partial class SelfLinkOperationWithParameter : IOperation
 {
     public required string Id { get; init; }
@@ -88,7 +88,7 @@ public partial class SelfLinkOperationWithParameterApiResource : ApiResource
     public string Id { get; init; } = null!;
 }
 
-[SelfLink(typeof(SelfLinkOperationWithMatchingParameterApiResource), "/self/matching/{Id}")]
+[Blueprint.Model.Attributes.SelfLink(typeof(SelfLinkOperationWithMatchingParameterApiResource), "/self/matching/{Id}")]
 public partial class SelfLinkOperationWithMatchingParameter : IOperation
 {
     public required string Id { get; init; }
@@ -104,7 +104,7 @@ public partial class SelfLinkOperationWithMatchingParameterApiResource : ApiReso
     public string Id { get; init; } = null!;
 }
 
-[SelfLink(typeof(SelfLinkOperationWithMappedParameterApiResource), "/self/mapped/{RouteId:Id}")]
+[Blueprint.Model.Attributes.SelfLink(typeof(SelfLinkOperationWithMappedParameterApiResource), "/self/mapped/{RouteId:Id}")]
 public partial class SelfLinkOperationWithMappedParameter : IOperation
 {
     public required string RouteId { get; init; }

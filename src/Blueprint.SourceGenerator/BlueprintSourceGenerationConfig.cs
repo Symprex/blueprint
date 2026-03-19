@@ -1,5 +1,6 @@
 using Blueprint.SourceGenerator.Helpers;
 using Blueprint.SourceGenerator.Modules;
+using Blueprint.SourceGenerator.Planning;
 using Microsoft.CodeAnalysis;
 
 namespace Blueprint.SourceGenerator;
@@ -77,6 +78,17 @@ public record BlueprintSourceGenerationConfig(IReadOnlyList<IBlueprintSourceGene
                 orderedHost,
                 orderedAppRegistration,
                 orderedDebugManifest));
+    }
+
+    /// <summary>
+    /// Builds the validated pipeline plan for a specific operation using the configured modules.
+    /// </summary>
+    /// <param name="operationFullClassName">The fully-qualified metadata name of the operation type.</param>
+    /// <param name="compilation">The active compilation used to resolve the operation symbol and related lookups.</param>
+    /// <returns>The pipeline plan, or diagnostics if contributor composition or variable requirements are invalid.</returns>
+    public Result<PipelinePlan> BuildPipelinePlan(string operationFullClassName, Compilation compilation)
+    {
+        return PipelinePlanBuilder.Build(operationFullClassName, compilation, this.BuildExecutionPlan());
     }
 
     private static TContributor[] OrderContributors<TContributor>(

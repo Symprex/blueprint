@@ -1,3 +1,5 @@
+using Blueprint.SourceGenerator.Helpers;
+
 namespace Blueprint.SourceGenerator.Planning;
 
 /// <summary>
@@ -7,12 +9,27 @@ namespace Blueprint.SourceGenerator.Planning;
 /// <param name="VariableRegistry">The variable registry for the plan.</param>
 public sealed record PipelinePlan(OperationModel Operation, VariableRegistry VariableRegistry)
 {
+    private readonly List<DiagnosticInfo> _diagnostics = [];
     private readonly List<PipelineContribution> _contributions = [];
+
+    /// <summary>
+    /// Gets the accumulated diagnostics.
+    /// </summary>
+    public IReadOnlyList<DiagnosticInfo> Diagnostics => this._diagnostics;
 
     /// <summary>
     /// Gets the ordered pipeline contributions.
     /// </summary>
     public IReadOnlyList<PipelineContribution> Contributions => this._contributions;
+
+    /// <summary>
+    /// Adds a diagnostic to the pipeline plan.
+    /// </summary>
+    /// <param name="diagnostic">The diagnostic to add.</param>
+    public void AddDiagnostic(DiagnosticInfo diagnostic)
+    {
+        this._diagnostics.Add(diagnostic);
+    }
 
     /// <summary>
     /// Adds a contribution to the pipeline plan.

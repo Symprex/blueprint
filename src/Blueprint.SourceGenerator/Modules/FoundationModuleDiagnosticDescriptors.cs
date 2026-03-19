@@ -32,4 +32,13 @@ internal static class FoundationModuleDiagnosticDescriptors
         DiagnosticSeverity.Error,
         isEnabledByDefault: true,
         description: "Contributor dependencies must form a deterministic acyclic ordering.");
+
+    public static readonly DiagnosticDescriptor MissingRequiredVariable = new(
+        id: "BPMOD004",
+        title: "Missing required variable",
+        messageFormat: "The contributor '{0}' requires variable '{1}' of type '{2}', but no matching provision is configured",
+        category: Category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "Required pipeline variables must be provided by at least one configured contributor.");
 }

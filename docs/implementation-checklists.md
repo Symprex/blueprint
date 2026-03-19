@@ -29,6 +29,8 @@ They are intentionally short and repeatable so future humans and AI agents can u
 - [ ] Preserve incremental-generator cacheability and rerun the cache-sensitive test harness.
 - [ ] Prefer CodeWriter helpers over ad-hoc string concatenation.
 - [ ] For new planning helpers, registries, or contributor-ordering logic, add tests for happy paths, failure/diagnostic paths, and determinism edge cases.
+- [ ] If the change activates pipeline planning, cover both the missing-required-variable diagnostic path and an ordered shared-variable happy path.
+- [ ] Do not use reflection in tests to assert contract existence or invoke private/internal helpers; if behavior is hard to prove, add or use a supported seam instead.
 
 ## New validation or diagnostic work
 

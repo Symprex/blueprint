@@ -90,6 +90,7 @@ then the relevant `/docs` file should be updated in the same change.
 - Read the most relevant detailed docs for the change.
 - Identify the build, snapshot, and generator harness you expect to exercise.
 - For any feature, bugfix, refactor, or behavior change, use the repo-local `test-driven-development` skill mindset first: write the failing proof before production edits and watch it fail for the right reason.
+- Do not use reflection in tests to assert that a contract exists or to invoke private/internal helpers. If the right behavior is not testable through a supported seam, improve that seam first.
 
 ### While you change code
 

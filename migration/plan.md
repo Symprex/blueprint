@@ -307,7 +307,8 @@ When delegating a workstream, include:
 
 - The first foundation slice now introduces contributor capability interfaces, `BlueprintSourceGenerationConfig.BuildExecutionPlan()` ordering/dependency validation with `BPMOD001`-`BPMOD003`, initial planning models (`OperationModel`, `DescriptorPlan`, `PipelinePlan`, `AppRegistrationPlan`, `GeneratedDebugManifest`, and `VariableRegistry`), and a real-contributor conversion of `LinkGenerationModule` through the new execution plan.
 - Planning and variable-registry coverage now exercises happy paths, failure/diagnostic paths, and determinism edge cases for the implemented foundation behaviors.
-- Next slice: activate pipeline contributors next, because ordered stages and variable sharing are the highest-risk remaining foundation seam.
+- Pipeline contributors now expose a typed `IPipelineContributor.Contribute(PipelineContributorContext)` contract, and descriptor generation activates `ConfigurePipelinePlan()` so unsatisfied required variables fail deterministically with `BPMOD004`.
+- Next slice: make pipeline variable validation stage-aware and route the first production pipeline contributor through the activated seam before widening into host, app-registration, or debug-manifest contributors.
 
 ### Sub-agent guidance
 

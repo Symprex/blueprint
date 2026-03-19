@@ -143,9 +143,20 @@ public sealed class OperationDescriptorSourceGenerator : IIncrementalGenerator, 
             contributor.Contribute(new DescriptorContributorContext(operationModel, descriptorPlan, operationLookup));
         }
 
-        var failures = descriptorPlan.Diagnostics.ToArray();
+        var pipelinePlanResult = ConfigurePipelinePlan(operationFullClassName, compilation, executionPlanResult);
+        var failures = descriptorPlan.Diagnostics
+            .Concat(pipelinePlanResult.Diagnostics)
+            .ToArray();
 
         return failures.Length > 0 ? Result<DescriptorPlan>.Failure(failures) : Result.Success(descriptorPlan);
+    }
+
+    private static Result<PipelinePlan> ConfigurePipelinePlan(
+        string operationFullClassName,
+        Compilation compilation,
+        Result<BlueprintModuleExecutionPlan> executionPlanResult)
+    {
+        return PipelinePlanBuilder.Build(operationFullClassName, compilation, executionPlanResult);
     }
 
     private static string GenerateDescriptorClass(
