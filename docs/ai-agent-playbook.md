@@ -56,6 +56,7 @@ For this repo that means:
 - `README.md` and `.github/copilot-instructions.md` should point into `/docs`
 - architecture, diagnostics, observability expectations, and implementation checklists should not live only in chat history
 - for migration-plan work, durable sequencing or review decisions belong in `migration\plan.md` and the relevant `migration\...\plan.md` file, not only in session-local state such as chat, SQL todos, or the session `plan.md`
+- Blueprint-specific usage and extension knowledge should also live in repo-local skills: keep `using-blueprint` as the canonical consumer-installable Blueprint skill, keep `extending-blueprint` as the repo-local overlay, and update the relevant skill in the same change when Blueprint behavior or workflow changes
 
 ### 4. Prefer machine-actionable outputs
 

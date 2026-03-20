@@ -33,6 +33,7 @@
 - `/docs/README.md` is the entry point for detailed repository guidance. Treat `/docs` as the detailed source of truth for architecture, principles, observability, and AI workflow.
 
 - If a change affects architecture, generator flow, diagnostics, observability, developer tooling, or project principles, update the relevant `/docs` file in the same change.
+- If a change affects how Blueprint is consumed by downstream repos or extended in this repo, update the relevant Blueprint skill in the same change: `using-blueprint` for consumer/install guidance and `extending-blueprint` for repo-internal contributor guidance.
 
 - Start with these docs for non-trivial work:
   - `docs/guiding-principles.md`

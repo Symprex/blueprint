@@ -61,6 +61,7 @@ They are intentionally short and repeatable so future humans and AI agents can u
 - [ ] Make large generated surfaces easier to summarize, inspect, and reason about.
 - [ ] Design tooling so it helps both humans and AI agents answer "what exists?" and "why?" quickly.
 - [ ] If a tool closes a recurring confusion gap, document the new workflow in `/docs`.
+- [ ] If the change alters how Blueprint is consumed or extended, update `using-blueprint` and/or `extending-blueprint` in the same change.
 
 ## Breaking change or migration work
 

@@ -63,7 +63,7 @@ The target is **consumer-contract compatibility**, not byte-for-byte parity with
 3. Do not start a workstream until every listed dependency is complete or an explicit human override is recorded.
 4. Implement the smallest reviewable slice that can satisfy a meaningful acceptance criterion.
 5. Follow the TDD-first execution loop below for every slice, using the repo-local `test-driven-development`, `systematic-debugging`, and `verification-before-completion` skills when relevant.
-6. Update docs and machine-readable artifacts in the same change.
+6. Update docs, machine-readable artifacts, and relevant Blueprint skill artifacts in the same change.
 7. Use the sub-agent guidance in this file to split investigation, implementation, testing, and review work.
 8. At every major design gate, request human review before declaring the phase complete.
 9. After a slice reaches local done and passes self-review, generate a visual human-review handoff with `visual-explainer` before commit or before moving to the next phase gate.
@@ -242,6 +242,14 @@ Before planning or implementation, load:
 2. `dotnet-advisor`
 3. `dotnet-csharp`
 4. `dotnet-tooling`, `dotnet-testing`, and/or `dotnet-devops` as the workstream requires
+5. `using-blueprint` when the slice changes consumer-facing Blueprint usage, migration guidance, or the preferred sample-consumer story
+6. `extending-blueprint` when the slice changes Blueprint generators, runtime contracts, modules, diagnostics, or repo-internal Blueprint guidance
+
+### Blueprint skill contract
+
+- `using-blueprint` is the canonical consumer-facing Blueprint skill. Keep it focused on consumer contract and workflow guidance, not installation or distribution instructions, unless a later migration slice explicitly scopes that work.
+- `extending-blueprint` is the repo-local overlay for contributors changing Blueprint internals, migration guidance, or the preferred consumer story inside this repository.
+- Repository ownership of these skills is sufficient for now. Do not invent a mirroring, export, or downstream distribution workflow until that work is explicitly planned and approved.
 
 ### Recommended sub-agent roles
 

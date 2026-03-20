@@ -15,6 +15,16 @@ Read these files first, in this order:
 
 If .NET skills are available in this session, load the .NET routing/baseline skills first and then load the testing/tooling/devops skills you need for the current slice.
 
+If `using-blueprint` and/or `extending-blueprint` are available in this session, load the Blueprint-specific skill that matches the slice:
+
+- `using-blueprint` for consumer-facing Blueprint usage, migration guidance, or sample-consumer design
+- `extending-blueprint` for Blueprint generator/runtime/module/diagnostic changes and repo-internal Blueprint guidance
+
+Treat the Blueprint skill scope as part of the contract:
+
+- keep `using-blueprint` focused on consumer contract and workflow guidance, not installation or distribution instructions, unless the current slice explicitly scopes that work
+- treat repo ownership of the Blueprint skills as the current default; do not add a mirroring/export workflow unless the migration plan explicitly adds that slice
+
 If the repo-local skills `test-driven-development`, `systematic-debugging`, and `verification-before-completion` are available in the session, use them at the right points:
 
 - `test-driven-development` before production edits
@@ -41,7 +51,7 @@ Non-negotiable operating rules:
 - Follow strict TDD: no production code before a failing proof has been observed failing for the right reason.
 - Preserve incremental-generator cacheability. If generator behavior changes, use the existing cacheability-sensitive harness.
 - Review generated diffs intentionally. Never approve snapshot baselines blindly.
-- Update docs and machine-readable artifacts in the same change.
+- Update docs, machine-readable artifacts, and any relevant Blueprint skill artifacts in the same change.
 - Keep `migration\plan.md` fully up to date with durable progress, approved decisions, and next-step information, not session noise.
 - Session `plan.md`, SQL todos, and chat checkpoints are working state only. Any durable decision about sequencing, approved slices, review outcomes, or human direction MUST be written explicitly to `migration\plan.md` and the relevant `migration\...\plan.md` file before handoff or stop.
 - When a slice is obviously complete, review-closed, and verification-passing, create a small, focused git commit before starting unrelated work or ending the session. If a human review gate is still open, stop before committing and record that explicitly.
