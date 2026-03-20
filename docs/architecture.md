@@ -39,7 +39,7 @@ Key files:
 
 - `src\Blueprint.SourceGenerator\Generators\Descriptors\OperationDescriptorSourceGenerator.cs`
 - `src\Blueprint.SourceGenerator\Modules\IBlueprintSourceGeneratorModule.cs`
-- `src\Blueprint.SourceGenerator\Modules\LinkGenerationModule.cs`
+- `src\Blueprint.SourceGenerator\Modules\LinkGeneration\LinkGenerationModule.cs`
 
 This stage is where string-based metadata should be turned into symbol-backed, validated configuration.
 
@@ -127,9 +127,17 @@ The first Phase 0 foundation slice now exists in the current implementation:
 - `BlueprintSourceGenerationConfig.BuildPipelinePlan(...)` is the supported seam for constructing and validating a per-operation `PipelinePlan` outside private generator helpers
 - `LinkGenerationModule` is now the first real post-initialization and descriptor contributor routed through the execution plan instead of being hard-coded directly into descriptor generation
 - initial planning models now exist for `OperationModel`, `DescriptorPlan`, `PipelinePlan`, `AppRegistrationPlan`, `GeneratedDebugManifest`, and `VariableRegistry`
-- `IPipelineContributor` now exposes a typed `Contribute(PipelineContributorContext)` seam, and descriptor generation runs `ConfigurePipelinePlan()` to build pipeline planning state and report `BPMOD004` for required variables that are missing or only become available after the consuming contributor's earliest stage
+- `IPipelineContributor` now exposes a typed `ContributeToPipeline(PipelineContributorContext)` seam, descriptor contributors use `ContributeToDescriptor(...)`, descriptor generation runs `ConfigurePipelinePlan()` to build pipeline planning state and report `BPMOD004` for required variables that are missing or only become available after the consuming contributor's declared stage, planning context classes now expose helper methods plus a small safe read-only metadata surface instead of record-shaped bags of mutable inner state, and the executor-pipeline generator now activates that seam for handler execution through `HandlerExecutionModule`
 
-At this stage post-initialization, descriptor, and pipeline planning/validation seams are executed end-to-end in descriptor generation. The executor-pipeline generator is not yet routed through module planning, and host, app-registration, plus debug-manifest contributors are still deliberately scaffolded so later migration slices can fill them in without reinventing the foundation contract.
+At this stage post-initialization, descriptor, and pipeline planning/validation seams are executed end-to-end in descriptor generation, and the executor-pipeline generator routes the execution-stage handler invocation through `HandlerExecutionModule` while preserving the previous generated code shape. Pipeline render steps now carry contributor-owned rendering callbacks with no separate behavior-driving enum, stage participation is inferred implicitly when contributors register render steps or variables, and descriptor/pipeline/render contexts expose helper methods plus only the small read-only metadata properties needed for clear module code instead of raw public access to mutable plan, handler, or writer objects. `PipelineCodeGenerator` only replays ordered steps instead of interpreting handler-execution markers centrally. Logging, exception/result handling, host, app-registration, and debug-manifest contributors are still deliberately scaffolded or hard-coded so later migration slices can fill them in without reinventing the foundation contract.
+
+Contributor contract conventions:
+
+- concrete module implementations end with `Module`
+- concrete module files live in dedicated subfolders under `src\Blueprint.SourceGenerator\Modules`
+- module-specific helper files live beside the owning module inside that folder
+- contributor methods are named for the seam they populate (`ContributeToDescriptor`, `ContributeToPipeline`, etc.)
+- planning context classes expose helper methods plus only a small read-only metadata surface; they do not publish mutable inner plan, handler, or writer objects as public state
 
 Representative planned models:
 

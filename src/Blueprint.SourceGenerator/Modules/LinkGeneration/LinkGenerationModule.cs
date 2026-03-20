@@ -58,14 +58,12 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
     }
 
     /// <inheritdoc />
-    public void Contribute(DescriptorContributorContext context)
+    public void ContributeToDescriptor(DescriptorContributorContext context)
     {
-        var linkRegistrations = new List<UrlRegistration>();
+        LookForRootLinks(context);
+        LookForSelfLinks(context);
 
-        LookForRootLinks(context, linkRegistrations);
-        LookForSelfLinks(context, linkRegistrations);
-
-        context.Plan.AddRenderStep(codeWriter => RenderDescriptor(codeWriter, context.Plan));
+        context.AddRenderStep(codeWriter => RenderDescriptor(codeWriter, context.GetMetadata<UrlRegistration>(), context.GetMetadata<LinkRegistration>()));
     }
 
     // Normalise away the parameter names, so that we can compare URLs with different property names (as utimately they are
@@ -75,24 +73,26 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
         return _placeholderRegex.Replace(url, "{<prop>}");
     }
 
-    private static void RenderDescriptor(ICodeWriter codeWriter, DescriptorPlan plan)
+    private static void RenderDescriptor(
+        ICodeWriter codeWriter,
+        IEnumerable<UrlRegistration> urlRegistrations,
+        IEnumerable<LinkRegistration> linkRegistrations)
     {
-        foreach (var r in plan.GetMetadata<UrlRegistration>())
+        foreach (var r in urlRegistrations)
         {
             codeWriter.AppendLine($"this.AddUrl(new global::Blueprint.Model.ApiOperationUrl(\"{r.Url}\"));");
         }
 
-        foreach (var r in plan.GetMetadata<LinkRegistration>())
+        foreach (var r in linkRegistrations)
         {
             codeWriter.AppendLine($"this.AddLink(new global::Blueprint.Model.ApiOperationLink(this, \"{r.Url}\", \"{r.Url}\", \"{r.Rel}\", typeof({r.ResourceType})));");
         }
     }
 
-    private static void LookForRootLinks(
-        DescriptorContributorContext context,
-        List<UrlRegistration> linkRegistrations)
+    private static void LookForRootLinks(DescriptorContributorContext context)
     {
-        var rootLinkAttribute = RootLinkAttributeDescriptor.Instance.ParseSingle(context.Operation.TypeSymbol);
+        var operationType = context.GetOperationTypeSymbol();
+        var rootLinkAttribute = RootLinkAttributeDescriptor.Instance.ParseSingle(operationType);
 
         if (rootLinkAttribute == null)
         {
@@ -111,25 +111,22 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
             {
                 var placeholderName = placeholder.Value.Trim('{', '}');
 
-                if (context.Operation.TypeSymbol.GetMembers().Any(m => m.Name == placeholderName) == false)
+                if (operationType.GetMembers().Any(m => m.Name == placeholderName) == false)
                 {
                     var argumentLocationInfo = locationInfo.WithSubRange(placeholder.Index + 2, placeholder.Length - 2);
-                    context.Plan.AddDiagnostic(CreatePlaceholderMissingDiagnostic(context.Operation.TypeSymbol, placeholderName, argumentLocationInfo));
+                    context.AddDiagnostic(CreatePlaceholderMissingDiagnostic(operationType, placeholderName, argumentLocationInfo));
                 }
             }
         }
 
         var urlRegistration = new UrlRegistration(url, locationInfo);
-
-        linkRegistrations.Add(urlRegistration);
-        context.Plan.AddMetadata(urlRegistration);
+        context.AddMetadata(urlRegistration);
     }
 
-    private static void LookForSelfLinks(
-        DescriptorContributorContext context,
-        List<UrlRegistration> linkRegistrations)
+    private static void LookForSelfLinks(DescriptorContributorContext context)
     {
-        var selfLinkAttributes = SelfLinkAttributeDescriptor.Instance.ParseAll(context.Operation.TypeSymbol);
+        var operationType = context.GetOperationTypeSymbol();
+        var selfLinkAttributes = SelfLinkAttributeDescriptor.Instance.ParseAll(operationType);
 
         foreach (var selfLinkAttribute in selfLinkAttributes)
         {
@@ -138,11 +135,11 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
 
             if (resourceType is not INamedTypeSymbol resourceTypeSymbol || resourceTypeSymbol.AllInterfaces.Any(i => i.Name == "ILinkableResource") == false)
             {
-                context.Plan.AddDiagnostic(
+                context.AddDiagnostic(
                     new DiagnosticInfo(
                         _notLinkableResourceError,
                         resourceLocation,
-                        [resourceType.ToDisplayString(), context.Operation.TypeSymbol.ToDisplayString()]));
+                        [resourceType.ToDisplayString(), operationType.ToDisplayString()]));
 
                 continue;
             }
@@ -166,10 +163,10 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
 
                         // First, make sure the route property exists
                         if (TryFindMember(
-                                context.Operation.TypeSymbol,
+                                operationType,
                                 routePropertyName,
                                 argumentLocationInfo,
-                                context.Plan))
+                                context))
                         {
                             // Now, make sure the resource has the route name OR the alternate name. We will only do this
                             // check if the operation check passes
@@ -180,7 +177,7 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
                                     resourceTypeSymbol,
                                     routePropertyName,
                                     argumentLocationInfo,
-                                    context.Plan);
+                                    context);
                             }
                             else
                             {
@@ -189,7 +186,7 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
                                     resourceTypeSymbol,
                                     resourcePropertyName!,
                                     argumentLocationInfo,
-                                    context.Plan);
+                                    context);
                             }
                         }
 
@@ -197,7 +194,7 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
                     });
             }
 
-            if (context.Plan.Diagnostics.Any())
+            if (context.HasDiagnostics())
             {
                 return;
             }
@@ -205,19 +202,18 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
             var urlRegistration = new UrlRegistration(normalisedUrl, urlLocation);
             var linkRegistration = new LinkRegistration(normalisedUrl, "self", resourceTypeSymbol, urlLocation);
 
-            linkRegistrations.Add(urlRegistration);
-            context.Plan.AddMetadata(urlRegistration);
-            context.Plan.AddMetadata(linkRegistration);
+            context.AddMetadata(urlRegistration);
+            context.AddMetadata(linkRegistration);
         }
     }
 
-    private static bool TryFindMember(INamedTypeSymbol namedTypeSymbol, string placeholderName, LocationInfo argumentLocationInfo, DescriptorPlan descriptorPlan)
+    private static bool TryFindMember(INamedTypeSymbol namedTypeSymbol, string placeholderName, LocationInfo argumentLocationInfo, DescriptorContributorContext context)
     {
         var memberExists = namedTypeSymbol.GetMembers().Any(m => m.Name == placeholderName);
 
         if (!memberExists)
         {
-            descriptorPlan.AddDiagnostic(
+            context.AddDiagnostic(
                 CreatePlaceholderMissingDiagnostic(
                     namedTypeSymbol,
                     placeholderName,

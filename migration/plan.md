@@ -31,13 +31,14 @@ The target is **consumer-contract compatibility**, not byte-for-byte parity with
 - Planning and orchestration guidance are complete.
 - The initial minimum **Phase 0 / Workstream 1: Foundation module system** slice has landed, including contributor capability splits, deterministic execution-plan diagnostics, `LinkGenerationModule` contributor routing, planning models, and stage-aware pipeline variable validation.
 - The next session should treat `migration\foundation-module-system\plan.md` as the immediate detailed execution target, while keeping `migration\plan.md` as the ordering and safety contract.
-- The next approved implementation slice is to route `HandlerExecutionContributor` through the activated seam as the first production pipeline contributor.
-- That slice should stay narrow:
-  - start from the existing pipeline integration harness as the failing proof, especially `src\Blueprint.SourceGenerator.Tests\Generators\Pipelines\OperationExecutorPipelineGeneratorIntegrationTests.cs`
-  - move handler invocation and the produced handler-result variable through the contributor seam first
-  - avoid widening into validation, exception translation, result normalization, host wiring, or debug-manifest work in the same slice unless the dependency chain explicitly requires it
-- This approved slice is a narrow seam-activation step, not a freeze of the broader result-model direction. It may proceed while preserving the current result-wrapping behavior and deferring host-agnostic result redesign.
-- Before widening scope beyond the first slice, the next session should confirm that the foundation design still aligns with the Phase 0 exit gate, performance harness expectations, and manifest contract requirements.
+- The first approved production pipeline-contributor slice is now complete: `HandlerExecutionModule` routes handler invocation plus the produced `handler-result` variable through the activated pipeline seam while preserving the existing generated pipeline output and result wrapping.
+- The failing proof for that slice lives in `src\Blueprint.SourceGenerator.Tests\Generators\Pipelines\OperationExecutorPipelineGeneratorIntegrationTests.cs`, and the full pipeline integration class continues to pass after the seam activation.
+- The approved follow-on refinement to that slice is now complete locally: contributor methods are now seam-specific (`ContributeToPipeline` / `ContributeToDescriptor`), `PipelineContributorContext` uses `RegisterVariable(...)` plus implicit stage participation instead of explicit `AddContribution(...)`, `PipelineRenderStepKind` has been removed, and `HandlerExecutionModule` owns the handler-invocation rendering callback directly.
+- Planning context classes now expose helper methods plus only a small safe read-only metadata surface instead of record-style bags of public mutable inner state, internal variable-registry naming now aligns with `RegisterVariable(...)` / `RequireVariable(...)`, and module-specific helper files now live beside their owning module inside the module folder.
+- Concrete module implementations now follow the repo convention of `*Module` naming and live in per-module folders under `src\Blueprint.SourceGenerator\Modules`.
+- The live executor pipeline generator still hard-codes the outer logging plus exception/result shell, but handler invocation rendering now lives with the contributor-owned render step instead of the central pipeline generator.
+- Approved next slice after this review gate: extract validation through the activated contributor seam before widening into exception translation, result normalization, host wiring, or debug-manifest work.
+- This remains a narrow seam-activation step, not a freeze of the broader result-model direction. The current result-wrapping behavior is intentionally preserved while host-agnostic result redesign stays deferred.
 
 ## Durable decision rule
 
@@ -218,7 +219,7 @@ This phase proves that the architecture is general, not HTTP-only.
 | Performance and scale | No hard blocker for first milestone; evolves with foundation/core work |
 | Generated manifests and inspection surfaces | Foundation design direction |
 | Operation discovery and descriptors | Foundation module system |
-| Pipeline composition and execution | Foundation + operation discovery + provisional result contract from workstream 7; the approved narrow `HandlerExecutionContributor` seam-activation slice may proceed earlier only if it preserves the current result-wrapping behavior and does not freeze the broader result-model direction |
+| Pipeline composition and execution | Foundation + operation discovery + provisional result contract from workstream 7; the approved narrow `HandlerExecutionModule` seam-activation slice may proceed earlier only if it preserves the current result-wrapping behavior and does not freeze the broader result-model direction |
 | Result model and host translation | Foundation + operation discovery + pipeline design loop; must be agreed before pipeline/HTTP/error/OpenAPI contracts freeze |
 | Error model and exception handling | Foundation + operation discovery + pipeline composition + result model |
 | HTTP host and message population | Foundation + operation discovery + pipeline composition + result model |
@@ -334,8 +335,9 @@ When delegating a workstream, include:
 
 - The first foundation slice now introduces contributor capability interfaces, `BlueprintSourceGenerationConfig.BuildExecutionPlan()` ordering/dependency validation with `BPMOD001`-`BPMOD003`, initial planning models (`OperationModel`, `DescriptorPlan`, `PipelinePlan`, `AppRegistrationPlan`, `GeneratedDebugManifest`, and `VariableRegistry`), and a real-contributor conversion of `LinkGenerationModule` through the new execution plan.
 - Planning and variable-registry coverage now exercises happy paths, failure/diagnostic paths, and determinism edge cases for the implemented foundation behaviors.
-- Pipeline contributors now expose a typed `IPipelineContributor.Contribute(PipelineContributorContext)` contract, and descriptor generation activates `ConfigurePipelinePlan()` so required variables fail deterministically with stage-aware `BPMOD004`.
-- Approved next slice: route `HandlerExecutionContributor` through the activated seam as the first production pipeline contributor.
+- Pipeline contributors now expose a typed `IPipelineContributor.ContributeToPipeline(PipelineContributorContext)` contract, descriptor contributors use `ContributeToDescriptor(...)`, and descriptor generation activates `ConfigurePipelinePlan()` so required variables fail deterministically with stage-aware `BPMOD004`.
+- Planning context classes expose helper methods plus only a small safe read-only metadata surface instead of record-style bags of mutable inner state, module-specific helper files live beside the owning module, and variable registry terminology now aligns with `RegisterVariable(...)` / `RequireVariable(...)`.
+- Approved next slice: extract validation as the next production contributor through the activated pipeline seam.
 - Scope guard for that slice: use the existing pipeline integration harness as the failing proof, move handler invocation plus the produced handler-result variable through the seam, and defer validation, exception translation, result normalization, and host wiring to later slices.
 
 ### Sub-agent guidance

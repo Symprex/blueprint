@@ -119,15 +119,21 @@ The initial minimum slice now exists in the repository:
 Current limitation:
 
 - descriptor, post-initialization, and pipeline planning/validation seams are now exercised end-to-end in descriptor generation
-- pipeline contributors now use a typed `IPipelineContributor.Contribute(PipelineContributorContext)` contract, and required variables fail deterministically with stage-aware `BPMOD004` validation based on the consuming contributor's earliest planned stage
+- pipeline contributors now use a typed `IPipelineContributor.ContributeToPipeline(PipelineContributorContext)` contract, descriptor contributors use `ContributeToDescriptor(...)`, and required variables fail deterministically with stage-aware `BPMOD004` validation based on the declared required stage
+- planning context classes now expose helper methods plus only the small read-only metadata needed by modules; contributors render and register through helper methods rather than reaching through raw mutable `Plan` or `Writer` state
+- `PipelineContributorContext` now carries contributor-aware helper methods for render steps and variable registration, and stage participation is inferred implicitly instead of being recorded manually with `AddContribution(...)`
+- pipeline render steps are now executable contributor-owned callbacks without a separate behavior-driving enum; `HandlerExecutionModule` owns the handler-invocation rendering logic directly and the central pipeline generator only plays back ordered steps
+- concrete module implementations now follow the repo convention of `*Module` naming and live in per-module folders beneath `src\Blueprint.SourceGenerator\Modules`, with module-specific helper files colocated beside the owning module
+- variable-registry terminology now aligns with `RegisterVariable(...)`, `RequireVariable(...)`, and `VariableRegistration`
 - host, app-registration, and debug-manifest contributors currently exist as capability seams and planning scaffolds for follow-on slices
-- the live executor pipeline generator still hard-codes handler invocation, logging, and exception/result behavior instead of consuming a first production pipeline contributor
+- the live executor pipeline generator now routes handler invocation plus the produced `handler-result` variable through `HandlerExecutionModule`, but outer logging and exception/result behavior are still hard-coded outside the contributor seam
 
 Next slice:
 
-- approved decision: route `HandlerExecutionContributor` through the activated seam as the first production pipeline contributor
-- start from the existing pipeline integration harness as the failing proof, especially `src\Blueprint.SourceGenerator.Tests\Generators\Pipelines\OperationExecutorPipelineGeneratorIntegrationTests.cs`
-- keep the initial scope to handler invocation plus the produced handler-result variable; defer validation, exception translation, result normalization, host wiring, and debug-manifest work to later slices
+- completed decision: `HandlerExecutionModule` is now the first production pipeline contributor flowing through the activated seam
+- completed follow-on refinement: `src\Blueprint.SourceGenerator.Tests\Generators\Pipelines\OperationExecutorPipelineGeneratorIntegrationTests.cs` now asserts the renamed module, the implicit stage-participation model, and that the stored render step owns the handler-invocation emission path, while the full pipeline integration class still passes end-to-end
+- approved next extraction target after the current review gate: validation
+- follow-on review gate: keep the validation slice separate from later exception/result handling, execution-shell planning, host wiring, and debug-manifest work
 
 ### 2. Introduce intermediate planning models
 
@@ -171,6 +177,15 @@ The target should be a **hybrid** model:
   - stage placement
   - whether they belong to the shared executor shell or per-operation core plan
   - diagnostics they can emit
+
+Concrete contract conventions for future slices:
+
+- concrete module types must end with `Module`
+- concrete module files should live in dedicated subfolders under `src\Blueprint.SourceGenerator\Modules`
+- module-specific helper files should live beside the owning module in that folder
+- contributor capability methods should be named for their seam (`ContributeToDescriptor`, `ContributeToPipeline`, etc.)
+- pipeline stage participation should be inferred by helper APIs such as render-step and variable registration rather than relying on explicit `AddContribution(...)` bookkeeping
+- planning context classes should expose helper methods plus at most a small read-only metadata surface and should not expose raw public record-style access to mutable inner plan, handler, or writer state
 
 This keeps the system flexible without losing explainability.
 

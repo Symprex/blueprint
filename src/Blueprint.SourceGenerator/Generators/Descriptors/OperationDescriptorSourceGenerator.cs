@@ -140,7 +140,7 @@ public sealed class OperationDescriptorSourceGenerator : IIncrementalGenerator, 
 
         foreach (var contributor in executionPlanResult.Value.DescriptorContributors)
         {
-            contributor.Contribute(new DescriptorContributorContext(operationModel, descriptorPlan, operationLookup));
+            contributor.ContributeToDescriptor(new DescriptorContributorContext(operationModel, descriptorPlan, operationLookup));
         }
 
         var pipelinePlanResult = ConfigurePipelinePlan(operationFullClassName, compilation, executionPlanResult);

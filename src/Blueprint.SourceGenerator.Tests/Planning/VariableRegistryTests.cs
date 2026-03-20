@@ -11,16 +11,16 @@ public class VariableRegistryTests
         var registry = new VariableRegistry();
         var key = new VariableKey("global::Marten.IDocumentSession", "document-session");
 
-        registry.RegisterProvision(
-            new VariableProvision(
+        registry.RegisterVariable(
+            new VariableRegistration(
                 key,
                 ProducerId: "persistence",
                 AvailableFrom: PipelineStage.Execution,
                 SourceKind: VariableSourceKind.Service,
                 Lifetime: VariableLifetime.Local));
 
-        var act = () => registry.RegisterProvision(
-            new VariableProvision(
+        var act = () => registry.RegisterVariable(
+            new VariableRegistration(
                 key,
                 ProducerId: "outbox",
                 AvailableFrom: PipelineStage.Execution,
@@ -39,14 +39,16 @@ public class VariableRegistryTests
         var required = new VariableRequirement(
             new VariableKey("global::System.Security.Claims.ClaimsIdentity", "identity"),
             ConsumerId: "auth",
+            RequiredBy: PipelineStage.Authentication,
             IsRequired: true);
         var optional = new VariableRequirement(
             new VariableKey("global::Rebus.Transport.ITransactionContext", "transaction-scope"),
             ConsumerId: "outbox",
+            RequiredBy: PipelineStage.PostExecution,
             IsRequired: false);
 
-        registry.RegisterRequirement(required);
-        registry.RegisterRequirement(optional);
+        registry.RequireVariable(required);
+        registry.RequireVariable(optional);
 
         registry.Requirements.Should().Equal(required, optional);
     }
@@ -57,16 +59,16 @@ public class VariableRegistryTests
         var registry = new VariableRegistry();
         var key = new VariableKey("global::System.String", "header-value");
 
-        registry.RegisterProvision(
-            new VariableProvision(
+        registry.RegisterVariable(
+            new VariableRegistration(
                 key,
                 ProducerId: "http",
                 AvailableFrom: PipelineStage.Population,
                 SourceKind: VariableSourceKind.Context,
                 Lifetime: VariableLifetime.ContextLookup,
                 AllowMultiple: true));
-        registry.RegisterProvision(
-            new VariableProvision(
+        registry.RegisterVariable(
+            new VariableRegistration(
                 key,
                 ProducerId: "messaging",
                 AvailableFrom: PipelineStage.Population,
@@ -74,7 +76,7 @@ public class VariableRegistryTests
                 Lifetime: VariableLifetime.ContextLookup,
                 AllowMultiple: true));
 
-        registry.Provisions.Select(p => p.ProducerId).Should().Equal("http", "messaging");
+        registry.Registrations.Select(p => p.ProducerId).Should().Equal("http", "messaging");
     }
 
     [Fact]
@@ -82,21 +84,21 @@ public class VariableRegistryTests
     {
         var registry = new VariableRegistry();
 
-        registry.RegisterProvision(
-            new VariableProvision(
+        registry.RegisterVariable(
+            new VariableRegistration(
                 new VariableKey("global::System.String", "tenant-id"),
                 ProducerId: "tenant",
                 AvailableFrom: PipelineStage.Setup,
                 SourceKind: VariableSourceKind.Context,
                 Lifetime: VariableLifetime.ContextLookup));
-        registry.RegisterProvision(
-            new VariableProvision(
+        registry.RegisterVariable(
+            new VariableRegistration(
                 new VariableKey("global::System.String", "correlation-id"),
                 ProducerId: "correlation",
                 AvailableFrom: PipelineStage.Setup,
                 SourceKind: VariableSourceKind.Context,
                 Lifetime: VariableLifetime.ContextLookup));
 
-        registry.Provisions.Select(p => p.Key.Purpose).Should().Equal("tenant-id", "correlation-id");
+        registry.Registrations.Select(p => p.Key.Purpose).Should().Equal("tenant-id", "correlation-id");
     }
 }

@@ -41,7 +41,7 @@ Migration diagnostics should be paired with machine-readable reporting such as S
 
 ### Link and route validation
 
-`LinkGenerationModule` defines `BPLG001` through `BPLG003` (`src\Blueprint.SourceGenerator\Modules\LinkGenerationModule.cs`):
+`LinkGenerationModule` defines `BPLG001` through `BPLG003` (`src\Blueprint.SourceGenerator\Modules\LinkGeneration\LinkGenerationModule.cs`):
 
 - placeholder-to-property validation for route templates
 - duplicate URL detection
@@ -114,7 +114,7 @@ The foundation module system now reserves `BPMOD001`-`BPMOD004` for contributor-
 - cyclic contributor dependency graphs
 - missing required pipeline variables discovered during pipeline-plan validation, including values that only become available after the consuming contributor stage
 
-These are compile-time failures because non-deterministic module composition or unresolved required pipeline variables would make generated output unstable and hard to inspect. `BPMOD004` is stage-aware: a matching provision must exist and be available no later than the consuming contributor's earliest planned stage.
+These are compile-time failures because non-deterministic module composition or unresolved required pipeline variables would make generated output unstable and hard to inspect. `BPMOD004` is stage-aware: a matching provision must exist and be available no later than the consuming contributor's declared required stage. Recent pipeline-contract cleanup intentionally removed the separate orphan-render-step diagnostic by making stage participation implicit in the planning helpers instead of leaving it as caller-managed bookkeeping.
 
 ## Human- and AI-friendly diagnostics
 

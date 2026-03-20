@@ -1,5 +1,6 @@
 using Blueprint.SourceGenerator.CodeWriter;
 using Blueprint.SourceGenerator.Generators.Pipelines.Model;
+using Blueprint.SourceGenerator.Planning;
 
 namespace Blueprint.SourceGenerator.Generators.Pipelines;
 
@@ -11,7 +12,7 @@ internal static class PipelineCodeGenerator
     /// <summary>
     /// Generates the complete pipeline class for an operation handler.
     /// </summary>
-    public static string GeneratePipeline(OperationHandlerModel handler)
+    public static string GeneratePipeline(OperationHandlerModel handler, PipelinePlan plan)
     {
         var codeBuilder = CodeBuilder.Create("Blueprint.Generated");
 
@@ -22,7 +23,7 @@ internal static class PipelineCodeGenerator
         AddLoggingFields(pipelineClass);
         AddLoggerField(pipelineClass);
         AddConstructor(pipelineClass, handler);
-        AddExecuteAsyncMethod(pipelineClass, handler);
+        AddExecuteAsyncMethod(pipelineClass, handler, plan);
 
         return codeBuilder.Build();
     }
@@ -83,7 +84,7 @@ internal static class PipelineCodeGenerator
             .WithBody(writer => writer.Assign("_logger", $"loggerFactory.CreateLogger(\"{handler.PipelineClassName}\")"));
     }
 
-    private static void AddExecuteAsyncMethod(ClassBuilder pipelineClass, OperationHandlerModel handler)
+    private static void AddExecuteAsyncMethod(ClassBuilder pipelineClass, OperationHandlerModel handler, PipelinePlan plan)
     {
         var executeMethod = pipelineClass.AddMethod("ExecuteAsync")
             .MakePublicMethod()
@@ -107,89 +108,22 @@ internal static class PipelineCodeGenerator
                     {
                         tryWriter.AppendLine($"_ApiOperationExecuting(_logger, \"{handler.OperationTypeName}\", null);");
                         tryWriter.NewLine();
-                        WriteHandlerInvocation(tryWriter, handler);
+                        WritePipelineSteps(tryWriter, handler, plan);
                     });
 
                 WriteExceptionHandling(writer, handler.IsHandlerAsync);
             });
     }
 
-    private static void WriteHandlerInvocation(ICodeWriter writer, OperationHandlerModel handler)
+    private static void WritePipelineSteps(ICodeWriter writer, OperationHandlerModel handler, PipelinePlan plan)
     {
-        foreach (var param in handler.Parameters)
+        foreach (var contribution in plan.Contributions)
         {
-            switch (param.Source)
+            foreach (var renderStep in plan.GetRenderSteps(contribution))
             {
-                case ParameterSource.FromDependencyInjection:
-                    writer.DeclareVar(
-                        param.VariableName,
-                        $"Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<{param.ParameterTypeName}>(context.ServiceProvider)");
-                    break;
+                renderStep.Render(new PipelineRenderContext(writer, handler, plan));
             }
         }
-
-        if (handler.Parameters.Any(p => p.Source == ParameterSource.FromDependencyInjection))
-        {
-            writer.NewLine();
-        }
-
-        var parameterList = new List<string>();
-        foreach (var param in handler.Parameters)
-        {
-            switch (param.Source)
-            {
-                case ParameterSource.Operation:
-                    parameterList.Add("operation");
-                    break;
-                case ParameterSource.FromContext:
-                    parameterList.Add("context");
-                    break;
-                case ParameterSource.FromContextProperty:
-                    parameterList.Add($"context.{param.ContextPropertyName}");
-                    break;
-                case ParameterSource.FromDependencyInjection:
-                    parameterList.Add(param.VariableName);
-                    break;
-            }
-        }
-
-        if (handler.IsInline)
-        {
-            if (handler.IsHandlerStatic)
-            {
-                writer.DeclareVar("handlerResult", $"{(handler.IsHandlerAsync ? "await " : string.Empty)}{handler.OperationTypeFullName}.{handler.HandlerMethodName}({string.Join(", ", parameterList)})");
-            }
-            else
-            {
-                writer.DeclareVar("handlerResult", $"{(handler.IsHandlerAsync ? "await " : string.Empty)}operation.{handler.HandlerMethodName}({string.Join(", ", parameterList)})");
-            }
-        }
-        else
-        {
-            var handlerVarName = char.ToLowerInvariant(handler.HandlerClassName![0]) + handler.HandlerClassName.Substring(1);
-
-            writer.DeclareVar(
-                handlerVarName,
-                $"Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<{handler.HandlerClassFullName}>(context.ServiceProvider)");
-            writer.If(
-                $"{handlerVarName} == null",
-                ifWriter =>
-                {
-                    ifWriter.Assign(
-                        handlerVarName,
-                        $"Microsoft.Extensions.DependencyInjection.ActivatorUtilities.CreateInstance<{handler.HandlerClassFullName}>(context.ServiceProvider)");
-                });
-
-            writer.NewLine();
-
-            var allParams = new List<string> { "operation" };
-            allParams.AddRange(parameterList);
-
-            writer.DeclareVar("handlerResult", $"{(handler.IsHandlerAsync ? "await " : string.Empty)}{handlerVarName}.{handler.HandlerMethodName}({string.Join(", ", allParams)})");
-        }
-
-        writer.NewLine();
-        writer.Return(WrapOperationResult("new Blueprint.Runtime.Exec.OkResult(handlerResult)", handler.IsHandlerAsync));
     }
 
     private static void WriteExceptionHandling(ICodeWriter writer, bool isHandlerAsync)

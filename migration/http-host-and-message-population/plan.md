@@ -18,7 +18,7 @@ HTTP is the primary host and the main consumer-facing contract surface. The lega
 - Legacy: `D:\Projects\Signature365\src\Blueprint\Blueprint.Http\MessagePopulation\HttpRouteMessagePopulationSource.cs`
 - Legacy generated output: `D:\Projects\Signature365\src\Apps\AdminPortal\Symprex.Signature365.AdminPortal\Internal\Generated\Blueprint\GetOpenApiQueryExecutorPipeline.cs`
 - Current: `src\Blueprint.Runtime\Http\ApplicationBuilderExtensions.cs`
-- Current: `src\Blueprint.SourceGenerator\Modules\LinkGenerationModule.cs`
+- Current: `src\Blueprint.SourceGenerator\Modules\LinkGeneration\LinkGenerationModule.cs`
 
 ## Migration goal
 

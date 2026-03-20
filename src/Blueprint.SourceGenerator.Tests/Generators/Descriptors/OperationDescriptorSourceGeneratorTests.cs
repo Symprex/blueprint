@@ -85,8 +85,103 @@ public class OperationDescriptorSourceGeneratorTests
         result.Diagnostics.Should().BeEmpty();
         result.Value.Should().NotBeNull();
         result.Value!.Contributions.Select(c => c.ContributorId).Should().Equal("provider", "consumer");
-        result.Value.VariableRegistry.Provisions.Select(p => p.ProducerId).Should().Equal("provider");
+        result.Value.VariableRegistry.Registrations.Select(p => p.ProducerId).Should().Equal("provider");
         result.Value.VariableRegistry.Requirements.Select(r => r.ConsumerId).Should().Equal("consumer");
+    }
+
+    [Fact]
+    public void When_handler_execution_module_is_used_via_public_pipeline_plan_api_then_handler_metadata_is_resolved()
+    {
+        var compilation = CreateCompilation(
+            """
+            using Blueprint.Model;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace;
+
+            public partial class IncludedOperation : IQuery<string>
+            {
+                public static Task<string> HandleAsync()
+                {
+                    return Task.FromResult("hello");
+                }
+            }
+            """);
+        var config = new BlueprintSourceGenerationConfig([new HandlerExecutionModule()]);
+
+        var result = config.BuildPipelinePlan("TestNamespace.IncludedOperation", compilation);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Value.Should().NotBeNull();
+        result.Value!.Contributions.Should().ContainSingle().Which.Should().Be(
+            new PipelineContribution(PipelineStage.Execution, nameof(HandlerExecutionModule)));
+        result.Value.VariableRegistry.Registrations.Should().ContainSingle().Which.Should().BeEquivalentTo(
+            new VariableRegistration(
+                new VariableKey("string", HandlerExecutionModule.HandlerResultPurpose),
+                nameof(HandlerExecutionModule),
+                PipelineStage.Execution,
+                VariableSourceKind.ProducedValue,
+                VariableLifetime.Local));
+    }
+
+    [Fact]
+    public void When_pipeline_contributor_uses_context_helpers_then_plan_uses_contributor_identity_and_implicit_stage_participation()
+    {
+        var compilation = CreateCompilation();
+        var config = new BlueprintSourceGenerationConfig([new HelperMethodPipelineModule()]);
+
+        var result = config.BuildPipelinePlan("TestNamespace.IncludedOperation", compilation);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Value.Should().NotBeNull();
+        result.Value!.Contributions.Should().ContainSingle().Which.Should().Be(
+            new PipelineContribution(PipelineStage.Execution, "helper-method"));
+        var renderStep = result.Value.RenderSteps.Should().ContainSingle().Subject;
+        renderStep.Stage.Should().Be(PipelineStage.Execution);
+        renderStep.ContributorId.Should().Be("helper-method");
+        result.Value.VariableRegistry.Registrations.Should().ContainSingle().Which.Should().BeEquivalentTo(
+            new VariableRegistration(
+                new VariableKey("global::System.String", "helper-result"),
+                "helper-method",
+                PipelineStage.Execution,
+                VariableSourceKind.ProducedValue,
+                VariableLifetime.Local));
+    }
+
+    [Fact]
+    public void When_descriptor_contributor_uses_helper_methods_then_descriptor_plan_is_populated_without_plan_bypass()
+    {
+        var compilation = CreateCompilation();
+        var operation = OperationModel.Create(compilation.GetTypeByMetadataName("TestNamespace.IncludedOperation")!);
+        var plan = new DescriptorPlan(operation);
+        var context = new DescriptorContributorContext(operation, plan, new CompilationOperationLookup(compilation));
+
+        context.AddMetadata("descriptor-metadata");
+        context.AddRenderStep(writer => writer.AppendLine(context.GetOperationTypeSymbol().Name));
+
+        context.FindOperationByMetadataName("TestNamespace.IncludedOperation")!.TypeName.Should().Be("IncludedOperation");
+        plan.Metadata.Should().ContainSingle().Which.Should().Be("descriptor-metadata");
+        var writer = new RecordingCodeWriter();
+
+        plan.Render(writer);
+
+        writer.Rendered.Should().Contain("IncludedOperation");
+        context.HasDiagnostics().Should().BeFalse();
+    }
+
+    [Fact]
+    public void When_pipeline_render_step_has_no_explicit_contribution_then_stage_participation_is_implicit()
+    {
+        var compilation = CreateCompilation();
+        var config = new BlueprintSourceGenerationConfig([new OrphanRenderStepPipelineModule()]);
+
+        var result = config.BuildPipelinePlan("TestNamespace.IncludedOperation", compilation);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Value.Should().NotBeNull();
+        result.Value!.Contributions.Should().ContainSingle().Which.Should().Be(
+            new PipelineContribution(PipelineStage.Execution, "orphan-render-step"));
+        result.Value.RenderSteps.Should().ContainSingle();
     }
 
     internal static GenerationResult Compile(string source)
@@ -94,18 +189,16 @@ public class OperationDescriptorSourceGeneratorTests
         return TestHelpers.Compile<OperationDescriptorSourceGenerator>("using Blueprint.Model;\nusing Blueprint.Model.Attributes;\n\nnamespace TestNamespace;\n\n" + source);
     }
 
-    private static CSharpCompilation CreateCompilation()
+    private static CSharpCompilation CreateCompilation(string source = """
+                                                           using Blueprint.Model;
+
+                                                           namespace TestNamespace;
+
+                                                           public partial class IncludedOperation : IOperation
+                                                           {
+                                                           }
+                                                           """)
     {
-        const string source = """
-                               using Blueprint.Model;
-
-                              namespace TestNamespace;
-
-                              public partial class IncludedOperation : IOperation
-                              {
-                              }
-                              """;
-
         var syntaxTree = CSharpSyntaxTree.ParseText(source, new CSharpParseOptions(LanguageVersion.Preview));
         var references = AppDomain.CurrentDomain.GetAssemblies()
             .Where(a => !a.IsDynamic && !string.IsNullOrWhiteSpace(a.Location))
@@ -135,14 +228,11 @@ public class OperationDescriptorSourceGeneratorTests
 
         public IReadOnlyList<string> DependsOn { get; } = [];
 
-        public void Contribute(PipelineContributorContext context)
+        public void ContributeToPipeline(PipelineContributorContext context)
         {
-            context.Plan.AddContribution(new PipelineContribution(PipelineStage.Validation, this.ContributorId, "Consume a required session"));
-            context.Plan.VariableRegistry.RegisterRequirement(
-                new VariableRequirement(
-                    new VariableKey("global::Marten.IDocumentSession", "document-session"),
-                    ConsumerId: this.ContributorId,
-                    IsRequired: true));
+            context.RequireVariable(
+                new VariableKey("global::Marten.IDocumentSession", "document-session"),
+                requiredBy: PipelineStage.Validation);
         }
     }
 
@@ -160,9 +250,9 @@ public class OperationDescriptorSourceGeneratorTests
 
         public IReadOnlyList<string> DependsOn { get; } = ["missing"];
 
-        public void Contribute(PipelineContributorContext context)
+        public void ContributeToPipeline(PipelineContributorContext context)
         {
-            context.Plan.AddContribution(new PipelineContribution(PipelineStage.Setup, this.ContributorId, "Should never run"));
+            context.AddRenderStep(PipelineStage.Setup, static _ => { });
         }
     }
 
@@ -180,16 +270,13 @@ public class OperationDescriptorSourceGeneratorTests
 
         public IReadOnlyList<string> DependsOn { get; } = [];
 
-        public void Contribute(PipelineContributorContext context)
+        public void ContributeToPipeline(PipelineContributorContext context)
         {
-            context.Plan.AddContribution(new PipelineContribution(PipelineStage.Setup, this.ContributorId, "Provide a session"));
-            context.Plan.VariableRegistry.RegisterProvision(
-                new VariableProvision(
-                    new VariableKey("global::Marten.IDocumentSession", "document-session"),
-                    ProducerId: this.ContributorId,
-                    AvailableFrom: PipelineStage.Setup,
-                    SourceKind: VariableSourceKind.Service,
-                    Lifetime: VariableLifetime.Local));
+            context.RegisterVariable(
+                new VariableKey("global::Marten.IDocumentSession", "document-session"),
+                availableFrom: PipelineStage.Setup,
+                sourceKind: VariableSourceKind.Service,
+                lifetime: VariableLifetime.Local);
         }
     }
 
@@ -207,14 +294,11 @@ public class OperationDescriptorSourceGeneratorTests
 
         public IReadOnlyList<string> DependsOn { get; } = ["provider"];
 
-        public void Contribute(PipelineContributorContext context)
+        public void ContributeToPipeline(PipelineContributorContext context)
         {
-            context.Plan.AddContribution(new PipelineContribution(PipelineStage.Validation, this.ContributorId, "Consume the shared session"));
-            context.Plan.VariableRegistry.RegisterRequirement(
-                new VariableRequirement(
-                    new VariableKey("global::Marten.IDocumentSession", "document-session"),
-                    ConsumerId: this.ContributorId,
-                    IsRequired: true));
+            context.RequireVariable(
+                new VariableKey("global::Marten.IDocumentSession", "document-session"),
+                requiredBy: PipelineStage.Validation);
         }
     }
 
@@ -232,16 +316,100 @@ public class OperationDescriptorSourceGeneratorTests
 
         public IReadOnlyList<string> DependsOn { get; } = [];
 
-        public void Contribute(PipelineContributorContext context)
+        public void ContributeToPipeline(PipelineContributorContext context)
         {
-            context.Plan.AddContribution(new PipelineContribution(PipelineStage.PostExecution, this.ContributorId, "Provide a session too late"));
-            context.Plan.VariableRegistry.RegisterProvision(
-                new VariableProvision(
-                    new VariableKey("global::Marten.IDocumentSession", "document-session"),
-                    ProducerId: this.ContributorId,
-                    AvailableFrom: PipelineStage.PostExecution,
-                    SourceKind: VariableSourceKind.Service,
-                    Lifetime: VariableLifetime.Local));
+            context.RegisterVariable(
+                new VariableKey("global::Marten.IDocumentSession", "document-session"),
+                availableFrom: PipelineStage.PostExecution,
+                sourceKind: VariableSourceKind.Service,
+                lifetime: VariableLifetime.Local);
+        }
+    }
+
+    private sealed class HelperMethodPipelineModule : IBlueprintSourceGeneratorModule, IPipelineContributor
+    {
+        public string ModuleId => nameof(HelperMethodPipelineModule);
+
+        public BlueprintModuleCategory Category => BlueprintModuleCategory.Core;
+
+        public string ContributorId => "helper-method";
+
+        public int Order => 0;
+
+        public bool IsUnique => true;
+
+        public IReadOnlyList<string> DependsOn { get; } = [];
+
+        public void ContributeToPipeline(PipelineContributorContext context)
+        {
+            context.AddRenderStep(PipelineStage.Execution, static _ => { });
+            context.RegisterVariable(
+                new VariableKey("global::System.String", "helper-result"),
+                availableFrom: PipelineStage.Execution,
+                sourceKind: VariableSourceKind.ProducedValue,
+                lifetime: VariableLifetime.Local);
+        }
+    }
+
+    private sealed class OrphanRenderStepPipelineModule : IBlueprintSourceGeneratorModule, IPipelineContributor
+    {
+        public string ModuleId => nameof(OrphanRenderStepPipelineModule);
+
+        public BlueprintModuleCategory Category => BlueprintModuleCategory.Core;
+
+        public string ContributorId => "orphan-render-step";
+
+        public int Order => 0;
+
+        public bool IsUnique => true;
+
+        public IReadOnlyList<string> DependsOn { get; } = [];
+
+        public void ContributeToPipeline(PipelineContributorContext context)
+        {
+            context.AddRenderStep(PipelineStage.Execution, static _ => { });
+        }
+    }
+
+    private sealed class RecordingCodeWriter : Blueprint.SourceGenerator.CodeWriter.ICodeWriter
+    {
+        private readonly List<string> _lines = [];
+
+        public string Rendered => string.Join(Environment.NewLine, this._lines);
+
+        public void Append(string value)
+        {
+            this._lines.Add(value);
+        }
+
+        public void AppendUnindented(string value)
+        {
+            this._lines.Add(value);
+        }
+
+        public void NewLine()
+        {
+            this._lines.Add(string.Empty);
+        }
+
+        public void AppendLine(string value)
+        {
+            this._lines.Add(value);
+        }
+
+        public void AppendUnindentedLine(string value)
+        {
+            this._lines.Add(value);
+        }
+
+        public IDisposable Block(string value, params string[] constraints)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Blueprint.SourceGenerator.CodeWriter.ICodeWriter BlockWriter(string originalLine)
+        {
+            throw new NotSupportedException();
         }
     }
 }

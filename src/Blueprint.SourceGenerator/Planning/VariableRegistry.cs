@@ -5,14 +5,14 @@ namespace Blueprint.SourceGenerator.Planning;
 /// </summary>
 public sealed class VariableRegistry
 {
-    private readonly Dictionary<VariableKey, VariableProvision> _uniqueProvisions = new();
-    private readonly List<VariableProvision> _provisions = [];
+    private readonly Dictionary<VariableKey, VariableRegistration> _uniqueRegistrations = new();
+    private readonly List<VariableRegistration> _registrations = [];
     private readonly List<VariableRequirement> _requirements = [];
 
     /// <summary>
-    /// Gets the registered provisions.
+    /// Gets the registered variable registrations.
     /// </summary>
-    public IReadOnlyList<VariableProvision> Provisions => this._provisions;
+    public IReadOnlyList<VariableRegistration> Registrations => this._registrations;
 
     /// <summary>
     /// Gets the registered requirements.
@@ -20,85 +20,68 @@ public sealed class VariableRegistry
     public IReadOnlyList<VariableRequirement> Requirements => this._requirements;
 
     /// <summary>
-    /// Registers a variable provision.
+    /// Registers a variable.
     /// </summary>
-    /// <param name="provision">The provision to register.</param>
-    public void RegisterProvision(VariableProvision provision)
+    /// <param name="registration">The variable registration.</param>
+    public void RegisterVariable(VariableRegistration registration)
     {
-        if (!provision.AllowMultiple
-            && this._uniqueProvisions.TryGetValue(provision.Key, out var existingProvision))
+        if (!registration.AllowMultiple
+            && this._uniqueRegistrations.TryGetValue(registration.Key, out var existingRegistration))
         {
             throw new InvalidOperationException(
-                $"A unique variable provision for '{provision.Key.Purpose}' and type '{provision.Key.TypeName}' is already registered by '{existingProvision.ProducerId}'.");
+                $"A unique variable registration for '{registration.Key.Purpose}' and type '{registration.Key.TypeName}' is already registered by '{existingRegistration.ProducerId}'.");
         }
 
-        if (!provision.AllowMultiple)
+        if (!registration.AllowMultiple)
         {
-            this._uniqueProvisions.Add(provision.Key, provision);
+            this._uniqueRegistrations.Add(registration.Key, registration);
         }
 
-        this._provisions.Add(provision);
+        this._registrations.Add(registration);
     }
 
     /// <summary>
-    /// Registers a variable requirement.
+    /// Registers a required variable.
     /// </summary>
     /// <param name="requirement">The requirement to register.</param>
-    public void RegisterRequirement(VariableRequirement requirement)
+    public void RequireVariable(VariableRequirement requirement)
     {
         this._requirements.Add(requirement);
     }
 
     /// <summary>
-    /// Gets the required variables that have no matching provision or are only available after the consumer stage.
+    /// Gets the required variables that have no matching registration or are only available after the consumer stage.
     /// </summary>
-    /// <param name="contributions">The planned pipeline contributions for the current operation.</param>
     /// <returns>The unsatisfied requirements.</returns>
-    public IReadOnlyList<UnsatisfiedVariableRequirement> GetUnsatisfiedRequirements(IReadOnlyList<PipelineContribution> contributions)
+    public IReadOnlyList<UnsatisfiedVariableRequirement> GetUnsatisfiedRequirements()
     {
-        var earliestContributionStages = contributions
-            .GroupBy(contribution => contribution.ContributorId, StringComparer.Ordinal)
-            .ToDictionary(
-                group => group.Key,
-                group => group.Min(contribution => contribution.Stage),
-                StringComparer.Ordinal);
-
         return this._requirements
             .Where(requirement => requirement.IsRequired)
-            .Select(requirement => this.GetUnsatisfiedRequirement(requirement, earliestContributionStages))
+            .Select(this.GetUnsatisfiedRequirement)
             .Where(result => result is not null)
             .Select(result => result!)
             .ToArray();
     }
 
-    private UnsatisfiedVariableRequirement? GetUnsatisfiedRequirement(
-        VariableRequirement requirement,
-        IReadOnlyDictionary<string, PipelineStage> earliestContributionStages)
+    private UnsatisfiedVariableRequirement? GetUnsatisfiedRequirement(VariableRequirement requirement)
     {
-        var matchingProvisions = this._provisions
-            .Where(provision => provision.Key == requirement.Key)
-            .OrderBy(provision => provision.AvailableFrom)
+        var matchingRegistrations = this._registrations
+            .Where(registration => registration.Key == requirement.Key)
+            .OrderBy(registration => registration.AvailableFrom)
             .ToArray();
 
-        earliestContributionStages.TryGetValue(requirement.ConsumerId, out var requiredBy);
-        var hasRequiredStage = earliestContributionStages.ContainsKey(requirement.ConsumerId);
-
-        if (matchingProvisions.Length == 0)
+        if (matchingRegistrations.Length == 0)
         {
-            return new UnsatisfiedVariableRequirement(
-                requirement,
-                hasRequiredStage ? requiredBy : null,
-                EarliestAvailableFrom: null);
+            return new UnsatisfiedVariableRequirement(requirement, EarliestAvailableFrom: null);
         }
 
-        var earliestProvision = matchingProvisions[0];
+        var earliestRegistration = matchingRegistrations[0];
 
-        if (hasRequiredStage && earliestProvision.AvailableFrom > requiredBy)
+        if (earliestRegistration.AvailableFrom > requirement.RequiredBy)
         {
             return new UnsatisfiedVariableRequirement(
                 requirement,
-                requiredBy,
-                earliestProvision.AvailableFrom);
+                earliestRegistration.AvailableFrom);
         }
 
         return null;
@@ -113,7 +96,7 @@ public sealed class VariableRegistry
 public sealed record VariableKey(string TypeName, string Purpose);
 
 /// <summary>
-/// Describes a value produced by a contributor.
+/// Describes a variable registered by a contributor.
 /// </summary>
 /// <param name="Key">The variable key.</param>
 /// <param name="ProducerId">The producing contributor identifier.</param>
@@ -121,7 +104,7 @@ public sealed record VariableKey(string TypeName, string Purpose);
 /// <param name="SourceKind">The kind of source backing the value.</param>
 /// <param name="Lifetime">The preferred lifetime or storage model.</param>
 /// <param name="AllowMultiple">Whether multiple producers are allowed.</param>
-public sealed record VariableProvision(
+public sealed record VariableRegistration(
     VariableKey Key,
     string ProducerId,
     PipelineStage AvailableFrom,
@@ -134,21 +117,21 @@ public sealed record VariableProvision(
 /// </summary>
 /// <param name="Key">The variable key.</param>
 /// <param name="ConsumerId">The consuming contributor identifier.</param>
+/// <param name="RequiredBy">The stage by which the variable must be available.</param>
 /// <param name="IsRequired">Whether the value is required.</param>
 public sealed record VariableRequirement(
     VariableKey Key,
     string ConsumerId,
+    PipelineStage RequiredBy,
     bool IsRequired);
 
 /// <summary>
 /// Describes a required variable that is missing or only available too late for the consumer.
 /// </summary>
 /// <param name="Requirement">The unsatisfied requirement.</param>
-/// <param name="RequiredBy">The earliest stage at which the consumer contributes to the pipeline.</param>
-/// <param name="EarliestAvailableFrom">The earliest stage at which a matching provision becomes available.</param>
+/// <param name="EarliestAvailableFrom">The earliest stage at which a matching registration becomes available.</param>
 public sealed record UnsatisfiedVariableRequirement(
     VariableRequirement Requirement,
-    PipelineStage? RequiredBy,
     PipelineStage? EarliestAvailableFrom);
 
 /// <summary>

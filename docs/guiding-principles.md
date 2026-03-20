@@ -22,7 +22,7 @@ Stringly-typed contracts should not stay stringly-typed if the compiler can vali
 
 Current examples:
 
-- `LinkGenerationModule` validates route placeholders against operation and resource members and reports `BPLG001` through `BPLG003` diagnostics (`src\Blueprint.SourceGenerator\Modules\LinkGenerationModule.cs`).
+- `LinkGenerationModule` validates route placeholders against operation and resource members and reports `BPLG001` through `BPLG003` diagnostics (`src\Blueprint.SourceGenerator\Modules\LinkGeneration\LinkGenerationModule.cs`).
 - Generator entry points fail early when required partial modifiers are missing (`BP001`, `BP002`, `BP005`, `BP104`) (`src\Blueprint.SourceGenerator\Generators\ApiResources\ApiResourceSourceGenerator.cs`, `src\Blueprint.SourceGenerator\Generators\App\AppDataModelSourceGenerator.cs`, `src\Blueprint.SourceGenerator\Generators\Descriptors\OperationDescriptorSourceGenerator.cs`, `src\Blueprint.SourceGenerator\Generators\Pipelines\DiagnosticDescriptors.cs`).
 - Handler discovery and parameter resolution are analyzed during generation, not deferred to runtime (`src\Blueprint.SourceGenerator\Generators\Pipelines\ParameterAnalyzer.cs`).
 

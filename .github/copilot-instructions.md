@@ -77,6 +77,11 @@
 - Operations are declared in the contract/model layer and implement `ICommand` or `IQuery`, both of which extend `IOperation`. The repo expects operations to expose `static ApiOperationDescriptor Configure()`, usually through generated partial code rather than manual implementations.
 
 - Generator changes often span more than one emitter. If you change operation discovery or generated registration shape, check the descriptor generator, app registration generator, and pipeline/executor generator together so runtime registration and execution stay aligned.
+- Concrete generator modules must end with the `Module` suffix and live in dedicated subfolders under `src\Blueprint.SourceGenerator\Modules` (for example `Modules\LinkGeneration\LinkGenerationModule.cs`).
+- Module-specific helper files should live beside the owning module inside that same folder rather than back at the `Modules` root.
+- Contributor capability methods should be named for the seam they populate (`ContributeToDescriptor`, `ContributeToPipeline`, and similar `ContributeTo<Thing>` names), not a generic `Contribute`.
+- For pipeline planning, stage participation should be inferred by helper APIs such as render-step and variable registration; do not introduce or reintroduce explicit `AddContribution(...)` bookkeeping in module call sites.
+- Planning context classes may expose a small read-only metadata surface when it keeps module code clearer, but they must not expose mutable plan/execution state or record-style grab-bags that bypass the approved helper surface.
 
 - Generator tests are not just string snapshots. `src\Blueprint.SourceGenerator.Tests\TestHelpers.cs` compiles in-memory source, runs the incremental generator twice, and asserts the second run is fully cached. A change can fail tests by breaking incremental cacheability even when the generated text still looks correct.
 

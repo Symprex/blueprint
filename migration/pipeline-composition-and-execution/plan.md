@@ -164,7 +164,13 @@ This is one of the first implementation modules. Validation, auth, HTTP, resourc
 
 Approved first activation slice:
 
-- route `HandlerExecutionContributor` through the activated seam first
+- route `HandlerExecutionModule` through the activated seam first
 - use `src\Blueprint.SourceGenerator.Tests\Generators\Pipelines\OperationExecutorPipelineGeneratorIntegrationTests.cs` as the primary failing-proof harness
 - keep the slice narrow: move handler invocation and the produced handler-result variable through the seam before widening into validation, exception translation, result normalization, or host-specific work
 - preserve the current result-wrapping behavior for this slice so the broader result-model direction remains an explicit later gate rather than an accidental early freeze
+
+Approved next extraction slice:
+
+- extract validation as the next production contributor through the activated seam
+- use the pipeline planning and integration harnesses first so validation requirements and ordering stay deterministic
+- keep the validation slice separate from later exception/result translation and host-specific work

@@ -101,9 +101,9 @@ Definition of success for this session:
 
 Immediate expected first slice:
 
-- Focus on the approved next foundation/pipeline slice: route `HandlerExecutionContributor` through the activated seam as the first production pipeline contributor.
-- Use the existing pipeline integration harness as the failing-proof starting point, especially `src\Blueprint.SourceGenerator.Tests\Generators\Pipelines\OperationExecutorPipelineGeneratorIntegrationTests.cs`.
-- Keep the scope narrow: move handler invocation plus the produced handler-result variable through the contributor seam first; defer validation, exception translation, result normalization, host wiring, and broader Phase 1 work unless the dependency chain explicitly requires more.
+- Focus on the approved next foundation/pipeline slice: extract validation as the next production contributor through the activated seam.
+- Use the existing pipeline planning and integration harnesses as the failing-proof starting point, especially `src\Blueprint.SourceGenerator.Tests\Generators\Descriptors\OperationDescriptorSourceGeneratorTests.cs` and `src\Blueprint.SourceGenerator.Tests\Generators\Pipelines\OperationExecutorPipelineGeneratorIntegrationTests.cs`.
+- Keep the scope narrow: move validation requirements and rendering/planning behavior through the contributor seam first; defer exception translation, result normalization, host wiring, and broader Phase 1 work unless the dependency chain explicitly requires more.
 
 When you begin, first summarize:
 

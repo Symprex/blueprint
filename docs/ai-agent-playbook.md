@@ -100,6 +100,9 @@ then the relevant `/docs` file should be updated in the same change.
 - Keep runtime behavior simple and inspectable.
 - Reuse the existing generator and CodeWriter patterns before inventing ad-hoc output logic.
 - For new planning helpers, registries, or orchestration seams, cover the happy path, the failure/diagnostic path, and the determinism edge cases that keep generation stable.
+- Keep contributor naming and layout explicit: concrete module types end with `Module`, live in dedicated subfolders under `src\Blueprint.SourceGenerator\Modules`, module-specific helper files live beside the owning module in that folder, and seam methods should be named `ContributeTo<Thing>` instead of a generic `Contribute`.
+- For pipeline planning, prefer helper APIs that imply stage participation when contributors register render steps or variables; do not rely on manual `AddContribution(...)` bookkeeping when the type design can enforce the contract directly.
+- Planning context classes may expose a small read-only metadata surface when it keeps module code clearer, but do not leave mutable plan/execution objects or record-style grab-bags available for modules to bypass the helper surface.
 
 ### After tools or humans give feedback
 

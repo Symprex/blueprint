@@ -19,7 +19,7 @@ The rewrite already has a good starting point with `ApiResourceSourceGenerator` 
 ## Evidence
 
 - Current: `src\Blueprint.SourceGenerator\Generators\ApiResources\ApiResourceSourceGenerator.cs`
-- Current: `src\Blueprint.SourceGenerator\Modules\LinkGenerationModule.cs`
+- Current: `src\Blueprint.SourceGenerator\Modules\LinkGeneration\LinkGenerationModule.cs`
 - Legacy: `D:\Projects\Signature365\src\Blueprint\Blueprint.Http\Middleware\LinkGeneratorMiddlewareBuilder.cs`
 - Legacy: `D:\Projects\Signature365\src\Blueprint\Blueprint.Http\Middleware\ResourceEventHandlerMiddlewareBuilder.cs`
 - Legacy: `D:\Projects\Signature365\src\Blueprint\Blueprint.Http\Middleware\ResourceEventHandler.cs`

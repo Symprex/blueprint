@@ -11,5 +11,5 @@ public interface IPipelineContributor : IBlueprintContributor
     /// Contributes pipeline plan state for the current operation.
     /// </summary>
     /// <param name="context">The contribution context.</param>
-    void Contribute(PipelineContributorContext context);
+    void ContributeToPipeline(PipelineContributorContext context);
 }

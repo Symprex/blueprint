@@ -11,5 +11,5 @@ public interface IDescriptorContributor : IBlueprintContributor
     /// Contributes descriptor plan state for the current operation.
     /// </summary>
     /// <param name="context">The contribution context.</param>
-    void Contribute(DescriptorContributorContext context);
+    void ContributeToDescriptor(DescriptorContributorContext context);
 }

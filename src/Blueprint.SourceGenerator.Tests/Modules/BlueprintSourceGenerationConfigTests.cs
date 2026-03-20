@@ -154,7 +154,7 @@ public class BlueprintSourceGenerationConfigTests
 
         public IReadOnlyList<string> DependsOn { get; } = dependsOn;
 
-        public void Contribute(DescriptorContributorContext context)
+        public void ContributeToDescriptor(DescriptorContributorContext context)
         {
         }
     }

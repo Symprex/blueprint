@@ -1,5 +1,8 @@
 using System.Text;
+using Blueprint.SourceGenerator.Generators.Pipelines.Model;
 using Blueprint.SourceGenerator.Helpers;
+using Blueprint.SourceGenerator.Modules;
+using Blueprint.SourceGenerator.Planning;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
@@ -32,14 +35,16 @@ public sealed partial class OperationExecutorPipelineSourceGenerator : IIncremen
 
         // Stage 3: Find handlers for all operations
         var handlersProvider = combinedProvider
-            .Select((scanModelContext, _) => FindHandlersForOperations(scanModelContext))
+            .Select((scanModelContext, _) => (Compilation: scanModelContext.Right, Result: FindHandlersForOperations(scanModelContext)))
             .WithTrackingName(Stages.FindHandlers);
 
         // Stage 4: Generate pipeline classes for each operation
         context.RegisterSourceOutput(
             handlersProvider,
-            (spc, result) =>
+            (spc, context) =>
             {
+                var compilation = context.Compilation;
+                var result = context.Result;
                 result!.ReportDiagnostics(spc);
 
                 if (result.Value is not { } compilationModel)
@@ -47,17 +52,51 @@ public sealed partial class OperationExecutorPipelineSourceGenerator : IIncremen
                     return;
                 }
 
+                var config = new BlueprintSourceGenerationConfig([new HandlerExecutionModule()]);
+                var executionPlanResult = config.BuildExecutionPlan();
+                executionPlanResult.ReportDiagnostics(spc);
+
+                if (executionPlanResult.Value is null)
+                {
+                    return;
+                }
+
+                var successfulHandlers = new List<OperationHandlerModel>();
+
                 // Generate a pipeline for each handler
                 foreach (var handler in compilationModel.Handlers)
                 {
-                    var pipelineSource = PipelineCodeGenerator.GeneratePipeline(handler);
+                    var pipelinePlanResult = PipelinePlanBuilder.Build(
+                        handler.OperationTypeFullName,
+                        compilation,
+                        executionPlanResult,
+                        handler);
+                    pipelinePlanResult.ReportDiagnostics(spc);
+
+                    if (pipelinePlanResult.Value is null)
+                    {
+                        continue;
+                    }
+
+                    successfulHandlers.Add(handler);
+
+                    var pipelineSource = PipelineCodeGenerator.GeneratePipeline(handler, pipelinePlanResult.Value);
                     spc.AddSource(
                         $"{handler.OperationTypeName}ExecutorPipeline.g.cs",
                         SourceText.From(pipelineSource, Encoding.UTF8));
                 }
 
+                if (successfulHandlers.Count == 0)
+                {
+                    return;
+                }
+
                 // Generate the executor with all registrations
-                var executorSource = ExecutorCodeGenerator.GenerateExecutor(compilationModel);
+                var executorSource = ExecutorCodeGenerator.GenerateExecutor(
+                    compilationModel with
+                    {
+                        Handlers = new EquatableList<OperationHandlerModel>(successfulHandlers.ToArray()),
+                    });
                 spc.AddSource(
                     $"{compilationModel.AppTypeName}Executor.g.cs",
                     SourceText.From(executorSource, Encoding.UTF8));

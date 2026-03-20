@@ -37,6 +37,9 @@ Do not use this skill for ordinary downstream app usage; use `using-blueprint`.
 3. Follow through across generator, runtime, sample, docs, and skills when the contract changes.
 4. If Blueprint becomes easier or harder to consume, update `using-blueprint` in the same change.
 5. If the repo-internal extension workflow changes, update this skill in the same change.
+6. Concrete module implementations must end with `Module`, live in dedicated subfolders under `src\Blueprint.SourceGenerator\Modules`, and keep module-specific helper files beside the owning module in that folder.
+7. Contributor seam methods should use explicit `ContributeTo<Thing>` names, and planning context classes should prefer helper methods with only a small read-only metadata surface rather than record-style public inner state or mutable plan/execution access.
+8. For pipeline planning, prefer helper APIs that imply stage participation when contributors register render steps or variables; do not reintroduce manual `AddContribution(...)` bookkeeping.
 
 ## Common mistakes
 
