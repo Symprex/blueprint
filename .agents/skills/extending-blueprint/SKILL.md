@@ -26,7 +26,7 @@ Do not use this skill for ordinary downstream app usage; use `using-blueprint`.
 | --- | --- | --- |
 | Operation contract and descriptors | `docs\architecture.md`, `OperationDescriptorSourceGenerator` | app registration, diagnostics, sample usage |
 | App registration | `AppDataModelSourceGenerator` | generated `this.Register(Operation.Configure())`, runtime registry |
-| Pipelines and executors | `OperationExecutorPipelineSourceGenerator` | handler discovery, full pipeline snapshots, compile-time source checks, runtime integration harness |
+| Pipelines and executors | `OperationExecutorPipelineSourceGenerator` | handler discovery, full pipeline snapshots, compile-time source checks, runtime integration harness, benchmark harness (`src\Blueprint.SourceGenerator.Benchmarks`) |
 | Diagnostics and validation | `docs\compile-time-validation.md` | precise source locations, stable IDs, tests |
 | Consumer story | sample projects + `docs\refactoring-workflow.md` | `using-blueprint`, migration prompt, docs |
 
@@ -41,6 +41,10 @@ Do not use this skill for ordinary downstream app usage; use `using-blueprint`.
 7. Contributor seam methods should use explicit `ContributeTo<Thing>` names, and planning context classes should prefer helper methods with only a small read-only metadata surface rather than record-style public inner state or mutable plan/execution access.
 8. For pipeline planning, prefer helper APIs that imply stage participation when contributors register render steps or variables; do not reintroduce manual `AddContribution(...)` bookkeeping.
 9. For pipeline contributor feature work, require the full proof matrix: a full pipeline snapshot, compile-time invalid-configuration or source-check tests when the generator can validate the contract, and runtime integration tests that execute the generated pipeline for valid and invalid paths. A substring assertion alone is not enough.
+10. For validation or executor hot-path work, run `src\Blueprint.SourceGenerator.Benchmarks` and review the BenchmarkDotNet artifact before handoff or commit.
+11. When comments are needed, spend them on invariants, fallback boundaries, and trade-offs; never on repeating what the code already says.
+12. Prefer `static` lambdas in LINQ or similar delegate-heavy code whenever no local capture is needed.
+13. Keep module-specific tests in module-specific files instead of extending shared catch-all test files forever.
 
 ## Common mistakes
 

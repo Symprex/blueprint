@@ -287,6 +287,15 @@ public sealed class PipelineRenderContext
     }
 
     /// <summary>
+    /// Emits a single statement line.
+    /// </summary>
+    /// <param name="statement">The statement text.</param>
+    public void WriteStatement(string statement)
+    {
+        this._writer.AppendLine(statement);
+    }
+
+    /// <summary>
     /// Emits a return statement.
     /// </summary>
     /// <param name="expression">The returned expression.</param>

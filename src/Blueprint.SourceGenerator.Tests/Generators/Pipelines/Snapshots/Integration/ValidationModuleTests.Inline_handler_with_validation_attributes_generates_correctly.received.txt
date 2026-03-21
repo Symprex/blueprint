@@ -37,10 +37,13 @@ namespace Blueprint.Generated
             {
                 _ApiOperationExecuting(_logger, "CreateUserCommand", null);
 
-                var validationResults = new global::System.Collections.Generic.List<global::System.ComponentModel.DataAnnotations.ValidationResult>();
-                var validationContext = new global::System.ComponentModel.DataAnnotations.ValidationContext(operation);
-                var isValid = global::System.ComponentModel.DataAnnotations.Validator.TryValidateObject(operation, validationContext, validationResults, validateAllProperties: true);
-                if (isValid == false)
+                var validationResults = default(global::System.Collections.Generic.List<global::System.ComponentModel.DataAnnotations.ValidationResult>);
+                if (global::System.String.IsNullOrWhiteSpace(operation.Name))
+                {
+                    validationResults = validationResults ?? new global::System.Collections.Generic.List<global::System.ComponentModel.DataAnnotations.ValidationResult>();
+                    validationResults.Add(new global::System.ComponentModel.DataAnnotations.ValidationResult(new global::System.ComponentModel.DataAnnotations.RequiredAttribute().FormatErrorMessage("Name"), ["Name"]));
+                }
+                if (validationResults is not null)
                 {
                     throw new global::Blueprint.Validation.ValidationException(validationResults);
                 }

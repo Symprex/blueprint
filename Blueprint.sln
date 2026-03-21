@@ -29,6 +29,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Blueprint.SourceGenerator.C
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Blueprint.SourceGenerator.CodeWriter.Tests", "src\Blueprint.SourceGenerator.CodeWriter.Tests\Blueprint.SourceGenerator.CodeWriter.Tests.csproj", "{5110151B-C5D0-4FB3-9622-D3426F0ED32C}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Blueprint.SourceGenerator.Benchmarks", "src\Blueprint.SourceGenerator.Benchmarks\Blueprint.SourceGenerator.Benchmarks.csproj", "{9AECA41A-5022-4036-BF52-E8EF5A67F0E1}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -71,9 +73,14 @@ Global
 		{5110151B-C5D0-4FB3-9622-D3426F0ED32C}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{5110151B-C5D0-4FB3-9622-D3426F0ED32C}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{5110151B-C5D0-4FB3-9622-D3426F0ED32C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9AECA41A-5022-4036-BF52-E8EF5A67F0E1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9AECA41A-5022-4036-BF52-E8EF5A67F0E1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9AECA41A-5022-4036-BF52-E8EF5A67F0E1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9AECA41A-5022-4036-BF52-E8EF5A67F0E1}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{AF948AAE-4F61-4D9C-942E-A8F318C61E9D} = {6A6D0D4D-3EAE-4F88-94AD-9ABE41050A24}
 		{5110151B-C5D0-4FB3-9622-D3426F0ED32C} = {6A6D0D4D-3EAE-4F88-94AD-9ABE41050A24}
+		{9AECA41A-5022-4036-BF52-E8EF5A67F0E1} = {6A6D0D4D-3EAE-4F88-94AD-9ABE41050A24}
 	EndGlobalSection
 EndGlobal

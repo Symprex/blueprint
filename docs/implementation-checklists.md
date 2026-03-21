@@ -32,6 +32,10 @@ They are intentionally short and repeatable so future humans and AI agents can u
 - [ ] If the change activates pipeline planning, cover both the missing-required-variable diagnostic path and an ordered shared-variable happy path.
 - [ ] If the change adds or alters pipeline contributor behavior, include all three proof layers: a full pipeline snapshot, compile-time invalid-configuration/diagnostic coverage when the generator can know the contract is wrong, and runtime integration tests that execute the generated pipeline for valid and invalid paths.
 - [ ] Do not treat a “generated source contains line X” assertion as sufficient proof for pipeline behavior; use it only as a supporting check alongside the stronger harnesses.
+- [ ] If the change targets a measured pipeline or validation hot path, run `src\Blueprint.SourceGenerator.Benchmarks` and capture the relevant BenchmarkDotNet artifact before closing the slice.
+- [ ] If comments are needed, make them explain intent, constraints, invariants, or trade-offs that are not obvious from the code itself. Do not add narration comments.
+- [ ] Prefer `static` lambdas in LINQ or similar delegate-heavy code when no capture is required.
+- [ ] Keep module-specific tests in module-specific files instead of extending shared catch-all test classes indefinitely.
 - [ ] Do not use reflection in tests to assert contract existence or invoke private/internal helpers; if behavior is hard to prove, add or use a supported seam instead.
 
 ## New validation or diagnostic work
@@ -83,6 +87,7 @@ They are intentionally short and repeatable so future humans and AI agents can u
 - [ ] Run the relevant tests, snapshots, and formatting flow.
 - [ ] Review the generated diff, not just the source diff.
 - [ ] Make sure the docs and harness changes match the implementation.
+- [ ] If a benchmark harness exists for the touched hot path, rerun it and review the output before handoff or commit.
 - [ ] Re-run the final verification commands immediately before claiming success or commit readiness.
 - [ ] If the slice is obviously complete and no review gate remains open, make a small, focused git commit before switching tasks or ending the session.
 - [ ] Leave the repository easier to change correctly than it was before.

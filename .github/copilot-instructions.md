@@ -98,6 +98,9 @@
   - compile-time invalid-configuration test when symbol-backed validation is possible
   - runtime integration test that executes the generated pipeline for success and failure
 - If one of those layers truly does not apply, record why in the session plan and the relevant migration plan before coding.
+- When code needs comments, use them to explain the invariant, constraint, fallback boundary, or trade-off that is not obvious from the code alone. Do not add comments that simply restate what the next line already says.
+- Prefer `static` lambdas in LINQ and similar delegate-heavy code whenever the lambda does not need to capture local state.
+- Keep module-specific tests in module-specific test files. Do not keep growing shared catch-all test files with cases that only exercise one module.
 
 - Prefer compile-time validation over runtime repair. `LinkGenerationModule` and the BP/BPLG diagnostics are the pattern to follow. When a string literal or declarative contract can be proven at build time, surface it as a diagnostic.
 

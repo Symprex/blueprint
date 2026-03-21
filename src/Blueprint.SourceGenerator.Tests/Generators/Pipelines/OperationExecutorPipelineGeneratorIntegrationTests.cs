@@ -168,55 +168,6 @@ public class OperationExecutorPipelineGeneratorIntegrationTests
     }
 
     [Fact]
-    public void Inline_handler_with_validation_attributes_generates_validation_before_handler_invocation()
-    {
-        var source = """
-                     using Blueprint;
-                     using Blueprint.Model;
-                     using System.ComponentModel.DataAnnotations;
-                     using System.Threading.Tasks;
-
-                     namespace TestNamespace;
-
-                     [BlueprintAppScan]
-                     public partial class TestApp : BlueprintApp
-                     {
-                         public TestApp()
-                         {
-                             this.Register(CreateUserCommand.Configure());
-                         }
-                     }
-
-                     public class CreateUserCommand : ICommand<string>
-                     {
-                         public static ApiOperationDescriptor Configure()
-                         {
-                             return new ApiOperationDescriptor(typeof(CreateUserCommand), nameof(CreateUserCommand), "Tests");
-                         }
-
-                         [Required]
-                         public string? Name { get; set; }
-
-                         public static Task<string> HandleAsync(CreateUserCommand command)
-                         {
-                             return Task.FromResult(command.Name ?? string.Empty);
-                         }
-                     }
-                     """;
-
-        var result = Compile(source);
-
-        result.Diagnostics.Should().BeEmpty();
-        var pipelineSource = result.Output.Single(tree => tree.FilePath.EndsWith("CreateUserCommandExecutorPipeline.g.cs", StringComparison.Ordinal)).ToString();
-
-        pipelineSource.Should().Contain("global::System.ComponentModel.DataAnnotations.Validator.TryValidateObject");
-        pipelineSource.Should().Contain("throw new global::Blueprint.Validation.ValidationException(validationResults);");
-        pipelineSource.IndexOf("global::System.ComponentModel.DataAnnotations.Validator.TryValidateObject", StringComparison.Ordinal)
-            .Should()
-            .BeLessThan(pipelineSource.IndexOf("var handlerResult", StringComparison.Ordinal));
-    }
-
-    [Fact]
     public async Task Inline_static_handler_generates_correctly()
     {
         var source = """
@@ -318,47 +269,6 @@ public class OperationExecutorPipelineGeneratorIntegrationTests
                          public static Task<string> InvokeAsync(ApiOperationContext context)
                          {
                              return Task.FromResult("Context: " + context.App.GetType().Name);
-                         }
-                     }
-                     """;
-
-        await Compile(source)
-            .VerifySuccessAsync(SnapshotsFolder);
-    }
-
-    [Fact]
-    public async Task Inline_handler_with_validation_attributes_generates_correctly()
-    {
-        var source = """
-                     using Blueprint;
-                     using Blueprint.Model;
-                     using System.ComponentModel.DataAnnotations;
-                     using System.Threading.Tasks;
-
-                     namespace TestNamespace;
-
-                     [BlueprintAppScan]
-                     public partial class TestApp : BlueprintApp
-                     {
-                         public TestApp()
-                         {
-                             this.Register(CreateUserCommand.Configure());
-                         }
-                     }
-
-                     public class CreateUserCommand : ICommand<string>
-                     {
-                         public static ApiOperationDescriptor Configure()
-                         {
-                             return new ApiOperationDescriptor(typeof(CreateUserCommand), nameof(CreateUserCommand), "Tests");
-                         }
-
-                         [Required]
-                         public string? Name { get; set; }
-
-                         public static Task<string> HandleAsync(CreateUserCommand command)
-                         {
-                             return Task.FromResult(command.Name ?? string.Empty);
                          }
                      }
                      """;
@@ -669,8 +579,8 @@ public class OperationExecutorPipelineGeneratorIntegrationTests
         var syntaxTree = CSharpSyntaxTree.ParseText(source, parseOptions);
 
         var references = AppDomain.CurrentDomain.GetAssemblies()
-            .Where(a => !a.IsDynamic && !string.IsNullOrWhiteSpace(a.Location))
-            .Select(a => MetadataReference.CreateFromFile(a.Location))
+            .Where(static assembly => !assembly.IsDynamic && !string.IsNullOrWhiteSpace(assembly.Location))
+            .Select(static assembly => MetadataReference.CreateFromFile(assembly.Location))
             .ToList();
 
         references.Add(MetadataReference.CreateFromFile(typeof(Blueprint.Model.ICommand).Assembly.Location));
