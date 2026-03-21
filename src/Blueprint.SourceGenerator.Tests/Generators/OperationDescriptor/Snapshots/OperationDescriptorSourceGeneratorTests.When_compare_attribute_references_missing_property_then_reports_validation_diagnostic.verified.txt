@@ -1,0 +1,16 @@
+﻿File: Input0.cs
+using Blueprint.Model;
+using Blueprint.Model.Attributes;
+
+namespace TestNamespace;
+
+using System.ComponentModel.DataAnnotations;
+
+public partial class IncludedOperation : IOperation
+                                         ^^^^^^^^^^ [Error:CS0535] 'IncludedOperation' does not implement interface member 'IOperation.Configure()'
+{
+    [Compare("MissingProperty")]
+             ^^^^^^^^^^^^^^^^^ [Error:BPV001] The property 'MissingProperty' referenced by CompareAttribute on 'Password' does not exist on operation 'IncludedOperation'
+    public string? Password { get; set; }
+                 ^ [Warning:CS8632] The annotation for nullable reference types should only be used in code within a '#nullable' annotations context.
+}

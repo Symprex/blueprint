@@ -27,7 +27,7 @@ public sealed class OperationDescriptorSourceGenerator : IIncrementalGenerator, 
 
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
-        var config = new BlueprintSourceGenerationConfig([new LinkGenerationModule()]);
+        var config = new BlueprintSourceGenerationConfig([new LinkGenerationModule(), new ValidationModule()]);
         var executionPlanResult = config.BuildExecutionPlan();
 
         context.RegisterPostInitializationOutput(i =>

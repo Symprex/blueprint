@@ -49,6 +49,18 @@ Migration diagnostics should be paired with machine-readable reporting such as S
 
 This is the clearest current example of the repository principle that string literals should be validated against symbols when possible.
 
+### Validation contributor diagnostics
+
+Validation-oriented compile-time checks should use a dedicated range instead of borrowing the link or foundation IDs.
+
+Reserved direction:
+
+| Range | Meaning |
+| --- | --- |
+| `BPV001`-`BPV099` | validation contributor diagnostics for invalid declarative contracts that the generator can prove at build time |
+
+Typical examples include validation attributes that name other members with strings, such as `CompareAttribute.OtherProperty` pointing at a property that does not exist on the operation type. When those contracts are knowable during generation, prefer a build-time diagnostic over waiting for runtime validation to fail indirectly.
+
 ## Diagnostic design rules
 
 When adding new diagnostics:
@@ -84,6 +96,13 @@ When adding a new validation rule, add or update the matching deterministic test
 - unit tests for the diagnostic or helper behavior
 - snapshot tests when generated output changes
 - cacheability-sensitive tests when the generator pipeline changes
+- runtime integration tests when the generated pipeline behavior changes and the runtime seam is executable in `Blueprint.SourceGenerator.Tests.Integration`
+
+For pipeline contributor work, do not stop at a line-presence assertion in generated code. The default proof set is:
+
+- a snapshot of the full generated pipeline shape
+- compile-time failure coverage for invalid symbol-backed declarative contracts
+- runtime integration coverage that executes the generated pipeline for both valid and invalid paths
 
 Those tests should prove behavior through supported seams. Do not use reflection in tests to assert that a contract exists or to invoke private/internal helpers. If a behavior is hard to verify without doing that, improve the public or otherwise supported seam first and then test through that seam.
 

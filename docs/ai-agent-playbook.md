@@ -93,6 +93,11 @@ then the relevant `/docs` file should be updated in the same change.
 - Identify the build, snapshot, and generator harness you expect to exercise.
 - For any feature, bugfix, refactor, or behavior change, use the repo-local `test-driven-development` skill mindset first: write the failing proof before production edits and watch it fail for the right reason.
 - Do not use reflection in tests to assert that a contract exists or to invoke private/internal helpers. If the right behavior is not testable through a supported seam, improve that seam first.
+- For pipeline contributor or module slices, write the test matrix down before coding. The default minimum is:
+  - a full generator snapshot of the affected pipeline shape
+  - compile-time invalid-configuration or diagnostic coverage for any symbol-backed declarative contract the generator can validate
+  - runtime integration coverage in `Blueprint.SourceGenerator.Tests.Integration` that executes the generated pipeline for both success and failure paths
+- A generated-source substring assertion is only a supporting check. It is not the primary proof for pipeline behavior.
 
 ### While you change code
 
@@ -100,6 +105,10 @@ then the relevant `/docs` file should be updated in the same change.
 - Keep runtime behavior simple and inspectable.
 - Reuse the existing generator and CodeWriter patterns before inventing ad-hoc output logic.
 - For new planning helpers, registries, or orchestration seams, cover the happy path, the failure/diagnostic path, and the determinism edge cases that keep generation stable.
+- For pipeline behavior changes, keep the three proof layers aligned:
+  - snapshots prove the complete emitted shape
+  - diagnostics prove invalid source contracts fail early
+  - integration tests prove generated pipelines actually execute correctly at runtime
 - Keep contributor naming and layout explicit: concrete module types end with `Module`, live in dedicated subfolders under `src\Blueprint.SourceGenerator\Modules`, module-specific helper files live beside the owning module in that folder, and seam methods should be named `ContributeTo<Thing>` instead of a generic `Contribute`.
 - For pipeline planning, prefer helper APIs that imply stage participation when contributors register render steps or variables; do not rely on manual `AddContribution(...)` bookkeeping when the type design can enforce the contract directly.
 - Planning context classes may expose a small read-only metadata surface when it keeps module code clearer, but do not leave mutable plan/execution objects or record-style grab-bags available for modules to bypass the helper surface.

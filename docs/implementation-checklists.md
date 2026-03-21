@@ -30,6 +30,8 @@ They are intentionally short and repeatable so future humans and AI agents can u
 - [ ] Prefer CodeWriter helpers over ad-hoc string concatenation.
 - [ ] For new planning helpers, registries, or contributor-ordering logic, add tests for happy paths, failure/diagnostic paths, and determinism edge cases.
 - [ ] If the change activates pipeline planning, cover both the missing-required-variable diagnostic path and an ordered shared-variable happy path.
+- [ ] If the change adds or alters pipeline contributor behavior, include all three proof layers: a full pipeline snapshot, compile-time invalid-configuration/diagnostic coverage when the generator can know the contract is wrong, and runtime integration tests that execute the generated pipeline for valid and invalid paths.
+- [ ] Do not treat a “generated source contains line X” assertion as sufficient proof for pipeline behavior; use it only as a supporting check alongside the stronger harnesses.
 - [ ] Do not use reflection in tests to assert contract existence or invoke private/internal helpers; if behavior is hard to prove, add or use a supported seam instead.
 
 ## New validation or diagnostic work
@@ -38,6 +40,7 @@ They are intentionally short and repeatable so future humans and AI agents can u
 - [ ] Point to the most useful source location, including subranges when practical.
 - [ ] Include concrete type, member, route, or serializer names in the message.
 - [ ] Add tests that lock in both the success path and the failure path.
+- [ ] If a validation attribute or other declarative contract names another symbol with a string (for example `CompareAttribute.OtherProperty`), add a compile-time diagnostic and tests for missing or invalid references when the generator can validate it.
 - [ ] Ask whether the diagnostic should also be documented in `docs/compile-time-validation.md`.
 
 ## Serialization and API contract work

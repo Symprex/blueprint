@@ -57,6 +57,11 @@
   - `systematic-debugging` before fixing any unexpected test/build/runtime failure
   - `verification-before-completion` before claiming success, moving on, or preparing to commit
 - For new planning helpers, registries, and orchestration seams, aim test coverage at happy paths, failure/diagnostic paths, and determinism edge cases.
+- For pipeline or module feature work, the minimum proof set is stricter than a line-presence assertion:
+  - a full generator snapshot that captures the complete pipeline shape
+  - compile-time source/diagnostic tests for invalid declarative or string-backed contracts when the generator can know they are wrong
+  - `Blueprint.SourceGenerator.Tests.Integration` coverage that executes the generated pipeline for both valid and invalid paths and proves short-circuiting or handler execution
+- Simple generated-source substring assertions may supplement that matrix, but they do not replace snapshots, diagnostics, or runtime execution proofs.
 
 ## High-level architecture
 
@@ -88,6 +93,11 @@
 - Snapshot baselines live under `src\Blueprint.SourceGenerator.Tests\Generators\*\Snapshots\*.verified.txt`. When intentional generator output changes occur, review the corresponding `.received.*` file and then promote it to `.verified.*`; do not update snapshots without reviewing the generated diff.
 
 - Follow a TDD mindset for all changes. Start by identifying the relevant existing test, snapshot, or validation path; add or update that safety net first when behaviour changes; then implement and finish by rerunning the targeted tests before broader validation.
+- For pipeline contributor slices, build the test matrix up front and keep it explicit:
+  - snapshot test for the full generated pipeline
+  - compile-time invalid-configuration test when symbol-backed validation is possible
+  - runtime integration test that executes the generated pipeline for success and failure
+- If one of those layers truly does not apply, record why in the session plan and the relevant migration plan before coding.
 
 - Prefer compile-time validation over runtime repair. `LinkGenerationModule` and the BP/BPLG diagnostics are the pattern to follow. When a string literal or declarative contract can be proven at build time, surface it as a diagnostic.
 

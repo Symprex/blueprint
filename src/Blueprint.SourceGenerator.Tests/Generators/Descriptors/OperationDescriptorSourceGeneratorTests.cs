@@ -170,6 +170,104 @@ public class OperationDescriptorSourceGeneratorTests
     }
 
     [Fact]
+    public void When_operation_has_validation_attributes_then_validation_module_contributes_validation_stage()
+    {
+        var compilation = CreateCompilation(
+            """
+            using System.ComponentModel.DataAnnotations;
+            using Blueprint.Model;
+
+            namespace TestNamespace;
+
+            public partial class IncludedOperation : IOperation
+            {
+                [Required]
+                public string? Name { get; set; }
+            }
+            """);
+        var config = new BlueprintSourceGenerationConfig([new ValidationModule()]);
+
+        var result = config.BuildPipelinePlan("TestNamespace.IncludedOperation", compilation);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Value.Should().NotBeNull();
+        result.Value!.Contributions.Should().ContainSingle().Which.Should().Be(
+            new PipelineContribution(PipelineStage.Validation, nameof(ValidationModule)));
+        result.Value.RenderSteps.Should().ContainSingle(step =>
+            step.Stage == PipelineStage.Validation && step.ContributorId == nameof(ValidationModule));
+    }
+
+    [Fact]
+    public void When_operation_implements_IValidatableObject_then_validation_module_contributes_validation_stage()
+    {
+        var compilation = CreateCompilation(
+            """
+            using System.Collections.Generic;
+            using System.ComponentModel.DataAnnotations;
+            using Blueprint.Model;
+
+            namespace TestNamespace;
+
+            public partial class IncludedOperation : IOperation, IValidatableObject
+            {
+                public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+                {
+                    yield break;
+                }
+            }
+            """);
+        var config = new BlueprintSourceGenerationConfig([new ValidationModule()]);
+
+        var result = config.BuildPipelinePlan("TestNamespace.IncludedOperation", compilation);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Value.Should().NotBeNull();
+        result.Value!.Contributions.Should().ContainSingle().Which.Should().Be(
+            new PipelineContribution(PipelineStage.Validation, nameof(ValidationModule)));
+        result.Value.RenderSteps.Should().ContainSingle(step =>
+            step.Stage == PipelineStage.Validation && step.ContributorId == nameof(ValidationModule));
+    }
+
+    [Fact]
+    public async Task When_compare_attribute_references_missing_property_then_reports_validation_diagnostic()
+    {
+        var source = """
+                     using System.ComponentModel.DataAnnotations;
+
+                     public partial class IncludedOperation : IOperation
+                     {
+                         [Compare("MissingProperty")]
+                         public string? Password { get; set; }
+                     }
+                     """;
+
+        var result = Compile(source);
+
+        result.Diagnostics.Select(d => d.Id).Should().Contain("BPV001");
+        await result.VerifyCompilationFailedAsync(SnapshotsFolder);
+    }
+
+    [Fact]
+    public void When_compare_attribute_references_existing_property_then_validation_diagnostic_is_not_reported()
+    {
+        var source = """
+                     using System.ComponentModel.DataAnnotations;
+
+                     public partial class IncludedOperation : IOperation
+                     {
+                         public string? Confirmation { get; set; }
+
+                         [Compare(nameof(Confirmation))]
+                         public string? Password { get; set; }
+                     }
+                     """;
+
+        var result = Compile(source);
+
+        result.Diagnostics.Should().BeEmpty();
+    }
+
+    [Fact]
     public void When_pipeline_render_step_has_no_explicit_contribution_then_stage_participation_is_implicit()
     {
         var compilation = CreateCompilation();
@@ -206,6 +304,7 @@ public class OperationDescriptorSourceGeneratorTests
             .ToList();
 
         references.Add(MetadataReference.CreateFromFile(typeof(Blueprint.Model.IOperation).Assembly.Location));
+        references.Add(MetadataReference.CreateFromFile(typeof(System.ComponentModel.DataAnnotations.RequiredAttribute).Assembly.Location));
 
         return CSharpCompilation.Create(
             assemblyName: "OperationDescriptorSourceGeneratorTests",

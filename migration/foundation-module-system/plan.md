@@ -126,14 +126,18 @@ Current limitation:
 - concrete module implementations now follow the repo convention of `*Module` naming and live in per-module folders beneath `src\Blueprint.SourceGenerator\Modules`, with module-specific helper files colocated beside the owning module
 - variable-registry terminology now aligns with `RegisterVariable(...)`, `RequireVariable(...)`, and `VariableRegistration`
 - host, app-registration, and debug-manifest contributors currently exist as capability seams and planning scaffolds for follow-on slices
-- the live executor pipeline generator now routes handler invocation plus the produced `handler-result` variable through `HandlerExecutionModule`, but outer logging and exception/result behavior are still hard-coded outside the contributor seam
+- the live executor pipeline generator now routes validation through `ValidationModule` and handler invocation plus the produced `handler-result` variable through `HandlerExecutionModule`, but outer logging and exception/result behavior are still hard-coded outside the contributor seam
 
 Next slice:
 
 - completed decision: `HandlerExecutionModule` is now the first production pipeline contributor flowing through the activated seam
 - completed follow-on refinement: `src\Blueprint.SourceGenerator.Tests\Generators\Pipelines\OperationExecutorPipelineGeneratorIntegrationTests.cs` now asserts the renamed module, the implicit stage-participation model, and that the stored render step owns the handler-invocation emission path, while the full pipeline integration class still passes end-to-end
-- approved next extraction target after the current review gate: validation
-- follow-on review gate: keep the validation slice separate from later exception/result handling, execution-shell planning, host wiring, and debug-manifest work
+- completed extraction target: `ValidationModule` is now the second production pipeline contributor flowing through the activated seam for operations that expose DataAnnotations validation attributes or `IValidatableObject`
+- completed failing proof: `src\Blueprint.SourceGenerator.Tests\Generators\Pipelines\OperationExecutorPipelineGeneratorIntegrationTests.cs` now asserts that generated validation runs before handler invocation, and the full generator plus integration suites continue to pass
+- completed proof expansion: the validation contributor slice now also has a full generated-pipeline snapshot, compile-time invalid-configuration coverage for string-backed validation contracts (`BPV001` on invalid `CompareAttribute` property references), and runtime integration execution tests that prove invalid `[Required]`, valid `[Required]`, and invalid `IValidatableObject` paths against the generated pipeline
+- durable rule for the remaining pipeline-contributor slices in this workstream: a few generated-source substring assertions are only supplemental. Every behavior-changing contributor slice must land with the full three-layer proof matrix (pipeline snapshot, compile-time invalid-configuration/source check where applicable, and runtime integration execution tests) before the review gate can close
+- next recommended slice after this review gate: extract exception translation through the activated seam while keeping broader result normalization, execution-shell planning, host wiring, and debug-manifest work separate
+- follow-on review gate: keep exception/result handling, execution-shell planning, host wiring, and debug-manifest work separate from the completed validation slice
 
 ### 2. Introduce intermediate planning models
 

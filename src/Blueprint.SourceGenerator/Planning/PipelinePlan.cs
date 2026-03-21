@@ -278,6 +278,15 @@ public sealed class PipelineRenderContext
     }
 
     /// <summary>
+    /// Emits a throw statement.
+    /// </summary>
+    /// <param name="expression">The exception expression to throw.</param>
+    public void Throw(string expression)
+    {
+        this._writer.AppendLine($"throw {expression};");
+    }
+
+    /// <summary>
     /// Emits a return statement.
     /// </summary>
     /// <param name="expression">The returned expression.</param>

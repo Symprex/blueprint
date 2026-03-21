@@ -36,8 +36,11 @@ The target is **consumer-contract compatibility**, not byte-for-byte parity with
 - The approved follow-on refinement to that slice is now complete locally: contributor methods are now seam-specific (`ContributeToPipeline` / `ContributeToDescriptor`), `PipelineContributorContext` uses `RegisterVariable(...)` plus implicit stage participation instead of explicit `AddContribution(...)`, `PipelineRenderStepKind` has been removed, and `HandlerExecutionModule` owns the handler-invocation rendering callback directly.
 - Planning context classes now expose helper methods plus only a small safe read-only metadata surface instead of record-style bags of public mutable inner state, internal variable-registry naming now aligns with `RegisterVariable(...)` / `RequireVariable(...)`, and module-specific helper files now live beside their owning module inside the module folder.
 - Concrete module implementations now follow the repo convention of `*Module` naming and live in per-module folders under `src\Blueprint.SourceGenerator\Modules`.
-- The live executor pipeline generator still hard-codes the outer logging plus exception/result shell, but handler invocation rendering now lives with the contributor-owned render step instead of the central pipeline generator.
-- Approved next slice after this review gate: extract validation through the activated contributor seam before widening into exception translation, result normalization, host wiring, or debug-manifest work.
+- The second approved production pipeline-contributor slice is now complete: `ValidationModule` detects DataAnnotations/IValidatableObject validation surfaces at compile time, emits `Validator.TryValidateObject(...)` in `PipelineStage.Validation`, and throws `Blueprint.Validation.ValidationException` so the existing validation catch/result path remains unchanged.
+- The failing proof for the validation slice also lives in `src\Blueprint.SourceGenerator.Tests\Generators\Pipelines\OperationExecutorPipelineGeneratorIntegrationTests.cs`, and the main generator test suite plus `Blueprint.SourceGenerator.Tests.Integration` both pass after the seam activation.
+- The validation slice now carries the stricter cross-layer proof matrix required for future pipeline/module work: a full generated-pipeline snapshot, a compile-time invalid-configuration proof (`BPV001` for invalid `CompareAttribute` property references), and runtime integration execution tests that prove invalid and valid validation paths against the generated pipeline. Simple substring assertions may remain as supplemental checks, but they are not sufficient to close a contributor slice on their own.
+- The live executor pipeline generator still hard-codes the outer logging plus exception/result shell, but both validation rendering and handler invocation rendering now live with contributor-owned render steps instead of the central pipeline generator.
+- Next recommended slice after this review gate: extract exception translation through the activated contributor seam before widening into broader result normalization, host wiring, or debug-manifest work.
 - This remains a narrow seam-activation step, not a freeze of the broader result-model direction. The current result-wrapping behavior is intentionally preserved while host-agnostic result redesign stays deferred.
 
 ## Durable decision rule
@@ -83,6 +86,11 @@ Every workstream and sub-task should follow this loop unless it is purely docume
    - analyzer/code-fix test
    - benchmark harness or telemetry capture
    - use `test-driven-development` discipline to prove the test fails for the right reason before production edits
+   - for pipeline/module contributor slices that change generated behavior, the proof must include the full three-layer matrix before production edits:
+     - a full pipeline snapshot covering the generated output shape
+     - a compile-time invalid-configuration/source-check proof for symbol-backed or string-backed contracts the generator can validate
+     - a runtime integration test that executes the generated pipeline through representative valid and invalid paths
+     - simple `Contains(...)` or line-presence assertions may supplement the proof, but they cannot replace this matrix
 3. Implement the smallest slice needed to make the proof pass.
 4. Run targeted `dotnet format`, build, and the relevant tests.
 5. If the proof or build behaves unexpectedly, use `systematic-debugging` discipline before proposing fixes.
@@ -337,8 +345,9 @@ When delegating a workstream, include:
 - Planning and variable-registry coverage now exercises happy paths, failure/diagnostic paths, and determinism edge cases for the implemented foundation behaviors.
 - Pipeline contributors now expose a typed `IPipelineContributor.ContributeToPipeline(PipelineContributorContext)` contract, descriptor contributors use `ContributeToDescriptor(...)`, and descriptor generation activates `ConfigurePipelinePlan()` so required variables fail deterministically with stage-aware `BPMOD004`.
 - Planning context classes expose helper methods plus only a small safe read-only metadata surface instead of record-style bags of mutable inner state, module-specific helper files live beside the owning module, and variable registry terminology now aligns with `RegisterVariable(...)` / `RequireVariable(...)`.
-- Approved next slice: extract validation as the next production contributor through the activated pipeline seam.
-- Scope guard for that slice: use the existing pipeline integration harness as the failing proof, move handler invocation plus the produced handler-result variable through the seam, and defer validation, exception translation, result normalization, and host wiring to later slices.
+- Validation now flows through `ValidationModule`, which activates only for operations with DataAnnotations validation attributes or `IValidatableObject`, emits `Validator.TryValidateObject(...)` in `PipelineStage.Validation`, and throws `Blueprint.Validation.ValidationException` into the existing catch/result shell.
+- The live pipeline now routes both validation and handler execution through contributor-owned render steps while keeping the outer logging plus exception/result shell hard-coded.
+- Next recommended slice after the validation review gate: extract exception translation through the activated seam first, while keeping broader result normalization, host wiring, and debug-manifest work deferred.
 
 ### Sub-agent guidance
 

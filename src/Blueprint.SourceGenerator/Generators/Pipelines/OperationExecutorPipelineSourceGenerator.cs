@@ -52,7 +52,7 @@ public sealed partial class OperationExecutorPipelineSourceGenerator : IIncremen
                     return;
                 }
 
-                var config = new BlueprintSourceGenerationConfig([new HandlerExecutionModule()]);
+                var config = new BlueprintSourceGenerationConfig([new ValidationModule(), new HandlerExecutionModule()]);
                 var executionPlanResult = config.BuildExecutionPlan();
                 executionPlanResult.ReportDiagnostics(spc);
 
