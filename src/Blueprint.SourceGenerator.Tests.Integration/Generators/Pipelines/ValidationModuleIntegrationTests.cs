@@ -85,6 +85,64 @@ public class ValidationModuleIntegrationTests
     }
 
     [Fact]
+    public async Task When_required_and_max_length_validation_fails_for_whitespace_then_generated_pipeline_returns_required_failure_and_skips_handler()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(RequiredMaxLengthValidationOperation));
+        var context = CreateContext(app, RequiredMaxLengthValidationOperation.Configure());
+        ((RequiredMaxLengthValidationOperation)context.Operation).Name = "    ";
+
+        RequiredMaxLengthValidationOperation.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<ValidationFailedOperationResult>();
+        RequiredMaxLengthValidationOperation.HandlerCallCount.Should().Be(0);
+        var validationResult = ((ValidationFailedOperationResult)result).ValidationResults.Should().ContainSingle().Subject;
+        validationResult.MemberNames.Should().Contain(nameof(RequiredMaxLengthValidationOperation.Name));
+        validationResult.ErrorMessage.Should().Be("The Name field is required.");
+    }
+
+    [Fact]
+    public async Task When_required_and_max_length_validation_fails_for_too_long_value_then_generated_pipeline_returns_max_length_failure_and_skips_handler()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(RequiredMaxLengthValidationOperation));
+        var context = CreateContext(app, RequiredMaxLengthValidationOperation.Configure());
+        ((RequiredMaxLengthValidationOperation)context.Operation).Name = "abcd";
+
+        RequiredMaxLengthValidationOperation.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<ValidationFailedOperationResult>();
+        RequiredMaxLengthValidationOperation.HandlerCallCount.Should().Be(0);
+        var validationResult = ((ValidationFailedOperationResult)result).ValidationResults.Should().ContainSingle().Subject;
+        validationResult.MemberNames.Should().Contain(nameof(RequiredMaxLengthValidationOperation.Name));
+        validationResult.ErrorMessage.Should().Be("The field Name must be a string or array type with a maximum length of '3'.");
+    }
+
+    [Fact]
+    public async Task When_required_and_max_length_validation_passes_then_generated_pipeline_runs_handler_and_returns_ok()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(RequiredMaxLengthValidationOperation));
+        var context = CreateContext(app, RequiredMaxLengthValidationOperation.Configure());
+        ((RequiredMaxLengthValidationOperation)context.Operation).Name = "abc";
+
+        RequiredMaxLengthValidationOperation.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<OkResult>();
+        RequiredMaxLengthValidationOperation.HandlerCallCount.Should().Be(1);
+        ((OkResult)result).Unwrap<string>().Should().Be("abc");
+    }
+
+    [Fact]
     public async Task When_required_allow_empty_strings_is_used_then_generated_pipeline_allows_empty_string_and_runs_handler()
     {
         var app = new IntegrationTestBlueprintApp();
@@ -218,6 +276,26 @@ public partial class MultiRequiredValidationOperation : ICommand<string>
     {
         HandlerCallCount++;
         return Task.FromResult($"{operation.Name}:{operation.Age}");
+    }
+}
+
+public partial class RequiredMaxLengthValidationOperation : ICommand<string>
+{
+    public static int HandlerCallCount { get; private set; }
+
+    [Required]
+    [MaxLength(3)]
+    public string? Name { get; set; }
+
+    public static void Reset()
+    {
+        HandlerCallCount = 0;
+    }
+
+    public static Task<string> HandleAsync(RequiredMaxLengthValidationOperation operation)
+    {
+        HandlerCallCount++;
+        return Task.FromResult(operation.Name ?? string.Empty);
     }
 }
 

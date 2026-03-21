@@ -69,6 +69,48 @@ public class ValidationPipelineBenchmarks
     }
 
     [Benchmark]
+    public Task<OperationResult> RequiredMaxLengthWhitespaceAsync()
+    {
+        var pipeline = this._executor.GetPipeline(typeof(RequiredMaxLengthValidationOperation));
+        var context = CreateContext<RequiredMaxLengthValidationOperation>(
+            this._app,
+            RequiredMaxLengthValidationOperation.Configure(),
+            operation =>
+            {
+                operation.Name = "    ";
+            });
+        return pipeline.ExecuteAsync(context);
+    }
+
+    [Benchmark]
+    public Task<OperationResult> RequiredMaxLengthTooLongAsync()
+    {
+        var pipeline = this._executor.GetPipeline(typeof(RequiredMaxLengthValidationOperation));
+        var context = CreateContext<RequiredMaxLengthValidationOperation>(
+            this._app,
+            RequiredMaxLengthValidationOperation.Configure(),
+            operation =>
+            {
+                operation.Name = "abcd";
+            });
+        return pipeline.ExecuteAsync(context);
+    }
+
+    [Benchmark]
+    public Task<OperationResult> RequiredMaxLengthValidAsync()
+    {
+        var pipeline = this._executor.GetPipeline(typeof(RequiredMaxLengthValidationOperation));
+        var context = CreateContext<RequiredMaxLengthValidationOperation>(
+            this._app,
+            RequiredMaxLengthValidationOperation.Configure(),
+            operation =>
+            {
+                operation.Name = "abc";
+            });
+        return pipeline.ExecuteAsync(context);
+    }
+
+    [Benchmark]
     public Task<OperationResult> MixedBuiltInFallbackInvalidAsync()
     {
         var pipeline = this._executor.GetPipeline(typeof(MixedValidationOperation));
@@ -132,6 +174,18 @@ public partial class RequiredOnlyValidationOperation : ICommand<string>
     public static Task<string> HandleAsync(RequiredOnlyValidationOperation operation)
     {
         return Task.FromResult($"{operation.Name}:{operation.Age}");
+    }
+}
+
+public partial class RequiredMaxLengthValidationOperation : ICommand<string>
+{
+    [Required]
+    [MaxLength(3)]
+    public string? Name { get; set; }
+
+    public static Task<string> HandleAsync(RequiredMaxLengthValidationOperation operation)
+    {
+        return Task.FromResult(operation.Name ?? string.Empty);
     }
 }
 
