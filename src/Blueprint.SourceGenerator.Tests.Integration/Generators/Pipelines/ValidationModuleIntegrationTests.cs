@@ -3,6 +3,7 @@ using Blueprint.Middleware;
 using Blueprint.Model;
 using Blueprint.Runtime.Exec;
 using Blueprint.SourceGenerator.Tests.Integration.Generators.OperationDescriptors;
+using Blueprint.Validation;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -180,6 +181,214 @@ public class ValidationModuleIntegrationTests
     }
 
     [Fact]
+    public void When_descriptor_requests_property_attributes_then_descriptor_returns_declared_property_attributes()
+    {
+        var descriptor = DisplayNamedRequiredOperation.Configure();
+
+        var propertyAttributes = descriptor.GetPropertyAttributes(nameof(DisplayNamedRequiredOperation.Name));
+
+        propertyAttributes.OfType<DisplayAttribute>().Should().ContainSingle(static attribute => attribute.Name == "Display name");
+        propertyAttributes.OfType<RequiredAttribute>().Should().ContainSingle();
+    }
+
+    [Fact]
+    public void When_validation_runtime_validates_required_and_max_length_property_then_required_short_circuits_other_failures()
+    {
+        var operation = new RequiredMaxLengthValidationOperation
+        {
+            Name = "    ",
+        };
+        var descriptor = RequiredMaxLengthValidationOperation.Configure();
+        List<ValidationResult>? validationResults = null;
+
+        ValidationRuntime.ValidateProperty(
+            descriptor.GetPropertyAttributes(nameof(RequiredMaxLengthValidationOperation.Name)),
+            operation,
+            operation.Name,
+            nameof(RequiredMaxLengthValidationOperation.Name),
+            ref validationResults);
+
+        validationResults.Should().ContainSingle();
+        validationResults![0].ErrorMessage.Should().Be("The Name field is required.");
+        validationResults[0].MemberNames.Should().Contain(nameof(RequiredMaxLengthValidationOperation.Name));
+    }
+
+    [Fact]
+    public async Task When_min_length_validation_fails_then_generated_pipeline_returns_validation_failure_and_skips_handler()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(MinLengthValidationOperation));
+        var context = CreateContext(app, MinLengthValidationOperation.Configure());
+        ((MinLengthValidationOperation)context.Operation).Name = "ab";
+
+        MinLengthValidationOperation.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<ValidationFailedOperationResult>();
+        MinLengthValidationOperation.HandlerCallCount.Should().Be(0);
+        var validationResult = ((ValidationFailedOperationResult)result).ValidationResults.Should().ContainSingle().Subject;
+        validationResult.MemberNames.Should().Contain(nameof(MinLengthValidationOperation.Name));
+        validationResult.ErrorMessage.Should().Be("The field Name must be a string or array type with a minimum length of '3'.");
+    }
+
+    [Fact]
+    public async Task When_min_length_validation_passes_then_generated_pipeline_runs_handler_and_returns_ok()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(MinLengthValidationOperation));
+        var context = CreateContext(app, MinLengthValidationOperation.Configure());
+        ((MinLengthValidationOperation)context.Operation).Name = "abc";
+
+        MinLengthValidationOperation.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<OkResult>();
+        MinLengthValidationOperation.HandlerCallCount.Should().Be(1);
+        ((OkResult)result).Unwrap<string>().Should().Be("abc");
+    }
+
+    [Fact]
+    public async Task When_string_length_validation_fails_for_too_short_value_then_generated_pipeline_returns_validation_failure_and_skips_handler()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(StringLengthValidationOperation));
+        var context = CreateContext(app, StringLengthValidationOperation.Configure());
+        ((StringLengthValidationOperation)context.Operation).Name = "ab";
+
+        StringLengthValidationOperation.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<ValidationFailedOperationResult>();
+        StringLengthValidationOperation.HandlerCallCount.Should().Be(0);
+        var validationResult = ((ValidationFailedOperationResult)result).ValidationResults.Should().ContainSingle().Subject;
+        validationResult.MemberNames.Should().Contain(nameof(StringLengthValidationOperation.Name));
+        validationResult.ErrorMessage.Should().Be("The field Name must be a string with a minimum length of 3 and a maximum length of 5.");
+    }
+
+    [Fact]
+    public async Task When_string_length_validation_fails_for_too_long_value_then_generated_pipeline_returns_validation_failure_and_skips_handler()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(StringLengthValidationOperation));
+        var context = CreateContext(app, StringLengthValidationOperation.Configure());
+        ((StringLengthValidationOperation)context.Operation).Name = "abcdef";
+
+        StringLengthValidationOperation.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<ValidationFailedOperationResult>();
+        StringLengthValidationOperation.HandlerCallCount.Should().Be(0);
+        var validationResult = ((ValidationFailedOperationResult)result).ValidationResults.Should().ContainSingle().Subject;
+        validationResult.MemberNames.Should().Contain(nameof(StringLengthValidationOperation.Name));
+        validationResult.ErrorMessage.Should().Be("The field Name must be a string with a minimum length of 3 and a maximum length of 5.");
+    }
+
+    [Fact]
+    public async Task When_string_length_validation_passes_then_generated_pipeline_runs_handler_and_returns_ok()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(StringLengthValidationOperation));
+        var context = CreateContext(app, StringLengthValidationOperation.Configure());
+        ((StringLengthValidationOperation)context.Operation).Name = "abcd";
+
+        StringLengthValidationOperation.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<OkResult>();
+        StringLengthValidationOperation.HandlerCallCount.Should().Be(1);
+        ((OkResult)result).Unwrap<string>().Should().Be("abcd");
+    }
+
+    [Fact]
+    public async Task When_email_address_validation_fails_then_generated_pipeline_returns_validation_failure_and_skips_handler()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(EmailAddressValidationOperation));
+        var context = CreateContext(app, EmailAddressValidationOperation.Configure());
+        ((EmailAddressValidationOperation)context.Operation).Email = "invalid";
+
+        EmailAddressValidationOperation.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<ValidationFailedOperationResult>();
+        EmailAddressValidationOperation.HandlerCallCount.Should().Be(0);
+        var validationResult = ((ValidationFailedOperationResult)result).ValidationResults.Should().ContainSingle().Subject;
+        validationResult.MemberNames.Should().Contain(nameof(EmailAddressValidationOperation.Email));
+        validationResult.ErrorMessage.Should().Be("The Email field is not a valid e-mail address.");
+    }
+
+    [Fact]
+    public async Task When_email_address_validation_passes_then_generated_pipeline_runs_handler_and_returns_ok()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(EmailAddressValidationOperation));
+        var context = CreateContext(app, EmailAddressValidationOperation.Configure());
+        ((EmailAddressValidationOperation)context.Operation).Email = "hello@example.com";
+
+        EmailAddressValidationOperation.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<OkResult>();
+        EmailAddressValidationOperation.HandlerCallCount.Should().Be(1);
+        ((OkResult)result).Unwrap<string>().Should().Be("hello@example.com");
+    }
+
+    [Fact]
+    public async Task When_mixed_fast_and_runtime_property_validation_fails_then_generated_pipeline_returns_validation_failure_and_skips_handler()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(MixedFastAndRuntimeValidationOperation));
+        var context = CreateContext(app, MixedFastAndRuntimeValidationOperation.Configure());
+        var operation = (MixedFastAndRuntimeValidationOperation)context.Operation;
+        operation.Name = "abc";
+
+        MixedFastAndRuntimeValidationOperation.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<ValidationFailedOperationResult>();
+        MixedFastAndRuntimeValidationOperation.HandlerCallCount.Should().Be(0);
+        var validationResult = ((ValidationFailedOperationResult)result).ValidationResults.Should().ContainSingle().Subject;
+        validationResult.MemberNames.Should().Contain(nameof(MixedFastAndRuntimeValidationOperation.Code));
+        validationResult.ErrorMessage.Should().Be("Please provide a code.");
+    }
+
+    [Fact]
+    public async Task When_mixed_fast_and_runtime_property_validation_passes_then_generated_pipeline_runs_handler_and_returns_ok()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(MixedFastAndRuntimeValidationOperation));
+        var context = CreateContext(app, MixedFastAndRuntimeValidationOperation.Configure());
+        var operation = (MixedFastAndRuntimeValidationOperation)context.Operation;
+        operation.Name = "abc";
+        operation.Code = "token";
+
+        MixedFastAndRuntimeValidationOperation.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<OkResult>();
+        MixedFastAndRuntimeValidationOperation.HandlerCallCount.Should().Be(1);
+        ((OkResult)result).Unwrap<string>().Should().Be("abc:token");
+    }
+
+    [Fact]
     public async Task When_IValidatableObject_validation_fails_then_generated_pipeline_returns_validation_failure_and_skips_handler()
     {
         var app = new IntegrationTestBlueprintApp();
@@ -334,5 +543,98 @@ public partial class RequiredCustomMessageOperation : ICommand<string>
     {
         HandlerCallCount++;
         return Task.FromResult(operation.Name ?? string.Empty);
+    }
+}
+
+public partial class DisplayNamedRequiredOperation : ICommand<string>
+{
+    [Display(Name = "Display name")]
+    [Required]
+    public string? Name { get; set; }
+
+    public static Task<string> HandleAsync(DisplayNamedRequiredOperation operation)
+    {
+        return Task.FromResult(operation.Name ?? string.Empty);
+    }
+}
+
+public partial class MinLengthValidationOperation : ICommand<string>
+{
+    public static int HandlerCallCount { get; private set; }
+
+    [Required]
+    [MinLength(3)]
+    public string? Name { get; set; }
+
+    public static void Reset()
+    {
+        HandlerCallCount = 0;
+    }
+
+    public static Task<string> HandleAsync(MinLengthValidationOperation operation)
+    {
+        HandlerCallCount++;
+        return Task.FromResult(operation.Name ?? string.Empty);
+    }
+}
+
+public partial class StringLengthValidationOperation : ICommand<string>
+{
+    public static int HandlerCallCount { get; private set; }
+
+    [StringLength(5, MinimumLength = 3)]
+    public string? Name { get; set; }
+
+    public static void Reset()
+    {
+        HandlerCallCount = 0;
+    }
+
+    public static Task<string> HandleAsync(StringLengthValidationOperation operation)
+    {
+        HandlerCallCount++;
+        return Task.FromResult(operation.Name ?? string.Empty);
+    }
+}
+
+public partial class EmailAddressValidationOperation : ICommand<string>
+{
+    public static int HandlerCallCount { get; private set; }
+
+    [EmailAddress]
+    public string? Email { get; set; }
+
+    public static void Reset()
+    {
+        HandlerCallCount = 0;
+    }
+
+    public static Task<string> HandleAsync(EmailAddressValidationOperation operation)
+    {
+        HandlerCallCount++;
+        return Task.FromResult(operation.Email ?? string.Empty);
+    }
+}
+
+public partial class MixedFastAndRuntimeValidationOperation : ICommand<string>
+{
+    public static int HandlerCallCount { get; private set; }
+
+    [Required]
+    [MaxLength(3)]
+    public string? Name { get; set; }
+
+    [Required(ErrorMessage = "Please provide a code.")]
+    public string? Code { get; set; }
+
+    public static void Reset()
+    {
+        HandlerCallCount = 0;
+    }
+
+    public static Task<string> HandleAsync(MixedFastAndRuntimeValidationOperation operation)
+    {
+        HandlerCallCount++;
+        return Task.FromResult($"{operation.Name}:{operation.Code}");
     }
 }

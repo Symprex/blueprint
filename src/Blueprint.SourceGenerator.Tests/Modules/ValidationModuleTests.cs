@@ -112,7 +112,7 @@ public class ValidationModuleTests
     }
 
     [Fact]
-    public void Inline_handler_with_mixed_validation_attributes_generates_validation_before_handler_invocation()
+    public void Inline_handler_with_required_and_min_length_validation_attributes_generates_fast_property_checks_before_handler_invocation()
     {
         var source = """
                      using Blueprint;
@@ -154,9 +154,114 @@ public class ValidationModuleTests
         result.Diagnostics.Should().BeEmpty();
         var pipelineSource = result.Output.Single(static tree => tree.FilePath.EndsWith("CreateUserCommandExecutorPipeline.g.cs", StringComparison.Ordinal)).ToString();
 
-        pipelineSource.Should().Contain("global::System.ComponentModel.DataAnnotations.Validator.TryValidateObject");
+        pipelineSource.Should().NotContain("global::System.ComponentModel.DataAnnotations.Validator.TryValidateObject");
+        pipelineSource.Should().Contain("global::System.String.IsNullOrWhiteSpace(operation.Name)");
+        pipelineSource.Should().Contain("operation.Name.Length < 3");
+        pipelineSource.Should().Contain("new global::System.ComponentModel.DataAnnotations.MinLengthAttribute(3).FormatErrorMessage(\"Name\")");
         pipelineSource.Should().Contain("throw new global::Blueprint.Validation.ValidationException(validationResults);");
-        pipelineSource.IndexOf("global::System.ComponentModel.DataAnnotations.Validator.TryValidateObject", StringComparison.Ordinal)
+        pipelineSource.IndexOf("global::System.String.IsNullOrWhiteSpace(operation.Name)", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(pipelineSource.IndexOf("var handlerResult", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Inline_handler_with_string_length_validation_attributes_generates_fast_property_checks_before_handler_invocation()
+    {
+        var source = """
+                     using Blueprint;
+                     using Blueprint.Model;
+                     using System.ComponentModel.DataAnnotations;
+                     using System.Threading.Tasks;
+
+                     namespace TestNamespace;
+
+                     [BlueprintAppScan]
+                     public partial class TestApp : BlueprintApp
+                     {
+                         public TestApp()
+                         {
+                             this.Register(CreateUserCommand.Configure());
+                         }
+                     }
+
+                     public class CreateUserCommand : ICommand<string>
+                     {
+                         public static ApiOperationDescriptor Configure()
+                         {
+                             return new ApiOperationDescriptor(typeof(CreateUserCommand), nameof(CreateUserCommand), "Tests");
+                         }
+
+                         [StringLength(5, MinimumLength = 3)]
+                         public string? Name { get; set; }
+
+                         public static Task<string> HandleAsync(CreateUserCommand command)
+                         {
+                             return Task.FromResult(command.Name ?? string.Empty);
+                         }
+                     }
+                     """;
+
+        var result = CompilePipeline(source);
+
+        result.Diagnostics.Should().BeEmpty();
+        var pipelineSource = result.Output.Single(static tree => tree.FilePath.EndsWith("CreateUserCommandExecutorPipeline.g.cs", StringComparison.Ordinal)).ToString();
+
+        pipelineSource.Should().NotContain("global::System.ComponentModel.DataAnnotations.Validator.TryValidateObject");
+        pipelineSource.Should().Contain("operation.Name.Length < 3");
+        pipelineSource.Should().Contain("operation.Name.Length > 5");
+        pipelineSource.Should().Contain("new global::System.ComponentModel.DataAnnotations.StringLengthAttribute(5)");
+        pipelineSource.Should().Contain("MinimumLength = 3");
+        pipelineSource.IndexOf("operation.Name.Length < 3", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(pipelineSource.IndexOf("var handlerResult", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Inline_handler_with_email_address_validation_attributes_generates_fast_property_checks_before_handler_invocation()
+    {
+        var source = """
+                     using Blueprint;
+                     using Blueprint.Model;
+                     using System.ComponentModel.DataAnnotations;
+                     using System.Threading.Tasks;
+
+                     namespace TestNamespace;
+
+                     [BlueprintAppScan]
+                     public partial class TestApp : BlueprintApp
+                     {
+                         public TestApp()
+                         {
+                             this.Register(CreateUserCommand.Configure());
+                         }
+                     }
+
+                     public class CreateUserCommand : ICommand<string>
+                     {
+                         public static ApiOperationDescriptor Configure()
+                         {
+                             return new ApiOperationDescriptor(typeof(CreateUserCommand), nameof(CreateUserCommand), "Tests");
+                         }
+
+                         [EmailAddress]
+                         public string? Email { get; set; }
+
+                         public static Task<string> HandleAsync(CreateUserCommand command)
+                         {
+                             return Task.FromResult(command.Email ?? string.Empty);
+                         }
+                     }
+                     """;
+
+        var result = CompilePipeline(source);
+
+        result.Diagnostics.Should().BeEmpty();
+        var pipelineSource = result.Output.Single(static tree => tree.FilePath.EndsWith("CreateUserCommandExecutorPipeline.g.cs", StringComparison.Ordinal)).ToString();
+
+        pipelineSource.Should().NotContain("global::System.ComponentModel.DataAnnotations.Validator.TryValidateObject");
+        pipelineSource.Should().Contain("global::Blueprint.Validation.ValidationRuntime.IsValidEmailAddress(operation.Email) == false");
+        pipelineSource.Should().Contain("new global::System.ComponentModel.DataAnnotations.EmailAddressAttribute().FormatErrorMessage(\"Email\")");
+        pipelineSource.IndexOf("global::Blueprint.Validation.ValidationRuntime.IsValidEmailAddress(operation.Email) == false", StringComparison.Ordinal)
             .Should()
             .BeLessThan(pipelineSource.IndexOf("var handlerResult", StringComparison.Ordinal));
     }
@@ -269,7 +374,7 @@ public class ValidationModuleTests
     }
 
     [Fact]
-    public void Inline_handler_with_required_allow_empty_strings_uses_data_annotations_validation_before_handler_invocation()
+    public void Inline_handler_with_required_allow_empty_strings_uses_runtime_property_validation_before_handler_invocation()
     {
         var source = """
                      using Blueprint;
@@ -310,11 +415,13 @@ public class ValidationModuleTests
         result.Diagnostics.Should().BeEmpty();
         var pipelineSource = result.Output.Single(static tree => tree.FilePath.EndsWith("CreateUserCommandExecutorPipeline.g.cs", StringComparison.Ordinal)).ToString();
 
-        pipelineSource.Should().Contain("global::System.ComponentModel.DataAnnotations.Validator.TryValidateObject");
+        pipelineSource.Should().NotContain("global::System.ComponentModel.DataAnnotations.Validator.TryValidateObject");
+        pipelineSource.Should().Contain("global::Blueprint.Validation.ValidationRuntime.ValidateProperty");
+        pipelineSource.Should().Contain("context.Descriptor.GetPropertyAttributes(\"Name\")");
     }
 
     [Fact]
-    public void Inline_handler_with_display_named_required_attribute_uses_data_annotations_validation_before_handler_invocation()
+    public void Inline_handler_with_display_named_required_attribute_uses_runtime_property_validation_before_handler_invocation()
     {
         var source = """
                      using Blueprint;
@@ -356,7 +463,9 @@ public class ValidationModuleTests
         result.Diagnostics.Should().BeEmpty();
         var pipelineSource = result.Output.Single(static tree => tree.FilePath.EndsWith("CreateUserCommandExecutorPipeline.g.cs", StringComparison.Ordinal)).ToString();
 
-        pipelineSource.Should().Contain("global::System.ComponentModel.DataAnnotations.Validator.TryValidateObject");
+        pipelineSource.Should().NotContain("global::System.ComponentModel.DataAnnotations.Validator.TryValidateObject");
+        pipelineSource.Should().Contain("global::Blueprint.Validation.ValidationRuntime.ValidateProperty");
+        pipelineSource.Should().Contain("context.Descriptor.GetPropertyAttributes(\"Name\")");
         pipelineSource.Should().NotContain("global::System.String.IsNullOrWhiteSpace(operation.Name)");
     }
 
@@ -485,6 +594,107 @@ public class ValidationModuleTests
                          public static Task<string> HandleAsync(CreateUserCommand command)
                          {
                              return Task.FromResult(command.Name ?? string.Empty);
+                         }
+                     }
+                     """;
+
+        await CompilePipeline(source)
+            .VerifySuccessAsync(PipelineSnapshotsFolder);
+    }
+
+    [Fact]
+    public void Inline_handler_with_mixed_fast_and_runtime_validation_properties_generates_fast_and_runtime_checks_before_handler_invocation()
+    {
+        var source = """
+                     using Blueprint;
+                     using Blueprint.Model;
+                     using System.ComponentModel.DataAnnotations;
+                     using System.Threading.Tasks;
+
+                     namespace TestNamespace;
+
+                     [BlueprintAppScan]
+                     public partial class TestApp : BlueprintApp
+                     {
+                         public TestApp()
+                         {
+                             this.Register(CreateUserCommand.Configure());
+                         }
+                     }
+
+                     public class CreateUserCommand : ICommand<string>
+                     {
+                         public static ApiOperationDescriptor Configure()
+                         {
+                             return new ApiOperationDescriptor(typeof(CreateUserCommand), nameof(CreateUserCommand), "Tests");
+                         }
+
+                         [Required]
+                         [MaxLength(3)]
+                         public string? Name { get; set; }
+
+                         [Required(ErrorMessage = "Please provide a code.")]
+                         public string? Code { get; set; }
+
+                         public static Task<string> HandleAsync(CreateUserCommand command)
+                         {
+                             return Task.FromResult($"{command.Name}:{command.Code}");
+                         }
+                     }
+                     """;
+
+        var result = CompilePipeline(source);
+
+        result.Diagnostics.Should().BeEmpty();
+        var pipelineSource = result.Output.Single(static tree => tree.FilePath.EndsWith("CreateUserCommandExecutorPipeline.g.cs", StringComparison.Ordinal)).ToString();
+
+        pipelineSource.Should().NotContain("global::System.ComponentModel.DataAnnotations.Validator.TryValidateObject");
+        pipelineSource.Should().Contain("global::System.String.IsNullOrWhiteSpace(operation.Name)");
+        pipelineSource.Should().Contain("operation.Name.Length > 3");
+        pipelineSource.Should().Contain("global::Blueprint.Validation.ValidationRuntime.ValidateProperty");
+        pipelineSource.Should().Contain("context.Descriptor.GetPropertyAttributes(\"Code\")");
+        pipelineSource.IndexOf("global::System.String.IsNullOrWhiteSpace(operation.Name)", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(pipelineSource.IndexOf("global::Blueprint.Validation.ValidationRuntime.ValidateProperty", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Inline_handler_with_mixed_fast_and_runtime_validation_properties_generates_correctly()
+    {
+        var source = """
+                     using Blueprint;
+                     using Blueprint.Model;
+                     using System.ComponentModel.DataAnnotations;
+                     using System.Threading.Tasks;
+
+                     namespace TestNamespace;
+
+                     [BlueprintAppScan]
+                     public partial class TestApp : BlueprintApp
+                     {
+                         public TestApp()
+                         {
+                             this.Register(CreateUserCommand.Configure());
+                         }
+                     }
+
+                     public class CreateUserCommand : ICommand<string>
+                     {
+                         public static ApiOperationDescriptor Configure()
+                         {
+                             return new ApiOperationDescriptor(typeof(CreateUserCommand), nameof(CreateUserCommand), "Tests");
+                         }
+
+                         [Required]
+                         [MaxLength(3)]
+                         public string? Name { get; set; }
+
+                         [Required(ErrorMessage = "Please provide a code.")]
+                         public string? Code { get; set; }
+
+                         public static Task<string> HandleAsync(CreateUserCommand command)
+                         {
+                             return Task.FromResult($"{command.Name}:{command.Code}");
                          }
                      }
                      """;

@@ -1,16 +1,13 @@
 using Blueprint.SourceGenerator.Helpers;
 using Blueprint.SourceGenerator.Planning;
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace Blueprint.SourceGenerator.Modules;
 
 /// <summary>
-/// Emits eager DataAnnotations validation through the shared pipeline contributor seam, using a narrow
-/// generated fast path for default <c>RequiredAttribute</c> shapes plus supported
-/// <c>RequiredAttribute</c>/<c>MaxLengthAttribute</c> string combinations and the framework fallback
-/// for everything that can influence validation behavior or message formatting.
+/// Emits eager DataAnnotations validation through the shared pipeline contributor seam, using per-property
+/// generated fast paths for supported validation attributes and a shared runtime fallback for unsupported
+/// property-level shapes.
 /// </summary>
 public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescriptorContributor, IPipelineContributor
 {
@@ -33,41 +30,31 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
 
     public void ContributeToPipeline(PipelineContributorContext context)
     {
-        if (TryGetPropertyValidationFastPath(context.Operation.TypeSymbol, out var validationProperties))
+        var validationPlan = ValidationPropertyPlanner.Create(context.Operation.TypeSymbol);
+
+        if (validationPlan.RequiresWholeObjectFallback)
         {
-            context.AddRenderStep(PipelineStage.Validation, renderContext => RenderPropertyValidation(renderContext, validationProperties));
+            context.AddRenderStep(PipelineStage.Validation, RenderGenericValidation);
             return;
         }
 
-        if (!RequiresValidation(context.Operation.TypeSymbol))
+        if (!validationPlan.RequiresValidation)
         {
             return;
         }
 
-        context.AddRenderStep(PipelineStage.Validation, RenderGenericValidation);
-    }
-
-    private static bool RequiresValidation(INamedTypeSymbol operationType)
-    {
-        return HasValidationAttribute(operationType)
-               || operationType.AllInterfaces.Any(static interfaceSymbol => interfaceSymbol.ToDisplayString() == "System.ComponentModel.DataAnnotations.IValidatableObject")
-               || operationType.GetAllMembers()
-                     .OfType<IPropertySymbol>()
-                     .Any(static property => property is { IsStatic: false, Parameters.Length: 0, DeclaredAccessibility: Accessibility.Public }
-                                             && HasValidationAttribute(property));
+        context.AddRenderStep(PipelineStage.Validation, renderContext => RenderPropertyValidation(renderContext, validationPlan.Properties));
     }
 
     private static void ValidateCompareAttributes(DescriptorContributorContext context)
     {
         var operationType = context.GetOperationTypeSymbol();
-        var operationProperties = operationType.GetAllMembers()
-            .OfType<IPropertySymbol>()
-            .Where(static property => property is { IsStatic: false, Parameters.Length: 0, DeclaredAccessibility: Accessibility.Public })
+        var operationProperties = ValidationSymbolHelpers.GetPublicInstanceProperties(operationType)
             .ToArray();
 
         foreach (var property in operationProperties)
         {
-            foreach (var compareAttribute in property.GetAttributes().Where(static attribute => IsCompareAttribute(attribute.AttributeClass)))
+            foreach (var compareAttribute in property.GetAttributes().Where(static attribute => ValidationSymbolHelpers.IsCompareAttribute(attribute.AttributeClass)))
             {
                 var otherPropertyName = compareAttribute.ConstructorArguments.FirstOrDefault().Value as string;
                 if (string.IsNullOrWhiteSpace(otherPropertyName))
@@ -83,7 +70,7 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
                 context.AddDiagnostic(
                     new DiagnosticInfo(
                         ValidationDiagnosticDescriptors.MissingCompareProperty,
-                        GetComparePropertyLocation(compareAttribute, property),
+                        ValidationSymbolHelpers.GetComparePropertyLocation(compareAttribute, property),
                         [
                             otherPropertyName!,
                             property.Name,
@@ -93,235 +80,7 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
         }
     }
 
-    private static bool HasValidationAttribute(ISymbol symbol)
-    {
-        return symbol.GetAttributes().Any(static attribute => IsValidationAttribute(attribute.AttributeClass));
-    }
-
-    private static bool IsValidationAttribute(INamedTypeSymbol? attributeClass)
-    {
-        return attributeClass is not null
-               && (attributeClass.ToDisplayString() == "System.ComponentModel.DataAnnotations.ValidationAttribute"
-                   || attributeClass.InheritsFrom("System.ComponentModel.DataAnnotations.ValidationAttribute"));
-    }
-
-    private static bool IsCompareAttribute(INamedTypeSymbol? attributeClass)
-    {
-        return attributeClass is not null
-               && attributeClass.Name == "CompareAttribute"
-               && attributeClass.ContainingNamespace.ToDisplayString() == "System.ComponentModel.DataAnnotations";
-    }
-
-    private static LocationInfo? GetComparePropertyLocation(AttributeData compareAttribute, IPropertySymbol property)
-    {
-        if (compareAttribute.ApplicationSyntaxReference?.GetSyntax() is AttributeSyntax attributeSyntax
-            && attributeSyntax.ArgumentList is { Arguments.Count: > 0 })
-        {
-            return LocationInfo.CreateFrom(attributeSyntax.ArgumentList.Arguments[0].Expression);
-        }
-
-        return property.Locations.Length > 0 ? LocationInfo.CreateFrom(property.Locations[0]) : null;
-    }
-
-    private static bool TryGetPropertyValidationFastPath(INamedTypeSymbol operationType, out IReadOnlyList<PropertyValidationFastPath> properties)
-    {
-        var validationProperties = new List<PropertyValidationFastPath>();
-
-        properties = validationProperties;
-
-        // Type-level validation and IValidatableObject can introduce rules that the generated fast path
-        // cannot prove or preserve, so they always stay on the framework-controlled fallback path.
-        if (HasValidationAttribute(operationType)
-            || operationType.AllInterfaces.Any(static interfaceSymbol => interfaceSymbol.ToDisplayString() == "System.ComponentModel.DataAnnotations.IValidatableObject"))
-        {
-            return false;
-        }
-
-        foreach (var property in operationType.GetAllMembers()
-                     .OfType<IPropertySymbol>()
-                     .Where(static property => property is { IsStatic: false, Parameters.Length: 0, DeclaredAccessibility: Accessibility.Public }))
-        {
-            var validationAttributes = property.GetAttributes()
-                .Where(static attribute => IsValidationAttribute(attribute.AttributeClass))
-                .ToArray();
-
-            if (validationAttributes.Length == 0)
-            {
-                continue;
-            }
-
-            // Display metadata and non-default built-in settings shape the emitted error text. Falling
-            // back keeps DataAnnotations authoritative for those cases instead of approximating it.
-            if (property.GetAttributes().Any(static attribute => IsDisplayNameAffectingAttribute(attribute.AttributeClass)))
-            {
-                return false;
-            }
-
-            if (!TryCreatePropertyValidationFastPath(property, validationAttributes, out var validationProperty))
-            {
-                return false;
-            }
-
-            validationProperties.Add(validationProperty);
-        }
-
-        return validationProperties.Count > 0;
-    }
-
-    private static bool TryCreatePropertyValidationFastPath(
-        IPropertySymbol property,
-        IReadOnlyList<AttributeData> validationAttributes,
-        out PropertyValidationFastPath validationProperty)
-    {
-        var propertyName = property.Name;
-        var escapedPropertyName = EscapeIdentifier(property.Name);
-        var propertyAccess = $"operation.{escapedPropertyName}";
-        var hasSupportedRequired = false;
-        int? maxLength = null;
-
-        foreach (var attribute in validationAttributes)
-        {
-            if (IsRequiredAttribute(attribute.AttributeClass))
-            {
-                if (hasSupportedRequired || !IsSupportedRequiredAttribute(attribute))
-                {
-                    validationProperty = default;
-                    return false;
-                }
-
-                hasSupportedRequired = true;
-                continue;
-            }
-
-            if (IsMaxLengthAttribute(attribute.AttributeClass))
-            {
-                if (maxLength.HasValue || !TryGetSupportedMaxLength(attribute, out var supportedMaxLength))
-                {
-                    validationProperty = default;
-                    return false;
-                }
-
-                maxLength = supportedMaxLength;
-                continue;
-            }
-
-            validationProperty = default;
-            return false;
-        }
-
-        if (!hasSupportedRequired)
-        {
-            validationProperty = default;
-            return false;
-        }
-
-        if (property.Type.SpecialType == SpecialType.System_String)
-        {
-            validationProperty = new PropertyValidationFastPath(
-                propertyName,
-                propertyName,
-                $"global::System.String.IsNullOrWhiteSpace({propertyAccess})",
-                maxLength.HasValue ? $"!global::System.String.IsNullOrWhiteSpace({propertyAccess}) && {propertyAccess}.Length > {maxLength.Value}" : null,
-                maxLength);
-            return true;
-        }
-
-        if (maxLength.HasValue)
-        {
-            validationProperty = default;
-            return false;
-        }
-
-        if (property.Type.IsReferenceType || IsNullableValueType(property.Type))
-        {
-            validationProperty = new PropertyValidationFastPath(
-                propertyName,
-                propertyName,
-                $"{propertyAccess} is null",
-                null,
-                null);
-            return true;
-        }
-
-        validationProperty = default;
-        return false;
-    }
-
-    private static bool IsNullableValueType(ITypeSymbol type)
-    {
-        return type is INamedTypeSymbol namedType
-               && namedType.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T;
-    }
-
-    private static bool IsRequiredAttribute(INamedTypeSymbol? attributeClass)
-    {
-        return attributeClass is not null
-               && attributeClass.Name == "RequiredAttribute"
-               && attributeClass.ContainingNamespace.ToDisplayString() == "System.ComponentModel.DataAnnotations";
-    }
-
-    private static bool IsMaxLengthAttribute(INamedTypeSymbol? attributeClass)
-    {
-        return attributeClass is not null
-               && attributeClass.Name == "MaxLengthAttribute"
-               && attributeClass.ContainingNamespace.ToDisplayString() == "System.ComponentModel.DataAnnotations";
-    }
-
-    private static bool IsSupportedRequiredAttribute(AttributeData attribute)
-    {
-        foreach (var namedArgument in attribute.NamedArguments)
-        {
-            if (namedArgument.Key == "AllowEmptyStrings")
-            {
-                if (namedArgument.Value.Value is bool allowEmptyStrings && allowEmptyStrings)
-                {
-                    return false;
-                }
-
-                continue;
-            }
-
-            return false;
-        }
-
-        return true;
-    }
-
-    private static bool TryGetSupportedMaxLength(AttributeData attribute, out int maxLength)
-    {
-        maxLength = default;
-
-        if (attribute.ConstructorArguments.Length != 1
-            || attribute.ConstructorArguments[0].Value is not int supportedMaxLength
-            || supportedMaxLength < 0
-            || attribute.NamedArguments.Length > 0)
-        {
-            return false;
-        }
-
-        maxLength = supportedMaxLength;
-        return true;
-    }
-
-    private static bool IsDisplayNameAffectingAttribute(INamedTypeSymbol? attributeClass)
-    {
-        if (attributeClass is null)
-        {
-            return false;
-        }
-
-        var namespaceName = attributeClass.ContainingNamespace.ToDisplayString();
-
-        return (attributeClass.Name == "DisplayAttribute" && namespaceName == "System.ComponentModel.DataAnnotations")
-               || (attributeClass.Name == "DisplayNameAttribute" && namespaceName == "System.ComponentModel");
-    }
-
-    private static string EscapeIdentifier(string identifier)
-    {
-        return SyntaxFacts.GetKeywordKind(identifier) != SyntaxKind.None ? "@" + identifier : identifier;
-    }
-
-    private static void RenderPropertyValidation(PipelineRenderContext context, IReadOnlyList<PropertyValidationFastPath> properties)
+    private static void RenderPropertyValidation(PipelineRenderContext context, IReadOnlyList<PropertyValidationPlan> properties)
     {
         context.DeclareVariable(
             "validationResults",
@@ -329,32 +88,14 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
 
         foreach (var property in properties)
         {
-            context.If(
-                property.RequiredCondition,
-                branch =>
-                {
-                    branch.Assign(
-                        "validationResults",
-                        "validationResults ?? new global::System.Collections.Generic.List<global::System.ComponentModel.DataAnnotations.ValidationResult>()");
-
-                    // The hot path should stay allocation-light, but invalid results still need the same
-                    // default RequiredAttribute message formatting that the framework would have produced.
-                    branch.WriteStatement(
-                        $"validationResults.Add(new global::System.ComponentModel.DataAnnotations.ValidationResult(new global::System.ComponentModel.DataAnnotations.RequiredAttribute().FormatErrorMessage(\"{property.DisplayName}\"), [\"{property.MemberName}\"]));");
-                });
-
-            if (property.MaxLengthCondition is not null && property.MaxLength is int maxLength)
+            switch (property)
             {
-                context.If(
-                    property.MaxLengthCondition,
-                    branch =>
-                    {
-                        branch.Assign(
-                            "validationResults",
-                            "validationResults ?? new global::System.Collections.Generic.List<global::System.ComponentModel.DataAnnotations.ValidationResult>()");
-                        branch.WriteStatement(
-                            $"validationResults.Add(new global::System.ComponentModel.DataAnnotations.ValidationResult(new global::System.ComponentModel.DataAnnotations.MaxLengthAttribute({maxLength}).FormatErrorMessage(\"{property.DisplayName}\"), [\"{property.MemberName}\"]));");
-                    });
+                case FastPathPropertyValidationPlan fastPathProperty:
+                    RenderFastPathValidation(context, fastPathProperty);
+                    break;
+                case RuntimeFallbackPropertyValidationPlan runtimeFallbackProperty:
+                    RenderRuntimeFallbackValidation(context, runtimeFallbackProperty);
+                    break;
             }
         }
 
@@ -362,6 +103,63 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
             "validationResults is not null",
             static branch => branch.Throw("new global::Blueprint.Validation.ValidationException(validationResults)"));
         context.WriteBlankLine();
+    }
+
+    private static void RenderFastPathValidation(PipelineRenderContext context, FastPathPropertyValidationPlan property)
+    {
+        if (property.RequiredRule is not null)
+        {
+            RenderValidationFailure(context, property.RequiredRule.FailureCondition, property.RequiredRule, property);
+        }
+
+        foreach (var rule in property.OtherRules)
+        {
+            var failureOperand = WrapConditionOperand(rule.FailureCondition);
+            var failureCondition = property.RequiredRule?.SuccessCondition is string successCondition
+                ? $"{successCondition} && {failureOperand}"
+                : rule.GuardCondition is string guardCondition
+                    ? $"{guardCondition} && {failureOperand}"
+                    : rule.FailureCondition;
+            RenderValidationFailure(context, failureCondition, rule, property);
+        }
+
+        static string WrapConditionOperand(string condition)
+        {
+            if ((condition.StartsWith('(') && condition.EndsWith(')'))
+                || (!condition.Contains("&&", StringComparison.Ordinal) && !condition.Contains("||", StringComparison.Ordinal)))
+            {
+                return condition;
+            }
+
+            return $"({condition})";
+        }
+    }
+
+    private static void RenderRuntimeFallbackValidation(PipelineRenderContext context, RuntimeFallbackPropertyValidationPlan property)
+    {
+        context.WriteStatement(
+            $"global::Blueprint.Validation.ValidationRuntime.ValidateProperty({context.GetContextPropertyExpression("Descriptor")}.GetPropertyAttributes(\"{property.MemberName}\"), {context.GetOperationExpression()}, {property.PropertyAccess}, \"{property.MemberName}\", ref validationResults);");
+    }
+
+    private static void RenderValidationFailure(
+        PipelineRenderContext context,
+        string failureCondition,
+        ValidationFastPathRule rule,
+        FastPathPropertyValidationPlan property)
+    {
+        context.If(
+            failureCondition,
+            branch =>
+            {
+                branch.Assign(
+                    "validationResults",
+                    "validationResults ?? new global::System.Collections.Generic.List<global::System.ComponentModel.DataAnnotations.ValidationResult>()");
+                var validationAttributeExpression = rule.WrapValidationAttributeExpression
+                    ? $"({rule.ValidationAttributeExpression})"
+                    : rule.ValidationAttributeExpression;
+                branch.WriteStatement(
+                    $"validationResults.Add(new global::System.ComponentModel.DataAnnotations.ValidationResult({validationAttributeExpression}.FormatErrorMessage(\"{property.DisplayName}\"), [\"{property.MemberName}\"]));");
+            });
     }
 
     private static void RenderGenericValidation(PipelineRenderContext context)
@@ -380,11 +178,4 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
             static branch => branch.Throw("new global::Blueprint.Validation.ValidationException(validationResults)"));
         context.WriteBlankLine();
     }
-
-    private readonly record struct PropertyValidationFastPath(
-        string MemberName,
-        string DisplayName,
-        string RequiredCondition,
-        string? MaxLengthCondition,
-        int? MaxLength);
 }

@@ -9,6 +9,7 @@ namespace Blueprint.Model;
 public class ApiOperationDescriptor
 {
     private readonly Dictionary<Type, object> _featureData = new();
+    private readonly Dictionary<string, IReadOnlyList<Attribute>> _propertyAttributes;
 
     private readonly List<ApiOperationUrl> _urls = new();
     private readonly List<ApiOperationLink> _links = new();
@@ -24,12 +25,13 @@ public class ApiOperationDescriptor
     /// <param name="source">The source of this operation descriptor. Useful for determining _how_ an operation
     /// has found (i.e. scan vs explicit).</param>
     public ApiOperationDescriptor(
-        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)] Type operationType,
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor | DynamicallyAccessedMemberTypes.PublicProperties)] Type operationType,
         string name,
         string source)
     {
         this.OperationType = operationType;
         this.Source = source;
+        this._propertyAttributes = CreatePropertyAttributes(operationType);
 
         this.Name = name;
     }
@@ -45,7 +47,7 @@ public class ApiOperationDescriptor
     /// decide what action to take (for example any declarative permissions in the form of
     /// attributes).
     /// </summary>
-    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)]
+    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor | DynamicallyAccessedMemberTypes.PublicProperties)]
     public Type OperationType { get; }
 
     /// <summary>
@@ -149,6 +151,30 @@ public class ApiOperationDescriptor
     public void SetFeatureData<TFeatureData>(TFeatureData newFeatureData) where TFeatureData : class
     {
         this._featureData[typeof(TFeatureData)] = newFeatureData;
+    }
+
+    /// <summary>
+    /// Gets all declared attributes for the requested public property.
+    /// </summary>
+    /// <param name="propertyName">The property name.</param>
+    /// <returns>The property attributes.</returns>
+    public IReadOnlyList<Attribute> GetPropertyAttributes(string propertyName)
+    {
+        if (this._propertyAttributes.TryGetValue(propertyName, out var propertyAttributes))
+        {
+            return propertyAttributes;
+        }
+
+        throw new InvalidOperationException($"Could not find property '{propertyName}' on operation type {this.OperationType}.");
+    }
+
+    private static Dictionary<string, IReadOnlyList<Attribute>> CreatePropertyAttributes(Type operationType)
+    {
+        return operationType.GetProperties()
+            .ToDictionary(
+                static property => property.Name,
+                static property => (IReadOnlyList<Attribute>)property.GetCustomAttributes(inherit: true).OfType<Attribute>().ToArray(),
+                StringComparer.Ordinal);
     }
 
     /// <inheritdoc />

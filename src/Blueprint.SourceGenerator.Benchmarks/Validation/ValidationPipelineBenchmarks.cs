@@ -32,6 +32,14 @@ public class ValidationPipelineBenchmarks
     }
 
     [Benchmark]
+    public Task<OperationResult> RequiredRuntimeFallbackInvalidAsync()
+    {
+        var pipeline = this._executor.GetPipeline(typeof(RequiredRuntimeFallbackValidationOperation));
+        var context = CreateContext<RequiredRuntimeFallbackValidationOperation>(this._app, RequiredRuntimeFallbackValidationOperation.Configure());
+        return pipeline.ExecuteAsync(context);
+    }
+
+    [Benchmark]
     public Task<OperationResult> RequiredOnlyInvalidAsync()
     {
         var pipeline = this._executor.GetPipeline(typeof(RequiredOnlyValidationOperation));
@@ -111,7 +119,35 @@ public class ValidationPipelineBenchmarks
     }
 
     [Benchmark]
-    public Task<OperationResult> MixedBuiltInFallbackInvalidAsync()
+    public Task<OperationResult> MaxLengthTooLongAsync()
+    {
+        var pipeline = this._executor.GetPipeline(typeof(MaxLengthValidationOperation));
+        var context = CreateContext<MaxLengthValidationOperation>(
+            this._app,
+            MaxLengthValidationOperation.Configure(),
+            operation =>
+            {
+                operation.Name = "abcd";
+            });
+        return pipeline.ExecuteAsync(context);
+    }
+
+    [Benchmark]
+    public Task<OperationResult> MaxLengthRuntimeFallbackTooLongAsync()
+    {
+        var pipeline = this._executor.GetPipeline(typeof(MaxLengthRuntimeFallbackValidationOperation));
+        var context = CreateContext<MaxLengthRuntimeFallbackValidationOperation>(
+            this._app,
+            MaxLengthRuntimeFallbackValidationOperation.Configure(),
+            operation =>
+            {
+                operation.Name = "abcd";
+            });
+        return pipeline.ExecuteAsync(context);
+    }
+
+    [Benchmark]
+    public Task<OperationResult> MinLengthTooShortAsync()
     {
         var pipeline = this._executor.GetPipeline(typeof(MixedValidationOperation));
         var context = CreateContext<MixedValidationOperation>(
@@ -120,6 +156,76 @@ public class ValidationPipelineBenchmarks
             operation =>
             {
                 operation.Name = "ab";
+            });
+        return pipeline.ExecuteAsync(context);
+    }
+
+    [Benchmark]
+    public Task<OperationResult> MinLengthRuntimeFallbackTooShortAsync()
+    {
+        var pipeline = this._executor.GetPipeline(typeof(MinLengthRuntimeFallbackValidationOperation));
+        var context = CreateContext<MinLengthRuntimeFallbackValidationOperation>(
+            this._app,
+            MinLengthRuntimeFallbackValidationOperation.Configure(),
+            operation =>
+            {
+                operation.Name = "ab";
+            });
+        return pipeline.ExecuteAsync(context);
+    }
+
+    [Benchmark]
+    public Task<OperationResult> StringLengthTooShortAsync()
+    {
+        var pipeline = this._executor.GetPipeline(typeof(StringLengthValidationOperation));
+        var context = CreateContext<StringLengthValidationOperation>(
+            this._app,
+            StringLengthValidationOperation.Configure(),
+            operation =>
+            {
+                operation.Name = "ab";
+            });
+        return pipeline.ExecuteAsync(context);
+    }
+
+    [Benchmark]
+    public Task<OperationResult> StringLengthRuntimeFallbackTooShortAsync()
+    {
+        var pipeline = this._executor.GetPipeline(typeof(StringLengthRuntimeFallbackValidationOperation));
+        var context = CreateContext<StringLengthRuntimeFallbackValidationOperation>(
+            this._app,
+            StringLengthRuntimeFallbackValidationOperation.Configure(),
+            operation =>
+            {
+                operation.Name = "ab";
+            });
+        return pipeline.ExecuteAsync(context);
+    }
+
+    [Benchmark]
+    public Task<OperationResult> EmailAddressInvalidAsync()
+    {
+        var pipeline = this._executor.GetPipeline(typeof(EmailAddressValidationOperation));
+        var context = CreateContext<EmailAddressValidationOperation>(
+            this._app,
+            EmailAddressValidationOperation.Configure(),
+            operation =>
+            {
+                operation.Email = "invalid";
+            });
+        return pipeline.ExecuteAsync(context);
+    }
+
+    [Benchmark]
+    public Task<OperationResult> EmailAddressRuntimeFallbackInvalidAsync()
+    {
+        var pipeline = this._executor.GetPipeline(typeof(EmailAddressRuntimeFallbackValidationOperation));
+        var context = CreateContext<EmailAddressRuntimeFallbackValidationOperation>(
+            this._app,
+            EmailAddressRuntimeFallbackValidationOperation.Configure(),
+            operation =>
+            {
+                operation.Email = "invalid";
             });
         return pipeline.ExecuteAsync(context);
     }
@@ -177,6 +283,18 @@ public partial class RequiredOnlyValidationOperation : ICommand<string>
     }
 }
 
+public partial class RequiredRuntimeFallbackValidationOperation : ICommand<string>
+{
+    [Display(Name = "Display name")]
+    [Required]
+    public string? Name { get; set; }
+
+    public static Task<string> HandleAsync(RequiredRuntimeFallbackValidationOperation operation)
+    {
+        return Task.FromResult(operation.Name ?? string.Empty);
+    }
+}
+
 public partial class RequiredMaxLengthValidationOperation : ICommand<string>
 {
     [Required]
@@ -184,6 +302,29 @@ public partial class RequiredMaxLengthValidationOperation : ICommand<string>
     public string? Name { get; set; }
 
     public static Task<string> HandleAsync(RequiredMaxLengthValidationOperation operation)
+    {
+        return Task.FromResult(operation.Name ?? string.Empty);
+    }
+}
+
+public partial class MaxLengthValidationOperation : ICommand<string>
+{
+    [MaxLength(3)]
+    public string? Name { get; set; }
+
+    public static Task<string> HandleAsync(MaxLengthValidationOperation operation)
+    {
+        return Task.FromResult(operation.Name ?? string.Empty);
+    }
+}
+
+public partial class MaxLengthRuntimeFallbackValidationOperation : ICommand<string>
+{
+    [Display(Name = "Display name")]
+    [MaxLength(3)]
+    public string? Name { get; set; }
+
+    public static Task<string> HandleAsync(MaxLengthRuntimeFallbackValidationOperation operation)
     {
         return Task.FromResult(operation.Name ?? string.Empty);
     }
@@ -214,6 +355,65 @@ public partial class MixedValidationOperation : ICommand<string>
     public static Task<string> HandleAsync(MixedValidationOperation operation)
     {
         return Task.FromResult(operation.Name ?? string.Empty);
+    }
+}
+
+public partial class MinLengthRuntimeFallbackValidationOperation : ICommand<string>
+{
+    [Display(Name = "Display name")]
+    [Required]
+    [MinLength(3)]
+    public string? Name { get; set; }
+
+    public static Task<string> HandleAsync(MinLengthRuntimeFallbackValidationOperation operation)
+    {
+        return Task.FromResult(operation.Name ?? string.Empty);
+    }
+}
+
+public partial class StringLengthValidationOperation : ICommand<string>
+{
+    [StringLength(5, MinimumLength = 3)]
+    public string? Name { get; set; }
+
+    public static Task<string> HandleAsync(StringLengthValidationOperation operation)
+    {
+        return Task.FromResult(operation.Name ?? string.Empty);
+    }
+}
+
+public partial class StringLengthRuntimeFallbackValidationOperation : ICommand<string>
+{
+    [Display(Name = "Display name")]
+    [StringLength(5, MinimumLength = 3)]
+    public string? Name { get; set; }
+
+    public static Task<string> HandleAsync(StringLengthRuntimeFallbackValidationOperation operation)
+    {
+        return Task.FromResult(operation.Name ?? string.Empty);
+    }
+}
+
+public partial class EmailAddressValidationOperation : ICommand<string>
+{
+    [EmailAddress]
+    public string? Email { get; set; }
+
+    public static Task<string> HandleAsync(EmailAddressValidationOperation operation)
+    {
+        return Task.FromResult(operation.Email ?? string.Empty);
+    }
+}
+
+public partial class EmailAddressRuntimeFallbackValidationOperation : ICommand<string>
+{
+    [Display(Name = "Display name")]
+    [EmailAddress]
+    public string? Email { get; set; }
+
+    public static Task<string> HandleAsync(EmailAddressRuntimeFallbackValidationOperation operation)
+    {
+        return Task.FromResult(operation.Email ?? string.Empty);
     }
 }
 
