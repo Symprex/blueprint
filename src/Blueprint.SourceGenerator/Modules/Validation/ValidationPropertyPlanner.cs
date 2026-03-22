@@ -15,6 +15,7 @@ internal static class ValidationPropertyPlanner
         new EmailAddressValidationFastPathStrategy(),
         new RequiredIfValidationFastPathStrategy(),
         new RequiredIfNotValidationFastPathStrategy(),
+        new NotAllowedIfValidationFastPathStrategy(),
         new GreaterThanValidationFastPathStrategy(),
         new GreaterThanPropertyValidationFastPathStrategy(),
     ];

@@ -508,6 +508,68 @@ public class ValidationModuleIntegrationTests
     }
 
     [Fact]
+    public async Task When_not_allowed_if_validation_fails_then_generated_pipeline_returns_validation_failure_and_skips_handler()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(NotAllowedIfValidationOperation));
+        var context = CreateContext(app, NotAllowedIfValidationOperation.Configure());
+        var operation = (NotAllowedIfValidationOperation)context.Operation;
+        operation.Enabled = true;
+        operation.Name = "Blueprint";
+
+        NotAllowedIfValidationOperation.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<ValidationFailedOperationResult>();
+        NotAllowedIfValidationOperation.HandlerCallCount.Should().Be(0);
+        var validationResult = ((ValidationFailedOperationResult)result).ValidationResults.Should().ContainSingle().Subject;
+        validationResult.MemberNames.Should().Contain(nameof(NotAllowedIfValidationOperation.Name));
+        validationResult.ErrorMessage.Should().Be("This field is not allowed to be set if Enabled field is True.");
+    }
+
+    [Fact]
+    public async Task When_not_allowed_if_validation_passes_then_generated_pipeline_runs_handler_and_returns_ok()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(NotAllowedIfValidationOperation));
+        var context = CreateContext(app, NotAllowedIfValidationOperation.Configure());
+        var operation = (NotAllowedIfValidationOperation)context.Operation;
+        operation.Enabled = true;
+
+        NotAllowedIfValidationOperation.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<OkResult>();
+        NotAllowedIfValidationOperation.HandlerCallCount.Should().Be(1);
+        ((OkResult)result).Unwrap<string>().Should().Be(string.Empty);
+    }
+
+    [Fact]
+    public async Task When_not_allowed_if_validation_uses_null_dependent_value_then_runtime_fallback_returns_validation_failure_and_skips_handler()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(NotAllowedIfNullDependentValueValidationOperation));
+        var context = CreateContext(app, NotAllowedIfNullDependentValueValidationOperation.Configure());
+        var operation = (NotAllowedIfNullDependentValueValidationOperation)context.Operation;
+        operation.Name = "Blueprint";
+
+        NotAllowedIfNullDependentValueValidationOperation.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<ValidationFailedOperationResult>();
+        NotAllowedIfNullDependentValueValidationOperation.HandlerCallCount.Should().Be(0);
+        var validationResult = ((ValidationFailedOperationResult)result).ValidationResults.Should().ContainSingle().Subject;
+        validationResult.MemberNames.Should().Contain(nameof(NotAllowedIfNullDependentValueValidationOperation.Name));
+        validationResult.ErrorMessage.Should().Be("This field is not allowed to be set if TokenId field is null.");
+    }
+
+    [Fact]
     public async Task When_mixed_fast_and_runtime_property_validation_fails_then_generated_pipeline_returns_validation_failure_and_skips_handler()
     {
         var app = new IntegrationTestBlueprintApp();
@@ -855,6 +917,48 @@ public partial class RequiredIfNotValidationOperation : ICommand<string>
     {
         HandlerCallCount++;
         return Task.FromResult(operation.PaymentIntentId ?? string.Empty);
+    }
+}
+
+public partial class NotAllowedIfValidationOperation : ICommand<string>
+{
+    public static int HandlerCallCount { get; private set; }
+
+    public bool Enabled { get; set; }
+
+    [NotAllowedIf(nameof(Enabled), true)]
+    public string? Name { get; set; }
+
+    public static void Reset()
+    {
+        HandlerCallCount = 0;
+    }
+
+    public static Task<string> HandleAsync(NotAllowedIfValidationOperation operation)
+    {
+        HandlerCallCount++;
+        return Task.FromResult(operation.Name ?? string.Empty);
+    }
+}
+
+public partial class NotAllowedIfNullDependentValueValidationOperation : ICommand<string>
+{
+    public static int HandlerCallCount { get; private set; }
+
+    public string? TokenId { get; set; }
+
+    [NotAllowedIf(nameof(TokenId), null)]
+    public string? Name { get; set; }
+
+    public static void Reset()
+    {
+        HandlerCallCount = 0;
+    }
+
+    public static Task<string> HandleAsync(NotAllowedIfNullDependentValueValidationOperation operation)
+    {
+        HandlerCallCount++;
+        return Task.FromResult(operation.Name ?? string.Empty);
     }
 }
 

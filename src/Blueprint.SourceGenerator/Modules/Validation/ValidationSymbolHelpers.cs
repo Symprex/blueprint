@@ -67,6 +67,13 @@ internal static class ValidationSymbolHelpers
                && attributeClass.ContainingNamespace.ToDisplayString() == "Blueprint.Validation";
     }
 
+    public static bool IsNotAllowedIfAttribute(INamedTypeSymbol? attributeClass)
+    {
+        return attributeClass is not null
+               && attributeClass.Name == "NotAllowedIfAttribute"
+               && attributeClass.ContainingNamespace.ToDisplayString() == "Blueprint.Validation";
+    }
+
     public static bool IsDisplayNameAffectingAttribute(INamedTypeSymbol? attributeClass)
     {
         if (attributeClass is null)

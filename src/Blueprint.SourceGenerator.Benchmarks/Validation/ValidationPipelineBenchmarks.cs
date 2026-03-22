@@ -369,6 +369,50 @@ public class ValidationPipelineBenchmarks
     }
 
     [Benchmark]
+    public Task<OperationResult> NotAllowedIfInvalidAsync()
+    {
+        var pipeline = this._executor.GetPipeline(typeof(NotAllowedIfValidationOperation));
+        var context = CreateContext<NotAllowedIfValidationOperation>(
+            this._app,
+            NotAllowedIfValidationOperation.Configure(),
+            operation =>
+            {
+                operation.Enabled = true;
+                operation.Name = "Blueprint";
+            });
+        return pipeline.ExecuteAsync(context);
+    }
+
+    [Benchmark]
+    public Task<OperationResult> NotAllowedIfValidAsync()
+    {
+        var pipeline = this._executor.GetPipeline(typeof(NotAllowedIfValidationOperation));
+        var context = CreateContext<NotAllowedIfValidationOperation>(
+            this._app,
+            NotAllowedIfValidationOperation.Configure(),
+            operation =>
+            {
+                operation.Enabled = true;
+            });
+        return pipeline.ExecuteAsync(context);
+    }
+
+    [Benchmark]
+    public Task<OperationResult> NotAllowedIfRuntimeFallbackInvalidAsync()
+    {
+        var pipeline = this._executor.GetPipeline(typeof(NotAllowedIfRuntimeFallbackValidationOperation));
+        var context = CreateContext<NotAllowedIfRuntimeFallbackValidationOperation>(
+            this._app,
+            NotAllowedIfRuntimeFallbackValidationOperation.Configure(),
+            operation =>
+            {
+                operation.Enabled = true;
+                operation.Name = "Blueprint";
+            });
+        return pipeline.ExecuteAsync(context);
+    }
+
+    [Benchmark]
     public Task<OperationResult> ValidatableObjectFallbackInvalidAsync()
     {
         var pipeline = this._executor.GetPipeline(typeof(ValidatableBenchmarkOperation));
@@ -656,6 +700,33 @@ public partial class RequiredIfNotRuntimeFallbackValidationOperation : ICommand<
     public static Task<string> HandleAsync(RequiredIfNotRuntimeFallbackValidationOperation operation)
     {
         return Task.FromResult(operation.PaymentIntentId ?? string.Empty);
+    }
+}
+
+public partial class NotAllowedIfValidationOperation : ICommand<string>
+{
+    public bool Enabled { get; set; }
+
+    [NotAllowedIf(nameof(Enabled), true)]
+    public string? Name { get; set; }
+
+    public static Task<string> HandleAsync(NotAllowedIfValidationOperation operation)
+    {
+        return Task.FromResult(operation.Name ?? string.Empty);
+    }
+}
+
+public partial class NotAllowedIfRuntimeFallbackValidationOperation : ICommand<string>
+{
+    public bool Enabled { get; set; }
+
+    [Display(Name = "Display name")]
+    [NotAllowedIf(nameof(Enabled), true)]
+    public string? Name { get; set; }
+
+    public static Task<string> HandleAsync(NotAllowedIfRuntimeFallbackValidationOperation operation)
+    {
+        return Task.FromResult(operation.Name ?? string.Empty);
     }
 }
 

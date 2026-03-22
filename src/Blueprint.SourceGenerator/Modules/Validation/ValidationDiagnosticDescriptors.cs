@@ -41,4 +41,13 @@ internal static class ValidationDiagnosticDescriptors
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
         description: "RequiredIfNotAttribute must reference a real operation property so generated validation and runtime behavior stay deterministic.");
+
+    public static readonly DiagnosticDescriptor MissingNotAllowedIfProperty = new(
+        id: "BPV005",
+        title: "NotAllowedIfAttribute references a missing property",
+        messageFormat: "The property '{0}' referenced by NotAllowedIfAttribute on '{1}' does not exist on operation '{2}'",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "NotAllowedIfAttribute must reference a real operation property so generated validation and runtime behavior stay deterministic.");
 }

@@ -169,6 +169,25 @@ public class ValidationModuleTests
     }
 
     [Fact]
+    public async Task When_not_allowed_if_attribute_references_missing_property_then_reports_validation_diagnostic()
+    {
+        var source = """
+                     using Blueprint.Validation;
+
+                     public partial class IncludedOperation : IOperation
+                     {
+                         [NotAllowedIf("MissingProperty", true)]
+                         public string? Name { get; set; }
+                     }
+                     """;
+
+        var result = CompileDescriptor(source);
+
+        result.Diagnostics.Select(static d => d.Id).Should().Contain("BPV005");
+        await result.VerifyCompilationFailedAsync(DescriptorSnapshotsFolder);
+    }
+
+    [Fact]
     public void Inline_handler_with_greater_than_property_validation_attribute_generates_property_comparison_before_handler_invocation()
     {
         var source = """
@@ -451,6 +470,149 @@ public class ValidationModuleTests
 
         await CompilePipeline(source)
             .VerifySuccessAsync(PipelineSnapshotsFolder);
+    }
+
+    [Fact]
+    public void Inline_handler_with_not_allowed_if_validation_attribute_generates_conditional_forbidden_check_before_handler_invocation()
+    {
+        var source = """
+                     using Blueprint;
+                     using Blueprint.Model;
+                     using Blueprint.Validation;
+                     using System.Threading.Tasks;
+
+                     namespace TestNamespace;
+
+                     [BlueprintAppScan]
+                     public partial class TestApp : BlueprintApp
+                     {
+                         public TestApp()
+                         {
+                             this.Register(CreateUserCommand.Configure());
+                         }
+                     }
+
+                     public class CreateUserCommand : ICommand<string>
+                     {
+                         public static ApiOperationDescriptor Configure()
+                         {
+                             return new ApiOperationDescriptor(typeof(CreateUserCommand), nameof(CreateUserCommand), "Tests");
+                         }
+
+                         public bool Enabled { get; set; }
+
+                         [NotAllowedIf(nameof(Enabled), true)]
+                         public string? Name { get; set; }
+
+                         public static Task<string> HandleAsync(CreateUserCommand command)
+                         {
+                             return Task.FromResult(command.Name ?? string.Empty);
+                         }
+                     }
+                     """;
+
+        var result = CompilePipeline(source);
+
+        result.Diagnostics.Should().BeEmpty();
+        var pipelineSource = result.Output.Single(static tree => tree.FilePath.EndsWith("CreateUserCommandExecutorPipeline.g.cs", StringComparison.Ordinal)).ToString();
+
+        pipelineSource.Should().NotContain("global::System.ComponentModel.DataAnnotations.Validator.TryValidateObject");
+        pipelineSource.Should().Contain("operation.Enabled == true && operation.Name is not null");
+        pipelineSource.Should().Contain("global::Blueprint.Validation.NotAllowedIfAttribute");
+        pipelineSource.IndexOf("operation.Enabled == true && operation.Name is not null", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(pipelineSource.IndexOf("var handlerResult", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Inline_handler_with_not_allowed_if_validation_attribute_generates_correctly()
+    {
+        var source = """
+                     using Blueprint;
+                     using Blueprint.Model;
+                     using Blueprint.Validation;
+                     using System.Threading.Tasks;
+
+                     namespace TestNamespace;
+
+                     [BlueprintAppScan]
+                     public partial class TestApp : BlueprintApp
+                     {
+                         public TestApp()
+                         {
+                             this.Register(CreateUserCommand.Configure());
+                         }
+                     }
+
+                     public class CreateUserCommand : ICommand<string>
+                     {
+                         public static ApiOperationDescriptor Configure()
+                         {
+                             return new ApiOperationDescriptor(typeof(CreateUserCommand), nameof(CreateUserCommand), "Tests");
+                         }
+
+                         public bool Enabled { get; set; }
+
+                         [NotAllowedIf(nameof(Enabled), true)]
+                         public string? Name { get; set; }
+
+                         public static Task<string> HandleAsync(CreateUserCommand command)
+                         {
+                             return Task.FromResult(command.Name ?? string.Empty);
+                         }
+                     }
+                     """;
+
+        await CompilePipeline(source)
+            .VerifySuccessAsync(PipelineSnapshotsFolder);
+    }
+
+    [Fact]
+    public void Inline_handler_with_not_allowed_if_null_dependent_value_uses_runtime_fallback()
+    {
+        var source = """
+                     using Blueprint;
+                     using Blueprint.Model;
+                     using Blueprint.Validation;
+                     using System.Threading.Tasks;
+
+                     namespace TestNamespace;
+
+                     [BlueprintAppScan]
+                     public partial class TestApp : BlueprintApp
+                     {
+                         public TestApp()
+                         {
+                             this.Register(CreateUserCommand.Configure());
+                         }
+                     }
+
+                     public class CreateUserCommand : ICommand<string>
+                     {
+                         public static ApiOperationDescriptor Configure()
+                         {
+                             return new ApiOperationDescriptor(typeof(CreateUserCommand), nameof(CreateUserCommand), "Tests");
+                         }
+
+                         public string? TokenId { get; set; }
+
+                         [NotAllowedIf(nameof(TokenId), null)]
+                         public string? Name { get; set; }
+
+                         public static Task<string> HandleAsync(CreateUserCommand command)
+                         {
+                             return Task.FromResult(command.Name ?? string.Empty);
+                         }
+                     }
+                     """;
+
+        var result = CompilePipeline(source);
+
+        result.Diagnostics.Should().BeEmpty();
+        var pipelineSource = result.Output.Single(static tree => tree.FilePath.EndsWith("CreateUserCommandExecutorPipeline.g.cs", StringComparison.Ordinal)).ToString();
+
+        pipelineSource.Should().Contain("global::Blueprint.Validation.ValidationRuntime.ValidateProperty");
+        pipelineSource.Should().NotContain("operation.TokenId is null && operation.Name is not null");
     }
 
     [Fact]

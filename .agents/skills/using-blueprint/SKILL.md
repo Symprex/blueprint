@@ -36,7 +36,7 @@ Do not use this skill to change Blueprint internals in `blueprint-source-gen`; u
 
 - Treat validation attributes as compile-time inputs first and runtime behavior second; if the build can prove the contract is wrong, expect a diagnostic instead of a runtime repair path.
 - `Blueprint.Validation.GreaterThanPropertyAttribute` is now part of the retained Blueprint-specific validation surface for property-to-property greater-than checks.
-- For other legacy Blueprint conditional validators (`RequiredIf`, `RequiredIfNot`, `GreaterThan`, `NotAllowedIf`), verify the current Blueprint baseline before assuming the source-generated implementation has already landed in the same way.
+- The retained Blueprint-specific conditional validator set now includes `GreaterThan`, `RequiredIf`, `RequiredIfNot`, and `NotAllowedIf` alongside `GreaterThanProperty`; verify the exact fast-path versus fallback shape before relying on a specific constructor or comparison form.
 
 ## Working loop
 
