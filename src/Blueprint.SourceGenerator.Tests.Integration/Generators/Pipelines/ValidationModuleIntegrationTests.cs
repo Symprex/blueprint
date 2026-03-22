@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Diagnostics;
 using Blueprint.Middleware;
 using Blueprint.Model;
 using Blueprint.Runtime.Exec;
@@ -27,6 +28,78 @@ public class ValidationModuleIntegrationTests
         RequiredValidationOperation.HandlerCallCount.Should().Be(0);
         var validationResult = ((ValidationFailedOperationResult)result).ValidationResults.Should().ContainSingle().Subject;
         validationResult.MemberNames.Should().Contain(nameof(RequiredValidationOperation.Name));
+    }
+
+    [Fact]
+    public async Task When_required_validation_fails_then_generated_pipeline_marks_activity_ok_and_skips_handler()
+    {
+        using var activity = new Activity("validation-test");
+        activity.Start();
+
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(RequiredValidationOperation));
+        var context = CreateContext(app, RequiredValidationOperation.Configure());
+        context.Activity = activity;
+
+        RequiredValidationOperation.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<ValidationFailedOperationResult>();
+        RequiredValidationOperation.HandlerCallCount.Should().Be(0);
+        activity.GetTagItem("otel.status_code").Should().Be("OK");
+        activity.Events.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task When_handler_throws_legacy_validation_exception_then_generated_pipeline_returns_validation_failure_and_marks_activity_ok()
+    {
+        using var activity = new Activity("legacy-validation-exception-test");
+        activity.Start();
+
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(LegacyValidationExceptionOperation));
+        var context = CreateContext(app, LegacyValidationExceptionOperation.Configure());
+        context.Activity = activity;
+
+        LegacyValidationExceptionOperation.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<ValidationFailedOperationResult>();
+        LegacyValidationExceptionOperation.HandlerCallCount.Should().Be(1);
+        var validationResult = ((ValidationFailedOperationResult)result).ValidationResults.Should().ContainSingle().Subject;
+        validationResult.MemberNames.Should().Contain(nameof(LegacyValidationExceptionOperation.Name));
+        validationResult.ErrorMessage.Should().Be("Legacy validation failure.");
+        activity.GetTagItem("otel.status_code").Should().Be("OK");
+        activity.Events.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task When_handler_throws_data_annotations_validation_exception_then_generated_pipeline_returns_validation_failure_and_marks_activity_ok()
+    {
+        using var activity = new Activity("framework-validation-exception-test");
+        activity.Start();
+
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(DataAnnotationsValidationExceptionOperation));
+        var context = CreateContext(app, DataAnnotationsValidationExceptionOperation.Configure());
+        context.Activity = activity;
+
+        DataAnnotationsValidationExceptionOperation.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<ValidationFailedOperationResult>();
+        DataAnnotationsValidationExceptionOperation.HandlerCallCount.Should().Be(1);
+        var validationResult = ((ValidationFailedOperationResult)result).ValidationResults.Should().ContainSingle().Subject;
+        validationResult.MemberNames.Should().Contain(nameof(DataAnnotationsValidationExceptionOperation.Name));
+        validationResult.ErrorMessage.Should().Be("Framework validation failure.");
+        activity.GetTagItem("otel.status_code").Should().Be("OK");
+        activity.Events.Should().BeEmpty();
     }
 
     [Fact]
@@ -959,6 +1032,48 @@ public partial class NotAllowedIfNullDependentValueValidationOperation : IComman
     {
         HandlerCallCount++;
         return Task.FromResult(operation.Name ?? string.Empty);
+    }
+}
+
+public partial class LegacyValidationExceptionOperation : ICommand<string>
+{
+    public static int HandlerCallCount { get; private set; }
+
+    public string? Name { get; set; }
+
+    public static void Reset()
+    {
+        HandlerCallCount = 0;
+    }
+
+    public static Task<string> HandleAsync(LegacyValidationExceptionOperation operation)
+    {
+        HandlerCallCount++;
+        throw new global::Blueprint.Validation.ValidationException(
+        [
+            new ValidationResult("Legacy validation failure.", [nameof(Name)]),
+        ]);
+    }
+}
+
+public partial class DataAnnotationsValidationExceptionOperation : ICommand<string>
+{
+    public static int HandlerCallCount { get; private set; }
+
+    public string? Name { get; set; }
+
+    public static void Reset()
+    {
+        HandlerCallCount = 0;
+    }
+
+    public static Task<string> HandleAsync(DataAnnotationsValidationExceptionOperation operation)
+    {
+        HandlerCallCount++;
+        throw new global::System.ComponentModel.DataAnnotations.ValidationException(
+            new ValidationResult("Framework validation failure.", [nameof(Name)]),
+            null,
+            operation.Name);
     }
 }
 

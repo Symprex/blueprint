@@ -150,7 +150,9 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
 
         context.If(
             "validationResults is not null",
-            static branch => branch.Throw("new global::Blueprint.Validation.ValidationException(validationResults)"));
+            static branch => ReturnValidationFailure(
+                branch,
+                "new Blueprint.Middleware.ValidationFailedOperationResult(validationResults)"));
         context.WriteBlankLine();
     }
 
@@ -224,7 +226,18 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
             $"global::System.ComponentModel.DataAnnotations.Validator.TryValidateObject({context.GetOperationExpression()}, validationContext, validationResults, validateAllProperties: true)");
         context.If(
             "isValid == false",
-            static branch => branch.Throw("new global::Blueprint.Validation.ValidationException(validationResults)"));
+            static branch => ReturnValidationFailure(
+                branch,
+                "new Blueprint.Middleware.ValidationFailedOperationResult(validationResults)"));
         context.WriteBlankLine();
+    }
+
+    private static void ReturnValidationFailure(PipelineRenderContext context, string operationResultExpression)
+    {
+        context.WriteStatement($"{context.GetContextPropertyExpression("Activity")}?.SetTag(\"otel.status_code\", \"OK\");");
+        context.Return(
+            context.IsHandlerAsync()
+                ? operationResultExpression
+                : $"System.Threading.Tasks.Task.FromResult<Blueprint.OperationResult>({operationResultExpression})");
     }
 }

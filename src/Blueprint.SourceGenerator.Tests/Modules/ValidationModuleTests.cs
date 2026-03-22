@@ -803,7 +803,10 @@ public class ValidationModuleTests
         pipelineSource.Should().Contain("global::System.String.IsNullOrWhiteSpace(operation.Name)");
         pipelineSource.Should().Contain("operation.Name.Length < 3");
         pipelineSource.Should().Contain("new global::System.ComponentModel.DataAnnotations.MinLengthAttribute(3).FormatErrorMessage(\"Name\")");
-        pipelineSource.Should().Contain("throw new global::Blueprint.Validation.ValidationException(validationResults);");
+        pipelineSource.Should().Contain("context.Activity?.SetTag(\"otel.status_code\", \"OK\");");
+        pipelineSource.Should().Contain("return new Blueprint.Middleware.ValidationFailedOperationResult(validationResults);");
+        pipelineSource.Should().NotContain("throw new global::Blueprint.Validation.ValidationException(validationResults);");
+        pipelineSource.Should().Contain("catch (Blueprint.Validation.ValidationException e)");
         pipelineSource.IndexOf("global::System.String.IsNullOrWhiteSpace(operation.Name)", StringComparison.Ordinal)
             .Should()
             .BeLessThan(pipelineSource.IndexOf("var handlerResult", StringComparison.Ordinal));
@@ -1162,6 +1165,9 @@ public class ValidationModuleTests
         var pipelineSource = result.Output.Single(static tree => tree.FilePath.EndsWith("CreateUserCommandExecutorPipeline.g.cs", StringComparison.Ordinal)).ToString();
 
         pipelineSource.Should().Contain("global::System.ComponentModel.DataAnnotations.Validator.TryValidateObject");
+        pipelineSource.Should().Contain("context.Activity?.SetTag(\"otel.status_code\", \"OK\");");
+        pipelineSource.Should().Contain("return new Blueprint.Middleware.ValidationFailedOperationResult(validationResults);");
+        pipelineSource.Should().NotContain("throw new global::Blueprint.Validation.ValidationException(validationResults);");
     }
 
     [Fact]

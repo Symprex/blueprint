@@ -51,7 +51,8 @@ namespace Blueprint.Generated
                 global::Blueprint.Validation.ValidationRuntime.ValidateProperty(context.Descriptor.GetPropertyAttributes("Code"), operation, operation.Code, "Code", ref validationResults);
                 if (validationResults is not null)
                 {
-                    throw new global::Blueprint.Validation.ValidationException(validationResults);
+                    context.Activity?.SetTag("otel.status_code", "OK");
+                    return new Blueprint.Middleware.ValidationFailedOperationResult(validationResults);
                 }
 
                 var handlerResult = await global::TestNamespace.CreateUserCommand.HandleAsync(operation);
