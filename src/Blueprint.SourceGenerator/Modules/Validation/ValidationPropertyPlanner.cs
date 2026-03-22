@@ -13,6 +13,8 @@ internal static class ValidationPropertyPlanner
         new MinLengthValidationFastPathStrategy(),
         new StringLengthValidationFastPathStrategy(),
         new EmailAddressValidationFastPathStrategy(),
+        new RequiredIfValidationFastPathStrategy(),
+        new RequiredIfNotValidationFastPathStrategy(),
         new GreaterThanValidationFastPathStrategy(),
         new GreaterThanPropertyValidationFastPathStrategy(),
     ];
@@ -74,7 +76,7 @@ internal static class ValidationPropertyPlanner
                 return false;
             }
 
-            if (ValidationSymbolHelpers.IsRequiredAttribute(attribute.AttributeClass))
+            if (ValidationSymbolHelpers.IsRequiredLikeAttribute(attribute.AttributeClass))
             {
                 if (requiredRule is not null)
                 {

@@ -23,4 +23,22 @@ internal static class ValidationDiagnosticDescriptors
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
         description: "GreaterThanPropertyAttribute must reference a real operation property so generated validation and runtime behavior stay deterministic.");
+
+    public static readonly DiagnosticDescriptor MissingRequiredIfProperty = new(
+        id: "BPV003",
+        title: "RequiredIfAttribute references a missing property",
+        messageFormat: "The property '{0}' referenced by RequiredIfAttribute on '{1}' does not exist on operation '{2}'",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "RequiredIfAttribute must reference a real operation property so generated validation and runtime behavior stay deterministic.");
+
+    public static readonly DiagnosticDescriptor MissingRequiredIfNotProperty = new(
+        id: "BPV004",
+        title: "RequiredIfNotAttribute references a missing property",
+        messageFormat: "The property '{0}' referenced by RequiredIfNotAttribute on '{1}' does not exist on operation '{2}'",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "RequiredIfNotAttribute must reference a real operation property so generated validation and runtime behavior stay deterministic.");
 }

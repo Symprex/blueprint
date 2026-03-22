@@ -14,6 +14,7 @@ Router and index skill for **dotnet-artisan**. Always loaded after [skill:using-
 - Routing .NET/C# requests to the correct domain skill or specialist agent
 - Loading [skill:dotnet-csharp] coding standards as baseline for all code paths
 - Maintaining the skill catalog and routing precedence
+- Loading repo-local overlay skills when a Blueprint repository has focused guidance for a narrow concern
 - Delegating complex analysis to specialist agents
 - Disambiguating requests spanning multiple domains
 
@@ -69,6 +70,14 @@ Identify the primary domain from the request, then invoke the matching skill. If
 | Excel, Word, PowerPoint, PDF, spreadsheet, document generation | [skill:dotnet-api] (references/office-documents.md) |
 | New project (unclear domain) | [skill:dotnet-tooling], then route to the owning domain skill |
 
+### Repository-local overlays
+
+When the repository has a dedicated local skill for a narrow concern, load it in addition to the core .NET route instead of stretching a broader skill beyond its intended scope.
+
+| In blueprint-source-gen, if the request involves... | Also load |
+|-----------------------------------------------------|-----------|
+| `JetBrains.Annotations`, `UsedImplicitly`, `MustDisposeResource`, `MustUseReturnValue`, Rider/ReSharper implicit-use warnings, or annotation-cleanup/hygiene work | [skill:annotation-hygiene] after [skill:dotnet-csharp] |
+
 ### Cross-Domain Routing
 
 Many tasks naturally span multiple domains. After invoking the primary domain skill, also load supporting skills when these patterns appear:
@@ -96,6 +105,7 @@ For broad "build me an app" requests, load comprehensively: [skill:dotnet-csharp
 | [skill:dotnet-devops] | GitHub Actions, Azure DevOps, containers, NuGet, observability | CI/CD pipelines, packaging, and operations |
 | [skill:dotnet-tooling] | Project setup, MSBuild, Native AOT, profiling, CLI apps, version detection | Build system, performance, and developer tools |
 | [skill:dotnet-debugging] | WinDbg MCP, crash dumps, hang analysis, memory diagnostics | Live and post-mortem dump analysis |
+| [skill:annotation-hygiene] | blueprint-source-gen JetBrains annotation policy and cleanup guidance | Repo-local overlay for focused annotation hygiene work |
 | dotnet-advisor | This skill -- routes to domain skills above | Entry point, loaded after [skill:using-dotnet] |
 
 ---

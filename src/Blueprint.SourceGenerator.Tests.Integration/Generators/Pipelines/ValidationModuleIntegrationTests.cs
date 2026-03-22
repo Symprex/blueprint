@@ -429,6 +429,85 @@ public class ValidationModuleIntegrationTests
     }
 
     [Fact]
+    public async Task When_required_if_validation_fails_then_generated_pipeline_returns_validation_failure_and_skips_handler()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(RequiredIfValidationOperation));
+        var context = CreateContext(app, RequiredIfValidationOperation.Configure());
+        var operation = (RequiredIfValidationOperation)context.Operation;
+        operation.Enabled = true;
+
+        RequiredIfValidationOperation.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<ValidationFailedOperationResult>();
+        RequiredIfValidationOperation.HandlerCallCount.Should().Be(0);
+        var validationResult = ((ValidationFailedOperationResult)result).ValidationResults.Should().ContainSingle().Subject;
+        validationResult.MemberNames.Should().Contain(nameof(RequiredIfValidationOperation.Name));
+        validationResult.ErrorMessage.Should().Be("The Name field is required.");
+    }
+
+    [Fact]
+    public async Task When_required_if_validation_passes_then_generated_pipeline_runs_handler_and_returns_ok()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(RequiredIfValidationOperation));
+        var context = CreateContext(app, RequiredIfValidationOperation.Configure());
+        var operation = (RequiredIfValidationOperation)context.Operation;
+        operation.Enabled = true;
+        operation.Name = "Blueprint";
+
+        RequiredIfValidationOperation.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<OkResult>();
+        RequiredIfValidationOperation.HandlerCallCount.Should().Be(1);
+        ((OkResult)result).Unwrap<string>().Should().Be("Blueprint");
+    }
+
+    [Fact]
+    public async Task When_required_if_not_validation_fails_then_generated_pipeline_returns_validation_failure_and_skips_handler()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(RequiredIfNotValidationOperation));
+        var context = CreateContext(app, RequiredIfNotValidationOperation.Configure());
+        var operation = (RequiredIfNotValidationOperation)context.Operation;
+        operation.TokenId = "token";
+
+        RequiredIfNotValidationOperation.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<ValidationFailedOperationResult>();
+        RequiredIfNotValidationOperation.HandlerCallCount.Should().Be(0);
+        var validationResult = ((ValidationFailedOperationResult)result).ValidationResults.Should().ContainSingle().Subject;
+        validationResult.MemberNames.Should().Contain(nameof(RequiredIfNotValidationOperation.PaymentIntentId));
+        validationResult.ErrorMessage.Should().Be("The PaymentIntentId field is required.");
+    }
+
+    [Fact]
+    public async Task When_required_if_not_validation_passes_then_generated_pipeline_runs_handler_and_returns_ok()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(RequiredIfNotValidationOperation));
+        var context = CreateContext(app, RequiredIfNotValidationOperation.Configure());
+
+        RequiredIfNotValidationOperation.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<OkResult>();
+        RequiredIfNotValidationOperation.HandlerCallCount.Should().Be(1);
+        ((OkResult)result).Unwrap<string>().Should().Be(string.Empty);
+    }
+
+    [Fact]
     public async Task When_mixed_fast_and_runtime_property_validation_fails_then_generated_pipeline_returns_validation_failure_and_skips_handler()
     {
         var app = new IntegrationTestBlueprintApp();
@@ -734,6 +813,48 @@ public partial class GreaterThanValidationOperation : ICommand<string>
     {
         HandlerCallCount++;
         return Task.FromResult(operation.Count.ToString());
+    }
+}
+
+public partial class RequiredIfValidationOperation : ICommand<string>
+{
+    public static int HandlerCallCount { get; private set; }
+
+    public bool Enabled { get; set; }
+
+    [RequiredIf(nameof(Enabled), true)]
+    public string? Name { get; set; }
+
+    public static void Reset()
+    {
+        HandlerCallCount = 0;
+    }
+
+    public static Task<string> HandleAsync(RequiredIfValidationOperation operation)
+    {
+        HandlerCallCount++;
+        return Task.FromResult(operation.Name ?? string.Empty);
+    }
+}
+
+public partial class RequiredIfNotValidationOperation : ICommand<string>
+{
+    public static int HandlerCallCount { get; private set; }
+
+    public string? TokenId { get; set; }
+
+    [RequiredIfNot(nameof(TokenId), null)]
+    public string? PaymentIntentId { get; set; }
+
+    public static void Reset()
+    {
+        HandlerCallCount = 0;
+    }
+
+    public static Task<string> HandleAsync(RequiredIfNotValidationOperation operation)
+    {
+        HandlerCallCount++;
+        return Task.FromResult(operation.PaymentIntentId ?? string.Empty);
     }
 }
 

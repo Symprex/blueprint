@@ -58,7 +58,10 @@ The target is **consumer-contract compatibility**, not byte-for-byte parity with
 - The next retained Blueprint-specific validation slice is also complete locally: `Blueprint.Validation.GreaterThanAttribute` is available again as a consumer-facing contract, `ValidationModule` emits a direct `operation.Property <= constant` fast path for supported default-constructor non-nullable numeric/decimal shapes, and unsupported/customized shapes continue to flow through the shared per-property `ValidationRuntime.ValidateProperty(...)` fallback.
 - The updated `ShortRun` benchmark artifact (`BenchmarkDotNet.Artifacts\results\Blueprint.SourceGenerator.Benchmarks.Validation.ValidationPipelineBenchmarks-report.*`) now also captures `GreaterThanInvalidAsync` at about `6.9 us` / `2.05 KB` versus `GreaterThanRuntimeFallbackInvalidAsync` at about `7.5 us` / `2.91 KB`, giving the retained-validator track a direct value-comparison benchmark alongside the existing property-to-property benchmark.
 - The repo-local annotation-hygiene follow-on is now also complete locally: `.agents\skills\annotation-hygiene\SKILL.md` captures the approved JetBrains-annotation guidance, and the first focused runtime-model, planning, and validation annotation passes are now in the tree.
-- Next slice after these retained-validator and annotation-hygiene follow-ons: continue the remaining retained conditional/property-dependent rules (`RequiredIf`, `RequiredIfNot`, and `NotAllowedIf`) before moving on to the deferred no-exception validation-failure redesign.
+- The retained conditional-required follow-on is now also complete locally: `Blueprint.Validation.RequiredIfAttribute` and `RequiredIfNotAttribute` are available again as consumer-facing contracts, the per-property planner treats them as required-like rules so later validators short-circuit correctly, and `ValidationModule` emits direct conditional required checks for supported default-constructor scalar/null comparisons while falling back to the shared per-property `ValidationRuntime.ValidateProperty(...)` seam for arrays, custom messages, display-name shaping, and unsupported comparison shapes.
+- `BPV003` and `BPV004` are now reserved for invalid `RequiredIfAttribute` and `RequiredIfNotAttribute` property references, extending the retained-validator compile-time guardrails to the remaining conditional required family.
+- The updated `ShortRun` benchmark artifact (`BenchmarkDotNet.Artifacts\results\Blueprint.SourceGenerator.Benchmarks.Validation.ValidationPipelineBenchmarks-report.*`) now also captures `RequiredIfInvalidAsync` at about `10.1 us` / `2.98 KB` versus `RequiredIfRuntimeFallbackInvalidAsync` at about `11.6 us` / `3.52 KB`; `RequiredIfNotInvalidAsync` is about `13.5 us` / `3.27 KB` versus `RequiredIfNotRuntimeFallbackInvalidAsync` at about `11.5 us` / `3.78 KB`, so the current short run shows the expected allocation drop but not a mean-time win for `RequiredIfNot` yet.
+- Next slice after these retained-validator and annotation-hygiene follow-ons: finish the last retained conditional/property-dependent rule (`NotAllowedIf`) before moving on to the deferred no-exception validation-failure redesign.
 - This remains a narrow seam-activation step, not a freeze of the broader result-model direction. The current result-wrapping behavior is intentionally preserved while host-agnostic result redesign stays deferred.
 
 ## Durable decision rule
@@ -272,6 +275,8 @@ Before planning or implementation, load:
 4. `dotnet-tooling`, `dotnet-testing`, and/or `dotnet-devops` as the workstream requires
 5. `using-blueprint` when the slice changes consumer-facing Blueprint usage, migration guidance, or the preferred sample-consumer story
 6. `extending-blueprint` when the slice changes Blueprint generators, runtime contracts, modules, diagnostics, or repo-internal Blueprint guidance
+
+For JetBrains annotation hygiene work inside this repository, load `annotation-hygiene` after `dotnet-advisor`/`dotnet-csharp` instead of extending one of the broader .NET skills.
 
 ### Blueprint skill contract
 

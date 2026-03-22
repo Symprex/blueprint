@@ -131,6 +131,44 @@ public class ValidationModuleTests
     }
 
     [Fact]
+    public async Task When_required_if_attribute_references_missing_property_then_reports_validation_diagnostic()
+    {
+        var source = """
+                     using Blueprint.Validation;
+
+                     public partial class IncludedOperation : IOperation
+                     {
+                         [RequiredIf("MissingProperty", true)]
+                         public string? Name { get; set; }
+                     }
+                     """;
+
+        var result = CompileDescriptor(source);
+
+        result.Diagnostics.Select(static d => d.Id).Should().Contain("BPV003");
+        await result.VerifyCompilationFailedAsync(DescriptorSnapshotsFolder);
+    }
+
+    [Fact]
+    public async Task When_required_if_not_attribute_references_missing_property_then_reports_validation_diagnostic()
+    {
+        var source = """
+                     using Blueprint.Validation;
+
+                     public partial class IncludedOperation : IOperation
+                     {
+                         [RequiredIfNot("MissingProperty", null)]
+                         public string? Name { get; set; }
+                     }
+                     """;
+
+        var result = CompileDescriptor(source);
+
+        result.Diagnostics.Select(static d => d.Id).Should().Contain("BPV004");
+        await result.VerifyCompilationFailedAsync(DescriptorSnapshotsFolder);
+    }
+
+    [Fact]
     public void Inline_handler_with_greater_than_property_validation_attribute_generates_property_comparison_before_handler_invocation()
     {
         var source = """
@@ -217,6 +255,196 @@ public class ValidationModuleTests
                          public static Task<string> HandleAsync(CreateUserCommand command)
                          {
                              return Task.FromResult($"{command.Minimum}:{command.Maximum}");
+                         }
+                     }
+                     """;
+
+        await CompilePipeline(source)
+            .VerifySuccessAsync(PipelineSnapshotsFolder);
+    }
+
+    [Fact]
+    public void Inline_handler_with_required_if_validation_attribute_generates_conditional_required_check_before_handler_invocation()
+    {
+        var source = """
+                     using Blueprint;
+                     using Blueprint.Model;
+                     using Blueprint.Validation;
+                     using System.Threading.Tasks;
+
+                     namespace TestNamespace;
+
+                     [BlueprintAppScan]
+                     public partial class TestApp : BlueprintApp
+                     {
+                         public TestApp()
+                         {
+                             this.Register(CreateUserCommand.Configure());
+                         }
+                     }
+
+                     public class CreateUserCommand : ICommand<string>
+                     {
+                         public static ApiOperationDescriptor Configure()
+                         {
+                             return new ApiOperationDescriptor(typeof(CreateUserCommand), nameof(CreateUserCommand), "Tests");
+                         }
+
+                         public bool Enabled { get; set; }
+
+                         [RequiredIf(nameof(Enabled), true)]
+                         public string? Name { get; set; }
+
+                         public static Task<string> HandleAsync(CreateUserCommand command)
+                         {
+                             return Task.FromResult(command.Name ?? string.Empty);
+                         }
+                     }
+                     """;
+
+        var result = CompilePipeline(source);
+
+        result.Diagnostics.Should().BeEmpty();
+        var pipelineSource = result.Output.Single(static tree => tree.FilePath.EndsWith("CreateUserCommandExecutorPipeline.g.cs", StringComparison.Ordinal)).ToString();
+
+        pipelineSource.Should().NotContain("global::System.ComponentModel.DataAnnotations.Validator.TryValidateObject");
+        pipelineSource.Should().Contain("operation.Enabled == true && global::System.String.IsNullOrWhiteSpace(operation.Name)");
+        pipelineSource.Should().Contain("global::Blueprint.Validation.RequiredIfAttribute");
+        pipelineSource.IndexOf("operation.Enabled == true && global::System.String.IsNullOrWhiteSpace(operation.Name)", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(pipelineSource.IndexOf("var handlerResult", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Inline_handler_with_required_if_validation_attribute_generates_correctly()
+    {
+        var source = """
+                     using Blueprint;
+                     using Blueprint.Model;
+                     using Blueprint.Validation;
+                     using System.Threading.Tasks;
+
+                     namespace TestNamespace;
+
+                     [BlueprintAppScan]
+                     public partial class TestApp : BlueprintApp
+                     {
+                         public TestApp()
+                         {
+                             this.Register(CreateUserCommand.Configure());
+                         }
+                     }
+
+                     public class CreateUserCommand : ICommand<string>
+                     {
+                         public static ApiOperationDescriptor Configure()
+                         {
+                             return new ApiOperationDescriptor(typeof(CreateUserCommand), nameof(CreateUserCommand), "Tests");
+                         }
+
+                         public bool Enabled { get; set; }
+
+                         [RequiredIf(nameof(Enabled), true)]
+                         public string? Name { get; set; }
+
+                         public static Task<string> HandleAsync(CreateUserCommand command)
+                         {
+                             return Task.FromResult(command.Name ?? string.Empty);
+                         }
+                     }
+                     """;
+
+        await CompilePipeline(source)
+            .VerifySuccessAsync(PipelineSnapshotsFolder);
+    }
+
+    [Fact]
+    public void Inline_handler_with_required_if_not_validation_attribute_generates_conditional_required_check_before_handler_invocation()
+    {
+        var source = """
+                     using Blueprint;
+                     using Blueprint.Model;
+                     using Blueprint.Validation;
+                     using System.Threading.Tasks;
+
+                     namespace TestNamespace;
+
+                     [BlueprintAppScan]
+                     public partial class TestApp : BlueprintApp
+                     {
+                         public TestApp()
+                         {
+                             this.Register(CreateUserCommand.Configure());
+                         }
+                     }
+
+                     public class CreateUserCommand : ICommand<string>
+                     {
+                         public static ApiOperationDescriptor Configure()
+                         {
+                             return new ApiOperationDescriptor(typeof(CreateUserCommand), nameof(CreateUserCommand), "Tests");
+                         }
+
+                         public string? TokenId { get; set; }
+
+                         [RequiredIfNot(nameof(TokenId), null)]
+                         public string? PaymentIntentId { get; set; }
+
+                         public static Task<string> HandleAsync(CreateUserCommand command)
+                         {
+                             return Task.FromResult(command.PaymentIntentId ?? string.Empty);
+                         }
+                     }
+                     """;
+
+        var result = CompilePipeline(source);
+
+        result.Diagnostics.Should().BeEmpty();
+        var pipelineSource = result.Output.Single(static tree => tree.FilePath.EndsWith("CreateUserCommandExecutorPipeline.g.cs", StringComparison.Ordinal)).ToString();
+
+        pipelineSource.Should().NotContain("global::System.ComponentModel.DataAnnotations.Validator.TryValidateObject");
+        pipelineSource.Should().Contain("operation.TokenId is not null && global::System.String.IsNullOrWhiteSpace(operation.PaymentIntentId)");
+        pipelineSource.Should().Contain("global::Blueprint.Validation.RequiredIfNotAttribute");
+        pipelineSource.IndexOf("operation.TokenId is not null && global::System.String.IsNullOrWhiteSpace(operation.PaymentIntentId)", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(pipelineSource.IndexOf("var handlerResult", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Inline_handler_with_required_if_not_validation_attribute_generates_correctly()
+    {
+        var source = """
+                     using Blueprint;
+                     using Blueprint.Model;
+                     using Blueprint.Validation;
+                     using System.Threading.Tasks;
+
+                     namespace TestNamespace;
+
+                     [BlueprintAppScan]
+                     public partial class TestApp : BlueprintApp
+                     {
+                         public TestApp()
+                         {
+                             this.Register(CreateUserCommand.Configure());
+                         }
+                     }
+
+                     public class CreateUserCommand : ICommand<string>
+                     {
+                         public static ApiOperationDescriptor Configure()
+                         {
+                             return new ApiOperationDescriptor(typeof(CreateUserCommand), nameof(CreateUserCommand), "Tests");
+                         }
+
+                         public string? TokenId { get; set; }
+
+                         [RequiredIfNot(nameof(TokenId), null)]
+                         public string? PaymentIntentId { get; set; }
+
+                         public static Task<string> HandleAsync(CreateUserCommand command)
+                         {
+                             return Task.FromResult(command.PaymentIntentId ?? string.Empty);
                          }
                      }
                      """;

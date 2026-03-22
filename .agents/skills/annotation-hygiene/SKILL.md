@@ -1,6 +1,6 @@
 ---
 name: annotation-hygiene
-description: Use when adding, reviewing, or cleaning up JetBrains.Annotations usage in blueprint-source-gen, especially around runtime-model contracts, generator planning seams, validation paths, or broader annotation consistency slices
+description: Use when adding, reviewing, or cleaning up JetBrains.Annotations usage in blueprint-source-gen, especially `UsedImplicitly`, `MustDisposeResource`, `MustUseReturnValue`, implicit-use warnings, runtime-model contracts, generator planning seams, validation paths, or focused annotation consistency slices
 ---
 
 # Annotation Hygiene
@@ -12,13 +12,14 @@ description: Use when adding, reviewing, or cleaning up JetBrains.Annotations us
 ## When to Use
 
 - Touching public or cross-module contracts that are discovered indirectly rather than called directly
+- Seeing Rider/ReSharper implicit-use warnings or questions about `UsedImplicitly`, `MustDisposeResource`, `MustUseReturnValue`, or related JetBrains attributes
 - Reviewing `Try*` seams in runtime, planning, validation, or generator code where nullable intent is easy to lose
 - Cleaning up analyzer warnings, implicit-use warnings, or disposal/lifetime hints in shared helpers
 - Taking a broader annotation consistency pass across a focused slice of the repo
 
 Do not use this skill to justify repo-wide annotation churn with no contract improvement.
 
-**REQUIRED BACKGROUND:** Use `using-dotnet` and `dotnet-advisor` for .NET work. Use `dotnet-csharp` for nullable-flow background, and `extending-blueprint` when the touched code changes Blueprint internals.
+**REQUIRED BACKGROUND:** Use `using-dotnet` and `dotnet-advisor` for .NET work. In blueprint-source-gen, `dotnet-advisor` should route JetBrains annotation questions here instead of stretching a broader .NET skill. Use `dotnet-csharp` for nullable-flow background, and `extending-blueprint` when the touched code changes Blueprint internals.
 
 ## Core categories
 

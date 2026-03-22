@@ -290,6 +290,85 @@ public class ValidationPipelineBenchmarks
     }
 
     [Benchmark]
+    public Task<OperationResult> RequiredIfInvalidAsync()
+    {
+        var pipeline = this._executor.GetPipeline(typeof(RequiredIfValidationOperation));
+        var context = CreateContext<RequiredIfValidationOperation>(
+            this._app,
+            RequiredIfValidationOperation.Configure(),
+            operation =>
+            {
+                operation.Enabled = true;
+            });
+        return pipeline.ExecuteAsync(context);
+    }
+
+    [Benchmark]
+    public Task<OperationResult> RequiredIfValidAsync()
+    {
+        var pipeline = this._executor.GetPipeline(typeof(RequiredIfValidationOperation));
+        var context = CreateContext<RequiredIfValidationOperation>(
+            this._app,
+            RequiredIfValidationOperation.Configure(),
+            operation =>
+            {
+                operation.Enabled = true;
+                operation.Name = "Blueprint";
+            });
+        return pipeline.ExecuteAsync(context);
+    }
+
+    [Benchmark]
+    public Task<OperationResult> RequiredIfRuntimeFallbackInvalidAsync()
+    {
+        var pipeline = this._executor.GetPipeline(typeof(RequiredIfRuntimeFallbackValidationOperation));
+        var context = CreateContext<RequiredIfRuntimeFallbackValidationOperation>(
+            this._app,
+            RequiredIfRuntimeFallbackValidationOperation.Configure(),
+            operation =>
+            {
+                operation.Enabled = true;
+            });
+        return pipeline.ExecuteAsync(context);
+    }
+
+    [Benchmark]
+    public Task<OperationResult> RequiredIfNotInvalidAsync()
+    {
+        var pipeline = this._executor.GetPipeline(typeof(RequiredIfNotValidationOperation));
+        var context = CreateContext<RequiredIfNotValidationOperation>(
+            this._app,
+            RequiredIfNotValidationOperation.Configure(),
+            operation =>
+            {
+                operation.TokenId = "token";
+            });
+        return pipeline.ExecuteAsync(context);
+    }
+
+    [Benchmark]
+    public Task<OperationResult> RequiredIfNotValidAsync()
+    {
+        var pipeline = this._executor.GetPipeline(typeof(RequiredIfNotValidationOperation));
+        var context = CreateContext<RequiredIfNotValidationOperation>(this._app, RequiredIfNotValidationOperation.Configure());
+        return pipeline.ExecuteAsync(context);
+    }
+
+    [Benchmark]
+    public Task<OperationResult> RequiredIfNotRuntimeFallbackInvalidAsync()
+    {
+        var pipeline = this._executor.GetPipeline(typeof(RequiredIfNotRuntimeFallbackValidationOperation));
+        var context = CreateContext<RequiredIfNotRuntimeFallbackValidationOperation>(
+            this._app,
+            RequiredIfNotRuntimeFallbackValidationOperation.Configure(),
+            operation =>
+            {
+                operation.TokenId = "token";
+            });
+        return pipeline.ExecuteAsync(context);
+    }
+
+    [Benchmark]
     public Task<OperationResult> ValidatableObjectFallbackInvalidAsync()
     {
         var pipeline = this._executor.GetPipeline(typeof(ValidatableBenchmarkOperation));
@@ -523,6 +602,60 @@ public partial class GreaterThanRuntimeFallbackValidationOperation : ICommand<st
     public static Task<string> HandleAsync(GreaterThanRuntimeFallbackValidationOperation operation)
     {
         return Task.FromResult(operation.Count.ToString());
+    }
+}
+
+public partial class RequiredIfValidationOperation : ICommand<string>
+{
+    public bool Enabled { get; set; }
+
+    [RequiredIf(nameof(Enabled), true)]
+    public string? Name { get; set; }
+
+    public static Task<string> HandleAsync(RequiredIfValidationOperation operation)
+    {
+        return Task.FromResult(operation.Name ?? string.Empty);
+    }
+}
+
+public partial class RequiredIfRuntimeFallbackValidationOperation : ICommand<string>
+{
+    public bool Enabled { get; set; }
+
+    [Display(Name = "Display name")]
+    [RequiredIf(nameof(Enabled), true)]
+    public string? Name { get; set; }
+
+    public static Task<string> HandleAsync(RequiredIfRuntimeFallbackValidationOperation operation)
+    {
+        return Task.FromResult(operation.Name ?? string.Empty);
+    }
+}
+
+public partial class RequiredIfNotValidationOperation : ICommand<string>
+{
+    public string? TokenId { get; set; }
+
+    [RequiredIfNot(nameof(TokenId), null)]
+    public string? PaymentIntentId { get; set; }
+
+    public static Task<string> HandleAsync(RequiredIfNotValidationOperation operation)
+    {
+        return Task.FromResult(operation.PaymentIntentId ?? string.Empty);
+    }
+}
+
+public partial class RequiredIfNotRuntimeFallbackValidationOperation : ICommand<string>
+{
+    public string? TokenId { get; set; }
+
+    [Display(Name = "Display name")]
+    [RequiredIfNot(nameof(TokenId), null)]
+    public string? PaymentIntentId { get; set; }
+
+    public static Task<string> HandleAsync(RequiredIfNotRuntimeFallbackValidationOperation operation)
+    {
+        return Task.FromResult(operation.PaymentIntentId ?? string.Empty);
     }
 }
 

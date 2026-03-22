@@ -65,6 +65,8 @@ Current validation contributor IDs in active use:
 
 - `BPV001`: `CompareAttribute` references a property that does not exist on the operation type.
 - `BPV002`: `GreaterThanPropertyAttribute` references a property that does not exist on the operation type.
+- `BPV003`: `RequiredIfAttribute` references a property that does not exist on the operation type.
+- `BPV004`: `RequiredIfNotAttribute` references a property that does not exist on the operation type.
 
 ## Diagnostic design rules
 

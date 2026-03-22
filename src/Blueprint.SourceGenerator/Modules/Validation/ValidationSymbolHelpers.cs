@@ -53,6 +53,20 @@ internal static class ValidationSymbolHelpers
                && attributeClass.ContainingNamespace.ToDisplayString() == "Blueprint.Validation";
     }
 
+    public static bool IsRequiredIfAttribute(INamedTypeSymbol? attributeClass)
+    {
+        return attributeClass is not null
+               && attributeClass.Name == "RequiredIfAttribute"
+               && attributeClass.ContainingNamespace.ToDisplayString() == "Blueprint.Validation";
+    }
+
+    public static bool IsRequiredIfNotAttribute(INamedTypeSymbol? attributeClass)
+    {
+        return attributeClass is not null
+               && attributeClass.Name == "RequiredIfNotAttribute"
+               && attributeClass.ContainingNamespace.ToDisplayString() == "Blueprint.Validation";
+    }
+
     public static bool IsDisplayNameAffectingAttribute(INamedTypeSymbol? attributeClass)
     {
         if (attributeClass is null)
@@ -71,6 +85,13 @@ internal static class ValidationSymbolHelpers
         return attributeClass is not null
                && attributeClass.Name == "RequiredAttribute"
                && attributeClass.ContainingNamespace.ToDisplayString() == "System.ComponentModel.DataAnnotations";
+    }
+
+    public static bool IsRequiredLikeAttribute(INamedTypeSymbol? attributeClass)
+    {
+        return IsRequiredAttribute(attributeClass)
+               || IsRequiredIfAttribute(attributeClass)
+               || IsRequiredIfNotAttribute(attributeClass);
     }
 
     public static bool IsMaxLengthAttribute(INamedTypeSymbol? attributeClass)
@@ -105,6 +126,13 @@ internal static class ValidationSymbolHelpers
     {
         return type is INamedTypeSymbol namedType
                && namedType.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T;
+    }
+
+    public static ITypeSymbol? GetNullableValueTypeArgument(ITypeSymbol type)
+    {
+        return type is INamedTypeSymbol namedType && namedType.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T
+            ? namedType.TypeArguments[0]
+            : null;
     }
 
     public static string EscapeIdentifier(string identifier)
