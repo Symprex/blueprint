@@ -267,6 +267,7 @@ If a new module materially changes compile-time or runtime cost, it should also 
 - The first deterministic compile-time fixture slice is now active in `src\Blueprint.SourceGenerator.Tests\Scale\SyntheticBlueprintFixtureGenerator.cs`.
 - `src\Blueprint.SourceGenerator.Tests\Scale\SyntheticBlueprintFixtureGeneratorTests.cs` now proves repeated-output stability, expected app/operation file emission, and descriptor-generator compatibility through the existing `TestHelpers.Compile<OperationDescriptorSourceGenerator>(fixture.CombinedSource)` path, and `dotnet test .\src\Blueprint.SourceGenerator.Tests\Blueprint.SourceGenerator.Tests.csproj --no-restore` passes after the helper lands.
 - Next follow-on for the first milestone: add a multi-source compile harness and Tier 2 cacheability/invalidation-locality tests that apply single-operation and shared-contract mutations to the synthetic fixture surface, then revisit the measured `BlueprintApp` hot paths with that broader harness in place.
+- Active next slice: start with the shared multi-source compile harness plus the first single-operation invalidation-locality proof. Keep the first batch narrow: prove descriptor, app, and pipeline generators can all run from the synthetic fixture surface together, then add the smallest mutation test that shows one changed synthetic operation only invalidates the expected downstream outputs.
 
 ## Sequencing
 

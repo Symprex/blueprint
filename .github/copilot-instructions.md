@@ -48,6 +48,8 @@
 - For migration-plan work, finish each completed slice with a self-review and then a `visual-explainer` HTML review document before commit or phase handoff.
 - That review document should highlight the architectural delta, interesting code snippets, representative generated outputs or artifacts, validation evidence, review findings, open concerns, and concrete questions for the human reviewer.
 - Treat human feedback from that visual review as input for another AI review/fix round before committing.
+- Migration orchestration sessions must not end at slice selection, plan creation, or todo creation alone. Once the next ready slice is identified, continue in the same session into failing proof and the first implementation step unless an explicit blocker or human review gate stops the work.
+- Keep `migration\progress.json` aligned with `migration\plan.md` and the active workstream plan whenever the current ready slice, last completed slice, or open review gate changes.
 
 ## TDD and verification expectations
 

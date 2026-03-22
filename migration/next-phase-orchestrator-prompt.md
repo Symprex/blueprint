@@ -4,14 +4,17 @@ Your job is to execute the migration safely, incrementally, and resumably by fol
 
 Read these files first, in this order:
 
-1. `migration\plan.md`
-2. `migration\foundation-module-system\plan.md`
-3. `docs\README.md`
-4. `docs\architecture.md`
-5. `docs\compile-time-validation.md`
-6. `docs\implementation-checklists.md`
-7. `docs\refactoring-workflow.md`
-8. `docs\observability-and-dev-experience.md`
+1. `migration\progress.json`
+2. `migration\plan.md`
+3. The workstream plan named by `migration\progress.json` (from `sourceOfTruth.workstreamPlan`)
+4. `docs\README.md`
+5. `docs\architecture.md`
+6. `docs\compile-time-validation.md`
+7. `docs\implementation-checklists.md`
+8. `docs\refactoring-workflow.md`
+9. `docs\observability-and-dev-experience.md`
+
+Treat `migration\progress.json` as the machine-readable resume index for the current next-ready slice. Treat `migration\plan.md` plus the relevant `migration\...\plan.md` file as the narrative source of truth. If they disagree, do not stop at the disagreement alone: resolve the next dependency-safe slice from the durable plans, update `migration\progress.json` plus the relevant plan files in the same session, and then continue into implementation.
 
 If .NET skills are available in this session, load the .NET routing/baseline skills first and then load the testing/tooling/devops skills you need for the current slice.
 
@@ -34,7 +37,7 @@ If the repo-local skills `test-driven-development`, `systematic-debugging`, and 
 Execution goals:
 
 - Start at the next ready work in `migration\plan.md`.
-- Default to **Phase 0 / Workstream 1: Foundation module system** unless the plan or repository state clearly shows that another dependency-complete slice is the real next step.
+- Use `migration\progress.json` to determine the active workstream and next ready slice. If it is missing or stale, resolve the next dependency-complete slice from the durable plans, update the JSON and plans, and then continue.
 - Follow the ordering, dependency, artifact, and human-review gates in `migration\plan.md` exactly.
 - Keep work small, reviewable, and resumable.
 
@@ -53,13 +56,17 @@ Non-negotiable operating rules:
 - Review generated diffs intentionally. Never approve snapshot baselines blindly.
 - Update docs, machine-readable artifacts, and any relevant Blueprint skill artifacts in the same change.
 - Keep `migration\plan.md` fully up to date with durable progress, approved decisions, and next-step information, not session noise.
+- Keep `migration\progress.json` in sync with the current ready slice, the active workstream, the last completed slice, and any open review gate whenever those facts change.
 - Session `plan.md`, SQL todos, and chat checkpoints are working state only. Any durable decision about sequencing, approved slices, review outcomes, or human direction MUST be written explicitly to `migration\plan.md` and the relevant `migration\...\plan.md` file before handoff or stop.
 - When a slice is obviously complete, review-closed, and verification-passing, create a small, focused git commit before starting unrelated work or ending the session. If a human review gate is still open, stop before committing and record that explicitly.
+- Slice selection, document reading, plan creation, and todo creation are setup steps, not a valid stopping point. Unless an explicit blocker or review gate stops you, the same session must continue into failing proof, observe that proof fail for the right reason, and start the production change for the selected slice.
+- If the prompt's "Immediate expected first slice" is stale compared with the durable plans or repository state, update the prompt, `migration\progress.json`, and the relevant plans in the same session and then implement the corrected next-ready slice instead of stopping at the correction.
 
 Resumability contract:
 
 - Treat `migration\plan.md` and the relevant module plan as the cross-session source of truth. Do not assume any prior session-local state will still be available.
 - At the start of the session, identify the exact slice you are taking on and record it in SQL todos.
+- After identifying the slice, begin executing it in the same session. Do not hand off or stop with only a slice summary unless the repo is truly blocked.
 - At the end of every meaningful work step, leave a checkpoint in your response with:
   - `Completed`
   - `Verified`
@@ -98,12 +105,13 @@ Definition of success for this session:
 - You leave the repository and the migration plan easier to resume from than they were at session start.
 - Any approved review or human decision from the session is written explicitly into `migration\plan.md` before handoff.
 - Any obviously completed, review-closed slice is captured in a small, focused git commit unless an open review gate or explicit user instruction says otherwise.
+- You do not stop at planning-only output after finding the next slice. By the end of the session, there must be concrete failing-proof evidence and at least one corresponding repo change unless the session is explicitly blocked.
 
 Immediate expected first slice:
 
-- Focus on the approved next foundation/pipeline slice: extract validation as the next production contributor through the activated seam.
-- Use the existing pipeline planning and integration harnesses as the failing-proof starting point, especially `src\Blueprint.SourceGenerator.Tests\Generators\Descriptors\OperationDescriptorSourceGeneratorTests.cs` and `src\Blueprint.SourceGenerator.Tests\Generators\Pipelines\OperationExecutorPipelineGeneratorIntegrationTests.cs`.
-- Keep the scope narrow: move validation requirements and rendering/planning behavior through the contributor seam first; defer exception translation, result normalization, host wiring, and broader Phase 1 work unless the dependency chain explicitly requires more.
+- Focus on the approved next **Phase 0 / Workstream 3: Performance and scale** slice: add the multi-source compile harness and the first Tier 2 cacheability/invalidation-locality tests on top of `SyntheticBlueprintFixtureGenerator`.
+- Use the existing scale fixtures and tracked incremental-generator harnesses as the failing-proof starting point, especially `src\Blueprint.SourceGenerator.Tests\Scale\SyntheticBlueprintFixtureGeneratorTests.cs` and `src\Blueprint.SourceGenerator.Tests\TestHelpers.cs`.
+- Keep the scope narrow: first prove the synthetic fixture can drive the descriptor, app, and pipeline generators together, then add the smallest single-operation and shared-contract mutation checks that demonstrate localized invalidation without broad churn.
 
 When you begin, first summarize:
 

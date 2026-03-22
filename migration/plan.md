@@ -29,8 +29,10 @@ The target is **consumer-contract compatibility**, not byte-for-byte parity with
 ## Current status and next recommended step
 
 - Planning and orchestration guidance are complete.
+- Migration orchestration now also uses `migration\progress.json` as the machine-readable resume index; it must stay aligned with `migration\plan.md` and the active workstream plan whenever the ready slice or review-gate state changes.
+- The launcher contract is now stricter: once the next dependency-safe slice is identified, the same session must continue into failing proof and the first implementation step unless an explicit blocker or review gate stops the work.
 - The initial minimum **Phase 0 / Workstream 1: Foundation module system** slice has landed, including contributor capability splits, deterministic execution-plan diagnostics, `LinkGenerationModule` contributor routing, planning models, and stage-aware pipeline variable validation.
-- The next session should treat `migration\foundation-module-system\plan.md` as the immediate detailed execution target, while keeping `migration\plan.md` as the ordering and safety contract.
+- The next session should read `migration\progress.json` immediately after this file, then treat `migration\performance-and-scale\plan.md` as the immediate detailed execution target while keeping `migration\plan.md` as the ordering and safety contract.
 - The first approved production pipeline-contributor slice is now complete: `HandlerExecutionModule` routes handler invocation plus the produced `handler-result` variable through the activated pipeline seam while preserving the existing generated pipeline output and result wrapping.
 - The failing proof for that slice lives in `src\Blueprint.SourceGenerator.Tests\Generators\Pipelines\OperationExecutorPipelineGeneratorIntegrationTests.cs`, and the full pipeline integration class continues to pass after the seam activation.
 - The approved follow-on refinement to that slice is now complete locally: contributor methods are now seam-specific (`ContributeToPipeline` / `ContributeToDescriptor`), `PipelineContributorContext` uses `RegisterVariable(...)` plus implicit stage participation instead of explicit `AddContribution(...)`, `PipelineRenderStepKind` has been removed, and `HandlerExecutionModule` owns the handler-invocation rendering callback directly.
@@ -71,10 +73,12 @@ The target is **consumer-contract compatibility**, not byte-for-byte parity with
 - The first Phase 0 / Workstream 3 runtime-hotspot baseline is now complete locally: `src\Blueprint.SourceGenerator.Benchmarks\BlueprintApp\BlueprintAppBenchmarks.cs` adds `ShortRun` BenchmarkDotNet coverage for `BlueprintApp.Register(...)` and `BlueprintApp.TryFindOperation(...)` at 10, 100, and 250 operation counts.
 - The new hotspot artifacts (`BenchmarkDotNet.Artifacts\results\Blueprint.SourceGenerator.Benchmarks.RuntimeModel.BlueprintAppRegistrationBenchmarks-report.*` and `BenchmarkDotNet.Artifacts\results\Blueprint.SourceGenerator.Benchmarks.RuntimeModel.BlueprintAppLookupBenchmarks-report.*`) currently show registration growing from about `2.9 us` / `5.27 KB` at 10 operations to about `203.6 us` / `226.95 KB` at 100 and about `1.08 ms` / `1296.4 KB` at 250, while lookup remains about `136-141 ns` at 10 operations, about `829-963 ns` at 100, and about `1.76-2.02 us` at 250.
 - Next recommended Phase 0 follow-on after this baseline: stay in Workstream 3 long enough to add the deterministic synthetic fixture generator plus Tier 2 cacheability/invalidation-locality coverage before attempting any `BlueprintApp` runtime optimization.
+- The immediate next ready slice inside that follow-on is now explicit: add the shared multi-source compile harness plus the first Tier 2 invalidation-locality tests that mutate one synthetic operation and one shared contract shape while keeping the fixture generator as the shared input surface.
 
 ## Durable decision rule
 
 - `migration\plan.md` is the cross-session source of truth for migration ordering, approved next slices, and human/review decisions.
+- `migration\progress.json` is the machine-readable resume index for the current ready slice, active workstream, last completed slice, and open review gate. It must stay aligned with this plan and the relevant workstream plan.
 - Session-local state such as chat history, session `plan.md`, SQL todos, or transient review artifacts is not sufficient to carry a decision into the next orchestrator session.
 - If a human or review step approves a next slice, changes architectural direction, or closes a gate, record that decision here and in the relevant `migration\...\plan.md` file before the session ends.
 
@@ -92,16 +96,17 @@ The target is **consumer-contract compatibility**, not byte-for-byte parity with
 ## How a future orchestrator should use this plan
 
 1. Read this file first.
-2. Read the detailed module plan for the selected workstream before making changes.
+2. Read `migration\progress.json` and then the detailed module plan for the selected workstream before making changes.
 3. Do not start a workstream until every listed dependency is complete or an explicit human override is recorded.
 4. Implement the smallest reviewable slice that can satisfy a meaningful acceptance criterion.
-5. Follow the TDD-first execution loop below for every slice, using the repo-local `test-driven-development`, `systematic-debugging`, and `verification-before-completion` skills when relevant.
-6. Update docs, machine-readable artifacts, and relevant Blueprint skill artifacts in the same change.
-7. Use the sub-agent guidance in this file to split investigation, implementation, testing, and review work.
-8. At every major design gate, request human review before declaring the phase complete.
-9. After a slice reaches local done and passes self-review, generate a visual human-review handoff with `visual-explainer` before commit or before moving to the next phase gate.
-10. If review closes a decision about sequencing, slice selection, or architecture direction, write that decision explicitly into `migration\plan.md` before ending the session.
-11. If a slice is obviously complete, review-closed, and verification-passing, make a small, focused git commit before switching to unrelated work or ending the session. If a review gate remains open, stop short of commit and record why.
+5. Do not stop after slice selection, doc reading, or plan/todo setup alone. In the same session, continue into failing proof and the first production edit unless an explicit blocker or review gate prevents it.
+6. Follow the TDD-first execution loop below for every slice, using the repo-local `test-driven-development`, `systematic-debugging`, and `verification-before-completion` skills when relevant.
+7. Update docs, machine-readable artifacts, and relevant Blueprint skill artifacts in the same change.
+8. Use the sub-agent guidance in this file to split investigation, implementation, testing, and review work.
+9. At every major design gate, request human review before declaring the phase complete.
+10. After a slice reaches local done and passes self-review, generate a visual human-review handoff with `visual-explainer` before commit or before moving to the next phase gate.
+11. If review closes a decision about sequencing, slice selection, or architecture direction, write that decision explicitly into `migration\plan.md` and `migration\progress.json` before ending the session.
+12. If a slice is obviously complete, review-closed, and verification-passing, make a small, focused git commit before switching to unrelated work or ending the session. If a review gate remains open, stop short of commit and record why.
 
 ## TDD-first execution loop
 

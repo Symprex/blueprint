@@ -56,6 +56,7 @@ For this repo that means:
 - `README.md` and `.github/copilot-instructions.md` should point into `/docs`
 - architecture, diagnostics, observability expectations, and implementation checklists should not live only in chat history
 - for migration-plan work, durable sequencing or review decisions belong in `migration\plan.md` and the relevant `migration\...\plan.md` file, not only in session-local state such as chat, SQL todos, or the session `plan.md`
+- for migration orchestration, `migration\progress.json` is the machine-readable resume index and must stay aligned with the current next-ready slice, active workstream, last completed slice, and open review gate
 - Blueprint-specific usage and extension knowledge should also live in repo-local skills: keep `using-blueprint` as the canonical consumer-installable Blueprint skill, keep `extending-blueprint` as the repo-local overlay, and update the relevant skill in the same change when Blueprint behavior or workflow changes
 
 ### 4. Prefer machine-actionable outputs
@@ -91,6 +92,7 @@ then the relevant `/docs` file should be updated in the same change.
 - Start in `docs/README.md`.
 - Read the most relevant detailed docs for the change.
 - Identify the build, snapshot, and generator harness you expect to exercise.
+- For migration orchestrator sessions, finding the next slice is only the beginning of the loop. In the same session, move from slice selection to a failing proof and then to the first production change unless an explicit blocker or review gate stops you.
 - For any feature, bugfix, refactor, or behavior change, use the repo-local `test-driven-development` skill mindset first: write the failing proof before production edits and watch it fail for the right reason.
 - Do not use reflection in tests to assert that a contract exists or to invoke private/internal helpers. If the right behavior is not testable through a supported seam, improve that seam first.
 - For pipeline contributor or module slices, write the test matrix down before coding. The default minimum is:
@@ -119,6 +121,7 @@ then the relevant `/docs` file should be updated in the same change.
 - fix the immediate issue
 - decide whether a stronger diagnostic, test, doc, or tool should exist
 - add the improvement when it is reasonable and directly related
+- If the feedback is "the agent stopped at planning" or "the next slice was rediscovered but not actioned", treat that as an orchestration bug. Tighten the launcher prompt, durable migration guidance, and `migration\progress.json` contract in the same change instead of relying on memory.
 
 ### Before you ask for commit-level human review
 
