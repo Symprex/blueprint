@@ -1,3 +1,5 @@
+using JetBrains.Annotations;
+
 namespace Blueprint.Model;
 
 /// <summary>
@@ -5,4 +7,5 @@ namespace Blueprint.Model;
 /// it will generate.
 /// </summary>
 /// <typeparam name="TResponse">The type of response.</typeparam>
+[UsedImplicitly(ImplicitUseTargetFlags.WithInheritors)]
 public interface IReturn<TResponse>;

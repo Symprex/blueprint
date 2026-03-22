@@ -131,7 +131,7 @@ public class ApiOperationDescriptor
     /// <param name="feature">The feature data of the specified type.</param>
     /// <typeparam name="TFeatureData">The feature data type to load.</typeparam>
     /// <returns>Whether the feature data exists.</returns>
-    public bool TryGetFeatureData<TFeatureData>(out TFeatureData? feature)
+    public bool TryGetFeatureData<TFeatureData>([NotNullWhen(true)] out TFeatureData? feature)
     {
         if (this._featureData.TryGetValue(typeof(TFeatureData), out var data))
         {

@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.Diagnostics.CodeAnalysis;
+using JetBrains.Annotations;
 
 namespace Blueprint.Validation;
 
@@ -63,6 +64,7 @@ public static class ValidationRuntime
     /// </summary>
     /// <param name="value">The value to validate.</param>
     /// <returns><c>true</c> when the value is a valid email address; otherwise <c>false</c>.</returns>
+    [MustUseReturnValue]
     public static bool IsValidEmailAddress(string? value)
     {
         return _emailAddressAttribute.IsValid(value);

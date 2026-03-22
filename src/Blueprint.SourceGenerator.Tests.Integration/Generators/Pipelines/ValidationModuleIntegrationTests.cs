@@ -389,6 +389,46 @@ public class ValidationModuleIntegrationTests
     }
 
     [Fact]
+    public async Task When_greater_than_validation_fails_then_generated_pipeline_returns_validation_failure_and_skips_handler()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(GreaterThanValidationOperation));
+        var context = CreateContext(app, GreaterThanValidationOperation.Configure());
+        var operation = (GreaterThanValidationOperation)context.Operation;
+        operation.Count = 10;
+
+        GreaterThanValidationOperation.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<ValidationFailedOperationResult>();
+        GreaterThanValidationOperation.HandlerCallCount.Should().Be(0);
+        var validationResult = ((ValidationFailedOperationResult)result).ValidationResults.Should().ContainSingle().Subject;
+        validationResult.MemberNames.Should().Contain(nameof(GreaterThanValidationOperation.Count));
+        validationResult.ErrorMessage.Should().Be("The field Count must be greater than '10'.");
+    }
+
+    [Fact]
+    public async Task When_greater_than_validation_passes_then_generated_pipeline_runs_handler_and_returns_ok()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(GreaterThanValidationOperation));
+        var context = CreateContext(app, GreaterThanValidationOperation.Configure());
+        var operation = (GreaterThanValidationOperation)context.Operation;
+        operation.Count = 11;
+
+        GreaterThanValidationOperation.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<OkResult>();
+        GreaterThanValidationOperation.HandlerCallCount.Should().Be(1);
+        ((OkResult)result).Unwrap<string>().Should().Be("11");
+    }
+
+    [Fact]
     public async Task When_mixed_fast_and_runtime_property_validation_fails_then_generated_pipeline_returns_validation_failure_and_skips_handler()
     {
         var app = new IntegrationTestBlueprintApp();
@@ -675,6 +715,25 @@ public partial class GreaterThanPropertyValidationOperation : ICommand<string>
     {
         HandlerCallCount++;
         return Task.FromResult($"{operation.Minimum}:{operation.Maximum}");
+    }
+}
+
+public partial class GreaterThanValidationOperation : ICommand<string>
+{
+    public static int HandlerCallCount { get; private set; }
+
+    [GreaterThan(10)]
+    public int Count { get; set; }
+
+    public static void Reset()
+    {
+        HandlerCallCount = 0;
+    }
+
+    public static Task<string> HandleAsync(GreaterThanValidationOperation operation)
+    {
+        HandlerCallCount++;
+        return Task.FromResult(operation.Count.ToString());
     }
 }
 

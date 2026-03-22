@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.CodeAnalysis;
 
 namespace Blueprint.SourceGenerator.Modules;
@@ -8,5 +9,6 @@ internal interface IValidationFastPathStrategy
         IPropertySymbol property,
         string propertyAccess,
         AttributeData attribute,
+        [NotNullWhen(true)]
         out ValidationFastPathRule? rule);
 }

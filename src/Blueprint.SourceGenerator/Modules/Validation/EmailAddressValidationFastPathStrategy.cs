@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.CodeAnalysis;
 
 namespace Blueprint.SourceGenerator.Modules;
@@ -8,6 +9,7 @@ internal sealed class EmailAddressValidationFastPathStrategy : IValidationFastPa
         IPropertySymbol property,
         string propertyAccess,
         AttributeData attribute,
+        [NotNullWhen(true)]
         out ValidationFastPathRule? rule)
     {
         rule = null;

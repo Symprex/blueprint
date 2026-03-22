@@ -1,4 +1,5 @@
 ﻿using Blueprint.Runtime.Exec;
+using JetBrains.Annotations;
 
 namespace Blueprint;
 
@@ -8,6 +9,7 @@ namespace Blueprint;
 /// validation etc. that avoids a) a nested delegate structure that is harder to debug and b) a lot of reflection that
 /// can be slow and marks it hard to impossible for AOT compiled application.
 /// </summary>
+[UsedImplicitly(ImplicitUseTargetFlags.WithInheritors)]
 public interface IOperationExecutorPipeline
 {
     /// <summary>

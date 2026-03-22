@@ -262,6 +262,34 @@ public class ValidationPipelineBenchmarks
     }
 
     [Benchmark]
+    public Task<OperationResult> GreaterThanInvalidAsync()
+    {
+        var pipeline = this._executor.GetPipeline(typeof(GreaterThanValidationOperation));
+        var context = CreateContext<GreaterThanValidationOperation>(
+            this._app,
+            GreaterThanValidationOperation.Configure(),
+            operation =>
+            {
+                operation.Count = 10;
+            });
+        return pipeline.ExecuteAsync(context);
+    }
+
+    [Benchmark]
+    public Task<OperationResult> GreaterThanRuntimeFallbackInvalidAsync()
+    {
+        var pipeline = this._executor.GetPipeline(typeof(GreaterThanRuntimeFallbackValidationOperation));
+        var context = CreateContext<GreaterThanRuntimeFallbackValidationOperation>(
+            this._app,
+            GreaterThanRuntimeFallbackValidationOperation.Configure(),
+            operation =>
+            {
+                operation.Count = 10;
+            });
+        return pipeline.ExecuteAsync(context);
+    }
+
+    [Benchmark]
     public Task<OperationResult> ValidatableObjectFallbackInvalidAsync()
     {
         var pipeline = this._executor.GetPipeline(typeof(ValidatableBenchmarkOperation));
@@ -472,6 +500,29 @@ public partial class GreaterThanPropertyRuntimeFallbackValidationOperation : ICo
     public static Task<string> HandleAsync(GreaterThanPropertyRuntimeFallbackValidationOperation operation)
     {
         return Task.FromResult($"{operation.Minimum}:{operation.Maximum}");
+    }
+}
+
+public partial class GreaterThanValidationOperation : ICommand<string>
+{
+    [GreaterThan(10)]
+    public int Count { get; set; }
+
+    public static Task<string> HandleAsync(GreaterThanValidationOperation operation)
+    {
+        return Task.FromResult(operation.Count.ToString());
+    }
+}
+
+public partial class GreaterThanRuntimeFallbackValidationOperation : ICommand<string>
+{
+    [Display(Name = "Count value")]
+    [GreaterThan(10)]
+    public int Count { get; set; }
+
+    public static Task<string> HandleAsync(GreaterThanRuntimeFallbackValidationOperation operation)
+    {
+        return Task.FromResult(operation.Count.ToString());
     }
 }
 

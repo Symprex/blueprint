@@ -1,5 +1,6 @@
 using Blueprint.SourceGenerator.Generators.Pipelines.Model;
 using Blueprint.SourceGenerator.Helpers;
+using JetBrains.Annotations;
 using Microsoft.CodeAnalysis;
 
 namespace Blueprint.SourceGenerator.Generators.Pipelines;
@@ -15,6 +16,7 @@ public static class HandlerDiscovery
     /// <param name="operationType">The operation type to find a handler for.</param>
     /// <param name="compilation">The compilation to search in.</param>
     /// <returns>The discovered handler model, or failure with diagnostic if no handler was found.</returns>
+    [MustUseReturnValue]
     public static Result<OperationHandlerModel> FindHandler(
         INamedTypeSymbol operationType,
         Compilation compilation)

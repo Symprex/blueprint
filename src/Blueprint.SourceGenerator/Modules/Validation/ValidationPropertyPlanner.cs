@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+using JetBrains.Annotations;
 using Microsoft.CodeAnalysis;
 
 namespace Blueprint.SourceGenerator.Modules;
@@ -11,9 +13,11 @@ internal static class ValidationPropertyPlanner
         new MinLengthValidationFastPathStrategy(),
         new StringLengthValidationFastPathStrategy(),
         new EmailAddressValidationFastPathStrategy(),
+        new GreaterThanValidationFastPathStrategy(),
         new GreaterThanPropertyValidationFastPathStrategy(),
     ];
 
+    [MustUseReturnValue]
     public static ValidationPipelinePlan Create(INamedTypeSymbol operationType)
     {
         if (ValidationSymbolHelpers.RequiresWholeObjectFallback(operationType))
@@ -98,18 +102,19 @@ internal static class ValidationPropertyPlanner
         IPropertySymbol property,
         string propertyAccess,
         AttributeData attribute,
-        out ValidationFastPathRule rule)
+        [NotNullWhen(true)]
+        out ValidationFastPathRule? rule)
     {
         foreach (var strategy in _strategies)
         {
             if (strategy.TryCreateRule(property, propertyAccess, attribute, out var candidateRule))
             {
-                rule = candidateRule!;
+                rule = candidateRule;
                 return true;
             }
         }
 
-        rule = default!;
+        rule = null;
         return false;
     }
 }

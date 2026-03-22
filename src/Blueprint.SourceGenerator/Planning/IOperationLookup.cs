@@ -1,3 +1,4 @@
+using JetBrains.Annotations;
 using Microsoft.CodeAnalysis;
 
 namespace Blueprint.SourceGenerator.Planning;
@@ -5,6 +6,7 @@ namespace Blueprint.SourceGenerator.Planning;
 /// <summary>
 /// Resolves operation models from the current compilation so contributors can reason about related operations.
 /// </summary>
+[UsedImplicitly]
 public interface IOperationLookup
 {
     /// <summary>

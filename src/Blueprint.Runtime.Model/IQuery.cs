@@ -14,4 +14,5 @@ public interface IQuery : IOperation;
 /// the operation.
 /// </summary>
 /// <typeparam name="TResponse">The type of response that will be generated.</typeparam>
+[UsedImplicitly(ImplicitUseTargetFlags.WithInheritors)]
 public interface IQuery<TResponse> : IQuery, IReturn<TResponse>;

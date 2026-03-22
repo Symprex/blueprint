@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using Blueprint.SourceGenerator.CodeWriter;
 using Blueprint.SourceGenerator.Helpers;
+using JetBrains.Annotations;
 
 namespace Blueprint.SourceGenerator.Planning;
 
@@ -75,6 +76,7 @@ public sealed record DescriptorPlan(OperationModel Operation)
     /// </summary>
     /// <typeparam name="T">The metadata type.</typeparam>
     /// <returns>The matching metadata instances.</returns>
+    [ItemNotNull]
     public IEnumerable<T> GetMetadata<T>()
     {
         return this.Metadata.OfType<T>();

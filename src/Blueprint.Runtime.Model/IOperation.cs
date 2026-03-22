@@ -1,3 +1,5 @@
+using JetBrains.Annotations;
+
 namespace Blueprint.Model;
 
 /// <summary>
@@ -10,5 +12,6 @@ public interface IOperation
     /// Configures the <see cref="ApiOperationDescriptor" /> for this operation.
     /// </summary>
     /// <returns>The configured <see cref="ApiOperationDescriptor"/>.</returns>
+    [UsedImplicitly]
     static abstract ApiOperationDescriptor Configure();
 }
