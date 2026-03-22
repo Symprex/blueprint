@@ -257,6 +257,15 @@ If a new module materially changes compile-time or runtime cost, it should also 
 - Expect every major module to declare how it participates in the scale harness once implemented.
 - Treat known O(n²) or obviously linear-scan registry hot paths as redesign candidates before claiming Signature365-scale readiness.
 
+## Current migration status
+
+- The first runtime-hotspot measurement slice is now active in `src\Blueprint.SourceGenerator.Benchmarks\BlueprintApp\BlueprintAppBenchmarks.cs`.
+- `ShortRun` BenchmarkDotNet artifacts now exist for `BlueprintApp.Register(...)` and `BlueprintApp.TryFindOperation(...)` under `BenchmarkDotNet.Artifacts\results\Blueprint.SourceGenerator.Benchmarks.RuntimeModel.BlueprintApp*report.*`.
+- The current `ShortRun` registration baseline shows `RegisterAllOperations` at about `2.9 us` / `5.27 KB` for 10 operations, about `203.6 us` / `226.95 KB` for 100 operations, and about `1.08 ms` / `1296.4 KB` for 250 operations.
+- The current `ShortRun` lookup baseline shows registered/missing `TryFindOperation(...)` calls at about `136-141 ns` for 10 operations, about `829-963 ns` for 100 operations, and about `1.76-2.02 us` for 250 operations, each with about `128 B` allocated.
+- This slice is intentionally measurement-only. It captures the current `BlueprintApp` cost curve before any runtime optimization work changes the hot paths.
+- Next follow-on for the first milestone: add the deterministic synthetic fixture generator and Tier 2 compile-time cacheability/invalidation-locality tests, then revisit the measured `BlueprintApp` hot paths with that broader harness in place.
+
 ## Sequencing
 
 Start this work in Phase 0 and keep it evolving alongside implementation.
