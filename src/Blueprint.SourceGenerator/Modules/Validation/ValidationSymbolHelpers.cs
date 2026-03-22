@@ -39,6 +39,13 @@ internal static class ValidationSymbolHelpers
                && attributeClass.ContainingNamespace.ToDisplayString() == "System.ComponentModel.DataAnnotations";
     }
 
+    public static bool IsGreaterThanPropertyAttribute(INamedTypeSymbol? attributeClass)
+    {
+        return attributeClass is not null
+               && attributeClass.Name == "GreaterThanPropertyAttribute"
+               && attributeClass.ContainingNamespace.ToDisplayString() == "Blueprint.Validation";
+    }
+
     public static bool IsDisplayNameAffectingAttribute(INamedTypeSymbol? attributeClass)
     {
         if (attributeClass is null)
@@ -98,9 +105,14 @@ internal static class ValidationSymbolHelpers
         return SyntaxFacts.GetKeywordKind(identifier) != SyntaxKind.None ? "@" + identifier : identifier;
     }
 
-    public static LocationInfo? GetComparePropertyLocation(AttributeData compareAttribute, IPropertySymbol property)
+    public static string? GetReferencedPropertyName(AttributeData attribute)
     {
-        if (compareAttribute.ApplicationSyntaxReference?.GetSyntax() is AttributeSyntax attributeSyntax
+        return attribute.ConstructorArguments.FirstOrDefault().Value as string;
+    }
+
+    public static LocationInfo? GetReferencedPropertyLocation(AttributeData attribute, IPropertySymbol property)
+    {
+        if (attribute.ApplicationSyntaxReference?.GetSyntax() is AttributeSyntax attributeSyntax
             && attributeSyntax.ArgumentList is { Arguments.Count: > 0 })
         {
             return LocationInfo.CreateFrom(attributeSyntax.ArgumentList.Arguments[0].Expression);

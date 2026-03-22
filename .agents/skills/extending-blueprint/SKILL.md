@@ -42,9 +42,10 @@ Do not use this skill for ordinary downstream app usage; use `using-blueprint`.
 8. For pipeline planning, prefer helper APIs that imply stage participation when contributors register render steps or variables; do not reintroduce manual `AddContribution(...)` bookkeeping.
 9. For pipeline contributor feature work, require the full proof matrix: a full pipeline snapshot, compile-time invalid-configuration or source-check tests when the generator can validate the contract, and runtime integration tests that execute the generated pipeline for valid and invalid paths. A substring assertion alone is not enough.
 10. For validation or executor hot-path work, run `src\Blueprint.SourceGenerator.Benchmarks` and review the BenchmarkDotNet artifact before handoff or commit.
-11. When comments are needed, spend them on invariants, fallback boundaries, and trade-offs; never on repeating what the code already says.
-12. Prefer `static` lambdas in LINQ or similar delegate-heavy code whenever no local capture is needed.
-13. Keep module-specific tests in module-specific files instead of extending shared catch-all test files forever.
+11. For validation fast-path work, keep rule detection and code emission in dedicated strategy helpers beside `ValidationModule`; use `ValidationRuntime` for unsupported per-property fallback and add `BPV` diagnostics when referenced members are provably invalid.
+12. When comments are needed, spend them on invariants, fallback boundaries, and trade-offs; never on repeating what the code already says.
+13. Prefer `static` lambdas in LINQ or similar delegate-heavy code whenever no local capture is needed.
+14. Keep module-specific tests in module-specific files instead of extending shared catch-all test files forever.
 
 ## Common mistakes
 

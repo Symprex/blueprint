@@ -61,6 +61,11 @@ Reserved direction:
 
 Typical examples include validation attributes that name other members with strings, such as `CompareAttribute.OtherProperty` pointing at a property that does not exist on the operation type. When those contracts are knowable during generation, prefer a build-time diagnostic over waiting for runtime validation to fail indirectly.
 
+Current validation contributor IDs in active use:
+
+- `BPV001`: `CompareAttribute` references a property that does not exist on the operation type.
+- `BPV002`: `GreaterThanPropertyAttribute` references a property that does not exist on the operation type.
+
 ## Diagnostic design rules
 
 When adding new diagnostics:

@@ -29,7 +29,14 @@ Do not use this skill to change Blueprint internals in `blueprint-source-gen`; u
 | App root | Create a `partial` `BlueprintApp` with `[BlueprintAppScan]`; use `FromAssemblyOf = typeof(...)` when operations live in another assembly |
 | Generator wiring | Reference Blueprint's generator as an analyzer so compile-time generation runs; in this repo the sample uses `ProjectReference` with `OutputItemType="Analyzer"` and `ReferenceOutputAssembly="false"` |
 | HTTP host | Map the generated surface with `MapBlueprintApi<TApp, TExec>()` |
+| Validation | Prefer declarative `ValidationAttribute` usage; Blueprint generates validation from those contracts, and the current retained Blueprint-specific set now includes `Blueprint.Validation.GreaterThanPropertyAttribute` |
 | Debugging | Prefer build diagnostics, generated output, manifests, and sample patterns over runtime guesswork |
+
+## Validation contract
+
+- Treat validation attributes as compile-time inputs first and runtime behavior second; if the build can prove the contract is wrong, expect a diagnostic instead of a runtime repair path.
+- `Blueprint.Validation.GreaterThanPropertyAttribute` is now part of the retained Blueprint-specific validation surface for property-to-property greater-than checks.
+- For other legacy Blueprint conditional validators (`RequiredIf`, `RequiredIfNot`, `GreaterThan`, `NotAllowedIf`), verify the current Blueprint baseline before assuming the source-generated implementation has already landed in the same way.
 
 ## Working loop
 

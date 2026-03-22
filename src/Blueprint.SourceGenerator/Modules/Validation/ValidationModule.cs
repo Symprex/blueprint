@@ -25,7 +25,7 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
 
     public void ContributeToDescriptor(DescriptorContributorContext context)
     {
-        ValidateCompareAttributes(context);
+        ValidateReferencedPropertyAttributes(context);
     }
 
     public void ContributeToPipeline(PipelineContributorContext context)
@@ -46,7 +46,7 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
         context.AddRenderStep(PipelineStage.Validation, renderContext => RenderPropertyValidation(renderContext, validationPlan.Properties));
     }
 
-    private static void ValidateCompareAttributes(DescriptorContributorContext context)
+    private static void ValidateReferencedPropertyAttributes(DescriptorContributorContext context)
     {
         var operationType = context.GetOperationTypeSymbol();
         var operationProperties = ValidationSymbolHelpers.GetPublicInstanceProperties(operationType)
@@ -54,29 +54,54 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
 
         foreach (var property in operationProperties)
         {
-            foreach (var compareAttribute in property.GetAttributes().Where(static attribute => ValidationSymbolHelpers.IsCompareAttribute(attribute.AttributeClass)))
+            AddMissingPropertyDiagnostics(
+                context,
+                operationType.Name,
+                operationProperties,
+                property,
+                property.GetAttributes().Where(static attribute => ValidationSymbolHelpers.IsCompareAttribute(attribute.AttributeClass)),
+                ValidationDiagnosticDescriptors.MissingCompareProperty);
+
+            AddMissingPropertyDiagnostics(
+                context,
+                operationType.Name,
+                operationProperties,
+                property,
+                property.GetAttributes().Where(static attribute => ValidationSymbolHelpers.IsGreaterThanPropertyAttribute(attribute.AttributeClass)),
+                ValidationDiagnosticDescriptors.MissingGreaterThanProperty);
+        }
+    }
+
+    private static void AddMissingPropertyDiagnostics(
+        DescriptorContributorContext context,
+        string operationTypeName,
+        IReadOnlyList<IPropertySymbol> operationProperties,
+        IPropertySymbol property,
+        IEnumerable<AttributeData> attributes,
+        DiagnosticDescriptor diagnosticDescriptor)
+    {
+        foreach (var attribute in attributes)
+        {
+            var referencedPropertyName = ValidationSymbolHelpers.GetReferencedPropertyName(attribute);
+            if (string.IsNullOrWhiteSpace(referencedPropertyName))
             {
-                var otherPropertyName = compareAttribute.ConstructorArguments.FirstOrDefault().Value as string;
-                if (string.IsNullOrWhiteSpace(otherPropertyName))
-                {
-                    continue;
-                }
-
-                if (operationProperties.Any(candidate => candidate.Name == otherPropertyName))
-                {
-                    continue;
-                }
-
-                context.AddDiagnostic(
-                    new DiagnosticInfo(
-                        ValidationDiagnosticDescriptors.MissingCompareProperty,
-                        ValidationSymbolHelpers.GetComparePropertyLocation(compareAttribute, property),
-                        [
-                            otherPropertyName!,
-                            property.Name,
-                            operationType.Name,
-                        ]));
+                continue;
             }
+
+            if (operationProperties.Any(candidate => candidate.Name == referencedPropertyName))
+            {
+                continue;
+            }
+
+            context.AddDiagnostic(
+                new DiagnosticInfo(
+                    diagnosticDescriptor,
+                    ValidationSymbolHelpers.GetReferencedPropertyLocation(attribute, property),
+                    [
+                        referencedPropertyName!,
+                        property.Name,
+                        operationTypeName,
+                    ]));
         }
     }
 

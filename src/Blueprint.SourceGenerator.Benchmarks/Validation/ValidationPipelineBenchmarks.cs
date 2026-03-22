@@ -7,6 +7,7 @@ using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Order;
 using Blueprint.Model;
 using Blueprint.Runtime.Exec;
+using Blueprint.Validation;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Blueprint.SourceGenerator.Benchmarks.Validation;
@@ -231,6 +232,36 @@ public class ValidationPipelineBenchmarks
     }
 
     [Benchmark]
+    public Task<OperationResult> GreaterThanPropertyInvalidAsync()
+    {
+        var pipeline = this._executor.GetPipeline(typeof(GreaterThanPropertyValidationOperation));
+        var context = CreateContext<GreaterThanPropertyValidationOperation>(
+            this._app,
+            GreaterThanPropertyValidationOperation.Configure(),
+            operation =>
+            {
+                operation.Minimum = 10m;
+                operation.Maximum = 10m;
+            });
+        return pipeline.ExecuteAsync(context);
+    }
+
+    [Benchmark]
+    public Task<OperationResult> GreaterThanPropertyRuntimeFallbackInvalidAsync()
+    {
+        var pipeline = this._executor.GetPipeline(typeof(GreaterThanPropertyRuntimeFallbackValidationOperation));
+        var context = CreateContext<GreaterThanPropertyRuntimeFallbackValidationOperation>(
+            this._app,
+            GreaterThanPropertyRuntimeFallbackValidationOperation.Configure(),
+            operation =>
+            {
+                operation.Minimum = 10m;
+                operation.Maximum = 10m;
+            });
+        return pipeline.ExecuteAsync(context);
+    }
+
+    [Benchmark]
     public Task<OperationResult> ValidatableObjectFallbackInvalidAsync()
     {
         var pipeline = this._executor.GetPipeline(typeof(ValidatableBenchmarkOperation));
@@ -414,6 +445,33 @@ public partial class EmailAddressRuntimeFallbackValidationOperation : ICommand<s
     public static Task<string> HandleAsync(EmailAddressRuntimeFallbackValidationOperation operation)
     {
         return Task.FromResult(operation.Email ?? string.Empty);
+    }
+}
+
+public partial class GreaterThanPropertyValidationOperation : ICommand<string>
+{
+    public decimal Minimum { get; set; }
+
+    [GreaterThanProperty(nameof(Minimum))]
+    public decimal Maximum { get; set; }
+
+    public static Task<string> HandleAsync(GreaterThanPropertyValidationOperation operation)
+    {
+        return Task.FromResult($"{operation.Minimum}:{operation.Maximum}");
+    }
+}
+
+public partial class GreaterThanPropertyRuntimeFallbackValidationOperation : ICommand<string>
+{
+    public decimal Minimum { get; set; }
+
+    [Display(Name = "Maximum value")]
+    [GreaterThanProperty(nameof(Minimum))]
+    public decimal Maximum { get; set; }
+
+    public static Task<string> HandleAsync(GreaterThanPropertyRuntimeFallbackValidationOperation operation)
+    {
+        return Task.FromResult($"{operation.Minimum}:{operation.Maximum}");
     }
 }
 

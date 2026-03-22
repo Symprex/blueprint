@@ -348,6 +348,47 @@ public class ValidationModuleIntegrationTests
     }
 
     [Fact]
+    public async Task When_greater_than_property_validation_fails_then_generated_pipeline_returns_validation_failure_and_skips_handler()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(GreaterThanPropertyValidationOperation));
+        var context = CreateContext(app, GreaterThanPropertyValidationOperation.Configure());
+        var operation = (GreaterThanPropertyValidationOperation)context.Operation;
+        operation.Minimum = 10m;
+        operation.Maximum = 10m;
+
+        GreaterThanPropertyValidationOperation.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<ValidationFailedOperationResult>();
+        GreaterThanPropertyValidationOperation.HandlerCallCount.Should().Be(0);
+        var validationResult = ((ValidationFailedOperationResult)result).ValidationResults.Should().ContainSingle().Subject;
+        validationResult.MemberNames.Should().Contain(nameof(GreaterThanPropertyValidationOperation.Maximum));
+    }
+
+    [Fact]
+    public async Task When_greater_than_property_validation_passes_then_generated_pipeline_runs_handler_and_returns_ok()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(GreaterThanPropertyValidationOperation));
+        var context = CreateContext(app, GreaterThanPropertyValidationOperation.Configure());
+        var operation = (GreaterThanPropertyValidationOperation)context.Operation;
+        operation.Minimum = 10m;
+        operation.Maximum = 11m;
+
+        GreaterThanPropertyValidationOperation.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<OkResult>();
+        GreaterThanPropertyValidationOperation.HandlerCallCount.Should().Be(1);
+        ((OkResult)result).Unwrap<string>().Should().Be("10:11");
+    }
+
+    [Fact]
     public async Task When_mixed_fast_and_runtime_property_validation_fails_then_generated_pipeline_returns_validation_failure_and_skips_handler()
     {
         var app = new IntegrationTestBlueprintApp();
@@ -613,6 +654,27 @@ public partial class EmailAddressValidationOperation : ICommand<string>
     {
         HandlerCallCount++;
         return Task.FromResult(operation.Email ?? string.Empty);
+    }
+}
+
+public partial class GreaterThanPropertyValidationOperation : ICommand<string>
+{
+    public static int HandlerCallCount { get; private set; }
+
+    public decimal Minimum { get; set; }
+
+    [GreaterThanProperty(nameof(Minimum))]
+    public decimal Maximum { get; set; }
+
+    public static void Reset()
+    {
+        HandlerCallCount = 0;
+    }
+
+    public static Task<string> HandleAsync(GreaterThanPropertyValidationOperation operation)
+    {
+        HandlerCallCount++;
+        return Task.FromResult($"{operation.Minimum}:{operation.Maximum}");
     }
 }
 

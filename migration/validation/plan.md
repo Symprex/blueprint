@@ -1,6 +1,6 @@
 # Validation
 
-- Status: Planned
+- Status: In progress
 - Priority: P1
 - Classification: Core middleware
 - Depends on: `../foundation-module-system/plan.md`, `../operation-discovery-and-descriptors/plan.md`, `../pipeline-composition-and-execution/plan.md`
@@ -101,7 +101,17 @@ Continue to support consumer-authored `ValidationAttribute` types as a normal ex
 - Use the .NET options-validation generator as both a direct tool for configuration/options types and the reference design for Blueprint's generated validation style.
 - Keep only a focused Blueprint-specific validator subset where it adds clear semantics beyond DataAnnotations.
 - Treat Blueprint-specific validators that depend on request/user context as supported, but isolate the runtime helper surface they need.
+- Land the retained Blueprint-specific conditional/cross-property validators before replacing the current exception-based validation-failure control flow.
+- Treat JetBrains annotations as a repo-wide hygiene track; start with touched validation seams and capture the policy in a repo-local annotation-hygiene skill.
 
 ## Sequencing
 
 Implement as part of the first parity wave, alongside execution and auth.
+
+## Current migration status
+
+- Property-level validation planning and the shared runtime fallback seam are already active for built-in validation families such as `Required`, `MaxLength`, `MinLength`, `StringLength`, and `EmailAddress`.
+- The first retained Blueprint-specific cross-property validator is now active: `GreaterThanProperty` has a generated fast path for supported same-type non-nullable numeric/decimal/`DateTime` comparisons and falls back to `ValidationRuntime.ValidateProperty(...)` for unsupported shapes.
+- `BPV002` now covers missing referenced-property names for `GreaterThanPropertyAttribute`, extending the existing build-time validation pattern used for `CompareAttribute`.
+- The current `ShortRun` benchmark evidence shows `GreaterThanPropertyInvalidAsync` at about `8.7 us` / `2.2 KB` versus `GreaterThanPropertyRuntimeFallbackInvalidAsync` at about `11.0 us` / `3.13 KB`.
+- The next retained-validator slice should cover `RequiredIf`, `RequiredIfNot`, `GreaterThan`, and `NotAllowedIf`, then use that broader rule set as the baseline for the deferred no-exception validation-failure redesign.

@@ -11,6 +11,7 @@ internal static class ValidationPropertyPlanner
         new MinLengthValidationFastPathStrategy(),
         new StringLengthValidationFastPathStrategy(),
         new EmailAddressValidationFastPathStrategy(),
+        new GreaterThanPropertyValidationFastPathStrategy(),
     ];
 
     public static ValidationPipelinePlan Create(INamedTypeSymbol operationType)
