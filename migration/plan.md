@@ -442,11 +442,11 @@ When delegating a workstream, include:
 
 ### Checklist
 
-- [ ] Write and run a failing proof for the current slice before implementation.
-- [ ] Build a deterministic synthetic fixture generator for Blueprint apps and operations.
+- [x] Write and run a failing proof for the current slice before implementation.
+- [x] Build a deterministic synthetic fixture generator for Blueprint apps and operations.
 - [ ] Add Tier 2 compile-time cacheability and invalidation-locality tests.
 - [ ] Add build/design-time telemetry capture and reporting.
-- [ ] Benchmark known runtime hotspots such as `BlueprintApp` registration and operation lookup.
+- [x] Benchmark known runtime hotspots such as `BlueprintApp` registration and operation lookup.
 - [ ] Define PR-lane versus scheduled/manual benchmark lanes.
 - [ ] Add stress/soak tests for concurrent dispatch, startup, and manifest/OpenAPI generation.
 
@@ -477,6 +477,12 @@ When delegating a workstream, include:
 - Use `general-purpose` for harness design.
 - Use `task` for long-running builds/benchmarks.
 - Use `code-review` to check whether measurements are representative and whether gates are deterministic.
+
+### Durable progress
+
+- completed first compile-time fixture slice: `src\Blueprint.SourceGenerator.Tests\Scale\SyntheticBlueprintFixtureGenerator.cs` now emits a deterministic synthetic app plus ordered operation source files, and exposes a `CombinedSource` view so the same fixture can feed existing single-source generator harnesses while the broader multi-file scale harness is still landing
+- completed proof and verification for that slice: `src\Blueprint.SourceGenerator.Tests\Scale\SyntheticBlueprintFixtureGeneratorTests.cs` now locks repeated-output stability, expected app/operation file emission, and descriptor-generator compilation for the synthetic fixture, and `dotnet test .\src\Blueprint.SourceGenerator.Tests\Blueprint.SourceGenerator.Tests.csproj --no-restore` passes after the change
+- next approved follow-on for this workstream: add a multi-source compile harness plus Tier 2 cacheability/invalidation-locality tests that mutate one generated operation and one shared-contract shape while keeping `SyntheticBlueprintFixtureGenerator` as the shared input surface
 
 ## 4. Generated manifests and inspection surfaces
 

@@ -264,7 +264,9 @@ If a new module materially changes compile-time or runtime cost, it should also 
 - The current `ShortRun` registration baseline shows `RegisterAllOperations` at about `2.9 us` / `5.27 KB` for 10 operations, about `203.6 us` / `226.95 KB` for 100 operations, and about `1.08 ms` / `1296.4 KB` for 250 operations.
 - The current `ShortRun` lookup baseline shows registered/missing `TryFindOperation(...)` calls at about `136-141 ns` for 10 operations, about `829-963 ns` for 100 operations, and about `1.76-2.02 us` for 250 operations, each with about `128 B` allocated.
 - This slice is intentionally measurement-only. It captures the current `BlueprintApp` cost curve before any runtime optimization work changes the hot paths.
-- Next follow-on for the first milestone: add the deterministic synthetic fixture generator and Tier 2 compile-time cacheability/invalidation-locality tests, then revisit the measured `BlueprintApp` hot paths with that broader harness in place.
+- The first deterministic compile-time fixture slice is now active in `src\Blueprint.SourceGenerator.Tests\Scale\SyntheticBlueprintFixtureGenerator.cs`.
+- `src\Blueprint.SourceGenerator.Tests\Scale\SyntheticBlueprintFixtureGeneratorTests.cs` now proves repeated-output stability, expected app/operation file emission, and descriptor-generator compatibility through the existing `TestHelpers.Compile<OperationDescriptorSourceGenerator>(fixture.CombinedSource)` path, and `dotnet test .\src\Blueprint.SourceGenerator.Tests\Blueprint.SourceGenerator.Tests.csproj --no-restore` passes after the helper lands.
+- Next follow-on for the first milestone: add a multi-source compile harness and Tier 2 cacheability/invalidation-locality tests that apply single-operation and shared-contract mutations to the synthetic fixture surface, then revisit the measured `BlueprintApp` hot paths with that broader harness in place.
 
 ## Sequencing
 
