@@ -78,13 +78,22 @@ public static class EndpointRouteBuilderExtensions
         if (endpoints.ServiceProvider.GetService<IWebHostEnvironment>()?.IsDevelopment() == true &&
             !string.IsNullOrWhiteSpace(httpOptions.OperationsManifestResourceName))
         {
+            var manifestInspectionBasePath = basePath.TrimEnd('/') + "/.blueprint/manifests/operations";
             var manifestBuilder = endpoints.Map(
-                RoutePatternFactory.Parse(basePath.TrimEnd('/') + "/.blueprint/manifests/operations.json"),
+                RoutePatternFactory.Parse(manifestInspectionBasePath + ".json"),
                 ManifestJsonInspectionEndpoint.Create(typeof(T).Assembly, httpOptions.OperationsManifestResourceName));
             manifestBuilder.WithDisplayName("GET Blueprint manifest operations JSON");
             manifestBuilder.WithMetadata(new HttpMethodMetadata([HttpMethods.Get]));
 
             builders.Add(manifestBuilder);
+
+            var manifestPageBuilder = endpoints.Map(
+                RoutePatternFactory.Parse(manifestInspectionBasePath + ".html"),
+                ManifestDiagnosticsPageEndpoint.Create());
+            manifestPageBuilder.WithDisplayName("GET Blueprint manifest operations diagnostics page");
+            manifestPageBuilder.WithMetadata(new HttpMethodMetadata([HttpMethods.Get]));
+
+            builders.Add(manifestPageBuilder);
         }
 
         return new BlueprintEndpointRouteBuilder(builders);

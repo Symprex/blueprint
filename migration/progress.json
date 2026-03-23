@@ -10,22 +10,22 @@
       "title": "Wider manifest inspection projection surface",
       "status": "ready",
       "dependsOn": [
-        "Dev-only manifest JSON inspection endpoint approved."
+        "Dev-only manifest diagnostics page approved."
       ],
       "failingProof": [
-        "A failing proof shows the next hosted or tooling-facing inspection surface does not yet project from the existing canonical manifest data.",
-        "A failing proof shows the new projection surface would require a boundary decision if it tries to add runtime rediscovery or a runtime-side manifest model."
+        "A failing proof shows the next inspection consumer or projection surface is not yet available on top of the approved hosted canonical JSON boundary.",
+        "A failing proof shows the next projection would cross the runtime/source-generator boundary if it stops consuming canonical JSON as the source of truth."
       ],
       "expectedFiles": [
         "migration\\generated-manifests-and-inspection-surfaces\\plan.md",
         "migration\\plan.md",
         "migration\\generated-manifests-and-inspection-surfaces\\plan.md"
       ],
-      "reviewGate": "Require human review before the next inspection surface widens into a new hosted, CLI, or tooling contract, and keep the canonical-manifest boundary intact."
+      "reviewGate": "Require human review before any broader CLI/tooling or production-facing inspection contract lands, and keep richer inspection surfaces consuming canonical hosted JSON instead of adding a runtime-side manifest model."
     },
     "lastCompletedSlice": {
       "workstream": "generated-manifests-and-inspection-surfaces",
-      "title": "Dev-only manifest JSON inspection endpoint"
+      "title": "Dev-only manifest diagnostics page"
     },
     "openReviewGate": null
   },

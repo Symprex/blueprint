@@ -17,6 +17,7 @@ namespace Blueprint.SourceGenerator.Tests.Artifacts;
 public class ManifestInspectionEndpointTests
 {
     private const string ResourceName = "Blueprint.SourceGenerator.Tests.Artifacts.ManifestResources.operations.manifest.json";
+    private const string SnapshotsFolder = "ManifestSnapshots/";
 
     [Fact]
     public async Task When_mapped_in_development_then_manifest_json_endpoint_returns_embedded_manifest_and_production_stays_dark()
@@ -39,6 +40,47 @@ public class ManifestInspectionEndpointTests
         productionEndpoints.MapBlueprintApi<ManifestInspectionBlueprintApp, BlueprintAppExecutor>("api/");
 
         FindEndpoint(productionEndpoints, "api/.blueprint/manifests/operations.json").Should().BeNull();
+    }
+
+    [Fact]
+    public async Task When_mapped_in_development_then_manifest_diagnostics_page_returns_html_shell_and_production_stays_dark()
+    {
+        var developmentEndpoints = CreateEndpoints(Environments.Development);
+        developmentEndpoints.MapBlueprintApi<ManifestInspectionBlueprintApp, BlueprintAppExecutor>("api/");
+
+        var htmlEndpoint = FindEndpoint(developmentEndpoints, "api/.blueprint/manifests/operations.html");
+
+        htmlEndpoint.Should().NotBeNull();
+
+        var response = await InvokeEndpointAsync(htmlEndpoint!);
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        response.ContentType.Should().Be("text/html; charset=utf-8");
+
+        await Verify(response.Body)
+            .UseDirectory(SnapshotsFolder);
+
+        var productionEndpoints = CreateEndpoints(Environments.Production);
+        productionEndpoints.MapBlueprintApi<ManifestInspectionBlueprintApp, BlueprintAppExecutor>("api/");
+
+        FindEndpoint(productionEndpoints, "api/.blueprint/manifests/operations.html").Should().BeNull();
+    }
+
+    [Fact]
+    public async Task When_mapped_in_development_then_manifest_diagnostics_page_avoids_echoing_raw_fetch_errors()
+    {
+        var endpoints = CreateEndpoints(Environments.Development);
+        endpoints.MapBlueprintApi<ManifestInspectionBlueprintApp, BlueprintAppExecutor>("api/");
+
+        var htmlEndpoint = FindEndpoint(endpoints, "api/.blueprint/manifests/operations.html");
+
+        htmlEndpoint.Should().NotBeNull();
+
+        var response = await InvokeEndpointAsync(htmlEndpoint!);
+
+        response.Body.Should().Contain("Check browser console for details.");
+        response.Body.Should().Contain("console.error(\"Manifest load error:\", error);");
+        response.Body.Should().NotContain("Unable to load canonical manifest: ${error.message ?? error}");
     }
 
     [Fact]
