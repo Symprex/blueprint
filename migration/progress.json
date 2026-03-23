@@ -7,27 +7,27 @@
   "current": {
     "activeWorkstream": "performance-and-scale",
     "nextReadySlice": {
-      "title": "Synthetic invalidation report artifact",
+      "title": "Synthetic build telemetry capture contract",
       "status": "ready",
       "dependsOn": [
-        "Hosted manifest schema endpoint committed."
+        "Synthetic invalidation report artifact committed."
       ],
       "failingProof": [
-        "A failing proof shows the Tier 2 synthetic scale harness still exposes locality results only through ad-hoc test assertions rather than a machine-readable invalidation report artifact that AI/CI tooling can inspect.",
-        "A failing proof shows the single-operation and shared-contract mutation scenarios do not yet produce a deterministic envelope-aligned artifact that captures scenario metadata and changed generated outputs."
+        "A failing proof shows the repository still lacks a deterministic, documented way to capture cold, no-op, and single-edit build or design-time telemetry for the synthetic scale fixture scenarios that now emit invalidation reports.",
+        "A failing proof shows Phase 0 still cannot publish reviewable `.binlog` or timing-summary artifacts from the same Tier 2 synthetic scenarios in a stable, machine-readable contract."
       ],
       "expectedFiles": [
-        "src\\Blueprint.SourceGenerator.Tests\\Scale\\SyntheticBlueprintFixtureScaleHarnessTests.cs",
-        "src\\Blueprint.SourceGenerator.Tests\\Scale\\SyntheticFixtureInvalidationReport.cs",
+        "docs\\observability-and-dev-experience.md",
+        "docs\\implementation-checklists.md",
         "migration\\performance-and-scale\\plan.md",
         "migration\\plan.md",
-        "migration\\generated-manifests-and-inspection-surfaces\\plan.md"
+        "migration\\progress.json"
       ],
-      "reviewGate": "Stop again for review before generalizing the first performance artifact shape to benchmark, telemetry, or migration outputs if the synthetic invalidation report suggests different shared-envelope fields are needed."
+      "reviewGate": "Stop again for review before locking broader benchmark or telemetry publication lanes if the first telemetry-capture slice suggests the shared envelope needs different cross-artifact fields."
     },
     "lastCompletedSlice": {
-      "workstream": "generated-manifests-and-inspection-surfaces",
-      "title": "Hosted manifest schema endpoint"
+      "workstream": "performance-and-scale",
+      "title": "Synthetic invalidation report artifact"
     },
     "openReviewGate": null
   },

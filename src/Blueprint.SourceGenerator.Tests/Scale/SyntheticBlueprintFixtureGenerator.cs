@@ -63,11 +63,30 @@ public sealed record SyntheticBlueprintFixtureOptions
 public sealed record SyntheticBlueprintFixtureSourceFile(string Path, string Content);
 
 /// <summary>
-/// Represents a complete synthetic Blueprint app as a set of independently addressable source files.
+/// Represents a complete synthetic Blueprint app as a set of independently addressable source files plus the small
+/// amount of scenario metadata that performance artifacts need to describe what the fixture actually contains.
 /// </summary>
+/// <param name="Options">The stable options used to generate the fixture.</param>
 /// <param name="SourceFiles">The source files that make up the synthetic Blueprint app.</param>
-public sealed record SyntheticBlueprintFixture(ImmutableArray<SyntheticBlueprintFixtureSourceFile> SourceFiles)
+public sealed record SyntheticBlueprintFixture(
+    SyntheticBlueprintFixtureOptions Options,
+    ImmutableArray<SyntheticBlueprintFixtureSourceFile> SourceFiles)
 {
+    /// <summary>
+    /// Gets the namespace shared by the synthetic app and generated operations.
+    /// </summary>
+    public string NamespaceName => this.Options.NamespaceName;
+
+    /// <summary>
+    /// Gets the synthetic Blueprint app type name.
+    /// </summary>
+    public string AppName => this.Options.AppName;
+
+    /// <summary>
+    /// Gets the number of generated operations in the fixture.
+    /// </summary>
+    public int OperationCount => this.Options.OperationCount;
+
     /// <summary>
     /// Gets the legacy concatenated view of the fixture for older tests that still compile from one combined source blob.
     /// </summary>
@@ -106,7 +125,7 @@ public sealed record SyntheticBlueprintFixture(ImmutableArray<SyntheticBlueprint
             throw new InvalidOperationException($"Could not find synthetic fixture source file '{path}'.");
         }
 
-        return new SyntheticBlueprintFixture(sourceFiles.MoveToImmutable());
+        return new SyntheticBlueprintFixture(this.Options, sourceFiles.MoveToImmutable());
     }
 
     /// <summary>
@@ -188,6 +207,6 @@ public static class SyntheticBlueprintFixtureGenerator
                 operationSource));
         }
 
-        return new SyntheticBlueprintFixture(sourceFiles.MoveToImmutable());
+        return new SyntheticBlueprintFixture(options, sourceFiles.MoveToImmutable());
     }
 }

@@ -1,6 +1,6 @@
 # Generated manifests and inspection surfaces
 
-- Status: In progress (runtime projections active; hosted schema endpoint complete locally; next follow-on shifts to cross-artifact alignment)
+- Status: In progress (runtime projections active; hosted schema endpoint and first performance-artifact alignment slice complete locally)
 - Priority: P0
 - Classification: Cross-cutting architecture support
 - Depends on: no hard dependency for the first contract-definition pass; then evolves alongside `../foundation-module-system/plan.md`, `../operation-discovery-and-descriptors/plan.md`, `../auditing-and-observability/plan.md`, and `../performance-and-scale/plan.md`
@@ -202,3 +202,5 @@ The first milestone is the shared envelope, naming/layout rules, and contributor
 - `ManifestInspectionEndpointTests` now cover the schema route's development-only exposure, production dark path, exact embedded-schema response, and fail-fast invalid schema-resource configuration through the hosted boundary.
 - A full verification pass completed cleanly for this hosted-schema slice too: the focused red/green proof passes, `dotnet format .\Blueprint.sln --no-restore --include src\Blueprint.Runtime\Http\BlueprintHttpOptions.cs src\Blueprint.Runtime\Http\ApplicationBuilderExtensions.cs src\Blueprint.Runtime\Http\ManifestSchemaInspectionEndpoint.cs src\Blueprint.SourceGenerator.Tests\Artifacts\ManifestInspectionEndpointTests.cs` is clean aside from the repo's known IDE1006 noise, `dotnet build .\Blueprint.sln --no-restore` succeeds, and `dotnet test .\src\Blueprint.SourceGenerator.Tests\Blueprint.SourceGenerator.Tests.csproj --no-restore` passes with 190 tests green.
 - With runtime schema hosting in place, the next approved follow-on shifts to cross-artifact alignment: add a first machine-readable invalidation report for the Tier 2 synthetic scale harness using the shared manifest envelope so performance artifacts start following the same contract.
+- That first cross-workstream alignment slice is now complete locally too: `src\Blueprint.SourceGenerator.Tests\Scale\SyntheticFixtureInvalidationReport.cs` emits a `scale-invalidation` envelope with a contributor-owned `synthetic-scale-harness` section, and `SyntheticFixtureInvalidationReportTests` snapshot the single-operation and shared-contract mutation summaries so the manifest contract now covers reviewable performance invalidation artifacts as well as operations inspection surfaces.
+- The next approved alignment follow-on is narrower benchmark/telemetry publishing, not a new envelope family: keep using `GeneratedManifestEnvelope` while the performance workstream adds documented build/design-time telemetry capture around the same synthetic scenarios.

@@ -466,7 +466,7 @@ When delegating a workstream, include:
 
 - [x] Write and run a failing proof for the current slice before implementation.
 - [x] Build a deterministic synthetic fixture generator for Blueprint apps and operations.
-- [ ] Add Tier 2 compile-time cacheability and invalidation-locality tests.
+- [x] Add Tier 2 compile-time cacheability and invalidation-locality tests.
 - [ ] Add build/design-time telemetry capture and reporting.
 - [x] Benchmark known runtime hotspots such as `BlueprintApp` registration and operation lookup.
 - [ ] Define PR-lane versus scheduled/manual benchmark lanes.
@@ -505,6 +505,8 @@ When delegating a workstream, include:
 - completed first compile-time fixture slice: `src\Blueprint.SourceGenerator.Tests\Scale\SyntheticBlueprintFixtureGenerator.cs` now emits a deterministic synthetic app plus ordered operation source files, and exposes a `CombinedSource` view so the same fixture can feed existing single-source generator harnesses while the broader multi-file scale harness is still landing
 - completed proof and verification for that slice: `src\Blueprint.SourceGenerator.Tests\Scale\SyntheticBlueprintFixtureGeneratorTests.cs` now locks repeated-output stability, expected app/operation file emission, and descriptor-generator compilation for the synthetic fixture, and `dotnet test .\src\Blueprint.SourceGenerator.Tests\Blueprint.SourceGenerator.Tests.csproj --no-restore` passes after the change
 - next approved follow-on for this workstream: add a multi-source compile harness plus Tier 2 cacheability/invalidation-locality tests that mutate one generated operation and one shared-contract shape while keeping `SyntheticBlueprintFixtureGenerator` as the shared input surface
+- completed first machine-readable invalidation-report alignment slice: `SyntheticFixtureInvalidationReport` now emits a deterministic `scale-invalidation` manifest envelope for the Tier 2 single-operation and shared-contract mutation scenarios, and `SyntheticFixtureInvalidationReportTests` snapshot those reports so locality evidence is reviewable as artifact data instead of only imperative assertions
+- next approved follow-on for this workstream: add the first documented build/design-time telemetry capture contract around the same synthetic scenarios so `.binlog` plus timing outputs can be published in a reviewable, machine-readable form beside the invalidation reports
 
 ## 4. Generated manifests and inspection surfaces
 
@@ -531,7 +533,8 @@ When delegating a workstream, include:
     - human-approved hardening slice: reject conflicting debug-manifest entry ownership across multiple contributors with `BPMOD006` instead of silently allowing last-writer-wins replacement
 - [x] Ensure runtime inspection projects from build-time data rather than recomputing.
 - [ ] Align manifest output with migration reports, OpenAPI, and performance artifacts.
-  - approved first alignment slice after hosted schema review: emit a machine-readable invalidation report for the Tier 2 synthetic fixture harness using the shared manifest envelope, before broadening to benchmark/telemetry/OpenAPI alignment
+    - [x] approved first alignment slice after hosted schema review: emit a machine-readable invalidation report for the Tier 2 synthetic fixture harness using the shared manifest envelope, before broadening to benchmark/telemetry/OpenAPI alignment
+    - approved next alignment slice after the first performance artifact lands: keep the shared envelope and add documented build/design-time telemetry capture before broadening to benchmark-history publishing or OpenAPI alignment
 
 ### Acceptance criteria
 

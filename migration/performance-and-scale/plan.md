@@ -1,6 +1,6 @@
 # Performance and scale
 
-- Status: Planned
+- Status: In progress
 - Priority: P0
 - Classification: Cross-cutting engineering system
 - Depends on: no hard dependency for the first scale-harness milestone; then evolves alongside `../foundation-module-system/plan.md`, `../operation-discovery-and-descriptors/plan.md`, and `../pipeline-composition-and-execution/plan.md`
@@ -275,6 +275,8 @@ If a new module materially changes compile-time or runtime cost, it should also 
 - Completed first generated executor dispatch measurement follow-on and review closeout: `BlueprintAppExecutor` now exposes a shared `ExecuteAsync(ApiOperationContext)` dispatch shell in `src\Blueprint.Runtime\Exec\BlueprintAppDataModel.cs`, `src\Blueprint.SourceGenerator.Benchmarks\ExecutorDispatch\ExecutorDispatchBenchmarks.cs` now measures registered-pipeline lookup plus direct-pipeline versus executor-shell execution across the shared 10/100/250 synthetic descriptor counts, and the fresh `ShortRun` artifact (`BenchmarkDotNet.Artifacts\results\Blueprint.SourceGenerator.Benchmarks.RuntimeExec.ExecutorDispatchBenchmarks-report.*`) reports lookup at about `15.5 ns`, `15.9 ns`, and `24.1 ns`; direct pipeline execution at about `69.1 ns`, `55.6 ns`, and `91.4 ns` with `184 B` allocated; and full executor-shell dispatch at about `93.1 ns`, `97.5 ns`, and `137.8 ns` with the same `184 B` allocation profile.
 - Human review approved that dispatch measurement slice. The next approved Phase 0 follow-on now shifts to `migration\generated-manifests-and-inspection-surfaces\plan.md` so the repository defines one manifest envelope, naming/layout contract, and contributor ownership seam before more workstreams emit their own artifacts.
 - With the hosted schema endpoint now complete in the manifest workstream, the next approved cross-workstream follow-on returns here: emit a first machine-readable invalidation report for the Tier 2 synthetic fixture harness so performance artifacts start using the shared manifest conventions for scenario metadata and changed-output summaries.
+- Completed first machine-readable invalidation-report artifact alignment slice: `SyntheticFixtureInvalidationReport` now emits a deterministic `scale-invalidation` envelope with a contributor-owned `synthetic-scale-harness` section for the single-operation and shared-contract Tier 2 mutation scenarios, and `SyntheticFixtureInvalidationReportTests` pin both scenario snapshots so locality evidence is reviewable as data instead of only imperative assertions.
+- Next approved follow-on for this workstream: add the first documented build/design-time telemetry capture contract around the same synthetic scale scenarios so cold, no-op, and single-edit `.binlog` plus timing outputs can be published in a reviewable, machine-readable form beside the invalidation reports.
 
 ## Sequencing
 

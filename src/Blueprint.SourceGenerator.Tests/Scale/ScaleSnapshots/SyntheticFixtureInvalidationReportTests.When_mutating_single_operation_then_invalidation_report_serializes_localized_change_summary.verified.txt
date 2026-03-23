@@ -1,0 +1,49 @@
+﻿{
+  "schemaVersion": 1,
+  "artifactName": "scale-invalidation",
+  "artifactFamily": "build-time-manifest",
+  "relativePath": ".blueprint/manifests/scale-invalidation.manifest.json",
+  "app": {
+    "typeName": "Synthetic.Scale.SyntheticScaleApp",
+    "assemblyName": "Blueprint.SourceGenerator.Tests"
+  },
+  "generator": {
+    "productName": "Blueprint.SourceGenerator",
+    "version": "1.0.0.0"
+  },
+  "sections": {
+    "synthetic-scale-harness": {
+      "contributorId": "Blueprint.SourceGenerator.Tests.Scale",
+      "payload": {
+        "scenario": {
+          "namespaceName": "Synthetic.Scale",
+          "appName": "SyntheticScaleApp",
+          "operationCount": 100,
+          "sourceFileCount": 102,
+          "trackedGeneratorCount": 3
+        },
+        "mutation": {
+          "kind": "single-operation",
+          "sourcePath": "Operations\\SyntheticOperation050.cs"
+        },
+        "generators": {
+          "AppDataModelSourceGenerator": {
+            "changedOutputCount": 0,
+            "changedOutputs": []
+          },
+          "OperationDescriptorSourceGenerator": {
+            "changedOutputCount": 0,
+            "changedOutputs": []
+          },
+          "OperationExecutorPipelineSourceGenerator": {
+            "changedOutputCount": 1,
+            "changedOutputs": [
+              "SyntheticOperation050ExecutorPipeline.g.cs"
+            ]
+          }
+        }
+      }
+    }
+  },
+  "operations": {}
+}
