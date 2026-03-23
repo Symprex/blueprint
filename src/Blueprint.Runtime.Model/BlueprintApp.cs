@@ -11,6 +11,7 @@ public class BlueprintApp
     private static readonly List<ApiOperationLink> _emptyLinkList = new(0);
 
     private readonly Dictionary<Type, ApiOperationDescriptor> _allOperations = new();
+    private readonly Dictionary<string, ApiOperationDescriptor> _urlToOperation = new(StringComparer.Ordinal);
 
     private readonly List<ApiOperationLink> _allLinks = new();
 
@@ -43,10 +44,7 @@ public class BlueprintApp
 
         foreach (var url in descriptor.Urls)
         {
-            var existingDescriptor = this._allOperations.Values
-                .FirstOrDefault(d => d.Urls.Any(u => u.UrlFormat == url.UrlFormat));
-
-            if (existingDescriptor != null)
+            if (this._urlToOperation.TryGetValue(url.UrlFormat, out var existingDescriptor))
             {
                 throw new InvalidOperationException(
                     $"Cannot register URL '{url.UrlFormat}' for operation '{descriptor.Name}' as it is already registered by operation '{existingDescriptor.Name}'.");
@@ -54,6 +52,11 @@ public class BlueprintApp
         }
 
         this._allOperations[descriptor.OperationType] = descriptor;
+
+        foreach (var url in descriptor.Urls)
+        {
+            this._urlToOperation[url.UrlFormat] = descriptor;
+        }
 
         foreach (var link in descriptor.Links)
         {
@@ -181,15 +184,11 @@ Operations will be found polymorphically, meaning an operation could be register
     /// <returns>Whether an operation was found.</returns>
     public bool TryFindOperation(Type operationType, [NotNullWhen(true)] out ApiOperationDescriptor? descriptor)
     {
-        var found = this.Operations.SingleOrDefault(d => d.OperationType == operationType);
-
-        if (found == null)
+        if (!this._allOperations.TryGetValue(operationType, out descriptor))
         {
-            descriptor = null;
             return false;
         }
 
-        descriptor = found;
         return true;
     }
 }

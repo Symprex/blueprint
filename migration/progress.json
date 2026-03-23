@@ -7,28 +7,28 @@
   "current": {
     "activeWorkstream": "performance-and-scale",
     "nextReadySlice": {
-      "title": "BlueprintApp.Register runtime hotspot redesign",
+      "title": "Blueprint HTTP startup and endpoint-mapping measurement follow-on",
       "status": "ready",
       "dependsOn": [
-        "Tier 2 shared-contract invalidation-locality follow-on completed and reviewed"
+        "BlueprintApp runtime hotspot redesign completed and reviewed"
       ],
       "failingProof": [
-        "BenchmarkDotNet or a focused runtime proof captures the current BlueprintApp.Register(...) duplicate-check cost on the existing harness before the registry redesign.",
-        "Runtime-model tests preserve duplicate URL detection and TryFindOperation(...) semantics while the registration path is optimized.",
-        "Updated benchmark artifacts compare the new registration cost curve against the existing 10/100/250-operation baseline."
+        "BenchmarkDotNet or a focused startup measurement captures the current endpoint-mapping cost through ApplicationBuilderExtensions before any host-path optimization.",
+        "Runtime tests or a measurement harness prove mapped endpoint counts and attached descriptor metadata stay stable while the startup path is measured or refined.",
+        "The new startup/endpoint-mapping artifact compares against the updated BlueprintApp registration and lookup baseline rather than the old pre-redesign numbers."
       ],
       "expectedFiles": [
-        "src\\Blueprint.Runtime.Model\\BlueprintApp.cs",
-        "src\\Blueprint.SourceGenerator.Benchmarks\\BlueprintApp\\BlueprintAppBenchmarks.cs",
-        "src\\Blueprint.SourceGenerator.Tests\\Model\\BlueprintAppTests.cs"
+        "src\\Blueprint.Runtime\\Http\\ApplicationBuilderExtensions.cs",
+        "src\\Blueprint.SourceGenerator.Benchmarks\\Blueprint.SourceGenerator.Benchmarks.csproj",
+        "src\\Blueprint.SourceGenerator.Sample\\Startup.cs"
       ],
-      "reviewGate": "Require code review before closing the first BlueprintApp runtime-hotspot redesign."
+      "reviewGate": "Require code review before closing the first Blueprint HTTP startup/endpoint-mapping measurement slice."
     },
     "lastCompletedSlice": {
       "workstream": "performance-and-scale",
-      "title": "Tier 2 shared-contract invalidation-locality proof"
+      "title": "BlueprintApp runtime hotspot redesign"
     },
-    "openReviewGate": "None before the BlueprintApp runtime hotspot redesign starts."
+    "openReviewGate": "None before the Blueprint HTTP startup/endpoint-mapping measurement slice starts."
   },
   "orchestrationContract": {
     "mustImplementAfterSliceSelection": true,
