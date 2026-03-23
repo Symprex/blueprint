@@ -1,0 +1,69 @@
+﻿{
+  "schemaVersion": 1,
+  "artifactName": "build-telemetry",
+  "artifactFamily": "build-time-manifest",
+  "relativePath": ".blueprint/manifests/build-telemetry.manifest.json",
+  "app": {
+    "typeName": "Synthetic.Scale.SyntheticScaleApp",
+    "assemblyName": "Blueprint.SourceGenerator.Tests"
+  },
+  "generator": {
+    "productName": "Blueprint.SourceGenerator",
+    "version": "1.0.0.0"
+  },
+  "sections": {
+    "synthetic-build-harness": {
+      "contributorId": "Blueprint.SourceGenerator.Tests.Scale",
+      "payload": {
+        "scenario": {
+          "namespaceName": "Synthetic.Scale",
+          "appName": "SyntheticScaleApp",
+          "operationCount": 100,
+          "sourceFileCount": 102,
+          "trackedGeneratorCount": 3,
+          "diagnosticCount": 0
+        },
+        "capture": {
+          "captureName": "single-edit-build",
+          "isDesignTimeBuild": false,
+          "durationMs": 620
+        },
+        "generators": {
+          "AppDataModelSourceGenerator": {
+            "generatedOutputCount": 1,
+            "generatedOutputLineCount": 119,
+            "trackedStages": {
+              "CombineWithCompilation": 1,
+              "FindServicesToRegister": 1,
+              "InitialExtraction": 1
+            }
+          },
+          "OperationDescriptorSourceGenerator": {
+            "generatedOutputCount": 102,
+            "generatedOutputLineCount": 3035,
+            "trackedStages": {
+              "CombineWithCompilation": 100,
+              "Configuration": 100,
+              "ExecutionPlan": 1,
+              "InitialExtraction": 100
+            }
+          },
+          "OperationExecutorPipelineSourceGenerator": {
+            "generatedOutputCount": 101,
+            "generatedOutputLineCount": 8522,
+            "trackedStages": {
+              "CombineWithCompilation": 1,
+              "FindBlueprintApp": 1,
+              "FindHandlers": 1
+            }
+          }
+        },
+        "mutation": {
+          "kind": "single-operation",
+          "sourcePath": "Operations\\SyntheticOperation050.cs"
+        }
+      }
+    }
+  },
+  "operations": {}
+}

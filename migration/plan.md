@@ -506,7 +506,8 @@ When delegating a workstream, include:
 - completed proof and verification for that slice: `src\Blueprint.SourceGenerator.Tests\Scale\SyntheticBlueprintFixtureGeneratorTests.cs` now locks repeated-output stability, expected app/operation file emission, and descriptor-generator compilation for the synthetic fixture, and `dotnet test .\src\Blueprint.SourceGenerator.Tests\Blueprint.SourceGenerator.Tests.csproj --no-restore` passes after the change
 - next approved follow-on for this workstream: add a multi-source compile harness plus Tier 2 cacheability/invalidation-locality tests that mutate one generated operation and one shared-contract shape while keeping `SyntheticBlueprintFixtureGenerator` as the shared input surface
 - completed first machine-readable invalidation-report alignment slice: `SyntheticFixtureInvalidationReport` now emits a deterministic `scale-invalidation` manifest envelope for the Tier 2 single-operation and shared-contract mutation scenarios, and `SyntheticFixtureInvalidationReportTests` snapshot those reports so locality evidence is reviewable as artifact data instead of only imperative assertions
-- next approved follow-on for this workstream: add the first documented build/design-time telemetry capture contract around the same synthetic scenarios so `.binlog` plus timing outputs can be published in a reviewable, machine-readable form beside the invalidation reports
+- completed first build/design-time telemetry contract slice: `SyntheticBuildTelemetryReport` now emits a deterministic `build-telemetry` manifest envelope for cold-build and single-edit synthetic captures, and `SyntheticBuildTelemetryReportTests` snapshot generated-output counts, tracked stage counts, capture metadata, and optional mutation metadata so later `.binlog` runners have a reviewed contract to target
+- next approved follow-on for this workstream: add the first real synthetic MSBuild telemetry capture runner so `.binlog` and timing-summary files can flow into the reviewed `build-telemetry` contract instead of living only in in-process harness output
 
 ## 4. Generated manifests and inspection surfaces
 
@@ -534,7 +535,8 @@ When delegating a workstream, include:
 - [x] Ensure runtime inspection projects from build-time data rather than recomputing.
 - [ ] Align manifest output with migration reports, OpenAPI, and performance artifacts.
     - [x] approved first alignment slice after hosted schema review: emit a machine-readable invalidation report for the Tier 2 synthetic fixture harness using the shared manifest envelope, before broadening to benchmark/telemetry/OpenAPI alignment
-    - approved next alignment slice after the first performance artifact lands: keep the shared envelope and add documented build/design-time telemetry capture before broadening to benchmark-history publishing or OpenAPI alignment
+    - [x] approved next alignment slice after the first performance artifact lands: keep the shared envelope and add documented build/design-time telemetry capture before broadening to benchmark-history publishing or OpenAPI alignment
+    - approved next alignment slice after the telemetry contract lands: add a real synthetic MSBuild telemetry capture runner that emits `.binlog` and timing files into the reviewed `build-telemetry` envelope before broadening to benchmark-history publishing or OpenAPI alignment
 
 ### Acceptance criteria
 
