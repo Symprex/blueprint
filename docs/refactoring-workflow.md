@@ -31,9 +31,10 @@ This layer is appropriate when the repo's normal build, snapshot, and formatting
 
 ### Layer 2 - Roslyn analyzers and code fixes
 
-Current project:
+Current projects:
 
 - `src\Blueprint.Migration.Analyzers`
+- `src\Blueprint.Migration.Analyzers.CodeFixes`
 
 Current baseline libraries:
 
@@ -115,7 +116,7 @@ Current state and expectations:
 - `dotnet format --diagnostics ...` applies safe code fixes where supported once those fixes land
 - a second build should eventually leave only configuration-required or manual-review findings
 
-Today the first live rule is `BPMIG001`, which flags redundant parameterless `AddOpenApi()` activation calls. The analyzer project exists now, but code-fix coverage and the broader diagnostic family are still incremental follow-on work rather than completed workflow surface.
+Today the first live analyzer/code-fix pair is `BPMIG001`, which flags and safely removes redundant parameterless `AddOpenApi()` activation calls. The broader diagnostic family is still incremental follow-on work rather than completed workflow surface.
 
 ## Layer 3 - Codemod CLI
 

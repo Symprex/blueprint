@@ -438,7 +438,7 @@ When delegating a workstream, include:
 ### Tests and benchmarks
 
 - [x] Analyzer diagnostic tests.
-- [ ] Code-fix tests with before/after coverage.
+- [x] Code-fix tests with before/after coverage.
 - [ ] JSON/SARIF schema validation tests.
 - [ ] Dry-run idempotency tests for the codemod CLI.
 - [ ] Sample-app migration report review before broad rollout.
@@ -451,9 +451,9 @@ When delegating a workstream, include:
 
 ### Durable progress
 
-- the `BPMIG001`-`BPMIG399` range is now reserved in repo guidance, `Blueprint.Migration.Analyzers` plus `Blueprint.Migration.Analyzers.Tests` now provide the shared analyzer/test seam, and `BPMIG001` is now the first live migration diagnostic for redundant parameterless `BlueprintApiBuilder.AddOpenApi()` activation calls.
-- next approved follow-on for this workstream: add the first safe code-fix path for `BPMIG001` so parameterless `AddOpenApi()` calls can be removed mechanically instead of only being flagged.
-- keep broader activation/auth/resource diagnostics, report-schema work, and codemod scaffolding deferred until that first analyzer/code-fix pair is review-closed.
+- the `BPMIG001`-`BPMIG399` range is now reserved in repo guidance, `Blueprint.Migration.Analyzers`, `Blueprint.Migration.Analyzers.CodeFixes`, and `Blueprint.Migration.Analyzers.Tests` now provide the first complete analyzer/code-fix/test seam, and `BPMIG001` now flags plus safely removes redundant parameterless `BlueprintApiBuilder.AddOpenApi()` activation calls.
+- next approved follow-on for this workstream: add the first configuration-required migration diagnostic for configured `AddOpenApi(Action<OpenApiOptions>)` usage so migration tooling distinguishes between safe deletion and customization that still needs manual review.
+- keep broader activation/auth/resource diagnostics, report-schema work, and codemod scaffolding deferred until that configured-overload follow-on is review-closed.
 
 ### Sub-agent guidance
 
