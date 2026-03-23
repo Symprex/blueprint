@@ -134,7 +134,8 @@ public sealed class GeneratedManifestEnvelope
                 GetRequiredString(generatorObject, "productName"),
                 GetRequiredString(generatorObject, "version")));
 
-        if (root["sections"] is JObject sectionsObject)
+        var sectionsObject = GetOptionalObject(root, "sections");
+        if (sectionsObject is not null)
         {
             foreach (var property in sectionsObject.Properties().OrderBy(static property => property.Name, StringComparer.Ordinal))
             {
@@ -148,7 +149,8 @@ public sealed class GeneratedManifestEnvelope
             }
         }
 
-        if (root["operations"] is JObject operationsObject)
+        var operationsObject = GetOptionalObject(root, "operations");
+        if (operationsObject is not null)
         {
             foreach (var property in operationsObject.Properties().OrderBy(static property => property.Name, StringComparer.Ordinal))
             {
@@ -277,6 +279,18 @@ public sealed class GeneratedManifestEnvelope
     {
         return parent[propertyName] as JObject
                ?? throw new InvalidOperationException($"Manifest JSON is missing required object property '{propertyName}'.");
+    }
+
+    private static JObject? GetOptionalObject(JObject parent, string propertyName)
+    {
+        var token = parent[propertyName];
+        if (token is null)
+        {
+            return null;
+        }
+
+        return token as JObject
+               ?? throw new InvalidOperationException($"Manifest JSON property '{propertyName}' must be a JSON object when present.");
     }
 
     private static JToken GetRequiredToken(JObject parent, string propertyName)

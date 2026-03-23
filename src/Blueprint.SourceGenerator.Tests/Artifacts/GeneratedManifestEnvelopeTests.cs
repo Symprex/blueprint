@@ -91,4 +91,51 @@ public class GeneratedManifestEnvelopeTests
 
         firstManifest.ToJson().Should().Be(secondManifest.ToJson());
     }
+
+    [Fact]
+    public void FromJson_Should_Reject_Sections_Property_That_Is_Not_An_Object()
+    {
+        var manifestJson = CreateValidManifestJson();
+        manifestJson["sections"] = "invalid";
+
+        var act = () => GeneratedManifestEnvelope.FromJson(manifestJson.ToString());
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*sections*object*");
+    }
+
+    [Fact]
+    public void FromJson_Should_Reject_Operations_Property_That_Is_Not_An_Object()
+    {
+        var manifestJson = CreateValidManifestJson();
+        manifestJson["operations"] = new JArray("invalid");
+
+        var act = () => GeneratedManifestEnvelope.FromJson(manifestJson.ToString());
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*operations*object*");
+    }
+
+    private static JObject CreateValidManifestJson()
+    {
+        return new JObject
+        {
+            ["schemaVersion"] = 1,
+            ["artifactName"] = "operations",
+            ["artifactFamily"] = "build-time-manifest",
+            ["relativePath"] = ".blueprint/manifests/operations.manifest.json",
+            ["app"] = new JObject
+            {
+                ["typeName"] = "TestNamespace.TestBlueprintApp",
+                ["assemblyName"] = "Test.Assembly",
+            },
+            ["generator"] = new JObject
+            {
+                ["productName"] = "Blueprint.SourceGenerator",
+                ["version"] = "1.2.3",
+            },
+            ["sections"] = new JObject(),
+            ["operations"] = new JObject(),
+        };
+    }
 }

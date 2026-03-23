@@ -540,6 +540,8 @@ When delegating a workstream, include:
 - [x] Runtime manifest loading tests covering embedded-resource projection, stable roundtripping, and no-rediscovery runtime reads.
 - [x] Hosted manifest inspection endpoint tests covering the development-only JSON route, production dark-path gating, fail-fast resource validation during endpoint mapping, the review-ready diagnostics page shell, and generic DOM-facing error handling.
 - [ ] Schema validation tests.
+  - completed first sub-slice: `GeneratedManifestEnvelope.FromJson(...)` now rejects malformed top-level `sections` and `operations` properties instead of silently ignoring non-object shapes
+  - next recommended sub-slice: add explicit invalid-input proof for required envelope fields (`schemaVersion`, `app`, `generator`, and required strings) while keeping the work inside the parser contract
 - [x] Compatibility tests for multiple module contributors.
   - approved slice: `DebugManifestContributorCompatibilityTests` now proves the public `BuildDebugManifest(...)` seam rejects conflicting entry keys with `BPMOD006` while preserving non-conflicting composition
   - next recommended slice after this approval: add machine-readable schema validation for the approved manifest envelope and hosted fixture artifacts

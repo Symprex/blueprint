@@ -7,25 +7,25 @@
   "current": {
     "activeWorkstream": "generated-manifests-and-inspection-surfaces",
     "nextReadySlice": {
-      "title": "Manifest schema validation tests",
+      "title": "Manifest required-field parser validation tests",
       "status": "ready",
       "dependsOn": [
-        "Debug-manifest collision diagnostic approved."
+        "Top-level manifest object-shape validation committed."
       ],
       "failingProof": [
-        "A failing proof shows the approved manifest envelope or hosted fixture artifacts can drift from their intended machine-readable schema without deterministic validation feedback.",
-        "A failing proof shows snapshots alone do not enforce required manifest fields, versioning, and section/operation shape for downstream tooling."
+        "A failing proof shows required envelope fields such as schemaVersion, app, generator, or required strings are not yet covered by explicit parser-validation tests even though snapshots currently pass.",
+        "A failing proof shows malformed required-field JSON can still slip past the test suite without a direct contract-level assertion."
       ],
       "expectedFiles": [
         "src\\Blueprint.SourceGenerator.Tests\\Artifacts\\GeneratedManifestEnvelopeTests.cs",
-        "src\\Blueprint.SourceGenerator.Tests\\Artifacts\\ManifestResources\\operations.manifest.json",
+        "src\\Blueprint.SourceGenerator\\Artifacts\\GeneratedManifestEnvelope.cs",
         "migration\\generated-manifests-and-inspection-surfaces\\plan.md"
       ],
-      "reviewGate": "Stop again for review before broader hosted/tooling inspection work if schema validation changes the approved manifest contract or reveals contract drift that needs a design decision."
+      "reviewGate": "Stop again for review before broader hosted/tooling inspection work if required-field validation changes the approved manifest contract or reveals contract drift that needs a design decision."
     },
     "lastCompletedSlice": {
       "workstream": "generated-manifests-and-inspection-surfaces",
-      "title": "Debug-manifest collision diagnostic"
+      "title": "Top-level manifest object-shape validation"
     },
     "openReviewGate": null
   },
