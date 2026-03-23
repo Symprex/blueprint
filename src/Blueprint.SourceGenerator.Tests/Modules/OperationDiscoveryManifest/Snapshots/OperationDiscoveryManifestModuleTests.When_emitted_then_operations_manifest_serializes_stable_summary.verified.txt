@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "artifactName": "operations",
+  "artifactFamily": "build-time-manifest",
+  "relativePath": ".blueprint/manifests/operations.manifest.json",
+  "app": {
+    "typeName": "TestNamespace.TestBlueprintApp",
+    "assemblyName": "Test.Assembly"
+  },
+  "generator": {
+    "productName": "Blueprint.SourceGenerator",
+    "version": "1.2.3"
+  },
+  "sections": {
+    "operations-discovery": {
+      "contributorId": "OperationDiscoveryManifestModule",
+      "payload": {
+        "operationCount": 2
+      }
+    }
+  },
+  "operations": {
+    "TestNamespace.CreateUserCommand": {
+      "kind": "command",
+      "namespace": "TestNamespace",
+      "typeName": "CreateUserCommand"
+    },
+    "TestNamespace.ListUsersQuery": {
+      "kind": "query",
+      "namespace": "TestNamespace",
+      "typeName": "ListUsersQuery"
+    }
+  }
+}

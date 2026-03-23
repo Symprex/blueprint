@@ -77,6 +77,8 @@ Not all of these exist today, but they are good directions for future work:
 
 For generated machine-readable artifacts, extend `Blueprint.SourceGenerator.Artifacts.GeneratedManifestEnvelope` and keep the default `.blueprint/manifests/<artifact>.manifest.json` layout unless the migration plan explicitly changes that contract. That keeps later CLI, endpoint, CI, and AI-facing projections aligned on one deterministic source instead of fragmenting into ad-hoc schemas.
 
+The first activated contributor on that contract is the operations/discovery payload: `BlueprintSourceGenerationConfig.BuildDebugManifest(...)` plus `OperationDiscoveryManifestModule` and `OperationsDiscoveryManifestEmitter` now produce a deterministic `operations` manifest view with per-operation `kind`, `namespace`, and `typeName` summaries. Treat that path as the starting point for future manifest-producing modules instead of bypassing the contributor seam, but do not assume those exact fields are permanently frozen if later debug-manifest improvements need a better contributor-owned projection.
+
 ## Observability checklist for new work
 
 When adding or changing runtime behavior, ask:

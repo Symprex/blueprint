@@ -56,4 +56,17 @@ internal static class FoundationModuleDiagnosticDescriptors
         DiagnosticSeverity.Error,
         isEnabledByDefault: true,
         description: "Required pipeline variables must be provided and available no later than the consuming contributor stage.");
+
+    /// <summary>
+    /// Gets the diagnostic emitted when a public planning seam is asked to build data for an operation that does not
+    /// exist in the current compilation.
+    /// </summary>
+    public static readonly DiagnosticDescriptor MissingOperationType = new(
+        id: "BPMOD005",
+        title: "Missing operation type",
+        messageFormat: "The operation type '{0}' could not be found while building capability '{1}'",
+        category: Category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "Public planning helpers should fail deterministically when the requested operation metadata name does not resolve.");
 }

@@ -81,7 +81,9 @@ The target is **consumer-contract compatibility**, not byte-for-byte parity with
 - The generated executor dispatch measurement follow-on is now complete and human-approved: `BlueprintAppExecutor` exposes a shared `ExecuteAsync(ApiOperationContext)` shell in `src\Blueprint.Runtime\Exec\BlueprintAppDataModel.cs`, `src\Blueprint.SourceGenerator.Benchmarks\ExecutorDispatch\ExecutorDispatchBenchmarks.cs` now benchmarks registered-pipeline lookup plus direct-pipeline versus executor-shell dispatch at 10, 100, and 250 operations, and the fresh `ShortRun` artifact (`BenchmarkDotNet.Artifacts\results\Blueprint.SourceGenerator.Benchmarks.RuntimeExec.ExecutorDispatchBenchmarks-report.*`) reports lookup at about `15.5 ns`, `15.9 ns`, and `24.1 ns`; direct pipeline execution at about `69.1 ns`, `55.6 ns`, and `91.4 ns` with `184 B` allocated; and full executor-shell dispatch at about `93.1 ns`, `97.5 ns`, and `137.8 ns` with the same `184 B` allocation profile.
 - Human-approved next Phase 0 follow-on after the dispatch benchmark: switch the active detailed plan to `migration\generated-manifests-and-inspection-surfaces\plan.md` and land the shared manifest envelope, naming/layout rules, and contributor ownership contract before multiple workstreams invent incompatible artifact formats.
 - The first manifest contract-definition pass is now complete and human-approved: `src\Blueprint.SourceGenerator\Artifacts\GeneratedManifestEnvelope.cs` defines the canonical build-time envelope, default `.blueprint/manifests/<artifact>.manifest.json` layout, app/generator identity fields, contributor-owned top-level sections, duplicate operation-key rejection, and stable ordinal key ordering for deterministic serialization; `src\Blueprint.SourceGenerator.Tests\Artifacts\GeneratedManifestEnvelopeTests.cs` plus `GeneratedManifestEnvelopeTests.CreateBuildManifest_Should_Serialize_Stable_Envelope.verified.txt` lock the approved contract.
-- Human-approved next follow-on inside the manifest workstream: land operations/discovery summaries as the first real module contributor through the shared envelope so the workstream can satisfy the "at least one real module contributes manifest data through the shared contract" acceptance criterion before broader manifest families land.
+- The first real manifest-emitting contributor slice is now human-approved: `IDebugManifestContributor` now exposes `ContributeToManifest(DebugManifestContributorContext)`, `BlueprintSourceGenerationConfig.BuildDebugManifest(...)` activates the seam, `OperationDiscoveryManifestModule` contributes `kind`/`namespace`/`typeName` discovery entries for each operation, and `OperationsDiscoveryManifestEmitter` projects that planning data into the approved `operations.manifest.json` envelope shape with an `operations-discovery` section plus deterministic per-operation summaries. The slice is hardened by namespace-safe `Blueprint.Model` interface classification plus `BPMOD005` missing-operation diagnostics, the latest format/build/main-generator-tests pass is green, and second-pass code review found no remaining blocking issues.
+- Human review direction for future manifest work: the current operations-discovery entry shape is approved as the starting projection, but it is not permanently frozen. Later debug-manifest improvements may diverge from the current `kind`/`namespace`/`typeName` payload when a better owned shape is warranted, as long as those changes go back through the same review/versioning gates.
+- Human-approved next Phase 0 follow-on after the operations-discovery slice: keep the shared envelope as the canonical machine-readable source and add the first build-time markdown projection plus snapshot proof so humans and AI agents can review the same manifest data without recomputing discovery.
 
 ## Durable decision rule
 
@@ -510,6 +512,8 @@ When delegating a workstream, include:
 - [x] Define a shared manifest envelope and naming/versioning contract.
 - [x] Define how modules contribute without schema collisions.
 - [ ] Make JSON the canonical representation and define projections to markdown/endpoints/tooling.
+  - [ ] Add the first build-time markdown projection and snapshot proof from `GeneratedManifestEnvelope` (approved next slice).
+  - [ ] Add runtime inspection projection surfaces after the shared envelope proves it can support derived views without recomputing discovery.
 - [ ] Ensure runtime inspection projects from build-time data rather than recomputing.
 - [ ] Align manifest output with migration reports, OpenAPI, and performance artifacts.
 
@@ -517,7 +521,7 @@ When delegating a workstream, include:
 
 - [x] The schema is stable enough to snapshot and publish.
 - [x] Phase 0 can close with the shared contract agreed even if later modules still need to populate richer payloads incrementally.
-- [ ] At least one real module contributes manifest data through the shared contract.
+- [x] At least one real module contributes manifest data through the shared contract.
 - [ ] Humans and AI agents can answer "what exists?" and "why?" without reverse-engineering generated code.
 - [ ] Runtime inspection does not invent or recompute conflicting data.
 

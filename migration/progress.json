@@ -7,30 +7,29 @@
   "current": {
     "activeWorkstream": "generated-manifests-and-inspection-surfaces",
     "nextReadySlice": {
-      "title": "Operations discovery manifest payload",
+      "title": "Build-time operations manifest markdown projection and snapshot testing",
       "status": "ready",
       "dependsOn": [
-        "Generated manifest envelope and contributor ownership contract approved."
+        "Operations discovery manifest payload approved."
       ],
       "failingProof": [
-        "A failing snapshot proof shows the first real module still does not publish operations/discovery manifest data through GeneratedManifestEnvelope.",
-        "A failing ownership proof shows the operations manifest section is not yet reserved for one contributor with collision-safe behavior.",
-        "A failing integration proof shows no canonical operations.manifest.json-style output can yet be produced for a sample Blueprint app."
+        "A failing test shows GeneratedManifestEnvelope does not yet expose a markdown projection for human-readable review output.",
+        "A failing snapshot test shows the approved operations manifest cannot yet be reviewed as a stable markdown summary derived from the shared envelope.",
+        "A failing guard test shows any markdown projection must use only the envelope contents rather than recomputing operation discovery."
       ],
       "expectedFiles": [
-        "src\\Blueprint.SourceGenerator\\Artifacts\\OperationsDiscoveryManifestEmitter.cs",
-        "src\\Blueprint.SourceGenerator.Tests\\Artifacts\\OperationsDiscoveryManifestEmitterTests.cs",
-        "src\\Blueprint.SourceGenerator.Tests\\Artifacts\\OperationsDiscoveryManifestEmitterTests.Should_Emit_Operations_Discovery_Summary.verified.txt",
-        "src\\Blueprint.SourceGenerator.Tests.Integration\\Generators\\OperationsDiscoveryManifestGeneratorIntegrationTests.cs",
+        "src\\Blueprint.SourceGenerator\\Artifacts\\GeneratedManifestEnvelope.cs",
+        "src\\Blueprint.SourceGenerator.Tests\\Artifacts\\ManifestMarkdownProjectionTests.cs",
+        "src\\Blueprint.SourceGenerator.Tests\\Artifacts\\ManifestSnapshots\\ManifestMarkdownProjectionTests.When_operations_discovered_then_markdown_summary_captures_schema.verified.txt",
         "migration\\generated-manifests-and-inspection-surfaces\\plan.md"
       ],
-      "reviewGate": "Require code review before closing the first real manifest-emitting contributor slice."
+      "reviewGate": "Verify the markdown projection uses only envelope data and does not quietly recompute discovery or freeze future manifest shape decisions."
     },
     "lastCompletedSlice": {
       "workstream": "generated-manifests-and-inspection-surfaces",
-      "title": "Generated manifest envelope and contributor ownership contract"
+      "title": "Operations discovery manifest payload"
     },
-    "openReviewGate": "None before the operations discovery manifest payload slice starts."
+    "openReviewGate": "No current open review gate. The next markdown-projection slice must stop for review if it recomputes discovery or turns the current operations-discovery entry shape into a permanently frozen contract."
   },
   "orchestrationContract": {
     "mustImplementAfterSliceSelection": true,

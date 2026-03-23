@@ -91,6 +91,17 @@ public record BlueprintSourceGenerationConfig(IReadOnlyList<IBlueprintSourceGene
         return PipelinePlanBuilder.Build(operationFullClassName, compilation, this.BuildExecutionPlan());
     }
 
+    /// <summary>
+    /// Builds the per-operation debug manifest for a specific operation using the configured modules.
+    /// </summary>
+    /// <param name="operationFullClassName">The fully-qualified metadata name of the operation type.</param>
+    /// <param name="compilation">The active compilation used to resolve the operation symbol and related lookups.</param>
+    /// <returns>The debug manifest, or diagnostics if contributor composition is invalid.</returns>
+    public Result<GeneratedDebugManifest> BuildDebugManifest(string operationFullClassName, Compilation compilation)
+    {
+        return DebugManifestPlanBuilder.Build(operationFullClassName, compilation, this.BuildExecutionPlan());
+    }
+
     private static TContributor[] OrderContributors<TContributor>(
         IReadOnlyList<ContributorRegistration<TContributor>> registrations,
         string capabilityName,
