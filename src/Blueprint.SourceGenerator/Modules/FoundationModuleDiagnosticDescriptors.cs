@@ -69,4 +69,16 @@ internal static class FoundationModuleDiagnosticDescriptors
         DiagnosticSeverity.Error,
         isEnabledByDefault: true,
         description: "Public planning helpers should fail deterministically when the requested operation metadata name does not resolve.");
+
+    /// <summary>
+    /// Gets the diagnostic emitted when multiple debug-manifest contributors try to own the same entry key.
+    /// </summary>
+    public static readonly DiagnosticDescriptor DuplicateDebugManifestEntry = new(
+        id: "BPMOD006",
+        title: "Duplicate debug-manifest entry",
+        messageFormat: "The debug-manifest contributor '{0}' attempted to write entry '{1}' for operation '{3}', but contributor '{2}' already owns that key",
+        category: Category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "Debug-manifest entries are contributor-owned so inspection artifacts stay deterministic and explainable as more modules participate.");
 }

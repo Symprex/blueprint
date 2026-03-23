@@ -7,6 +7,8 @@ namespace Blueprint.SourceGenerator.Planning;
 public sealed record GeneratedDebugManifest(OperationModel Operation)
 {
     private readonly Dictionary<string, string> _entries = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, string> _entryOwners = new(StringComparer.Ordinal);
+    private readonly List<DebugManifestEntryCollision> _entryCollisions = [];
 
     /// <summary>
     /// Gets the current manifest entries.
@@ -14,12 +16,38 @@ public sealed record GeneratedDebugManifest(OperationModel Operation)
     public IReadOnlyDictionary<string, string> Entries => this._entries;
 
     /// <summary>
+    /// Gets the contributor collisions detected while modules build the manifest.
+    /// </summary>
+    public IReadOnlyList<DebugManifestEntryCollision> EntryCollisions => this._entryCollisions;
+
+    /// <summary>
     /// Adds or replaces a manifest entry.
     /// </summary>
     /// <param name="key">The entry key.</param>
     /// <param name="value">The entry value.</param>
-    public void AddEntry(string key, string value)
+    /// <param name="contributorId">The contributor claiming ownership of the entry.</param>
+    public void AddEntry(string key, string value, string contributorId)
     {
+        if (this._entryOwners.TryGetValue(key, out var ownerContributorId) &&
+            !string.Equals(ownerContributorId, contributorId, StringComparison.Ordinal))
+        {
+            // Keep the first owner so the resulting diagnostics explain which contributor already claimed the key.
+            this._entryCollisions.Add(new DebugManifestEntryCollision(key, ownerContributorId, contributorId));
+            return;
+        }
+
         this._entries[key] = value;
+        this._entryOwners[key] = contributorId;
     }
+
+    /// <summary>
+    /// Describes a conflicting attempt to claim an already-owned manifest entry.
+    /// </summary>
+    /// <param name="Key">The contested manifest entry key.</param>
+    /// <param name="OwnerContributorId">The contributor that claimed the key first.</param>
+    /// <param name="ConflictingContributorId">The later contributor that attempted to reuse the key.</param>
+    public sealed record DebugManifestEntryCollision(
+        string Key,
+        string OwnerContributorId,
+        string ConflictingContributorId);
 }

@@ -522,6 +522,7 @@ When delegating a workstream, include:
     - approved shape: `ManifestDiagnosticsPageEndpoint` maps `/.blueprint/manifests/operations.html` in development, fetches sibling `operations.json` client-side, and keeps raw fetch error details out of the page body
   - [ ] Add wider runtime inspection projection surfaces after the dev-only endpoint proves the envelope can be consumed through hosted inspection surfaces.
     - approved hosted follow-on: add a development-only markdown endpoint that serves prebuilt markdown bytes via an explicit resource-name seam, without projecting markdown inside `Blueprint.Runtime`
+    - human-approved hardening slice: reject conflicting debug-manifest entry ownership across multiple contributors with `BPMOD006` instead of silently allowing last-writer-wins replacement
 - [ ] Ensure runtime inspection projects from build-time data rather than recomputing.
 - [ ] Align manifest output with migration reports, OpenAPI, and performance artifacts.
 
@@ -539,7 +540,9 @@ When delegating a workstream, include:
 - [x] Runtime manifest loading tests covering embedded-resource projection, stable roundtripping, and no-rediscovery runtime reads.
 - [x] Hosted manifest inspection endpoint tests covering the development-only JSON route, production dark-path gating, fail-fast resource validation during endpoint mapping, the review-ready diagnostics page shell, and generic DOM-facing error handling.
 - [ ] Schema validation tests.
-- [ ] Compatibility tests for multiple module contributors.
+- [x] Compatibility tests for multiple module contributors.
+  - approved slice: `DebugManifestContributorCompatibilityTests` now proves the public `BuildDebugManifest(...)` seam rejects conflicting entry keys with `BPMOD006` while preserving non-conflicting composition
+  - next recommended slice after this approval: add machine-readable schema validation for the approved manifest envelope and hosted fixture artifacts
 
 ### Docs and artifacts
 

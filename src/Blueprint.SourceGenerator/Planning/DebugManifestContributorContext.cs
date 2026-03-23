@@ -7,6 +7,7 @@ namespace Blueprint.SourceGenerator.Planning;
 /// </summary>
 public sealed class DebugManifestContributorContext
 {
+    private readonly string _contributorId;
     private readonly OperationModel _operation;
     private readonly GeneratedDebugManifest _manifest;
     private readonly IOperationLookup _operationLookup;
@@ -14,14 +15,17 @@ public sealed class DebugManifestContributorContext
     /// <summary>
     /// Initializes a new instance of the <see cref="DebugManifestContributorContext"/> class.
     /// </summary>
+    /// <param name="contributorId">The contributor currently populating the manifest.</param>
     /// <param name="operation">The current operation.</param>
     /// <param name="manifest">The manifest plan under construction.</param>
     /// <param name="operationLookup">A lookup for related operations.</param>
     public DebugManifestContributorContext(
+        string contributorId,
         OperationModel operation,
         GeneratedDebugManifest manifest,
         IOperationLookup operationLookup)
     {
+        this._contributorId = contributorId;
         this._operation = operation;
         this._manifest = manifest;
         this._operationLookup = operationLookup;
@@ -48,7 +52,7 @@ public sealed class DebugManifestContributorContext
     /// <param name="value">The manifest entry value.</param>
     public void AddEntry(string key, string value)
     {
-        this._manifest.AddEntry(key, value);
+        this._manifest.AddEntry(key, value, this._contributorId);
     }
 
     /// <summary>

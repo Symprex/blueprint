@@ -46,7 +46,27 @@ internal static class DebugManifestPlanBuilder
 
         foreach (var contributor in executionPlanResult.Value.DebugManifestContributors)
         {
-            contributor.ContributeToManifest(new DebugManifestContributorContext(operationModel, debugManifest, operationLookup));
+            contributor.ContributeToManifest(new DebugManifestContributorContext(
+                contributor.ContributorId,
+                operationModel,
+                debugManifest,
+                operationLookup));
+        }
+
+        if (debugManifest.EntryCollisions.Count > 0)
+        {
+            return Result<GeneratedDebugManifest>.Failure(
+                debugManifest.EntryCollisions
+                    .Select(collision => new DiagnosticInfo(
+                        FoundationModuleDiagnosticDescriptors.DuplicateDebugManifestEntry,
+                        (Location?)null,
+                        [
+                            collision.ConflictingContributorId,
+                            collision.Key,
+                            collision.OwnerContributorId,
+                            operationModel.FullTypeName,
+                        ]))
+                    .ToArray());
         }
 
         return Result.Success(debugManifest);
