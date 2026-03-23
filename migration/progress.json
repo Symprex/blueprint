@@ -7,28 +7,28 @@
   "current": {
     "activeWorkstream": "performance-and-scale",
     "nextReadySlice": {
-      "title": "Blueprint HTTP startup and endpoint-mapping measurement follow-on",
+      "title": "Generated executor dispatch measurement follow-on",
       "status": "ready",
       "dependsOn": [
-        "BlueprintApp runtime hotspot redesign completed and reviewed"
+        "Blueprint HTTP startup and endpoint-mapping measurement follow-on completed and reviewed"
       ],
       "failingProof": [
-        "BenchmarkDotNet or a focused startup measurement captures the current endpoint-mapping cost through ApplicationBuilderExtensions before any host-path optimization.",
-        "Runtime tests or a measurement harness prove mapped endpoint counts and attached descriptor metadata stay stable while the startup path is measured or refined.",
-        "The new startup/endpoint-mapping artifact compares against the updated BlueprintApp registration and lookup baseline rather than the old pre-redesign numbers."
+        "BenchmarkDotNet or a focused runtime measurement captures generated executor dispatch cost through the current BlueprintAppExecutor and representative pipelines before any request-path optimization.",
+        "The next measurement surface also makes shared executor shell overhead explicit so request-path work can be separated from startup and registration work.",
+        "The new dispatch artifact compares against the updated BlueprintApp registration and endpoint-mapping baselines rather than stale pre-runtime-redesign numbers."
       ],
       "expectedFiles": [
-        "src\\Blueprint.Runtime\\Http\\ApplicationBuilderExtensions.cs",
-        "src\\Blueprint.SourceGenerator.Benchmarks\\Blueprint.SourceGenerator.Benchmarks.csproj",
-        "src\\Blueprint.SourceGenerator.Sample\\Startup.cs"
+        "src\\Blueprint.Runtime\\Exec\\BlueprintAppDataModel.cs",
+        "src\\Blueprint.SourceGenerator.Benchmarks\\Validation\\ValidationPipelineBenchmarks.cs",
+        "src\\Blueprint.SourceGenerator.Benchmarks\\Blueprint.SourceGenerator.Benchmarks.csproj"
       ],
-      "reviewGate": "Require code review before closing the first Blueprint HTTP startup/endpoint-mapping measurement slice."
+      "reviewGate": "Require code review before closing the first generated executor dispatch measurement slice."
     },
     "lastCompletedSlice": {
       "workstream": "performance-and-scale",
-      "title": "BlueprintApp runtime hotspot redesign"
+      "title": "Blueprint HTTP startup and endpoint-mapping measurement follow-on"
     },
-    "openReviewGate": "None before the Blueprint HTTP startup/endpoint-mapping measurement slice starts."
+    "openReviewGate": "None before the generated executor dispatch measurement slice starts."
   },
   "orchestrationContract": {
     "mustImplementAfterSliceSelection": true,
