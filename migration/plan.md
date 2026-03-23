@@ -74,7 +74,8 @@ The target is **consumer-contract compatibility**, not byte-for-byte parity with
 - The new hotspot artifacts (`BenchmarkDotNet.Artifacts\results\Blueprint.SourceGenerator.Benchmarks.RuntimeModel.BlueprintAppRegistrationBenchmarks-report.*` and `BenchmarkDotNet.Artifacts\results\Blueprint.SourceGenerator.Benchmarks.RuntimeModel.BlueprintAppLookupBenchmarks-report.*`) currently show registration growing from about `2.9 us` / `5.27 KB` at 10 operations to about `203.6 us` / `226.95 KB` at 100 and about `1.08 ms` / `1296.4 KB` at 250, while lookup remains about `136-141 ns` at 10 operations, about `829-963 ns` at 100, and about `1.76-2.02 us` at 250.
 - Next recommended Phase 0 follow-on after this baseline: stay in Workstream 3 long enough to add the deterministic synthetic fixture generator plus Tier 2 cacheability/invalidation-locality coverage before attempting any `BlueprintApp` runtime optimization.
 - The first retained Tier 2 compile-harness follow-on is now complete locally: `SyntheticBlueprintFixtureGenerator` now emits partial query operations with inline handlers so the same fixture can drive descriptor, app-registration, and pipeline generation together, `TestHelpers` now exposes a shared tracked multi-generator harness for multi-source compile runs and same-driver edit comparisons, and `SyntheticBlueprintFixtureScaleHarnessTests` now proves a 100-operation synthetic fixture compiles cleanly through all three generators while a single-operation handler-signature mutation only changes the expected pipeline output.
-- Next ready Phase 0 follow-on after that harness slice: keep Workstream 3 active long enough to add the shared-contract mutation proof and broader invalidation-locality assertions on top of the same synthetic fixture surface before moving on to runtime optimization work.
+- The shared-contract invalidation-locality follow-on is now complete locally: `SyntheticBlueprintFixtureGenerator` now emits a shared inherited `SyntheticOperationBase` validation contract plus a generic source-file mutation seam, `SyntheticBlueprintFixtureGeneratorTests` now cover the shared base emission, and `SyntheticBlueprintFixtureScaleHarnessTests` now prove that adding `[MaxLength(5)]` to the shared inherited validation contract keeps descriptor and app-registration outputs stable while changing every generated executor pipeline file for the 100-operation synthetic fixture.
+- Next ready Phase 0 follow-on after closing the Tier 2 harness gate: revisit the measured `BlueprintApp` runtime hotspots by redesigning the duplicate URL checks in `src\Blueprint.Runtime.Model\BlueprintApp.cs`, keep `TryFindOperation(...)` semantics covered by tests and benchmarks, and compare the new registration cost curve against the existing 10/100/250-operation baseline.
 
 ## Durable decision rule
 
@@ -214,7 +215,7 @@ No downstream feature work should be treated as "real" until Phase 0 closes.
 
 - [ ] Foundation module system minimum viable slice is implemented.
 - [ ] Migration diagnostic ranges, report classes, and analyzer/codemod direction are defined.
-- [ ] Tier 2 compile-time scale harness exists and is running deterministically.
+- [x] Tier 2 compile-time scale harness exists and is running deterministically.
 - [ ] Generated manifest envelope/schema contract is agreed and reviewable.
 - [ ] Benchmark baselines for the known `BlueprintApp` hotspots exist in a reviewable artifact location before Phase 1 starts.
 - [ ] The Phase 0 review artifact set exists: manifest schema/example, synthetic fixture example, Tier 2 test evidence, and hotspot benchmark baseline.

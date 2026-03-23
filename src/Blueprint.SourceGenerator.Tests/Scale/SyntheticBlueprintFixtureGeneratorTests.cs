@@ -36,9 +36,10 @@ public class SyntheticBlueprintFixtureGeneratorTests
         fixture.SourceFiles.Select(static file => file.Path)
             .Should()
             .Contain("SyntheticScaleApp.cs")
+            .And.Contain(@"Shared\SyntheticOperationBase.cs")
             .And.Contain("Operations\\SyntheticOperation001.cs")
             .And.Contain("Operations\\SyntheticOperation005.cs");
-        fixture.SourceFiles.Should().HaveCount(6);
+        fixture.SourceFiles.Should().HaveCount(7);
     }
 
     [Fact]

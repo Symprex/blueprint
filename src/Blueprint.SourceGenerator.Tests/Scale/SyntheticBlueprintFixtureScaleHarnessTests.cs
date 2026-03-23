@@ -76,4 +76,41 @@ public class SyntheticBlueprintFixtureScaleHarnessTests
             .Should()
             .Equal("SyntheticOperation050ExecutorPipeline.g.cs");
     }
+
+    [Fact]
+    public void When_mutating_shared_validation_contract_then_pipeline_output_changes_are_broader_but_explainable()
+    {
+        var fixture = SyntheticBlueprintFixtureGenerator.Create(
+            new SyntheticBlueprintFixtureOptions(
+                namespaceName: "Synthetic.Scale",
+                appName: "SyntheticScaleApp",
+                operationCount: 100));
+        var updatedFixture = fixture.MutateSourceFile(
+            path: @"Shared\SyntheticOperationBase.cs",
+            mutation: static source => source.Replace(
+                "[global::System.ComponentModel.DataAnnotations.Required]",
+                "[global::System.ComponentModel.DataAnnotations.Required]\n        [global::System.ComponentModel.DataAnnotations.MaxLength(5)]",
+                StringComparison.Ordinal));
+
+        var editResult = TestHelpers.CompileWithTrackedGeneratorsAfterEdit(
+            [
+                TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>(),
+                TestHelpers.CreateTrackedGenerator<AppDataModelSourceGenerator>(),
+                TestHelpers.CreateTrackedGenerator<OperationExecutorPipelineSourceGenerator>(),
+            ],
+            fixture.SourceFiles.Select(static file => file.Content).ToArray(),
+            updatedFixture.SourceFiles.Select(static file => file.Content).ToArray(),
+            fixture.SourceFiles.Select(static file => file.Path).ToArray());
+
+        editResult.Updated.Diagnostics.Should().BeEmpty();
+        editResult.GetChangedGeneratedSourceHintNames(nameof(OperationDescriptorSourceGenerator))
+            .Should()
+            .BeEmpty();
+        editResult.GetChangedGeneratedSourceHintNames(nameof(AppDataModelSourceGenerator))
+            .Should()
+            .BeEmpty();
+        editResult.GetChangedGeneratedSourceHintNames(nameof(OperationExecutorPipelineSourceGenerator))
+            .Should()
+            .Equal(Enumerable.Range(1, 100).Select(static operationIndex => $"SyntheticOperation{operationIndex:000}ExecutorPipeline.g.cs"));
+    }
 }
