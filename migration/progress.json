@@ -7,28 +7,28 @@
   "current": {
     "activeWorkstream": "performance-and-scale",
     "nextReadySlice": {
-      "title": "Repeated host startup and endpoint-mapping stress harness",
+      "title": "PR-lane versus scheduled benchmark split",
       "status": "ready",
       "dependsOn": [
-        "Concurrent executor dispatch stress harness committed."
+        "Repeated host startup and endpoint-mapping stress harness committed."
       ],
       "failingProof": [
-        "A failing proof shows Phase 0 still lacks a deterministic repeated host startup and endpoint-mapping stress harness, even though `BlueprintEndpointMappingBenchmarks` already measures one-shot mapping cost.",
-        "A failing proof shows `MapBlueprintApi(...)` and the current hosted inspection endpoints are not yet exercised across repeated host construction and mapping iterations in a non-microbenchmark proof."
+        "A failing proof shows the repo still lacks a durable PR-lane versus scheduled/manual benchmark split, so contributors have no approved boundary between always-on regression checks and richer benchmark or stress runs.",
+        "A failing proof shows the current docs and migration plans do not yet tell contributors where executor/startup stress harnesses belong in PR validation versus scheduled or manual measurement flows."
       ],
       "expectedFiles": [
+        "docs\\implementation-checklists.md",
         "docs\\observability-and-dev-experience.md",
+        ".agents\\skills\\extending-blueprint\\SKILL.md",
         "migration\\performance-and-scale\\plan.md",
         "migration\\plan.md",
-        "migration\\progress.json",
-        "src\\Blueprint.SourceGenerator.Benchmarks\\BlueprintHttp\\BlueprintEndpointMappingBenchmarks.cs",
-        "src\\Blueprint.SourceGenerator.Tests\\Artifacts\\ManifestInspectionEndpointTests.cs"
+        "migration\\progress.json"
       ],
-      "reviewGate": "Stop again for review before broader manifest/OpenAPI soak work if the first repeated startup harness exposes host-lifecycle gaps or needs a dedicated artifact/reporting seam."
+      "reviewGate": "Stop again for review before wiring actual CI lanes if the repo needs a policy decision on which benchmark or stress checks are acceptable in PRs versus scheduled/manual runs."
     },
     "lastCompletedSlice": {
       "workstream": "performance-and-scale",
-      "title": "Concurrent executor dispatch stress harness"
+      "title": "Repeated host startup and endpoint-mapping stress harness"
     },
     "openReviewGate": null
   },
