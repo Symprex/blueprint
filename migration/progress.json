@@ -2,31 +2,34 @@
   "schemaVersion": 1,
   "sourceOfTruth": {
     "masterPlan": "migration\\plan.md",
-    "workstreamPlan": "migration\\generated-manifests-and-inspection-surfaces\\plan.md"
+    "workstreamPlan": "migration\\performance-and-scale\\plan.md"
   },
   "current": {
-    "activeWorkstream": "generated-manifests-and-inspection-surfaces",
+    "activeWorkstream": "performance-and-scale",
     "nextReadySlice": {
-      "title": "Manifest follow-on prioritization",
-      "status": "needs-review",
+      "title": "Synthetic invalidation report artifact",
+      "status": "ready",
       "dependsOn": [
-        "Manifest machine-readable schema validation committed."
+        "Hosted manifest schema endpoint committed."
       ],
       "failingProof": [
-        "A reviewed next slice must narrow whether the manifest workstream should widen runtime or CLI inspection projections first, or instead align manifest artifacts with migration, OpenAPI, and performance outputs before another implementation session starts.",
-        "If that prioritization is skipped, the next orchestrator session cannot produce a dependency-safe failing proof from the remaining broad manifest checklist items without guessing at scope."
+        "A failing proof shows the Tier 2 synthetic scale harness still exposes locality results only through ad-hoc test assertions rather than a machine-readable invalidation report artifact that AI/CI tooling can inspect.",
+        "A failing proof shows the single-operation and shared-contract mutation scenarios do not yet produce a deterministic envelope-aligned artifact that captures scenario metadata and changed generated outputs."
       ],
       "expectedFiles": [
+        "src\\Blueprint.SourceGenerator.Tests\\Scale\\SyntheticBlueprintFixtureScaleHarnessTests.cs",
+        "src\\Blueprint.SourceGenerator.Tests\\Scale\\SyntheticFixtureInvalidationReport.cs",
+        "migration\\performance-and-scale\\plan.md",
         "migration\\plan.md",
         "migration\\generated-manifests-and-inspection-surfaces\\plan.md"
       ],
-      "reviewGate": "Choose and record the next narrow manifest follow-on before implementation. The remaining work is broader than one dependency-safe slice until a human reviewer prioritizes between wider runtime/CLI inspection projections and cross-artifact manifest alignment."
+      "reviewGate": "Stop again for review before generalizing the first performance artifact shape to benchmark, telemetry, or migration outputs if the synthetic invalidation report suggests different shared-envelope fields are needed."
     },
     "lastCompletedSlice": {
       "workstream": "generated-manifests-and-inspection-surfaces",
-      "title": "Manifest machine-readable schema validation"
+      "title": "Hosted manifest schema endpoint"
     },
-    "openReviewGate": "Choose and record the next narrow manifest follow-on before implementation. The remaining manifest work branches between wider runtime/CLI inspection projections and cross-artifact manifest alignment."
+    "openReviewGate": null
   },
   "orchestrationContract": {
     "mustImplementAfterSliceSelection": true,

@@ -29,6 +29,7 @@
   <ItemGroup>
     <EmbeddedResource Include="Artifacts\ManifestResources\operations.manifest.json" LogicalName="Blueprint.SourceGenerator.Tests.Artifacts.ManifestResources.operations.manifest.json" />
     <EmbeddedResource Include="Artifacts\ManifestResources\operations.manifest.md" LogicalName="Blueprint.SourceGenerator.Tests.Artifacts.ManifestResources.operations.manifest.md" />
+    <EmbeddedResource Include="..\Blueprint.SourceGenerator\Artifacts\GeneratedManifestEnvelope.schema.json" Link="Artifacts\ManifestResources\GeneratedManifestEnvelope.schema.json" LogicalName="Blueprint.SourceGenerator.Tests.Artifacts.ManifestResources.GeneratedManifestEnvelope.schema.json" />
   </ItemGroup>
 
   <ItemGroup>

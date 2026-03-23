@@ -42,6 +42,13 @@ public class BlueprintHttpOptions
     public string? OperationsManifestMarkdownResourceName { get; set; }
 
     /// <summary>
+    /// Gets or sets the optional embedded resource name for the checked-in schema that describes the hosted operations
+    /// manifest contract. Keeping schema bytes explicit lets runtime inspection widen without moving schema lookup or
+    /// schema interpretation logic into the runtime assembly.
+    /// </summary>
+    public string? OperationsManifestSchemaResourceName { get; set; }
+
+    /// <summary>
     /// An optional domain that should be used instead of the request URL when generating absolute
     /// link URLs.
     /// </summary>

@@ -108,6 +108,17 @@ public static class EndpointRouteBuilderExtensions
 
                 builders.Add(manifestMarkdownBuilder);
             }
+
+            if (!string.IsNullOrWhiteSpace(httpOptions.OperationsManifestSchemaResourceName))
+            {
+                var manifestSchemaBuilder = endpoints.Map(
+                    RoutePatternFactory.Parse(manifestInspectionBasePath + ".schema.json"),
+                    ManifestSchemaInspectionEndpoint.Create(typeof(T).Assembly, httpOptions.OperationsManifestSchemaResourceName));
+                manifestSchemaBuilder.WithDisplayName("GET Blueprint manifest operations schema");
+                manifestSchemaBuilder.WithMetadata(new HttpMethodMetadata([HttpMethods.Get]));
+
+                builders.Add(manifestSchemaBuilder);
+            }
         }
 
         return new BlueprintEndpointRouteBuilder(builders);

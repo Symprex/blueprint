@@ -19,6 +19,7 @@ public class ManifestInspectionEndpointTests
 {
     private const string ResourceName = "Blueprint.SourceGenerator.Tests.Artifacts.ManifestResources.operations.manifest.json";
     private const string MarkdownResourceName = "Blueprint.SourceGenerator.Tests.Artifacts.ManifestResources.operations.manifest.md";
+    private const string SchemaResourceName = "Blueprint.SourceGenerator.Tests.Artifacts.ManifestResources.GeneratedManifestEnvelope.schema.json";
     private const string SnapshotsFolder = "ManifestSnapshots/";
 
     [Fact]
@@ -65,6 +66,29 @@ public class ManifestInspectionEndpointTests
         productionEndpoints.MapBlueprintApi<ManifestInspectionBlueprintApp, BlueprintAppExecutor>("api/");
 
         FindEndpoint(productionEndpoints, "api/.blueprint/manifests/operations.md").Should().BeNull();
+    }
+
+    [Fact]
+    public async Task When_mapped_in_development_then_manifest_schema_endpoint_returns_embedded_schema_and_production_stays_dark()
+    {
+        var developmentEndpoints = CreateEndpoints(Environments.Development);
+        developmentEndpoints.MapBlueprintApi<ManifestInspectionBlueprintApp, BlueprintAppExecutor>("api/");
+
+        var schemaEndpoint = FindEndpoint(developmentEndpoints, "api/.blueprint/manifests/operations.schema.json");
+
+        schemaEndpoint.Should().NotBeNull();
+
+        var response = await InvokeEndpointAsync(schemaEndpoint!);
+        var expectedSchema = ManifestResourceLoader.LoadRequiredString(typeof(ManifestInspectionEndpointTests).Assembly, SchemaResourceName);
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        response.ContentType.Should().Be("application/schema+json; charset=utf-8");
+        response.Body.Should().Be(expectedSchema);
+
+        var productionEndpoints = CreateEndpoints(Environments.Production);
+        productionEndpoints.MapBlueprintApi<ManifestInspectionBlueprintApp, BlueprintAppExecutor>("api/");
+
+        FindEndpoint(productionEndpoints, "api/.blueprint/manifests/operations.schema.json").Should().BeNull();
     }
 
     [Fact]
@@ -130,6 +154,17 @@ public class ManifestInspectionEndpointTests
             .WithMessage("*missing.manifest.json*");
     }
 
+    [Fact]
+    public void When_manifest_schema_resource_name_is_invalid_then_mapping_fails_fast()
+    {
+        var endpoints = CreateEndpoints(Environments.Development, schemaResourceName: "missing.schema.json");
+
+        var act = () => endpoints.MapBlueprintApi<ManifestInspectionBlueprintApp, BlueprintAppExecutor>("api/");
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*missing.schema.json*");
+    }
+
     private static async Task<TestEndpointInvocationResult> InvokeEndpointAsync(RouteEndpoint endpoint)
     {
         await using var body = new MemoryStream();
@@ -161,16 +196,20 @@ public class ManifestInspectionEndpointTests
     private static TestEndpointRouteBuilder CreateEndpoints(
         string environmentName,
         string resourceName = ResourceName,
-        string markdownResourceName = MarkdownResourceName)
+        string markdownResourceName = MarkdownResourceName,
+        string schemaResourceName = SchemaResourceName)
     {
+        var httpOptions = new BlueprintHttpOptions
+        {
+            OperationsManifestResourceName = resourceName,
+            OperationsManifestMarkdownResourceName = markdownResourceName,
+            OperationsManifestSchemaResourceName = schemaResourceName,
+        };
+
         var services = new ServiceCollection()
             .AddLogging()
             .AddSingleton<IWebHostEnvironment>(new TestWebHostEnvironment(environmentName))
-            .AddSingleton<IOptions<BlueprintHttpOptions>>(Options.Create(new BlueprintHttpOptions
-            {
-                OperationsManifestResourceName = resourceName,
-                OperationsManifestMarkdownResourceName = markdownResourceName,
-            }))
+            .AddSingleton<IOptions<BlueprintHttpOptions>>(Options.Create(httpOptions))
             .BuildServiceProvider();
 
         return new TestEndpointRouteBuilder(services);
