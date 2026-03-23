@@ -542,7 +542,8 @@ When delegating a workstream, include:
 - [ ] Schema validation tests.
   - completed first sub-slice: `GeneratedManifestEnvelope.FromJson(...)` now rejects malformed top-level `sections` and `operations` properties instead of silently ignoring non-object shapes
   - completed second sub-slice: `GeneratedManifestEnvelope.FromJson(...)` now requires `schemaVersion` to be a real JSON integer token instead of accepting a quoted numeric string
-  - next recommended sub-slice: tighten required string fields so non-string tokens cannot pass through permissive conversions while keeping the work inside the parser contract
+  - completed third sub-slice: `GeneratedManifestEnvelope.FromJson(...)` now requires required string fields to be real JSON string tokens instead of accepting numeric tokens through permissive conversions
+  - next recommended sub-slice: add explicit nested-string proof for `app`, `generator`, and section `contributorId` paths while keeping the work inside the parser contract
 - [x] Compatibility tests for multiple module contributors.
   - approved slice: `DebugManifestContributorCompatibilityTests` now proves the public `BuildDebugManifest(...)` seam rejects conflicting entry keys with `BPMOD006` while preserving non-conflicting composition
   - next recommended slice after this approval: add machine-readable schema validation for the approved manifest envelope and hosted fixture artifacts

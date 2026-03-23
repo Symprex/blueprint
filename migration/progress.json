@@ -7,25 +7,25 @@
   "current": {
     "activeWorkstream": "generated-manifests-and-inspection-surfaces",
     "nextReadySlice": {
-      "title": "Manifest required-string token validation",
+      "title": "Manifest nested required-string proof",
       "status": "ready",
       "dependsOn": [
-        "Manifest schemaVersion integer-token validation committed."
+        "Manifest required-string token validation committed."
       ],
       "failingProof": [
-        "A failing proof shows required string fields such as artifactName, relativePath, app identity, generator identity, or section contributorId can still accept non-string JSON tokens through permissive conversions.",
-        "A failing proof shows malformed required-string JSON can still slip past the test suite without a direct contract-level assertion."
+        "A failing proof shows nested required string fields such as app identity, generator identity, or section contributorId are not yet covered by explicit invalid-token parser tests even though the shared helper changed.",
+        "A failing proof shows malformed nested required-string JSON can still slip past the test suite without a direct contract-level assertion."
       ],
       "expectedFiles": [
         "src\\Blueprint.SourceGenerator.Tests\\Artifacts\\GeneratedManifestEnvelopeTests.cs",
         "src\\Blueprint.SourceGenerator\\Artifacts\\GeneratedManifestEnvelope.cs",
         "migration\\generated-manifests-and-inspection-surfaces\\plan.md"
       ],
-      "reviewGate": "Stop again for review before broader hosted/tooling inspection work if required-string validation changes the approved manifest contract or reveals contract drift that needs a design decision."
+      "reviewGate": "Stop again for review before broader hosted/tooling inspection work if nested required-string proof reveals a contract drift or the next schema-validation step needs a design decision."
     },
     "lastCompletedSlice": {
       "workstream": "generated-manifests-and-inspection-surfaces",
-      "title": "Manifest schemaVersion integer-token validation"
+      "title": "Manifest required-string token validation"
     },
     "openReviewGate": null
   },

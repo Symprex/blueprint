@@ -140,6 +140,18 @@ public class GeneratedManifestEnvelopeTests
             .WithMessage("*schemaVersion*integer*");
     }
 
+    [Fact]
+    public void FromJson_Should_Reject_ArtifactName_That_Is_Not_A_String_Token()
+    {
+        var manifestJson = CreateValidManifestJson();
+        manifestJson["artifactName"] = 123;
+
+        var act = () => GeneratedManifestEnvelope.FromJson(manifestJson.ToString());
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*artifactName*string*");
+    }
+
     private static JObject CreateValidManifestJson()
     {
         return new JObject

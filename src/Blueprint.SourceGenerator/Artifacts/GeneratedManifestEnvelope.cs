@@ -325,7 +325,18 @@ public sealed class GeneratedManifestEnvelope
 
     private static string GetRequiredString(JObject parent, string propertyName)
     {
-        var value = parent.Value<string>(propertyName);
+        var token = parent[propertyName];
+        if (token is null)
+        {
+            throw new InvalidOperationException($"Manifest JSON is missing required string property '{propertyName}'.");
+        }
+
+        if (token is not JValue { Type: JTokenType.String } valueToken)
+        {
+            throw new InvalidOperationException($"Manifest JSON property '{propertyName}' must be a JSON string.");
+        }
+
+        var value = valueToken.Value<string>();
         if (value is null || string.IsNullOrWhiteSpace(value))
         {
             throw new InvalidOperationException($"Manifest JSON is missing required string property '{propertyName}'.");
