@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blueprint.local/schemas/generated-manifest-envelope.schema.json",
+  "title": "GeneratedManifestEnvelope",
+  "description": "Schema for the shared Blueprint manifest envelope used by build-time artifacts and hosted inspection fixtures.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "artifactName",
+    "artifactFamily",
+    "relativePath",
+    "app",
+    "generator"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "artifactName": {
+      "$ref": "#/$defs/nonEmptyString"
+    },
+    "artifactFamily": {
+      "$ref": "#/$defs/nonEmptyString"
+    },
+    "relativePath": {
+      "$ref": "#/$defs/nonEmptyString"
+    },
+    "app": {
+      "$ref": "#/$defs/appIdentity"
+    },
+    "generator": {
+      "$ref": "#/$defs/generatorIdentity"
+    },
+    "sections": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/contributorSection"
+      }
+    },
+    "operations": {
+      "type": "object",
+      "additionalProperties": {}
+    }
+  },
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": ".*\\S.*"
+    },
+    "appIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "typeName",
+        "assemblyName"
+      ],
+      "properties": {
+        "typeName": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "assemblyName": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "generatorIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "productName",
+        "version"
+      ],
+      "properties": {
+        "productName": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "version": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "contributorSection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contributorId",
+        "payload"
+      ],
+      "properties": {
+        "contributorId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "payload": {}
+      }
+    }
+  }
+}

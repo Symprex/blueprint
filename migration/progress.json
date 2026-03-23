@@ -7,28 +7,26 @@
   "current": {
     "activeWorkstream": "generated-manifests-and-inspection-surfaces",
     "nextReadySlice": {
-      "title": "Manifest machine-readable schema validation",
-      "status": "ready",
+      "title": "Manifest follow-on prioritization",
+      "status": "needs-review",
       "dependsOn": [
-        "Manifest nested required-string proof committed."
+        "Manifest machine-readable schema validation committed."
       ],
       "failingProof": [
-        "A failing proof shows the approved manifest envelope and hosted inspection fixtures are not yet validated against one machine-readable schema artifact, so malformed-but-shape-compatible JSON can still escape direct schema checks.",
-        "A failing proof shows the hosted JSON and markdown inspection fixtures are not yet pinned to the same schema contract as GeneratedManifestEnvelope roundtripping."
+        "A reviewed next slice must narrow whether the manifest workstream should widen runtime or CLI inspection projections first, or instead align manifest artifacts with migration, OpenAPI, and performance outputs before another implementation session starts.",
+        "If that prioritization is skipped, the next orchestrator session cannot produce a dependency-safe failing proof from the remaining broad manifest checklist items without guessing at scope."
       ],
       "expectedFiles": [
-        "src\\Blueprint.SourceGenerator.Tests\\Artifacts\\GeneratedManifestEnvelopeTests.cs",
-        "src\\Blueprint.SourceGenerator.Tests\\Artifacts\\ManifestInspectionEndpointTests.cs",
-        "src\\Blueprint.SourceGenerator\\Artifacts\\GeneratedManifestEnvelope.cs",
+        "migration\\plan.md",
         "migration\\generated-manifests-and-inspection-surfaces\\plan.md"
       ],
-      "reviewGate": "Stop for review before wider runtime or CLI manifest projections if the schema artifact needs new versioning rules, reveals envelope/fixture drift, or forces a new tooling contract."
+      "reviewGate": "Choose and record the next narrow manifest follow-on before implementation. The remaining work is broader than one dependency-safe slice until a human reviewer prioritizes between wider runtime/CLI inspection projections and cross-artifact manifest alignment."
     },
     "lastCompletedSlice": {
       "workstream": "generated-manifests-and-inspection-surfaces",
-      "title": "Manifest nested required-string proof"
+      "title": "Manifest machine-readable schema validation"
     },
-    "openReviewGate": null
+    "openReviewGate": "Choose and record the next narrow manifest follow-on before implementation. The remaining manifest work branches between wider runtime/CLI inspection projections and cross-artifact manifest alignment."
   },
   "orchestrationContract": {
     "mustImplementAfterSliceSelection": true,

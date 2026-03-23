@@ -2,6 +2,7 @@ using System.Text;
 using Blueprint.Model;
 using Blueprint.Runtime.Artifacts;
 using Blueprint.Runtime.Http;
+using Blueprint.SourceGenerator.Artifacts;
 using FluentAssertions;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -64,6 +65,17 @@ public class ManifestInspectionEndpointTests
         productionEndpoints.MapBlueprintApi<ManifestInspectionBlueprintApp, BlueprintAppExecutor>("api/");
 
         FindEndpoint(productionEndpoints, "api/.blueprint/manifests/operations.md").Should().BeNull();
+    }
+
+    [Fact]
+    public void When_hosted_markdown_fixture_loaded_then_it_matches_manifest_json_projection()
+    {
+        var manifestJson = ManifestResourceLoader.LoadRequiredString(typeof(ManifestInspectionEndpointTests).Assembly, ResourceName);
+        var markdown = ManifestResourceLoader.LoadRequiredString(typeof(ManifestInspectionEndpointTests).Assembly, MarkdownResourceName);
+
+        GeneratedManifestEnvelope.FromJson(manifestJson).ToMarkdown()
+            .Should()
+            .Be(markdown.Replace("\r\n", "\n", StringComparison.Ordinal));
     }
 
     [Fact]

@@ -87,7 +87,8 @@ The target is **consumer-contract compatibility**, not byte-for-byte parity with
 - Human-approved next Phase 0 follow-on after the markdown slice: start runtime inspection surfaces with the narrowest projection first by loading the approved manifest envelope from embedded runtime resources. This embedded-resource slice should establish runtime access to pre-built manifest data before dev-only endpoints or CLI projections widen the inspection surface.
 - The manifest inspection workstream has since advanced beyond that first embedded-resource review gate: the embedded JSON seam, development-only JSON/HTML/markdown endpoints, debug-manifest collision diagnostic, and initial parser-hardening slices now live in `migration\generated-manifests-and-inspection-surfaces\plan.md` as the durable per-slice record.
 - The latest schema-validation follow-on is now complete locally: nested required-string failures now report full manifest paths for `app`, `generator`, and section contributor identities, `GeneratedManifestEnvelopeTests` cover those invalid-token paths, and the latest format/build/main-generator-tests pass with 185 tests green.
-- The next approved follow-on in that workstream is to add machine-readable schema validation for the approved manifest envelope and hosted fixture artifacts before wider runtime or CLI manifest projections are introduced.
+- The machine-readable schema-validation follow-on is now also complete locally: `src\Blueprint.SourceGenerator\Artifacts\GeneratedManifestEnvelope.schema.json` now defines the approved envelope contract, `GeneratedManifestEnvelopeTests` validate the embedded operations manifest and an invalid `app.typeName` mutation against it, `ManifestInspectionEndpointTests` semantically pin the hosted markdown fixture to the canonical JSON projection, and the latest format/build/main-generator-tests pass with 188 tests green.
+- The next manifest follow-on is no longer narrow enough to start without human prioritization. The remaining work now branches between wider runtime/CLI inspection projections and broader artifact-alignment work across migration, OpenAPI, and performance outputs, so the next session should open from `migration\progress.json` and respect that review gate instead of guessing.
 
 ## Durable decision rule
 
@@ -525,7 +526,7 @@ When delegating a workstream, include:
   - [ ] Add wider runtime inspection projection surfaces after the dev-only endpoint proves the envelope can be consumed through hosted inspection surfaces.
     - approved hosted follow-on: add a development-only markdown endpoint that serves prebuilt markdown bytes via an explicit resource-name seam, without projecting markdown inside `Blueprint.Runtime`
     - human-approved hardening slice: reject conflicting debug-manifest entry ownership across multiple contributors with `BPMOD006` instead of silently allowing last-writer-wins replacement
-- [ ] Ensure runtime inspection projects from build-time data rather than recomputing.
+- [x] Ensure runtime inspection projects from build-time data rather than recomputing.
 - [ ] Align manifest output with migration reports, OpenAPI, and performance artifacts.
 
 ### Acceptance criteria
@@ -541,11 +542,12 @@ When delegating a workstream, include:
 - [x] Snapshot tests for manifest shape and content.
 - [x] Runtime manifest loading tests covering embedded-resource projection, stable roundtripping, and no-rediscovery runtime reads.
 - [x] Hosted manifest inspection endpoint tests covering the development-only JSON route, production dark-path gating, fail-fast resource validation during endpoint mapping, the review-ready diagnostics page shell, and generic DOM-facing error handling.
-- [ ] Schema validation tests.
+- [x] Schema validation tests.
   - completed first sub-slice: `GeneratedManifestEnvelope.FromJson(...)` now rejects malformed top-level `sections` and `operations` properties instead of silently ignoring non-object shapes
   - completed second sub-slice: `GeneratedManifestEnvelope.FromJson(...)` now requires `schemaVersion` to be a real JSON integer token instead of accepting a quoted numeric string
   - completed third sub-slice: `GeneratedManifestEnvelope.FromJson(...)` now requires required string fields to be real JSON string tokens instead of accepting numeric tokens through permissive conversions
   - completed fourth sub-slice: nested required-string failures now report full manifest paths for `app`, `generator`, and section contributor identities, and `GeneratedManifestEnvelopeTests` pin those invalid-token paths explicitly
+  - completed fifth sub-slice: `GeneratedManifestEnvelope.schema.json` now publishes the approved envelope contract as a machine-readable artifact, `GeneratedManifestEnvelopeTests` validate the embedded operations manifest plus an invalid mutation against it, and `ManifestInspectionEndpointTests` pin the hosted markdown fixture semantically to the canonical JSON projection
 - [x] Compatibility tests for multiple module contributors.
   - approved slice: `DebugManifestContributorCompatibilityTests` now proves the public `BuildDebugManifest(...)` seam rejects conflicting entry keys with `BPMOD006` while preserving non-conflicting composition
   - next recommended slice after this approval: add machine-readable schema validation for the approved manifest envelope and hosted fixture artifacts
@@ -554,7 +556,7 @@ When delegating a workstream, include:
 
 - [x] Update `docs\observability-and-dev-experience.md`.
 - [x] Update `docs\architecture.md` with manifest generation flow.
-- [ ] Publish schema/example artifacts in Phase 0 and richer reference-app artifacts incrementally later.
+- [x] Publish schema/example artifacts in Phase 0 and richer reference-app artifacts incrementally later.
 
 ### Sub-agent guidance
 
