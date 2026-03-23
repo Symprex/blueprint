@@ -2,33 +2,33 @@
   "schemaVersion": 1,
   "sourceOfTruth": {
     "masterPlan": "migration\\plan.md",
-    "workstreamPlan": "migration\\performance-and-scale\\plan.md"
+    "workstreamPlan": "migration\\generated-manifests-and-inspection-surfaces\\plan.md"
   },
   "current": {
-    "activeWorkstream": "performance-and-scale",
+    "activeWorkstream": "generated-manifests-and-inspection-surfaces",
     "nextReadySlice": {
-      "title": "Generated executor dispatch measurement follow-on",
+      "title": "Generated manifest envelope and contributor ownership contract",
       "status": "ready",
       "dependsOn": [
-        "Blueprint HTTP startup and endpoint-mapping measurement follow-on completed and reviewed"
+        "No hard dependency for the first contract-definition pass."
       ],
       "failingProof": [
-        "BenchmarkDotNet or a focused runtime measurement captures generated executor dispatch cost through the current BlueprintAppExecutor and representative pipelines before any request-path optimization.",
-        "The next measurement surface also makes shared executor shell overhead explicit so request-path work can be separated from startup and registration work.",
-        "The new dispatch artifact compares against the updated BlueprintApp registration and endpoint-mapping baselines rather than stale pre-runtime-redesign numbers."
+        "A failing schema or snapshot proof shows the shared manifest envelope still lacks the agreed app identity, generator version, naming/layout, and contributor-extension contract.",
+        "A reference manifest example proves contributors cannot yet add payload sections through one collision-safe envelope and ownership model.",
+        "The first contract slice locks the canonical machine-readable artifact shape before downstream modules emit incompatible manifest formats."
       ],
       "expectedFiles": [
-        "src\\Blueprint.Runtime\\Exec\\BlueprintAppDataModel.cs",
-        "src\\Blueprint.SourceGenerator.Benchmarks\\Validation\\ValidationPipelineBenchmarks.cs",
-        "src\\Blueprint.SourceGenerator.Benchmarks\\Blueprint.SourceGenerator.Benchmarks.csproj"
+        "src\\Blueprint.SourceGenerator\\Artifacts\\ManifestEnvelope.cs",
+        "src\\Blueprint.SourceGenerator.Tests\\Artifacts\\ManifestEnvelopeTests.cs",
+        "migration\\generated-manifests-and-inspection-surfaces\\plan.md"
       ],
-      "reviewGate": "Require code review before closing the first generated executor dispatch measurement slice."
+      "reviewGate": "Require code review before closing the manifest envelope and contributor ownership contract slice."
     },
     "lastCompletedSlice": {
       "workstream": "performance-and-scale",
-      "title": "Blueprint HTTP startup and endpoint-mapping measurement follow-on"
+      "title": "Generated executor dispatch measurement follow-on"
     },
-    "openReviewGate": "None before the generated executor dispatch measurement slice starts."
+    "openReviewGate": "None before the manifest envelope contract slice starts."
   },
   "orchestrationContract": {
     "mustImplementAfterSliceSelection": true,

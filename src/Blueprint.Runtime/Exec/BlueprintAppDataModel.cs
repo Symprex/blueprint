@@ -1,4 +1,5 @@
 using Blueprint.Model;
+using Blueprint.Runtime.Exec;
 
 namespace Blueprint;
 
@@ -44,5 +45,15 @@ public class BlueprintAppExecutor
         return !this._allOperations.TryGetValue(operationType, out var pipeline)
             ? throw new InvalidOperationException($"Cannot find a registered operation with the name '{operationType}'.")
             : pipeline;
+    }
+
+    /// <summary>
+    /// Resolves and executes the registered pipeline for the operation described by the supplied context.
+    /// </summary>
+    /// <param name="context">The execution context whose descriptor identifies the operation to dispatch.</param>
+    /// <returns>The result produced by the resolved pipeline.</returns>
+    public Task<OperationResult> ExecuteAsync(ApiOperationContext context)
+    {
+        return this.GetPipeline(context.Descriptor.OperationType).ExecuteAsync(context);
     }
 }
