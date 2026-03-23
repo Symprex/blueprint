@@ -7,29 +7,28 @@
   "current": {
     "activeWorkstream": "performance-and-scale",
     "nextReadySlice": {
-      "title": "Synthetic design-time telemetry capture",
+      "title": "Concurrent executor dispatch stress harness",
       "status": "ready",
       "dependsOn": [
-        "Synthetic MSBuild telemetry capture runner committed."
+        "Synthetic design-time telemetry capture committed."
       ],
       "failingProof": [
-        "A failing proof shows the repo-native telemetry runner still cannot compare normal-build and design-time-build behavior from the same synthetic project graph, even though the Phase 0 telemetry plan explicitly calls for that question to be answerable.",
-        "A failing proof shows the reviewed `build-telemetry` envelope and timing artifacts still lack a repeatable design-time-build capture path, so IDE-health investigation stops at cold, no-op, and single-edit normal builds."
+        "A failing proof shows Phase 0 still lacks a deterministic concurrent executor-dispatch stress harness, even though the runtime dispatch benchmark baseline now exists.",
+        "A failing proof shows the generated executor shell and registered pipeline path are not yet exercised under repeated concurrent dispatch in a non-microbenchmark proof."
       ],
       "expectedFiles": [
         "docs\\observability-and-dev-experience.md",
-        "docs\\implementation-checklists.md",
-        "migration\\performance-and-scale\\Capture-SyntheticBuildTelemetry.ps1",
         "migration\\performance-and-scale\\plan.md",
         "migration\\plan.md",
         "migration\\progress.json",
-        "src\\Blueprint.SourceGenerator.Tests\\Scale\\SyntheticBuildTelemetryRunnerTests.cs"
+        "src\\Blueprint.SourceGenerator.Benchmarks\\ExecutorDispatch\\ExecutorDispatchBenchmarks.cs",
+        "src\\Blueprint.SourceGenerator.Tests.Integration\\Generators\\Pipelines\\ConcurrentExecutorDispatchIntegrationTests.cs"
       ],
-      "reviewGate": "Stop again for review before broader benchmark-lane or telemetry-publication work if the first design-time capture needs different `build-telemetry` fields or a separate manifest projection."
+      "reviewGate": "Stop again for review before broader startup or soak-test work if the first concurrent dispatch harness exposes runtime thread-safety gaps or needs a different machine-readable artifact seam."
     },
     "lastCompletedSlice": {
       "workstream": "performance-and-scale",
-      "title": "Synthetic MSBuild telemetry capture runner"
+      "title": "Synthetic design-time telemetry capture"
     },
     "openReviewGate": null
   },

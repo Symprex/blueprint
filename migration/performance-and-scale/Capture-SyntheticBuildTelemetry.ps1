@@ -142,24 +142,47 @@ function Invoke-BuildCapture
         [string]$CaptureDirectory,
 
         [Parameter(Mandatory = $true)]
-        [bool]$NoRestore
+        [bool]$NoRestore,
+
+        [bool]$IsDesignTimeBuild
     )
 
     New-CleanDirectory -Path $CaptureDirectory
     $binLogPath = Join-Path $CaptureDirectory 'msbuild.binlog'
-    $arguments = @(
-        'build',
-        $ProjectPath,
-        '--nologo',
-        '-v:minimal',
-        '-c',
-        $Configuration,
-        "/bl:$binLogPath"
-    )
 
-    if ($NoRestore)
+    if ($IsDesignTimeBuild)
     {
-        $arguments += '--no-restore'
+        # dotnet msbuild does not restore implicitly, so the design-time capture already avoids restore work.
+        $arguments = @(
+            'msbuild',
+            $ProjectPath,
+            '-t:Compile',
+            '-nologo',
+            '-v:minimal',
+            "-p:Configuration=$Configuration",
+            '-p:DesignTimeBuild=true',
+            '-p:SkipCompilerExecution=true',
+            '-p:ProvideCommandLineArgs=true',
+            '-p:BuildProjectReferences=false',
+            "/bl:$binLogPath"
+        )
+    }
+    else
+    {
+        $arguments = @(
+            'build',
+            $ProjectPath,
+            '--nologo',
+            '-v:minimal',
+            '-c',
+            $Configuration,
+            "/bl:$binLogPath"
+        )
+
+        if ($NoRestore)
+        {
+            $arguments += '--no-restore'
+        }
     }
 
     $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
@@ -298,6 +321,9 @@ function Write-TelemetryArtifacts
         [Parameter(Mandatory = $true)]
         [string]$GeneratedDirectory,
 
+        [Parameter(Mandatory = $true)]
+        [bool]$IsDesignTimeBuild,
+
         [string]$MutationKind,
 
         [string]$MutationSourcePath
@@ -306,7 +332,7 @@ function Write-TelemetryArtifacts
     $generatorSummaries = Get-GeneratorSummaries -GeneratedDirectory $GeneratedDirectory
     $capturePayload = [ordered]@{
         captureName = $CaptureName
-        isDesignTimeBuild = $false
+        isDesignTimeBuild = $IsDesignTimeBuild
         durationMs = [long][Math]::Round($Duration.TotalMilliseconds, [System.MidpointRounding]::AwayFromZero)
     }
 
@@ -389,13 +415,15 @@ function Invoke-CaptureScenario
         [Parameter(Mandatory = $true)]
         [bool]$NoRestore,
 
+        [bool]$IsDesignTimeBuild,
+
         [string]$MutationKind,
 
         [string]$MutationSourcePath
     )
 
     $captureDirectory = Join-Path $OutputDirectory $CaptureName
-    $buildResult = Invoke-BuildCapture -ProjectPath $ProjectPath -CaptureDirectory $captureDirectory -NoRestore:$NoRestore
+    $buildResult = Invoke-BuildCapture -ProjectPath $ProjectPath -CaptureDirectory $captureDirectory -NoRestore:$NoRestore -IsDesignTimeBuild:$IsDesignTimeBuild
     $generatedDirectory = Copy-GeneratedArtifacts -ProjectDirectory $ProjectDirectory -CaptureDirectory $captureDirectory
     Write-TelemetryArtifacts `
         -CaptureDirectory $captureDirectory `
@@ -407,6 +435,7 @@ function Invoke-CaptureScenario
         -GeneratorVersion (Get-GeneratorVersion -RepoRoot $repoRoot) `
         -BinLogPath $buildResult.BinLogPath `
         -GeneratedDirectory $generatedDirectory `
+        -IsDesignTimeBuild:$IsDesignTimeBuild `
         -MutationKind $MutationKind `
         -MutationSourcePath $MutationSourcePath
 }
@@ -423,8 +452,9 @@ $projectPath = Write-SyntheticProject `
     -AppName $AppName `
     -OperationCount $OperationCount
 
-Invoke-CaptureScenario -ProjectPath $projectPath -ProjectDirectory $projectDirectory -CaptureName 'cold-build' -NoRestore:$false
-Invoke-CaptureScenario -ProjectPath $projectPath -ProjectDirectory $projectDirectory -CaptureName 'no-op-build' -NoRestore:$true
+Invoke-CaptureScenario -ProjectPath $projectPath -ProjectDirectory $projectDirectory -CaptureName 'cold-build' -NoRestore:$false -IsDesignTimeBuild:$false
+Invoke-CaptureScenario -ProjectPath $projectPath -ProjectDirectory $projectDirectory -CaptureName 'no-op-build' -NoRestore:$true -IsDesignTimeBuild:$false
+Invoke-CaptureScenario -ProjectPath $projectPath -ProjectDirectory $projectDirectory -CaptureName 'design-time-build' -NoRestore:$true -IsDesignTimeBuild:$true
 
 $mutationIndex = [Math]::Min(50, [Math]::Max(1, $OperationCount))
 $mutationSourcePath = 'Operations\SyntheticOperation{0:D3}.cs' -f $mutationIndex
@@ -445,6 +475,7 @@ Invoke-CaptureScenario `
     -ProjectDirectory $projectDirectory `
     -CaptureName 'single-edit-build' `
     -NoRestore:$true `
+    -IsDesignTimeBuild:$false `
     -MutationKind 'single-operation' `
     -MutationSourcePath $mutationSourcePath
 

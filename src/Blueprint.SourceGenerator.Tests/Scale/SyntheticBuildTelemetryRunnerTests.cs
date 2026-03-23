@@ -20,6 +20,7 @@ public class SyntheticBuildTelemetryRunnerTests
 
             AssertCaptureDirectory(outputDirectory, "cold-build");
             AssertCaptureDirectory(outputDirectory, "no-op-build");
+            AssertCaptureDirectory(outputDirectory, "design-time-build", expectedIsDesignTimeBuild: true);
             AssertCaptureDirectory(outputDirectory, "single-edit-build", expectedMutationSourcePath: @"Operations\SyntheticOperation005.cs");
         }
         finally
@@ -31,7 +32,8 @@ public class SyntheticBuildTelemetryRunnerTests
     private static void AssertCaptureDirectory(
         string outputDirectory,
         string captureName,
-        string? expectedMutationSourcePath = null)
+        string? expectedMutationSourcePath = null,
+        bool expectedIsDesignTimeBuild = false)
     {
         var captureDirectory = Path.Combine(outputDirectory, captureName);
         File.Exists(Path.Combine(captureDirectory, "msbuild.binlog")).Should().BeTrue();
@@ -46,6 +48,7 @@ public class SyntheticBuildTelemetryRunnerTests
 
         var payload = (JObject)manifest.Sections["synthetic-build-harness"].Payload;
         ((JObject)payload["capture"]!)["captureName"]!.Value<string>().Should().Be(captureName);
+        ((JObject)payload["capture"]!)["isDesignTimeBuild"]!.Value<bool>().Should().Be(expectedIsDesignTimeBuild);
         ((JObject)payload["capture"]!)["durationMs"]!.Value<long>().Should().BeGreaterThanOrEqualTo(0);
 
         var timingSummary = JObject.Parse(File.ReadAllText(Path.Combine(captureDirectory, "timing-summary.json")));

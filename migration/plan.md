@@ -467,7 +467,7 @@ When delegating a workstream, include:
 - [x] Write and run a failing proof for the current slice before implementation.
 - [x] Build a deterministic synthetic fixture generator for Blueprint apps and operations.
 - [x] Add Tier 2 compile-time cacheability and invalidation-locality tests.
-- [ ] Add build/design-time telemetry capture and reporting.
+- [x] Add build/design-time telemetry capture and reporting.
 - [x] Benchmark known runtime hotspots such as `BlueprintApp` registration and operation lookup.
 - [ ] Define PR-lane versus scheduled/manual benchmark lanes.
 - [ ] Add stress/soak tests for concurrent dispatch, startup, and manifest/OpenAPI generation.
@@ -475,7 +475,7 @@ When delegating a workstream, include:
 ### Acceptance criteria
 
 - [ ] Medium-scale compile-time locality is measured and gated in CI.
-- [ ] Build telemetry can explain cold, no-op, and single-edit behavior.
+- [x] Build telemetry can explain cold, no-op, and single-edit behavior.
 - [ ] Runtime hotspot measurements exist for known registration/lookup bottlenecks.
 - [ ] A reviewable benchmark baseline exists for the known `BlueprintApp` hotspots before Phase 1 starts.
 - [ ] The fixture generator feeds both compile-time and runtime harnesses.
@@ -484,13 +484,13 @@ When delegating a workstream, include:
 ### Tests and benchmarks
 
 - [ ] Cacheability and invalidation-locality tests.
-- [ ] Build telemetry capture with `.binlog` and timing summaries.
+- [x] Build telemetry capture with `.binlog` and timing summaries.
 - [ ] BenchmarkDotNet or equivalent runtime benchmarks for startup, dispatch, and shell overhead.
 - [ ] Stress tests for concurrent and high-volume paths.
 
 ### Docs and artifacts
 
-- [ ] Update `docs\observability-and-dev-experience.md` with measurement and artifact expectations if needed.
+- [x] Update `docs\observability-and-dev-experience.md` with measurement and artifact expectations if needed.
 - [ ] Keep benchmark artifact locations and lane expectations documented.
 - [ ] Publish benchmark/telemetry outputs in a reviewable format.
 
@@ -508,7 +508,8 @@ When delegating a workstream, include:
 - completed first machine-readable invalidation-report alignment slice: `SyntheticFixtureInvalidationReport` now emits a deterministic `scale-invalidation` manifest envelope for the Tier 2 single-operation and shared-contract mutation scenarios, and `SyntheticFixtureInvalidationReportTests` snapshot those reports so locality evidence is reviewable as artifact data instead of only imperative assertions
 - completed first build/design-time telemetry contract slice: `SyntheticBuildTelemetryReport` now emits a deterministic `build-telemetry` manifest envelope for cold-build and single-edit synthetic captures, and `SyntheticBuildTelemetryReportTests` snapshot generated-output counts, tracked stage counts, capture metadata, and optional mutation metadata so later `.binlog` runners have a reviewed contract to target
 - completed first real synthetic MSBuild telemetry capture runner: `migration\performance-and-scale\Capture-SyntheticBuildTelemetry.ps1` now materializes a temporary synthetic app, emits cold-build, no-op-build, and single-edit-build `.binlog` plus `timing-summary.json` outputs, copies reviewable generated sources, and writes the reviewed `build-telemetry` envelope for each capture; `SyntheticBuildTelemetryRunnerTests.cs` now proves those artifacts end-to-end while keeping emitted inspection files out of `Compile` so repeat captures stay incremental
-- next approved follow-on for this workstream: extend the same synthetic telemetry runner with the first design-time-build capture summary so Phase 0 can compare normal-build and design-time behavior before lane/publishing work broadens
+- completed first design-time telemetry follow-on: the same repo-native runner now emits a `design-time-build` capture through the reviewed `build-telemetry` envelope with `capture.isDesignTimeBuild = true`, giving Phase 0 a deterministic binlog-plus-summary seam for comparing IDE-style builds against the normal cold/no-op graph
+- next approved follow-on for this workstream: add the first concurrent executor-dispatch stress harness so Phase 0 starts proving stability under repeated concurrent dispatch rather than relying only on microbenchmark measurements
 
 ## 4. Generated manifests and inspection surfaces
 
