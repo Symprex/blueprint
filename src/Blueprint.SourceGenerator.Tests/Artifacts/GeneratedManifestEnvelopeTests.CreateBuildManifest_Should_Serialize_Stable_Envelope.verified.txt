@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "artifactName": "operations",
+  "artifactFamily": "build-time-manifest",
+  "relativePath": ".blueprint/manifests/operations.manifest.json",
+  "app": {
+    "typeName": "TestNamespace.TestBlueprintApp",
+    "assemblyName": "Test.Assembly"
+  },
+  "generator": {
+    "productName": "Blueprint.SourceGenerator",
+    "version": "1.2.3"
+  },
+  "sections": {
+    "links": {
+      "contributorId": "links-module",
+      "payload": {
+        "resourceCount": 2
+      }
+    }
+  },
+  "operations": {
+    "TestNamespace.GetUserQuery": {
+      "route": "/users/{id}"
+    }
+  }
+}

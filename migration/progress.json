@@ -7,28 +7,30 @@
   "current": {
     "activeWorkstream": "generated-manifests-and-inspection-surfaces",
     "nextReadySlice": {
-      "title": "Generated manifest envelope and contributor ownership contract",
+      "title": "Operations discovery manifest payload",
       "status": "ready",
       "dependsOn": [
-        "No hard dependency for the first contract-definition pass."
+        "Generated manifest envelope and contributor ownership contract approved."
       ],
       "failingProof": [
-        "A failing schema or snapshot proof shows the shared manifest envelope still lacks the agreed app identity, generator version, naming/layout, and contributor-extension contract.",
-        "A reference manifest example proves contributors cannot yet add payload sections through one collision-safe envelope and ownership model.",
-        "The first contract slice locks the canonical machine-readable artifact shape before downstream modules emit incompatible manifest formats."
+        "A failing snapshot proof shows the first real module still does not publish operations/discovery manifest data through GeneratedManifestEnvelope.",
+        "A failing ownership proof shows the operations manifest section is not yet reserved for one contributor with collision-safe behavior.",
+        "A failing integration proof shows no canonical operations.manifest.json-style output can yet be produced for a sample Blueprint app."
       ],
       "expectedFiles": [
-        "src\\Blueprint.SourceGenerator\\Artifacts\\ManifestEnvelope.cs",
-        "src\\Blueprint.SourceGenerator.Tests\\Artifacts\\ManifestEnvelopeTests.cs",
+        "src\\Blueprint.SourceGenerator\\Artifacts\\OperationsDiscoveryManifestEmitter.cs",
+        "src\\Blueprint.SourceGenerator.Tests\\Artifacts\\OperationsDiscoveryManifestEmitterTests.cs",
+        "src\\Blueprint.SourceGenerator.Tests\\Artifacts\\OperationsDiscoveryManifestEmitterTests.Should_Emit_Operations_Discovery_Summary.verified.txt",
+        "src\\Blueprint.SourceGenerator.Tests.Integration\\Generators\\OperationsDiscoveryManifestGeneratorIntegrationTests.cs",
         "migration\\generated-manifests-and-inspection-surfaces\\plan.md"
       ],
-      "reviewGate": "Require code review before closing the manifest envelope and contributor ownership contract slice."
+      "reviewGate": "Require code review before closing the first real manifest-emitting contributor slice."
     },
     "lastCompletedSlice": {
-      "workstream": "performance-and-scale",
-      "title": "Generated executor dispatch measurement follow-on"
+      "workstream": "generated-manifests-and-inspection-surfaces",
+      "title": "Generated manifest envelope and contributor ownership contract"
     },
-    "openReviewGate": "None before the manifest envelope contract slice starts."
+    "openReviewGate": "None before the operations discovery manifest payload slice starts."
   },
   "orchestrationContract": {
     "mustImplementAfterSliceSelection": true,

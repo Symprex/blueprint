@@ -1,6 +1,6 @@
 # Generated manifests and inspection surfaces
 
-- Status: Planned
+- Status: In progress (contract approved; first contributor slice ready)
 - Priority: P0
 - Classification: Cross-cutting architecture support
 - Depends on: no hard dependency for the first contract-definition pass; then evolves alongside `../foundation-module-system/plan.md`, `../operation-discovery-and-descriptors/plan.md`, `../auditing-and-observability/plan.md`, and `../performance-and-scale/plan.md`
@@ -150,3 +150,14 @@ But it should align with them where shared conventions help, especially around m
 Define the common contract early, before multiple modules emit their own artifact formats.
 
 The first milestone is the shared envelope, naming/layout rules, and contributor ownership model. Specific payload sections can then land incrementally with each feature module.
+
+## Current first-milestone status
+
+- `src\Blueprint.SourceGenerator\Artifacts\GeneratedManifestEnvelope.cs` now defines the first shared build-time manifest contract.
+- The current contract fixes `build-time-manifest` as the initial artifact family and `.blueprint/manifests/<artifact>.manifest.json` as the default relative layout for canonical build outputs.
+- The envelope carries stable app identity (`typeName`, `assemblyName`) plus generator identity (`productName`, `version`) so runtime tooling, CI artifacts, and review projections can project from one source of truth.
+- Top-level contributor payloads now live under shared `sections` entries with explicit `contributorId` ownership, conflicting owners for the same section name fail fast instead of silently merging incompatible schemas, and serialization now uses stable ordinal key ordering instead of contributor insertion order.
+- Per-operation payloads now live under shared `operations` entries keyed by a stable operation identifier, duplicate keys are rejected to keep downstream projections deterministic, and serialization also uses stable ordinal key ordering.
+- `src\Blueprint.SourceGenerator.Tests\Artifacts\GeneratedManifestEnvelopeTests.cs` plus `GeneratedManifestEnvelopeTests.CreateBuildManifest_Should_Serialize_Stable_Envelope.verified.txt` provide the first snapshot/contract proof for this workstream.
+- Human review approved the initial envelope fields, default layout, ownership rules, and deterministic key-ordering fix for downstream manifest-emitting slices.
+- Next approved slice: land operations/discovery summaries as the first real module contributor through the shared envelope, starting with snapshot, ownership-collision, and integration proofs.

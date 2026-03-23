@@ -28,6 +28,7 @@ Do not use this skill for ordinary downstream app usage; use `using-blueprint`.
 | App registration | `AppDataModelSourceGenerator` | generated `this.Register(Operation.Configure())`, runtime registry |
 | Pipelines and executors | `OperationExecutorPipelineSourceGenerator` | handler discovery, full pipeline snapshots, compile-time source checks, runtime integration harness, benchmark harness (`src\Blueprint.SourceGenerator.Benchmarks`) |
 | Diagnostics and validation | `docs\compile-time-validation.md` | precise source locations, stable IDs, tests |
+| Manifest and inspection contracts | `migration\generated-manifests-and-inspection-surfaces\plan.md`, `GeneratedManifestEnvelope` | `docs\observability-and-dev-experience.md`, snapshot proof, contributor ownership collisions |
 | Consumer story | sample projects + `docs\refactoring-workflow.md` | `using-blueprint`, migration prompt, docs |
 
 ## Working rules
@@ -45,9 +46,10 @@ Do not use this skill for ordinary downstream app usage; use `using-blueprint`.
 11. For pipeline contributor feature work, require the full proof matrix: a full pipeline snapshot, compile-time invalid-configuration or source-check tests when the generator can validate the contract, and runtime integration tests that execute the generated pipeline for valid and invalid paths. A substring assertion alone is not enough.
 12. For validation or executor hot-path work, run `src\Blueprint.SourceGenerator.Benchmarks` and review the BenchmarkDotNet artifact before handoff or commit.
 13. For validation fast-path work, keep rule detection and code emission in dedicated strategy helpers beside `ValidationModule`; use `ValidationRuntime` for unsupported per-property fallback and add `BPV` diagnostics when referenced members are provably invalid.
-14. When comments are needed, spend them on invariants, fallback boundaries, and trade-offs; never on repeating what the code already says.
-15. Prefer `static` lambdas in LINQ or similar delegate-heavy code whenever no local capture is needed.
-16. Keep module-specific tests in module-specific files instead of extending shared catch-all test files forever.
+14. New manifest producers should extend `Blueprint.SourceGenerator.Artifacts.GeneratedManifestEnvelope` and its default `.blueprint/manifests/<artifact>.manifest.json` layout instead of inventing unrelated top-level JSON contracts or insertion-order-dependent output.
+15. When comments are needed, spend them on invariants, fallback boundaries, and trade-offs; never on repeating what the code already says.
+16. Prefer `static` lambdas in LINQ or similar delegate-heavy code whenever no local capture is needed.
+17. Keep module-specific tests in module-specific files instead of extending shared catch-all test files forever.
 
 ## Common mistakes
 

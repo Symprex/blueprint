@@ -80,6 +80,8 @@ The target is **consumer-contract compatibility**, not byte-for-byte parity with
 - The first Blueprint HTTP startup/endpoint-mapping measurement follow-on is now complete locally: `BlueprintEndpointMappingBenchmarks` exercises the current `MapBlueprintApi(...)` host surface via a benchmark-specific Blueprint app and route builder inside `src\Blueprint.SourceGenerator.Benchmarks\BlueprintHttp\BlueprintEndpointMappingBenchmarks.cs`, and the fresh `ShortRun` artifact reports about `36.92 us` / `42.62 KB` for 10 operations, about `300.91 us` / `415.4 KB` for 100 operations, and about `739.42 us` / `1021.98 KB` for 250 operations.
 - The generated executor dispatch measurement follow-on is now complete and human-approved: `BlueprintAppExecutor` exposes a shared `ExecuteAsync(ApiOperationContext)` shell in `src\Blueprint.Runtime\Exec\BlueprintAppDataModel.cs`, `src\Blueprint.SourceGenerator.Benchmarks\ExecutorDispatch\ExecutorDispatchBenchmarks.cs` now benchmarks registered-pipeline lookup plus direct-pipeline versus executor-shell dispatch at 10, 100, and 250 operations, and the fresh `ShortRun` artifact (`BenchmarkDotNet.Artifacts\results\Blueprint.SourceGenerator.Benchmarks.RuntimeExec.ExecutorDispatchBenchmarks-report.*`) reports lookup at about `15.5 ns`, `15.9 ns`, and `24.1 ns`; direct pipeline execution at about `69.1 ns`, `55.6 ns`, and `91.4 ns` with `184 B` allocated; and full executor-shell dispatch at about `93.1 ns`, `97.5 ns`, and `137.8 ns` with the same `184 B` allocation profile.
 - Human-approved next Phase 0 follow-on after the dispatch benchmark: switch the active detailed plan to `migration\generated-manifests-and-inspection-surfaces\plan.md` and land the shared manifest envelope, naming/layout rules, and contributor ownership contract before multiple workstreams invent incompatible artifact formats.
+- The first manifest contract-definition pass is now complete and human-approved: `src\Blueprint.SourceGenerator\Artifacts\GeneratedManifestEnvelope.cs` defines the canonical build-time envelope, default `.blueprint/manifests/<artifact>.manifest.json` layout, app/generator identity fields, contributor-owned top-level sections, duplicate operation-key rejection, and stable ordinal key ordering for deterministic serialization; `src\Blueprint.SourceGenerator.Tests\Artifacts\GeneratedManifestEnvelopeTests.cs` plus `GeneratedManifestEnvelopeTests.CreateBuildManifest_Should_Serialize_Stable_Envelope.verified.txt` lock the approved contract.
+- Human-approved next follow-on inside the manifest workstream: land operations/discovery summaries as the first real module contributor through the shared envelope so the workstream can satisfy the "at least one real module contributes manifest data through the shared contract" acceptance criterion before broader manifest families land.
 
 ## Durable decision rule
 
@@ -503,32 +505,32 @@ When delegating a workstream, include:
 
 ### Checklist
 
-- [ ] Write and run a failing proof for the current slice before implementation.
-- [ ] Deliver the Phase 0 contract first: envelope, versioning, ownership, naming, and contributor-collision rules.
-- [ ] Define a shared manifest envelope and naming/versioning contract.
-- [ ] Define how modules contribute without schema collisions.
+- [x] Write and run a failing proof for the Phase 0 contract slice before implementation.
+- [x] Deliver the Phase 0 contract first: envelope, versioning, ownership, naming, and contributor-collision rules.
+- [x] Define a shared manifest envelope and naming/versioning contract.
+- [x] Define how modules contribute without schema collisions.
 - [ ] Make JSON the canonical representation and define projections to markdown/endpoints/tooling.
 - [ ] Ensure runtime inspection projects from build-time data rather than recomputing.
 - [ ] Align manifest output with migration reports, OpenAPI, and performance artifacts.
 
 ### Acceptance criteria
 
-- [ ] The schema is stable enough to snapshot and publish.
-- [ ] Phase 0 can close with the shared contract agreed even if later modules still need to populate richer payloads incrementally.
+- [x] The schema is stable enough to snapshot and publish.
+- [x] Phase 0 can close with the shared contract agreed even if later modules still need to populate richer payloads incrementally.
 - [ ] At least one real module contributes manifest data through the shared contract.
 - [ ] Humans and AI agents can answer "what exists?" and "why?" without reverse-engineering generated code.
 - [ ] Runtime inspection does not invent or recompute conflicting data.
 
 ### Tests and benchmarks
 
-- [ ] Snapshot tests for manifest shape and content.
+- [x] Snapshot tests for manifest shape and content.
 - [ ] Schema validation tests.
 - [ ] Compatibility tests for multiple module contributors.
 
 ### Docs and artifacts
 
-- [ ] Update `docs\observability-and-dev-experience.md`.
-- [ ] Update `docs\architecture.md` with manifest generation flow.
+- [x] Update `docs\observability-and-dev-experience.md`.
+- [x] Update `docs\architecture.md` with manifest generation flow.
 - [ ] Publish schema/example artifacts in Phase 0 and richer reference-app artifacts incrementally later.
 
 ### Sub-agent guidance

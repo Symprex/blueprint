@@ -75,6 +75,8 @@ Not all of these exist today, but they are good directions for future work:
 
 `BlueprintApp` already exposes registries of operations and links (`src\Blueprint.Runtime.Model\BlueprintApp.cs`). Treat those kinds of metadata structures as building blocks for richer inspection tooling.
 
+For generated machine-readable artifacts, extend `Blueprint.SourceGenerator.Artifacts.GeneratedManifestEnvelope` and keep the default `.blueprint/manifests/<artifact>.manifest.json` layout unless the migration plan explicitly changes that contract. That keeps later CLI, endpoint, CI, and AI-facing projections aligned on one deterministic source instead of fragmenting into ad-hoc schemas.
+
 ## Observability checklist for new work
 
 When adding or changing runtime behavior, ask:
