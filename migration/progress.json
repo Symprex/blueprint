@@ -2,33 +2,33 @@
   "schemaVersion": 1,
   "sourceOfTruth": {
     "masterPlan": "migration\\plan.md",
-    "workstreamPlan": "migration\\performance-and-scale\\plan.md"
+    "workstreamPlan": "migration\\breaking-changes-and-migration-tooling\\plan.md"
   },
   "current": {
-    "activeWorkstream": "performance-and-scale",
+    "activeWorkstream": "breaking-changes-and-migration-tooling",
     "nextReadySlice": {
-      "title": "High-volume link-generation stress harness",
+      "title": "Migration diagnostic-range scaffold",
       "status": "ready",
       "dependsOn": [
-        "PR-lane versus scheduled/manual benchmark split committed."
+        "High-volume link-generation stress harness committed."
       ],
       "failingProof": [
-        "A failing proof shows the synthetic scale harness still lacks a high-volume link-generation stress scenario, so Phase 0 has no deterministic proof that link template generation stays stable once operation counts rise again after the new benchmark-lane policy lands.",
-        "A failing proof shows repeated link-generation output can still broaden unexpectedly across the synthetic fixture surface without a focused stress assertion over the existing LinkGenerationModule seam."
+        "A failing proof shows the repo still has no reserved BPMIG diagnostic range or analyzer test harness, so the breaking-changes workstream has no executable namespace or proof surface for its first migration diagnostics.",
+        "A failing proof shows later migration analyzer work would still need to invent project shape, diagnostic IDs, and deterministic test wiring ad hoc instead of starting from a reviewed scaffold."
       ],
       "expectedFiles": [
-        "src\\Blueprint.SourceGenerator.Tests\\Scale\\SyntheticBlueprintFixtureGenerator.cs",
-        "src\\Blueprint.SourceGenerator.Tests\\Scale\\SyntheticBlueprintFixtureScaleHarnessTests.cs",
-        "docs\\observability-and-dev-experience.md",
-        "migration\\performance-and-scale\\plan.md",
+        "src\\Blueprint.Migration.Analyzers\\Blueprint.Migration.Analyzers.csproj",
+        "src\\Blueprint.Migration.Analyzers.Tests\\Blueprint.Migration.Analyzers.Tests.csproj",
+        "docs\\compile-time-validation.md",
+        "migration\\breaking-changes-and-migration-tooling\\plan.md",
         "migration\\plan.md",
         "migration\\progress.json"
       ],
-      "reviewGate": "Stop again for review before broadening into manifest/OpenAPI or CI automation if the first high-volume link-generation stress harness suggests the synthetic fixture needs new resource/link mix contracts."
+      "reviewGate": "Stop again for review before mass analyzer or codemod work if the first scaffold exposes a different diagnostic taxonomy or project layout than the current BPMIG/analyzer plan assumes."
     },
     "lastCompletedSlice": {
       "workstream": "performance-and-scale",
-      "title": "PR-lane versus scheduled/manual benchmark split"
+      "title": "High-volume link-generation stress harness"
     },
     "openReviewGate": null
   },

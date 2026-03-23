@@ -209,6 +209,12 @@ Plan the rollout as an analyzer-led major-version change:
 - consumer-specific integrations that need a package/module but only have runtime middleware today
 - validation attributes that no longer belong in the supported Blueprint subset
 
+## Current migration status
+
+- This workstream has stayed planned-only while Phase 0 established the foundation contributor seams, manifest contract, and performance harnesses that later migration diagnostics need to target.
+- Next approved slice: reserve the `BPMIG001`-`BPMIG399` diagnostic range in repo guidance and scaffold the first `Blueprint.Migration.Analyzers` test harness with one deterministic placeholder diagnostic proof so later migration analyzers have a durable project, namespace, and test pattern instead of starting ad hoc.
+- Keep codemod scaffolding, SARIF/JSON schema work, and broad rewrite coverage deferred until the first analyzer scaffold is review-closed.
+
 ## Observability and debuggability
 
 - per-project migration manifest

@@ -449,6 +449,12 @@ When delegating a workstream, include:
 - [ ] Update `docs\compile-time-validation.md` with migration diagnostic guidance.
 - [ ] Add examples of expected migration artifacts once the tooling lands.
 
+### Durable progress
+
+- This workstream remains planned-only while Phase 0 finishes the foundation contributor seams, manifest contract, and first performance harnesses that migration diagnostics will need to target.
+- next approved follow-on for this workstream: reserve the `BPMIG001`-`BPMIG399` diagnostic range and scaffold the first `Blueprint.Migration.Analyzers` test harness with one deterministic placeholder diagnostic proof so later analyzer/code-fix work has a durable namespace, project shape, and test pattern.
+- keep codemod scaffolding, report-schema work, and broad rewrite coverage deferred until that first analyzer scaffold is review-closed.
+
 ### Sub-agent guidance
 
 - Use `explore` to inventory legacy activation APIs, nested execution assumptions, validation attributes, and grouped-handler usage.
@@ -512,7 +518,8 @@ When delegating a workstream, include:
 - completed first concurrent executor-dispatch stress harness: `src\Blueprint.SourceGenerator.Tests.Integration\Generators\Pipelines\ConcurrentExecutorDispatchIntegrationTests.cs` now drives 64 start-gated operations through the generated `IntegrationTestBlueprintAppExecutor.ExecuteAsync(...)` shell, reports requested/completed/faulted counts plus returned payloads, and proves repeated concurrent dispatch stays stable on the same executor seam that the dispatch benchmark measures
 - completed first repeated host startup and endpoint-mapping stress harness: `src\Blueprint.SourceGenerator.Tests\Artifacts\ManifestInspectionEndpointStressTests.cs` now rebuilds 40 development endpoint route builders, maps `MapBlueprintApi(...)`, and proves stable 5-endpoint counts plus 40/40 hosted manifest JSON route hits through a reusable `RepeatedEndpointMappingStressHarness`, keeping the first startup stress slice on the same host surface that `BlueprintEndpointMappingBenchmarks` measures
 - completed first PR-lane versus scheduled/manual benchmark split: `BenchmarkLaneGuidanceTests.cs` now proves the two-lane performance model from `migration\performance-and-scale\plan.md` is surfaced in `docs\implementation-checklists.md`, `docs\observability-and-dev-experience.md`, and `.agents\skills\extending-blueprint\SKILL.md`, so deterministic stress proofs stay in the pull-request lane while noisier wall-clock or higher-volume comparisons move to scheduled/manual guidance
-- next approved follow-on for this workstream: start the post-lane broadening work with a high-volume link-generation stress harness on the existing synthetic fixture surface before revisiting larger manifest/OpenAPI stress once those generators exist
+- completed first high-volume link-generation stress harness: `SyntheticBlueprintFixtureScaleHarnessTests.cs` now drives a 100-operation synthetic fixture with unique root links, proves descriptor output contains those links at scale, and requires a single root-link edit to change only `SyntheticOperation050_Descriptor.g.cs`; the same slice also fixes stale link-only descriptor output by removing the model-only combined-provider comparer from descriptor/app generators and by making `DescriptorPlan` equality include diagnostics plus metadata
+- next approved cross-workstream follow-on: shift to `migration\breaking-changes-and-migration-tooling\plan.md` and reserve the BPMIG diagnostic range while scaffolding the first analyzer test harness; keep further performance-specific broadening deferred until parameter-binding or OpenAPI implementation provides the next dependency-safe stress surface
 
 ## 4. Generated manifests and inspection surfaces
 

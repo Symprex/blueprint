@@ -113,7 +113,8 @@ public sealed class OperationDescriptorSourceGenerator : IIncrementalGenerator, 
             new OperationClassToGenerate(
                 model.ToString(),
                 model.ContainingNamespace.ToDisplayString(),
-                model.Name));
+                model.Name,
+                classNode.ToFullString()));
     }
 
     private static Result<DescriptorPlan> Configure(
@@ -211,7 +212,8 @@ public sealed class OperationDescriptorSourceGenerator : IIncrementalGenerator, 
     /// <param name="FullClassName">The fully-qualified operation type name.</param>
     /// <param name="Namespace">The namespace that will contain the generated descriptor wrapper.</param>
     /// <param name="ClassName">The simple operation type name.</param>
-    private record OperationClassToGenerate(string FullClassName, string Namespace, string ClassName);
+    /// <param name="DeclarationText">The operation declaration text used to invalidate semantic edits within the operation file.</param>
+    private record OperationClassToGenerate(string FullClassName, string Namespace, string ClassName, string DeclarationText);
 
     /// <summary>
     /// The names of the <see cref="ApiResourceSourceGenerator"/> stages, used in particular to test for the

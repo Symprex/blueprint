@@ -8,12 +8,25 @@ namespace Blueprint.SourceGenerator.Planning;
 /// <summary>
 /// Mutable descriptor planning state for a single operation.
 /// </summary>
-/// <param name="Operation">The operation being planned.</param>
-public sealed record DescriptorPlan(OperationModel Operation)
+public sealed class DescriptorPlan : IEquatable<DescriptorPlan>
 {
     private readonly List<DiagnosticInfo> _diagnostics = [];
     private readonly List<object> _metadata = [];
     private readonly List<Action<ICodeWriter>> _renderSteps = [];
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="DescriptorPlan"/> class.
+    /// </summary>
+    /// <param name="operation">The operation being planned.</param>
+    public DescriptorPlan(OperationModel operation)
+    {
+        this.Operation = operation;
+    }
+
+    /// <summary>
+    /// Gets the operation being planned.
+    /// </summary>
+    public OperationModel Operation { get; }
 
     /// <summary>
     /// Gets the accumulated diagnostics.
@@ -101,5 +114,53 @@ public sealed record DescriptorPlan(OperationModel Operation)
         {
             renderStep(codeWriter);
         }
+    }
+
+    /// <inheritdoc />
+    public bool Equals(DescriptorPlan? other)
+    {
+        if (ReferenceEquals(this, other))
+        {
+            return true;
+        }
+
+        if (other is null)
+        {
+            return false;
+        }
+
+        return EqualityComparer<OperationModel>.Default.Equals(this.Operation, other.Operation)
+            && this.Diagnostics.SequenceEqual(other.Diagnostics)
+            && this.Metadata.SequenceEqual(other.Metadata)
+
+            // Descriptor render steps are delegates, so the metadata they capture must drive equality; the count still
+            // protects contributor activation changes that do not add metadata of their own.
+            && this._renderSteps.Count == other._renderSteps.Count;
+    }
+
+    /// <inheritdoc />
+    public override bool Equals(object? obj)
+    {
+        return obj is DescriptorPlan other && this.Equals(other);
+    }
+
+    /// <inheritdoc />
+    public override int GetHashCode()
+    {
+        System.HashCode hash = default;
+        hash.Add(this.Operation);
+
+        foreach (var diagnostic in this.Diagnostics)
+        {
+            hash.Add(diagnostic);
+        }
+
+        foreach (var metadata in this.Metadata)
+        {
+            hash.Add(metadata);
+        }
+
+        hash.Add(this._renderSteps.Count);
+        return hash.ToHashCode();
     }
 }

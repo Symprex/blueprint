@@ -17,7 +17,8 @@ public sealed record SyntheticBlueprintFixtureOptions
     /// <param name="namespaceName">The namespace shared by the synthetic app and generated operations.</param>
     /// <param name="appName">The synthetic Blueprint app type name.</param>
     /// <param name="operationCount">The number of generated operations the fixture should emit.</param>
-    public SyntheticBlueprintFixtureOptions(string namespaceName, string appName, int operationCount)
+    /// <param name="includeRootLinks">A value indicating whether every synthetic operation should include a unique root link.</param>
+    public SyntheticBlueprintFixtureOptions(string namespaceName, string appName, int operationCount, bool includeRootLinks = false)
     {
         if (string.IsNullOrWhiteSpace(namespaceName))
         {
@@ -37,6 +38,7 @@ public sealed record SyntheticBlueprintFixtureOptions
         this.NamespaceName = namespaceName;
         this.AppName = appName;
         this.OperationCount = operationCount;
+        this.IncludeRootLinks = includeRootLinks;
     }
 
     /// <summary>
@@ -53,6 +55,11 @@ public sealed record SyntheticBlueprintFixtureOptions
     /// Gets the number of generated operations the fixture should emit.
     /// </summary>
     public int OperationCount { get; }
+
+    /// <summary>
+    /// Gets a value indicating whether every synthetic operation should include a unique root link.
+    /// </summary>
+    public bool IncludeRootLinks { get; }
 }
 
 /// <summary>
@@ -189,18 +196,7 @@ public static class SyntheticBlueprintFixtureGenerator
         for (var operationIndex = 1; operationIndex <= options.OperationCount; operationIndex++)
         {
             var operationName = $"SyntheticOperation{operationIndex:000}";
-            var operationSource = $$"""
-                                  namespace {{options.NamespaceName}}
-                                  {
-                                      public partial class {{operationName}} : SyntheticOperationBase, global::Blueprint.Model.IQuery<string>
-                                      {
-                                          public static global::System.Threading.Tasks.Task<string> InvokeAsync()
-                                          {
-                                              return global::System.Threading.Tasks.Task.FromResult("{{operationName}}");
-                                          }
-                                     }
-                                 }
-                                 """;
+            var operationSource = CreateOperationSource(options.NamespaceName, operationName, operationIndex, options.IncludeRootLinks);
 
             sourceFiles.Add(new SyntheticBlueprintFixtureSourceFile(
                 $@"Operations\{operationName}.cs",
@@ -208,5 +204,37 @@ public static class SyntheticBlueprintFixtureGenerator
         }
 
         return new SyntheticBlueprintFixture(options, sourceFiles.MoveToImmutable());
+    }
+
+    private static string CreateOperationSource(string namespaceName, string operationName, int operationIndex, bool includeRootLinks)
+    {
+        var rootLinkAttribute = string.Empty;
+        var idProperty = string.Empty;
+
+        if (includeRootLinks)
+        {
+            var rootLinkUrl = $"/synthetic/operations/{operationIndex:000}/{{Id}}";
+            rootLinkAttribute = $$"""
+                                  [global::Blueprint.Model.Attributes.RootLink("{{rootLinkUrl}}")]
+                                  """;
+            idProperty = """
+                                           public int Id { get; init; }
+
+                                """;
+        }
+
+        return $$"""
+                 namespace {{namespaceName}}
+                 {
+                     {{rootLinkAttribute}}
+                     public partial class {{operationName}} : SyntheticOperationBase, global::Blueprint.Model.IQuery<string>
+                     {
+                         {{idProperty}}        public static global::System.Threading.Tasks.Task<string> InvokeAsync()
+                         {
+                             return global::System.Threading.Tasks.Task.FromResult("{{operationName}}");
+                         }
+                    }
+                }
+                """;
     }
 }
