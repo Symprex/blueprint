@@ -7,29 +7,30 @@
   "current": {
     "activeWorkstream": "generated-manifests-and-inspection-surfaces",
     "nextReadySlice": {
-      "title": "Build-time operations manifest markdown projection and snapshot testing",
+      "title": "Runtime manifest loading and embedded resource projection",
       "status": "ready",
       "dependsOn": [
-        "Operations discovery manifest payload approved."
+        "Build-time operations manifest markdown projection and snapshot testing approved."
       ],
       "failingProof": [
-        "A failing test shows GeneratedManifestEnvelope does not yet expose a markdown projection for human-readable review output.",
-        "A failing snapshot test shows the approved operations manifest cannot yet be reviewed as a stable markdown summary derived from the shared envelope.",
-        "A failing guard test shows any markdown projection must use only the envelope contents rather than recomputing operation discovery."
+        "A failing test shows the operations manifest cannot yet be loaded from embedded runtime resources without recomputing discovery.",
+        "A failing roundtrip test shows GeneratedManifestEnvelope cannot yet deserialize the embedded manifest JSON back into the approved envelope contract.",
+        "A failing runtime projection test shows operations are not yet exposed from embedded manifest data without calling debug-manifest contributors or rebuilding operation discovery."
       ],
       "expectedFiles": [
+        "src\\Blueprint.Runtime\\Artifacts\\ManifestResourceLoader.cs",
         "src\\Blueprint.SourceGenerator\\Artifacts\\GeneratedManifestEnvelope.cs",
-        "src\\Blueprint.SourceGenerator.Tests\\Artifacts\\ManifestMarkdownProjectionTests.cs",
-        "src\\Blueprint.SourceGenerator.Tests\\Artifacts\\ManifestSnapshots\\ManifestMarkdownProjectionTests.When_operations_discovered_then_markdown_summary_captures_schema.verified.txt",
+        "src\\Blueprint.SourceGenerator.Tests\\Artifacts\\ManifestRuntimeProjectionTests.cs",
+        "src\\Blueprint.SourceGenerator.Tests\\Artifacts\\ManifestSnapshots\\ManifestRuntimeProjectionTests.When_manifest_loaded_from_embedded_resource_then_operations_project_correctly.verified.txt",
         "migration\\generated-manifests-and-inspection-surfaces\\plan.md"
       ],
-      "reviewGate": "Verify the markdown projection uses only envelope data and does not quietly recompute discovery or freeze future manifest shape decisions."
+      "reviewGate": "Require human review before dev-only endpoint or CLI projections widen the runtime manifest surface, and verify the runtime path loads pre-built envelope data instead of rediscovering operations."
     },
     "lastCompletedSlice": {
       "workstream": "generated-manifests-and-inspection-surfaces",
-      "title": "Operations discovery manifest payload"
+      "title": "Build-time operations manifest markdown projection and snapshot testing"
     },
-    "openReviewGate": "No current open review gate. The next markdown-projection slice must stop for review if it recomputes discovery or turns the current operations-discovery entry shape into a permanently frozen contract."
+    "openReviewGate": "No current open review gate. The runtime manifest loading slice must stop for review before endpoint or CLI projections widen the inspection contract."
   },
   "orchestrationContract": {
     "mustImplementAfterSliceSelection": true,
