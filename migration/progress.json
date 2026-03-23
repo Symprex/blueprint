@@ -7,28 +7,28 @@
   "current": {
     "activeWorkstream": "performance-and-scale",
     "nextReadySlice": {
-      "title": "Concurrent executor dispatch stress harness",
+      "title": "Repeated host startup and endpoint-mapping stress harness",
       "status": "ready",
       "dependsOn": [
-        "Synthetic design-time telemetry capture committed."
+        "Concurrent executor dispatch stress harness committed."
       ],
       "failingProof": [
-        "A failing proof shows Phase 0 still lacks a deterministic concurrent executor-dispatch stress harness, even though the runtime dispatch benchmark baseline now exists.",
-        "A failing proof shows the generated executor shell and registered pipeline path are not yet exercised under repeated concurrent dispatch in a non-microbenchmark proof."
+        "A failing proof shows Phase 0 still lacks a deterministic repeated host startup and endpoint-mapping stress harness, even though `BlueprintEndpointMappingBenchmarks` already measures one-shot mapping cost.",
+        "A failing proof shows `MapBlueprintApi(...)` and the current hosted inspection endpoints are not yet exercised across repeated host construction and mapping iterations in a non-microbenchmark proof."
       ],
       "expectedFiles": [
         "docs\\observability-and-dev-experience.md",
         "migration\\performance-and-scale\\plan.md",
         "migration\\plan.md",
         "migration\\progress.json",
-        "src\\Blueprint.SourceGenerator.Benchmarks\\ExecutorDispatch\\ExecutorDispatchBenchmarks.cs",
-        "src\\Blueprint.SourceGenerator.Tests.Integration\\Generators\\Pipelines\\ConcurrentExecutorDispatchIntegrationTests.cs"
+        "src\\Blueprint.SourceGenerator.Benchmarks\\BlueprintHttp\\BlueprintEndpointMappingBenchmarks.cs",
+        "src\\Blueprint.SourceGenerator.Tests\\Artifacts\\ManifestInspectionEndpointTests.cs"
       ],
-      "reviewGate": "Stop again for review before broader startup or soak-test work if the first concurrent dispatch harness exposes runtime thread-safety gaps or needs a different machine-readable artifact seam."
+      "reviewGate": "Stop again for review before broader manifest/OpenAPI soak work if the first repeated startup harness exposes host-lifecycle gaps or needs a dedicated artifact/reporting seam."
     },
     "lastCompletedSlice": {
       "workstream": "performance-and-scale",
-      "title": "Synthetic design-time telemetry capture"
+      "title": "Concurrent executor dispatch stress harness"
     },
     "openReviewGate": null
   },

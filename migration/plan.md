@@ -476,8 +476,8 @@ When delegating a workstream, include:
 
 - [ ] Medium-scale compile-time locality is measured and gated in CI.
 - [x] Build telemetry can explain cold, no-op, and single-edit behavior.
-- [ ] Runtime hotspot measurements exist for known registration/lookup bottlenecks.
-- [ ] A reviewable benchmark baseline exists for the known `BlueprintApp` hotspots before Phase 1 starts.
+- [x] Runtime hotspot measurements exist for known registration/lookup bottlenecks.
+- [x] A reviewable benchmark baseline exists for the known `BlueprintApp` hotspots before Phase 1 starts.
 - [ ] The fixture generator feeds both compile-time and runtime harnesses.
 - [ ] Tier 3 readiness has an explicit measurement plan before Signature365-scale migration starts.
 
@@ -485,7 +485,7 @@ When delegating a workstream, include:
 
 - [ ] Cacheability and invalidation-locality tests.
 - [x] Build telemetry capture with `.binlog` and timing summaries.
-- [ ] BenchmarkDotNet or equivalent runtime benchmarks for startup, dispatch, and shell overhead.
+- [x] BenchmarkDotNet or equivalent runtime benchmarks for startup, dispatch, and shell overhead.
 - [ ] Stress tests for concurrent and high-volume paths.
 
 ### Docs and artifacts
@@ -509,7 +509,8 @@ When delegating a workstream, include:
 - completed first build/design-time telemetry contract slice: `SyntheticBuildTelemetryReport` now emits a deterministic `build-telemetry` manifest envelope for cold-build and single-edit synthetic captures, and `SyntheticBuildTelemetryReportTests` snapshot generated-output counts, tracked stage counts, capture metadata, and optional mutation metadata so later `.binlog` runners have a reviewed contract to target
 - completed first real synthetic MSBuild telemetry capture runner: `migration\performance-and-scale\Capture-SyntheticBuildTelemetry.ps1` now materializes a temporary synthetic app, emits cold-build, no-op-build, and single-edit-build `.binlog` plus `timing-summary.json` outputs, copies reviewable generated sources, and writes the reviewed `build-telemetry` envelope for each capture; `SyntheticBuildTelemetryRunnerTests.cs` now proves those artifacts end-to-end while keeping emitted inspection files out of `Compile` so repeat captures stay incremental
 - completed first design-time telemetry follow-on: the same repo-native runner now emits a `design-time-build` capture through the reviewed `build-telemetry` envelope with `capture.isDesignTimeBuild = true`, giving Phase 0 a deterministic binlog-plus-summary seam for comparing IDE-style builds against the normal cold/no-op graph
-- next approved follow-on for this workstream: add the first concurrent executor-dispatch stress harness so Phase 0 starts proving stability under repeated concurrent dispatch rather than relying only on microbenchmark measurements
+- completed first concurrent executor-dispatch stress harness: `src\Blueprint.SourceGenerator.Tests.Integration\Generators\Pipelines\ConcurrentExecutorDispatchIntegrationTests.cs` now drives 64 start-gated operations through the generated `IntegrationTestBlueprintAppExecutor.ExecuteAsync(...)` shell, reports requested/completed/faulted counts plus returned payloads, and proves repeated concurrent dispatch stays stable on the same executor seam that the dispatch benchmark measures
+- next approved follow-on for this workstream: add the first repeated host startup and endpoint-mapping stress harness so Phase 0 proves `MapBlueprintApi(...)` stays stable across repeated host construction and mapping loops rather than relying only on the current benchmark curve
 
 ## 4. Generated manifests and inspection surfaces
 
