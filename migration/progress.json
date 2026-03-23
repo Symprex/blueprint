@@ -7,14 +7,14 @@
   "current": {
     "activeWorkstream": "performance-and-scale",
     "nextReadySlice": {
-      "title": "Synthetic MSBuild telemetry capture runner",
+      "title": "Synthetic design-time telemetry capture",
       "status": "ready",
       "dependsOn": [
-        "Synthetic build telemetry capture contract committed."
+        "Synthetic MSBuild telemetry capture runner committed."
       ],
       "failingProof": [
-        "A failing proof shows the repository still has no repo-native runner that emits real `.binlog` or timing-summary files for the cold, no-op, and single-edit synthetic scale scenarios, even though the `build-telemetry` contract now exists.",
-        "A failing proof shows the reviewed `build-telemetry` envelope is still populated only from in-process test harness data rather than from a repeatable MSBuild/design-time capture workflow."
+        "A failing proof shows the repo-native telemetry runner still cannot compare normal-build and design-time-build behavior from the same synthetic project graph, even though the Phase 0 telemetry plan explicitly calls for that question to be answerable.",
+        "A failing proof shows the reviewed `build-telemetry` envelope and timing artifacts still lack a repeatable design-time-build capture path, so IDE-health investigation stops at cold, no-op, and single-edit normal builds."
       ],
       "expectedFiles": [
         "docs\\observability-and-dev-experience.md",
@@ -22,13 +22,14 @@
         "migration\\performance-and-scale\\Capture-SyntheticBuildTelemetry.ps1",
         "migration\\performance-and-scale\\plan.md",
         "migration\\plan.md",
-        "migration\\progress.json"
+        "migration\\progress.json",
+        "src\\Blueprint.SourceGenerator.Tests\\Scale\\SyntheticBuildTelemetryRunnerTests.cs"
       ],
-      "reviewGate": "Stop again for review before locking broader benchmark or telemetry publication lanes if the first real MSBuild runner suggests the reviewed `build-telemetry` envelope still needs different fields."
+      "reviewGate": "Stop again for review before broader benchmark-lane or telemetry-publication work if the first design-time capture needs different `build-telemetry` fields or a separate manifest projection."
     },
     "lastCompletedSlice": {
       "workstream": "performance-and-scale",
-      "title": "Synthetic build telemetry capture contract"
+      "title": "Synthetic MSBuild telemetry capture runner"
     },
     "openReviewGate": null
   },

@@ -68,6 +68,7 @@ They are intentionally short and repeatable so future humans and AI agents can u
 - [ ] Prefer stable, machine-readable outputs over log scraping.
 - [ ] Make large generated surfaces easier to summarize, inspect, and reason about.
 - [ ] Design tooling so it helps both humans and AI agents answer "what exists?" and "why?" quickly.
+- [ ] If a build or telemetry runner emits compiler-generated inspection files, keep them out of `Compile` on later builds (for example with `Compile Remove="artifacts\generated\**\*.cs"`) so no-op or design-time captures do not accidentally measure stale generated inputs.
 - [ ] If a tool closes a recurring confusion gap, document the new workflow in `/docs`.
 - [ ] If the change alters how Blueprint is consumed or extended, update `using-blueprint` and/or `extending-blueprint` in the same change.
 
