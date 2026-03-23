@@ -7,29 +7,28 @@
   "current": {
     "activeWorkstream": "performance-and-scale",
     "nextReadySlice": {
-      "title": "Tier 2 multi-source compile harness and first invalidation-locality proof",
+      "title": "Tier 2 shared-contract invalidation-locality follow-on",
       "status": "ready",
       "dependsOn": [
-        "Synthetic blueprint fixture generator slice completed",
-        "BlueprintApp runtime-hotspot benchmark baseline completed"
+        "Tier 2 multi-source compile harness and first single-operation invalidation proof completed"
       ],
       "failingProof": [
-        "Scale test proves the synthetic fixture can drive descriptor, app, and pipeline generators together through a shared multi-source compile harness.",
-        "Scale test proves mutating one synthetic operation only changes the expected downstream outputs.",
-        "Follow-on proof then mutates one shared contract shape and checks the broader but still explainable invalidation boundary."
+        "Scale test mutates one shared contract shape used across the synthetic fixture and proves the broader but still explainable set of generated outputs that change.",
+        "The shared-contract mutation proof reuses the tracked multi-generator harness so descriptor, app, and pipeline generators are observed in one deterministic edit run.",
+        "The follow-on assertion records which generator outputs stay stable so locality regressions remain reviewable."
       ],
       "expectedFiles": [
         "src\\Blueprint.SourceGenerator.Tests\\Scale\\SyntheticBlueprintFixtureGenerator.cs",
-        "src\\Blueprint.SourceGenerator.Tests\\Scale\\SyntheticBlueprintFixtureGeneratorTests.cs",
+        "src\\Blueprint.SourceGenerator.Tests\\Scale\\SyntheticBlueprintFixtureScaleHarnessTests.cs",
         "src\\Blueprint.SourceGenerator.Tests\\TestHelpers.cs"
       ],
       "reviewGate": "Require code review before treating the Tier 2 deterministic CI gate as closed."
     },
     "lastCompletedSlice": {
       "workstream": "performance-and-scale",
-      "title": "BlueprintApp runtime-hotspot benchmark baseline"
+      "title": "Tier 2 multi-source compile harness and first single-operation invalidation proof"
     },
-    "openReviewGate": "None before the Tier 2 failing proof lands."
+    "openReviewGate": "None before the shared-contract mutation proof lands."
   },
   "orchestrationContract": {
     "mustImplementAfterSliceSelection": true,

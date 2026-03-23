@@ -118,6 +118,43 @@ public record GenerationResult(SyntaxTree[] Inputs, Diagnostic[] Diagnostics, Sy
     }
 }
 
+public sealed record TrackedGeneratorDefinition(
+    string Name,
+    IIncrementalGenerator Generator,
+    ImmutableArray<string> StageNames);
+
+public sealed record GeneratedSourceSnapshot(string HintName, string SourceText);
+
+public sealed record MultiGeneratorGenerationResult(
+    Diagnostic[] Diagnostics,
+    ImmutableDictionary<string, ImmutableArray<GeneratedSourceSnapshot>> GeneratedSources,
+    ImmutableDictionary<string, ImmutableDictionary<string, ImmutableArray<IncrementalGeneratorRunStep>>> TrackedSteps)
+{
+    public ImmutableArray<GeneratedSourceSnapshot> GetGeneratedSources(string generatorName)
+    {
+        return this.GeneratedSources.TryGetValue(generatorName, out var generatedSources)
+            ? generatedSources
+            : [];
+    }
+}
+
+public sealed record MultiGeneratorEditResult(
+    MultiGeneratorGenerationResult Initial,
+    MultiGeneratorGenerationResult Updated)
+{
+    public ImmutableArray<string> GetChangedGeneratedSourceHintNames(string generatorName)
+    {
+        var initialSources = this.Initial.GetGeneratedSources(generatorName)
+            .ToDictionary(static source => source.HintName, static source => source.SourceText, StringComparer.Ordinal);
+
+        return this.Updated.GetGeneratedSources(generatorName)
+            .Where(source => !initialSources.TryGetValue(source.HintName, out var sourceText) || sourceText != source.SourceText)
+            .Select(static source => source.HintName)
+            .OrderBy(static hintName => hintName, StringComparer.Ordinal)
+            .ToImmutableArray();
+    }
+}
+
 /// <summary>
 /// A set of helper methods for testing the generation of source code, including gathering of diagnostics and checking
 /// the cacheability of the source generator to ensure it will be performant.
@@ -130,56 +167,54 @@ public static class TestHelpers
     public static GenerationResult Compile<T>(string source, bool assertCacheability = true)
         where T : IIncrementalGenerator, ITrackedSourceGenerator, new()
     {
-        return Compile<T>([source], assertCacheability);
+        return Compile<T>([source], filePaths: null, assertCacheability);
+    }
+
+    public static TrackedGeneratorDefinition CreateTrackedGenerator<T>()
+        where T : IIncrementalGenerator, ITrackedSourceGenerator, new()
+    {
+        var generator = new T();
+        return new TrackedGeneratorDefinition(typeof(T).Name, generator, [.. generator.StageNames]);
+    }
+
+    public static MultiGeneratorGenerationResult CompileWithTrackedGenerators(
+        TrackedGeneratorDefinition[] generators,
+        string[] sources,
+        string[] filePaths)
+    {
+        ArgumentNullException.ThrowIfNull(generators);
+
+        var parseOptions = new CSharpParseOptions(LanguageVersion.Preview);
+        var compilation = CreateCompilation(sources, filePaths, parseOptions);
+        var result = RunTrackedGenerators(generators, parseOptions, compilation);
+        return result.Initial;
+    }
+
+    public static MultiGeneratorEditResult CompileWithTrackedGeneratorsAfterEdit(
+        TrackedGeneratorDefinition[] generators,
+        string[] initialSources,
+        string[] updatedSources,
+        string[] filePaths)
+    {
+        ArgumentNullException.ThrowIfNull(generators);
+
+        var parseOptions = new CSharpParseOptions(LanguageVersion.Preview);
+        var initialCompilation = CreateCompilation(initialSources, filePaths, parseOptions);
+        var updatedCompilation = CreateCompilation(updatedSources, filePaths, parseOptions);
+        return RunTrackedGenerators(generators, parseOptions, initialCompilation, updatedCompilation);
     }
 
     // You call this method passing in C# sources, and the list of stages you expect
     // It runs the generator, asserts the outputs are ok,
     private static GenerationResult Compile<T>(
         string[] sources, // C# source code
+        string[]? filePaths,
         bool assertCacheability = true) // You can disable cacheability checking during dev
         where T : IIncrementalGenerator, ITrackedSourceGenerator, new() // T is your generator
     {
-        // Convert the source files to SyntaxTrees
         var parseOptions = new CSharpParseOptions(LanguageVersion.Preview);
-        var syntaxTrees = sources.Select((x, i) => CSharpSyntaxTree.ParseText(x, parseOptions, $"Input{i}.cs")).ToArray();
-
-        // Configure the assembly references you need
-        // This will vary depending on your generator and requirements
-        var references = AppDomain.CurrentDomain.GetAssemblies()
-            .Where(a => !a.IsDynamic && !string.IsNullOrWhiteSpace(a.Location))
-            .Select(a => MetadataReference.CreateFromFile(a.Location))
-            .ToList();
-
-        references.Add(MetadataReference.CreateFromFile(typeof(HttpRequestMessage).Assembly.Location));
-        references.Add(MetadataReference.CreateFromFile(typeof(System.Net.Http.Headers.AuthenticationHeaderValue).Assembly.Location));
-        references.Add(MetadataReference.CreateFromFile(typeof(Blueprint.Model.ICommand).Assembly.Location));
-
-        // Add Blueprint.Runtime explicitly for types used in generated code
-        references.Add(MetadataReference.CreateFromFile(typeof(Blueprint.OperationResult).Assembly.Location));
-        references.Add(MetadataReference.CreateFromFile(typeof(Blueprint.Runtime.Exec.ApiOperationContext).Assembly.Location));
-
-        // Add System.ComponentModel.Annotations for ValidationResult
-        references.Add(MetadataReference.CreateFromFile(typeof(System.ComponentModel.DataAnnotations.ValidationResult).Assembly.Location));
-
-        // Add Microsoft.Extensions.Logging for LoggerMessage.Define, ILogger, ILoggerFactory
-        references.Add(MetadataReference.CreateFromFile(typeof(Microsoft.Extensions.Logging.ILogger).Assembly.Location));
-        references.Add(MetadataReference.CreateFromFile(typeof(Microsoft.Extensions.Logging.LoggerMessage).Assembly.Location));
-        references.Add(MetadataReference.CreateFromFile(typeof(Microsoft.Extensions.Logging.Abstractions.NullLogger).Assembly.Location));
-
-        // Add Microsoft.Extensions.DependencyInjection for IServiceProvider
-        references.Add(MetadataReference.CreateFromFile(typeof(Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions).Assembly.Location));
-
-        // Add System.Diagnostics.DiagnosticSource for Activity tracing
-        references.Add(MetadataReference.CreateFromFile(typeof(System.Diagnostics.Activity).Assembly.Location));
-
-        // Create a Compilation object
-        // You may want to specify other results here
-        var compilation = CSharpCompilation.Create(
-            "Tests",
-            syntaxTrees,
-            references,
-            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+        var compilation = CreateCompilation(sources, filePaths, parseOptions);
+        var syntaxTrees = compilation.SyntaxTrees.ToArray();
 
         // Run the generator, get the results, and assert cacheability if applicable
         var runResult = RunGeneratorAndAssertOutput<T>(
@@ -189,6 +224,127 @@ public static class TestHelpers
 
         // Return the generator diagnostics and generated sources
         return new GenerationResult(syntaxTrees, runResult.Diagnostics, runResult.GeneratedSources.ToArray());
+    }
+
+    private static CSharpCompilation CreateCompilation(
+        string[] sources,
+        string[]? filePaths,
+        CSharpParseOptions parseOptions)
+    {
+        ArgumentNullException.ThrowIfNull(sources);
+
+        if (filePaths is not null && filePaths.Length != sources.Length)
+        {
+            throw new ArgumentException("Source file path count must match source count.", nameof(filePaths));
+        }
+
+        var syntaxTrees = sources.Select((source, index) => CSharpSyntaxTree.ParseText(source, parseOptions, filePaths?[index] ?? $"Input{index}.cs")).ToArray();
+        var references = CreateMetadataReferences();
+
+        return CSharpCompilation.Create(
+            "Tests",
+            syntaxTrees,
+            references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+    }
+
+    private static List<MetadataReference> CreateMetadataReferences()
+    {
+        var references = AppDomain.CurrentDomain.GetAssemblies()
+            .Where(static assembly => !assembly.IsDynamic && !string.IsNullOrWhiteSpace(assembly.Location))
+            .Select(static assembly => (MetadataReference)MetadataReference.CreateFromFile(assembly.Location))
+            .ToList();
+
+        references.Add(MetadataReference.CreateFromFile(typeof(HttpRequestMessage).Assembly.Location));
+        references.Add(MetadataReference.CreateFromFile(typeof(System.Net.Http.Headers.AuthenticationHeaderValue).Assembly.Location));
+        references.Add(MetadataReference.CreateFromFile(typeof(Blueprint.Model.ICommand).Assembly.Location));
+        references.Add(MetadataReference.CreateFromFile(typeof(Blueprint.OperationResult).Assembly.Location));
+        references.Add(MetadataReference.CreateFromFile(typeof(Blueprint.Runtime.Exec.ApiOperationContext).Assembly.Location));
+        references.Add(MetadataReference.CreateFromFile(typeof(System.ComponentModel.DataAnnotations.ValidationResult).Assembly.Location));
+        references.Add(MetadataReference.CreateFromFile(typeof(Microsoft.Extensions.Logging.ILogger).Assembly.Location));
+        references.Add(MetadataReference.CreateFromFile(typeof(Microsoft.Extensions.Logging.LoggerMessage).Assembly.Location));
+        references.Add(MetadataReference.CreateFromFile(typeof(Microsoft.Extensions.Logging.Abstractions.NullLogger).Assembly.Location));
+        references.Add(MetadataReference.CreateFromFile(typeof(Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions).Assembly.Location));
+        references.Add(MetadataReference.CreateFromFile(typeof(System.Diagnostics.Activity).Assembly.Location));
+        return references;
+    }
+
+    private static MultiGeneratorEditResult RunTrackedGenerators(
+        TrackedGeneratorDefinition[] generators,
+        CSharpParseOptions parseOptions,
+        CSharpCompilation initialCompilation,
+        CSharpCompilation? updatedCompilation = null)
+    {
+        var driver = CreateTrackedGeneratorDriver(generators, parseOptions);
+        var initialRun = ExecuteTrackedGenerators(driver, initialCompilation, generators);
+
+        if (updatedCompilation is null)
+        {
+            return new MultiGeneratorEditResult(initialRun.Result, initialRun.Result);
+        }
+
+        var updatedRun = ExecuteTrackedGenerators(initialRun.Driver, updatedCompilation, generators);
+        return new MultiGeneratorEditResult(initialRun.Result, updatedRun.Result);
+    }
+
+    private static GeneratorDriver CreateTrackedGeneratorDriver(
+        TrackedGeneratorDefinition[] generators,
+        CSharpParseOptions parseOptions)
+    {
+        var sourceGenerators = generators.Select(static generator => generator.Generator.AsSourceGenerator()).ToArray();
+        var driverOptions = new GeneratorDriverOptions(
+            disabledOutputs: IncrementalGeneratorOutputKind.None,
+            trackIncrementalGeneratorSteps: true);
+
+        return CSharpGeneratorDriver.Create(sourceGenerators, driverOptions: driverOptions, parseOptions: parseOptions);
+    }
+
+    private static (GeneratorDriver Driver, MultiGeneratorGenerationResult Result) ExecuteTrackedGenerators(
+        GeneratorDriver driver,
+        CSharpCompilation compilation,
+        TrackedGeneratorDefinition[] generators)
+    {
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out _);
+        var runResult = driver.GetRunResult();
+
+        foreach (var result in runResult.Results)
+        {
+            if (result.Exception is not null)
+            {
+                ExceptionDispatchInfo.Throw(result.Exception);
+            }
+        }
+
+        var emitResult = outputCompilation.Emit(new MemoryStream());
+        var diagnostics = emitResult.Success
+            ? runResult.Diagnostics.ToArray()
+            : emitResult.Diagnostics.Concat(runResult.Diagnostics).ToArray();
+
+        return (driver, CreateMultiGeneratorGenerationResult(runResult, diagnostics, generators));
+    }
+
+    private static MultiGeneratorGenerationResult CreateMultiGeneratorGenerationResult(
+        GeneratorDriverRunResult runResult,
+        Diagnostic[] diagnostics,
+        TrackedGeneratorDefinition[] generators)
+    {
+        var generatedSources = ImmutableDictionary.CreateRange(
+            generators.Select(
+                (generator, index) => new KeyValuePair<string, ImmutableArray<GeneratedSourceSnapshot>>(
+                    generator.Name,
+                    runResult.Results[index].GeneratedSources
+                        .Select(static source => new GeneratedSourceSnapshot(source.HintName, source.SourceText.ToString()))
+                        .OrderBy(static source => source.HintName, StringComparer.Ordinal)
+                        .ToImmutableArray())));
+        var trackedSteps = ImmutableDictionary.CreateRange(
+            generators.Select(
+                (generator, index) => new KeyValuePair<string, ImmutableDictionary<string, ImmutableArray<IncrementalGeneratorRunStep>>>(
+                    generator.Name,
+                    runResult.Results[index].TrackedSteps
+                        .Where(step => generator.StageNames.Contains(step.Key, StringComparer.Ordinal))
+                        .ToImmutableDictionary(static step => step.Key, static step => step.Value, StringComparer.Ordinal))));
+
+        return new MultiGeneratorGenerationResult(diagnostics, generatedSources, trackedSteps);
     }
 
     private static (Diagnostic[] Diagnostics, IEnumerable<SyntaxTree> GeneratedSources) RunGeneratorAndAssertOutput<T>(

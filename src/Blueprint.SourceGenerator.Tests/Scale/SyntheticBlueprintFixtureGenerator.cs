@@ -40,6 +40,20 @@ public sealed record SyntheticBlueprintFixture(ImmutableArray<SyntheticBlueprint
     public string CombinedSource => string.Join(
         Environment.NewLine + Environment.NewLine,
         this.SourceFiles.Select(static sourceFile => sourceFile.Content));
+
+    public SyntheticBlueprintFixture MutateOperation(int operationIndex, Func<string, string> mutation)
+    {
+        ArgumentNullException.ThrowIfNull(mutation);
+
+        var operationPath = $@"Operations\SyntheticOperation{operationIndex:000}.cs";
+        var sourceFiles = this.SourceFiles.Select(
+                sourceFile => sourceFile.Path == operationPath
+                    ? sourceFile with { Content = mutation(sourceFile.Content) }
+                    : sourceFile)
+            .ToImmutableArray();
+
+        return new SyntheticBlueprintFixture(sourceFiles);
+    }
 }
 
 public static class SyntheticBlueprintFixtureGenerator
@@ -50,14 +64,14 @@ public static class SyntheticBlueprintFixtureGenerator
 
         var sourceFiles = ImmutableArray.CreateBuilder<SyntheticBlueprintFixtureSourceFile>(options.OperationCount + 1);
         var appSource = $$"""
-                          namespace {{options.NamespaceName}}
-                          {
-                              [global::Blueprint.Model.BlueprintAppScan]
-                              public partial class {{options.AppName}} : global::Blueprint.Model.BlueprintApp
-                              {
-                              }
-                          }
-                          """;
+                           namespace {{options.NamespaceName}}
+                           {
+                               [global::Blueprint.Model.BlueprintAppScan]
+                               public partial class {{options.AppName}} : global::Blueprint.Model.BlueprintApp
+                               {
+                               }
+                           }
+                           """;
 
         sourceFiles.Add(new SyntheticBlueprintFixtureSourceFile(
             $"{options.AppName}.cs",
@@ -67,13 +81,19 @@ public static class SyntheticBlueprintFixtureGenerator
         {
             var operationName = $"SyntheticOperation{operationIndex:000}";
             var operationSource = $$"""
-                                namespace {{options.NamespaceName}}
-                                {
-                                    public partial class {{operationName}} : global::Blueprint.Model.IOperation
-                                    {
-                                    }
-                                }
-                                """;
+                                 namespace {{options.NamespaceName}}
+                                 {
+                                     public partial class {{operationName}} : global::Blueprint.Model.IQuery<string>
+                                     {
+                                         public string? Value { get; init; }
+
+                                         public static global::System.Threading.Tasks.Task<string> InvokeAsync()
+                                         {
+                                             return global::System.Threading.Tasks.Task.FromResult("{{operationName}}");
+                                         }
+                                     }
+                                 }
+                                 """;
 
             sourceFiles.Add(new SyntheticBlueprintFixtureSourceFile(
                 $@"Operations\{operationName}.cs",
