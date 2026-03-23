@@ -7,25 +7,25 @@
   "current": {
     "activeWorkstream": "generated-manifests-and-inspection-surfaces",
     "nextReadySlice": {
-      "title": "Manifest required-field parser validation tests",
+      "title": "Manifest required-string token validation",
       "status": "ready",
       "dependsOn": [
-        "Top-level manifest object-shape validation committed."
+        "Manifest schemaVersion integer-token validation committed."
       ],
       "failingProof": [
-        "A failing proof shows required envelope fields such as schemaVersion, app, generator, or required strings are not yet covered by explicit parser-validation tests even though snapshots currently pass.",
-        "A failing proof shows malformed required-field JSON can still slip past the test suite without a direct contract-level assertion."
+        "A failing proof shows required string fields such as artifactName, relativePath, app identity, generator identity, or section contributorId can still accept non-string JSON tokens through permissive conversions.",
+        "A failing proof shows malformed required-string JSON can still slip past the test suite without a direct contract-level assertion."
       ],
       "expectedFiles": [
         "src\\Blueprint.SourceGenerator.Tests\\Artifacts\\GeneratedManifestEnvelopeTests.cs",
         "src\\Blueprint.SourceGenerator\\Artifacts\\GeneratedManifestEnvelope.cs",
         "migration\\generated-manifests-and-inspection-surfaces\\plan.md"
       ],
-      "reviewGate": "Stop again for review before broader hosted/tooling inspection work if required-field validation changes the approved manifest contract or reveals contract drift that needs a design decision."
+      "reviewGate": "Stop again for review before broader hosted/tooling inspection work if required-string validation changes the approved manifest contract or reveals contract drift that needs a design decision."
     },
     "lastCompletedSlice": {
       "workstream": "generated-manifests-and-inspection-surfaces",
-      "title": "Top-level manifest object-shape validation"
+      "title": "Manifest schemaVersion integer-token validation"
     },
     "openReviewGate": null
   },

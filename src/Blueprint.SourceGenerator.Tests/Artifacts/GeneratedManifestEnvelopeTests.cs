@@ -116,6 +116,30 @@ public class GeneratedManifestEnvelopeTests
             .WithMessage("*operations*object*");
     }
 
+    [Fact]
+    public void FromJson_Should_Reject_SchemaVersion_That_Is_Not_An_Integer_Token()
+    {
+        var manifestJson = CreateValidManifestJson();
+        manifestJson["schemaVersion"] = "1";
+
+        var act = () => GeneratedManifestEnvelope.FromJson(manifestJson.ToString());
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*schemaVersion*integer*");
+    }
+
+    [Fact]
+    public void FromJson_Should_Reject_SchemaVersion_That_Exceeds_Int32_Range()
+    {
+        var manifestJson = CreateValidManifestJson();
+        manifestJson["schemaVersion"] = 2147483648L;
+
+        var act = () => GeneratedManifestEnvelope.FromJson(manifestJson.ToString());
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*schemaVersion*integer*");
+    }
+
     private static JObject CreateValidManifestJson()
     {
         return new JObject

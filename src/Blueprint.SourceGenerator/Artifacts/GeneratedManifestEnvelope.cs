@@ -113,8 +113,7 @@ public sealed class GeneratedManifestEnvelope
         EnsureValue(json, nameof(json));
 
         var root = JObject.Parse(json);
-        var schemaVersion = root.Value<int?>("schemaVersion")
-            ?? throw new InvalidOperationException("Manifest JSON is missing required property 'schemaVersion'.");
+        var schemaVersion = GetRequiredInteger(root, "schemaVersion");
 
         if (schemaVersion != 1)
         {
@@ -297,6 +296,31 @@ public sealed class GeneratedManifestEnvelope
     {
         return parent[propertyName]?.DeepClone()
                ?? throw new InvalidOperationException($"Manifest JSON is missing required property '{propertyName}'.");
+    }
+
+    private static int GetRequiredInteger(JObject parent, string propertyName)
+    {
+        var token = parent[propertyName];
+        if (token is null)
+        {
+            throw new InvalidOperationException($"Manifest JSON is missing required property '{propertyName}'.");
+        }
+
+        if (token is not JValue { Type: JTokenType.Integer } value)
+        {
+            throw new InvalidOperationException($"Manifest JSON property '{propertyName}' must be a JSON integer.");
+        }
+
+        try
+        {
+            return value.Value<int>();
+        }
+        catch (OverflowException exception)
+        {
+            throw new InvalidOperationException(
+                $"Manifest JSON property '{propertyName}' must be a JSON integer within the Int32 range.",
+                exception);
+        }
     }
 
     private static string GetRequiredString(JObject parent, string propertyName)
