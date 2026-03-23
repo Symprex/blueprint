@@ -85,6 +85,7 @@ The target is **consumer-contract compatibility**, not byte-for-byte parity with
 - Human review direction for future manifest work: the current operations-discovery entry shape is approved as the starting projection, but it is not permanently frozen. Later debug-manifest improvements may diverge from the current `kind`/`namespace`/`typeName` payload when a better owned shape is warranted, as long as those changes go back through the same review/versioning gates.
 - The first build-time projection follow-on is now human-approved: `GeneratedManifestEnvelope.ToMarkdown()` projects deterministic markdown from the shared envelope, `ManifestMarkdownProjectionTests` lock a stable operations summary plus an envelope-only guard, and nested object payloads are now normalized recursively so richer future manifest data does not reintroduce insertion-order markdown diffs.
 - Human-approved next Phase 0 follow-on after the markdown slice: start runtime inspection surfaces with the narrowest projection first by loading the approved manifest envelope from embedded runtime resources. This embedded-resource slice should establish runtime access to pre-built manifest data before dev-only endpoints or CLI projections widen the inspection surface.
+- The first runtime inspection follow-on is now complete locally and awaiting review: `Blueprint.Runtime.Artifacts.ManifestResourceLoader` loads approved manifest JSON from embedded assembly resources, `GeneratedManifestEnvelope.FromJson(...)` rehydrates the shared contract without recomputing discovery, and `ManifestRuntimeProjectionTests` cover embedded-resource loading, JSON roundtripping, and stable runtime projection from the embedded operations manifest.
 
 ## Durable decision rule
 
@@ -514,8 +515,10 @@ When delegating a workstream, include:
 - [x] Define how modules contribute without schema collisions.
 - [ ] Make JSON the canonical representation and define projections to markdown/endpoints/tooling.
   - [x] Add the first build-time markdown projection and snapshot proof from `GeneratedManifestEnvelope`.
-  - [ ] Add runtime manifest loading and embedded resource projection as the first runtime inspection surface.
-  - [ ] Add wider runtime inspection projection surfaces after embedded-resource loading proves the envelope can be consumed without recomputing discovery.
+  - [x] Add runtime manifest loading and embedded resource projection as the first runtime inspection surface.
+  - [x] Human-review the embedded-resource boundary before wider runtime endpoint or CLI projections begin.
+  - [ ] Add a development-only manifest inspection endpoint that serves loaded manifest JSON/markdown without recomputing discovery.
+  - [ ] Add wider runtime inspection projection surfaces after the dev-only endpoint proves the envelope can be consumed through hosted inspection surfaces.
 - [ ] Ensure runtime inspection projects from build-time data rather than recomputing.
 - [ ] Align manifest output with migration reports, OpenAPI, and performance artifacts.
 
@@ -525,11 +528,12 @@ When delegating a workstream, include:
 - [x] Phase 0 can close with the shared contract agreed even if later modules still need to populate richer payloads incrementally.
 - [x] At least one real module contributes manifest data through the shared contract.
 - [x] Humans and AI agents can answer "what exists?" and "why?" without reverse-engineering generated code.
-- [ ] Runtime inspection does not invent or recompute conflicting data.
+- [x] Runtime inspection does not invent or recompute conflicting data.
 
 ### Tests and benchmarks
 
 - [x] Snapshot tests for manifest shape and content.
+- [x] Runtime manifest loading tests covering embedded-resource projection, stable roundtripping, and no-rediscovery runtime reads.
 - [ ] Schema validation tests.
 - [ ] Compatibility tests for multiple module contributors.
 

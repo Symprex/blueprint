@@ -48,10 +48,11 @@ Do not use this skill for ordinary downstream app usage; use `using-blueprint`.
 13. For validation fast-path work, keep rule detection and code emission in dedicated strategy helpers beside `ValidationModule`; use `ValidationRuntime` for unsupported per-property fallback and add `BPV` diagnostics when referenced members are provably invalid.
 14. New manifest producers should extend `Blueprint.SourceGenerator.Artifacts.GeneratedManifestEnvelope` and its default `.blueprint/manifests/<artifact>.manifest.json` layout instead of inventing unrelated top-level JSON contracts or insertion-order-dependent output. Treat the current operations-discovery payload shape as an approved starting point, not as a forever-frozen contract if later debug-manifest improvements need a better contributor-owned projection.
 15. Derived manifest projections such as `GeneratedManifestEnvelope.ToMarkdown()` must read only envelope data, and they should keep nested payload ordering deterministic so future richer manifest content stays reviewable.
-16. Manifest contributor slices should activate the typed `ContributeToManifest(DebugManifestContributorContext)` seam and the public `BlueprintSourceGenerationConfig.BuildDebugManifest(...)` helper instead of bypassing the planning model with ad-hoc envelope writes.
-17. When comments are needed, spend them on invariants, fallback boundaries, and trade-offs; never on repeating what the code already says.
-18. Prefer `static` lambdas in LINQ or similar delegate-heavy code whenever no local capture is needed.
-19. Keep module-specific tests in module-specific files instead of extending shared catch-all test files forever.
+16. Runtime inspection slices should load previously built manifest data through stable seams such as `ManifestResourceLoader` plus `GeneratedManifestEnvelope.FromJson(...)`; do not rebuild discovery by calling contributor seams or re-deriving operation metadata in runtime code.
+17. Manifest contributor slices should activate the typed `ContributeToManifest(DebugManifestContributorContext)` seam and the public `BlueprintSourceGenerationConfig.BuildDebugManifest(...)` helper instead of bypassing the planning model with ad-hoc envelope writes.
+18. When comments are needed, spend them on invariants, fallback boundaries, and trade-offs; never on repeating what the code already says.
+19. Prefer `static` lambdas in LINQ or similar delegate-heavy code whenever no local capture is needed.
+20. Keep module-specific tests in module-specific files instead of extending shared catch-all test files forever.
 
 ## Common mistakes
 

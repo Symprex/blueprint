@@ -103,6 +103,63 @@ public sealed class GeneratedManifestEnvelope
     }
 
     /// <summary>
+    /// Rehydrates the shared manifest envelope from serialized JSON so runtime inspection surfaces can project from the
+    /// build-time artifact instead of recomputing operation metadata.
+    /// </summary>
+    /// <param name="json">The serialized manifest JSON.</param>
+    /// <returns>The deserialized shared manifest envelope.</returns>
+    public static GeneratedManifestEnvelope FromJson(string json)
+    {
+        EnsureValue(json, nameof(json));
+
+        var root = JObject.Parse(json);
+        var schemaVersion = root.Value<int?>("schemaVersion")
+            ?? throw new InvalidOperationException("Manifest JSON is missing required property 'schemaVersion'.");
+
+        if (schemaVersion != 1)
+        {
+            throw new InvalidOperationException($"Manifest schema version '{schemaVersion}' is not supported.");
+        }
+
+        var appObject = GetRequiredObject(root, "app");
+        var generatorObject = GetRequiredObject(root, "generator");
+        var manifest = new GeneratedManifestEnvelope(
+            GetRequiredString(root, "artifactName"),
+            GetRequiredString(root, "artifactFamily"),
+            GetRequiredString(root, "relativePath"),
+            new GeneratedManifestAppIdentity(
+                GetRequiredString(appObject, "typeName"),
+                GetRequiredString(appObject, "assemblyName")),
+            new GeneratedManifestGeneratorIdentity(
+                GetRequiredString(generatorObject, "productName"),
+                GetRequiredString(generatorObject, "version")));
+
+        if (root["sections"] is JObject sectionsObject)
+        {
+            foreach (var property in sectionsObject.Properties().OrderBy(static property => property.Name, StringComparer.Ordinal))
+            {
+                var sectionObject = property.Value as JObject
+                    ?? throw new InvalidOperationException($"Manifest section '{property.Name}' must be a JSON object.");
+
+                manifest.AddSection(
+                    property.Name,
+                    GetRequiredString(sectionObject, "contributorId"),
+                    GetRequiredToken(sectionObject, "payload"));
+            }
+        }
+
+        if (root["operations"] is JObject operationsObject)
+        {
+            foreach (var property in operationsObject.Properties().OrderBy(static property => property.Name, StringComparer.Ordinal))
+            {
+                manifest.AddOperation(property.Name, property.Value);
+            }
+        }
+
+        return manifest;
+    }
+
+    /// <summary>
     /// Adds or replaces a contributor-owned section, rejecting ownership collisions so two modules cannot silently claim
     /// the same section name.
     /// </summary>
@@ -214,6 +271,29 @@ public sealed class GeneratedManifestEnvelope
         {
             throw new ArgumentException("Value cannot be null or whitespace.", parameterName);
         }
+    }
+
+    private static JObject GetRequiredObject(JObject parent, string propertyName)
+    {
+        return parent[propertyName] as JObject
+               ?? throw new InvalidOperationException($"Manifest JSON is missing required object property '{propertyName}'.");
+    }
+
+    private static JToken GetRequiredToken(JObject parent, string propertyName)
+    {
+        return parent[propertyName]?.DeepClone()
+               ?? throw new InvalidOperationException($"Manifest JSON is missing required property '{propertyName}'.");
+    }
+
+    private static string GetRequiredString(JObject parent, string propertyName)
+    {
+        var value = parent.Value<string>(propertyName);
+        if (value is null || string.IsNullOrWhiteSpace(value))
+        {
+            throw new InvalidOperationException($"Manifest JSON is missing required string property '{propertyName}'.");
+        }
+
+        return value;
     }
 
     private static void AppendTokenEntries(StringBuilder builder, JToken token)

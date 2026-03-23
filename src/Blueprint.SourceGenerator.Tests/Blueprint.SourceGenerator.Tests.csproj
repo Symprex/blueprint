@@ -27,6 +27,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="Artifacts\ManifestResources\operations.manifest.json" LogicalName="Blueprint.SourceGenerator.Tests.Artifacts.ManifestResources.operations.manifest.json" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Folder Include="Generators\App\Snapshots\" />
   </ItemGroup>
 </Project>

@@ -7,30 +7,30 @@
   "current": {
     "activeWorkstream": "generated-manifests-and-inspection-surfaces",
     "nextReadySlice": {
-      "title": "Runtime manifest loading and embedded resource projection",
+      "title": "Dev-only manifest inspection endpoint projection",
       "status": "ready",
       "dependsOn": [
-        "Build-time operations manifest markdown projection and snapshot testing approved."
+        "Runtime manifest loading and embedded resource projection approved."
       ],
       "failingProof": [
-        "A failing test shows the operations manifest cannot yet be loaded from embedded runtime resources without recomputing discovery.",
-        "A failing roundtrip test shows GeneratedManifestEnvelope cannot yet deserialize the embedded manifest JSON back into the approved envelope contract.",
-        "A failing runtime projection test shows operations are not yet exposed from embedded manifest data without calling debug-manifest contributors or rebuilding operation discovery."
+        "A failing endpoint test shows a development host does not yet expose a Blueprint manifest JSON endpoint that projects the loaded envelope.",
+        "A failing endpoint test shows a development host does not yet expose a Blueprint manifest markdown endpoint derived from the same loaded envelope.",
+        "A failing environment-gating test shows the inspection endpoint surface is not yet constrained to development-only routing by default."
       ],
       "expectedFiles": [
-        "src\\Blueprint.Runtime\\Artifacts\\ManifestResourceLoader.cs",
-        "src\\Blueprint.SourceGenerator\\Artifacts\\GeneratedManifestEnvelope.cs",
-        "src\\Blueprint.SourceGenerator.Tests\\Artifacts\\ManifestRuntimeProjectionTests.cs",
-        "src\\Blueprint.SourceGenerator.Tests\\Artifacts\\ManifestSnapshots\\ManifestRuntimeProjectionTests.When_manifest_loaded_from_embedded_resource_then_operations_project_correctly.verified.txt",
+        "src\\Blueprint.Runtime\\Http\\ApplicationBuilderExtensions.cs",
+        "src\\Blueprint.Runtime\\Artifacts\\ManifestProjectionEndpoints.cs",
+        "src\\Blueprint.Runtime\\Http\\BlueprintHttpOptions.cs",
+        "src\\Blueprint.SourceGenerator.Tests\\Artifacts\\ManifestInspectionEndpointTests.cs",
         "migration\\generated-manifests-and-inspection-surfaces\\plan.md"
       ],
-      "reviewGate": "Require human review before dev-only endpoint or CLI projections widen the runtime manifest surface, and verify the runtime path loads pre-built envelope data instead of rediscovering operations."
+      "reviewGate": "Require human review before any production exposure or broader CLI/runtime inspection surface lands, and verify the hosted endpoint reads the same loaded manifest envelope rather than rediscovering operations."
     },
     "lastCompletedSlice": {
       "workstream": "generated-manifests-and-inspection-surfaces",
-      "title": "Build-time operations manifest markdown projection and snapshot testing"
+      "title": "Runtime manifest loading and embedded resource projection"
     },
-    "openReviewGate": "No current open review gate. The runtime manifest loading slice must stop for review before endpoint or CLI projections widen the inspection contract."
+    "openReviewGate": null
   },
   "orchestrationContract": {
     "mustImplementAfterSliceSelection": true,
