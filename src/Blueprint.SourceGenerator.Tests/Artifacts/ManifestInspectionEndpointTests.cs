@@ -17,6 +17,7 @@ namespace Blueprint.SourceGenerator.Tests.Artifacts;
 public class ManifestInspectionEndpointTests
 {
     private const string ResourceName = "Blueprint.SourceGenerator.Tests.Artifacts.ManifestResources.operations.manifest.json";
+    private const string MarkdownResourceName = "Blueprint.SourceGenerator.Tests.Artifacts.ManifestResources.operations.manifest.md";
     private const string SnapshotsFolder = "ManifestSnapshots/";
 
     [Fact]
@@ -40,6 +41,29 @@ public class ManifestInspectionEndpointTests
         productionEndpoints.MapBlueprintApi<ManifestInspectionBlueprintApp, BlueprintAppExecutor>("api/");
 
         FindEndpoint(productionEndpoints, "api/.blueprint/manifests/operations.json").Should().BeNull();
+    }
+
+    [Fact]
+    public async Task When_mapped_in_development_then_manifest_markdown_endpoint_returns_embedded_markdown_and_production_stays_dark()
+    {
+        var developmentEndpoints = CreateEndpoints(Environments.Development);
+        developmentEndpoints.MapBlueprintApi<ManifestInspectionBlueprintApp, BlueprintAppExecutor>("api/");
+
+        var markdownEndpoint = FindEndpoint(developmentEndpoints, "api/.blueprint/manifests/operations.md");
+
+        markdownEndpoint.Should().NotBeNull();
+
+        var response = await InvokeEndpointAsync(markdownEndpoint!);
+        var expectedMarkdown = ManifestResourceLoader.LoadRequiredString(typeof(ManifestInspectionEndpointTests).Assembly, MarkdownResourceName);
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        response.ContentType.Should().Be("text/markdown; charset=utf-8");
+        response.Body.Should().Be(expectedMarkdown);
+
+        var productionEndpoints = CreateEndpoints(Environments.Production);
+        productionEndpoints.MapBlueprintApi<ManifestInspectionBlueprintApp, BlueprintAppExecutor>("api/");
+
+        FindEndpoint(productionEndpoints, "api/.blueprint/manifests/operations.md").Should().BeNull();
     }
 
     [Fact]
@@ -122,7 +146,10 @@ public class ManifestInspectionEndpointTests
             .SingleOrDefault(endpoint => string.Equals(endpoint.RoutePattern.RawText, routePattern, StringComparison.Ordinal));
     }
 
-    private static TestEndpointRouteBuilder CreateEndpoints(string environmentName, string resourceName = ResourceName)
+    private static TestEndpointRouteBuilder CreateEndpoints(
+        string environmentName,
+        string resourceName = ResourceName,
+        string markdownResourceName = MarkdownResourceName)
     {
         var services = new ServiceCollection()
             .AddLogging()
@@ -130,6 +157,7 @@ public class ManifestInspectionEndpointTests
             .AddSingleton<IOptions<BlueprintHttpOptions>>(Options.Create(new BlueprintHttpOptions
             {
                 OperationsManifestResourceName = resourceName,
+                OperationsManifestMarkdownResourceName = markdownResourceName,
             }))
             .BuildServiceProvider();
 

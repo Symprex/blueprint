@@ -521,6 +521,7 @@ When delegating a workstream, include:
   - [x] Add a development-only manifest diagnostics page that consumes the hosted canonical JSON endpoint without introducing a runtime-side manifest model.
     - approved shape: `ManifestDiagnosticsPageEndpoint` maps `/.blueprint/manifests/operations.html` in development, fetches sibling `operations.json` client-side, and keeps raw fetch error details out of the page body
   - [ ] Add wider runtime inspection projection surfaces after the dev-only endpoint proves the envelope can be consumed through hosted inspection surfaces.
+    - approved hosted follow-on: add a development-only markdown endpoint that serves prebuilt markdown bytes via an explicit resource-name seam, without projecting markdown inside `Blueprint.Runtime`
 - [ ] Ensure runtime inspection projects from build-time data rather than recomputing.
 - [ ] Align manifest output with migration reports, OpenAPI, and performance artifacts.
 

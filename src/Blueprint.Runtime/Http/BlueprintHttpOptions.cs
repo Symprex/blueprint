@@ -35,6 +35,13 @@ public class BlueprintHttpOptions
     public string? OperationsManifestResourceName { get; set; }
 
     /// <summary>
+    /// Gets or sets the optional embedded resource name for a prebuilt markdown projection of the operations manifest.
+    /// Keeping markdown bytes explicit lets hosted inspection widen without moving markdown projection logic into the
+    /// runtime assembly.
+    /// </summary>
+    public string? OperationsManifestMarkdownResourceName { get; set; }
+
+    /// <summary>
     /// An optional domain that should be used instead of the request URL when generating absolute
     /// link URLs.
     /// </summary>

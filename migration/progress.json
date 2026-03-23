@@ -7,25 +7,25 @@
   "current": {
     "activeWorkstream": "generated-manifests-and-inspection-surfaces",
     "nextReadySlice": {
-      "title": "Wider manifest inspection projection surface",
+      "title": "Broader content negotiation or tooling manifest projection",
       "status": "ready",
       "dependsOn": [
-        "Dev-only manifest diagnostics page approved."
+        "Dev-only manifest markdown inspection endpoint approved."
       ],
       "failingProof": [
-        "A failing proof shows the next inspection consumer or projection surface is not yet available on top of the approved hosted canonical JSON boundary.",
-        "A failing proof shows the next projection would cross the runtime/source-generator boundary if it stops consuming canonical JSON as the source of truth."
+        "A failing proof shows the next inspection consumer or validation surface is not yet available on top of the approved JSON, HTML, and prebuilt markdown hosting boundary.",
+        "A failing proof shows the next widening would cross the runtime/source-generator boundary if it stops consuming prebuilt manifest artifacts as the source of truth."
       ],
       "expectedFiles": [
         "migration\\generated-manifests-and-inspection-surfaces\\plan.md",
         "migration\\plan.md",
-        "migration\\generated-manifests-and-inspection-surfaces\\plan.md"
+        "migration\\progress.json"
       ],
-      "reviewGate": "Require human review before any broader CLI/tooling or production-facing inspection contract lands, and keep richer inspection surfaces consuming canonical hosted JSON instead of adding a runtime-side manifest model."
+      "reviewGate": "Require human review before any broader content negotiation, CLI/tooling projection, or production-facing inspection contract lands, and keep runtime hosting on prebuilt manifest artifacts rather than runtime-side projection logic."
     },
     "lastCompletedSlice": {
       "workstream": "generated-manifests-and-inspection-surfaces",
-      "title": "Dev-only manifest diagnostics page"
+      "title": "Dev-only manifest markdown inspection endpoint"
     },
     "openReviewGate": null
   },

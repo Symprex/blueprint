@@ -28,6 +28,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Artifacts\ManifestResources\operations.manifest.json" LogicalName="Blueprint.SourceGenerator.Tests.Artifacts.ManifestResources.operations.manifest.json" />
+    <EmbeddedResource Include="Artifacts\ManifestResources\operations.manifest.md" LogicalName="Blueprint.SourceGenerator.Tests.Artifacts.ManifestResources.operations.manifest.md" />
   </ItemGroup>
 
   <ItemGroup>

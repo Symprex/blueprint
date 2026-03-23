@@ -75,25 +75,39 @@ public static class EndpointRouteBuilderExtensions
             }
         }
 
-        if (endpoints.ServiceProvider.GetService<IWebHostEnvironment>()?.IsDevelopment() == true &&
-            !string.IsNullOrWhiteSpace(httpOptions.OperationsManifestResourceName))
+        if (endpoints.ServiceProvider.GetService<IWebHostEnvironment>()?.IsDevelopment() == true)
         {
             var manifestInspectionBasePath = basePath.TrimEnd('/') + "/.blueprint/manifests/operations";
-            var manifestBuilder = endpoints.Map(
-                RoutePatternFactory.Parse(manifestInspectionBasePath + ".json"),
-                ManifestJsonInspectionEndpoint.Create(typeof(T).Assembly, httpOptions.OperationsManifestResourceName));
-            manifestBuilder.WithDisplayName("GET Blueprint manifest operations JSON");
-            manifestBuilder.WithMetadata(new HttpMethodMetadata([HttpMethods.Get]));
 
-            builders.Add(manifestBuilder);
+            if (!string.IsNullOrWhiteSpace(httpOptions.OperationsManifestResourceName))
+            {
+                var manifestBuilder = endpoints.Map(
+                    RoutePatternFactory.Parse(manifestInspectionBasePath + ".json"),
+                    ManifestJsonInspectionEndpoint.Create(typeof(T).Assembly, httpOptions.OperationsManifestResourceName));
+                manifestBuilder.WithDisplayName("GET Blueprint manifest operations JSON");
+                manifestBuilder.WithMetadata(new HttpMethodMetadata([HttpMethods.Get]));
 
-            var manifestPageBuilder = endpoints.Map(
-                RoutePatternFactory.Parse(manifestInspectionBasePath + ".html"),
-                ManifestDiagnosticsPageEndpoint.Create());
-            manifestPageBuilder.WithDisplayName("GET Blueprint manifest operations diagnostics page");
-            manifestPageBuilder.WithMetadata(new HttpMethodMetadata([HttpMethods.Get]));
+                builders.Add(manifestBuilder);
 
-            builders.Add(manifestPageBuilder);
+                var manifestPageBuilder = endpoints.Map(
+                    RoutePatternFactory.Parse(manifestInspectionBasePath + ".html"),
+                    ManifestDiagnosticsPageEndpoint.Create());
+                manifestPageBuilder.WithDisplayName("GET Blueprint manifest operations diagnostics page");
+                manifestPageBuilder.WithMetadata(new HttpMethodMetadata([HttpMethods.Get]));
+
+                builders.Add(manifestPageBuilder);
+            }
+
+            if (!string.IsNullOrWhiteSpace(httpOptions.OperationsManifestMarkdownResourceName))
+            {
+                var manifestMarkdownBuilder = endpoints.Map(
+                    RoutePatternFactory.Parse(manifestInspectionBasePath + ".md"),
+                    ManifestMarkdownInspectionEndpoint.Create(typeof(T).Assembly, httpOptions.OperationsManifestMarkdownResourceName));
+                manifestMarkdownBuilder.WithDisplayName("GET Blueprint manifest operations markdown");
+                manifestMarkdownBuilder.WithMetadata(new HttpMethodMetadata([HttpMethods.Get]));
+
+                builders.Add(manifestMarkdownBuilder);
+            }
         }
 
         return new BlueprintEndpointRouteBuilder(builders);
