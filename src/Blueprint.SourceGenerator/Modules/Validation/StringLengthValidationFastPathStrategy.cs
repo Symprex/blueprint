@@ -3,8 +3,13 @@ using Microsoft.CodeAnalysis;
 
 namespace Blueprint.SourceGenerator.Modules;
 
+/// <summary>
+/// Handles <c>StringLengthAttribute</c> when the configured min/max bounds can
+/// be represented as direct generated string-length checks.
+/// </summary>
 internal sealed class StringLengthValidationFastPathStrategy : IValidationFastPathStrategy
 {
+    /// <inheritdoc />
     public bool TryCreateRule(
         IPropertySymbol property,
         string propertyAccess,

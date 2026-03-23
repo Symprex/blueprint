@@ -21,6 +21,8 @@ public class ParsedAttribute
     /// <summary>
     /// Gets the constructor argument for the given <see cref="MarkerAttributeConstructorArgument{TType, TGeneratorType}"/>.
     /// </summary>
+    /// <typeparam name="TType">The CLR type declared for the marker attribute constructor argument.</typeparam>
+    /// <typeparam name="TGeneratorType">The strongly typed value shape expected by generator-side consumers.</typeparam>
     /// <param name="definition">The definition of the constructor argument to get.</param>
     /// <returns>The constructor argument.</returns>
     /// <exception cref="InvalidOperationException">If the constructor argument cannot be found.</exception>

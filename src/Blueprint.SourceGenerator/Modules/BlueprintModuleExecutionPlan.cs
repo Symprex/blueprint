@@ -17,6 +17,7 @@ public sealed record BlueprintModuleExecutionPlan(
     IAppRegistrationContributor[] AppRegistrationContributors,
     IDebugManifestContributor[] DebugManifestContributors)
 {
+    /// <inheritdoc />
     public bool Equals(BlueprintModuleExecutionPlan? other)
     {
         if (ReferenceEquals(this, other))
@@ -37,6 +38,7 @@ public sealed record BlueprintModuleExecutionPlan(
             && ContributorsEqual(this.DebugManifestContributors, other.DebugManifestContributors);
     }
 
+    /// <inheritdoc />
     public override int GetHashCode()
     {
         HashCode hashCode = default;

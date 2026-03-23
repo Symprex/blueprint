@@ -147,6 +147,7 @@ public class ApiOperationDescriptor
     /// <summary>
     /// Adds the given feature data to this descriptor.
     /// </summary>
+    /// <typeparam name="TFeatureData">The feature data type being stored for later runtime lookup.</typeparam>
     /// <param name="newFeatureData">The feature data to store.</param>
     public void SetFeatureData<TFeatureData>(TFeatureData newFeatureData) where TFeatureData : class
     {

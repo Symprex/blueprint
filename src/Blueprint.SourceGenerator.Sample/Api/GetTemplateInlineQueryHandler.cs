@@ -13,6 +13,9 @@ namespace Blueprint.SourceGenerator.Sample.Api;
 [HttpGet]
 public partial class GetTemplateInlineQuery : IQuery<TemplateApiResource>
 {
+    /// <summary>
+    /// Gets the template identifier that the sample inline handler should resolve.
+    /// </summary>
     public required string Id { get; init; }
 
     /// <summary>

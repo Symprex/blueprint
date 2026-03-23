@@ -11,16 +11,22 @@ namespace Blueprint.SourceGenerator.Modules;
 /// </summary>
 public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitializationContributor, IDescriptorContributor
 {
+    /// <inheritdoc />
     public string ModuleId => nameof(LinkGenerationModule);
 
+    /// <inheritdoc />
     public BlueprintModuleCategory Category => BlueprintModuleCategory.Core;
 
+    /// <inheritdoc />
     public string ContributorId => nameof(LinkGenerationModule);
 
+    /// <inheritdoc />
     public int Order => 0;
 
+    /// <inheritdoc />
     public bool IsUnique => true;
 
+    /// <inheritdoc />
     public IReadOnlyList<string> DependsOn { get; } = [];
 
     private static readonly DiagnosticDescriptor _missingPlaceholderError = new(

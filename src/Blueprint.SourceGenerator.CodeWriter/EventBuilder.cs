@@ -19,6 +19,11 @@ namespace Blueprint.SourceGenerator.CodeWriter
         private Action<ICodeWriter>? _removeHandlerDelegate = null;
         private bool _static = false;
 
+        /// <summary>
+        /// Initializes a new instance attached to the supplied class builder.
+        /// </summary>
+        /// <param name="class">The class builder that owns this event.</param>
+        /// <param name="eventName">The event name to emit.</param>
         internal EventBuilder(ClassBuilder @class, string eventName)
         {
             this.Name = eventName;
@@ -278,6 +283,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
             return this;
         }
 
+        /// <inheritdoc/>
         internal override void Write(in CodeWriter writer)
         {
             var @static = this._static ? "static " : string.Empty;

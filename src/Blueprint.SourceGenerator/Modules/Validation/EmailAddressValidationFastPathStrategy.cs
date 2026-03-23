@@ -3,8 +3,13 @@ using Microsoft.CodeAnalysis;
 
 namespace Blueprint.SourceGenerator.Modules;
 
+/// <summary>
+/// Handles <c>EmailAddressAttribute</c> when the target property is a simple
+/// string and the attribute uses the default runtime options.
+/// </summary>
 internal sealed class EmailAddressValidationFastPathStrategy : IValidationFastPathStrategy
 {
+    /// <inheritdoc />
     public bool TryCreateRule(
         IPropertySymbol property,
         string propertyAccess,

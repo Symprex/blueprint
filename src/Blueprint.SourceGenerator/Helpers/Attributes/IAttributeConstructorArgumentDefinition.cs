@@ -1,5 +1,8 @@
 namespace Blueprint.SourceGenerator.Helpers.Attributes;
 
+/// <summary>
+/// Describes a constructor argument that a generated marker attribute exposes.
+/// </summary>
 public interface IAttributeConstructorArgumentDefinition
 {
     /// <summary>

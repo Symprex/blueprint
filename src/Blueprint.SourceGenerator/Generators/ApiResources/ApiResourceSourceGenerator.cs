@@ -7,6 +7,9 @@ using Microsoft.CodeAnalysis.Text;
 
 namespace Blueprint.SourceGenerator.Generators.ApiResources;
 
+/// <summary>
+/// Incremental source generator that fills in the <c>Object</c> property for API resource types.
+/// </summary>
 [Generator(LanguageNames.CSharp)]
 public sealed class ApiResourceSourceGenerator : IIncrementalGenerator, ITrackedSourceGenerator
 {
@@ -21,6 +24,10 @@ public sealed class ApiResourceSourceGenerator : IIncrementalGenerator, ITracked
     /// <inheritdoc />
     public string[] StageNames { get; } = StageHelpers.FindAll(typeof(Stages));
 
+    /// <summary>
+    /// Configures syntax discovery and source emission for partial API resource types.
+    /// </summary>
+    /// <param name="context">The incremental generator initialization context.</param>
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         var classDeclarations = context.SyntaxProvider
@@ -109,6 +116,13 @@ public sealed class ApiResourceSourceGenerator : IIncrementalGenerator, ITracked
                  """;
     }
 
+    /// <summary>
+    /// Captures the minimal metadata needed to render the generated <c>Object</c> override for an API resource.
+    /// </summary>
+    /// <param name="FullClassName">The resource type name as it should appear in generated code.</param>
+    /// <param name="Namespace">The containing namespace for the generated partial type.</param>
+    /// <param name="ClassName">The simple class name used to derive the resource object name.</param>
+    /// <param name="IsEnumerable">Indicates whether the resource represents a collection payload.</param>
     private record ClassToGenerate(string FullClassName, string Namespace, string ClassName, bool IsEnumerable);
 
     /// <summary>

@@ -73,7 +73,7 @@ public class ApiOperationLink
     /// The resource from which this link can be created, for example a `UserResource` value that
     /// is returned from an operation. This <b>MUST</b> be an <see cref="ILinkableResource" />.
     /// </summary>
-    public Type ResourceType { get; }
+    public Type ResourceType { get; } = null!;
 
     /// <inheritdoc />
     public override string ToString()

@@ -106,6 +106,7 @@ then the relevant `/docs` file should be updated in the same change.
 - Favor compile-time enforcement over runtime repair.
 - Keep runtime behavior simple and inspectable.
 - Reuse the existing generator and CodeWriter patterns before inventing ad-hoc output logic.
+- Treat XML documentation as part of the contract for non-test C# code: explain rationale, invariants, and expected usage rather than paraphrasing signatures. Actual `*Test.cs` / `*Tests.cs` files stay exempt, but reusable test infrastructure such as `TestHelpers`, fixture generators, and `TestBase` should still carry useful XML docs.
 - For new planning helpers, registries, or orchestration seams, cover the happy path, the failure/diagnostic path, and the determinism edge cases that keep generation stable.
 - For pipeline behavior changes, keep the three proof layers aligned:
   - snapshots prove the complete emitted shape

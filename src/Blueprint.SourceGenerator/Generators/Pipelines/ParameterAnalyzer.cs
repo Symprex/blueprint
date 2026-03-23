@@ -125,6 +125,8 @@ public static class ParameterAnalyzer
     /// <summary>
     /// Checks if a method is a valid handler method by name.
     /// </summary>
+    /// <param name="methodName">The method name to evaluate against the supported handler entry-point names.</param>
+    /// <returns><see langword="true"/> when the method name is one of the supported handler entry points.</returns>
     public static bool IsHandlerMethodName(string methodName)
     {
         return HandlerMethodNames.Contains(methodName);

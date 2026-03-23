@@ -9,11 +9,18 @@ public class BlueprintAppExecutor
 {
     private readonly Dictionary<Type, IOperationExecutorPipeline> _allOperations = new();
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="BlueprintAppExecutor"/> class.
+    /// </summary>
+    /// <param name="app">The Blueprint app model whose operations this executor will dispatch.</param>
     public BlueprintAppExecutor(BlueprintApp app)
     {
         this.App = app;
     }
 
+    /// <summary>
+    /// Gets the Blueprint app metadata that owns the registered operation descriptors.
+    /// </summary>
     public BlueprintApp App { get; }
 
     /// <summary>

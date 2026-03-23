@@ -13,14 +13,21 @@ public sealed class DelegateBuilder : BuilderBase<DelegateBuilder>, IParameteriz
     private readonly GenericCollection _generics = new GenericCollection();
     private readonly List<ParameterBuilder<DelegateBuilder>> _parameters = new List<ParameterBuilder<DelegateBuilder>>();
 
+    /// <summary>
+    /// Initializes a new instance attached to the supplied file builder.
+    /// </summary>
+    /// <param name="name">The delegate name to emit.</param>
+    /// <param name="builder">The file builder that owns this declaration.</param>
     internal DelegateBuilder(string name, CodeBuilder builder)
     {
         this.Name = name;
         this.Builder = builder;
     }
 
+    /// <inheritdoc/>
     DelegateBuilder IParameterized<DelegateBuilder>.Parent => this;
 
+    /// <inheritdoc/>
     List<ParameterBuilder<DelegateBuilder>> IParameterized<DelegateBuilder>.Parameters => this._parameters;
 
     /// <summary>
@@ -222,6 +229,7 @@ public sealed class DelegateBuilder : BuilderBase<DelegateBuilder>, IParameteriz
         return this;
     }
 
+    /// <inheritdoc/>
     internal override void Write(in CodeWriter writer)
     {
         if (this._xmlDoc is ParameterDocumentationComment parameterDocumentation)

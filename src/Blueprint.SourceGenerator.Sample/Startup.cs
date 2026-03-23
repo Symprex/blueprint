@@ -1,8 +1,14 @@
 namespace Blueprint.SourceGenerator.Sample;
 
+/// <summary>
+/// Minimal ASP.NET Core startup used by the sample app to demonstrate Blueprint endpoint registration in a real host.
+/// </summary>
 public class Startup
 {
-    // This method gets called by the runtime. Use this method to add services to the container.
+    /// <summary>
+    /// Registers the sample Blueprint services needed to execute the sample operations.
+    /// </summary>
+    /// <param name="services">The application service collection.</param>
     public void ConfigureServices(IServiceCollection services)
     {
         services.AddSingleton<SampleBlueprintAppExecutor, SampleBlueprintAppExecutor>();
@@ -36,7 +42,11 @@ public class Startup
         //     .AddResourceEvents<NullResourceEventRepository>());
     }
 
-    // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
+    /// <summary>
+    /// Configures the HTTP pipeline for the sample host and maps Blueprint endpoints under the sample API route.
+    /// </summary>
+    /// <param name="app">The application builder.</param>
+    /// <param name="env">The hosting environment for the sample app.</param>
     public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
     {
         app.UseForwardedHeaders();

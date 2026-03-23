@@ -9,9 +9,14 @@ namespace Blueprint.SourceGenerator.CodeWriter
     /// <summary>
     /// Builds a single parameter within a generated signature, including its type, name, and optional default value.
     /// </summary>
+    /// <typeparam name="T">The concrete builder that owns this parameter so the fluent API can return the correct type.</typeparam>
     public class ParameterBuilder<T>
         where T : BuilderBase<T>
     {
+        /// <summary>
+        /// Initializes a new instance attached to the supplied owner builder.
+        /// </summary>
+        /// <param name="parent">The builder that owns this generated parameter.</param>
         internal ParameterBuilder(T parent)
         {
             this.Parent = parent;

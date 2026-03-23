@@ -7,6 +7,9 @@ namespace Blueprint.Model.Attributes;
 [AttributeUsage(AttributeTargets.Class, Inherited = false, AllowMultiple = true)]
 public class HttpMethodAttribute(string httpMethod) : Attribute
 {
+    /// <summary>
+    /// Gets the explicit HTTP method that should be used instead of Blueprint's conventional inference.
+    /// </summary>
     public string HttpMethod { get; } = httpMethod;
 }
 

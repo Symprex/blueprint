@@ -3,8 +3,13 @@ using Microsoft.CodeAnalysis;
 
 namespace Blueprint.SourceGenerator.Modules;
 
+/// <summary>
+/// Handles <c>MaxLengthAttribute</c> for string properties whose configured
+/// maximum can be expressed directly in generated code.
+/// </summary>
 internal sealed class MaxLengthValidationFastPathStrategy : IValidationFastPathStrategy
 {
+    /// <inheritdoc />
     public bool TryCreateRule(
         IPropertySymbol property,
         string propertyAccess,

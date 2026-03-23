@@ -16,6 +16,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <summary>
         /// Adds a parameter to the current generated signature.
         /// </summary>
+        /// <typeparam name="T">The concrete builder type returned by fluent configuration methods so call chains stay strongly typed.</typeparam>
         /// <param name="parameterized">The builder whose parameter list should be updated.</param>
         /// <param name="typeName">The C# type text to emit.</param>
         /// <returns>The same builder so fluent configuration can continue.</returns>
@@ -28,6 +29,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <summary>
         /// Adds a parameter to the current generated signature.
         /// </summary>
+        /// <typeparam name="T">The concrete builder type returned by fluent configuration methods so call chains stay strongly typed.</typeparam>
         /// <param name="parameterized">The builder whose parameter list should be updated.</param>
         /// <param name="typeSymbol">The Roslyn type symbol to convert into emitted type text.</param>
         /// <returns>The same builder so fluent configuration can continue.</returns>
@@ -41,6 +43,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <summary>
         /// Adds a parameter to the current generated signature.
         /// </summary>
+        /// <typeparam name="T">The concrete builder type returned by fluent configuration methods so call chains stay strongly typed.</typeparam>
         /// <param name="parameterized">The builder whose parameter list should be updated.</param>
         /// <param name="typeName">The C# type text to emit.</param>
         /// <param name="parameterName">The parameter name to emit. When omitted, a name is inferred from the type.</param>
@@ -54,6 +57,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <summary>
         /// Adds a parameter to the current generated signature.
         /// </summary>
+        /// <typeparam name="T">The concrete builder type returned by fluent configuration methods so call chains stay strongly typed.</typeparam>
         /// <param name="parameterized">The builder whose parameter list should be updated.</param>
         /// <param name="typeSymbol">The Roslyn type symbol to convert into emitted type text.</param>
         /// <param name="parameterName">The parameter name to emit. When omitted, a name is inferred from the type.</param>
@@ -68,6 +72,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <summary>
         /// Adds a parameter to the current generated signature.
         /// </summary>
+        /// <typeparam name="T">The concrete builder type returned by fluent configuration methods so call chains stay strongly typed.</typeparam>
         /// <param name="parameterized">The builder whose parameter list should be updated.</param>
         /// <param name="typeName">The C# type text to emit.</param>
         /// <param name="parameterName">The parameter name to emit. When omitted, a name is inferred from the type.</param>
@@ -82,6 +87,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <summary>
         /// Adds a parameter to the current generated signature.
         /// </summary>
+        /// <typeparam name="T">The concrete builder type returned by fluent configuration methods so call chains stay strongly typed.</typeparam>
         /// <param name="parameterized">The builder whose parameter list should be updated.</param>
         /// <param name="typeSymbol">The Roslyn type symbol to convert into emitted type text.</param>
         /// <param name="parameterName">The parameter name to emit. When omitted, a name is inferred from the type.</param>
@@ -97,6 +103,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <summary>
         /// Adds a parameter to the current generated signature and emits a default value.
         /// </summary>
+        /// <typeparam name="T">The concrete builder type returned by fluent configuration methods so call chains stay strongly typed.</typeparam>
         /// <param name="parameterized">The builder whose parameter list should be updated.</param>
         /// <param name="typeName">The C# type text to emit.</param>
         /// <param name="parameterName">The parameter name to emit. When omitted, a name is inferred from the type.</param>
@@ -114,6 +121,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <summary>
         /// Adds a parameter to the current generated signature and emits a default value.
         /// </summary>
+        /// <typeparam name="T">The concrete builder type returned by fluent configuration methods so call chains stay strongly typed.</typeparam>
         /// <param name="parameterized">The builder whose parameter list should be updated.</param>
         /// <param name="typeSymbol">The Roslyn type symbol to convert into emitted type text.</param>
         /// <param name="parameterName">The parameter name to emit. When omitted, a name is inferred from the type.</param>
@@ -130,6 +138,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <summary>
         /// Adds a parameter to the current generated signature and emits a default value.
         /// </summary>
+        /// <typeparam name="T">The concrete builder type returned by fluent configuration methods so call chains stay strongly typed.</typeparam>
         /// <param name="parameterized">The builder whose parameter list should be updated.</param>
         /// <param name="typeName">The C# type text to emit.</param>
         /// <param name="parameterName">The parameter name to emit. When omitted, a name is inferred from the type.</param>
@@ -146,6 +155,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <summary>
         /// Adds a parameter to the current generated signature and emits a default value.
         /// </summary>
+        /// <typeparam name="T">The concrete builder type returned by fluent configuration methods so call chains stay strongly typed.</typeparam>
         /// <param name="parameterized">The builder whose parameter list should be updated.</param>
         /// <param name="typeSymbol">The Roslyn type symbol to convert into emitted type text.</param>
         /// <param name="parameterName">The parameter name to emit. When omitted, a name is inferred from the type.</param>
@@ -161,6 +171,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <summary>
         /// Adds a parameter to the current generated signature and emits a null default value.
         /// </summary>
+        /// <typeparam name="T">The concrete builder type returned by fluent configuration methods so call chains stay strongly typed.</typeparam>
         /// <param name="parameterized">The builder whose parameter list should be updated.</param>
         /// <param name="typeName">The C# type text to emit.</param>
         /// <param name="parameterName">The parameter name to emit. When omitted, a name is inferred from the type.</param>
@@ -177,6 +188,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <summary>
         /// Adds a parameter to the current generated signature and emits a null default value.
         /// </summary>
+        /// <typeparam name="T">The concrete builder type returned by fluent configuration methods so call chains stay strongly typed.</typeparam>
         /// <param name="parameterized">The builder whose parameter list should be updated.</param>
         /// <param name="typeSymbol">The Roslyn type symbol to convert into emitted type text.</param>
         /// <param name="parameterName">The parameter name to emit. When omitted, a name is inferred from the type.</param>
@@ -192,6 +204,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <summary>
         /// Adds a parameter to the current generated signature.
         /// </summary>
+        /// <typeparam name="T">The concrete builder type returned by fluent configuration methods so call chains stay strongly typed.</typeparam>
         /// <param name="parameterized">The builder whose parameter list should be updated.</param>
         /// <param name="parameter">The Roslyn parameter symbol to mirror into generated source.</param>
         /// <returns>The same builder so fluent configuration can continue.</returns>
@@ -206,6 +219,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <summary>
         /// Adds multiple Roslyn parameters to the current generated signature.
         /// </summary>
+        /// <typeparam name="T">The concrete builder type returned by fluent configuration methods so call chains stay strongly typed.</typeparam>
         /// <param name="parameterized">The builder whose parameter list should be updated.</param>
         /// <param name="parameters">The parameters or argument expressions to mirror into generated source.</param>
         /// <returns>The same builder so fluent configuration can continue.</returns>

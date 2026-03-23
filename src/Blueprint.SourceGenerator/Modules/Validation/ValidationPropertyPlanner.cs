@@ -4,6 +4,10 @@ using Microsoft.CodeAnalysis;
 
 namespace Blueprint.SourceGenerator.Modules;
 
+/// <summary>
+/// Decides whether each validation-decorated property can be lowered into generated checks or must fall back to the
+/// existing runtime validation path.
+/// </summary>
 internal static class ValidationPropertyPlanner
 {
     private static readonly IValidationFastPathStrategy[] _strategies =
@@ -20,6 +24,11 @@ internal static class ValidationPropertyPlanner
         new GreaterThanPropertyValidationFastPathStrategy(),
     ];
 
+    /// <summary>
+    /// Builds the validation plan for an operation type by trying each property against the supported fast-path strategies.
+    /// </summary>
+    /// <param name="operationType">The operation type whose validation attributes should be analysed.</param>
+    /// <returns>The validation plan that describes fast-path and runtime-fallback decisions.</returns>
     [MustUseReturnValue]
     public static ValidationPipelinePlan Create(INamedTypeSymbol operationType)
     {

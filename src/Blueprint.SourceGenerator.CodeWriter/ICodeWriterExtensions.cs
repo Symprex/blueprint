@@ -74,6 +74,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <summary>
         /// Emits one generated line per item in the supplied collection.
         /// </summary>
+        /// <typeparam name="T">The element type of the source collection.</typeparam>
         /// <param name="writer">The writer that receives the generated output.</param>
         /// <param name="collection">The enumerable expression to iterate over in generated code.</param>
         /// <param name="predicate">A callback that converts each source item into the line text that should be emitted.</param>
@@ -91,6 +92,8 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <summary>
         /// Emits one generated line per key/value pair in the supplied dictionary.
         /// </summary>
+        /// <typeparam name="TKey">The dictionary key type.</typeparam>
+        /// <typeparam name="TValue">The dictionary value type.</typeparam>
         /// <param name="writer">The writer that receives the generated output.</param>
         /// <param name="collection">The source dictionary whose entries should be emitted.</param>
         /// <param name="predicate">A callback that converts each key/value pair into the line text that should be emitted.</param>

@@ -5,8 +5,17 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace Blueprint.SourceGenerator.Modules;
 
+/// <summary>
+/// Centralises Roslyn attribute and property-shape checks used by validation planning so all validation contributors make
+/// the same semantic decisions.
+/// </summary>
 internal static class ValidationSymbolHelpers
 {
+    /// <summary>
+    /// Returns the public instance properties that participate in generated operation validation.
+    /// </summary>
+    /// <param name="operationType">The operation type to inspect.</param>
+    /// <returns>The public instance properties declared on the operation type.</returns>
     public static IEnumerable<IPropertySymbol> GetPublicInstanceProperties(INamedTypeSymbol operationType)
     {
         return operationType.GetAllMembers()
@@ -14,17 +23,33 @@ internal static class ValidationSymbolHelpers
             .Where(static property => property is { IsStatic: false, Parameters.Length: 0, DeclaredAccessibility: Accessibility.Public });
     }
 
+    /// <summary>
+    /// Determines whether validation must fall back to whole-object runtime evaluation because the type itself carries
+    /// validation behaviour that property-level generation cannot safely reproduce.
+    /// </summary>
+    /// <param name="operationType">The operation type to inspect.</param>
+    /// <returns><see langword="true"/> when whole-object runtime validation is required.</returns>
     public static bool RequiresWholeObjectFallback(INamedTypeSymbol operationType)
     {
         return HasValidationAttribute(operationType)
                || operationType.AllInterfaces.Any(static interfaceSymbol => interfaceSymbol.ToDisplayString() == "System.ComponentModel.DataAnnotations.IValidatableObject");
     }
 
+    /// <summary>
+    /// Determines whether the supplied symbol has any validation-related attributes.
+    /// </summary>
+    /// <param name="symbol">The symbol to inspect.</param>
+    /// <returns><see langword="true"/> when a validation attribute is present.</returns>
     public static bool HasValidationAttribute(ISymbol symbol)
     {
         return symbol.GetAttributes().Any(static attribute => IsValidationAttribute(attribute.AttributeClass));
     }
 
+    /// <summary>
+    /// Checks whether an attribute type represents a DataAnnotations validation attribute.
+    /// </summary>
+    /// <param name="attributeClass">The attribute type to inspect.</param>
+    /// <returns><see langword="true"/> when the attribute participates in validation.</returns>
     public static bool IsValidationAttribute(INamedTypeSymbol? attributeClass)
     {
         return attributeClass is not null
@@ -32,6 +57,11 @@ internal static class ValidationSymbolHelpers
                    || attributeClass.InheritsFrom("System.ComponentModel.DataAnnotations.ValidationAttribute"));
     }
 
+    /// <summary>
+    /// Checks whether an attribute type is <c>CompareAttribute</c>.
+    /// </summary>
+    /// <param name="attributeClass">The attribute type to inspect.</param>
+    /// <returns><see langword="true"/> when the attribute is a compare attribute.</returns>
     public static bool IsCompareAttribute(INamedTypeSymbol? attributeClass)
     {
         return attributeClass is not null
@@ -39,6 +69,11 @@ internal static class ValidationSymbolHelpers
                && attributeClass.ContainingNamespace.ToDisplayString() == "System.ComponentModel.DataAnnotations";
     }
 
+    /// <summary>
+    /// Checks whether an attribute type is Blueprint's <c>GreaterThanPropertyAttribute</c>.
+    /// </summary>
+    /// <param name="attributeClass">The attribute type to inspect.</param>
+    /// <returns><see langword="true"/> when the attribute is a greater-than-property attribute.</returns>
     public static bool IsGreaterThanPropertyAttribute(INamedTypeSymbol? attributeClass)
     {
         return attributeClass is not null
@@ -46,6 +81,11 @@ internal static class ValidationSymbolHelpers
                && attributeClass.ContainingNamespace.ToDisplayString() == "Blueprint.Validation";
     }
 
+    /// <summary>
+    /// Checks whether an attribute type is Blueprint's <c>GreaterThanAttribute</c>.
+    /// </summary>
+    /// <param name="attributeClass">The attribute type to inspect.</param>
+    /// <returns><see langword="true"/> when the attribute is a greater-than attribute.</returns>
     public static bool IsGreaterThanAttribute(INamedTypeSymbol? attributeClass)
     {
         return attributeClass is not null
@@ -53,6 +93,11 @@ internal static class ValidationSymbolHelpers
                && attributeClass.ContainingNamespace.ToDisplayString() == "Blueprint.Validation";
     }
 
+    /// <summary>
+    /// Checks whether an attribute type is Blueprint's <c>RequiredIfAttribute</c>.
+    /// </summary>
+    /// <param name="attributeClass">The attribute type to inspect.</param>
+    /// <returns><see langword="true"/> when the attribute is a required-if attribute.</returns>
     public static bool IsRequiredIfAttribute(INamedTypeSymbol? attributeClass)
     {
         return attributeClass is not null
@@ -60,6 +105,11 @@ internal static class ValidationSymbolHelpers
                && attributeClass.ContainingNamespace.ToDisplayString() == "Blueprint.Validation";
     }
 
+    /// <summary>
+    /// Checks whether an attribute type is Blueprint's <c>RequiredIfNotAttribute</c>.
+    /// </summary>
+    /// <param name="attributeClass">The attribute type to inspect.</param>
+    /// <returns><see langword="true"/> when the attribute is a required-if-not attribute.</returns>
     public static bool IsRequiredIfNotAttribute(INamedTypeSymbol? attributeClass)
     {
         return attributeClass is not null
@@ -67,6 +117,11 @@ internal static class ValidationSymbolHelpers
                && attributeClass.ContainingNamespace.ToDisplayString() == "Blueprint.Validation";
     }
 
+    /// <summary>
+    /// Checks whether an attribute type is Blueprint's <c>NotAllowedIfAttribute</c>.
+    /// </summary>
+    /// <param name="attributeClass">The attribute type to inspect.</param>
+    /// <returns><see langword="true"/> when the attribute is a not-allowed-if attribute.</returns>
     public static bool IsNotAllowedIfAttribute(INamedTypeSymbol? attributeClass)
     {
         return attributeClass is not null
@@ -74,6 +129,11 @@ internal static class ValidationSymbolHelpers
                && attributeClass.ContainingNamespace.ToDisplayString() == "Blueprint.Validation";
     }
 
+    /// <summary>
+    /// Checks whether an attribute influences the display name used in validation messages, which forces runtime fallback.
+    /// </summary>
+    /// <param name="attributeClass">The attribute type to inspect.</param>
+    /// <returns><see langword="true"/> when the attribute changes the display name used for validation.</returns>
     public static bool IsDisplayNameAffectingAttribute(INamedTypeSymbol? attributeClass)
     {
         if (attributeClass is null)
@@ -87,6 +147,11 @@ internal static class ValidationSymbolHelpers
                || (attributeClass.Name == "DisplayNameAttribute" && namespaceName == "System.ComponentModel");
     }
 
+    /// <summary>
+    /// Checks whether an attribute type is <c>RequiredAttribute</c>.
+    /// </summary>
+    /// <param name="attributeClass">The attribute type to inspect.</param>
+    /// <returns><see langword="true"/> when the attribute is a required attribute.</returns>
     public static bool IsRequiredAttribute(INamedTypeSymbol? attributeClass)
     {
         return attributeClass is not null
@@ -94,6 +159,11 @@ internal static class ValidationSymbolHelpers
                && attributeClass.ContainingNamespace.ToDisplayString() == "System.ComponentModel.DataAnnotations";
     }
 
+    /// <summary>
+    /// Checks whether an attribute behaves like a required constraint and therefore should run before other rules.
+    /// </summary>
+    /// <param name="attributeClass">The attribute type to inspect.</param>
+    /// <returns><see langword="true"/> when the attribute is required-like.</returns>
     public static bool IsRequiredLikeAttribute(INamedTypeSymbol? attributeClass)
     {
         return IsRequiredAttribute(attributeClass)
@@ -101,6 +171,11 @@ internal static class ValidationSymbolHelpers
                || IsRequiredIfNotAttribute(attributeClass);
     }
 
+    /// <summary>
+    /// Checks whether an attribute type is <c>MaxLengthAttribute</c>.
+    /// </summary>
+    /// <param name="attributeClass">The attribute type to inspect.</param>
+    /// <returns><see langword="true"/> when the attribute is a max-length attribute.</returns>
     public static bool IsMaxLengthAttribute(INamedTypeSymbol? attributeClass)
     {
         return attributeClass is not null
@@ -108,6 +183,11 @@ internal static class ValidationSymbolHelpers
                && attributeClass.ContainingNamespace.ToDisplayString() == "System.ComponentModel.DataAnnotations";
     }
 
+    /// <summary>
+    /// Checks whether an attribute type is <c>MinLengthAttribute</c>.
+    /// </summary>
+    /// <param name="attributeClass">The attribute type to inspect.</param>
+    /// <returns><see langword="true"/> when the attribute is a min-length attribute.</returns>
     public static bool IsMinLengthAttribute(INamedTypeSymbol? attributeClass)
     {
         return attributeClass is not null
@@ -115,6 +195,11 @@ internal static class ValidationSymbolHelpers
                && attributeClass.ContainingNamespace.ToDisplayString() == "System.ComponentModel.DataAnnotations";
     }
 
+    /// <summary>
+    /// Checks whether an attribute type is <c>StringLengthAttribute</c>.
+    /// </summary>
+    /// <param name="attributeClass">The attribute type to inspect.</param>
+    /// <returns><see langword="true"/> when the attribute is a string-length attribute.</returns>
     public static bool IsStringLengthAttribute(INamedTypeSymbol? attributeClass)
     {
         return attributeClass is not null
@@ -122,6 +207,11 @@ internal static class ValidationSymbolHelpers
                && attributeClass.ContainingNamespace.ToDisplayString() == "System.ComponentModel.DataAnnotations";
     }
 
+    /// <summary>
+    /// Checks whether an attribute type is <c>EmailAddressAttribute</c>.
+    /// </summary>
+    /// <param name="attributeClass">The attribute type to inspect.</param>
+    /// <returns><see langword="true"/> when the attribute is an email-address attribute.</returns>
     public static bool IsEmailAddressAttribute(INamedTypeSymbol? attributeClass)
     {
         return attributeClass is not null
@@ -129,12 +219,22 @@ internal static class ValidationSymbolHelpers
                && attributeClass.ContainingNamespace.ToDisplayString() == "System.ComponentModel.DataAnnotations";
     }
 
+    /// <summary>
+    /// Checks whether a type is <see cref="Nullable{T}" />.
+    /// </summary>
+    /// <param name="type">The type to inspect.</param>
+    /// <returns><see langword="true"/> when the type is nullable.</returns>
     public static bool IsNullableValueType(ITypeSymbol type)
     {
         return type is INamedTypeSymbol namedType
                && namedType.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T;
     }
 
+    /// <summary>
+    /// Returns the underlying value type for a nullable value type.
+    /// </summary>
+    /// <param name="type">The type to inspect.</param>
+    /// <returns>The wrapped value type when the supplied type is nullable; otherwise, <see langword="null"/>.</returns>
     public static ITypeSymbol? GetNullableValueTypeArgument(ITypeSymbol type)
     {
         return type is INamedTypeSymbol namedType && namedType.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T
@@ -142,16 +242,32 @@ internal static class ValidationSymbolHelpers
             : null;
     }
 
+    /// <summary>
+    /// Escapes a C# identifier when it collides with a language keyword.
+    /// </summary>
+    /// <param name="identifier">The identifier to escape.</param>
+    /// <returns>The escaped identifier when needed; otherwise, the original identifier.</returns>
     public static string EscapeIdentifier(string identifier)
     {
         return SyntaxFacts.GetKeywordKind(identifier) != SyntaxKind.None ? "@" + identifier : identifier;
     }
 
+    /// <summary>
+    /// Reads the first constructor argument from a property-referencing validation attribute as the referenced property name.
+    /// </summary>
+    /// <param name="attribute">The attribute to inspect.</param>
+    /// <returns>The referenced property name, if one is present.</returns>
     public static string? GetReferencedPropertyName(AttributeData attribute)
     {
         return attribute.ConstructorArguments.FirstOrDefault().Value as string;
     }
 
+    /// <summary>
+    /// Locates the syntax site that names a referenced property so diagnostics can point at the most helpful source span.
+    /// </summary>
+    /// <param name="attribute">The attribute whose constructor argument should be highlighted.</param>
+    /// <param name="property">The property that owns the attribute, used as a fallback location.</param>
+    /// <returns>The best available location for a referenced-property diagnostic.</returns>
     public static LocationInfo? GetReferencedPropertyLocation(AttributeData attribute, IPropertySymbol property)
     {
         if (attribute.ApplicationSyntaxReference?.GetSyntax() is AttributeSyntax attributeSyntax

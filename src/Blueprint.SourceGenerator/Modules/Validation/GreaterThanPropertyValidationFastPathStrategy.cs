@@ -3,8 +3,13 @@ using Microsoft.CodeAnalysis;
 
 namespace Blueprint.SourceGenerator.Modules;
 
+/// <summary>
+/// Handles <c>GreaterThanPropertyAttribute</c> when both properties can be compared directly in generated code without
+/// runtime reflection or boxing.
+/// </summary>
 internal sealed class GreaterThanPropertyValidationFastPathStrategy : IValidationFastPathStrategy
 {
+    /// <inheritdoc />
     public bool TryCreateRule(
         IPropertySymbol property,
         string propertyAccess,

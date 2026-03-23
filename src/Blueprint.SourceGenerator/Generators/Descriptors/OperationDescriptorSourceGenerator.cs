@@ -11,6 +11,9 @@ using Microsoft.CodeAnalysis.Text;
 
 namespace Blueprint.SourceGenerator.Generators.Descriptors;
 
+/// <summary>
+/// Incremental source generator that emits operation descriptor implementations for Blueprint operations.
+/// </summary>
 [Generator(LanguageNames.CSharp)]
 public sealed class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITrackedSourceGenerator
 {
@@ -25,6 +28,10 @@ public sealed class OperationDescriptorSourceGenerator : IIncrementalGenerator, 
     /// <inheritdoc />
     public string[] StageNames { get; } = StageHelpers.FindAll(typeof(Stages));
 
+    /// <summary>
+    /// Configures syntax discovery, module execution, and descriptor emission for Blueprint operations.
+    /// </summary>
+    /// <param name="context">The incremental generator initialization context.</param>
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         var config = new BlueprintSourceGenerationConfig([new LinkGenerationModule(), new ValidationModule()]);
@@ -198,6 +205,12 @@ public sealed class OperationDescriptorSourceGenerator : IIncrementalGenerator, 
         return codeBuilder.Build();
     }
 
+    /// <summary>
+    /// Captures the operation identity needed to render a descriptor companion type.
+    /// </summary>
+    /// <param name="FullClassName">The fully-qualified operation type name.</param>
+    /// <param name="Namespace">The namespace that will contain the generated descriptor wrapper.</param>
+    /// <param name="ClassName">The simple operation type name.</param>
     private record OperationClassToGenerate(string FullClassName, string Namespace, string ClassName);
 
     /// <summary>

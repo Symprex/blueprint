@@ -9,20 +9,30 @@ namespace Blueprint.SourceGenerator.Modules;
 /// </summary>
 public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IPipelineContributor
 {
+    /// <summary>
+    /// The shared variable purpose used when downstream contributors need the handler result.
+    /// </summary>
     public const string HandlerResultPurpose = "handler-result";
 
+    /// <inheritdoc />
     public string ModuleId => nameof(HandlerExecutionModule);
 
+    /// <inheritdoc />
     public BlueprintModuleCategory Category => BlueprintModuleCategory.Core;
 
+    /// <inheritdoc />
     public string ContributorId => nameof(HandlerExecutionModule);
 
+    /// <inheritdoc />
     public int Order => 0;
 
+    /// <inheritdoc />
     public bool IsUnique => true;
 
+    /// <inheritdoc />
     public IReadOnlyList<string> DependsOn { get; } = [];
 
+    /// <inheritdoc />
     public void ContributeToPipeline(PipelineContributorContext context)
     {
         var handler = context.Handler ?? throw new InvalidOperationException("The pipeline contributor requires handler metadata, but no handler was resolved for the current operation.");
@@ -115,6 +125,13 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
         context.Return(WrapOperationResult("new Blueprint.Runtime.Exec.OkResult(handlerResult)", context.IsHandlerAsync()));
     }
 
+    /// <summary>
+    /// Prefers the declared operation result contract so downstream variable matching follows the public CQRS surface
+    /// instead of incidental handler implementation details.
+    /// </summary>
+    /// <param name="operation">The operation being planned.</param>
+    /// <param name="fallbackTypeName">The handler return type to use when no operation contract result is declared.</param>
+    /// <returns>The operation result type name that should back the produced handler-result variable.</returns>
     private static string GetOperationResultTypeNameOrFallback(OperationModel operation, string fallbackTypeName)
     {
         var operationResultInterface = operation.TypeSymbol.AllInterfaces.FirstOrDefault(
@@ -127,6 +144,13 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
             : operationResultInterface.TypeArguments[0].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
     }
 
+    /// <summary>
+    /// Normalises synchronous and asynchronous handler paths so generated pipelines always return a
+    /// <see cref="Task{TResult}" /> of <c>Blueprint.OperationResult</c>.
+    /// </summary>
+    /// <param name="operationResultExpression">The operation-result expression to return.</param>
+    /// <param name="isHandlerAsync">Whether the handler already returns an asynchronous result.</param>
+    /// <returns>A return expression compatible with the generated pipeline signature.</returns>
     private static string WrapOperationResult(string operationResultExpression, bool isHandlerAsync)
     {
         return isHandlerAsync

@@ -3,8 +3,13 @@ using Microsoft.CodeAnalysis;
 
 namespace Blueprint.SourceGenerator.Modules;
 
+/// <summary>
+/// Handles <c>RequiredAttribute</c> when the property shape can be reduced to
+/// a direct null-or-empty check in generated code.
+/// </summary>
 internal sealed class RequiredValidationFastPathStrategy : IValidationFastPathStrategy
 {
+    /// <inheritdoc />
     public bool TryCreateRule(
         IPropertySymbol property,
         string propertyAccess,

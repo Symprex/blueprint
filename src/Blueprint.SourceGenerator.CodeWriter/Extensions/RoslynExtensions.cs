@@ -11,6 +11,7 @@ public static class RoslynExtensions
     /// <summary>
     /// Resolves the declared symbol for a type declaration syntax node.
     /// </summary>
+    /// <typeparam name="TSymbol">The expected symbol type, such as <see cref="Microsoft.CodeAnalysis.INamedTypeSymbol"/>.</typeparam>
     /// <param name="compilation">The compilation whose semantic model should be used when resolving symbols.</param>
     /// <param name="declarationSyntax">The type declaration syntax node whose symbol should be resolved.</param>
     /// <returns>The declared symbol for the supplied type declaration, or <see langword="null"/> when Roslyn cannot resolve one.</returns>

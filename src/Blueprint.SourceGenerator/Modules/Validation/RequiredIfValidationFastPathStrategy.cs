@@ -3,8 +3,12 @@ using Microsoft.CodeAnalysis;
 
 namespace Blueprint.SourceGenerator.Modules;
 
+/// <summary>
+/// Handles <c>RequiredIfAttribute</c> by delegating to the shared conditional-required lowering helper.
+/// </summary>
 internal sealed class RequiredIfValidationFastPathStrategy : IValidationFastPathStrategy
 {
+    /// <inheritdoc />
     public bool TryCreateRule(
         IPropertySymbol property,
         string propertyAccess,

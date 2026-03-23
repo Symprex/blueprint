@@ -2,8 +2,21 @@ using System.Collections.Immutable;
 
 namespace Blueprint.SourceGenerator.Tests.Scale;
 
+/// <summary>
+/// Describes the minimum knobs needed to synthesise a repeatable Blueprint app for scale and invalidation tests.
+/// </summary>
+/// <remarks>
+/// The options stay intentionally small so benchmark and locality diffs reflect the behaviour under test rather than a
+/// large amount of fixture configuration noise.
+/// </remarks>
 public sealed record SyntheticBlueprintFixtureOptions
 {
+    /// <summary>
+    /// Initialises fixture options for a synthetic Blueprint app.
+    /// </summary>
+    /// <param name="namespaceName">The namespace shared by the synthetic app and generated operations.</param>
+    /// <param name="appName">The synthetic Blueprint app type name.</param>
+    /// <param name="operationCount">The number of generated operations the fixture should emit.</param>
     public SyntheticBlueprintFixtureOptions(string namespaceName, string appName, int operationCount)
     {
         if (string.IsNullOrWhiteSpace(namespaceName))
@@ -26,21 +39,48 @@ public sealed record SyntheticBlueprintFixtureOptions
         this.OperationCount = operationCount;
     }
 
+    /// <summary>
+    /// Gets the namespace shared by the synthetic app and its generated operations.
+    /// </summary>
     public string NamespaceName { get; }
 
+    /// <summary>
+    /// Gets the synthetic Blueprint app type name.
+    /// </summary>
     public string AppName { get; }
 
+    /// <summary>
+    /// Gets the number of generated operations the fixture should emit.
+    /// </summary>
     public int OperationCount { get; }
 }
 
+/// <summary>
+/// Represents one physical source file within a synthetic Blueprint fixture.
+/// </summary>
+/// <param name="Path">The stable relative path used when compiling or mutating the fixture.</param>
+/// <param name="Content">The source text that should be compiled for the file.</param>
 public sealed record SyntheticBlueprintFixtureSourceFile(string Path, string Content);
 
+/// <summary>
+/// Represents a complete synthetic Blueprint app as a set of independently addressable source files.
+/// </summary>
+/// <param name="SourceFiles">The source files that make up the synthetic Blueprint app.</param>
 public sealed record SyntheticBlueprintFixture(ImmutableArray<SyntheticBlueprintFixtureSourceFile> SourceFiles)
 {
+    /// <summary>
+    /// Gets the legacy concatenated view of the fixture for older tests that still compile from one combined source blob.
+    /// </summary>
     public string CombinedSource => string.Join(
         Environment.NewLine + Environment.NewLine,
         this.SourceFiles.Select(static sourceFile => sourceFile.Content));
 
+    /// <summary>
+    /// Creates a new fixture with one named source file rewritten.
+    /// </summary>
+    /// <param name="path">The relative source-file path to mutate.</param>
+    /// <param name="mutation">The transformation to apply to the selected file contents.</param>
+    /// <returns>A new fixture whose selected source file has been rewritten.</returns>
     public SyntheticBlueprintFixture MutateSourceFile(string path, Func<string, string> mutation)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
@@ -69,6 +109,12 @@ public sealed record SyntheticBlueprintFixture(ImmutableArray<SyntheticBlueprint
         return new SyntheticBlueprintFixture(sourceFiles.MoveToImmutable());
     }
 
+    /// <summary>
+    /// Creates a new fixture with one generated operation file rewritten.
+    /// </summary>
+    /// <param name="operationIndex">The one-based synthetic operation index to mutate.</param>
+    /// <param name="mutation">The transformation to apply to the selected operation file.</param>
+    /// <returns>A new fixture whose selected operation source file has been rewritten.</returns>
     public SyntheticBlueprintFixture MutateOperation(int operationIndex, Func<string, string> mutation)
     {
         var operationPath = $@"Operations\SyntheticOperation{operationIndex:000}.cs";
@@ -76,8 +122,17 @@ public sealed record SyntheticBlueprintFixture(ImmutableArray<SyntheticBlueprint
     }
 }
 
+/// <summary>
+/// Creates the repeatable synthetic Blueprint app used by scale and invalidation harnesses.
+/// </summary>
 public static class SyntheticBlueprintFixtureGenerator
 {
+    /// <summary>
+    /// Builds a synthetic Blueprint app whose structure stays simple enough for benchmark and locality tests to attribute
+    /// changes to the infrastructure under test instead of fixture complexity.
+    /// </summary>
+    /// <param name="options">The options that define the synthetic app shape.</param>
+    /// <returns>The generated synthetic fixture.</returns>
     public static SyntheticBlueprintFixture Create(SyntheticBlueprintFixtureOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);

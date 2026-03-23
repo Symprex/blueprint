@@ -4,9 +4,16 @@ using System.Globalization;
 
 namespace Blueprint.Validation;
 
+/// <summary>
+/// Requires a property value to compare greater than another property on the same object during runtime validation.
+/// </summary>
 [AttributeUsage(AttributeTargets.Property, AllowMultiple = true)]
 public sealed class GreaterThanPropertyAttribute : ValidationAttribute
 {
+    /// <summary>
+    /// Initializes a new instance of the <see cref="GreaterThanPropertyAttribute"/> class.
+    /// </summary>
+    /// <param name="otherPropertyName">The sibling property whose value acts as the comparison baseline.</param>
     public GreaterThanPropertyAttribute(string otherPropertyName)
         : base("The field {0} must be greater than '{1}'.")
     {
@@ -18,13 +25,18 @@ public sealed class GreaterThanPropertyAttribute : ValidationAttribute
         this.OtherPropertyName = otherPropertyName;
     }
 
+    /// <summary>
+    /// Gets the sibling property name whose value acts as the comparison baseline.
+    /// </summary>
     public string OtherPropertyName { get; }
 
+    /// <inheritdoc />
     public override string FormatErrorMessage(string name)
     {
         return string.Format(CultureInfo.CurrentCulture, this.ErrorMessageString, name, this.OtherPropertyName);
     }
 
+    /// <inheritdoc />
     [UnconditionalSuppressMessage("Trimming", "IL2075", Justification = "Blueprint validation attributes inspect preserved public operation properties during runtime fallback validation.")]
     protected override ValidationResult? IsValid(object? value, ValidationContext validationContext)
     {

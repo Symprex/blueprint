@@ -216,6 +216,11 @@ the code is regenerated.";
             return this.AddClass(symbol.Name);
         }
 
+        /// <summary>
+        /// Adds an already-constructed class builder to the generated file and sets its owning <see cref="CodeBuilder"/>.
+        /// </summary>
+        /// <param name="builder">The pre-built class builder to enqueue.</param>
+        /// <returns>The supplied builder so it can continue to be configured.</returns>
         internal ClassBuilder AddClass(ClassBuilder builder)
         {
             this._builders.Enqueue(builder);
@@ -235,6 +240,11 @@ the code is regenerated.";
             return builder;
         }
 
+        /// <summary>
+        /// Adds an already-constructed record builder to the generated file and sets its owning <see cref="CodeBuilder"/>.
+        /// </summary>
+        /// <param name="builder">The pre-built record builder to enqueue.</param>
+        /// <returns>The supplied builder so it can continue to be configured.</returns>
         internal RecordBuilder AddRecord(RecordBuilder builder)
         {
             this._builders.Enqueue(builder);
@@ -254,6 +264,11 @@ the code is regenerated.";
             return builder;
         }
 
+        /// <summary>
+        /// Adds an already-constructed enum builder to the generated file and sets its owning <see cref="CodeBuilder"/>.
+        /// </summary>
+        /// <param name="builder">The pre-built enum builder to enqueue.</param>
+        /// <returns>The supplied builder so it can continue to be configured.</returns>
         internal EnumBuilder AddEnum(EnumBuilder builder)
         {
             this._builders.Enqueue(builder);

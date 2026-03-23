@@ -8,6 +8,9 @@ using Microsoft.CodeAnalysis.Text;
 
 namespace Blueprint.SourceGenerator.Generators.App;
 
+/// <summary>
+/// Incremental source generator that discovers Blueprint app scan declarations and emits app registrations.
+/// </summary>
 [Generator(LanguageNames.CSharp)]
 public sealed partial class AppDataModelSourceGenerator : IIncrementalGenerator, ITrackedSourceGenerator
 {
@@ -73,6 +76,11 @@ public sealed partial class AppDataModelSourceGenerator : IIncrementalGenerator,
             });
     }
 
+    /// <summary>
+    /// Renders the generated constructor body that registers each discovered operation descriptor with the Blueprint app.
+    /// </summary>
+    /// <param name="compilationModel">The app compilation model that contains the discovered operations to register.</param>
+    /// <returns>The generated registration companion source.</returns>
     private static string GenerateRegistrations(BlueprintAppDataModelCompilationModel compilationModel)
     {
         var codeBuilder = CodeBuilder.Create(compilationModel.Class.Namespace!);
@@ -93,10 +101,19 @@ public sealed partial class AppDataModelSourceGenerator : IIncrementalGenerator,
 
     private static class Stages
     {
+        /// <summary>
+        /// Tracks syntax discovery for candidate Blueprint app declarations.
+        /// </summary>
         public const string InitialExtraction = nameof(InitialExtraction);
 
+        /// <summary>
+        /// Tracks the point where parsed scan metadata is paired with the Roslyn compilation.
+        /// </summary>
         public const string CombineWithCompilation = nameof(CombineWithCompilation);
 
+        /// <summary>
+        /// Tracks assembly scanning and operation-registration discovery.
+        /// </summary>
         public const string FindServicesToRegister = nameof(FindServicesToRegister);
     }
 }

@@ -16,6 +16,11 @@ namespace Blueprint.SourceGenerator.CodeWriter
         private readonly List<string> _attributes = new List<string>();
         private DocumentationComment? _xmlDoc;
 
+        /// <summary>
+        /// Initializes a new instance attached to the supplied file builder.
+        /// </summary>
+        /// <param name="name">The record name to emit.</param>
+        /// <param name="codeBuilder">The file builder that owns this declaration.</param>
         internal RecordBuilder(string name, CodeBuilder codeBuilder)
         {
             this.Name = name;
@@ -155,6 +160,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
             return this.Builder.Build();
         }
 
+        /// <inheritdoc/>
         internal override void Write(in CodeWriter writer)
         {
             this._xmlDoc?.Write(writer);

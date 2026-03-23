@@ -4,12 +4,20 @@ using System.Globalization;
 
 namespace Blueprint.Validation;
 
+/// <summary>
+/// Requires a value unless another property matches one of the configured dependent values.
+/// </summary>
 [AttributeUsage(AttributeTargets.Property, AllowMultiple = true)]
 public sealed class RequiredIfNotAttribute : ValidationAttribute
 {
     private const string RequiredFieldMessage = "The {0} field is required.";
     private readonly HashSet<string?> _dependentValueTexts;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="RequiredIfNotAttribute"/> class.
+    /// </summary>
+    /// <param name="dependentProperty">The sibling property whose value can deactivate the requirement.</param>
+    /// <param name="dependentValue">The dependent value, or values, that deactivate the requirement.</param>
     public RequiredIfNotAttribute(string dependentProperty, object? dependentValue)
         : base(RequiredFieldMessage)
     {
@@ -24,17 +32,28 @@ public sealed class RequiredIfNotAttribute : ValidationAttribute
         this._dependentValueTexts = [.. this.DependentValues.Select(static value => value?.ToString())];
     }
 
+    /// <summary>
+    /// Gets the sibling property whose value can deactivate the requirement.
+    /// </summary>
     public string DependentProperty { get; }
 
+    /// <summary>
+    /// Gets the original dependent value supplied to the attribute constructor.
+    /// </summary>
     public object? DependentValue { get; }
 
+    /// <summary>
+    /// Gets the dependent values normalised into an enumerable so arrays and scalar inputs follow the same validation path.
+    /// </summary>
     public IEnumerable<object?> DependentValues { get; }
 
+    /// <inheritdoc />
     public override string FormatErrorMessage(string name)
     {
         return string.Format(CultureInfo.CurrentCulture, this.ErrorMessageString, name);
     }
 
+    /// <inheritdoc />
     [UnconditionalSuppressMessage("Trimming", "IL2075", Justification = "Blueprint validation attributes inspect preserved public operation properties during runtime fallback validation.")]
     protected override ValidationResult? IsValid(object? value, ValidationContext validationContext)
     {

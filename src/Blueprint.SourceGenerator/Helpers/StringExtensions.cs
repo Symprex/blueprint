@@ -1,7 +1,15 @@
 namespace Blueprint.SourceGenerator.Helpers;
 
+/// <summary>
+/// Provides identifier-shaping helpers used when generated source needs predictable naming conventions.
+/// </summary>
 public static class StringExtensions
 {
+    /// <summary>
+    /// Converts a PascalCase identifier into a camelCase form while preserving common all-caps acronym prefixes.
+    /// </summary>
+    /// <param name="str">The identifier text to convert.</param>
+    /// <returns>The camelCase identifier, or the original text when no leading-case change is required.</returns>
     public static string Camelize(this string str)
     {
         if (string.IsNullOrEmpty(str) || !char.IsUpper(str[0]))

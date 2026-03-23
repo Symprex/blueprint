@@ -9,6 +9,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         private bool _isClass;
         private bool _newDefault;
 
+        /// <summary>
+        /// Initializes a new instance with the supplied type parameter name.
+        /// </summary>
+        /// <param name="name">The type parameter name this builder configures.</param>
         internal GenericBuilder(string name)
         {
             this.Name = name;

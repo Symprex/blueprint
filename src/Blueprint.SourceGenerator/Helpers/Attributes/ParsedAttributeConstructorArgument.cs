@@ -5,6 +5,7 @@ namespace Blueprint.SourceGenerator.Helpers.Attributes;
 /// <summary>
 /// Represents a typed parsed constructor argument for an attribute.
 /// </summary>
+/// <typeparam name="TType">The type of the parsed constructor argument value.</typeparam>
 /// <param name="Definition">The definition of the constructor argument.</param>
 /// <param name="Location">The location of the constructor argument.</param>
 /// <param name="Value">The value of the constructor argument.</param>

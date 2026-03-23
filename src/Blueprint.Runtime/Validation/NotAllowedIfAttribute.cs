@@ -4,11 +4,19 @@ using System.Globalization;
 
 namespace Blueprint.Validation;
 
+/// <summary>
+/// Forbids setting a value when another property matches one of the configured dependent values.
+/// </summary>
 [AttributeUsage(AttributeTargets.Property, AllowMultiple = true)]
 public sealed class NotAllowedIfAttribute : ValidationAttribute
 {
     private readonly HashSet<string?> _dependentValueTexts;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="NotAllowedIfAttribute"/> class.
+    /// </summary>
+    /// <param name="dependentProperty">The sibling property whose value activates the prohibition.</param>
+    /// <param name="dependentValue">The dependent value, or values, that activate the prohibition.</param>
     public NotAllowedIfAttribute(string dependentProperty, object? dependentValue)
         : base($"This field is not allowed to be set if {dependentProperty} field is {GetDependentValueText(dependentValue)}.")
     {
@@ -23,12 +31,22 @@ public sealed class NotAllowedIfAttribute : ValidationAttribute
         this._dependentValueTexts = [.. this.DependentValues.Select(static value => value?.ToString())];
     }
 
+    /// <summary>
+    /// Gets the sibling property whose value activates the prohibition.
+    /// </summary>
     public string DependentProperty { get; }
 
+    /// <summary>
+    /// Gets the original dependent value supplied to the attribute constructor.
+    /// </summary>
     public object? DependentValue { get; }
 
+    /// <summary>
+    /// Gets the dependent values normalised into an enumerable so arrays and scalar inputs follow the same validation path.
+    /// </summary>
     public IEnumerable<object?> DependentValues { get; }
 
+    /// <inheritdoc />
     [UnconditionalSuppressMessage("Trimming", "IL2075", Justification = "Blueprint validation attributes inspect preserved public operation properties during runtime fallback validation.")]
     protected override ValidationResult? IsValid(object? value, ValidationContext validationContext)
     {

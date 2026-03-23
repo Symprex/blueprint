@@ -15,6 +15,12 @@ internal record ParseOnlyBlueprintAppClassModel(
     string Name,
     string MetadataName)
 {
+    /// <summary>
+    /// Creates the cacheable app model used by later generator stages.
+    /// </summary>
+    /// <param name="type">The Blueprint app type being scanned.</param>
+    /// <param name="syntax">The declaring syntax node for the app type, when available.</param>
+    /// <returns>A compact model describing the app type.</returns>
     public static ParseOnlyBlueprintAppClassModel Create(INamedTypeSymbol type, SyntaxNode? syntax)
     {
         return new ParseOnlyBlueprintAppClassModel(

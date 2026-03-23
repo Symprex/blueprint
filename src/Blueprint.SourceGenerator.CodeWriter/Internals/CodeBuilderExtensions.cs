@@ -6,6 +6,10 @@ using Microsoft.CodeAnalysis;
 #nullable enable
 namespace Blueprint.SourceGenerator.CodeWriter.Internals
 {
+    /// <summary>
+    /// Converts Roslyn type symbols and CLR <see cref="System.Type"/> values to the C# type names used in generated source.
+    /// Handles the BCL keyword aliases (e.g. <c>int</c> instead of <c>Int32</c>) and fully qualified names.
+    /// </summary>
     internal static class CodeBuilderExtensions
     {
         private static readonly Dictionary<string, string> _mappings = new Dictionary<string, string>

@@ -8,6 +8,10 @@ public sealed class BlueprintEndpointRouteBuilder : IEndpointConventionBuilder
 {
     private readonly List<IEndpointConventionBuilder> _builders;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="BlueprintEndpointRouteBuilder"/> class.
+    /// </summary>
+    /// <param name="builders">The mapped endpoint builders that should receive shared conventions.</param>
     internal BlueprintEndpointRouteBuilder(List<IEndpointConventionBuilder> builders)
     {
         this._builders = builders;

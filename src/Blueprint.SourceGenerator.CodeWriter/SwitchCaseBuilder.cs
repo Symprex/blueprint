@@ -46,6 +46,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
             return this._parent;
         }
 
+        /// <inheritdoc/>
         void IBuilder.Write(in CodeWriter writer)
         {
             if (this._parent.Expression)

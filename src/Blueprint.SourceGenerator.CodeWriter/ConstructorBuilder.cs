@@ -21,6 +21,11 @@ namespace Blueprint.SourceGenerator.CodeWriter
 
         private Func<string> _baseCall;
 
+        /// <summary>
+        /// Initializes a new instance attached to the supplied class builder.
+        /// </summary>
+        /// <param name="accessModifier">The accessibility modifier to emit, or <see langword="null"/> to inherit from the owning class.</param>
+        /// <param name="classBuilder">The class builder that owns this constructor.</param>
         internal ConstructorBuilder(Accessibility? accessModifier, ClassBuilder classBuilder)
         {
             this.AccessModifier = accessModifier;
@@ -28,8 +33,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
             this._baseCall = () => string.Empty;
         }
 
+        /// <inheritdoc/>
         List<ParameterBuilder<ConstructorBuilder>> IParameterized<ConstructorBuilder>.Parameters => this._parameters;
 
+        /// <inheritdoc/>
         ConstructorBuilder IParameterized<ConstructorBuilder>.Parent => this;
 
         /// <summary>
@@ -47,6 +54,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// </summary>
         public ClassBuilder Class { get; }
 
+        /// <summary>Gets the number of parameters currently configured on this constructor.</summary>
         internal int Count => this._parameters.Count;
 
         /// <summary>
@@ -318,6 +326,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
             return this.Class.AddConstructor(accessModifier);
         }
 
+        /// <inheritdoc/>
         internal override void Write(in CodeWriter writer)
         {
             if (this._xmlDoc is ParameterDocumentationComment parameterDocumentation)

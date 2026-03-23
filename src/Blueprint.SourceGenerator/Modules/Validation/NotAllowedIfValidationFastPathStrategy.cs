@@ -5,8 +5,13 @@ using CSharpSymbolDisplay = Microsoft.CodeAnalysis.CSharp.SymbolDisplay;
 
 namespace Blueprint.SourceGenerator.Modules;
 
+/// <summary>
+/// Handles <c>NotAllowedIfAttribute</c> when both the referenced condition and the guarded property-state check can be
+/// expressed directly in generated code.
+/// </summary>
 internal sealed class NotAllowedIfValidationFastPathStrategy : IValidationFastPathStrategy
 {
+    /// <inheritdoc />
     public bool TryCreateRule(
         IPropertySymbol property,
         string propertyAccess,

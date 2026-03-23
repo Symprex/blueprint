@@ -10,11 +10,16 @@ using Microsoft.AspNetCore.Routing.Patterns;
 // ReSharper disable once CheckNamespace
 namespace Microsoft.AspNetCore.Builder;
 
+/// <summary>
+/// Adds Blueprint endpoint-mapping helpers to ASP.NET Core's endpoint-route builder for discoverable application startup.
+/// </summary>
 public static class EndpointRouteBuilderExtensions
 {
     /// <summary>
     /// Maps all Blueprint operation endpoints from the given <see cref="BlueprintAppExecutor" />.
     /// </summary>
+    /// <typeparam name="T">The Blueprint app type whose operations should be exposed.</typeparam>
+    /// <typeparam name="TExec">The generated executor type that can route those operations.</typeparam>
     /// <param name="endpoints">The endpoint builder to register with.</param>
     /// <param name="basePath">A base path to prepend to all routes.</param>
     /// <returns>A builder that allows adding metadata / conventions to all mapped endpoints.</returns>

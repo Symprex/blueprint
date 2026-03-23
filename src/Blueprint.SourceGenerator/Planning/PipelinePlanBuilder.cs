@@ -6,8 +6,19 @@ using Microsoft.CodeAnalysis;
 
 namespace Blueprint.SourceGenerator.Planning;
 
+/// <summary>
+/// Builds the shared pipeline plan that contributors later render into generated executor code.
+/// </summary>
 internal static class PipelinePlanBuilder
 {
+    /// <summary>
+    /// Builds a pipeline plan for the requested operation using the currently configured contributor execution plan.
+    /// </summary>
+    /// <param name="operationFullClassName">The fully qualified metadata name of the operation implementation.</param>
+    /// <param name="compilation">The Roslyn compilation that contains the operation and contributor metadata.</param>
+    /// <param name="executionPlanResult">The configured contributor execution plan.</param>
+    /// <param name="handler">An optional pre-resolved handler model to reuse when one is already known.</param>
+    /// <returns>A successful pipeline plan or the diagnostics that prevented one from being built.</returns>
     public static Result<PipelinePlan> Build(
         string operationFullClassName,
         Compilation compilation,

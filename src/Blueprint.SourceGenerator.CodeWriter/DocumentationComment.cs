@@ -4,6 +4,10 @@
 #nullable enable
 namespace Blueprint.SourceGenerator.CodeWriter
 {
+    /// <summary>
+    /// Base for the internal documentation model written into generated source.
+    /// Subclasses decide the exact XML form (summary, inheritdoc, or parameter docs).
+    /// </summary>
     internal abstract class DocumentationComment
     {
         /// <summary>
@@ -13,8 +17,15 @@ namespace Blueprint.SourceGenerator.CodeWriter
         public abstract void Write(in CodeWriter writer);
     }
 
+    /// <summary>
+    /// Emits an <c>&lt;inheritdoc/&gt;</c> element, optionally targeting a specific cref.
+    /// </summary>
     internal class InheritDocumentationComment : DocumentationComment
     {
+        /// <summary>
+        /// Gets or sets the optional cref value placed on the emitted inheritdoc element.
+        /// When <see langword="null"/> a bare <c>&lt;inheritdoc/&gt;</c> is emitted.
+        /// </summary>
         internal string? InheritFrom { get; set; }
 
         /// <summary>
@@ -27,8 +38,14 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
     }
 
+    /// <summary>
+    /// Emits a <c>&lt;summary&gt;</c> element from a caller-supplied text string.
+    /// </summary>
     internal class SummaryDocumentationComment : DocumentationComment
     {
+        /// <summary>
+        /// Gets or sets the text to emit inside the generated summary element.
+        /// </summary>
         internal string? Summary { get; set; }
 
         /// <summary>
@@ -54,6 +71,9 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
     }
 
+    /// <summary>
+    /// Emits a <c>&lt;summary&gt;</c> element followed by <c>&lt;param&gt;</c> elements for each documented parameter.
+    /// </summary>
     internal class ParameterDocumentationComment : SummaryDocumentationComment
     {
         private readonly Dictionary<string, string> parameterDocs = new Dictionary<string, string>();
@@ -68,6 +88,12 @@ namespace Blueprint.SourceGenerator.CodeWriter
             this.parameterDocs[parameterName] = documentationComment;
         }
 
+        /// <summary>
+        /// Removes any recorded parameter docs whose names do not match a parameter on the supplied list,
+        /// preventing orphaned <c>&lt;param&gt;</c> elements in the generated output.
+        /// </summary>
+        /// <typeparam name="T">The concrete builder type that owns the parameter list.</typeparam>
+        /// <param name="parameters">The active parameter builders whose names define the valid set.</param>
         internal void RemoveUnusedParameters<T>(List<ParameterBuilder<T>> parameters)
             where T : BuilderBase<T>, IParameterized<T>
         {

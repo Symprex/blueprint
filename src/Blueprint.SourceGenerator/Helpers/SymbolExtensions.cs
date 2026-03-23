@@ -2,6 +2,10 @@ using Microsoft.CodeAnalysis;
 
 namespace Blueprint.SourceGenerator.Helpers
 {
+    /// <summary>
+    /// Provides Roslyn symbol helpers used by the generators when they need stable semantic checks without duplicating
+    /// low-level traversal logic.
+    /// </summary>
     internal static class SymbolExtensions
     {
         /// <summary>
@@ -48,11 +52,22 @@ namespace Blueprint.SourceGenerator.Helpers
             return false;
         }
 
+        /// <summary>
+        /// Checks whether the given symbol implements an interface identified by its fully qualified type name.
+        /// </summary>
+        /// <param name="symbol">The symbol whose interface list should be inspected.</param>
+        /// <param name="interfaceType">The fully qualified interface type name to look for.</param>
+        /// <returns><see langword="true"/> when the symbol implements the requested interface.</returns>
         public static bool ImplementsInterface(this INamedTypeSymbol symbol, string interfaceType)
         {
             return symbol.AllInterfaces.Any(i => i.ToString() == interfaceType);
         }
 
+        /// <summary>
+        /// Builds the full metadata name for a symbol so generator-side lookups stay stable across namespaces.
+        /// </summary>
+        /// <param name="symbol">The symbol whose metadata name should be rendered.</param>
+        /// <returns>The fully qualified metadata name for the symbol.</returns>
         public static string ToFullMetadataName(this ISymbol symbol)
         {
             return symbol.ContainingNamespace.IsGlobalNamespace

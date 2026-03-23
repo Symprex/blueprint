@@ -2,6 +2,9 @@ using Microsoft.CodeAnalysis;
 
 namespace Blueprint.SourceGenerator.CodeWriter
 {
+    /// <summary>
+    /// Holds the <see cref="GenericBuilder"/> entries for a generated declaration and formats them as a type-parameter list or where-clause set.
+    /// </summary>
     internal class GenericCollection : List<GenericBuilder>
     {
         /// <summary>

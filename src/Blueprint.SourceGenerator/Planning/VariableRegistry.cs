@@ -139,9 +139,24 @@ public sealed record UnsatisfiedVariableRequirement(
 /// </summary>
 public enum VariableSourceKind
 {
+    /// <summary>
+    /// The value comes directly from the operation context.
+    /// </summary>
     Context,
+
+    /// <summary>
+    /// The value is resolved from dependency injection.
+    /// </summary>
     Service,
+
+    /// <summary>
+    /// The value is generated as a local during pipeline rendering.
+    /// </summary>
     GeneratedLocal,
+
+    /// <summary>
+    /// The value is produced by an earlier contributor step.
+    /// </summary>
     ProducedValue,
 }
 
@@ -150,7 +165,18 @@ public enum VariableSourceKind
 /// </summary>
 public enum VariableLifetime
 {
+    /// <summary>
+    /// The value should be read from the operation context each time it is needed.
+    /// </summary>
     ContextLookup,
+
+    /// <summary>
+    /// The value should live as a constructor-initialised field on the generated pipeline type.
+    /// </summary>
     ConstructorField,
+
+    /// <summary>
+    /// The value should be stored in a local within the generated execute method.
+    /// </summary>
     Local,
 }

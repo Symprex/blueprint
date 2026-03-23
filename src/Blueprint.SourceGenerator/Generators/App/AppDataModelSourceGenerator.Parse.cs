@@ -6,6 +6,9 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace Blueprint.SourceGenerator.Generators.App;
 
+/// <summary>
+/// Incremental source generator that discovers Blueprint app scan declarations and emits app registrations.
+/// </summary>
 public sealed partial class AppDataModelSourceGenerator
 {
     private static Result<ParseOnlyDataModel>? ParseDataModelWithScanAttributes(GeneratorAttributeSyntaxContext context)

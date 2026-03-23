@@ -8,6 +8,10 @@ using Microsoft.CodeAnalysis;
 #nullable enable
 namespace Blueprint.SourceGenerator.CodeWriter.Internals
 {
+    /// <summary>
+    /// Resolves Roslyn symbol names to their globally qualified and metadata forms for use in generated source.
+    /// Also handles CLR keyword aliases and nullable type unwrapping.
+    /// </summary>
     internal static class ISymbolExtensions
     {
         private static readonly Dictionary<string, string> _fullNamesMaping = new Dictionary<string, string>

@@ -33,11 +33,13 @@ public sealed class CompilationOperationLookup(Compilation compilation) : IOpera
     private const string OperationMetadataName = "Blueprint.Model.IOperation";
     private readonly INamedTypeSymbol? _operationInterface = compilation.GetTypeByMetadataName(OperationMetadataName);
 
+    /// <inheritdoc />
     public OperationModel? FindByMetadataName(string metadataName)
     {
         return this.TryCreate(compilation.GetTypeByMetadataName(metadataName));
     }
 
+    /// <inheritdoc />
     public OperationModel? Find(INamedTypeSymbol typeSymbol)
     {
         return this.TryCreate(typeSymbol);

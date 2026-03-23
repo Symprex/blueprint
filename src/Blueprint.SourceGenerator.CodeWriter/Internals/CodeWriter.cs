@@ -7,6 +7,10 @@ using System.Text;
 #nullable enable
 namespace Blueprint.SourceGenerator.CodeWriter
 {
+    /// <summary>
+    /// Low-level source writer that tracks indentation, manages nested block writers, and accumulates lines into a renderable string.
+    /// Builders obtain an instance via <see cref="CodeBuilder"/> and should not construct one directly.
+    /// </summary>
     internal sealed class CodeWriter : IDisposable, ICodeWriter
     {
         private readonly IndentStyle _indentStyle;

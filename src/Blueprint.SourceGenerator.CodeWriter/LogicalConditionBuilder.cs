@@ -16,6 +16,13 @@ namespace Blueprint.SourceGenerator.CodeWriter
         private Action<ICodeWriter>? _innerWrite { get; set; }
         private LogicalConditionBuilder? _parent { get; }
 
+        /// <summary>
+        /// Initializes a new branch node in a conditional chain.
+        /// </summary>
+        /// <param name="writer">The writer that the generated conditional block will be emitted to.</param>
+        /// <param name="condition">The condition expression to emit inside the branch header, or <see langword="null"/> for an unconditional else.</param>
+        /// <param name="operator">The C# keyword to use for this branch, such as <c>if</c>, <c>else if</c>, or <c>else</c>.</param>
+        /// <param name="parent">The parent branch node, or <see langword="null"/> when this is the root of the chain.</param>
         internal LogicalConditionBuilder(ICodeWriter writer, string? condition, string @operator = "if", LogicalConditionBuilder? parent = null)
         {
             this._writer = writer;

@@ -6,9 +6,9 @@
       "usingDirectivesPlacement": "outsideNamespace"
     },
     "documentationRules": {
-      "documentExposedElements": false,
-      "documentInterfaces": false,
-      "documentInternalElements": false,
+      "documentExposedElements": true,
+      "documentInterfaces": true,
+      "documentInternalElements": true,
       "documentPrivateElements": false,
       "documentPrivateFields": false,
       "documentationCulture": "en-GB"

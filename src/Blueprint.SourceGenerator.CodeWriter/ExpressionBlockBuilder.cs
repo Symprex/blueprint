@@ -8,6 +8,11 @@ namespace Blueprint.SourceGenerator.CodeWriter
         private ICodeWriter _writer { get; }
         private string _blockCode { get; }
 
+        /// <summary>
+        /// Initializes a new instance with the writer and block header expression it wraps.
+        /// </summary>
+        /// <param name="writer">The writer that the generated block body will be emitted to.</param>
+        /// <param name="block">The block header expression to emit before the opening brace.</param>
         internal ExpressionBlockBuilder(ICodeWriter writer, string block)
         {
             this._writer = writer;

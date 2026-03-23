@@ -10,6 +10,8 @@ internal static class ExecutorCodeGenerator
     /// <summary>
     /// Generates the complete executor class with all pipeline registrations.
     /// </summary>
+    /// <param name="model">The compilation model containing the app type and generated pipelines to register.</param>
+    /// <returns>The generated executor source for the Blueprint app.</returns>
     public static string GenerateExecutor(PipelineCompilationModel model)
     {
         var codeBuilder = CodeBuilder.Create(model.AppNamespace);

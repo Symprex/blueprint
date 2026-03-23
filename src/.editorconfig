@@ -281,9 +281,29 @@ dotnet_diagnostic.SA1503.severity = none
 dotnet_diagnostic.SA1505.severity = none
 dotnet_diagnostic.SA1513.severity = none
 dotnet_diagnostic.SA1520.severity = none
-dotnet_diagnostic.SA1600.severity = none
-dotnet_diagnostic.SA1602.severity = none
+dotnet_diagnostic.SA1600.severity = warning
+dotnet_diagnostic.SA1602.severity = warning
 dotnet_diagnostic.SA1649.severity = none
+
+[**/*Tests.cs]
+dotnet_diagnostic.SA1600.severity = none
+dotnet_diagnostic.SA1601.severity = none
+dotnet_diagnostic.SA1602.severity = none
+
+[**/*Tests.*.cs]
+dotnet_diagnostic.SA1600.severity = none
+dotnet_diagnostic.SA1601.severity = none
+dotnet_diagnostic.SA1602.severity = none
+
+[**/*Test.cs]
+dotnet_diagnostic.SA1600.severity = none
+dotnet_diagnostic.SA1601.severity = none
+dotnet_diagnostic.SA1602.severity = none
+
+[**/*Test.*.cs]
+dotnet_diagnostic.SA1600.severity = none
+dotnet_diagnostic.SA1601.severity = none
+dotnet_diagnostic.SA1602.severity = none
 
 ###############################
 # YAML Code Style Rules       #

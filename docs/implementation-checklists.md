@@ -11,6 +11,7 @@ They are intentionally short and repeatable so future humans and AI agents can u
 - [ ] Does the runtime stay AOT-friendly, reflection-light, and easy to inspect?
 - [ ] Are observability and diagnostics considered part of the feature, not follow-up work?
 - [ ] If the change affects architecture, diagnostics, observability, or workflow, did `/docs` get updated too?
+- [ ] Do public, protected, and internal non-test C# surfaces have rationale-focused XML docs, and are reusable test helpers documented even though actual `*Test.cs` / `*Tests.cs` files stay exempt?
 
 ## New operation or app-registration work
 

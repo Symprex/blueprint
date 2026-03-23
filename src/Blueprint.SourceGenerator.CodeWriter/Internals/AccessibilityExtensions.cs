@@ -3,6 +3,9 @@ using Microsoft.CodeAnalysis;
 #nullable enable
 namespace Blueprint.SourceGenerator.CodeWriter.Internals
 {
+    /// <summary>
+    /// Converts Roslyn <see cref="Microsoft.CodeAnalysis.Accessibility"/> values to the C# keyword text used in generated source.
+    /// </summary>
     internal static class AccessibilityExtensions
     {
         /// <summary>

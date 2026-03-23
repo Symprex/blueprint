@@ -2,10 +2,16 @@ using Microsoft.CodeAnalysis;
 
 namespace Blueprint.SourceGenerator.Modules;
 
+/// <summary>
+/// Holds diagnostics that describe invalid Blueprint contributor composition or pipeline-planning state.
+/// </summary>
 internal static class FoundationModuleDiagnosticDescriptors
 {
     private const string Category = "BlueprintModuleSystem";
 
+    /// <summary>
+    /// Gets the diagnostic emitted when two contributors claim the same unique capability.
+    /// </summary>
     public static readonly DiagnosticDescriptor DuplicateUniqueContributor = new(
         id: "BPMOD001",
         title: "Duplicate unique contributor",
@@ -15,6 +21,9 @@ internal static class FoundationModuleDiagnosticDescriptors
         isEnabledByDefault: true,
         description: "Contributor composition must be deterministic. Unique contributors may only appear once for a given capability.");
 
+    /// <summary>
+    /// Gets the diagnostic emitted when a contributor dependency cannot be resolved.
+    /// </summary>
     public static readonly DiagnosticDescriptor MissingContributorDependency = new(
         id: "BPMOD002",
         title: "Missing contributor dependency",
@@ -24,6 +33,9 @@ internal static class FoundationModuleDiagnosticDescriptors
         isEnabledByDefault: true,
         description: "Contributor dependency declarations must resolve to configured contributors.");
 
+    /// <summary>
+    /// Gets the diagnostic emitted when contributor dependencies form a cycle.
+    /// </summary>
     public static readonly DiagnosticDescriptor CyclicContributorDependency = new(
         id: "BPMOD003",
         title: "Cyclic contributor dependency",
@@ -33,6 +45,9 @@ internal static class FoundationModuleDiagnosticDescriptors
         isEnabledByDefault: true,
         description: "Contributor dependencies must form a deterministic acyclic ordering.");
 
+    /// <summary>
+    /// Gets the diagnostic emitted when a contributor consumes a variable before any configured source can provide it.
+    /// </summary>
     public static readonly DiagnosticDescriptor MissingRequiredVariable = new(
         id: "BPMOD004",
         title: "Missing required variable",

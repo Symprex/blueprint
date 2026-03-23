@@ -12,6 +12,12 @@ namespace Blueprint.SourceGenerator.CodeWriter
         private readonly List<string> _attributes = new List<string>();
         private DocumentationComment? _xmlDoc;
 
+        /// <summary>
+        /// Initializes a new instance attached to the supplied enum builder.
+        /// </summary>
+        /// <param name="name">The enum member name to emit.</param>
+        /// <param name="builder">The enum builder that owns this value.</param>
+        /// <param name="value">The optional numeric value to assign to the generated enum member.</param>
         internal EnumValueBuilder(string name, EnumBuilder builder, int? value)
         {
             this.Name = name;
@@ -94,6 +100,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
             return this;
         }
 
+        /// <inheritdoc/>
         void IBuilder.Write(in CodeWriter writer)
         {
             this._xmlDoc?.Write(writer);

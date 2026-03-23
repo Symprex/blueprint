@@ -6,6 +6,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
     /// <summary>
     /// Provides the rendering infrastructure shared by builders that need pragma warning suppression around emitted source.
     /// </summary>
+    /// <typeparam name="T">The concrete builder type returned by fluent configuration methods so call chains stay strongly typed.</typeparam>
     public abstract class BuilderBase<T> : BuilderBase
         where T : BuilderBase
     {

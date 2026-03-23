@@ -8,10 +8,18 @@ namespace Blueprint.SourceGenerator.CodeWriter
     /// </summary>
     public abstract class BuilderBase : IBuilder
     {
+        /// <summary>
+        /// Holds the list of compiler warning codes that will be suppressed around this builder's emitted output.
+        /// </summary>
         protected readonly List<string> _pragmaWarnings = new List<string>();
 
+        /// <summary>
+        /// Emits the source for this builder to the supplied writer without pragma wrappers.
+        /// </summary>
+        /// <param name="writer">The writer that receives the generated output.</param>
         internal abstract void Write(in CodeWriter writer);
 
+        /// <inheritdoc/>
         void IBuilder.Write(in CodeWriter writer)
         {
             var warnings = string.Join(", ", this._pragmaWarnings.Distinct());

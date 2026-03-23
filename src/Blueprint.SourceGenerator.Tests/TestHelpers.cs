@@ -11,18 +11,20 @@ using Microsoft.CodeAnalysis.CSharp;
 namespace Blueprint.SourceGenerator.Tests;
 
 /// <summary>
-/// The result of a compilation, from <see cref="TestHelpers.Compile{T}(string,bool)"/>.
+/// Captures one generator test run so assertions can inspect the original inputs, emitted diagnostics, and generated
+/// output from the exact same Roslyn compilation.
 /// </summary>
-/// <param name="Inputs">The inputs to the compilation, from the tests.</param>
-/// <param name="Diagnostics">The generated diagnostics.</param>
-/// <param name="Output">The output of the compilation.</param>
+/// <param name="Inputs">The syntax trees that represented the test's handwritten input.</param>
+/// <param name="Diagnostics">The diagnostics surfaced by either generation or the emitted compilation.</param>
+/// <param name="Output">The generated syntax trees that were produced for the test run.</param>
 public record GenerationResult(SyntaxTree[] Inputs, Diagnostic[] Diagnostics, SyntaxTree[] Output)
 {
     /// <summary>
-    /// Verifies that the compilation was successful, and that the output is as expected.
+    /// Verifies a successful generation run against a reviewed snapshot so structural output changes stay intentional.
     /// </summary>
-    /// <param name="snapshotsFolder">Where the snapshots are to be stored.</param>
-    /// <param name="includeMarkerAttributes">Whether to include the source of marker attributes in the snapshot.</param>
+    /// <param name="snapshotsFolder">The snapshot folder that owns the reviewed baseline for this scenario.</param>
+    /// <param name="includeMarkerAttributes">Set to <see langword="true"/> when the marker-attribute boilerplate is part of the behaviour under review.</param>
+    /// <returns>A task that completes once the reviewed snapshot assertion has finished.</returns>
     public async Task VerifySuccessAsync(string snapshotsFolder, bool includeMarkerAttributes = false)
     {
         if (this.Diagnostics.Length != 0)
@@ -52,9 +54,10 @@ public record GenerationResult(SyntaxTree[] Inputs, Diagnostic[] Diagnostics, Sy
     }
 
     /// <summary>
-    /// Verifies that the compilation was successful, and that the output is as expected.
+    /// Verifies a failing generation run against a reviewed diagnostic snapshot so validation regressions stay readable.
     /// </summary>
-    /// <param name="snapshotsFolder">Where the snapshots are to be stored.</param>
+    /// <param name="snapshotsFolder">The snapshot folder that owns the reviewed diagnostic baseline for this scenario.</param>
+    /// <returns>A task that completes once the reviewed diagnostic snapshot assertion has finished.</returns>
     public async Task VerifyCompilationFailedAsync(string snapshotsFolder)
     {
         this.Diagnostics.Should().NotBeEmpty("we expected the input to generate diagnostic errors");
@@ -118,18 +121,42 @@ public record GenerationResult(SyntaxTree[] Inputs, Diagnostic[] Diagnostics, Sy
     }
 }
 
+/// <summary>
+/// Describes one tracked incremental generator inside the multi-generator harness.
+/// </summary>
+/// <param name="Name">The stable name used when reporting generated sources and tracked steps.</param>
+/// <param name="Generator">The incremental generator instance to execute.</param>
+/// <param name="StageNames">The stage names worth preserving when locality assertions compare tracked steps.</param>
 public sealed record TrackedGeneratorDefinition(
     string Name,
     IIncrementalGenerator Generator,
     ImmutableArray<string> StageNames);
 
+/// <summary>
+/// Stores a Roslyn generated source as plain text so tests can compare outputs without depending on Roslyn wrappers.
+/// </summary>
+/// <param name="HintName">The generated hint name used as the stable file identifier.</param>
+/// <param name="SourceText">The generated source text captured for comparison and snapshots.</param>
 public sealed record GeneratedSourceSnapshot(string HintName, string SourceText);
 
+/// <summary>
+/// Keeps one complete multi-generator run together so locality tests can correlate diagnostics, generated text, and
+/// tracked pipeline steps from the same driver execution.
+/// </summary>
+/// <param name="Diagnostics">The diagnostics surfaced by the run.</param>
+/// <param name="GeneratedSources">The generated source snapshots grouped by generator name.</param>
+/// <param name="TrackedSteps">The tracked incremental steps grouped by generator name and stage.</param>
 public sealed record MultiGeneratorGenerationResult(
     Diagnostic[] Diagnostics,
     ImmutableDictionary<string, ImmutableArray<GeneratedSourceSnapshot>> GeneratedSources,
     ImmutableDictionary<string, ImmutableDictionary<string, ImmutableArray<IncrementalGeneratorRunStep>>> TrackedSteps)
 {
+    /// <summary>
+    /// Returns the generated source snapshots for one generator without forcing each caller to duplicate dictionary
+    /// fallback logic.
+    /// </summary>
+    /// <param name="generatorName">The tracked generator name to read generated sources for.</param>
+    /// <returns>The generated sources for the requested generator, or an empty array when it produced none.</returns>
     public ImmutableArray<GeneratedSourceSnapshot> GetGeneratedSources(string generatorName)
     {
         return this.GeneratedSources.TryGetValue(generatorName, out var generatedSources)
@@ -138,10 +165,21 @@ public sealed record MultiGeneratorGenerationResult(
     }
 }
 
+/// <summary>
+/// Pairs the initial and updated multi-generator runs for edit-locality assertions.
+/// </summary>
+/// <param name="Initial">The baseline run before a source edit is applied.</param>
+/// <param name="Updated">The run captured after the source edit is applied.</param>
 public sealed record MultiGeneratorEditResult(
     MultiGeneratorGenerationResult Initial,
     MultiGeneratorGenerationResult Updated)
 {
+    /// <summary>
+    /// Identifies which generated outputs changed for one generator after an edit so locality tests can stay focused on
+    /// the affected artifacts instead of diffing every file manually.
+    /// </summary>
+    /// <param name="generatorName">The tracked generator name to diff.</param>
+    /// <returns>The ordered hint names whose generated source changed between the initial and updated runs.</returns>
     public ImmutableArray<string> GetChangedGeneratedSourceHintNames(string generatorName)
     {
         var initialSources = this.Initial.GetGeneratedSources(generatorName)
@@ -156,20 +194,35 @@ public sealed record MultiGeneratorEditResult(
 }
 
 /// <summary>
-/// A set of helper methods for testing the generation of source code, including gathering of diagnostics and checking
-/// the cacheability of the source generator to ensure it will be performant.
+/// Central Roslyn harness for generator tests.
 /// </summary>
 /// <remarks>
-/// This has been taken also as-is from https://andrewlock.net/creating-a-source-generator-part-10-testing-your-incremental-generator-pipeline-outputs-are-cacheable/
+/// These helpers intentionally compile real in-memory projects, emit the resulting assembly, and rerun the same driver
+/// to prove cacheability. Tests should prefer this shared harness over ad-hoc Roslyn setup so every slice exercises the
+/// same correctness and incremental-behaviour constraints. The original cacheability pattern was adapted from
+/// https://andrewlock.net/creating-a-source-generator-part-10-testing-your-incremental-generator-pipeline-outputs-are-cacheable/.
 /// </remarks>
 public static class TestHelpers
 {
+    /// <summary>
+    /// Runs a single tracked generator against one source string and verifies the same driver can replay its work from
+    /// cache on a second run.
+    /// </summary>
+    /// <typeparam name="T">The tracked incremental generator under test.</typeparam>
+    /// <param name="source">The handwritten source that should trigger the generator.</param>
+    /// <param name="assertCacheability">Set to <see langword="false"/> only when debugging a failing test and you need to inspect the first run in isolation.</param>
+    /// <returns>The captured diagnostics and generated syntax trees for the run.</returns>
     public static GenerationResult Compile<T>(string source, bool assertCacheability = true)
         where T : IIncrementalGenerator, ITrackedSourceGenerator, new()
     {
         return Compile<T>([source], filePaths: null, assertCacheability);
     }
 
+    /// <summary>
+    /// Creates a tracked generator definition that records the stage names a locality test is allowed to reason about.
+    /// </summary>
+    /// <typeparam name="T">The tracked incremental generator to instantiate.</typeparam>
+    /// <returns>A tracked generator definition ready for the multi-generator harness.</returns>
     public static TrackedGeneratorDefinition CreateTrackedGenerator<T>()
         where T : IIncrementalGenerator, ITrackedSourceGenerator, new()
     {
@@ -177,6 +230,14 @@ public static class TestHelpers
         return new TrackedGeneratorDefinition(typeof(T).Name, generator, [.. generator.StageNames]);
     }
 
+    /// <summary>
+    /// Executes several tracked generators against the same compilation so tests can observe how descriptor, app, and
+    /// pipeline emitters behave together from one baseline input set.
+    /// </summary>
+    /// <param name="generators">The tracked generators that should run against the shared compilation.</param>
+    /// <param name="sources">The source texts that make up the baseline compilation.</param>
+    /// <param name="filePaths">The stable file paths to associate with each source so diagnostics stay deterministic.</param>
+    /// <returns>The first multi-generator run captured from the shared driver execution.</returns>
     public static MultiGeneratorGenerationResult CompileWithTrackedGenerators(
         TrackedGeneratorDefinition[] generators,
         string[] sources,
@@ -190,6 +251,15 @@ public static class TestHelpers
         return result.Initial;
     }
 
+    /// <summary>
+    /// Reuses the same tracked-generator driver across an initial and updated compilation so locality tests can observe
+    /// which generated files and incremental stages truly changed after a targeted edit.
+    /// </summary>
+    /// <param name="generators">The tracked generators that should participate in both runs.</param>
+    /// <param name="initialSources">The baseline source texts before the edit.</param>
+    /// <param name="updatedSources">The source texts after the edit is applied.</param>
+    /// <param name="filePaths">The stable file paths shared by both compilations.</param>
+    /// <returns>The paired baseline and post-edit run results.</returns>
     public static MultiGeneratorEditResult CompileWithTrackedGeneratorsAfterEdit(
         TrackedGeneratorDefinition[] generators,
         string[] initialSources,

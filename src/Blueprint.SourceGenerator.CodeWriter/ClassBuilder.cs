@@ -29,6 +29,12 @@ namespace Blueprint.SourceGenerator.CodeWriter
         private DocumentationComment? _xmlDoc;
         private Func<PropertyBuilder, string>? _propertiesOrderBy = null;
 
+        /// <summary>
+        /// Initializes a new instance attached to the supplied <see cref="CodeBuilder"/>.
+        /// </summary>
+        /// <param name="className">The type name to emit.</param>
+        /// <param name="codeBuilder">The file builder that owns this declaration.</param>
+        /// <param name="partial"><see langword="true"/> to emit the <c>partial</c> modifier; otherwise <see langword="false"/>.</param>
         internal ClassBuilder(string className, CodeBuilder codeBuilder, bool partial = true)
         {
             this.Name = className;
@@ -547,6 +553,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
             return this;
         }
 
+        /// <inheritdoc/>
         internal override void Write(in CodeWriter writer)
         {
             this._xmlDoc?.Write(writer);

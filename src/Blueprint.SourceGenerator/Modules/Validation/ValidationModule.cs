@@ -11,23 +11,31 @@ namespace Blueprint.SourceGenerator.Modules;
 /// </summary>
 public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescriptorContributor, IPipelineContributor
 {
+    /// <inheritdoc />
     public string ModuleId => nameof(ValidationModule);
 
+    /// <inheritdoc />
     public BlueprintModuleCategory Category => BlueprintModuleCategory.Core;
 
+    /// <inheritdoc />
     public string ContributorId => nameof(ValidationModule);
 
+    /// <inheritdoc />
     public int Order => 0;
 
+    /// <inheritdoc />
     public bool IsUnique => true;
 
+    /// <inheritdoc />
     public IReadOnlyList<string> DependsOn { get; } = [];
 
+    /// <inheritdoc />
     public void ContributeToDescriptor(DescriptorContributorContext context)
     {
         ValidateReferencedPropertyAttributes(context);
     }
 
+    /// <inheritdoc />
     public void ContributeToPipeline(PipelineContributorContext context)
     {
         var validationPlan = ValidationPropertyPlanner.Create(context.Operation.TypeSymbol);

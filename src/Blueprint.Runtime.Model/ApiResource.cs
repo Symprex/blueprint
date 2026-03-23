@@ -30,6 +30,9 @@ public abstract class ApiResource : ILinkableResource, IHaveResourceKey
     [JsonPropertyName("$links")]
     public IDictionary<string, Link> Links => this._links;
 
+    /// <summary>
+    /// Gets the stable key used when link generation needs to identify this resource instance in URLs.
+    /// </summary>
     [Newtonsoft.Json.JsonIgnore]
     [System.Text.Json.Serialization.JsonIgnore]
     public virtual string ResourceKey => null!;

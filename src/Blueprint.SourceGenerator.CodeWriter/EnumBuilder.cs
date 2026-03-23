@@ -16,6 +16,11 @@ namespace Blueprint.SourceGenerator.CodeWriter
         private readonly List<EnumValueBuilder> _values = new List<EnumValueBuilder>();
         private DocumentationComment? _xmlDoc;
 
+        /// <summary>
+        /// Initializes a new instance attached to the supplied file builder.
+        /// </summary>
+        /// <param name="name">The enum name to emit.</param>
+        /// <param name="builder">The file builder that owns this declaration.</param>
         internal EnumBuilder(string name, CodeBuilder builder)
         {
             this.Name = name;
@@ -175,6 +180,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
             return this.Builder.Build();
         }
 
+        /// <inheritdoc/>
         void IBuilder.Write(in CodeWriter writer)
         {
             this._xmlDoc?.Write(writer);

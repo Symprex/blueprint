@@ -11,9 +11,18 @@ namespace Blueprint.SourceGenerator.CodeWriter
     {
         private ICodeWriter _writer { get; }
         private string _switchOn { get; }
+
+        /// <summary>Gets a value indicating whether this switch should be emitted as a switch expression rather than a switch statement.</summary>
         internal bool Expression { get; }
+
         private readonly List<SwitchCaseBuilder> _switchCases = new List<SwitchCaseBuilder>();
 
+        /// <summary>
+        /// Initializes a new instance attached to the supplied writer.
+        /// </summary>
+        /// <param name="writer">The writer that the generated switch will be emitted to.</param>
+        /// <param name="switchOn">The expression to evaluate for each generated switch case.</param>
+        /// <param name="expression"><see langword="true"/> to emit a switch expression; <see langword="false"/> for a switch statement.</param>
         internal SwitchBuilder(ICodeWriter writer, string switchOn, bool expression)
         {
             this._writer = writer;

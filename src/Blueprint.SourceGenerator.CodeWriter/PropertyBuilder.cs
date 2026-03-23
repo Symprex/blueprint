@@ -13,16 +13,30 @@ namespace Blueprint.SourceGenerator.CodeWriter
     /// </summary>
     public class PropertyBuilder : IBuilder
     {
+        /// <summary>
+        /// Distinguishes the different member shapes that <see cref="PropertyBuilder"/> can emit.
+        /// </summary>
         internal enum FieldType
         {
+            /// <summary>Emits a <c>const</c> field.</summary>
             Const,
+
+            /// <summary>Emits a <c>readonly</c> field.</summary>
             ReadOnly,
+
+            /// <summary>Emits a regular mutable field.</summary>
             Default,
+
+            /// <summary>Emits a property with optional accessors.</summary>
             Property
         }
 
         private bool _autoprops;
+
+        /// <summary>Controls which kind of member (const, readonly, field, or property) this builder emits.</summary>
         internal FieldType FieldTypeValue = FieldType.Property;
+
+        /// <summary>Controls how a default or null value is emitted for the generated member.</summary>
         internal ValueType PropertyValueType = ValueType.UserSpecified;
         private Action<ICodeWriter>? _getter;
         private string? _getterExpression;
@@ -36,6 +50,12 @@ namespace Blueprint.SourceGenerator.CodeWriter
         private readonly List<string> _attributes = new List<string>();
         private DocumentationComment? _xmlDoc;
 
+        /// <summary>
+        /// Initializes a new instance attached to the supplied class builder.
+        /// </summary>
+        /// <param name="name">The member name to emit.</param>
+        /// <param name="accessModifier">The accessibility modifier to emit, or <see langword="null"/> to omit one.</param>
+        /// <param name="builder">The class builder that owns this member.</param>
         internal PropertyBuilder(string name, Accessibility? accessModifier, ClassBuilder builder)
         {
             this.Name = name;
@@ -168,6 +188,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <summary>
         /// Sets the type emitted for the generated property or field.
         /// </summary>
+        /// <typeparam name="T">The CLR type whose name and namespace should be emitted.</typeparam>
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public PropertyBuilder SetType<T>()
         {
@@ -429,6 +450,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
             return this;
         }
 
+        /// <inheritdoc/>
         void IBuilder.Write(in CodeWriter writer)
         {
             this._xmlDoc?.Write(writer);

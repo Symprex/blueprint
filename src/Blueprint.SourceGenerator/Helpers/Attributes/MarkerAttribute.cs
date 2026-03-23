@@ -23,8 +23,14 @@ namespace Blueprint.SourceGenerator.Helpers.Attributes;
 /// </remarks>
 public class MarkerAttribute(string fullName, AttributeUsageAttribute? usage = null)
 {
+    /// <summary>
+    /// Gets the namespace that the generated marker attribute is emitted into.
+    /// </summary>
     public string Namespace { get; } = fullName[..fullName.LastIndexOf(".", StringComparison.Ordinal)];
 
+    /// <summary>
+    /// Gets the simple name of the generated marker attribute type.
+    /// </summary>
     public string Name { get; } = fullName[(fullName.LastIndexOf(".", StringComparison.Ordinal) + 1)..];
 
     /// <summary>

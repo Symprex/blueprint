@@ -5,8 +5,22 @@ using CSharpSymbolDisplay = Microsoft.CodeAnalysis.CSharp.SymbolDisplay;
 
 namespace Blueprint.SourceGenerator.Modules;
 
+/// <summary>
+/// Shares the conditional-expression lowering used by <c>RequiredIf</c> and <c>RequiredIfNot</c> validation fast paths so
+/// both attributes stay behaviourally aligned.
+/// </summary>
 internal static class ConditionalRequiredValidationFastPathStrategyHelpers
 {
+    /// <summary>
+    /// Tries to create a required-like rule whose activation depends on another property matching a configured value.
+    /// </summary>
+    /// <param name="property">The property being validated.</param>
+    /// <param name="propertyAccess">The generated-code expression used to read the property value.</param>
+    /// <param name="attribute">The conditional required attribute instance to translate.</param>
+    /// <param name="attributeTypeName">The runtime attribute type name used when emitting validation failures.</param>
+    /// <param name="isRequiredWhenConditionMatches">Whether a matching comparison should activate or deactivate the requirement.</param>
+    /// <param name="rule">Receives the generated fast-path rule when translation succeeds.</param>
+    /// <returns><see langword="true"/> when the attribute can be lowered into a generated fast-path rule.</returns>
     public static bool TryCreateRule(
         IPropertySymbol property,
         string propertyAccess,

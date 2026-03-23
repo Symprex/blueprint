@@ -22,6 +22,12 @@ namespace Blueprint.SourceGenerator.CodeWriter
 
         private Action<ICodeWriter>? _methodBodyWriter;
 
+        /// <summary>
+        /// Initializes a new instance attached to the supplied class builder.
+        /// </summary>
+        /// <param name="name">The method name to emit.</param>
+        /// <param name="accessModifier">The accessibility modifier to emit, or <see langword="null"/> to omit one.</param>
+        /// <param name="builder">The class builder that owns this method.</param>
         internal MethodBuilder(string name, Accessibility? accessModifier, ClassBuilder builder)
         {
             this.Name = name;
@@ -29,7 +35,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
             this.Class = builder;
         }
 
+        /// <inheritdoc/>
         List<ParameterBuilder<MethodBuilder>> IParameterized<MethodBuilder>.Parameters => this._parameters;
+
+        /// <inheritdoc/>
         MethodBuilder IParameterized<MethodBuilder>.Parent => this;
 
         /// <summary>
@@ -381,6 +390,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
             return this;
         }
 
+        /// <inheritdoc/>
         internal override void Write(in CodeWriter writer)
         {
             var output = this.ReturnType is null || string.IsNullOrEmpty(this.ReturnType) ? "void" : this.ReturnType.Trim();

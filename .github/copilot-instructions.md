@@ -95,6 +95,7 @@
 - Snapshot baselines live under `src\Blueprint.SourceGenerator.Tests\Generators\*\Snapshots\*.verified.txt`. When intentional generator output changes occur, review the corresponding `.received.*` file and then promote it to `.verified.*`; do not update snapshots without reviewing the generated diff.
 
 - Follow a TDD mindset for all changes. Start by identifying the relevant existing test, snapshot, or validation path; add or update that safety net first when behaviour changes; then implement and finish by rerunning the targeted tests before broader validation.
+- XML documentation for non-test C# code must explain rationale, invariants, and expected usage rather than just restating signatures. Build enforcement applies across non-test projects and reusable test infrastructure such as `TestHelpers`, fixture generators, and `TestBase`, while actual `*Test.cs` and `*Tests.cs` files stay exempt.
 - For pipeline contributor slices, build the test matrix up front and keep it explicit:
   - snapshot test for the full generated pipeline
   - compile-time invalid-configuration test when symbol-backed validation is possible

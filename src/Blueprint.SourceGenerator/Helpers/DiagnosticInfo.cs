@@ -14,6 +14,12 @@ public sealed record DiagnosticInfo
     private readonly EquatableList<string>? _messageArgs;
     private readonly LocationInfo? _location;
 
+    /// <summary>
+    /// Initializes a cacheable diagnostic wrapper from an already-normalized <see cref="LocationInfo"/> instance.
+    /// </summary>
+    /// <param name="descriptor">The diagnostic descriptor to report.</param>
+    /// <param name="location">The normalized diagnostic location, if one is available.</param>
+    /// <param name="messageArgs">Optional message-format arguments for the descriptor.</param>
     public DiagnosticInfo(DiagnosticDescriptor descriptor, LocationInfo? location, EquatableList<string>? messageArgs = null)
     {
         this._descriptor = descriptor;
@@ -21,7 +27,13 @@ public sealed record DiagnosticInfo
         this._location = location;
     }
 
-    // Explicit constructor to convert Location into LocationInfo
+    /// <summary>
+    /// Initializes a cacheable diagnostic wrapper from a Roslyn <see cref="Location"/>, converting it into the
+    /// normalized location shape used by incremental result payloads.
+    /// </summary>
+    /// <param name="descriptor">The diagnostic descriptor to report.</param>
+    /// <param name="location">The Roslyn location to normalize, if one is available.</param>
+    /// <param name="messageArgs">Optional message-format arguments for the descriptor.</param>
     public DiagnosticInfo(DiagnosticDescriptor descriptor, Location? location, EquatableList<string>? messageArgs = null)
     {
         this._descriptor = descriptor;
