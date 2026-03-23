@@ -211,9 +211,9 @@ Plan the rollout as an analyzer-led major-version change:
 
 ## Current migration status
 
-- This workstream has stayed planned-only while Phase 0 established the foundation contributor seams, manifest contract, and performance harnesses that later migration diagnostics need to target.
-- Next approved slice: reserve the `BPMIG001`-`BPMIG399` diagnostic range in repo guidance and scaffold the first `Blueprint.Migration.Analyzers` test harness with one deterministic placeholder diagnostic proof so later migration analyzers have a durable project, namespace, and test pattern instead of starting ad hoc.
-- Keep codemod scaffolding, SARIF/JSON schema work, and broad rewrite coverage deferred until the first analyzer scaffold is review-closed.
+- The `BPMIG001`-`BPMIG399` range is now reserved in repo guidance, and the first `Blueprint.Migration.Analyzers` scaffold plus deterministic descriptor tests are in the tree so later migration analyzers start from a reviewed project, namespace, and test pattern instead of inventing one ad hoc.
+- Next approved slice: replace the temporary `BPMIG001` placeholder with the first real migration diagnostic for redundant legacy activation calls, starting with `AddOpenApi()` because this workstream already treats that activation as mechanically removable once HTTP implies OpenAPI.
+- Keep code fixes, codemod scaffolding, SARIF/JSON schema work, and broader activation/auth/resource rewrite coverage deferred until that first real migration diagnostic is review-closed.
 
 ## Observability and debuggability
 

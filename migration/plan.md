@@ -420,8 +420,8 @@ When delegating a workstream, include:
 
 - [ ] Write and run a failing proof for the current slice before implementation.
 - [ ] Define the deliberate breaking changes and classify them by migration strategy.
-- [ ] Reserve and document migration diagnostic ranges such as `BPMIG001`-`BPMIG399`.
-- [ ] Plan and scaffold `Blueprint.Migration.Analyzers`.
+- [x] Reserve and document migration diagnostic ranges such as `BPMIG001`-`BPMIG399`.
+- [x] Plan and scaffold `Blueprint.Migration.Analyzers`.
 - [ ] Plan and scaffold `Blueprint.Codemod`.
 - [ ] Define SARIF, JSON, and markdown report schemas.
 - [ ] Define compatibility-shim policy, lifetime, and removal gates.
@@ -446,14 +446,14 @@ When delegating a workstream, include:
 ### Docs and artifacts
 
 - [ ] Update `docs\refactoring-workflow.md` with the concrete migration workflow and artifact locations.
-- [ ] Update `docs\compile-time-validation.md` with migration diagnostic guidance.
+- [x] Update `docs\compile-time-validation.md` with migration diagnostic guidance.
 - [ ] Add examples of expected migration artifacts once the tooling lands.
 
 ### Durable progress
 
-- This workstream remains planned-only while Phase 0 finishes the foundation contributor seams, manifest contract, and first performance harnesses that migration diagnostics will need to target.
-- next approved follow-on for this workstream: reserve the `BPMIG001`-`BPMIG399` diagnostic range and scaffold the first `Blueprint.Migration.Analyzers` test harness with one deterministic placeholder diagnostic proof so later analyzer/code-fix work has a durable namespace, project shape, and test pattern.
-- keep codemod scaffolding, report-schema work, and broad rewrite coverage deferred until that first analyzer scaffold is review-closed.
+- the `BPMIG001`-`BPMIG399` range is now reserved in repo guidance, and `Blueprint.Migration.Analyzers` plus `Blueprint.Migration.Analyzers.Tests` now provide the first durable migration analyzer/test scaffold with deterministic placeholder proof coverage.
+- next approved follow-on for this workstream: replace the temporary `BPMIG001` placeholder with the first real migration diagnostic for redundant legacy activation calls, starting with `AddOpenApi()` because the workstream already treats it as mechanically removable once HTTP implies OpenAPI.
+- keep code fixes, report-schema work, codemod scaffolding, and broader rewrite coverage deferred until that first real activation diagnostic is review-closed.
 
 ### Sub-agent guidance
 

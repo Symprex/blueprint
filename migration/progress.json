@@ -7,28 +7,30 @@
   "current": {
     "activeWorkstream": "breaking-changes-and-migration-tooling",
     "nextReadySlice": {
-      "title": "Migration diagnostic-range scaffold",
+      "title": "Redundant AddOpenApi migration diagnostic",
       "status": "ready",
       "dependsOn": [
-        "High-volume link-generation stress harness committed."
+        "Migration diagnostic-range scaffold committed."
       ],
       "failingProof": [
-        "A failing proof shows the repo still has no reserved BPMIG diagnostic range or analyzer test harness, so the breaking-changes workstream has no executable namespace or proof surface for its first migration diagnostics.",
-        "A failing proof shows later migration analyzer work would still need to invent project shape, diagnostic IDs, and deterministic test wiring ad hoc instead of starting from a reviewed scaffold."
+        "A failing proof shows `Blueprint.Migration.Analyzers` still does not flag redundant legacy `AddOpenApi()` activation calls even though this workstream already classifies that activation as mechanically removable once HTTP implies OpenAPI.",
+        "A failing proof shows `BPMIG001` is still only a scaffold placeholder instead of the first deterministic migration diagnostic with a stable message and source location."
       ],
       "expectedFiles": [
-        "src\\Blueprint.Migration.Analyzers\\Blueprint.Migration.Analyzers.csproj",
-        "src\\Blueprint.Migration.Analyzers.Tests\\Blueprint.Migration.Analyzers.Tests.csproj",
+        "src\\Blueprint.Migration.Analyzers\\MigrationDiagnosticDescriptors.cs",
+        "src\\Blueprint.Migration.Analyzers\\Analyzers\\LegacyActivationAnalyzer.cs",
+        "src\\Blueprint.Migration.Analyzers.Tests\\LegacyActivationAnalyzerTests.cs",
         "docs\\compile-time-validation.md",
+        "docs\\refactoring-workflow.md",
         "migration\\breaking-changes-and-migration-tooling\\plan.md",
         "migration\\plan.md",
         "migration\\progress.json"
       ],
-      "reviewGate": "Stop again for review before mass analyzer or codemod work if the first scaffold exposes a different diagnostic taxonomy or project layout than the current BPMIG/analyzer plan assumes."
+      "reviewGate": "Stop again for review before broad activation-family expansion or code-fix work if the first real BPMIG activation diagnostic needs a different taxonomy, message shape, or project layout than the scaffold assumed."
     },
     "lastCompletedSlice": {
-      "workstream": "performance-and-scale",
-      "title": "High-volume link-generation stress harness"
+      "workstream": "breaking-changes-and-migration-tooling",
+      "title": "Migration diagnostic-range scaffold"
     },
     "openReviewGate": null
   },

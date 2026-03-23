@@ -28,14 +28,16 @@ These diagnostics should stay stable and descriptive because they are part of th
 
 Large-scale migrations should use a dedicated diagnostic range rather than mixing mechanically-fixable migration findings into the ordinary generator IDs.
 
-Planned direction:
+Current reservation:
 
 | Range | Meaning |
 | --- | --- |
 | `BPMIG001`-`BPMIG099` | auto-fixable migration diagnostics |
 | `BPMIG100`-`BPMIG199` | configuration-required migration findings |
 | `BPMIG200`-`BPMIG299` | consumer-extension rewrites or custom migration work |
-| `BPMIG300+` | manual design-review items that should not be silently auto-fixed |
+| `BPMIG300`-`BPMIG399` | manual design-review items that should not be silently auto-fixed |
+
+The initial scaffold for that range now lives in `src\Blueprint.Migration.Analyzers\MigrationDiagnosticDescriptors.cs`, with deterministic proof in `src\Blueprint.Migration.Analyzers.Tests\MigrationDiagnosticDescriptorsTests.cs`. New migration diagnostics should extend that shared analyzer/test seam rather than introducing ad hoc project layouts.
 
 Migration diagnostics should be paired with machine-readable reporting such as SARIF so that larger refactors remain reviewable and automatable.
 
