@@ -31,11 +31,11 @@ This layer is appropriate when the repo's normal build, snapshot, and formatting
 
 ### Layer 2 - Roslyn analyzers and code fixes
 
-Planned project:
+Current project:
 
 - `src\Blueprint.Migration.Analyzers`
 
-Planned libraries:
+Current baseline libraries:
 
 - `Microsoft.CodeAnalysis.CSharp`
 - `Microsoft.CodeAnalysis.CSharp.Workspaces`
@@ -101,7 +101,7 @@ Use this for:
 
 ## Layer 2 - Analyzer-led migrations
 
-Once `Blueprint.Migration.Analyzers` exists, the default flow should be:
+With the initial scaffold in place, the target flow is:
 
 ```powershell
 dotnet build .\Blueprint.sln /p:ErrorLog=artifacts\migration-report.sarif;version=2
@@ -109,13 +109,13 @@ dotnet format .\Blueprint.sln --no-restore --diagnostics BPMIG001 BPMIG002
 dotnet build .\Blueprint.sln /p:ErrorLog=artifacts\migration-report-after-fix.sarif;version=2
 ```
 
-Expectations:
+Current state and expectations:
 
-- `dotnet build` surfaces all migration diagnostics
-- `dotnet format --diagnostics ...` applies safe code fixes where supported
-- a second build leaves only configuration-required or manual-review findings
+- `dotnet build` surfaces live migration diagnostics
+- `dotnet format --diagnostics ...` applies safe code fixes where supported once those fixes land
+- a second build should eventually leave only configuration-required or manual-review findings
 
-Until that project exists, treat these commands as the intended final workflow shape rather than something that should already run in this repository today.
+Today the first live rule is `BPMIG001`, which flags redundant parameterless `AddOpenApi()` activation calls. The analyzer project exists now, but code-fix coverage and the broader diagnostic family are still incremental follow-on work rather than completed workflow surface.
 
 ## Layer 3 - Codemod CLI
 

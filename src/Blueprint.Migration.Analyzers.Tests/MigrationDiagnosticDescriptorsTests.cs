@@ -5,16 +5,17 @@ namespace Blueprint.Migration.Analyzers.Tests;
 public sealed class MigrationDiagnosticDescriptorsTests
 {
     [Xunit.Fact]
-    public void When_loading_migration_diagnostic_descriptors_then_placeholder_id_reserves_the_first_bpmig_slot()
+    public void When_loading_migration_diagnostic_descriptors_then_redundant_addopenapi_activation_uses_the_first_bpmig_slot()
     {
-        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.PlaceholderProof.Id.Should().Be("BPMIG001");
-        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.PlaceholderProof.Category.Should().Be("BlueprintMigration");
+        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.RedundantAddOpenApiActivation.Id.Should().Be("BPMIG001");
+        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.RedundantAddOpenApiActivation.Category.Should().Be("BlueprintMigration");
     }
 
     [Xunit.Fact]
-    public void When_loading_migration_diagnostic_descriptors_then_placeholder_descriptor_stays_non_actionable_until_real_analyzers_land()
+    public void When_loading_migration_diagnostic_descriptors_then_redundant_addopenapi_activation_is_enabled_and_actionable()
     {
-        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.PlaceholderProof.DefaultSeverity.Should().Be(Microsoft.CodeAnalysis.DiagnosticSeverity.Hidden);
-        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.PlaceholderProof.IsEnabledByDefault.Should().BeFalse();
+        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.RedundantAddOpenApiActivation.DefaultSeverity.Should().Be(Microsoft.CodeAnalysis.DiagnosticSeverity.Info);
+        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.RedundantAddOpenApiActivation.IsEnabledByDefault.Should().BeTrue();
+        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.RedundantAddOpenApiActivation.MessageFormat.ToString().Should().Contain("AddOpenApi()");
     }
 }

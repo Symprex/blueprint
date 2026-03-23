@@ -7,30 +7,28 @@
   "current": {
     "activeWorkstream": "breaking-changes-and-migration-tooling",
     "nextReadySlice": {
-      "title": "Redundant AddOpenApi migration diagnostic",
+      "title": "Redundant AddOpenApi code fix",
       "status": "ready",
       "dependsOn": [
-        "Migration diagnostic-range scaffold committed."
+        "Redundant AddOpenApi migration diagnostic committed."
       ],
       "failingProof": [
-        "A failing proof shows `Blueprint.Migration.Analyzers` still does not flag redundant legacy `AddOpenApi()` activation calls even though this workstream already classifies that activation as mechanically removable once HTTP implies OpenAPI.",
-        "A failing proof shows `BPMIG001` is still only a scaffold placeholder instead of the first deterministic migration diagnostic with a stable message and source location."
+        "A failing proof shows `BPMIG001` can now flag redundant parameterless `AddOpenApi()` calls but there is still no safe code-fix path that removes the activation mechanically.",
+        "A failing proof shows the first auto-fixable migration rule still stops at diagnostics, so `dotnet format --diagnostics BPMIG001` cannot yet apply the intended rewrite."
       ],
       "expectedFiles": [
-        "src\\Blueprint.Migration.Analyzers\\MigrationDiagnosticDescriptors.cs",
-        "src\\Blueprint.Migration.Analyzers\\Analyzers\\LegacyActivationAnalyzer.cs",
-        "src\\Blueprint.Migration.Analyzers.Tests\\LegacyActivationAnalyzerTests.cs",
-        "docs\\compile-time-validation.md",
+        "src\\Blueprint.Migration.Analyzers\\CodeFixes\\LegacyActivationCodeFixProvider.cs",
+        "src\\Blueprint.Migration.Analyzers.Tests\\LegacyActivationCodeFixTests.cs",
         "docs\\refactoring-workflow.md",
         "migration\\breaking-changes-and-migration-tooling\\plan.md",
         "migration\\plan.md",
         "migration\\progress.json"
       ],
-      "reviewGate": "Stop again for review before broad activation-family expansion or code-fix work if the first real BPMIG activation diagnostic needs a different taxonomy, message shape, or project layout than the scaffold assumed."
+      "reviewGate": "Stop again for review before broad activation-family expansion if the first BPMIG code-fix path needs a different project split, FixAll strategy, or migration taxonomy than the current analyzer scaffold assumes."
     },
     "lastCompletedSlice": {
       "workstream": "breaking-changes-and-migration-tooling",
-      "title": "Migration diagnostic-range scaffold"
+      "title": "Redundant AddOpenApi migration diagnostic"
     },
     "openReviewGate": null
   },

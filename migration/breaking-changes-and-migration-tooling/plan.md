@@ -211,9 +211,9 @@ Plan the rollout as an analyzer-led major-version change:
 
 ## Current migration status
 
-- The `BPMIG001`-`BPMIG399` range is now reserved in repo guidance, and the first `Blueprint.Migration.Analyzers` scaffold plus deterministic descriptor tests are in the tree so later migration analyzers start from a reviewed project, namespace, and test pattern instead of inventing one ad hoc.
-- Next approved slice: replace the temporary `BPMIG001` placeholder with the first real migration diagnostic for redundant legacy activation calls, starting with `AddOpenApi()` because this workstream already treats that activation as mechanically removable once HTTP implies OpenAPI.
-- Keep code fixes, codemod scaffolding, SARIF/JSON schema work, and broader activation/auth/resource rewrite coverage deferred until that first real migration diagnostic is review-closed.
+- The `BPMIG001`-`BPMIG399` range is now reserved in repo guidance, `Blueprint.Migration.Analyzers` plus `Blueprint.Migration.Analyzers.Tests` provide the shared analyzer/test seam, and `BPMIG001` is now the first real migration diagnostic for redundant parameterless `BlueprintApiBuilder.AddOpenApi()` activation calls.
+- Next approved slice: add the first safe code-fix path for `BPMIG001` so parameterless `AddOpenApi()` calls can be removed mechanically instead of only being flagged.
+- Keep broader activation/auth/resource diagnostics, codemod scaffolding, and SARIF/JSON schema work deferred until the first analyzer/code-fix pair is review-closed.
 
 ## Observability and debuggability
 

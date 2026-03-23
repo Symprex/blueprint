@@ -8,14 +8,14 @@ namespace Blueprint.Migration.Analyzers;
 public static class MigrationDiagnosticDescriptors
 {
     /// <summary>
-    /// Gets the placeholder descriptor that proves the initial BPMIG scaffold is wired correctly.
+    /// Gets the diagnostic emitted when legacy Blueprint code still activates OpenAPI explicitly even though HTTP hosts now expose it by default.
     /// </summary>
-    public static DiagnosticDescriptor PlaceholderProof { get; } = new(
+    public static DiagnosticDescriptor RedundantAddOpenApiActivation { get; } = new(
         id: "BPMIG001",
-        title: "Migration analyzer scaffold placeholder",
-        messageFormat: "The Blueprint migration analyzer scaffold is wired and may now host real BPMIG diagnostics.",
+        title: "Remove redundant AddOpenApi activation",
+        messageFormat: "Remove 'AddOpenApi()' because Blueprint HTTP hosts now expose OpenAPI by default.",
         category: "BlueprintMigration",
-        defaultSeverity: DiagnosticSeverity.Hidden,
-        isEnabledByDefault: false,
-        description: "This placeholder reserves BPMIG001 while the first migration analyzer scaffold is landing.");
+        defaultSeverity: DiagnosticSeverity.Info,
+        isEnabledByDefault: true,
+        description: "Legacy Blueprint migrations should remove parameterless AddOpenApi() activation calls because the source-generated HTTP host already implies the OpenAPI surface.");
 }

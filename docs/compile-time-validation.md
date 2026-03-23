@@ -37,7 +37,7 @@ Current reservation:
 | `BPMIG200`-`BPMIG299` | consumer-extension rewrites or custom migration work |
 | `BPMIG300`-`BPMIG399` | manual design-review items that should not be silently auto-fixed |
 
-The initial scaffold for that range now lives in `src\Blueprint.Migration.Analyzers\MigrationDiagnosticDescriptors.cs`, with deterministic proof in `src\Blueprint.Migration.Analyzers.Tests\MigrationDiagnosticDescriptorsTests.cs`. New migration diagnostics should extend that shared analyzer/test seam rather than introducing ad hoc project layouts.
+The migration analyzer seam now lives in `src\Blueprint.Migration.Analyzers\MigrationDiagnosticDescriptors.cs`, with deterministic proof in `src\Blueprint.Migration.Analyzers.Tests`. The first live rule is `BPMIG001`, which flags redundant parameterless `BlueprintApiBuilder.AddOpenApi()` activation calls because source-generated HTTP hosts now imply OpenAPI by default. Future migration diagnostics should extend that shared analyzer/test seam rather than introducing ad hoc project layouts.
 
 Migration diagnostics should be paired with machine-readable reporting such as SARIF so that larger refactors remain reviewable and automatable.
 
