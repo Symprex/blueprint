@@ -7,28 +7,28 @@
   "current": {
     "activeWorkstream": "performance-and-scale",
     "nextReadySlice": {
-      "title": "PR-lane versus scheduled benchmark split",
+      "title": "High-volume link-generation stress harness",
       "status": "ready",
       "dependsOn": [
-        "Repeated host startup and endpoint-mapping stress harness committed."
+        "PR-lane versus scheduled/manual benchmark split committed."
       ],
       "failingProof": [
-        "A failing proof shows the repo still lacks a durable PR-lane versus scheduled/manual benchmark split, so contributors have no approved boundary between always-on regression checks and richer benchmark or stress runs.",
-        "A failing proof shows the current docs and migration plans do not yet tell contributors where executor/startup stress harnesses belong in PR validation versus scheduled or manual measurement flows."
+        "A failing proof shows the synthetic scale harness still lacks a high-volume link-generation stress scenario, so Phase 0 has no deterministic proof that link template generation stays stable once operation counts rise again after the new benchmark-lane policy lands.",
+        "A failing proof shows repeated link-generation output can still broaden unexpectedly across the synthetic fixture surface without a focused stress assertion over the existing LinkGenerationModule seam."
       ],
       "expectedFiles": [
-        "docs\\implementation-checklists.md",
+        "src\\Blueprint.SourceGenerator.Tests\\Scale\\SyntheticBlueprintFixtureGenerator.cs",
+        "src\\Blueprint.SourceGenerator.Tests\\Scale\\SyntheticBlueprintFixtureScaleHarnessTests.cs",
         "docs\\observability-and-dev-experience.md",
-        ".agents\\skills\\extending-blueprint\\SKILL.md",
         "migration\\performance-and-scale\\plan.md",
         "migration\\plan.md",
         "migration\\progress.json"
       ],
-      "reviewGate": "Stop again for review before wiring actual CI lanes if the repo needs a policy decision on which benchmark or stress checks are acceptable in PRs versus scheduled/manual runs."
+      "reviewGate": "Stop again for review before broadening into manifest/OpenAPI or CI automation if the first high-volume link-generation stress harness suggests the synthetic fixture needs new resource/link mix contracts."
     },
     "lastCompletedSlice": {
       "workstream": "performance-and-scale",
-      "title": "Repeated host startup and endpoint-mapping stress harness"
+      "title": "PR-lane versus scheduled/manual benchmark split"
     },
     "openReviewGate": null
   },

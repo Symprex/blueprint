@@ -469,7 +469,7 @@ When delegating a workstream, include:
 - [x] Add Tier 2 compile-time cacheability and invalidation-locality tests.
 - [x] Add build/design-time telemetry capture and reporting.
 - [x] Benchmark known runtime hotspots such as `BlueprintApp` registration and operation lookup.
-- [ ] Define PR-lane versus scheduled/manual benchmark lanes.
+- [x] Define PR-lane versus scheduled/manual benchmark lanes.
 - [ ] Add stress/soak tests for concurrent dispatch, startup, and manifest/OpenAPI generation.
 
 ### Acceptance criteria
@@ -491,7 +491,7 @@ When delegating a workstream, include:
 ### Docs and artifacts
 
 - [x] Update `docs\observability-and-dev-experience.md` with measurement and artifact expectations if needed.
-- [ ] Keep benchmark artifact locations and lane expectations documented.
+- [x] Keep benchmark artifact locations and lane expectations documented.
 - [ ] Publish benchmark/telemetry outputs in a reviewable format.
 
 ### Sub-agent guidance
@@ -511,7 +511,8 @@ When delegating a workstream, include:
 - completed first design-time telemetry follow-on: the same repo-native runner now emits a `design-time-build` capture through the reviewed `build-telemetry` envelope with `capture.isDesignTimeBuild = true`, giving Phase 0 a deterministic binlog-plus-summary seam for comparing IDE-style builds against the normal cold/no-op graph
 - completed first concurrent executor-dispatch stress harness: `src\Blueprint.SourceGenerator.Tests.Integration\Generators\Pipelines\ConcurrentExecutorDispatchIntegrationTests.cs` now drives 64 start-gated operations through the generated `IntegrationTestBlueprintAppExecutor.ExecuteAsync(...)` shell, reports requested/completed/faulted counts plus returned payloads, and proves repeated concurrent dispatch stays stable on the same executor seam that the dispatch benchmark measures
 - completed first repeated host startup and endpoint-mapping stress harness: `src\Blueprint.SourceGenerator.Tests\Artifacts\ManifestInspectionEndpointStressTests.cs` now rebuilds 40 development endpoint route builders, maps `MapBlueprintApi(...)`, and proves stable 5-endpoint counts plus 40/40 hosted manifest JSON route hits through a reusable `RepeatedEndpointMappingStressHarness`, keeping the first startup stress slice on the same host surface that `BlueprintEndpointMappingBenchmarks` measures
-- next approved follow-on for this workstream: define the PR-lane versus scheduled/manual benchmark split so the repository has an approved always-on versus richer-on-demand boundary before later high-volume or manifest/OpenAPI stress work broadens again
+- completed first PR-lane versus scheduled/manual benchmark split: `BenchmarkLaneGuidanceTests.cs` now proves the two-lane performance model from `migration\performance-and-scale\plan.md` is surfaced in `docs\implementation-checklists.md`, `docs\observability-and-dev-experience.md`, and `.agents\skills\extending-blueprint\SKILL.md`, so deterministic stress proofs stay in the pull-request lane while noisier wall-clock or higher-volume comparisons move to scheduled/manual guidance
+- next approved follow-on for this workstream: start the post-lane broadening work with a high-volume link-generation stress harness on the existing synthetic fixture surface before revisiting larger manifest/OpenAPI stress once those generators exist
 
 ## 4. Generated manifests and inspection surfaces
 

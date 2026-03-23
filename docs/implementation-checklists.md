@@ -34,6 +34,7 @@ They are intentionally short and repeatable so future humans and AI agents can u
 - [ ] If the change adds or alters pipeline contributor behavior, include all three proof layers: a full pipeline snapshot, compile-time invalid-configuration/diagnostic coverage when the generator can know the contract is wrong, and runtime integration tests that execute the generated pipeline for valid and invalid paths.
 - [ ] Do not treat a “generated source contains line X” assertion as sufficient proof for pipeline behavior; use it only as a supporting check alongside the stronger harnesses.
 - [ ] If the change targets a measured pipeline or validation hot path, run `src\Blueprint.SourceGenerator.Benchmarks` and capture the relevant BenchmarkDotNet artifact before closing the slice.
+- [ ] Keep deterministic benchmark-adjacent proofs in the `pull-request lane`, and push noisier wall-clock or high-volume comparisons into a `scheduled/manual` lane instead of gating ordinary PRs on shared-runner timing noise.
 - [ ] If the change targets runtime startup, endpoint mapping, or executor-shell stability, pair the relevant benchmark with a repeated stress proof in tests instead of treating one-shot microbenchmark numbers as sufficient.
 - [ ] If comments are needed, make them explain intent, constraints, invariants, or trade-offs that are not obvious from the code itself. Do not add narration comments.
 - [ ] Prefer `static` lambdas in LINQ or similar delegate-heavy code when no capture is required.
