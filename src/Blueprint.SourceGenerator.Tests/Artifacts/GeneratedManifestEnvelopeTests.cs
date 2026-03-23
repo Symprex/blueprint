@@ -152,6 +152,53 @@ public class GeneratedManifestEnvelopeTests
             .WithMessage("*artifactName*string*");
     }
 
+    [Theory]
+    [InlineData("typeName")]
+    [InlineData("assemblyName")]
+    public void FromJson_Should_Report_App_Property_Path_When_Nested_String_Field_Has_Invalid_Token(string propertyName)
+    {
+        var manifestJson = CreateValidManifestJson();
+        ((JObject)manifestJson["app"]!)[propertyName] = 123;
+
+        var act = () => GeneratedManifestEnvelope.FromJson(manifestJson.ToString());
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage($"*app.{propertyName}*string*");
+    }
+
+    [Theory]
+    [InlineData("productName")]
+    [InlineData("version")]
+    public void FromJson_Should_Report_Generator_Property_Path_When_Nested_String_Field_Has_Invalid_Token(string propertyName)
+    {
+        var manifestJson = CreateValidManifestJson();
+        ((JObject)manifestJson["generator"]!)[propertyName] = 123;
+
+        var act = () => GeneratedManifestEnvelope.FromJson(manifestJson.ToString());
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage($"*generator.{propertyName}*string*");
+    }
+
+    [Fact]
+    public void FromJson_Should_Report_Section_Contributor_Path_When_Nested_String_Field_Has_Invalid_Token()
+    {
+        var manifestJson = CreateValidManifestJson();
+        manifestJson["sections"] = new JObject
+        {
+            ["operations-discovery"] = new JObject
+            {
+                ["contributorId"] = 123,
+                ["payload"] = new JObject(),
+            },
+        };
+
+        var act = () => GeneratedManifestEnvelope.FromJson(manifestJson.ToString());
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*sections.operations-discovery.contributorId*string*");
+    }
+
     private static JObject CreateValidManifestJson()
     {
         return new JObject

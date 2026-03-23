@@ -7,25 +7,26 @@
   "current": {
     "activeWorkstream": "generated-manifests-and-inspection-surfaces",
     "nextReadySlice": {
-      "title": "Manifest nested required-string proof",
+      "title": "Manifest machine-readable schema validation",
       "status": "ready",
       "dependsOn": [
-        "Manifest required-string token validation committed."
+        "Manifest nested required-string proof committed."
       ],
       "failingProof": [
-        "A failing proof shows nested required string fields such as app identity, generator identity, or section contributorId are not yet covered by explicit invalid-token parser tests even though the shared helper changed.",
-        "A failing proof shows malformed nested required-string JSON can still slip past the test suite without a direct contract-level assertion."
+        "A failing proof shows the approved manifest envelope and hosted inspection fixtures are not yet validated against one machine-readable schema artifact, so malformed-but-shape-compatible JSON can still escape direct schema checks.",
+        "A failing proof shows the hosted JSON and markdown inspection fixtures are not yet pinned to the same schema contract as GeneratedManifestEnvelope roundtripping."
       ],
       "expectedFiles": [
         "src\\Blueprint.SourceGenerator.Tests\\Artifacts\\GeneratedManifestEnvelopeTests.cs",
+        "src\\Blueprint.SourceGenerator.Tests\\Artifacts\\ManifestInspectionEndpointTests.cs",
         "src\\Blueprint.SourceGenerator\\Artifacts\\GeneratedManifestEnvelope.cs",
         "migration\\generated-manifests-and-inspection-surfaces\\plan.md"
       ],
-      "reviewGate": "Stop again for review before broader hosted/tooling inspection work if nested required-string proof reveals a contract drift or the next schema-validation step needs a design decision."
+      "reviewGate": "Stop for review before wider runtime or CLI manifest projections if the schema artifact needs new versioning rules, reveals envelope/fixture drift, or forces a new tooling contract."
     },
     "lastCompletedSlice": {
       "workstream": "generated-manifests-and-inspection-surfaces",
-      "title": "Manifest required-string token validation"
+      "title": "Manifest nested required-string proof"
     },
     "openReviewGate": null
   },

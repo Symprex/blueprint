@@ -127,11 +127,11 @@ public sealed class GeneratedManifestEnvelope
             GetRequiredString(root, "artifactFamily"),
             GetRequiredString(root, "relativePath"),
             new GeneratedManifestAppIdentity(
-                GetRequiredString(appObject, "typeName"),
-                GetRequiredString(appObject, "assemblyName")),
+                GetRequiredString(appObject, "typeName", "app.typeName"),
+                GetRequiredString(appObject, "assemblyName", "app.assemblyName")),
             new GeneratedManifestGeneratorIdentity(
-                GetRequiredString(generatorObject, "productName"),
-                GetRequiredString(generatorObject, "version")));
+                GetRequiredString(generatorObject, "productName", "generator.productName"),
+                GetRequiredString(generatorObject, "version", "generator.version")));
 
         var sectionsObject = GetOptionalObject(root, "sections");
         if (sectionsObject is not null)
@@ -143,7 +143,10 @@ public sealed class GeneratedManifestEnvelope
 
                 manifest.AddSection(
                     property.Name,
-                    GetRequiredString(sectionObject, "contributorId"),
+                    GetRequiredString(
+                        sectionObject,
+                        "contributorId",
+                        $"sections.{property.Name}.contributorId"),
                     GetRequiredToken(sectionObject, "payload"));
             }
         }
@@ -323,23 +326,24 @@ public sealed class GeneratedManifestEnvelope
         }
     }
 
-    private static string GetRequiredString(JObject parent, string propertyName)
+    private static string GetRequiredString(JObject parent, string propertyName, string? propertyPath = null)
     {
+        var propertyDisplayName = propertyPath ?? propertyName;
         var token = parent[propertyName];
         if (token is null)
         {
-            throw new InvalidOperationException($"Manifest JSON is missing required string property '{propertyName}'.");
+            throw new InvalidOperationException($"Manifest JSON is missing required string property '{propertyDisplayName}'.");
         }
 
         if (token is not JValue { Type: JTokenType.String } valueToken)
         {
-            throw new InvalidOperationException($"Manifest JSON property '{propertyName}' must be a JSON string.");
+            throw new InvalidOperationException($"Manifest JSON property '{propertyDisplayName}' must be a JSON string.");
         }
 
         var value = valueToken.Value<string>();
         if (value is null || string.IsNullOrWhiteSpace(value))
         {
-            throw new InvalidOperationException($"Manifest JSON is missing required string property '{propertyName}'.");
+            throw new InvalidOperationException($"Manifest JSON is missing required string property '{propertyDisplayName}'.");
         }
 
         return value;
