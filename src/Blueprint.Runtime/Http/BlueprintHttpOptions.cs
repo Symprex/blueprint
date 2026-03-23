@@ -28,6 +28,13 @@ public class BlueprintHttpOptions
     public bool ReturnHttpNotAcceptable { get; set; }
 
     /// <summary>
+    /// Gets or sets the optional embedded resource name for the canonical operations manifest that hosted inspection
+    /// surfaces should expose. Keeping this explicit avoids introducing a hidden runtime resource-discovery convention
+    /// before the manifest emission story is widened deliberately.
+    /// </summary>
+    public string? OperationsManifestResourceName { get; set; }
+
+    /// <summary>
     /// An optional domain that should be used instead of the request URL when generating absolute
     /// link URLs.
     /// </summary>

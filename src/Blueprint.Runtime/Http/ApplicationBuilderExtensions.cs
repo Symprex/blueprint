@@ -5,6 +5,7 @@ using Blueprint.Model;
 using Blueprint.Runtime.Exec;
 using Blueprint.Runtime.Http;
 using Microsoft.AspNetCore.Routing.Patterns;
+using Microsoft.Extensions.Options;
 
 // This is the recommendation from MS for extensions to IEndpointRouteBuilder to aid discoverability
 // ReSharper disable once CheckNamespace
@@ -34,8 +35,7 @@ public static class EndpointRouteBuilderExtensions
         // var logger = endpoints.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("Blueprint.Compilation");
         var runtimeModel = new T();
 
-        // var httpOptions = endpoints.ServiceProvider.GetRequiredService<IOptions<BlueprintHttpOptions>>();
-        var httpOptions = new BlueprintHttpOptions();
+        var httpOptions = endpoints.ServiceProvider.GetService<IOptions<BlueprintHttpOptions>>()?.Value ?? new BlueprintHttpOptions();
 
         // var apiOperationExecutor = endpoints.ServiceProvider.GetRequiredService<IApiOperationExecutor>();
 
@@ -73,6 +73,18 @@ public static class EndpointRouteBuilderExtensions
 
                 builders.Add(builder);
             }
+        }
+
+        if (endpoints.ServiceProvider.GetService<IWebHostEnvironment>()?.IsDevelopment() == true &&
+            !string.IsNullOrWhiteSpace(httpOptions.OperationsManifestResourceName))
+        {
+            var manifestBuilder = endpoints.Map(
+                RoutePatternFactory.Parse(basePath.TrimEnd('/') + "/.blueprint/manifests/operations.json"),
+                ManifestJsonInspectionEndpoint.Create(typeof(T).Assembly, httpOptions.OperationsManifestResourceName));
+            manifestBuilder.WithDisplayName("GET Blueprint manifest operations JSON");
+            manifestBuilder.WithMetadata(new HttpMethodMetadata([HttpMethods.Get]));
+
+            builders.Add(manifestBuilder);
         }
 
         return new BlueprintEndpointRouteBuilder(builders);

@@ -517,7 +517,7 @@ When delegating a workstream, include:
   - [x] Add the first build-time markdown projection and snapshot proof from `GeneratedManifestEnvelope`.
   - [x] Add runtime manifest loading and embedded resource projection as the first runtime inspection surface.
   - [x] Human-review the embedded-resource boundary before wider runtime endpoint or CLI projections begin.
-  - [ ] Add a development-only manifest inspection endpoint that serves loaded manifest JSON/markdown without recomputing discovery.
+  - [x] Add a development-only manifest JSON inspection endpoint that serves the loaded canonical manifest without recomputing discovery.
   - [ ] Add wider runtime inspection projection surfaces after the dev-only endpoint proves the envelope can be consumed through hosted inspection surfaces.
 - [ ] Ensure runtime inspection projects from build-time data rather than recomputing.
 - [ ] Align manifest output with migration reports, OpenAPI, and performance artifacts.
@@ -534,6 +534,7 @@ When delegating a workstream, include:
 
 - [x] Snapshot tests for manifest shape and content.
 - [x] Runtime manifest loading tests covering embedded-resource projection, stable roundtripping, and no-rediscovery runtime reads.
+- [x] Hosted manifest inspection endpoint tests covering the development-only JSON route, production dark-path gating, and fail-fast resource validation during endpoint mapping.
 - [ ] Schema validation tests.
 - [ ] Compatibility tests for multiple module contributors.
 

@@ -7,28 +7,25 @@
   "current": {
     "activeWorkstream": "generated-manifests-and-inspection-surfaces",
     "nextReadySlice": {
-      "title": "Dev-only manifest inspection endpoint projection",
+      "title": "Wider manifest inspection projection surface",
       "status": "ready",
       "dependsOn": [
-        "Runtime manifest loading and embedded resource projection approved."
+        "Dev-only manifest JSON inspection endpoint approved."
       ],
       "failingProof": [
-        "A failing endpoint test shows a development host does not yet expose a Blueprint manifest JSON endpoint that projects the loaded envelope.",
-        "A failing endpoint test shows a development host does not yet expose a Blueprint manifest markdown endpoint derived from the same loaded envelope.",
-        "A failing environment-gating test shows the inspection endpoint surface is not yet constrained to development-only routing by default."
+        "A failing proof shows the next hosted or tooling-facing inspection surface does not yet project from the existing canonical manifest data.",
+        "A failing proof shows the new projection surface would require a boundary decision if it tries to add runtime rediscovery or a runtime-side manifest model."
       ],
       "expectedFiles": [
-        "src\\Blueprint.Runtime\\Http\\ApplicationBuilderExtensions.cs",
-        "src\\Blueprint.Runtime\\Artifacts\\ManifestProjectionEndpoints.cs",
-        "src\\Blueprint.Runtime\\Http\\BlueprintHttpOptions.cs",
-        "src\\Blueprint.SourceGenerator.Tests\\Artifacts\\ManifestInspectionEndpointTests.cs",
+        "migration\\generated-manifests-and-inspection-surfaces\\plan.md",
+        "migration\\plan.md",
         "migration\\generated-manifests-and-inspection-surfaces\\plan.md"
       ],
-      "reviewGate": "Require human review before any production exposure or broader CLI/runtime inspection surface lands, and verify the hosted endpoint reads the same loaded manifest envelope rather than rediscovering operations."
+      "reviewGate": "Require human review before the next inspection surface widens into a new hosted, CLI, or tooling contract, and keep the canonical-manifest boundary intact."
     },
     "lastCompletedSlice": {
       "workstream": "generated-manifests-and-inspection-surfaces",
-      "title": "Runtime manifest loading and embedded resource projection"
+      "title": "Dev-only manifest JSON inspection endpoint"
     },
     "openReviewGate": null
   },
