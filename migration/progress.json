@@ -7,28 +7,28 @@
   "current": {
     "activeWorkstream": "performance-and-scale",
     "nextReadySlice": {
-      "title": "Make the synthetic fixture generator feed runtime harnesses",
+      "title": "Extend the shared synthetic fixture into runtime stress harnesses",
       "status": "ready",
       "dependsOn": [
-        "Define the explicit Tier 3 readiness measurement plan completed."
+        "Make the synthetic fixture generator feed runtime benchmark harnesses completed."
       ],
       "failingProof": [
-        "A failing proof shows the runtime benchmark and stress harnesses still rely on bespoke scenario factories or host fixtures instead of the shared SyntheticBlueprintFixtureGenerator surface.",
-        "A failing proof shows compile-time and runtime scale evidence are still generated from different scenario definitions, so one shared synthetic fixture does not yet feed both sides of the performance story."
+        "A failing proof shows the repeated executor-dispatch and endpoint-mapping stress harnesses still rely on separate generated or host-specific scenarios instead of the shared SyntheticBlueprintFixtureGenerator surface.",
+        "A failing proof shows the runtime stress proofs and the runtime benchmarks still describe different scenario identities, so runtime Phase 0 evidence is not yet fully driven from one synthetic fixture."
       ],
       "expectedFiles": [
         "migration\\performance-and-scale\\plan.md",
-        "src\\Blueprint.SourceGenerator.Tests\\Scale\\SyntheticBlueprintFixtureGenerator.cs",
-        "src\\Blueprint.SourceGenerator.Benchmarks\\BlueprintHttp\\BlueprintEndpointMappingBenchmarks.cs",
-        "src\\Blueprint.SourceGenerator.Benchmarks\\ExecutorDispatch\\ExecutorDispatchBenchmarks.cs",
+        "src\\Blueprint.SourceGenerator.Benchmarks\\Scale\\SyntheticBlueprintFixtureGenerator.cs",
+        "src\\Blueprint.SourceGenerator.Tests.Integration\\Generators\\Pipelines\\ConcurrentExecutorDispatchIntegrationTests.cs",
+        "src\\Blueprint.SourceGenerator.Tests\\Artifacts\\ManifestInspectionEndpointStressTests.cs",
         "migration\\plan.md",
         "migration\\progress.json"
       ],
-      "reviewGate": "Stop for review if reusing the synthetic fixture for runtime harnesses requires changing the approved benchmark/scenario contracts instead of only unifying existing surfaces."
+      "reviewGate": "Stop for review if reusing the synthetic fixture in the runtime stress harnesses requires replacing the approved generated executor or hosted endpoint surfaces instead of layering the shared scenario underneath them."
     },
     "lastCompletedSlice": {
       "workstream": "performance-and-scale",
-      "title": "Define the explicit Tier 3 readiness measurement plan"
+      "title": "Make the synthetic fixture generator feed runtime benchmark harnesses"
     },
     "openReviewGate": null
   },

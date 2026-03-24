@@ -41,7 +41,7 @@ public sealed class XmlDocumentationEnforcementTests
 
     [Theory]
     [InlineData(@"src\Blueprint.SourceGenerator.Tests\TestHelpers.cs")]
-    [InlineData(@"src\Blueprint.SourceGenerator.Tests\Scale\SyntheticBlueprintFixtureGenerator.cs")]
+    [InlineData(@"src\Blueprint.SourceGenerator.Benchmarks\Scale\SyntheticBlueprintFixtureGenerator.cs")]
     [InlineData(@"src\Blueprint.SourceGenerator.CodeWriter.Tests\Tests\TestBase.cs")]
     public void When_reading_test_support_files_then_exposed_members_are_documented(string relativePath)
     {

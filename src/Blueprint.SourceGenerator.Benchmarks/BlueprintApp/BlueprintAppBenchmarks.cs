@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Order;
 using Blueprint.Model;
+using Blueprint.SourceGenerator.Tests.Scale;
 using BlueprintAppModel = Blueprint.Model.BlueprintApp;
 
 namespace Blueprint.SourceGenerator.Benchmarks.RuntimeModel;
@@ -114,6 +116,16 @@ internal static class BlueprintAppBenchmarkScenarioFactory
     private const string DescriptorSource = "Benchmark";
 
     /// <summary>
+    /// Keeps the runtime benchmark fixture namespace aligned with the shared synthetic source generator.
+    /// </summary>
+    private const string FixtureNamespaceName = "Synthetic.Benchmark";
+
+    /// <summary>
+    /// Keeps the runtime benchmark fixture app name aligned with the shared synthetic source generator.
+    /// </summary>
+    private const string FixtureAppName = "SyntheticBenchmarkApp";
+
+    /// <summary>
     /// Supplies the marker types whose Cartesian product produces a large set of unique synthetic operations.
     /// </summary>
     private static readonly Type[] MarkerTypes =
@@ -150,6 +162,12 @@ internal static class BlueprintAppBenchmarkScenarioFactory
             throw new ArgumentOutOfRangeException(nameof(operationCount), $"Operation count must be between 1 and {maxOperationCount}.");
         }
 
+        var fixture = SyntheticBlueprintFixtureGenerator.Create(
+            new SyntheticBlueprintFixtureOptions(
+                namespaceName: FixtureNamespaceName,
+                appName: FixtureAppName,
+                operationCount: operationCount));
+        var operationSourceFiles = GetOperationSourceFiles(fixture);
         var descriptors = new List<ApiOperationDescriptor>(operationCount);
 
         for (var index = 0; index < operationCount; index++)
@@ -157,9 +175,10 @@ internal static class BlueprintAppBenchmarkScenarioFactory
             var operationType = typeof(BenchmarkOperation<,>).MakeGenericType(
                 MarkerTypes[index / MarkerTypes.Length],
                 MarkerTypes[index % MarkerTypes.Length]);
-            var descriptor = new ApiOperationDescriptor(operationType, $"Operation{index:D3}", DescriptorSource);
+            var operationName = Path.GetFileNameWithoutExtension(operationSourceFiles[index].Path);
+            var descriptor = new ApiOperationDescriptor(operationType, operationName, DescriptorSource);
 
-            descriptor.AddUrl(new ApiOperationUrl($"/benchmark/{index:D3}"));
+            descriptor.AddUrl(new ApiOperationUrl($"/synthetic/operations/{index + 1:D3}"));
             descriptors.Add(descriptor);
         }
 
@@ -181,6 +200,21 @@ internal static class BlueprintAppBenchmarkScenarioFactory
         }
 
         return app;
+    }
+
+    private static List<SyntheticBlueprintFixtureSourceFile> GetOperationSourceFiles(SyntheticBlueprintFixture fixture)
+    {
+        var sourceFiles = new List<SyntheticBlueprintFixtureSourceFile>(fixture.OperationCount);
+
+        foreach (var sourceFile in fixture.SourceFiles)
+        {
+            if (sourceFile.Path.StartsWith(@"Operations\", StringComparison.Ordinal))
+            {
+                sourceFiles.Add(sourceFile);
+            }
+        }
+
+        return sourceFiles;
     }
 }
 

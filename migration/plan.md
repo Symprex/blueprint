@@ -494,7 +494,7 @@ When delegating a workstream, include:
 - [x] Build telemetry can explain cold, no-op, and single-edit behavior.
 - [x] Runtime hotspot measurements exist for known registration/lookup bottlenecks.
 - [x] A reviewable benchmark baseline exists for the known `BlueprintApp` hotspots before Phase 1 starts.
-- [ ] The fixture generator feeds both compile-time and runtime harnesses.
+- [x] The fixture generator feeds both compile-time and runtime harnesses.
 - [x] Tier 3 readiness has an explicit measurement plan before Signature365-scale migration starts.
 
 ### Tests and benchmarks
@@ -518,7 +518,7 @@ When delegating a workstream, include:
 
 ### Durable progress
 
-- completed first compile-time fixture slice: `src\Blueprint.SourceGenerator.Tests\Scale\SyntheticBlueprintFixtureGenerator.cs` now emits a deterministic synthetic app plus ordered operation source files, and exposes a `CombinedSource` view so the same fixture can feed existing single-source generator harnesses while the broader multi-file scale harness is still landing
+- completed first compile-time fixture slice: `src\Blueprint.SourceGenerator.Benchmarks\Scale\SyntheticBlueprintFixtureGenerator.cs` now emits a deterministic synthetic app plus ordered operation source files, and exposes a `CombinedSource` view so the same fixture can feed existing single-source generator harnesses while the broader multi-file scale harness is still landing
 - completed proof and verification for that slice: `src\Blueprint.SourceGenerator.Tests\Scale\SyntheticBlueprintFixtureGeneratorTests.cs` now locks repeated-output stability, expected app/operation file emission, and descriptor-generator compilation for the synthetic fixture, and `dotnet test .\src\Blueprint.SourceGenerator.Tests\Blueprint.SourceGenerator.Tests.csproj --no-restore` passes after the change
 - next approved follow-on for this workstream: add a multi-source compile harness plus Tier 2 cacheability/invalidation-locality tests that mutate one generated operation and one shared-contract shape while keeping `SyntheticBlueprintFixtureGenerator` as the shared input surface
 - completed first machine-readable invalidation-report alignment slice: `SyntheticFixtureInvalidationReport` now emits a deterministic `scale-invalidation` manifest envelope for the Tier 2 single-operation and shared-contract mutation scenarios, and `SyntheticFixtureInvalidationReportTests` snapshot those reports so locality evidence is reviewable as artifact data instead of only imperative assertions
@@ -532,7 +532,8 @@ When delegating a workstream, include:
 - the breaking-changes/tooling workstream has now completed that analyzer/codemod/report branch, including the preserved sample-app migration review package for the `SimpleBlueprintApp` fixture.
 - the reviewable performance-publication slice is now also complete: the scheduled/manual performance lane now has a preserved package that ties together the current BenchmarkDotNet markdown/HTML summaries, a fresh synthetic telemetry-runner capture, and representative `build-telemetry` / `scale-invalidation` snapshot evidence without inventing a new artifact family.
 - the explicit Tier 3 readiness measurement-plan slice is now also complete: `migration\performance-and-scale\plan.md` now names the required Signature365-scale scenarios, scheduled/manual artifacts, comparison points, and review expectations so later broad migration claims have a durable published target.
-- next approved follow-on after the Tier 3 planning slice: make the shared `SyntheticBlueprintFixtureGenerator` feed the runtime benchmark and stress harnesses as well as the compile-time harnesses
+- the first runtime benchmark-harness unification slice is now also complete: `Blueprint.SourceGenerator.Tests` and `Blueprint.SourceGenerator.Benchmarks` now share `SyntheticBlueprintFixtureGenerator`, and `BlueprintAppBenchmarkScenarioFactory` derives benchmark descriptor identities from the shared synthetic operation files instead of a benchmark-only naming scheme.
+- next approved follow-on after the runtime benchmark unification slice: extend the shared synthetic fixture into the repeated runtime stress harnesses so startup and executor-shell stress proofs stop using separate runtime-only scenario definitions
 
 ## 4. Generated manifests and inspection surfaces
 
