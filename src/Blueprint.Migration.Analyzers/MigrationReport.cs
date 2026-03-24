@@ -8,7 +8,7 @@ namespace Blueprint.Migration.Analyzers;
 public sealed class MigrationReport
 {
     private const int CurrentSchemaVersion = 1;
-    private const string ActivationDiagnosticsReportType = "activation-diagnostics";
+    private const string MigrationDiagnosticsReportType = "migration-diagnostics";
 
     /// <summary>
     /// Initializes a new instance of the <see cref="MigrationReport"/> class.
@@ -53,8 +53,8 @@ public sealed class MigrationReport
     /// classify analyzer findings without scraping text output from build logs.
     /// </summary>
     /// <param name="descriptors">The migration diagnostic descriptors that should appear in the report.</param>
-    /// <returns>A deterministic activation-diagnostics report.</returns>
-    public static MigrationReport CreateActivationDiagnostics(params DiagnosticDescriptor[] descriptors)
+    /// <returns>A deterministic migration-diagnostics report.</returns>
+    public static MigrationReport CreateMigrationDiagnostics(params DiagnosticDescriptor[] descriptors)
     {
         if (descriptors is null)
         {
@@ -62,7 +62,7 @@ public sealed class MigrationReport
         }
 
         return new MigrationReport(
-            ActivationDiagnosticsReportType,
+            MigrationDiagnosticsReportType,
             descriptors.Select(static descriptor => DiagnosticFinding.FromDescriptor(descriptor)));
     }
 }

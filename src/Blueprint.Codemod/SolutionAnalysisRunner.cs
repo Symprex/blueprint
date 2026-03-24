@@ -64,7 +64,7 @@ public sealed class SolutionAnalysisRunner
                 .Select(static diagnosticId => ResolveDescriptor(diagnosticId))
                 .ToArray();
 
-            return MigrationReport.CreateActivationDiagnostics(descriptors);
+            return MigrationReport.CreateMigrationDiagnostics(descriptors);
         }
         finally
         {

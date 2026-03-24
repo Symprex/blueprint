@@ -7,32 +7,30 @@
   "current": {
     "activeWorkstream": "breaking-changes-and-migration-tooling",
     "nextReadySlice": {
-      "title": "Shared migration report family rename",
+      "title": "Migration report schema validation tests",
       "status": "ready",
       "dependsOn": [
-        "Auth placeholder migration diagnostic reporting committed."
+        "Shared migration report family rename committed."
       ],
       "failingProof": [
-        "A failing proof shows the shared `MigrationReport` still emits `ReportType = \"activation-diagnostics\"` even though the report now contains non-activation findings such as `BPMIG200` and `BPMIG201`, so the durable artifact family name no longer matches the payload semantics.",
-        "A failing proof shows the codemod markdown/json artifact surfaces still present activation-only language, which would mislead reviewers and automation as more migration families enter the same BPMIG report seam."
+        "A failing proof shows the shared `migration-diagnostics` JSON payload can still change shape without any schema-validation assertion, so downstream automation is not guarded against contract drift.",
+        "A failing proof shows the codemod and analyzer artifact surfaces are still behavior-tested only, leaving JSON/SARIF compatibility unproven before broader rollout."
       ],
       "expectedFiles": [
-        "src\\Blueprint.Migration.Analyzers\\MigrationReport.cs",
         "src\\Blueprint.Migration.Analyzers.Tests\\MigrationReportSerializationTests.cs",
         "src\\Blueprint.Codemod.Tests\\ActivationDiagnosticsReportCollectionTests.cs",
         "src\\Blueprint.Codemod.Tests\\CodemodArtifactWriterTests.cs",
-        "src\\Blueprint.Codemod\\CodemodMarkdownSummaryWriter.cs",
+        "docs\\refactoring-workflow.md",
         "docs\\compile-time-validation.md",
         "migration\\breaking-changes-and-migration-tooling\\plan.md",
-        "migration\\authentication-and-authorisation\\plan.md",
         "migration\\plan.md",
         "migration\\progress.json"
       ],
-      "reviewGate": "Stop for review if renaming the shared report family requires a schema-version bump or a different compatibility policy for downstream automation."
+      "reviewGate": "Stop for review if schema validation requires a new third-party dependency or a schema-version policy that is not already documented in the migration plans."
     },
     "lastCompletedSlice": {
-      "workstream": "authentication-and-authorisation",
-      "title": "Auth placeholder migration diagnostic reporting"
+      "workstream": "breaking-changes-and-migration-tooling",
+      "title": "Shared migration report family rename"
     },
     "openReviewGate": null
   },

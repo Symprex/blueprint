@@ -4,7 +4,7 @@ using Blueprint.Migration.Analyzers;
 namespace Blueprint.Codemod;
 
 /// <summary>
-/// Runs the codemod entry point so migration tooling can emit the canonical activation-diagnostics report to
+/// Runs the codemod entry point so migration tooling can emit the canonical migration-diagnostics report to
 /// standard output and, when requested, write reviewable artifact files beside dry-run or apply-mode execution.
 /// </summary>
 public static class Program

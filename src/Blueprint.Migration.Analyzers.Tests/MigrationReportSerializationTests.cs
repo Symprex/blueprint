@@ -9,7 +9,7 @@ public sealed class MigrationReportSerializationTests
     [Xunit.Fact]
     public void When_serializing_activation_migration_report_then_emits_stable_bucketed_json()
     {
-        var report = MigrationReport.CreateActivationDiagnostics(
+        var report = MigrationReport.CreateMigrationDiagnostics(
             [
                 MigrationDiagnosticDescriptors.ConfiguredAddAuthenticationRequiresMigration,
                 MigrationDiagnosticDescriptors.RedundantAddOpenApiActivation,
@@ -21,7 +21,7 @@ public sealed class MigrationReportSerializationTests
 
         document.Should().NotBeNull();
         document!["SchemaVersion"]!.GetValue<int>().Should().Be(1);
-        document["ReportType"]!.GetValue<string>().Should().Be("activation-diagnostics");
+        document["ReportType"]!.GetValue<string>().Should().Be("migration-diagnostics");
 
         var findings = document["Findings"]!.AsArray();
         findings.Select(static node => node!["DiagnosticId"]!.GetValue<string>())
@@ -36,7 +36,7 @@ public sealed class MigrationReportSerializationTests
     [Xunit.Fact]
     public void When_creating_activation_migration_report_then_points_findings_at_the_relevant_migration_plan()
     {
-        var report = MigrationReport.CreateActivationDiagnostics(
+        var report = MigrationReport.CreateMigrationDiagnostics(
             [
                 MigrationDiagnosticDescriptors.ConfiguredAddAuthenticationRequiresMigration,
                 MigrationDiagnosticDescriptors.RedundantAddHateoasLinksActivation,

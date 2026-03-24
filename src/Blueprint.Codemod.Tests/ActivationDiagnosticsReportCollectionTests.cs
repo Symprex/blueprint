@@ -15,7 +15,7 @@ public sealed class ActivationDiagnosticsReportCollectionTests
                 diagnosticFilter: "BPMIG*"));
 
         report.SchemaVersion.Should().Be(1);
-        report.ReportType.Should().Be("activation-diagnostics");
+        report.ReportType.Should().Be("migration-diagnostics");
         report.Findings.Should().HaveCount(5);
         report.Findings.Select(static finding => (finding.DiagnosticId, finding.Category))
             .Should()

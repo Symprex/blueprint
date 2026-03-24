@@ -9,7 +9,7 @@ public sealed class ProgramCancellationTests
     [Xunit.Fact]
     public async Task When_running_dry_run_with_output_then_the_provided_cancellation_token_reaches_analysis_and_artifact_writing()
     {
-        var report = MigrationReport.CreateActivationDiagnostics();
+        var report = MigrationReport.CreateMigrationDiagnostics();
         var cancellationToken = new CancellationTokenSource().Token;
         CancellationToken? applyToken = null;
         CancellationToken? dryRunToken = null;
@@ -75,7 +75,7 @@ public sealed class ProgramCancellationTests
             (options, token) =>
             {
                 dryRunToken = token;
-                return Task.FromResult(MigrationReport.CreateActivationDiagnostics());
+                return Task.FromResult(MigrationReport.CreateMigrationDiagnostics());
             },
             (report, directory, token) =>
             {

@@ -31,10 +31,10 @@ public sealed class CodemodArtifactWriterTests
             var json = await File.ReadAllTextAsync(jsonPath);
             var document = JsonNode.Parse(json);
             document.Should().NotBeNull();
-            document!["ReportType"]!.GetValue<string>().Should().Be("activation-diagnostics");
+            document!["ReportType"]!.GetValue<string>().Should().Be("migration-diagnostics");
 
             var markdown = await File.ReadAllTextAsync(markdownPath);
-            markdown.Should().Contain("# activation-diagnostics");
+            markdown.Should().Contain("# migration-diagnostics");
             markdown.IndexOf("### BPMIG001", StringComparison.Ordinal).Should().BeGreaterThanOrEqualTo(0);
             markdown.IndexOf("### BPMIG100", StringComparison.Ordinal).Should().BeGreaterThanOrEqualTo(0);
             markdown.IndexOf("### BPMIG101", StringComparison.Ordinal).Should().BeGreaterThanOrEqualTo(0);
