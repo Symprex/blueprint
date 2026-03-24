@@ -55,4 +55,13 @@ public sealed class MigrationDiagnosticDescriptorsTests
         Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.ConfiguredAddAuthenticationRequiresMigration.MessageFormat.ToString().Should().Contain("AddAuthentication");
         Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.ConfiguredAddAuthenticationRequiresMigration.MessageFormat.ToString().Should().Contain("configuration");
     }
+
+    [Xunit.Fact]
+    public void When_loading_migration_diagnostic_descriptors_then_legacy_fromresource_uses_the_first_consumer_extension_slot()
+    {
+        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.LegacyFromResourceUsageRequiresMigration.Id.Should().Be("BPMIG200");
+        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.LegacyFromResourceUsageRequiresMigration.DefaultSeverity.Should().Be(Microsoft.CodeAnalysis.DiagnosticSeverity.Warning);
+        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.LegacyFromResourceUsageRequiresMigration.IsEnabledByDefault.Should().BeTrue();
+        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.LegacyFromResourceUsageRequiresMigration.MessageFormat.ToString().Should().Contain("FromResource");
+    }
 }

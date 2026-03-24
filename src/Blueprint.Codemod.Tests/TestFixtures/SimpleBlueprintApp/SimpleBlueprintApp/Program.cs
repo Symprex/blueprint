@@ -26,6 +26,37 @@ public sealed class BlueprintAuthenticationBuilder
 }
 
 /// <summary>
+/// Minimal FromResource attribute stub used to trigger the auth/resource migration diagnostic.
+/// </summary>
+[AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
+public sealed class FromResourceAttribute : Attribute
+{
+    /// <summary>
+    /// Initializes a new instance of the <see cref="FromResourceAttribute"/> class.
+    /// </summary>
+    /// <param name="operationType">The referenced legacy operation type.</param>
+    /// <param name="resourceKeyTemplate">The legacy auth/resource template.</param>
+    public FromResourceAttribute(Type operationType, string resourceKeyTemplate)
+    {
+    }
+}
+
+/// <summary>
+/// Minimal legacy query type referenced by the auth/resource inheritance fixture.
+/// </summary>
+public sealed class AccountLookupQuery
+{
+}
+
+/// <summary>
+/// Minimal legacy command type carrying FromResource metadata that must migrate to generated auth/resource metadata.
+/// </summary>
+[FromResource(typeof(AccountLookupQuery), "{Auth:AccountId}")]
+public sealed class AccountCommand
+{
+}
+
+/// <summary>
 /// Minimal extension surface that mirrors the legacy activation APIs used by the dry-run fixture.
 /// </summary>
 public static class BlueprintApiBuilderExtensions

@@ -66,4 +66,16 @@ public static class MigrationDiagnosticDescriptors
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
         description: "Legacy Blueprint migrations should treat configured AddAuthentication(...) calls as configuration-required work because context loading and consumer-owned authentication registration still need an explicit migration seam.");
+
+    /// <summary>
+    /// Gets the diagnostic emitted when legacy Blueprint operations still rely on FromResource metadata that must move into the source-generated auth/resource model.
+    /// </summary>
+    public static DiagnosticDescriptor LegacyFromResourceUsageRequiresMigration { get; } = new(
+        id: "BPMIG200",
+        title: "Migrate FromResource usage",
+        messageFormat: "Migrate 'FromResource(...)' usage because auth/resource inheritance must move into Blueprint's source-generated metadata model.",
+        category: "BlueprintMigration",
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "Legacy Blueprint migrations should treat FromResource(...) usage as consumer-extension rewrite work because the replacement auth/resource model needs explicit source-generated metadata instead of runtime attribute discovery.");
 }

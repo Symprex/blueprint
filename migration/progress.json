@@ -7,29 +7,31 @@
   "current": {
     "activeWorkstream": "authentication-and-authorisation",
     "nextReadySlice": {
-      "title": "Auth/resource migration diagnostic-reporting foundation",
+      "title": "Auth placeholder migration diagnostic reporting",
       "status": "ready",
       "dependsOn": [
-        "Codemod artifact emission and markdown summary output committed."
+        "FromResource migration diagnostic reporting committed."
       ],
       "failingProof": [
-        "A failing proof shows the shared `MigrationReport`/codemod seam still only covers activation diagnostics, so `[FromResource(...)]` and `{Auth:...}` usage cannot yet appear in the same deterministic review artifacts that now exist for activation cleanup.",
-        "A failing proof shows the current migration-analyzer surface still lacks the first reserved auth/resource diagnostic family, which means high-volume auth/resource migration work cannot yet enter the repo-native analyzer/report/codemod workflow before broader rewrite automation starts."
+        "A failing proof shows raw `{Auth:...}` placeholders in legacy resource templates still do not produce a reserved BPMIG diagnostic, so auth-template migration work cannot yet enter the same deterministic analyzer/report/codemod workflow as `[FromResource(...)]`.",
+        "A failing proof shows the shared `MigrationReport`/codemod seam still lacks a placeholder-focused auth/resource finding, which leaves the highest-volume auth-template review work outside the repo-native artifact flow before broader rewrite automation starts."
       ],
       "expectedFiles": [
         "src\\Blueprint.Migration.Analyzers\\MigrationDiagnosticDescriptors.cs",
-        "src\\Blueprint.Migration.Analyzers.Tests\\AuthenticationAndAuthorisationMigrationDiagnosticsTests.cs",
-        "src\\Blueprint.Migration.Analyzers\\MigrationReport.cs",
+        "src\\Blueprint.Migration.Analyzers\\Analyzers\\LegacyActivationAnalyzer.cs",
+        "src\\Blueprint.Migration.Analyzers.Tests\\LegacyActivationAnalyzerTests.cs",
+        "src\\Blueprint.Migration.Analyzers.Tests\\MigrationReportSerializationTests.cs",
+        "src\\Blueprint.Codemod.Tests\\ActivationDiagnosticsReportCollectionTests.cs",
         "docs\\compile-time-validation.md",
         "migration\\authentication-and-authorisation\\plan.md",
         "migration\\plan.md",
         "migration\\progress.json"
       ],
-      "reviewGate": "Stop for review if the first auth/resource migration diagnostics need a new BPMIG range split, a different bucket/documentation-path policy, or a different workstream boundary before broader auth/resource rewrite automation starts."
+      "reviewGate": "Stop for review if the first `{Auth:...}` placeholder diagnostics need a different BPMIG bucket/documentation-path policy or force a different boundary between auth/resource tooling and descriptor-lowering work."
     },
     "lastCompletedSlice": {
-      "workstream": "breaking-changes-and-migration-tooling",
-      "title": "Codemod artifact emission and markdown summary output"
+      "workstream": "authentication-and-authorisation",
+      "title": "FromResource migration diagnostic reporting"
     },
     "openReviewGate": null
   },

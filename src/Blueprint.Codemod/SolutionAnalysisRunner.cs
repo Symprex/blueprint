@@ -6,17 +6,17 @@ using Microsoft.CodeAnalysis;
 namespace Blueprint.Codemod;
 
 /// <summary>
-/// Builds a target solution in dry-run mode and collects the current activation diagnostics into the shared
+/// Builds a target solution in dry-run mode and collects the current migration diagnostics into the shared
 /// <see cref="MigrationReport"/> contract so later apply-mode work can reuse the same deterministic report shape.
 /// </summary>
 public sealed class SolutionAnalysisRunner
 {
     /// <summary>
-    /// Runs a dry-run analysis for a solution and returns the activation-diagnostics report.
+    /// Runs a dry-run analysis for a solution and returns the current migration report.
     /// </summary>
     /// <param name="options">The solution-analysis options.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>The collected activation-diagnostics report.</returns>
+    /// <returns>The collected migration report.</returns>
     public async Task<MigrationReport> DryRunAsync(SolutionAnalysisOptions options, CancellationToken cancellationToken = default)
     {
         if (options is null)
@@ -205,7 +205,8 @@ public sealed class SolutionAnalysisRunner
             "BPMIG003" => MigrationDiagnosticDescriptors.RedundantAddAuthorisationActivation,
             "BPMIG100" => MigrationDiagnosticDescriptors.ConfiguredAddOpenApiRequiresMigration,
             "BPMIG101" => MigrationDiagnosticDescriptors.ConfiguredAddAuthenticationRequiresMigration,
-            _ => throw new InvalidOperationException($"The codemod dry run does not yet know how to project '{diagnosticId}' into the activation-diagnostics report."),
+            "BPMIG200" => MigrationDiagnosticDescriptors.LegacyFromResourceUsageRequiresMigration,
+            _ => throw new InvalidOperationException($"The codemod dry run does not yet know how to project '{diagnosticId}' into the migration report."),
         };
     }
 

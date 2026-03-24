@@ -1,6 +1,6 @@
 # Authentication and authorisation
 
-- Status: Planned
+- Status: In progress
 - Priority: P1
 - Classification: Core middleware
 - Depends on: descriptor/auth-metadata design depends on `../foundation-module-system/plan.md`, `../operation-discovery-and-descriptors/plan.md`, and `../pipeline-composition-and-execution/plan.md`; HTTP runtime execution then also depends on `../http-host-and-message-population/plan.md`
@@ -77,7 +77,8 @@ Current migration-tooling direction:
 
 - `BPMIG003` now flags parameterless `AddAuthorisation()` activation as redundant safe-deletion cleanup
 - `BPMIG101` now flags configured `AddAuthentication(...)` usage as configuration-required migration work because context loading and consumer-owned auth registration still need an explicit seam
-- `Blueprint.Codemod` now supports `--output <dir>` for deterministic `codemod-report.json` / `codemod-report.md` emission from the shared activation `MigrationReport`, so the next dependency-safe auth/tooling slice is to bring `[FromResource(...)]` and `{Auth:...}` usage into that same structured diagnostic/report path before broad rewrite automation starts
+- `BPMIG200` now flags legacy `[FromResource(...)]` usage as consumer-extension rewrite migration work and maps it to this workstream plan so auth/resource migration review starts in the shared BPMIG analyzer/report/codemod seam before descriptor-lowering automation exists
+- `Blueprint.Codemod` now carries `BPMIG200` through dry-run/apply reports and `--output <dir>` artifact emission from the shared `MigrationReport`, so the next dependency-safe auth/tooling slice is to bring `{Auth:...}` placeholder usage into that same structured diagnostic/report path before broad rewrite automation starts
 
 ## Host coverage beyond HTTP
 

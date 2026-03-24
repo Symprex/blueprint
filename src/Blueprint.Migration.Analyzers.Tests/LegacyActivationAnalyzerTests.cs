@@ -276,6 +276,41 @@ public sealed class LegacyActivationAnalyzerTests
         diagnostic.GetMessage().Should().Contain("configuration");
     }
 
+    [Xunit.Fact]
+    public async Task When_legacy_operation_uses_fromresource_then_reports_bpmig200_with_fromresource_guidance()
+    {
+        const string source = """
+            namespace Legacy.Blueprint;
+
+            using System;
+
+            [AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
+            public sealed class FromResourceAttribute : Attribute
+            {
+                public FromResourceAttribute(Type operationType, string resourceKeyTemplate)
+                {
+                }
+            }
+
+            public sealed class AccountLookupQuery
+            {
+            }
+
+            [FromResource(typeof(AccountLookupQuery), "{Auth:AccountId}")]
+            public sealed class AccountCommand
+            {
+            }
+            """;
+
+        var diagnostics = await GetDiagnosticsAsync(source);
+
+        diagnostics.Should().ContainSingle(static diagnostic => diagnostic.Id == "BPMIG200");
+
+        var diagnostic = diagnostics.Single(static candidate => candidate.Id == "BPMIG200");
+        diagnostic.GetMessage().Should().Contain("FromResource");
+        diagnostic.Location.GetLineSpan().StartLinePosition.Line.Should().Be(16);
+    }
+
     private static async Task<ImmutableArray<Diagnostic>> GetDiagnosticsAsync(string source)
     {
         var syntaxTree = CSharpSyntaxTree.ParseText(source, new CSharpParseOptions(LanguageVersion.Preview));

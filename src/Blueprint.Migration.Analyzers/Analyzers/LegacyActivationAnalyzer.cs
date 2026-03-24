@@ -6,7 +6,7 @@ using Microsoft.CodeAnalysis.Diagnostics;
 namespace Blueprint.Migration.Analyzers.Analyzers;
 
 /// <summary>
-/// Reports legacy activation calls that are now redundant in the source-generated Blueprint architecture.
+/// Reports legacy activation calls and auth/resource attributes that no longer map directly to the source-generated Blueprint architecture.
 /// </summary>
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class LegacyActivationAnalyzer : DiagnosticAnalyzer
@@ -19,6 +19,7 @@ public sealed class LegacyActivationAnalyzer : DiagnosticAnalyzer
             MigrationDiagnosticDescriptors.RedundantAddAuthorisationActivation,
             MigrationDiagnosticDescriptors.ConfiguredAddOpenApiRequiresMigration,
             MigrationDiagnosticDescriptors.ConfiguredAddAuthenticationRequiresMigration,
+            MigrationDiagnosticDescriptors.LegacyFromResourceUsageRequiresMigration,
         ];
 
     /// <inheritdoc />
@@ -27,6 +28,7 @@ public sealed class LegacyActivationAnalyzer : DiagnosticAnalyzer
         context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.None);
         context.EnableConcurrentExecution();
         context.RegisterSyntaxNodeAction(this.AnalyzeInvocation, Microsoft.CodeAnalysis.CSharp.SyntaxKind.InvocationExpression);
+        context.RegisterSyntaxNodeAction(this.AnalyzeAttribute, Microsoft.CodeAnalysis.CSharp.SyntaxKind.Attribute);
     }
 
     private void AnalyzeInvocation(SyntaxNodeAnalysisContext context)
@@ -115,5 +117,21 @@ public sealed class LegacyActivationAnalyzer : DiagnosticAnalyzer
                 MigrationDiagnosticDescriptors.ConfiguredAddAuthenticationRequiresMigration,
                 memberAccess.Name.GetLocation()));
         }
+    }
+
+    private void AnalyzeAttribute(SyntaxNodeAnalysisContext context)
+    {
+        if (context.Node is not AttributeSyntax attribute
+            || context.SemanticModel.GetSymbolInfo(attribute, context.CancellationToken).Symbol is not IMethodSymbol attributeConstructor
+            || attributeConstructor.ContainingType is not INamedTypeSymbol { Name: "FromResourceAttribute" })
+        {
+            return;
+        }
+
+        // Migration analyzers intentionally key off the stable legacy attribute type name so app-local wrappers
+        // and namespace moves still surface upgrade work while consumers migrate toward the source-generated model.
+        context.ReportDiagnostic(Diagnostic.Create(
+            MigrationDiagnosticDescriptors.LegacyFromResourceUsageRequiresMigration,
+            attribute.Name.GetLocation()));
     }
 }

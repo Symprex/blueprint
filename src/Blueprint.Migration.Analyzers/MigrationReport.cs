@@ -3,7 +3,7 @@ using Microsoft.CodeAnalysis;
 namespace Blueprint.Migration.Analyzers;
 
 /// <summary>
-/// Represents a deterministic, machine-readable migration report for a specific diagnostic family.
+/// Represents a deterministic, machine-readable migration report for a specific migration-diagnostic family.
 /// </summary>
 public sealed class MigrationReport
 {
@@ -49,10 +49,10 @@ public sealed class MigrationReport
     public IReadOnlyList<DiagnosticFinding> Findings { get; }
 
     /// <summary>
-    /// Creates a report for the currently shipped activation diagnostics so later codemod/report tooling can
-    /// classify analyzer families without scraping text output from build logs.
+    /// Creates a report for the currently shipped shared migration diagnostics so later codemod/report tooling can
+    /// classify analyzer findings without scraping text output from build logs.
     /// </summary>
-    /// <param name="descriptors">The activation diagnostic descriptors that should appear in the report.</param>
+    /// <param name="descriptors">The migration diagnostic descriptors that should appear in the report.</param>
     /// <returns>A deterministic activation-diagnostics report.</returns>
     public static MigrationReport CreateActivationDiagnostics(params DiagnosticDescriptor[] descriptors)
     {

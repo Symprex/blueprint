@@ -38,6 +38,7 @@ public sealed class CodemodArtifactWriterTests
             markdown.IndexOf("### BPMIG001", StringComparison.Ordinal).Should().BeGreaterThanOrEqualTo(0);
             markdown.IndexOf("### BPMIG100", StringComparison.Ordinal).Should().BeGreaterThanOrEqualTo(0);
             markdown.IndexOf("### BPMIG101", StringComparison.Ordinal).Should().BeGreaterThanOrEqualTo(0);
+            markdown.IndexOf("### BPMIG200", StringComparison.Ordinal).Should().BeGreaterThanOrEqualTo(0);
         }
         finally
         {
@@ -80,12 +81,13 @@ public sealed class CodemodArtifactWriterTests
             document!["Findings"]!.AsArray()
                 .Select(static node => node!["DiagnosticId"]!.GetValue<string>())
                 .Should()
-                .Equal("BPMIG100", "BPMIG101");
+                .Equal("BPMIG100", "BPMIG101", "BPMIG200");
 
             var markdown = await File.ReadAllTextAsync(markdownPath);
             markdown.Should().NotContain("### BPMIG001");
             markdown.Should().Contain("### BPMIG100");
             markdown.Should().Contain("### BPMIG101");
+            markdown.Should().Contain("### BPMIG200");
         }
         finally
         {
