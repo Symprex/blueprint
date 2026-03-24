@@ -1,8 +1,12 @@
+extern alias benchmarks;
+
 using Blueprint.Model;
 using Blueprint.Runtime.Exec;
 using Blueprint.SourceGenerator.Tests.Integration.Generators.OperationDescriptors;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
+using BenchmarkBlueprintAppExecutor = benchmarks::Blueprint.SourceGenerator.Benchmarks.RuntimeExec.BenchmarkBlueprintAppExecutor;
+using BlueprintAppBenchmarkScenarioFactory = benchmarks::Blueprint.SourceGenerator.Benchmarks.RuntimeModel.BlueprintAppBenchmarkScenarioFactory;
 
 namespace Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines;
 
@@ -29,6 +33,27 @@ public class ConcurrentExecutorDispatchIntegrationTests
         summary.FaultedDispatchCount.Should().Be(0);
         summary.Payloads.Should().OnlyContain(static payload => payload == "Blueprint");
         ConcurrentDispatchOperation.HandlerCallCount.Should().Be(64);
+    }
+
+    [Fact]
+    public async Task When_dispatching_shared_synthetic_benchmark_operation_concurrently_then_stress_harness_reports_all_dispatches_completed()
+    {
+        var descriptors = BlueprintAppBenchmarkScenarioFactory.CreateDescriptors(operationCount: 64);
+        var app = BlueprintAppBenchmarkScenarioFactory.CreateRegisteredApp(descriptors);
+        var executor = new BenchmarkBlueprintAppExecutor(app, descriptors);
+        var descriptor = descriptors[32];
+
+        var summary = await ConcurrentExecutorDispatchStressHarness.ExecuteAsync(
+            app,
+            executor,
+            descriptor,
+            dispatchCount: 64,
+            configureContext: static _ => { },
+            extractPayload: static _ => null);
+
+        summary.RequestedDispatchCount.Should().Be(64);
+        summary.CompletedDispatchCount.Should().Be(64);
+        summary.FaultedDispatchCount.Should().Be(0);
     }
 }
 
@@ -59,14 +84,16 @@ internal static class ConcurrentExecutorDispatchStressHarness
         BlueprintAppExecutor executor,
         ApiOperationDescriptor descriptor,
         int dispatchCount,
-        Action<ApiOperationContext> configureContext)
+        Action<ApiOperationContext> configureContext,
+        Func<OperationResult, string?>? extractPayload = null)
     {
         var startGate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var tasks = new Task<ConcurrentExecutorDispatchOutcome>[dispatchCount];
+        var payloadExtractor = extractPayload ?? ExtractOkResultPayload;
 
         for (var index = 0; index < dispatchCount; index++)
         {
-            tasks[index] = ExecuteDispatchAsync(app, executor, descriptor, configureContext, startGate.Task);
+            tasks[index] = ExecuteDispatchAsync(app, executor, descriptor, configureContext, payloadExtractor, startGate.Task);
         }
 
         startGate.SetResult(true);
@@ -96,6 +123,7 @@ internal static class ConcurrentExecutorDispatchStressHarness
         BlueprintAppExecutor executor,
         ApiOperationDescriptor descriptor,
         Action<ApiOperationContext> configureContext,
+        Func<OperationResult, string?> extractPayload,
         Task startSignal)
     {
         await startSignal;
@@ -106,7 +134,7 @@ internal static class ConcurrentExecutorDispatchStressHarness
             configureContext(context);
 
             var result = await executor.ExecuteAsync(context);
-            var payload = ((OkResult)result).Unwrap<string>();
+            var payload = extractPayload(result);
             return ConcurrentExecutorDispatchOutcome.Success(payload);
         }
         catch (Exception exception)
@@ -118,6 +146,11 @@ internal static class ConcurrentExecutorDispatchStressHarness
     private static ApiOperationContext CreateContext(BlueprintApp app, ApiOperationDescriptor descriptor)
     {
         return new ApiOperationContext(EmptyServiceProvider.Instance, app, descriptor, CancellationToken.None);
+    }
+
+    private static string? ExtractOkResultPayload(OperationResult result)
+    {
+        return ((OkResult)result).Unwrap<string>();
     }
 
     private sealed class EmptyServiceProvider : IServiceProvider
@@ -139,7 +172,7 @@ internal sealed record ConcurrentExecutorDispatchSummary(
 
 internal sealed record ConcurrentExecutorDispatchOutcome(string? Payload, Exception? Exception)
 {
-    public static ConcurrentExecutorDispatchOutcome Success(string payload)
+    public static ConcurrentExecutorDispatchOutcome Success(string? payload)
     {
         return new ConcurrentExecutorDispatchOutcome(payload, null);
     }

@@ -22,6 +22,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Blueprint.SourceGenerator.Benchmarks\Blueprint.SourceGenerator.Benchmarks.csproj" Aliases="benchmarks" />
     <ProjectReference Include="..\Blueprint.SourceGenerator\Blueprint.SourceGenerator.csproj" OutputItemType="Analyzer" />
     <ProjectReference Include="..\Blueprint.Runtime\Blueprint.Runtime.csproj" />
   </ItemGroup>

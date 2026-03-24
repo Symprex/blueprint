@@ -7,28 +7,27 @@
   "current": {
     "activeWorkstream": "performance-and-scale",
     "nextReadySlice": {
-      "title": "Extend the shared synthetic fixture into runtime stress harnesses",
+      "title": "Extend the shared synthetic fixture into repeated endpoint-mapping stress",
       "status": "ready",
       "dependsOn": [
-        "Make the synthetic fixture generator feed runtime benchmark harnesses completed."
+        "Extend the shared synthetic fixture into concurrent executor stress completed."
       ],
       "failingProof": [
-        "A failing proof shows the repeated executor-dispatch and endpoint-mapping stress harnesses still rely on separate generated or host-specific scenarios instead of the shared SyntheticBlueprintFixtureGenerator surface.",
-        "A failing proof shows the runtime stress proofs and the runtime benchmarks still describe different scenario identities, so runtime Phase 0 evidence is not yet fully driven from one synthetic fixture."
+        "A failing proof shows ManifestInspectionEndpointStressTests still maps the one-operation StressManifestInspectionBlueprintApp scenario instead of reusing the shared synthetic descriptor identities that BlueprintEndpointMappingBenchmarks already measures.",
+        "A failing proof shows the repeated endpoint-mapping stress proof and the endpoint-mapping benchmark still describe different scenario identities, so startup/runtime Phase 0 evidence is not yet fully driven from one synthetic fixture."
       ],
       "expectedFiles": [
         "migration\\performance-and-scale\\plan.md",
-        "src\\Blueprint.SourceGenerator.Benchmarks\\Scale\\SyntheticBlueprintFixtureGenerator.cs",
-        "src\\Blueprint.SourceGenerator.Tests.Integration\\Generators\\Pipelines\\ConcurrentExecutorDispatchIntegrationTests.cs",
         "src\\Blueprint.SourceGenerator.Tests\\Artifacts\\ManifestInspectionEndpointStressTests.cs",
+        "src\\Blueprint.SourceGenerator.Benchmarks\\BlueprintHttp\\BlueprintEndpointMappingBenchmarks.cs",
         "migration\\plan.md",
         "migration\\progress.json"
       ],
-      "reviewGate": "Stop for review if reusing the synthetic fixture in the runtime stress harnesses requires replacing the approved generated executor or hosted endpoint surfaces instead of layering the shared scenario underneath them."
+      "reviewGate": "Stop for review if reusing the shared synthetic fixture in the endpoint-mapping stress harness requires changing the approved hosted manifest route contract instead of only widening the stress scenario seam."
     },
     "lastCompletedSlice": {
       "workstream": "performance-and-scale",
-      "title": "Make the synthetic fixture generator feed runtime benchmark harnesses"
+      "title": "Extend the shared synthetic fixture into concurrent executor stress"
     },
     "openReviewGate": null
   },
