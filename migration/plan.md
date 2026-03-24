@@ -508,7 +508,7 @@ When delegating a workstream, include:
 
 - [x] Update `docs\observability-and-dev-experience.md` with measurement and artifact expectations if needed.
 - [x] Keep benchmark artifact locations and lane expectations documented.
-- [ ] Publish benchmark/telemetry outputs in a reviewable format.
+- [x] Publish benchmark/telemetry outputs in a reviewable format.
 
 ### Sub-agent guidance
 
@@ -530,7 +530,8 @@ When delegating a workstream, include:
 - completed first PR-lane versus scheduled/manual benchmark split: `BenchmarkLaneGuidanceTests.cs` now proves the two-lane performance model from `migration\performance-and-scale\plan.md` is surfaced in `docs\implementation-checklists.md`, `docs\observability-and-dev-experience.md`, and `.agents\skills\extending-blueprint\SKILL.md`, so deterministic stress proofs stay in the pull-request lane while noisier wall-clock or higher-volume comparisons move to scheduled/manual guidance
 - completed first high-volume link-generation stress harness: `SyntheticBlueprintFixtureScaleHarnessTests.cs` now drives a 100-operation synthetic fixture with unique root links, proves descriptor output contains those links at scale, and requires a single root-link edit to change only `SyntheticOperation050_Descriptor.g.cs`; the same slice also fixes stale link-only descriptor output by removing the model-only combined-provider comparer from descriptor/app generators and by making `DescriptorPlan` equality include diagnostics plus metadata
 - the breaking-changes/tooling workstream has now completed that analyzer/codemod/report branch, including the preserved sample-app migration review package for the `SimpleBlueprintApp` fixture.
-- next approved cross-workstream follow-on: publish the existing benchmark and telemetry outputs in a reviewable format from `migration\performance-and-scale\plan.md`, keeping the approved `build-telemetry`, `scale-invalidation`, and scheduled/manual benchmark contracts intact while the repository prepares the next broader Phase 0 review package
+- the reviewable performance-publication slice is now also complete: the scheduled/manual performance lane now has a preserved package that ties together the current BenchmarkDotNet markdown/HTML summaries, a fresh synthetic telemetry-runner capture, and representative `build-telemetry` / `scale-invalidation` snapshot evidence without inventing a new artifact family.
+- next approved follow-on after the performance publication slice: define the explicit Tier 3 readiness measurement plan in `migration\performance-and-scale\plan.md` so Signature365-scale expectations are durable before broader Phase 1 expansion
 
 ## 4. Generated manifests and inspection surfaces
 

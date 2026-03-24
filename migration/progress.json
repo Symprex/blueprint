@@ -7,28 +7,27 @@
   "current": {
     "activeWorkstream": "performance-and-scale",
     "nextReadySlice": {
-      "title": "Publish benchmark and telemetry outputs in a reviewable format",
+      "title": "Define the explicit Tier 3 readiness measurement plan",
       "status": "ready",
       "dependsOn": [
-        "Sample-app migration report review before broad rollout completed."
+        "Publish benchmark and telemetry outputs in a reviewable format completed."
       ],
       "failingProof": [
-        "A failing proof shows the repository has benchmark, build-telemetry, and invalidation artifacts, but still lacks a preserved human-review package that ties those outputs together for the scheduled/manual performance lane.",
-        "A failing proof shows the current performance evidence is dispersed across BenchmarkDotNet outputs, telemetry envelopes, and stress summaries instead of one reviewable publication bundle."
+        "A failing proof shows the performance workstream still lacks a durable published Tier 3 readiness plan that states how Signature365-scale measurements will be captured, compared, and reviewed before broad migration starts.",
+        "A failing proof shows the current plan has benchmark, telemetry, and stress evidence, but not yet an explicit future measurement target for the next scale tier."
       ],
       "expectedFiles": [
-        "docs\\observability-and-dev-experience.md",
         "migration\\performance-and-scale\\plan.md",
-        "migration\\performance-and-scale\\Capture-SyntheticBuildTelemetry.ps1",
-        "migration\\breaking-changes-and-migration-tooling\\plan.md",
+        "docs\\implementation-checklists.md",
+        "docs\\observability-and-dev-experience.md",
         "migration\\plan.md",
         "migration\\progress.json"
       ],
-      "reviewGate": "Stop for review if publishing the performance package requires changing the approved machine-readable artifact contracts instead of only curating and presenting the existing outputs."
+      "reviewGate": "Stop for review if the Tier 3 plan reveals missing prerequisite architecture or measurement seams that Phase 0 has not yet approved."
     },
     "lastCompletedSlice": {
-      "workstream": "breaking-changes-and-migration-tooling",
-      "title": "Sample-app migration report review before broad rollout"
+      "workstream": "performance-and-scale",
+      "title": "Publish benchmark and telemetry outputs in a reviewable format"
     },
     "openReviewGate": null
   },
