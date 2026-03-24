@@ -439,7 +439,7 @@ When delegating a workstream, include:
 
 - [x] Analyzer diagnostic tests.
 - [x] Code-fix tests with before/after coverage.
-- [ ] JSON/SARIF schema validation tests.
+- [x] JSON/SARIF schema validation tests.
 - [ ] Dry-run idempotency tests for the codemod CLI.
 - [ ] Sample-app migration report review before broad rollout.
 
@@ -460,7 +460,8 @@ When delegating a workstream, include:
 - the next auth/resource migration diagnostic-reporting sub-slice is now also complete: `BPMIG201` flags raw `{Auth:...}` placeholder usage at the template literal, routes that finding to `migration\authentication-and-authorisation\plan.md`, and keeps the placeholder finding visible in dry-run/apply/artifact output alongside `BPMIG200`.
 - the shared report-family rename is now also complete: `MigrationReport.ReportType`, the main report factory/callers, and the codemod artifact expectations now use `migration-diagnostics`, so the shared report surface no longer advertises activation-only semantics while carrying auth/resource findings.
 - the JSON contract-validation follow-on is now also complete: `MigrationReportSerializationTests` and `CodemodArtifactWriterTests` both assert the required `migration-diagnostics` top-level and finding-level JSON shape, adding an explicit drift guard without changing the payload itself.
-- next approved follow-on after the JSON contract-validation slice: add SARIF contract validation tests for the dry-run input artifact before broader rollout.
+- the SARIF contract-validation follow-on is now also complete: `SarifDiagnosticReader` gives the dry-run collector a supported input-validation seam, `SarifDiagnosticReaderTests` guard valid rule-ID projection plus actionable failures for missing `runs` and malformed `ruleId` values, and `SolutionAnalysisRunner` now shares that seam so malformed analyzer output cannot silently drop findings.
+- next approved follow-on after the SARIF contract-validation slice: add dry-run idempotency tests for the codemod CLI before broader rollout.
 
 ### Sub-agent guidance
 

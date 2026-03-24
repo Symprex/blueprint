@@ -7,29 +7,29 @@
   "current": {
     "activeWorkstream": "breaking-changes-and-migration-tooling",
     "nextReadySlice": {
-      "title": "SARIF contract validation tests",
+      "title": "Dry-run idempotency tests for the codemod CLI",
       "status": "ready",
       "dependsOn": [
-        "Migration report schema validation tests committed."
+        "SARIF contract validation tests committed."
       ],
       "failingProof": [
-        "A failing proof shows the codemod dry-run still trusts the SARIF structure implicitly, so upstream analyzer-output changes could break migration report collection without a dedicated contract guardrail.",
-        "A failing proof shows the shared workflow now guards the repo-native JSON report shape but still lacks an equivalent validation seam for the SARIF input artifact that feeds it."
+        "A failing proof shows repeated dry-run executions against the same fixture copy are not yet explicitly proven to return the same stable migration-diagnostics payload and artifact set.",
+        "A failing proof shows review-only codemod runs could still drift because of temp-path, ordering, or output-writing behavior even though apply-mode idempotency is already covered."
       ],
       "expectedFiles": [
+        "src\\Blueprint.Codemod.Tests\\ProgramCancellationTests.cs",
+        "src\\Blueprint.Codemod.Tests\\CodemodArtifactWriterTests.cs",
         "src\\Blueprint.Codemod.Tests\\ActivationDiagnosticsReportCollectionTests.cs",
-        "src\\Blueprint.Codemod\\SolutionAnalysisRunner.cs",
-        "docs\\refactoring-workflow.md",
-        "docs\\compile-time-validation.md",
+        "src\\Blueprint.Codemod\\Program.cs",
         "migration\\breaking-changes-and-migration-tooling\\plan.md",
         "migration\\plan.md",
         "migration\\progress.json"
       ],
-      "reviewGate": "Stop for review if SARIF validation requires pinning to a compiler-version-specific schema or introducing a new third-party dependency."
+      "reviewGate": "Stop for review if proving dry-run idempotency requires freezing timestamps, temp-paths, or artifact metadata in a way that changes the intended CLI contract."
     },
     "lastCompletedSlice": {
       "workstream": "breaking-changes-and-migration-tooling",
-      "title": "Migration report schema validation tests"
+      "title": "SARIF contract validation tests"
     },
     "openReviewGate": null
   },

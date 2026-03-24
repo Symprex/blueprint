@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Text.Json;
 using Blueprint.Migration.Analyzers;
 using Microsoft.CodeAnalysis;
 
@@ -138,39 +137,7 @@ public sealed class SolutionAnalysisRunner
     private async Task<IReadOnlyList<string>> ReadDiagnosticIdsAsync(string sarifPath, CancellationToken cancellationToken)
     {
         await using var sarifStream = File.OpenRead(sarifPath);
-        using var document = await JsonDocument.ParseAsync(sarifStream, cancellationToken: cancellationToken);
-
-        var diagnosticIds = new SortedSet<string>(StringComparer.Ordinal);
-        if (!document.RootElement.TryGetProperty("runs", out var runsElement))
-        {
-            return Array.Empty<string>();
-        }
-
-        foreach (var runElement in runsElement.EnumerateArray())
-        {
-            if (!runElement.TryGetProperty("results", out var resultsElement))
-            {
-                continue;
-            }
-
-            foreach (var resultElement in resultsElement.EnumerateArray())
-            {
-                if (!resultElement.TryGetProperty("ruleId", out var ruleIdElement))
-                {
-                    continue;
-                }
-
-                var diagnosticId = ruleIdElement.GetString();
-                if (diagnosticId is null)
-                {
-                    continue;
-                }
-
-                diagnosticIds.Add(diagnosticId);
-            }
-        }
-
-        return diagnosticIds.ToArray();
+        return await SarifDiagnosticReader.ReadDiagnosticIdsAsync(sarifStream, cancellationToken);
     }
 
     /// <summary>
