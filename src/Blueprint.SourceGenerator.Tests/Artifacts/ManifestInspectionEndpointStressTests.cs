@@ -19,10 +19,17 @@ public class ManifestInspectionEndpointStressTests
     private const string SchemaResourceName = "Blueprint.SourceGenerator.Tests.Artifacts.ManifestResources.GeneratedManifestEnvelope.schema.json";
 
     [Fact]
-    public async Task When_mapping_blueprint_api_repeatedly_then_stress_harness_reports_shared_synthetic_fixture_endpoint_counts_and_hosted_manifest_routes()
+    public async Task When_mapping_blueprint_api_repeatedly_then_stress_harness_reports_shared_synthetic_fixture_endpoint_counts_and_all_hosted_manifest_routes()
     {
         var descriptors = BlueprintAppBenchmarkScenarioFactory.CreateDescriptors(operationCount: 10);
         var expectedEndpointCount = descriptors.Count + 4;
+        var requiredRoutePatterns = new[]
+        {
+            "api/.blueprint/manifests/operations.json",
+            "api/.blueprint/manifests/operations.md",
+            "api/.blueprint/manifests/operations.schema.json",
+            "api/.blueprint/manifests/operations.html",
+        };
         var originalDescriptors = SharedSyntheticManifestInspectionBlueprintApp.Descriptors;
 
         SharedSyntheticManifestInspectionBlueprintApp.Descriptors = descriptors;
@@ -33,14 +40,17 @@ public class ManifestInspectionEndpointStressTests
                 iterationCount: 40,
                 createEndpoints: static () => CreateEndpoints(Environments.Development),
                 mapEndpoints: static endpoints => endpoints.MapBlueprintApi<SharedSyntheticManifestInspectionBlueprintApp, BlueprintAppExecutor>("api/"),
-                requiredRoutePattern: "api/.blueprint/manifests/operations.json");
+                requiredRoutePatterns: requiredRoutePatterns);
 
             summary.RequestedIterationCount.Should().Be(40);
             summary.Failures.Should().BeEmpty();
             summary.CompletedIterationCount.Should().Be(40);
             summary.FaultedIterationCount.Should().Be(0);
             summary.EndpointCounts.Should().OnlyContain(count => count == expectedEndpointCount);
-            summary.RequiredRoutePatternHitCount.Should().Be(40);
+            summary.RequiredRoutePatternHitCounts.Should().BeEquivalentTo(
+                requiredRoutePatterns.ToDictionary(
+                    static routePattern => routePattern,
+                    static _ => 40));
         }
         finally
         {
@@ -121,14 +131,17 @@ internal static class RepeatedEndpointMappingStressHarness
         int iterationCount,
         Func<TEndpointRouteBuilder> createEndpoints,
         Action<TEndpointRouteBuilder> mapEndpoints,
-        string requiredRoutePattern)
+        IReadOnlyList<string> requiredRoutePatterns)
         where TEndpointRouteBuilder : IEndpointRouteBuilder, IDisposable
     {
         var endpointCounts = new List<int>(iterationCount);
         var failures = new List<RepeatedEndpointMappingStressFailure>();
         var completedIterationCount = 0;
         var faultedIterationCount = 0;
-        var requiredRoutePatternHitCount = 0;
+        var requiredRoutePatternHitCounts = requiredRoutePatterns.ToDictionary(
+            static routePattern => routePattern,
+            static _ => 0,
+            StringComparer.Ordinal);
 
         for (var iteration = 0; iteration < iterationCount; iteration++)
         {
@@ -138,10 +151,13 @@ internal static class RepeatedEndpointMappingStressHarness
                 mapEndpoints(endpoints);
 
                 endpointCounts.Add(CountMappedEndpoints(endpoints));
-
-                if (ContainsRoutePattern(endpoints, requiredRoutePattern))
+                var mappedRoutePatterns = GetMappedRoutePatterns(endpoints);
+                foreach (var requiredRoutePattern in requiredRoutePatterns)
                 {
-                    requiredRoutePatternHitCount++;
+                    if (mappedRoutePatterns.Contains(requiredRoutePattern))
+                    {
+                        requiredRoutePatternHitCounts[requiredRoutePattern]++;
+                    }
                 }
 
                 completedIterationCount++;
@@ -159,7 +175,7 @@ internal static class RepeatedEndpointMappingStressHarness
             faultedIterationCount,
             endpointCounts,
             failures,
-            requiredRoutePatternHitCount));
+            requiredRoutePatternHitCounts));
     }
 
     private static int CountMappedEndpoints(IEndpointRouteBuilder endpoints)
@@ -167,12 +183,15 @@ internal static class RepeatedEndpointMappingStressHarness
         return endpoints.DataSources.Sum(static dataSource => dataSource.Endpoints.Count);
     }
 
-    private static bool ContainsRoutePattern(IEndpointRouteBuilder endpoints, string requiredRoutePattern)
+    private static HashSet<string> GetMappedRoutePatterns(IEndpointRouteBuilder endpoints)
     {
         return endpoints.DataSources
             .SelectMany(static dataSource => dataSource.Endpoints)
             .OfType<RouteEndpoint>()
-            .Any(endpoint => string.Equals(endpoint.RoutePattern.RawText, requiredRoutePattern, StringComparison.Ordinal));
+            .Select(static endpoint => endpoint.RoutePattern.RawText)
+            .Where(static rawText => rawText is not null)
+            .Select(static rawText => rawText!)
+            .ToHashSet(StringComparer.Ordinal);
     }
 }
 
@@ -182,7 +201,7 @@ internal sealed record RepeatedEndpointMappingStressSummary(
     int FaultedIterationCount,
     IReadOnlyList<int> EndpointCounts,
     IReadOnlyList<RepeatedEndpointMappingStressFailure> Failures,
-    int RequiredRoutePatternHitCount);
+    IReadOnlyDictionary<string, int> RequiredRoutePatternHitCounts);
 
 internal sealed record RepeatedEndpointMappingStressFailure(
     int Iteration,

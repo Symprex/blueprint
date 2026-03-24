@@ -6,29 +6,12 @@
   },
   "current": {
     "activeWorkstream": "performance-and-scale",
-    "nextReadySlice": {
-      "title": "Extend repeated manifest-inspection stress to all hosted manifest routes",
-      "status": "ready",
-      "dependsOn": [
-        "Extend the shared synthetic fixture into repeated endpoint-mapping stress completed."
-      ],
-      "failingProof": [
-        "A failing proof shows ManifestInspectionEndpointStressTests only counts the hosted manifest JSON route on the shared synthetic fixture and does not prove the markdown, schema, and diagnostics routes survive all repeated endpoint-mapping iterations.",
-        "A failing proof shows the repeated startup stress harness can still regress one of the approved hosted manifest inspection surfaces without the Phase 0 performance lane noticing, because the stress summary records only the JSON route hit count today."
-      ],
-      "expectedFiles": [
-        "migration\\performance-and-scale\\plan.md",
-        "src\\Blueprint.SourceGenerator.Tests\\Artifacts\\ManifestInspectionEndpointStressTests.cs",
-        "migration\\plan.md",
-        "migration\\progress.json"
-      ],
-      "reviewGate": "Stop for review if widening the repeated stress proof requires changing the approved hosted manifest route names, resource-ownership assembly, or diagnostics page contract instead of only asserting the existing routes on each iteration."
-    },
+    "nextReadySlice": null,
     "lastCompletedSlice": {
       "workstream": "performance-and-scale",
-      "title": "Extend the shared synthetic fixture into repeated endpoint-mapping stress"
+      "title": "Extend repeated manifest-inspection stress to all hosted manifest routes"
     },
-    "openReviewGate": null
+    "openReviewGate": "Resolve and record the next approved dependency-safe Phase 0 slice before further implementation work resumes; the durable plans do not yet name a concrete successor after the hosted-manifest-route stress widening slice."
   },
   "orchestrationContract": {
     "mustImplementAfterSliceSelection": true,
