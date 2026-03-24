@@ -1,5 +1,6 @@
 using Blueprint.Model;
 using Blueprint.Runtime.Http;
+using Blueprint.SourceGenerator.Benchmarks.RuntimeModel;
 using FluentAssertions;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -18,20 +19,33 @@ public class ManifestInspectionEndpointStressTests
     private const string SchemaResourceName = "Blueprint.SourceGenerator.Tests.Artifacts.ManifestResources.GeneratedManifestEnvelope.schema.json";
 
     [Fact]
-    public async Task When_mapping_blueprint_api_repeatedly_then_stress_harness_reports_stable_endpoint_counts_and_hosted_manifest_routes()
+    public async Task When_mapping_blueprint_api_repeatedly_then_stress_harness_reports_shared_synthetic_fixture_endpoint_counts_and_hosted_manifest_routes()
     {
-        var summary = await RepeatedEndpointMappingStressHarness.ExecuteAsync(
-            iterationCount: 40,
-            createEndpoints: static () => CreateEndpoints(Environments.Development),
-            mapEndpoints: static endpoints => endpoints.MapBlueprintApi<StressManifestInspectionBlueprintApp, BlueprintAppExecutor>("api/"),
-            requiredRoutePattern: "api/.blueprint/manifests/operations.json");
+        var descriptors = BlueprintAppBenchmarkScenarioFactory.CreateDescriptors(operationCount: 10);
+        var expectedEndpointCount = descriptors.Count + 4;
+        var originalDescriptors = SharedSyntheticManifestInspectionBlueprintApp.Descriptors;
 
-        summary.RequestedIterationCount.Should().Be(40);
-        summary.CompletedIterationCount.Should().Be(40);
-        summary.FaultedIterationCount.Should().Be(0);
-        summary.Failures.Should().BeEmpty();
-        summary.EndpointCounts.Should().OnlyContain(static count => count == 5);
-        summary.RequiredRoutePatternHitCount.Should().Be(40);
+        SharedSyntheticManifestInspectionBlueprintApp.Descriptors = descriptors;
+
+        try
+        {
+            var summary = await RepeatedEndpointMappingStressHarness.ExecuteAsync(
+                iterationCount: 40,
+                createEndpoints: static () => CreateEndpoints(Environments.Development),
+                mapEndpoints: static endpoints => endpoints.MapBlueprintApi<SharedSyntheticManifestInspectionBlueprintApp, BlueprintAppExecutor>("api/"),
+                requiredRoutePattern: "api/.blueprint/manifests/operations.json");
+
+            summary.RequestedIterationCount.Should().Be(40);
+            summary.Failures.Should().BeEmpty();
+            summary.CompletedIterationCount.Should().Be(40);
+            summary.FaultedIterationCount.Should().Be(0);
+            summary.EndpointCounts.Should().OnlyContain(count => count == expectedEndpointCount);
+            summary.RequiredRoutePatternHitCount.Should().Be(40);
+        }
+        finally
+        {
+            SharedSyntheticManifestInspectionBlueprintApp.Descriptors = originalDescriptors;
+        }
     }
 
     private static StressTestEndpointRouteBuilder CreateEndpoints(string environmentName)
@@ -52,17 +66,18 @@ public class ManifestInspectionEndpointStressTests
         return new StressTestEndpointRouteBuilder(services);
     }
 
-    private sealed class StressManifestInspectionBlueprintApp : BlueprintApp
+    private sealed class SharedSyntheticManifestInspectionBlueprintApp : BlueprintApp
     {
-        public StressManifestInspectionBlueprintApp()
+        public static IReadOnlyList<ApiOperationDescriptor> Descriptors { get; set; } = [];
+
+        public SharedSyntheticManifestInspectionBlueprintApp()
         {
-            var descriptor = new ApiOperationDescriptor(typeof(StressTestOperation), "StressTestOperation", "ManifestInspectionEndpointStressTests");
-            descriptor.AddUrl(new ApiOperationUrl("/stress-test-operation"));
-            this.Register(descriptor);
+            foreach (var descriptor in Descriptors)
+            {
+                this.Register(descriptor);
+            }
         }
     }
-
-    private sealed class StressTestOperation;
 
     private sealed class StressTestEndpointRouteBuilder(IServiceProvider serviceProvider) : IEndpointRouteBuilder, IDisposable
     {

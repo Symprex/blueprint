@@ -7,27 +7,26 @@
   "current": {
     "activeWorkstream": "performance-and-scale",
     "nextReadySlice": {
-      "title": "Extend the shared synthetic fixture into repeated endpoint-mapping stress",
+      "title": "Extend repeated manifest-inspection stress to all hosted manifest routes",
       "status": "ready",
       "dependsOn": [
-        "Extend the shared synthetic fixture into concurrent executor stress completed."
+        "Extend the shared synthetic fixture into repeated endpoint-mapping stress completed."
       ],
       "failingProof": [
-        "A failing proof shows ManifestInspectionEndpointStressTests still maps the one-operation StressManifestInspectionBlueprintApp scenario instead of reusing the shared synthetic descriptor identities that BlueprintEndpointMappingBenchmarks already measures.",
-        "A failing proof shows the repeated endpoint-mapping stress proof and the endpoint-mapping benchmark still describe different scenario identities, so startup/runtime Phase 0 evidence is not yet fully driven from one synthetic fixture."
+        "A failing proof shows ManifestInspectionEndpointStressTests only counts the hosted manifest JSON route on the shared synthetic fixture and does not prove the markdown, schema, and diagnostics routes survive all repeated endpoint-mapping iterations.",
+        "A failing proof shows the repeated startup stress harness can still regress one of the approved hosted manifest inspection surfaces without the Phase 0 performance lane noticing, because the stress summary records only the JSON route hit count today."
       ],
       "expectedFiles": [
         "migration\\performance-and-scale\\plan.md",
         "src\\Blueprint.SourceGenerator.Tests\\Artifacts\\ManifestInspectionEndpointStressTests.cs",
-        "src\\Blueprint.SourceGenerator.Benchmarks\\BlueprintHttp\\BlueprintEndpointMappingBenchmarks.cs",
         "migration\\plan.md",
         "migration\\progress.json"
       ],
-      "reviewGate": "Stop for review if reusing the shared synthetic fixture in the endpoint-mapping stress harness requires changing the approved hosted manifest route contract instead of only widening the stress scenario seam."
+      "reviewGate": "Stop for review if widening the repeated stress proof requires changing the approved hosted manifest route names, resource-ownership assembly, or diagnostics page contract instead of only asserting the existing routes on each iteration."
     },
     "lastCompletedSlice": {
       "workstream": "performance-and-scale",
-      "title": "Extend the shared synthetic fixture into concurrent executor stress"
+      "title": "Extend the shared synthetic fixture into repeated endpoint-mapping stress"
     },
     "openReviewGate": null
   },
