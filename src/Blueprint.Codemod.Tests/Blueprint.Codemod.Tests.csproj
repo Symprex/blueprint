@@ -18,6 +18,7 @@
   <ItemGroup>
     <Compile Remove="TestFixtures\**\*.cs" />
     <None Include="TestFixtures\**\*" />
+    <Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
     <ProjectReference Include="..\Blueprint.Codemod\Blueprint.Codemod.csproj" />
   </ItemGroup>
 </Project>

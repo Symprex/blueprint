@@ -95,20 +95,44 @@ public sealed class SolutionAnalysisRunner
         using var process = new Process { StartInfo = processStartInfo };
         process.Start();
 
-        var standardOutputTask = process.StandardOutput.ReadToEndAsync();
-        var standardErrorTask = process.StandardError.ReadToEndAsync();
-
-        await process.WaitForExitAsync(cancellationToken);
-
-        var standardOutput = await standardOutputTask;
-        var standardError = await standardErrorTask;
+        var buildOutput = await WaitForProcessOutputAsync(process, cancellationToken);
 
         if (!File.Exists(sarifPath))
         {
             throw new InvalidOperationException($"The codemod dry run did not produce the expected SARIF output at '{sarifPath}'.");
         }
 
-        return new BuildResult(process.ExitCode, standardOutput, standardError);
+        return new BuildResult(process.ExitCode, buildOutput.StandardOutput, buildOutput.StandardError);
+    }
+
+    private static async Task<BuildOutput> ReadProcessOutputAsync(Process process, CancellationToken cancellationToken)
+    {
+        var standardOutputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
+        var standardErrorTask = process.StandardError.ReadToEndAsync(cancellationToken);
+
+        return new BuildOutput(
+            await standardOutputTask,
+            await standardErrorTask);
+    }
+
+    private static async Task<BuildOutput> WaitForProcessOutputAsync(Process process, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var readOutputTask = ReadProcessOutputAsync(process, cancellationToken);
+            await process.WaitForExitAsync(cancellationToken);
+            return await readOutputTask;
+        }
+        catch (OperationCanceledException)
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+                process.WaitForExit();
+            }
+
+            throw;
+        }
     }
 
     private async Task<IReadOnlyList<string>> ReadDiagnosticIdsAsync(string sarifPath, CancellationToken cancellationToken)
@@ -186,4 +210,6 @@ public sealed class SolutionAnalysisRunner
     }
 
     private sealed record BuildResult(int ExitCode, string StandardOutput, string StandardError);
+
+    private sealed record BuildOutput(string StandardOutput, string StandardError);
 }

@@ -2,34 +2,34 @@
   "schemaVersion": 1,
   "sourceOfTruth": {
     "masterPlan": "migration\\plan.md",
-    "workstreamPlan": "migration\\breaking-changes-and-migration-tooling\\plan.md"
+    "workstreamPlan": "migration\\authentication-and-authorisation\\plan.md"
   },
   "current": {
-    "activeWorkstream": "breaking-changes-and-migration-tooling",
+    "activeWorkstream": "authentication-and-authorisation",
     "nextReadySlice": {
-      "title": "Codemod artifact emission and markdown summary output",
+      "title": "Auth/resource migration diagnostic-reporting foundation",
       "status": "ready",
       "dependsOn": [
-        "Codemod CLI apply-mode foundation and transformation orchestration committed."
+        "Codemod artifact emission and markdown summary output committed."
       ],
       "failingProof": [
-        "A failing proof shows the codemod CLI can dry-run and apply the first supported activation migration, but it still cannot write durable `codemod-report.json` output to a chosen artifact directory for review or CI pickup.",
-        "A failing proof shows the codemod CLI still lacks a markdown summary projection derived from the canonical activation-diagnostics report, so reviewers must inspect raw JSON or stdout instead of a deterministic quick-review artifact."
+        "A failing proof shows the shared `MigrationReport`/codemod seam still only covers activation diagnostics, so `[FromResource(...)]` and `{Auth:...}` usage cannot yet appear in the same deterministic review artifacts that now exist for activation cleanup.",
+        "A failing proof shows the current migration-analyzer surface still lacks the first reserved auth/resource diagnostic family, which means high-volume auth/resource migration work cannot yet enter the repo-native analyzer/report/codemod workflow before broader rewrite automation starts."
       ],
       "expectedFiles": [
-        "src\\Blueprint.Codemod\\Program.cs",
-        "src\\Blueprint.Codemod\\CodemodArtifactWriter.cs",
-        "src\\Blueprint.Codemod\\CodemodMarkdownSummaryWriter.cs",
-        "src\\Blueprint.Codemod.Tests\\CodemodArtifactWriterTests.cs",
-        "migration\\breaking-changes-and-migration-tooling\\plan.md",
+        "src\\Blueprint.Migration.Analyzers\\MigrationDiagnosticDescriptors.cs",
+        "src\\Blueprint.Migration.Analyzers.Tests\\AuthenticationAndAuthorisationMigrationDiagnosticsTests.cs",
+        "src\\Blueprint.Migration.Analyzers\\MigrationReport.cs",
+        "docs\\compile-time-validation.md",
+        "migration\\authentication-and-authorisation\\plan.md",
         "migration\\plan.md",
         "migration\\progress.json"
       ],
-      "reviewGate": "Stop for review if codemod artifact locations, naming, or markdown-summary content need to diverge from the reviewable artifact conventions already described in docs\\refactoring-workflow.md before broader migration rewrites land."
+      "reviewGate": "Stop for review if the first auth/resource migration diagnostics need a new BPMIG range split, a different bucket/documentation-path policy, or a different workstream boundary before broader auth/resource rewrite automation starts."
     },
     "lastCompletedSlice": {
       "workstream": "breaking-changes-and-migration-tooling",
-      "title": "Codemod CLI apply-mode foundation and transformation orchestration"
+      "title": "Codemod artifact emission and markdown summary output"
     },
     "openReviewGate": null
   },

@@ -445,9 +445,9 @@ When delegating a workstream, include:
 
 ### Docs and artifacts
 
-- [ ] Update `docs\refactoring-workflow.md` with the concrete migration workflow and artifact locations.
+- [x] Update `docs\refactoring-workflow.md` with the concrete migration workflow and artifact locations.
 - [x] Update `docs\compile-time-validation.md` with migration diagnostic guidance.
-- [ ] Add examples of expected migration artifacts once the tooling lands.
+- [x] Add examples of expected migration artifacts once the tooling lands.
 
 ### Durable progress
 
@@ -455,8 +455,8 @@ When delegating a workstream, include:
 - the first repo-native activation-diagnostics report contract now lives in `src\Blueprint.Migration.Analyzers\MigrationReport.cs`, `src\Blueprint.Migration.Analyzers\DiagnosticFinding.cs`, and `src\Blueprint.Migration.Analyzers.Tests\MigrationReportSerializationTests.cs`, with deterministic ordering, stable bucket strings, and durable documentation-path mapping for the current activation family.
 - the first repo-native codemod dry-run collector now lives in `src\Blueprint.Codemod\Blueprint.Codemod.csproj`, `src\Blueprint.Codemod\SolutionAnalysisRunner.cs`, and `src\Blueprint.Codemod.Tests\ActivationDiagnosticsReportCollectionTests.cs`, proving that a fixture solution can emit the shared activation-diagnostics report through temporary SARIF collection.
 - the first repo-native codemod apply-mode foundation now also lives in `src\Blueprint.Codemod\ApplyModeOptions.cs`, `src\Blueprint.Codemod\TransformationApplier.cs`, and `src\Blueprint.Codemod.Tests\ApplyModeTests.cs`, proving that dry-run planning results can drive the first supported activation code-fix replay (`BPMIG001`) through `MSBuildWorkspace` while keeping repeat runs idempotent and configuration-required findings intact.
-- next approved follow-on for this workstream: add codemod artifact emission and markdown summary output so dry-run/apply runs can write reviewable `codemod-report.json` and `codemod-report.md` artifacts instead of only printing JSON to standard output.
-- keep broader auth attribute/resource rewrites deferred until that artifact-output slice is review-closed.
+- the first durable codemod artifact-output slice now also lives in `src\Blueprint.Codemod\CodemodArtifactWriter.cs`, `src\Blueprint.Codemod\CodemodMarkdownSummaryWriter.cs`, `src\Blueprint.Codemod\Program.cs`, and `src\Blueprint.Codemod.Tests\CodemodArtifactWriterTests.cs`, proving that dry-run and apply runs can keep emitting canonical stdout JSON while `--output <dir>` writes matching `codemod-report.json` and `codemod-report.md` artifacts sourced from the same `MigrationReport`.
+- next approved follow-on after the codemod artifact-output slice: move into the first auth/resource migration diagnostic-reporting foundation so `[FromResource(...)]` and `{Auth:...}` usage can enter the shared analyzer/report/codemod seam before broader rewrite automation starts.
 
 ### Sub-agent guidance
 

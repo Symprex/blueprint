@@ -181,7 +181,7 @@ Generated reports should classify findings using the same buckets used in the mi
 - consumer-extension rewrite required
 - manual design review required
 
-The current repo-native JSON projection for activation diagnostics follows that same bucket vocabulary and keeps report ordering deterministic by diagnostic ID, while `Blueprint.Codemod` now proves that both a real dry-run collector and the first supported apply-mode mutation can reuse that contract from a solution build. Human-readable summary projection is still a follow-on slice.
+The current repo-native activation-diagnostics seam follows that same bucket vocabulary and keeps report ordering deterministic by diagnostic ID. `Blueprint.Codemod` now proves that both a real dry-run collector and the first supported apply-mode mutation can reuse that contract from a solution build, and `--output <dir>` now writes the same canonical report as durable `codemod-report.json` plus a deterministic `codemod-report.md` summary for review and CI pickup without changing the existing stdout JSON behavior.
 
 ## Legacy Blueprint app migration workflow
 
@@ -211,12 +211,20 @@ Baseline capture should include:
 
 Run analyzers and the codemod CLI in dry-run mode first.
 
+Illustrative codemod command:
+
+```powershell
+dotnet run --project .\src\Blueprint.Codemod\Blueprint.Codemod.csproj -- --solution .\Blueprint.sln --diagnostic-filter BPMIG* --output .\artifacts\MyApp
+```
+
 Expected artifacts:
 
 - `artifacts\<App>\migration-report.sarif`
 - `artifacts\<App>\codemod-report.json`
 - `artifacts\<App>\codemod-report.md`
 - `artifacts\<App>\migration-summary.md`
+
+The codemod JSON and markdown artifacts should be treated as projections of the same canonical `MigrationReport` payload. Reviewers should be able to diff either file and see the same set of findings, buckets, and linked migration-plan paths.
 
 At the end of this phase, every finding should be classified as:
 

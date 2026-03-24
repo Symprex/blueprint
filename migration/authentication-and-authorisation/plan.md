@@ -77,6 +77,7 @@ Current migration-tooling direction:
 
 - `BPMIG003` now flags parameterless `AddAuthorisation()` activation as redundant safe-deletion cleanup
 - `BPMIG101` now flags configured `AddAuthentication(...)` usage as configuration-required migration work because context loading and consumer-owned auth registration still need an explicit seam
+- `Blueprint.Codemod` now supports `--output <dir>` for deterministic `codemod-report.json` / `codemod-report.md` emission from the shared activation `MigrationReport`, so the next dependency-safe auth/tooling slice is to bring `[FromResource(...)]` and `{Auth:...}` usage into that same structured diagnostic/report path before broad rewrite automation starts
 
 ## Host coverage beyond HTTP
 
