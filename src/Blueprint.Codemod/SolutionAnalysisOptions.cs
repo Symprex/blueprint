@@ -1,8 +1,8 @@
 namespace Blueprint.Codemod;
 
 /// <summary>
-/// Describes a codemod dry-run request against a solution so the runner can keep its command-line and test seams
-/// aligned while apply-mode work is still deferred.
+/// Describes a codemod solution-analysis request so dry-run reporting and apply-mode planning can reuse the same
+/// validated solution/filter contract.
 /// </summary>
 public sealed class SolutionAnalysisOptions
 {

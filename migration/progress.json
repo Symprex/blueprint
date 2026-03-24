@@ -7,28 +7,29 @@
   "current": {
     "activeWorkstream": "breaking-changes-and-migration-tooling",
     "nextReadySlice": {
-      "title": "Codemod CLI apply-mode foundation and transformation orchestration",
+      "title": "Codemod artifact emission and markdown summary output",
       "status": "ready",
       "dependsOn": [
-        "Codemod CLI dry-run mode with activation-diagnostics report collection committed."
+        "Codemod CLI apply-mode foundation and transformation orchestration committed."
       ],
       "failingProof": [
-        "A failing proof shows the codemod CLI can collect activation diagnostics and emit the MigrationReport JSON, but cannot yet apply or undo transformations; apply mode still lacks explicit transformation routing and revert-semantics design.",
-        "A failing proof shows that dry-run uses the collected diagnostics to plan transformations, but does not yet modify source files or prove idempotency of repeated apply runs."
+        "A failing proof shows the codemod CLI can dry-run and apply the first supported activation migration, but it still cannot write durable `codemod-report.json` output to a chosen artifact directory for review or CI pickup.",
+        "A failing proof shows the codemod CLI still lacks a markdown summary projection derived from the canonical activation-diagnostics report, so reviewers must inspect raw JSON or stdout instead of a deterministic quick-review artifact."
       ],
       "expectedFiles": [
-        "src\\Blueprint.Codemod\\TransformationApplier.cs",
-        "src\\Blueprint.Codemod\\ApplyModeOptions.cs",
-        "src\\Blueprint.Codemod.Tests\\ApplyModeTests.cs",
+        "src\\Blueprint.Codemod\\Program.cs",
+        "src\\Blueprint.Codemod\\CodemodArtifactWriter.cs",
+        "src\\Blueprint.Codemod\\CodemodMarkdownSummaryWriter.cs",
+        "src\\Blueprint.Codemod.Tests\\CodemodArtifactWriterTests.cs",
         "migration\\breaking-changes-and-migration-tooling\\plan.md",
         "migration\\plan.md",
         "migration\\progress.json"
       ],
-      "reviewGate": "Approve the dry-run CLI proof-of-concept and diagnostic collection pattern before implementing apply mode. Stop for review if the solution-loading strategy, diagnostic filtering, or report collection semantics need to change before apply mode adds transformation complexity."
+      "reviewGate": "Stop for review if codemod artifact locations, naming, or markdown-summary content need to diverge from the reviewable artifact conventions already described in docs\\refactoring-workflow.md before broader migration rewrites land."
     },
     "lastCompletedSlice": {
       "workstream": "breaking-changes-and-migration-tooling",
-      "title": "Codemod CLI dry-run mode with activation-diagnostics report collection"
+      "title": "Codemod CLI apply-mode foundation and transformation orchestration"
     },
     "openReviewGate": null
   },

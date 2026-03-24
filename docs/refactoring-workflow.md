@@ -116,23 +116,24 @@ Current state and expectations:
 - `dotnet format --diagnostics ...` applies safe code fixes where supported once those fixes land
 - a second build should eventually leave only configuration-required or manual-review findings
 
-Today the live auto-fixable activation diagnostics are `BPMIG001` for redundant parameterless `AddOpenApi()`, `BPMIG002` for redundant parameterless `AddHateoasLinks()`, and `BPMIG003` for redundant parameterless `AddAuthorisation()`. `BPMIG001` is also the first live analyzer/code-fix pair, while the configuration-required companion rules now include `BPMIG100` for configured `AddOpenApi(Action<OpenApiOptions>)` and `BPMIG101` for configured `AddAuthentication(...)`. The first repo-native structured JSON contract for that activation family now lives in `src\Blueprint.Migration.Analyzers\MigrationReport.cs` and `src\Blueprint.Migration.Analyzers\DiagnosticFinding.cs`, which serialize the stable `activation-diagnostics` report type, deterministic diagnostic ordering, shared migration buckets, and durable documentation-path links. `src\Blueprint.Codemod` now provides the first dry-run collector for that contract by building a solution, reading the temporary SARIF output, and projecting the matching activation diagnostics back into the shared report payload. The broader diagnostic family and apply-mode codemod surface are still incremental follow-on work rather than completed workflow surface.
+Today the live auto-fixable activation diagnostics are `BPMIG001` for redundant parameterless `AddOpenApi()`, `BPMIG002` for redundant parameterless `AddHateoasLinks()`, and `BPMIG003` for redundant parameterless `AddAuthorisation()`. `BPMIG001` is also the first live analyzer/code-fix pair, while the configuration-required companion rules now include `BPMIG100` for configured `AddOpenApi(Action<OpenApiOptions>)` and `BPMIG101` for configured `AddAuthentication(...)`. The first repo-native structured JSON contract for that activation family now lives in `src\Blueprint.Migration.Analyzers\MigrationReport.cs` and `src\Blueprint.Migration.Analyzers\DiagnosticFinding.cs`, which serialize the stable `activation-diagnostics` report type, deterministic diagnostic ordering, shared migration buckets, and durable documentation-path links. `src\Blueprint.Codemod` now provides both the first dry-run collector for that contract and the first apply-mode foundation: `SolutionAnalysisRunner` builds a solution with temporary SARIF output to project matching diagnostics into the shared report, while `TransformationApplier` reuses the same filter/report seam inside `MSBuildWorkspace` to replay the currently supported migration code fixes and prove idempotent repeat runs. Broader diagnostic families plus artifact-emission and markdown-summary output are still incremental follow-on work rather than completed workflow surface.
 
 ## Layer 3 - Codemod CLI
 
-The first repo-native `Blueprint.Codemod` dry-run seam now exists for activation-diagnostics collection:
+The first repo-native `Blueprint.Codemod` dry-run and apply-mode seams now exist for activation-diagnostics work:
 
 ```powershell
 dotnet run --project .\src\Blueprint.Codemod -- --solution .\Blueprint.sln --diagnostic-filter BPMIG*
+dotnet run --project .\src\Blueprint.Codemod -- --solution .\Blueprint.sln --diagnostic-filter BPMIG* --apply
 ```
 
-That initial dry run shells out to `dotnet build /p:ErrorLog=...`, filters the `BPMIG*` activation family, and writes the shared `MigrationReport` JSON payload to standard output. Apply mode, markdown summaries, and broader transformation routing are still follow-on work.
+The dry-run path shells out to `dotnet build /p:ErrorLog=...`, filters the `BPMIG*` activation family, and writes the shared `MigrationReport` JSON payload to standard output. The first apply-mode path now opens the solution through `MSBuildWorkspace`, reuses the same diagnostic filter, and replays the supported activation code-fix providers (currently the `BPMIG001` cleanup) before emitting the post-apply report to standard output. Markdown summaries, artifact-output directories, and broader transformation routing are still follow-on work.
 
-Large refactors should eventually support both dry-run and apply modes:
+Large refactors should support reviewable dry-run and apply commands before the richer artifact layer arrives:
 
 ```powershell
-dotnet run --project .\src\Blueprint.Codemod -- --solution .\Blueprint.sln --dry-run --output .\artifacts
-dotnet run --project .\src\Blueprint.Codemod -- --solution .\Blueprint.sln --output .\artifacts
+dotnet run --project .\src\Blueprint.Codemod -- --solution .\Blueprint.sln --diagnostic-filter BPMIG*
+dotnet run --project .\src\Blueprint.Codemod -- --solution .\Blueprint.sln --diagnostic-filter BPMIG* --apply
 dotnet format .\Blueprint.sln --no-restore
 dotnet build .\Blueprint.sln
 ```
@@ -180,7 +181,7 @@ Generated reports should classify findings using the same buckets used in the mi
 - consumer-extension rewrite required
 - manual design review required
 
-The current repo-native JSON projection for activation diagnostics follows that same bucket vocabulary and keeps report ordering deterministic by diagnostic ID, while `Blueprint.Codemod` now proves that a real dry-run collector can emit that contract from a solution build before apply mode exists.
+The current repo-native JSON projection for activation diagnostics follows that same bucket vocabulary and keeps report ordering deterministic by diagnostic ID, while `Blueprint.Codemod` now proves that both a real dry-run collector and the first supported apply-mode mutation can reuse that contract from a solution build. Human-readable summary projection is still a follow-on slice.
 
 ## Legacy Blueprint app migration workflow
 

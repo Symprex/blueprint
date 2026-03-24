@@ -40,13 +40,13 @@ public sealed class SolutionAnalysisRunner
 
             var allDiagnosticIds = await this.ReadDiagnosticIdsAsync(sarifPath, cancellationToken);
             var diagnosticIds = allDiagnosticIds
-                .Where(diagnosticId => MatchesFilter(diagnosticId, options.DiagnosticFilter))
+                .Where(diagnosticId => MatchesDiagnosticFilter(diagnosticId, options.DiagnosticFilter))
                 .ToArray();
 
             if (buildResult.ExitCode != 0)
             {
                 var nonMigrationDiagnosticIds = allDiagnosticIds
-                    .Where(diagnosticId => !MatchesFilter(diagnosticId, options.DiagnosticFilter))
+                    .Where(diagnosticId => !MatchesDiagnosticFilter(diagnosticId, options.DiagnosticFilter))
                     .ToArray();
 
                 if (diagnosticIds.Length == 0 || nonMigrationDiagnosticIds.Length > 0)
@@ -149,7 +149,13 @@ public sealed class SolutionAnalysisRunner
         return diagnosticIds.ToArray();
     }
 
-    private static bool MatchesFilter(string diagnosticId, string diagnosticFilter)
+    /// <summary>
+    /// Determines whether a diagnostic identifier matches the configured codemod filter.
+    /// </summary>
+    /// <param name="diagnosticId">The candidate diagnostic identifier.</param>
+    /// <param name="diagnosticFilter">The configured filter such as <c>BPMIG*</c>.</param>
+    /// <returns><see langword="true"/> when the diagnostic matches the filter; otherwise, <see langword="false"/>.</returns>
+    internal static bool MatchesDiagnosticFilter(string diagnosticId, string diagnosticFilter)
     {
         if (string.IsNullOrWhiteSpace(diagnosticFilter))
         {

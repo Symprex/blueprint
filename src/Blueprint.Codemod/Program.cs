@@ -22,6 +22,16 @@ public static class Program
         }
 
         _ = TryGetOption(args, "--diagnostic-filter", out var diagnosticFilter);
+        var applyMode = HasFlag(args, "--apply");
+
+        if (applyMode)
+        {
+            var applier = new TransformationApplier();
+            await applier.ApplyAsync(
+                new ApplyModeOptions(
+                    solutionPath,
+                    diagnosticFilter ?? "BPMIG*"));
+        }
 
         var runner = new SolutionAnalysisRunner();
         var report = await runner.DryRunAsync(
@@ -46,5 +56,10 @@ public static class Program
 
         value = string.Empty;
         return false;
+    }
+
+    private static bool HasFlag(string[] args, string flagName)
+    {
+        return args.Any(argument => string.Equals(argument, flagName, StringComparison.Ordinal));
     }
 }
