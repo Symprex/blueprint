@@ -7,30 +7,29 @@
   "current": {
     "activeWorkstream": "breaking-changes-and-migration-tooling",
     "nextReadySlice": {
-      "title": "Migration report schema validation tests",
+      "title": "SARIF contract validation tests",
       "status": "ready",
       "dependsOn": [
-        "Shared migration report family rename committed."
+        "Migration report schema validation tests committed."
       ],
       "failingProof": [
-        "A failing proof shows the shared `migration-diagnostics` JSON payload can still change shape without any schema-validation assertion, so downstream automation is not guarded against contract drift.",
-        "A failing proof shows the codemod and analyzer artifact surfaces are still behavior-tested only, leaving JSON/SARIF compatibility unproven before broader rollout."
+        "A failing proof shows the codemod dry-run still trusts the SARIF structure implicitly, so upstream analyzer-output changes could break migration report collection without a dedicated contract guardrail.",
+        "A failing proof shows the shared workflow now guards the repo-native JSON report shape but still lacks an equivalent validation seam for the SARIF input artifact that feeds it."
       ],
       "expectedFiles": [
-        "src\\Blueprint.Migration.Analyzers.Tests\\MigrationReportSerializationTests.cs",
         "src\\Blueprint.Codemod.Tests\\ActivationDiagnosticsReportCollectionTests.cs",
-        "src\\Blueprint.Codemod.Tests\\CodemodArtifactWriterTests.cs",
+        "src\\Blueprint.Codemod\\SolutionAnalysisRunner.cs",
         "docs\\refactoring-workflow.md",
         "docs\\compile-time-validation.md",
         "migration\\breaking-changes-and-migration-tooling\\plan.md",
         "migration\\plan.md",
         "migration\\progress.json"
       ],
-      "reviewGate": "Stop for review if schema validation requires a new third-party dependency or a schema-version policy that is not already documented in the migration plans."
+      "reviewGate": "Stop for review if SARIF validation requires pinning to a compiler-version-specific schema or introducing a new third-party dependency."
     },
     "lastCompletedSlice": {
       "workstream": "breaking-changes-and-migration-tooling",
-      "title": "Shared migration report family rename"
+      "title": "Migration report schema validation tests"
     },
     "openReviewGate": null
   },

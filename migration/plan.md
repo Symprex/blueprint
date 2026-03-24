@@ -459,7 +459,8 @@ When delegating a workstream, include:
 - the first auth/resource migration diagnostic-reporting sub-slice is now complete: `BPMIG200` flags legacy `[FromResource(...)]` usage as consumer-extension rewrite work, `LegacyActivationAnalyzer` reports it at the attribute location, `DiagnosticFinding` routes it to `migration\authentication-and-authorisation\plan.md`, and the shared codemod fixture/report/artifact coverage now carries that finding through dry-run and apply output.
 - the next auth/resource migration diagnostic-reporting sub-slice is now also complete: `BPMIG201` flags raw `{Auth:...}` placeholder usage at the template literal, routes that finding to `migration\authentication-and-authorisation\plan.md`, and keeps the placeholder finding visible in dry-run/apply/artifact output alongside `BPMIG200`.
 - the shared report-family rename is now also complete: `MigrationReport.ReportType`, the main report factory/callers, and the codemod artifact expectations now use `migration-diagnostics`, so the shared report surface no longer advertises activation-only semantics while carrying auth/resource findings.
-- next approved follow-on after the report-family rename: add JSON/SARIF schema validation tests for the shared migration-diagnostics artifacts before broader rollout.
+- the JSON contract-validation follow-on is now also complete: `MigrationReportSerializationTests` and `CodemodArtifactWriterTests` both assert the required `migration-diagnostics` top-level and finding-level JSON shape, adding an explicit drift guard without changing the payload itself.
+- next approved follow-on after the JSON contract-validation slice: add SARIF contract validation tests for the dry-run input artifact before broader rollout.
 
 ### Sub-agent guidance
 

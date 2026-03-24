@@ -181,7 +181,7 @@ Generated reports should classify findings using the same buckets used in the mi
 - consumer-extension rewrite required
 - manual design review required
 
-The current repo-native migration-diagnostics seam follows that same bucket vocabulary and keeps report ordering deterministic by diagnostic ID. `Blueprint.Codemod` now proves that both a real dry-run collector and the first supported apply-mode mutation can reuse that contract from a solution build, and `--output <dir>` now writes the same canonical report as durable `codemod-report.json` plus a deterministic `codemod-report.md` summary for review and CI pickup without changing the existing stdout JSON behavior.
+The current repo-native migration-diagnostics seam follows that same bucket vocabulary and keeps report ordering deterministic by diagnostic ID. `Blueprint.Codemod` now proves that both a real dry-run collector and the first supported apply-mode mutation can reuse that contract from a solution build, `--output <dir>` writes the same canonical report as durable `codemod-report.json` plus a deterministic `codemod-report.md` summary for review and CI pickup without changing the existing stdout JSON behavior, and the shared report shape is now guarded by explicit JSON-contract tests before broader rollout.
 
 ## Legacy Blueprint app migration workflow
 

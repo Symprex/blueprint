@@ -88,4 +88,61 @@ public sealed class MigrationReportSerializationTests
         finding.Category.Should().Be("consumer-extension rewrite required");
         finding.DocumentationPath.Should().Be(@"migration\authentication-and-authorisation\plan.md");
     }
+
+    [Xunit.Fact]
+    public void When_validating_the_shared_migration_report_json_contract_then_the_payload_matches_the_explicit_schema()
+    {
+        var report = MigrationReport.CreateMigrationDiagnostics(
+            [
+                MigrationDiagnosticDescriptors.RedundantAddOpenApiActivation,
+                MigrationDiagnosticDescriptors.ConfiguredAddAuthenticationRequiresMigration,
+                MigrationDiagnosticDescriptors.LegacyFromResourceUsageRequiresMigration,
+                MigrationDiagnosticDescriptors.LegacyAuthPlaceholderUsageRequiresMigration,
+            ]);
+
+        var document = JsonNode.Parse(JsonSerializer.Serialize(report));
+
+        document.Should().NotBeNull();
+        AssertMatchesMigrationReportJsonContract(document!);
+    }
+
+    private static void AssertMatchesMigrationReportJsonContract(JsonNode document)
+    {
+        var root = document.AsObject();
+        root.Select(static property => property.Key)
+            .Should()
+            .BeEquivalentTo(["SchemaVersion", "ReportType", "Findings"]);
+
+        root["SchemaVersion"]!.GetValue<int>().Should().Be(1);
+        root["ReportType"]!.GetValue<string>().Should().Be("migration-diagnostics");
+
+        var findings = root["Findings"]!.AsArray();
+        findings.Should().NotBeEmpty();
+
+        foreach (var findingNode in findings)
+        {
+            findingNode.Should().NotBeNull();
+            var finding = findingNode!.AsObject();
+            finding.Select(static property => property.Key)
+                .Should()
+                .BeEquivalentTo(
+                    [
+                        "DiagnosticId",
+                        "Title",
+                        "Message",
+                        "Description",
+                        "Severity",
+                        "Category",
+                        "DocumentationPath",
+                    ]);
+
+            finding["DiagnosticId"]!.GetValue<string>().Should().NotBeNullOrWhiteSpace();
+            finding["Title"]!.GetValue<string>().Should().NotBeNullOrWhiteSpace();
+            finding["Message"]!.GetValue<string>().Should().NotBeNullOrWhiteSpace();
+            finding["Description"]!.GetValue<string>().Should().NotBeNullOrWhiteSpace();
+            finding["Severity"]!.GetValue<string>().Should().NotBeNullOrWhiteSpace();
+            finding["Category"]!.GetValue<string>().Should().NotBeNullOrWhiteSpace();
+            finding["DocumentationPath"]!.GetValue<string>().Should().NotBeNullOrWhiteSpace();
+        }
+    }
 }

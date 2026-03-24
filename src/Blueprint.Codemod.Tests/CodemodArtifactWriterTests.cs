@@ -31,7 +31,7 @@ public sealed class CodemodArtifactWriterTests
             var json = await File.ReadAllTextAsync(jsonPath);
             var document = JsonNode.Parse(json);
             document.Should().NotBeNull();
-            document!["ReportType"]!.GetValue<string>().Should().Be("migration-diagnostics");
+            AssertMatchesMigrationReportJsonContract(document!);
 
             var markdown = await File.ReadAllTextAsync(markdownPath);
             markdown.Should().Contain("# migration-diagnostics");
@@ -176,6 +176,38 @@ public sealed class CodemodArtifactWriterTests
         {
             var childDestination = Path.Combine(destinationDirectory, Path.GetFileName(directory));
             CopyDirectory(directory, childDestination);
+        }
+    }
+
+    private static void AssertMatchesMigrationReportJsonContract(JsonNode document)
+    {
+        var root = document.AsObject();
+        root.Select(static property => property.Key)
+            .Should()
+            .BeEquivalentTo(["SchemaVersion", "ReportType", "Findings"]);
+
+        root["SchemaVersion"]!.GetValue<int>().Should().Be(1);
+        root["ReportType"]!.GetValue<string>().Should().Be("migration-diagnostics");
+
+        var findings = root["Findings"]!.AsArray();
+        findings.Should().NotBeEmpty();
+
+        foreach (var findingNode in findings)
+        {
+            findingNode.Should().NotBeNull();
+            var finding = findingNode!.AsObject();
+            finding.Select(static property => property.Key)
+                .Should()
+                .BeEquivalentTo(
+                    [
+                        "DiagnosticId",
+                        "Title",
+                        "Message",
+                        "Description",
+                        "Severity",
+                        "Category",
+                        "DocumentationPath",
+                    ]);
         }
     }
 }
