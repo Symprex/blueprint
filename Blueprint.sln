@@ -37,6 +37,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Blueprint.Migration.Analyze
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Blueprint.Migration.Analyzers.CodeFixes", "src\Blueprint.Migration.Analyzers.CodeFixes\Blueprint.Migration.Analyzers.CodeFixes.csproj", "{A834FF48-63F1-4F12-834B-B9224AE6721F}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Blueprint.Codemod", "src\Blueprint.Codemod\Blueprint.Codemod.csproj", "{F24AF6BA-A046-4CDB-878C-E75B9F8F5104}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Blueprint.Codemod.Tests", "src\Blueprint.Codemod.Tests\Blueprint.Codemod.Tests.csproj", "{160B58EB-A1B6-47B8-A369-9F02E6968F76}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -95,6 +99,14 @@ Global
 		{A834FF48-63F1-4F12-834B-B9224AE6721F}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A834FF48-63F1-4F12-834B-B9224AE6721F}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A834FF48-63F1-4F12-834B-B9224AE6721F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F24AF6BA-A046-4CDB-878C-E75B9F8F5104}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F24AF6BA-A046-4CDB-878C-E75B9F8F5104}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F24AF6BA-A046-4CDB-878C-E75B9F8F5104}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F24AF6BA-A046-4CDB-878C-E75B9F8F5104}.Release|Any CPU.Build.0 = Release|Any CPU
+		{160B58EB-A1B6-47B8-A369-9F02E6968F76}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{160B58EB-A1B6-47B8-A369-9F02E6968F76}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{160B58EB-A1B6-47B8-A369-9F02E6968F76}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{160B58EB-A1B6-47B8-A369-9F02E6968F76}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{AF948AAE-4F61-4D9C-942E-A8F318C61E9D} = {6A6D0D4D-3EAE-4F88-94AD-9ABE41050A24}
@@ -103,5 +115,7 @@ Global
 		{C187B297-F5BA-4273-87B5-09A8B2CC1B55} = {6A6D0D4D-3EAE-4F88-94AD-9ABE41050A24}
 		{2619C499-B36D-415E-A3CF-B89E62371329} = {6A6D0D4D-3EAE-4F88-94AD-9ABE41050A24}
 		{A834FF48-63F1-4F12-834B-B9224AE6721F} = {6A6D0D4D-3EAE-4F88-94AD-9ABE41050A24}
+		{F24AF6BA-A046-4CDB-878C-E75B9F8F5104} = {6A6D0D4D-3EAE-4F88-94AD-9ABE41050A24}
+		{160B58EB-A1B6-47B8-A369-9F02E6968F76} = {6A6D0D4D-3EAE-4F88-94AD-9ABE41050A24}
 	EndGlobalSection
 EndGlobal

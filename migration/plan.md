@@ -453,8 +453,9 @@ When delegating a workstream, include:
 
 - the `BPMIG001`-`BPMIG399` range is now reserved in repo guidance, `Blueprint.Migration.Analyzers`, `Blueprint.Migration.Analyzers.CodeFixes`, and `Blueprint.Migration.Analyzers.Tests` now provide the first complete analyzer/code-fix/test seam, `BPMIG001` now flags plus safely removes redundant parameterless `BlueprintApiBuilder.AddOpenApi()` activation calls, `BPMIG002` now flags redundant parameterless `AddHateoasLinks()` activation calls, `BPMIG003` now flags redundant parameterless `AddAuthorisation()` activation calls, `BPMIG100` now flags configured `AddOpenApi(Action<OpenApiOptions>)` usage as configuration-required migration work, and `BPMIG101` now flags configured `AddAuthentication(...)` usage as configuration-required migration work.
 - the first repo-native activation-diagnostics report contract now lives in `src\Blueprint.Migration.Analyzers\MigrationReport.cs`, `src\Blueprint.Migration.Analyzers\DiagnosticFinding.cs`, and `src\Blueprint.Migration.Analyzers.Tests\MigrationReportSerializationTests.cs`, with deterministic ordering, stable bucket strings, and durable documentation-path mapping for the current activation family.
-- next approved follow-on for this workstream: add codemod CLI dry-run mode with activation-diagnostics report collection so structured report emission is proven through solution loading before apply mode grows.
-- keep broader auth attribute/resource rewrites and codemod apply-mode work deferred until that dry-run slice is review-closed.
+- the first repo-native codemod dry-run collector now lives in `src\Blueprint.Codemod\Blueprint.Codemod.csproj`, `src\Blueprint.Codemod\SolutionAnalysisRunner.cs`, and `src\Blueprint.Codemod.Tests\ActivationDiagnosticsReportCollectionTests.cs`, proving that a fixture solution can emit the shared activation-diagnostics report through temporary SARIF collection before any apply-mode transforms exist.
+- next approved follow-on for this workstream: add codemod CLI apply-mode foundation and transformation orchestration so dry-run planning results can drive source edits and idempotency proof.
+- keep broader auth attribute/resource rewrites and human-readable codemod summary output deferred until that apply-mode slice is review-closed.
 
 ### Sub-agent guidance
 

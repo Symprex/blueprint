@@ -7,28 +7,28 @@
   "current": {
     "activeWorkstream": "breaking-changes-and-migration-tooling",
     "nextReadySlice": {
-      "title": "Codemod CLI dry-run mode with activation-diagnostics report collection",
+      "title": "Codemod CLI apply-mode foundation and transformation orchestration",
       "status": "ready",
       "dependsOn": [
-        "Migration report schema and output classes for activation diagnostics committed."
+        "Codemod CLI dry-run mode with activation-diagnostics report collection committed."
       ],
       "failingProof": [
-        "A failing proof shows no Blueprint.Codemod dry-run surface exists yet, so migration tooling cannot load a solution, collect BPMIG activation diagnostics, and emit the existing activation-diagnostics MigrationReport JSON contract.",
-        "A failing proof shows the report schema exists in-process, but no deterministic solution-analysis runner or fixture solution exercises report collection for real activation usages such as BPMIG001, BPMIG100, and BPMIG101."
+        "A failing proof shows the codemod CLI can collect activation diagnostics and emit the MigrationReport JSON, but cannot yet apply or undo transformations; apply mode still lacks explicit transformation routing and revert-semantics design.",
+        "A failing proof shows that dry-run uses the collected diagnostics to plan transformations, but does not yet modify source files or prove idempotency of repeated apply runs."
       ],
       "expectedFiles": [
-        "src\\Blueprint.Codemod\\Blueprint.Codemod.csproj",
-        "src\\Blueprint.Codemod\\SolutionAnalysisRunner.cs",
-        "src\\Blueprint.Codemod.Tests\\ActivationDiagnosticsReportCollectionTests.cs",
+        "src\\Blueprint.Codemod\\TransformationApplier.cs",
+        "src\\Blueprint.Codemod\\ApplyModeOptions.cs",
+        "src\\Blueprint.Codemod.Tests\\ApplyModeTests.cs",
         "migration\\breaking-changes-and-migration-tooling\\plan.md",
         "migration\\plan.md",
         "migration\\progress.json"
       ],
-      "reviewGate": "Approve the dry-run CLI and activation-diagnostics collection pattern before apply mode. Stop for review if the solution-loading strategy, diagnostic filtering, or report collection semantics need to change before transformation complexity is added."
+      "reviewGate": "Approve the dry-run CLI proof-of-concept and diagnostic collection pattern before implementing apply mode. Stop for review if the solution-loading strategy, diagnostic filtering, or report collection semantics need to change before apply mode adds transformation complexity."
     },
     "lastCompletedSlice": {
       "workstream": "breaking-changes-and-migration-tooling",
-      "title": "Migration report schema and output classes for activation diagnostics"
+      "title": "Codemod CLI dry-run mode with activation-diagnostics report collection"
     },
     "openReviewGate": null
   },
