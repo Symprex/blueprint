@@ -29,6 +29,15 @@ public sealed class MigrationDiagnosticDescriptorsTests
     }
 
     [Xunit.Fact]
+    public void When_loading_migration_diagnostic_descriptors_then_redundant_addauthorisation_activation_is_enabled_and_actionable()
+    {
+        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.RedundantAddAuthorisationActivation.Id.Should().Be("BPMIG003");
+        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.RedundantAddAuthorisationActivation.DefaultSeverity.Should().Be(Microsoft.CodeAnalysis.DiagnosticSeverity.Info);
+        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.RedundantAddAuthorisationActivation.IsEnabledByDefault.Should().BeTrue();
+        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.RedundantAddAuthorisationActivation.MessageFormat.ToString().Should().Contain("AddAuthorisation()");
+    }
+
+    [Xunit.Fact]
     public void When_loading_migration_diagnostic_descriptors_then_configured_addopenapi_uses_the_first_configuration_required_slot()
     {
         Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.ConfiguredAddOpenApiRequiresMigration.Id.Should().Be("BPMIG100");

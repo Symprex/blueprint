@@ -7,14 +7,14 @@
   "current": {
     "activeWorkstream": "breaking-changes-and-migration-tooling",
     "nextReadySlice": {
-      "title": "Redundant AddAuthorisation migration diagnostic",
+      "title": "Configured AddAuthentication migration diagnostic",
       "status": "ready",
       "dependsOn": [
-        "Redundant AddHateoasLinks migration diagnostic committed."
+        "Redundant AddAuthorisation migration diagnostic committed."
       ],
       "failingProof": [
-        "A failing proof shows parameterless `AddAuthorisation()` calls still produce no migration diagnostic even though the migration plans now treat authorisation as architecturally available and able to compile away when unused.",
-        "A failing proof shows the migration tooling still does not distinguish redundant `AddAuthorisation()` activation boilerplate from explicit authentication configuration that should remain in the configuration-required bucket."
+        "A failing proof shows configured `AddAuthentication(...)` calls still produce no configuration-required migration diagnostic even though the auth plan now treats context-loading and custom registration as explicit configuration work rather than feature activation.",
+        "A failing proof shows the migration tooling still does not distinguish redundant `AddAuthorisation()` cleanup from `AddAuthentication(...)` usage that must survive migration as a manual or configuration-guided change."
       ],
       "expectedFiles": [
         "src\\Blueprint.Migration.Analyzers\\MigrationDiagnosticDescriptors.cs",
@@ -26,11 +26,11 @@
         "migration\\plan.md",
         "migration\\progress.json"
       ],
-      "reviewGate": "Stop again for review before broader authentication configuration expansion if the first AddAuthorisation cleanup diagnostic needs a different safety boundary than the current auth plan assumes."
+      "reviewGate": "Stop again for review before broader auth attribute/resource expansion if the first configured AddAuthentication diagnostic needs a different replacement seam than the current auth plan assumes."
     },
     "lastCompletedSlice": {
       "workstream": "breaking-changes-and-migration-tooling",
-      "title": "Redundant AddHateoasLinks migration diagnostic"
+      "title": "Redundant AddAuthorisation migration diagnostic"
     },
     "openReviewGate": null
   },

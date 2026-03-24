@@ -16,6 +16,7 @@ public sealed class LegacyActivationAnalyzer : DiagnosticAnalyzer
         [
             MigrationDiagnosticDescriptors.RedundantAddOpenApiActivation,
             MigrationDiagnosticDescriptors.RedundantAddHateoasLinksActivation,
+            MigrationDiagnosticDescriptors.RedundantAddAuthorisationActivation,
             MigrationDiagnosticDescriptors.ConfiguredAddOpenApiRequiresMigration,
         ];
 
@@ -31,7 +32,7 @@ public sealed class LegacyActivationAnalyzer : DiagnosticAnalyzer
     {
         if (context.Node is not InvocationExpressionSyntax invocation
             || invocation.Expression is not MemberAccessExpressionSyntax memberAccess
-            || memberAccess.Name.Identifier.ValueText is not ("AddOpenApi" or "AddHateoasLinks"))
+            || memberAccess.Name.Identifier.ValueText is not ("AddOpenApi" or "AddHateoasLinks" or "AddAuthorisation"))
         {
             return;
         }
@@ -59,6 +60,16 @@ public sealed class LegacyActivationAnalyzer : DiagnosticAnalyzer
         {
             context.ReportDiagnostic(Diagnostic.Create(
                 MigrationDiagnosticDescriptors.RedundantAddHateoasLinksActivation,
+                memberAccess.Name.GetLocation()));
+            return;
+        }
+
+        if (memberAccess.Name.Identifier.ValueText == "AddAuthorisation"
+            && invocation.ArgumentList.Arguments.Count == 0
+            && methodSymbol.Parameters.Length == 0)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                MigrationDiagnosticDescriptors.RedundantAddAuthorisationActivation,
                 memberAccess.Name.GetLocation()));
             return;
         }

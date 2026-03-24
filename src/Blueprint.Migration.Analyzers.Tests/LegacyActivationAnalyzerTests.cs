@@ -162,6 +162,78 @@ public sealed class LegacyActivationAnalyzerTests
         diagnostic.Location.GetLineSpan().StartLinePosition.Line.Should().Be(16);
     }
 
+    [Xunit.Fact]
+    public async Task When_legacy_blueprint_builder_calls_addauthorisation_then_reports_bpmig003_on_the_invocation()
+    {
+        const string source = """
+            namespace Legacy.Blueprint;
+
+            public sealed class BlueprintApiBuilder
+            {
+            }
+
+            public static class BlueprintApiBuilderExtensions
+            {
+                public static BlueprintApiBuilder AddAuthorisation(this BlueprintApiBuilder apiBuilder)
+                    => apiBuilder;
+            }
+
+            public static class ConsumerConfiguration
+            {
+                public static void Configure(BlueprintApiBuilder builder)
+                {
+                    builder.AddAuthorisation();
+                }
+            }
+            """;
+
+        var diagnostics = await GetDiagnosticsAsync(source);
+
+        diagnostics.Should().ContainSingle(static diagnostic => diagnostic.Id == "BPMIG003");
+
+        var diagnostic = diagnostics.Single(static candidate => candidate.Id == "BPMIG003");
+        diagnostic.GetMessage().Should().Contain("AddAuthorisation");
+        diagnostic.Location.GetLineSpan().StartLinePosition.Line.Should().Be(16);
+    }
+
+    [Xunit.Fact]
+    public async Task When_legacy_blueprint_builder_configures_addauthorisation_then_does_not_report_bpmig003()
+    {
+        const string source = """
+            namespace Legacy.Blueprint;
+
+            using System;
+
+            public sealed class BlueprintApiBuilder
+            {
+            }
+
+            public sealed class BlueprintAuthorisationBuilder
+            {
+            }
+
+            public static class BlueprintApiBuilderExtensions
+            {
+                public static BlueprintApiBuilder AddAuthorisation(
+                    this BlueprintApiBuilder apiBuilder,
+                    Action<BlueprintAuthorisationBuilder> configure)
+                    => apiBuilder;
+            }
+
+            public static class ConsumerConfiguration
+            {
+                public static void Configure(BlueprintApiBuilder builder)
+                {
+                    builder.AddAuthorisation(_ => { });
+                }
+            }
+            """;
+
+        var diagnostics = await GetDiagnosticsAsync(source);
+
+        diagnostics.Should().NotContain(static diagnostic => diagnostic.Id == "BPMIG003");
+    }
+
     private static async Task<ImmutableArray<Diagnostic>> GetDiagnosticsAsync(string source)
     {
         var syntaxTree = CSharpSyntaxTree.ParseText(source, new CSharpParseOptions(LanguageVersion.Preview));

@@ -116,7 +116,7 @@ Current state and expectations:
 - `dotnet format --diagnostics ...` applies safe code fixes where supported once those fixes land
 - a second build should eventually leave only configuration-required or manual-review findings
 
-Today the live auto-fixable activation diagnostics are `BPMIG001` for redundant parameterless `AddOpenApi()` and `BPMIG002` for redundant parameterless `AddHateoasLinks()`. `BPMIG001` is also the first live analyzer/code-fix pair, while `BPMIG100` is the first configuration-required companion rule and flags configured `AddOpenApi(Action<OpenApiOptions>)` usage for migration toward a future `ConfigureOpenApi(...)` seam. The broader diagnostic family is still incremental follow-on work rather than completed workflow surface.
+Today the live auto-fixable activation diagnostics are `BPMIG001` for redundant parameterless `AddOpenApi()`, `BPMIG002` for redundant parameterless `AddHateoasLinks()`, and `BPMIG003` for redundant parameterless `AddAuthorisation()`. `BPMIG001` is also the first live analyzer/code-fix pair, while `BPMIG100` is the first configuration-required companion rule and flags configured `AddOpenApi(Action<OpenApiOptions>)` usage for migration toward a future `ConfigureOpenApi(...)` seam. The broader diagnostic family is still incremental follow-on work rather than completed workflow surface.
 
 ## Layer 3 - Codemod CLI
 

@@ -32,6 +32,18 @@ public static class MigrationDiagnosticDescriptors
         description: "Legacy Blueprint migrations should remove parameterless AddHateoasLinks() activation calls because the source-generated model treats link generation as an inferred capability rather than an activation switch.");
 
     /// <summary>
+    /// Gets the diagnostic emitted when legacy Blueprint code still activates authorisation explicitly even though auth stages should be inferred from declared requirements.
+    /// </summary>
+    public static DiagnosticDescriptor RedundantAddAuthorisationActivation { get; } = new(
+        id: "BPMIG003",
+        title: "Remove redundant AddAuthorisation activation",
+        messageFormat: "Remove 'AddAuthorisation()' because generated auth stages should be available whenever operations declare authorisation requirements.",
+        category: "BlueprintMigration",
+        defaultSeverity: DiagnosticSeverity.Info,
+        isEnabledByDefault: true,
+        description: "Legacy Blueprint migrations should remove parameterless AddAuthorisation() activation calls because the target architecture treats authorisation as an inferred capability rather than a feature toggle.");
+
+    /// <summary>
     /// Gets the diagnostic emitted when legacy Blueprint code still configures OpenAPI through the old activation overload instead of the future host-level configuration seam.
     /// </summary>
     public static DiagnosticDescriptor ConfiguredAddOpenApiRequiresMigration { get; } = new(

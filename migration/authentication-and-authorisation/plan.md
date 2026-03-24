@@ -75,8 +75,8 @@ Long-term target:
 
 Current migration-tooling direction:
 
-- parameterless `AddAuthorisation()` is the next safe-deletion activation candidate after the initial OpenAPI/link cleanup diagnostics
-- configured `AddAuthentication(...)` remains configuration-required migration work because context loading and consumer-owned auth registration still need an explicit seam
+- `BPMIG003` now flags parameterless `AddAuthorisation()` activation as redundant safe-deletion cleanup
+- configured `AddAuthentication(...)` is the next configuration-required activation follow-on because context loading and consumer-owned auth registration still need an explicit seam
 
 ## Host coverage beyond HTTP
 
