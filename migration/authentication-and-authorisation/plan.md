@@ -78,7 +78,8 @@ Current migration-tooling direction:
 - `BPMIG003` now flags parameterless `AddAuthorisation()` activation as redundant safe-deletion cleanup
 - `BPMIG101` now flags configured `AddAuthentication(...)` usage as configuration-required migration work because context loading and consumer-owned auth registration still need an explicit seam
 - `BPMIG200` now flags legacy `[FromResource(...)]` usage as consumer-extension rewrite migration work and maps it to this workstream plan so auth/resource migration review starts in the shared BPMIG analyzer/report/codemod seam before descriptor-lowering automation exists
-- `Blueprint.Codemod` now carries `BPMIG200` through dry-run/apply reports and `--output <dir>` artifact emission from the shared `MigrationReport`, so the next dependency-safe auth/tooling slice is to bring `{Auth:...}` placeholder usage into that same structured diagnostic/report path before broad rewrite automation starts
+- `BPMIG201` now flags raw `{Auth:...}` placeholder usage at the template-literal location, so both auth/resource inheritance and auth-template expansion now enter the same structured review path before descriptor-lowering automation exists
+- `Blueprint.Codemod` now carries `BPMIG200` and `BPMIG201` through dry-run/apply reports and `--output <dir>` artifact emission from the shared `MigrationReport`, so the next dependency-safe tooling slice is to rename the shared report family away from activation-only language before more non-activation migration findings land
 
 ## Host coverage beyond HTTP
 

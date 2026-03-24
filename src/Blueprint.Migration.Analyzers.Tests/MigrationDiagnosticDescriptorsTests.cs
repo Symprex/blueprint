@@ -64,4 +64,13 @@ public sealed class MigrationDiagnosticDescriptorsTests
         Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.LegacyFromResourceUsageRequiresMigration.IsEnabledByDefault.Should().BeTrue();
         Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.LegacyFromResourceUsageRequiresMigration.MessageFormat.ToString().Should().Contain("FromResource");
     }
+
+    [Xunit.Fact]
+    public void When_loading_migration_diagnostic_descriptors_then_legacy_auth_placeholder_uses_the_next_consumer_extension_slot()
+    {
+        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.LegacyAuthPlaceholderUsageRequiresMigration.Id.Should().Be("BPMIG201");
+        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.LegacyAuthPlaceholderUsageRequiresMigration.DefaultSeverity.Should().Be(Microsoft.CodeAnalysis.DiagnosticSeverity.Warning);
+        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.LegacyAuthPlaceholderUsageRequiresMigration.IsEnabledByDefault.Should().BeTrue();
+        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.LegacyAuthPlaceholderUsageRequiresMigration.MessageFormat.ToString().Should().Contain("{Auth:");
+    }
 }

@@ -20,6 +20,7 @@ public sealed class LegacyActivationAnalyzer : DiagnosticAnalyzer
             MigrationDiagnosticDescriptors.ConfiguredAddOpenApiRequiresMigration,
             MigrationDiagnosticDescriptors.ConfiguredAddAuthenticationRequiresMigration,
             MigrationDiagnosticDescriptors.LegacyFromResourceUsageRequiresMigration,
+            MigrationDiagnosticDescriptors.LegacyAuthPlaceholderUsageRequiresMigration,
         ];
 
     /// <inheritdoc />
@@ -123,15 +124,54 @@ public sealed class LegacyActivationAnalyzer : DiagnosticAnalyzer
     {
         if (context.Node is not AttributeSyntax attribute
             || context.SemanticModel.GetSymbolInfo(attribute, context.CancellationToken).Symbol is not IMethodSymbol attributeConstructor
-            || attributeConstructor.ContainingType is not INamedTypeSymbol { Name: "FromResourceAttribute" })
+            || attributeConstructor.ContainingType is not INamedTypeSymbol attributeType)
         {
             return;
         }
 
-        // Migration analyzers intentionally key off the stable legacy attribute type name so app-local wrappers
-        // and namespace moves still surface upgrade work while consumers migrate toward the source-generated model.
+        if (attributeType.Name == "FromResourceAttribute")
+        {
+            // Migration analyzers intentionally key off the stable legacy attribute type name so app-local wrappers
+            // and namespace moves still surface upgrade work while consumers migrate toward the source-generated model.
+            context.ReportDiagnostic(Diagnostic.Create(
+                MigrationDiagnosticDescriptors.LegacyFromResourceUsageRequiresMigration,
+                attribute.Name.GetLocation()));
+        }
+
+        if (!IsLegacyResourceTemplateAttribute(attributeType)
+            || !TryGetAuthPlaceholderLocation(attribute, context, out var placeholderLocation))
+        {
+            return;
+        }
+
         context.ReportDiagnostic(Diagnostic.Create(
-            MigrationDiagnosticDescriptors.LegacyFromResourceUsageRequiresMigration,
-            attribute.Name.GetLocation()));
+            MigrationDiagnosticDescriptors.LegacyAuthPlaceholderUsageRequiresMigration,
+            placeholderLocation));
+    }
+
+    private static bool IsLegacyResourceTemplateAttribute(INamedTypeSymbol attributeType)
+    {
+        return attributeType.Name is "FromResourceAttribute" or "ResourceAttribute";
+    }
+
+    private static bool TryGetAuthPlaceholderLocation(
+        AttributeSyntax attribute,
+        SyntaxNodeAnalysisContext context,
+        out Location placeholderLocation)
+    {
+        foreach (var argument in attribute.ArgumentList?.Arguments ?? [])
+        {
+            var constantValue = context.SemanticModel.GetConstantValue(argument.Expression, context.CancellationToken);
+            if (constantValue.HasValue
+                && constantValue.Value is string template
+                && template.IndexOf("{Auth:", StringComparison.Ordinal) >= 0)
+            {
+                placeholderLocation = argument.Expression.GetLocation();
+                return true;
+            }
+        }
+
+        placeholderLocation = Location.None;
+        return false;
     }
 }

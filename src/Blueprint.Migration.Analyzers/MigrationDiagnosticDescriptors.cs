@@ -78,4 +78,16 @@ public static class MigrationDiagnosticDescriptors
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
         description: "Legacy Blueprint migrations should treat FromResource(...) usage as consumer-extension rewrite work because the replacement auth/resource model needs explicit source-generated metadata instead of runtime attribute discovery.");
+
+    /// <summary>
+    /// Gets the diagnostic emitted when legacy Blueprint resource templates still use raw auth placeholders that must move into generated auth metadata bindings.
+    /// </summary>
+    public static DiagnosticDescriptor LegacyAuthPlaceholderUsageRequiresMigration { get; } = new(
+        id: "BPMIG201",
+        title: "Migrate auth placeholder usage",
+        messageFormat: "Migrate '{Auth:...}' placeholder usage because auth-template expansion must move into Blueprint's source-generated metadata model.",
+        category: "BlueprintMigration",
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "Legacy Blueprint migrations should treat raw {Auth:...} placeholder templates as consumer-extension rewrite work because the replacement auth/resource model needs explicit generated placeholder bindings instead of runtime string expansion.");
 }

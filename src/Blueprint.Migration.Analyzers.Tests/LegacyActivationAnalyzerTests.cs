@@ -311,6 +311,41 @@ public sealed class LegacyActivationAnalyzerTests
         diagnostic.Location.GetLineSpan().StartLinePosition.Line.Should().Be(16);
     }
 
+    [Xunit.Fact]
+    public async Task When_legacy_operation_uses_auth_placeholder_then_reports_bpmig201_at_the_placeholder_literal()
+    {
+        const string source = """
+            namespace Legacy.Blueprint;
+
+            using System;
+
+            [AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
+            public sealed class FromResourceAttribute : Attribute
+            {
+                public FromResourceAttribute(Type operationType, string resourceKeyTemplate)
+                {
+                }
+            }
+
+            public sealed class AccountLookupQuery
+            {
+            }
+
+            [FromResource(typeof(AccountLookupQuery), "{Auth:AccountId}")]
+            public sealed class AccountCommand
+            {
+            }
+            """;
+
+        var diagnostics = await GetDiagnosticsAsync(source);
+
+        diagnostics.Should().ContainSingle(static diagnostic => diagnostic.Id == "BPMIG201");
+
+        var diagnostic = diagnostics.Single(static candidate => candidate.Id == "BPMIG201");
+        diagnostic.GetMessage().Should().Contain("{Auth:");
+        diagnostic.Location.GetLineSpan().StartLinePosition.Line.Should().Be(16);
+    }
+
     private static async Task<ImmutableArray<Diagnostic>> GetDiagnosticsAsync(string source)
     {
         var syntaxTree = CSharpSyntaxTree.ParseText(source, new CSharpParseOptions(LanguageVersion.Preview));

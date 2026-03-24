@@ -2,36 +2,37 @@
   "schemaVersion": 1,
   "sourceOfTruth": {
     "masterPlan": "migration\\plan.md",
-    "workstreamPlan": "migration\\authentication-and-authorisation\\plan.md"
+    "workstreamPlan": "migration\\breaking-changes-and-migration-tooling\\plan.md"
   },
   "current": {
-    "activeWorkstream": "authentication-and-authorisation",
+    "activeWorkstream": "breaking-changes-and-migration-tooling",
     "nextReadySlice": {
-      "title": "Auth placeholder migration diagnostic reporting",
+      "title": "Shared migration report family rename",
       "status": "ready",
       "dependsOn": [
-        "FromResource migration diagnostic reporting committed."
+        "Auth placeholder migration diagnostic reporting committed."
       ],
       "failingProof": [
-        "A failing proof shows raw `{Auth:...}` placeholders in legacy resource templates still do not produce a reserved BPMIG diagnostic, so auth-template migration work cannot yet enter the same deterministic analyzer/report/codemod workflow as `[FromResource(...)]`.",
-        "A failing proof shows the shared `MigrationReport`/codemod seam still lacks a placeholder-focused auth/resource finding, which leaves the highest-volume auth-template review work outside the repo-native artifact flow before broader rewrite automation starts."
+        "A failing proof shows the shared `MigrationReport` still emits `ReportType = \"activation-diagnostics\"` even though the report now contains non-activation findings such as `BPMIG200` and `BPMIG201`, so the durable artifact family name no longer matches the payload semantics.",
+        "A failing proof shows the codemod markdown/json artifact surfaces still present activation-only language, which would mislead reviewers and automation as more migration families enter the same BPMIG report seam."
       ],
       "expectedFiles": [
-        "src\\Blueprint.Migration.Analyzers\\MigrationDiagnosticDescriptors.cs",
-        "src\\Blueprint.Migration.Analyzers\\Analyzers\\LegacyActivationAnalyzer.cs",
-        "src\\Blueprint.Migration.Analyzers.Tests\\LegacyActivationAnalyzerTests.cs",
+        "src\\Blueprint.Migration.Analyzers\\MigrationReport.cs",
         "src\\Blueprint.Migration.Analyzers.Tests\\MigrationReportSerializationTests.cs",
         "src\\Blueprint.Codemod.Tests\\ActivationDiagnosticsReportCollectionTests.cs",
+        "src\\Blueprint.Codemod.Tests\\CodemodArtifactWriterTests.cs",
+        "src\\Blueprint.Codemod\\CodemodMarkdownSummaryWriter.cs",
         "docs\\compile-time-validation.md",
+        "migration\\breaking-changes-and-migration-tooling\\plan.md",
         "migration\\authentication-and-authorisation\\plan.md",
         "migration\\plan.md",
         "migration\\progress.json"
       ],
-      "reviewGate": "Stop for review if the first `{Auth:...}` placeholder diagnostics need a different BPMIG bucket/documentation-path policy or force a different boundary between auth/resource tooling and descriptor-lowering work."
+      "reviewGate": "Stop for review if renaming the shared report family requires a schema-version bump or a different compatibility policy for downstream automation."
     },
     "lastCompletedSlice": {
       "workstream": "authentication-and-authorisation",
-      "title": "FromResource migration diagnostic reporting"
+      "title": "Auth placeholder migration diagnostic reporting"
     },
     "openReviewGate": null
   },

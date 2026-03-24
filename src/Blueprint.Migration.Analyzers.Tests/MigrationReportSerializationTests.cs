@@ -71,4 +71,21 @@ public sealed class MigrationReportSerializationTests
         finding.Category.Should().Be("consumer-extension rewrite required");
         finding.DocumentationPath.Should().Be(@"migration\authentication-and-authorisation\plan.md");
     }
+
+    [Xunit.Fact]
+    public void When_projecting_bpmig201_then_it_uses_the_authentication_migration_plan_and_consumer_extension_bucket()
+    {
+        var descriptor = new Microsoft.CodeAnalysis.DiagnosticDescriptor(
+            id: "BPMIG201",
+            title: "Migrate auth placeholder usage",
+            messageFormat: "Migrate '{Auth:...}' placeholder usage.",
+            category: "BlueprintMigration",
+            defaultSeverity: Microsoft.CodeAnalysis.DiagnosticSeverity.Warning,
+            isEnabledByDefault: true);
+
+        var finding = DiagnosticFinding.FromDescriptor(descriptor);
+
+        finding.Category.Should().Be("consumer-extension rewrite required");
+        finding.DocumentationPath.Should().Be(@"migration\authentication-and-authorisation\plan.md");
+    }
 }
