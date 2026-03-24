@@ -43,6 +43,8 @@ public static class Program
                     var artifactWriter = new CodemodArtifactWriter();
                     return artifactWriter.WriteAsync(report, outputDirectory, cancellationToken);
                 },
+                Console.Out,
+                Console.Error,
                 cancellationSource.Token);
         }
         catch (OperationCanceledException) when (cancellationSource.IsCancellationRequested)
@@ -56,16 +58,36 @@ public static class Program
         }
     }
 
-    private static async Task<int> RunAsync(
+    /// <summary>
+    /// Runs the codemod orchestration against injected collaborators so tests can prove CLI behavior without reflection or global console capture.
+    /// </summary>
+    /// <param name="args">The command-line arguments.</param>
+    /// <param name="applyAsync">The apply-mode implementation.</param>
+    /// <param name="dryRunAsync">The dry-run implementation.</param>
+    /// <param name="writeArtifactsAsync">The artifact writer implementation.</param>
+    /// <param name="standardOutput">The standard-output writer that receives the canonical JSON report.</param>
+    /// <param name="standardError">The standard-error writer that receives argument validation failures.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The process exit code.</returns>
+    internal static async Task<int> RunAsync(
         string[] args,
         Func<ApplyModeOptions, CancellationToken, Task> applyAsync,
         Func<SolutionAnalysisOptions, CancellationToken, Task<MigrationReport>> dryRunAsync,
         Func<MigrationReport, string, CancellationToken, Task> writeArtifactsAsync,
+        TextWriter standardOutput,
+        TextWriter standardError,
         CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(args);
+        ArgumentNullException.ThrowIfNull(applyAsync);
+        ArgumentNullException.ThrowIfNull(dryRunAsync);
+        ArgumentNullException.ThrowIfNull(writeArtifactsAsync);
+        ArgumentNullException.ThrowIfNull(standardOutput);
+        ArgumentNullException.ThrowIfNull(standardError);
+
         if (!TryGetOption(args, "--solution", out var solutionPath))
         {
-            Console.Error.WriteLine("Missing required '--solution <path>' option.");
+            await standardError.WriteLineAsync("Missing required '--solution <path>' option.");
             return 1;
         }
 
@@ -93,7 +115,7 @@ public static class Program
             await writeArtifactsAsync(report, outputDirectory, cancellationToken);
         }
 
-        Console.Out.WriteLine(JsonSerializer.Serialize(report));
+        await standardOutput.WriteLineAsync(JsonSerializer.Serialize(report));
         return 0;
     }
 

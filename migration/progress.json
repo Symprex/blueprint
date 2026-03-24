@@ -7,29 +7,28 @@
   "current": {
     "activeWorkstream": "breaking-changes-and-migration-tooling",
     "nextReadySlice": {
-      "title": "Dry-run idempotency tests for the codemod CLI",
+      "title": "Sample-app migration report review before broad rollout",
       "status": "ready",
       "dependsOn": [
-        "SARIF contract validation tests committed."
+        "Dry-run idempotency tests for the codemod CLI committed."
       ],
       "failingProof": [
-        "A failing proof shows repeated dry-run executions against the same fixture copy are not yet explicitly proven to return the same stable migration-diagnostics payload and artifact set.",
-        "A failing proof shows review-only codemod runs could still drift because of temp-path, ordering, or output-writing behavior even though apply-mode idempotency is already covered."
+        "A failing proof shows the repo still lacks a durable sample-app migration artifact set that a human reviewer can inspect before broader rollout.",
+        "A failing proof shows the current migration-tooling evidence is still limited to unit and fixture assertions rather than a preserved sample-app dry-run review package."
       ],
       "expectedFiles": [
-        "src\\Blueprint.Codemod.Tests\\ProgramCancellationTests.cs",
-        "src\\Blueprint.Codemod.Tests\\CodemodArtifactWriterTests.cs",
-        "src\\Blueprint.Codemod.Tests\\ActivationDiagnosticsReportCollectionTests.cs",
         "src\\Blueprint.Codemod\\Program.cs",
+        "src\\Blueprint.Codemod.Tests\\TestFixtures\\SimpleBlueprintApp\\SimpleBlueprintApp.sln",
+        "docs\\refactoring-workflow.md",
         "migration\\breaking-changes-and-migration-tooling\\plan.md",
         "migration\\plan.md",
         "migration\\progress.json"
       ],
-      "reviewGate": "Stop for review if proving dry-run idempotency requires freezing timestamps, temp-paths, or artifact metadata in a way that changes the intended CLI contract."
+      "reviewGate": "Stop for review if the sample-app artifact set reveals missing migration buckets, unstable report contents, or a need to change the intended codemod CLI contract before broader rollout."
     },
     "lastCompletedSlice": {
       "workstream": "breaking-changes-and-migration-tooling",
-      "title": "SARIF contract validation tests"
+      "title": "Dry-run idempotency tests for the codemod CLI"
     },
     "openReviewGate": null
   },

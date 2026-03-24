@@ -440,7 +440,7 @@ When delegating a workstream, include:
 - [x] Analyzer diagnostic tests.
 - [x] Code-fix tests with before/after coverage.
 - [x] JSON/SARIF schema validation tests.
-- [ ] Dry-run idempotency tests for the codemod CLI.
+- [x] Dry-run idempotency tests for the codemod CLI.
 - [ ] Sample-app migration report review before broad rollout.
 
 ### Docs and artifacts
@@ -461,7 +461,8 @@ When delegating a workstream, include:
 - the shared report-family rename is now also complete: `MigrationReport.ReportType`, the main report factory/callers, and the codemod artifact expectations now use `migration-diagnostics`, so the shared report surface no longer advertises activation-only semantics while carrying auth/resource findings.
 - the JSON contract-validation follow-on is now also complete: `MigrationReportSerializationTests` and `CodemodArtifactWriterTests` both assert the required `migration-diagnostics` top-level and finding-level JSON shape, adding an explicit drift guard without changing the payload itself.
 - the SARIF contract-validation follow-on is now also complete: `SarifDiagnosticReader` gives the dry-run collector a supported input-validation seam, `SarifDiagnosticReaderTests` guard valid rule-ID projection plus actionable failures for missing `runs` and malformed `ruleId` values, and `SolutionAnalysisRunner` now shares that seam so malformed analyzer output cannot silently drop findings.
-- next approved follow-on after the SARIF contract-validation slice: add dry-run idempotency tests for the codemod CLI before broader rollout.
+- the dry-run idempotency follow-on is now also complete: `Program.RunAsync` exposes a supported writer-injectable orchestration seam for tests, `ProgramCancellationTests` no longer use reflection to reach the CLI path, and `DryRunIdempotencyTests` now prove repeated review-only runs keep stdout, durable artifacts, and source files stable for the same copied fixture.
+- next approved follow-on after the dry-run idempotency slice: create and review a sample-app migration report artifact set before broader rollout.
 
 ### Sub-agent guidance
 

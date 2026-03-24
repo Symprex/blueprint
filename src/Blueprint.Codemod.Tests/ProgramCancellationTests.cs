@@ -1,4 +1,3 @@
-using System.Reflection;
 using Blueprint.Migration.Analyzers;
 using FluentAssertions;
 
@@ -15,8 +14,10 @@ public sealed class ProgramCancellationTests
         CancellationToken? dryRunToken = null;
         CancellationToken? artifactToken = null;
         string? outputDirectory = null;
+        using var standardOutput = new StringWriter();
+        using var standardError = new StringWriter();
 
-        var exitCode = await InvokeRunAsyncAsync(
+        var exitCode = await Program.RunAsync(
             [
                 "--solution",
                 "fixture.sln",
@@ -42,6 +43,8 @@ public sealed class ProgramCancellationTests
                 artifactToken = token;
                 return Task.CompletedTask;
             },
+            standardOutput,
+            standardError,
             cancellationToken);
 
         exitCode.Should().Be(0);
@@ -58,8 +61,10 @@ public sealed class ProgramCancellationTests
         CancellationToken? applyToken = null;
         CancellationToken? dryRunToken = null;
         var artifactWriterCalled = false;
+        using var standardOutput = new StringWriter();
+        using var standardError = new StringWriter();
 
-        var exitCode = await InvokeRunAsyncAsync(
+        var exitCode = await Program.RunAsync(
             [
                 "--solution",
                 "fixture.sln",
@@ -82,38 +87,13 @@ public sealed class ProgramCancellationTests
                 artifactWriterCalled = true;
                 return Task.CompletedTask;
             },
+            standardOutput,
+            standardError,
             cancellationToken);
 
         exitCode.Should().Be(0);
         applyToken.Should().Be(cancellationToken);
         dryRunToken.Should().Be(cancellationToken);
         artifactWriterCalled.Should().BeFalse();
-    }
-
-    private static async Task<int> InvokeRunAsyncAsync(
-        string[] args,
-        Func<ApplyModeOptions, CancellationToken, Task> applyAsync,
-        Func<SolutionAnalysisOptions, CancellationToken, Task<MigrationReport>> dryRunAsync,
-        Func<MigrationReport, string, CancellationToken, Task> writeArtifactsAsync,
-        CancellationToken cancellationToken)
-    {
-        var runAsyncMethod = typeof(Program).GetMethod(
-            "RunAsync",
-            BindingFlags.Static | BindingFlags.NonPublic);
-
-        runAsyncMethod.Should().NotBeNull("Program should expose a non-public orchestration seam for cancellation-aware testing.");
-
-        var invocation = (Task<int>)runAsyncMethod!.Invoke(
-            obj: null,
-            parameters:
-            [
-                args,
-                applyAsync,
-                dryRunAsync,
-                writeArtifactsAsync,
-                cancellationToken,
-            ])!;
-
-        return await invocation;
     }
 }
