@@ -7,28 +7,28 @@
   "current": {
     "activeWorkstream": "breaking-changes-and-migration-tooling",
     "nextReadySlice": {
-      "title": "Migration report schema and output classes for activation diagnostics",
+      "title": "Codemod CLI dry-run mode with activation-diagnostics report collection",
       "status": "ready",
       "dependsOn": [
-        "Configured AddAuthentication migration diagnostic committed."
+        "Migration report schema and output classes for activation diagnostics committed."
       ],
       "failingProof": [
-        "A failing proof shows the migration tooling still has no concrete report output classes or JSON payload shape for activation diagnostics even though the Phase 0 exit gate now expects structured report classes.",
-        "A failing proof shows activation diagnostics such as BPMIG001, BPMIG100, and BPMIG101 still cannot be serialized into a machine-readable category model that downstream codemod or review tooling can consume."
+        "A failing proof shows no Blueprint.Codemod dry-run surface exists yet, so migration tooling cannot load a solution, collect BPMIG activation diagnostics, and emit the existing activation-diagnostics MigrationReport JSON contract.",
+        "A failing proof shows the report schema exists in-process, but no deterministic solution-analysis runner or fixture solution exercises report collection for real activation usages such as BPMIG001, BPMIG100, and BPMIG101."
       ],
       "expectedFiles": [
-        "src\\Blueprint.Migration.Analyzers\\MigrationReport.cs",
-        "src\\Blueprint.Migration.Analyzers\\DiagnosticFinding.cs",
-        "src\\Blueprint.Migration.Analyzers.Tests\\MigrationReportSerializationTests.cs",
+        "src\\Blueprint.Codemod\\Blueprint.Codemod.csproj",
+        "src\\Blueprint.Codemod\\SolutionAnalysisRunner.cs",
+        "src\\Blueprint.Codemod.Tests\\ActivationDiagnosticsReportCollectionTests.cs",
         "migration\\breaking-changes-and-migration-tooling\\plan.md",
         "migration\\plan.md",
         "migration\\progress.json"
       ],
-      "reviewGate": "Stop again for review before codemod scaffolding grows on top of the new report shape; the finding categories and JSON contract must be approved first."
+      "reviewGate": "Approve the dry-run CLI and activation-diagnostics collection pattern before apply mode. Stop for review if the solution-loading strategy, diagnostic filtering, or report collection semantics need to change before transformation complexity is added."
     },
     "lastCompletedSlice": {
       "workstream": "breaking-changes-and-migration-tooling",
-      "title": "Configured AddAuthentication migration diagnostic"
+      "title": "Migration report schema and output classes for activation diagnostics"
     },
     "openReviewGate": null
   },

@@ -116,7 +116,7 @@ Current state and expectations:
 - `dotnet format --diagnostics ...` applies safe code fixes where supported once those fixes land
 - a second build should eventually leave only configuration-required or manual-review findings
 
-Today the live auto-fixable activation diagnostics are `BPMIG001` for redundant parameterless `AddOpenApi()`, `BPMIG002` for redundant parameterless `AddHateoasLinks()`, and `BPMIG003` for redundant parameterless `AddAuthorisation()`. `BPMIG001` is also the first live analyzer/code-fix pair, while the configuration-required companion rules now include `BPMIG100` for configured `AddOpenApi(Action<OpenApiOptions>)` and `BPMIG101` for configured `AddAuthentication(...)`. The broader diagnostic family is still incremental follow-on work rather than completed workflow surface.
+Today the live auto-fixable activation diagnostics are `BPMIG001` for redundant parameterless `AddOpenApi()`, `BPMIG002` for redundant parameterless `AddHateoasLinks()`, and `BPMIG003` for redundant parameterless `AddAuthorisation()`. `BPMIG001` is also the first live analyzer/code-fix pair, while the configuration-required companion rules now include `BPMIG100` for configured `AddOpenApi(Action<OpenApiOptions>)` and `BPMIG101` for configured `AddAuthentication(...)`. The first repo-native structured JSON contract for that activation family now lives in `src\Blueprint.Migration.Analyzers\MigrationReport.cs` and `src\Blueprint.Migration.Analyzers\DiagnosticFinding.cs`, which serialize the stable `activation-diagnostics` report type, deterministic diagnostic ordering, shared migration buckets, and durable documentation-path links before larger codemod scaffolding grows. The broader diagnostic family is still incremental follow-on work rather than completed workflow surface.
 
 ## Layer 3 - Codemod CLI
 
@@ -173,6 +173,8 @@ Generated reports should classify findings using the same buckets used in the mi
 - configuration required
 - consumer-extension rewrite required
 - manual design review required
+
+The current repo-native JSON projection for activation diagnostics follows that same bucket vocabulary and keeps report ordering deterministic by diagnostic ID so AI or CI consumers can diff the contract cleanly before a broader codemod CLI exists.
 
 ## Legacy Blueprint app migration workflow
 

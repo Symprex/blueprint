@@ -212,8 +212,9 @@ Plan the rollout as an analyzer-led major-version change:
 ## Current migration status
 
 - The `BPMIG001`-`BPMIG399` range is now reserved in repo guidance, `Blueprint.Migration.Analyzers`, `Blueprint.Migration.Analyzers.CodeFixes`, and `Blueprint.Migration.Analyzers.Tests` provide the first complete analyzer/code-fix/test seam, `BPMIG001` now flags plus safely removes redundant parameterless `BlueprintApiBuilder.AddOpenApi()` activation calls, `BPMIG002` now flags redundant parameterless `AddHateoasLinks()` activation calls, `BPMIG003` now flags redundant parameterless `AddAuthorisation()` activation calls, `BPMIG100` now flags configured `AddOpenApi(Action<OpenApiOptions>)` usage as configuration-required migration work, and `BPMIG101` now flags configured `AddAuthentication(...)` usage as configuration-required migration work.
-- Next approved slice: add migration report schema and output classes for activation diagnostics so the migration-tooling workstream can emit structured finding categories before codemod scaffolding expands.
-- Keep broader auth attribute/resource rewrites and codemod scaffolding deferred until that report-schema slice is review-closed.
+- `src\Blueprint.Migration.Analyzers\MigrationReport.cs`, `src\Blueprint.Migration.Analyzers\DiagnosticFinding.cs`, and `src\Blueprint.Migration.Analyzers.Tests\MigrationReportSerializationTests.cs` now define the first repo-native JSON report contract for activation diagnostics, including `SchemaVersion = 1`, `ReportType = "activation-diagnostics"`, deterministic diagnostic ordering, migration-bucket classification, and durable documentation-path links for the current activation family.
+- Next approved slice: add codemod CLI dry-run mode with activation-diagnostics report collection so the migration-tooling workstream can prove solution loading and structured report emission before apply mode grows.
+- Keep broader auth attribute/resource rewrites and codemod apply-mode work deferred until that dry-run slice is review-closed.
 
 ## Observability and debuggability
 
