@@ -18,4 +18,13 @@ public sealed class MigrationDiagnosticDescriptorsTests
         Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.RedundantAddOpenApiActivation.IsEnabledByDefault.Should().BeTrue();
         Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.RedundantAddOpenApiActivation.MessageFormat.ToString().Should().Contain("AddOpenApi()");
     }
+
+    [Xunit.Fact]
+    public void When_loading_migration_diagnostic_descriptors_then_configured_addopenapi_uses_the_first_configuration_required_slot()
+    {
+        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.ConfiguredAddOpenApiRequiresMigration.Id.Should().Be("BPMIG100");
+        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.ConfiguredAddOpenApiRequiresMigration.DefaultSeverity.Should().Be(Microsoft.CodeAnalysis.DiagnosticSeverity.Warning);
+        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.ConfiguredAddOpenApiRequiresMigration.IsEnabledByDefault.Should().BeTrue();
+        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.ConfiguredAddOpenApiRequiresMigration.MessageFormat.ToString().Should().Contain("ConfigureOpenApi");
+    }
 }

@@ -211,9 +211,9 @@ Plan the rollout as an analyzer-led major-version change:
 
 ## Current migration status
 
-- The `BPMIG001`-`BPMIG399` range is now reserved in repo guidance, `Blueprint.Migration.Analyzers`, `Blueprint.Migration.Analyzers.CodeFixes`, and `Blueprint.Migration.Analyzers.Tests` provide the first complete analyzer/code-fix/test seam, and `BPMIG001` now flags plus safely removes redundant parameterless `BlueprintApiBuilder.AddOpenApi()` activation calls.
-- Next approved slice: add the first configuration-required migration diagnostic for configured `AddOpenApi(Action<OpenApiOptions>)` usage so migration tooling distinguishes between safe deletion and OpenAPI customization that still needs manual review.
-- Keep broader activation/auth/resource diagnostics, codemod scaffolding, and SARIF/JSON schema work deferred until that configured-overload follow-on is review-closed.
+- The `BPMIG001`-`BPMIG399` range is now reserved in repo guidance, `Blueprint.Migration.Analyzers`, `Blueprint.Migration.Analyzers.CodeFixes`, and `Blueprint.Migration.Analyzers.Tests` provide the first complete analyzer/code-fix/test seam, `BPMIG001` now flags plus safely removes redundant parameterless `BlueprintApiBuilder.AddOpenApi()` activation calls, and `BPMIG100` now flags configured `AddOpenApi(Action<OpenApiOptions>)` usage as configuration-required migration work.
+- Next approved slice: add the next safe-deletion diagnostic for parameterless `AddHateoasLinks()` activation so migration tooling starts covering the other legacy activation calls that the plans treat as no longer required.
+- Keep broader auth/resource diagnostics, codemod scaffolding, and SARIF/JSON schema work deferred until that first link-activation follow-on is review-closed.
 
 ## Observability and debuggability
 

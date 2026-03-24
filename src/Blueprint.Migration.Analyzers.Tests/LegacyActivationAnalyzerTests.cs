@@ -85,6 +85,49 @@ public sealed class LegacyActivationAnalyzerTests
         diagnostics.Should().NotContain(static diagnostic => diagnostic.Id == "BPMIG001");
     }
 
+    [Xunit.Fact]
+    public async Task When_legacy_blueprint_builder_configures_addopenapi_then_reports_bpmig100_with_configureopenapi_guidance()
+    {
+        const string source = """
+            namespace Legacy.Blueprint;
+
+            using System;
+
+            public sealed class BlueprintApiBuilder
+            {
+            }
+
+            public sealed class OpenApiOptions
+            {
+                public string? Title { get; set; }
+            }
+
+            public static class BlueprintApiBuilderExtensions
+            {
+                public static BlueprintApiBuilder AddOpenApi(
+                    this BlueprintApiBuilder pipelineBuilder,
+                    Action<OpenApiOptions> configure)
+                    => pipelineBuilder;
+            }
+
+            public static class ConsumerConfiguration
+            {
+                public static void Configure(BlueprintApiBuilder builder)
+                {
+                    builder.AddOpenApi(options => options.Title = "Legacy");
+                }
+            }
+            """;
+
+        var diagnostics = await GetDiagnosticsAsync(source);
+
+        diagnostics.Should().ContainSingle(static diagnostic => diagnostic.Id == "BPMIG100");
+
+        var diagnostic = diagnostics.Single(static candidate => candidate.Id == "BPMIG100");
+        diagnostic.GetMessage().Should().Contain("ConfigureOpenApi");
+        diagnostic.GetMessage().Should().Contain("AddOpenApi");
+    }
+
     private static async Task<ImmutableArray<Diagnostic>> GetDiagnosticsAsync(string source)
     {
         var syntaxTree = CSharpSyntaxTree.ParseText(source, new CSharpParseOptions(LanguageVersion.Preview));

@@ -7,30 +7,30 @@
   "current": {
     "activeWorkstream": "breaking-changes-and-migration-tooling",
     "nextReadySlice": {
-      "title": "Configured AddOpenApi migration diagnostic",
+      "title": "Redundant AddHateoasLinks migration diagnostic",
       "status": "ready",
       "dependsOn": [
-        "Redundant AddOpenApi code fix committed."
+        "Configured AddOpenApi migration diagnostic committed."
       ],
       "failingProof": [
-        "A failing proof shows configured `AddOpenApi(Action<OpenApiOptions>)` calls still produce no configuration-required migration diagnostic even though the workstream now has a safe auto-fix path only for the parameterless overload.",
-        "A failing proof shows the migration tooling still cannot distinguish between auto-fixable parameterless OpenAPI activation and OpenAPI customization that must survive migration as a manual or configuration-guided change."
+        "A failing proof shows parameterless `AddHateoasLinks()` calls still produce no migration diagnostic even though the migration plans now treat link generation as architecturally available without an explicit activation switch.",
+        "A failing proof shows the migration tooling still does not distinguish link-generation metadata from legacy `AddHateoasLinks()` activation boilerplate that should disappear in the source-generated model."
       ],
       "expectedFiles": [
         "src\\Blueprint.Migration.Analyzers\\MigrationDiagnosticDescriptors.cs",
         "src\\Blueprint.Migration.Analyzers\\Analyzers\\LegacyActivationAnalyzer.cs",
         "src\\Blueprint.Migration.Analyzers.Tests\\LegacyActivationAnalyzerTests.cs",
         "docs\\refactoring-workflow.md",
-        "migration\\openapi\\plan.md",
+        "migration\\resource-model-links-and-post-processing\\plan.md",
         "migration\\breaking-changes-and-migration-tooling\\plan.md",
         "migration\\plan.md",
         "migration\\progress.json"
       ],
-      "reviewGate": "Stop again for review before broad activation-family expansion if the first configuration-required AddOpenApi diagnostic needs a different replacement seam or documentation contract than the current OpenAPI plan assumes."
+      "reviewGate": "Stop again for review before broad auth/resource expansion if the first link-activation diagnostic needs a different safety contract than the current link-generation migration plan assumes."
     },
     "lastCompletedSlice": {
       "workstream": "breaking-changes-and-migration-tooling",
-      "title": "Redundant AddOpenApi code fix"
+      "title": "Configured AddOpenApi migration diagnostic"
     },
     "openReviewGate": null
   },

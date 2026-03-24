@@ -13,7 +13,10 @@ public sealed class LegacyActivationAnalyzer : DiagnosticAnalyzer
 {
     /// <inheritdoc />
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics =>
-        [MigrationDiagnosticDescriptors.RedundantAddOpenApiActivation];
+        [
+            MigrationDiagnosticDescriptors.RedundantAddOpenApiActivation,
+            MigrationDiagnosticDescriptors.ConfiguredAddOpenApiRequiresMigration,
+        ];
 
     /// <inheritdoc />
     public override void Initialize(AnalysisContext context)
@@ -27,12 +30,15 @@ public sealed class LegacyActivationAnalyzer : DiagnosticAnalyzer
     {
         if (context.Node is not InvocationExpressionSyntax invocation
             || invocation.Expression is not MemberAccessExpressionSyntax memberAccess
-            || memberAccess.Name.Identifier.ValueText != "AddOpenApi"
-            || invocation.ArgumentList.Arguments.Count != 0)
+            || memberAccess.Name.Identifier.ValueText != "AddOpenApi")
         {
             return;
         }
 
+        // Migration analyzers intentionally key off stable legacy type names instead of namespaces because
+        // consumers often wrap or re-expose the old Blueprint builder types from app-local namespaces while
+        // moving toward the source-generated model. The BPMIG range is migration-specific, so favor broad
+        // discovery over narrowly missing genuine upgrade targets.
         var receiverType = context.SemanticModel.GetTypeInfo(memberAccess.Expression, context.CancellationToken).Type;
         if (receiverType is not INamedTypeSymbol { Name: "BlueprintApiBuilder" })
         {
@@ -41,14 +47,31 @@ public sealed class LegacyActivationAnalyzer : DiagnosticAnalyzer
 
         if (context.SemanticModel.GetSymbolInfo(invocation, context.CancellationToken).Symbol is not IMethodSymbol methodSymbol
             || methodSymbol.Name != "AddOpenApi"
-            || methodSymbol.Parameters.Length != 0
             || !SymbolEqualityComparer.Default.Equals(methodSymbol.ReturnType, receiverType))
         {
             return;
         }
 
-        context.ReportDiagnostic(Diagnostic.Create(
-            MigrationDiagnosticDescriptors.RedundantAddOpenApiActivation,
-            memberAccess.Name.GetLocation()));
+        if (invocation.ArgumentList.Arguments.Count == 0 && methodSymbol.Parameters.Length == 0)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                MigrationDiagnosticDescriptors.RedundantAddOpenApiActivation,
+                memberAccess.Name.GetLocation()));
+            return;
+        }
+
+        if (invocation.ArgumentList.Arguments.Count == 1
+            && methodSymbol.Parameters.Length == 1
+            && methodSymbol.Parameters[0].Type is INamedTypeSymbol
+            {
+                Name: "Action",
+                TypeArguments.Length: 1,
+            } configureCallback
+            && configureCallback.TypeArguments[0] is INamedTypeSymbol { Name: "OpenApiOptions" })
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                MigrationDiagnosticDescriptors.ConfiguredAddOpenApiRequiresMigration,
+                memberAccess.Name.GetLocation()));
+        }
     }
 }

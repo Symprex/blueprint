@@ -36,6 +36,11 @@ HTTP hosts should always have OpenAPI support. The long-term model is:
 - optional `ConfigureOpenApi(...)`-style customization for details that cannot be inferred statically
 - the actual document is backed by compile-time metadata, not runtime scanning of operation types
 
+Current migration-tooling status:
+
+- `BPMIG001` now flags parameterless `BlueprintApiBuilder.AddOpenApi()` calls as redundant safe-deletion cleanup.
+- `BPMIG100` now flags configured `AddOpenApi(Action<OpenApiOptions>)` usage as configuration-required migration work that should move toward the future `ConfigureOpenApi(...)` seam instead of being auto-fixed away.
+
 ## Integration strategy
 
 The legacy `GetOpenApiQuery` pattern should not define the new architecture by default.

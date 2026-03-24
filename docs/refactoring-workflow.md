@@ -116,7 +116,7 @@ Current state and expectations:
 - `dotnet format --diagnostics ...` applies safe code fixes where supported once those fixes land
 - a second build should eventually leave only configuration-required or manual-review findings
 
-Today the first live analyzer/code-fix pair is `BPMIG001`, which flags and safely removes redundant parameterless `AddOpenApi()` activation calls. The broader diagnostic family is still incremental follow-on work rather than completed workflow surface.
+Today the first live analyzer/code-fix pair is `BPMIG001`, which flags and safely removes redundant parameterless `AddOpenApi()` activation calls. The first configuration-required companion rule is `BPMIG100`, which flags configured `AddOpenApi(Action<OpenApiOptions>)` usage and points it toward a future `ConfigureOpenApi(...)` seam. The broader diagnostic family is still incremental follow-on work rather than completed workflow surface.
 
 ## Layer 3 - Codemod CLI
 
