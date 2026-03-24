@@ -495,7 +495,7 @@ When delegating a workstream, include:
 - [x] Runtime hotspot measurements exist for known registration/lookup bottlenecks.
 - [x] A reviewable benchmark baseline exists for the known `BlueprintApp` hotspots before Phase 1 starts.
 - [ ] The fixture generator feeds both compile-time and runtime harnesses.
-- [ ] Tier 3 readiness has an explicit measurement plan before Signature365-scale migration starts.
+- [x] Tier 3 readiness has an explicit measurement plan before Signature365-scale migration starts.
 
 ### Tests and benchmarks
 
@@ -531,7 +531,8 @@ When delegating a workstream, include:
 - completed first high-volume link-generation stress harness: `SyntheticBlueprintFixtureScaleHarnessTests.cs` now drives a 100-operation synthetic fixture with unique root links, proves descriptor output contains those links at scale, and requires a single root-link edit to change only `SyntheticOperation050_Descriptor.g.cs`; the same slice also fixes stale link-only descriptor output by removing the model-only combined-provider comparer from descriptor/app generators and by making `DescriptorPlan` equality include diagnostics plus metadata
 - the breaking-changes/tooling workstream has now completed that analyzer/codemod/report branch, including the preserved sample-app migration review package for the `SimpleBlueprintApp` fixture.
 - the reviewable performance-publication slice is now also complete: the scheduled/manual performance lane now has a preserved package that ties together the current BenchmarkDotNet markdown/HTML summaries, a fresh synthetic telemetry-runner capture, and representative `build-telemetry` / `scale-invalidation` snapshot evidence without inventing a new artifact family.
-- next approved follow-on after the performance publication slice: define the explicit Tier 3 readiness measurement plan in `migration\performance-and-scale\plan.md` so Signature365-scale expectations are durable before broader Phase 1 expansion
+- the explicit Tier 3 readiness measurement-plan slice is now also complete: `migration\performance-and-scale\plan.md` now names the required Signature365-scale scenarios, scheduled/manual artifacts, comparison points, and review expectations so later broad migration claims have a durable published target.
+- next approved follow-on after the Tier 3 planning slice: make the shared `SyntheticBlueprintFixtureGenerator` feed the runtime benchmark and stress harnesses as well as the compile-time harnesses
 
 ## 4. Generated manifests and inspection surfaces
 

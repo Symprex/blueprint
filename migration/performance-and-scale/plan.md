@@ -66,6 +66,27 @@ This tier should be exercised in normal CI through deterministic tests and selec
 
 This tier should be exercised through scheduled or explicitly-invoked benchmark/stress workflows rather than every pull request.
 
+#### Tier 3 readiness measurement plan
+
+Before Phase 1 or any Signature365-scale migration claims readiness, publish a reviewable Tier 3 package that includes:
+
+- at least one synthetic multi-project scenario at roughly 500 operations and one larger stretch scenario
+- cold-build, no-op-build, single-operation-edit, shared-contract-edit, and design-time-build telemetry captures
+- runtime benchmark summaries for registration, lookup, executor dispatch, and HTTP endpoint mapping
+- stress evidence for concurrent dispatch plus repeated startup/endpoint mapping on the same host surfaces
+- the reviewed `build-telemetry` and `scale-invalidation` envelopes for the representative edit scenarios
+- a short human-readable review summary that links back to the machine-readable artifacts and the prior approved baseline
+
+The Tier 3 review should compare the fresh package against the latest approved scheduled/manual package and call out:
+
+- widened invalidation scope
+- materially slower cold, no-op, or single-edit captures
+- materially higher generated-output volume or tracked-stage churn
+- runtime regressions in registration, dispatch, or endpoint mapping
+- any scenario that still lacks the auth, validation, link, or result-metadata surfaces expected at Signature365 scale
+
+Do not turn Tier 3 into a vague aspiration. Treat it as a published readiness review with named scenarios, captured artifacts, and an explicit comparison point.
+
 ## Harnesses to build
 
 ### 1. Deterministic compile-time scale tests
@@ -285,7 +306,8 @@ If a new module materially changes compile-time or runtime cost, it should also 
 - Completed first high-volume link-generation stress harness: `SyntheticBlueprintFixtureScaleHarnessTests.cs` now drives a 100-operation synthetic fixture that stamps unique root links across every operation, proves generated descriptor output contains those links at scale, and locks in single-edit locality by requiring one root-link mutation to change only `SyntheticOperation050_Descriptor.g.cs`. The same slice also closes the incremental root cause behind stale link-only descriptor output: descriptor/app generators no longer suppress compilation edits behind a model-only combined-provider comparer, and `DescriptorPlan` equality now includes diagnostics plus metadata so link-only descriptor changes invalidate correctly.
 - The breaking-changes/tooling workstream has now closed its sample-app migration report review gate with a preserved `SimpleBlueprintApp` dry-run package, so the next approved cross-workstream follow-on returns here.
 - The reviewable performance-publication slice is now complete too: the scheduled/manual lane has a preserved package that copies the current BenchmarkDotNet markdown/HTML reports, captures fresh synthetic `build-telemetry` runner outputs for cold/no-op/single-edit/design-time builds, and links representative `scale-invalidation` plus `build-telemetry` snapshot evidence into one human-review bundle without introducing a new machine-readable contract.
-- Next approved follow-on: define the explicit Tier 3 readiness measurement plan so Signature365-scale migration has a durable published target before Phase 1 broadens the scale surface again.
+- The explicit Tier 3 readiness measurement-plan slice is now complete too: this plan now states the required Signature365-scale scenarios, scheduled/manual artifacts, comparison points, and review expectations so Phase 1 does not treat Tier 3 as a vague aspiration.
+- Next approved follow-on: make the shared `SyntheticBlueprintFixtureGenerator` feed the runtime benchmark and stress harnesses as well as the compile-time harnesses so Tier 2 and Tier 3 evidence come from one synthetic scenario definition.
 
 ## Sequencing
 
