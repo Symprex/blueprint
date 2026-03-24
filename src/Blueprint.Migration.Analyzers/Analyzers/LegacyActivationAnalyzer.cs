@@ -18,6 +18,7 @@ public sealed class LegacyActivationAnalyzer : DiagnosticAnalyzer
             MigrationDiagnosticDescriptors.RedundantAddHateoasLinksActivation,
             MigrationDiagnosticDescriptors.RedundantAddAuthorisationActivation,
             MigrationDiagnosticDescriptors.ConfiguredAddOpenApiRequiresMigration,
+            MigrationDiagnosticDescriptors.ConfiguredAddAuthenticationRequiresMigration,
         ];
 
     /// <inheritdoc />
@@ -32,7 +33,7 @@ public sealed class LegacyActivationAnalyzer : DiagnosticAnalyzer
     {
         if (context.Node is not InvocationExpressionSyntax invocation
             || invocation.Expression is not MemberAccessExpressionSyntax memberAccess
-            || memberAccess.Name.Identifier.ValueText is not ("AddOpenApi" or "AddHateoasLinks" or "AddAuthorisation"))
+            || memberAccess.Name.Identifier.ValueText is not ("AddOpenApi" or "AddHateoasLinks" or "AddAuthorisation" or "AddAuthentication"))
         {
             return;
         }
@@ -96,6 +97,22 @@ public sealed class LegacyActivationAnalyzer : DiagnosticAnalyzer
         {
             context.ReportDiagnostic(Diagnostic.Create(
                 MigrationDiagnosticDescriptors.ConfiguredAddOpenApiRequiresMigration,
+                memberAccess.Name.GetLocation()));
+            return;
+        }
+
+        if (memberAccess.Name.Identifier.ValueText == "AddAuthentication"
+            && invocation.ArgumentList.Arguments.Count == 1
+            && methodSymbol.Parameters.Length == 1
+            && methodSymbol.Parameters[0].Type is INamedTypeSymbol
+            {
+                Name: "Action",
+                TypeArguments.Length: 1,
+            } configureAuthenticationCallback
+            && configureAuthenticationCallback.TypeArguments[0] is INamedTypeSymbol { Name: "BlueprintAuthenticationBuilder" })
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                MigrationDiagnosticDescriptors.ConfiguredAddAuthenticationRequiresMigration,
                 memberAccess.Name.GetLocation()));
         }
     }

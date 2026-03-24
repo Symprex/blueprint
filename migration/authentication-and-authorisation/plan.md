@@ -76,7 +76,7 @@ Long-term target:
 Current migration-tooling direction:
 
 - `BPMIG003` now flags parameterless `AddAuthorisation()` activation as redundant safe-deletion cleanup
-- configured `AddAuthentication(...)` is the next configuration-required activation follow-on because context loading and consumer-owned auth registration still need an explicit seam
+- `BPMIG101` now flags configured `AddAuthentication(...)` usage as configuration-required migration work because context loading and consumer-owned auth registration still need an explicit seam
 
 ## Host coverage beyond HTTP
 

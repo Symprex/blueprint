@@ -45,4 +45,14 @@ public sealed class MigrationDiagnosticDescriptorsTests
         Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.ConfiguredAddOpenApiRequiresMigration.IsEnabledByDefault.Should().BeTrue();
         Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.ConfiguredAddOpenApiRequiresMigration.MessageFormat.ToString().Should().Contain("ConfigureOpenApi");
     }
+
+    [Xunit.Fact]
+    public void When_loading_migration_diagnostic_descriptors_then_configured_addauthentication_uses_the_next_configuration_required_slot()
+    {
+        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.ConfiguredAddAuthenticationRequiresMigration.Id.Should().Be("BPMIG101");
+        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.ConfiguredAddAuthenticationRequiresMigration.DefaultSeverity.Should().Be(Microsoft.CodeAnalysis.DiagnosticSeverity.Warning);
+        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.ConfiguredAddAuthenticationRequiresMigration.IsEnabledByDefault.Should().BeTrue();
+        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.ConfiguredAddAuthenticationRequiresMigration.MessageFormat.ToString().Should().Contain("AddAuthentication");
+        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.ConfiguredAddAuthenticationRequiresMigration.MessageFormat.ToString().Should().Contain("configuration");
+    }
 }

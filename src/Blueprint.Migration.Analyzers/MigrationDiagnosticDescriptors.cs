@@ -54,4 +54,16 @@ public static class MigrationDiagnosticDescriptors
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
         description: "Legacy Blueprint migrations should treat configured AddOpenApi(...) calls as configuration-required work rather than a safe auto-fix because the customization must move to the future host-level ConfigureOpenApi seam.");
+
+    /// <summary>
+    /// Gets the diagnostic emitted when legacy Blueprint code still configures authentication through the old activation overload instead of an explicit migration-time configuration seam.
+    /// </summary>
+    public static DiagnosticDescriptor ConfiguredAddAuthenticationRequiresMigration { get; } = new(
+        id: "BPMIG101",
+        title: "Migrate configured AddAuthentication activation",
+        messageFormat: "Migrate configured 'AddAuthentication(...)' usage through the new authentication configuration path because auth stages are no longer activated through BlueprintApiBuilder feature toggles.",
+        category: "BlueprintMigration",
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "Legacy Blueprint migrations should treat configured AddAuthentication(...) calls as configuration-required work because context loading and consumer-owned authentication registration still need an explicit migration seam.");
 }

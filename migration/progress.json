@@ -7,30 +7,28 @@
   "current": {
     "activeWorkstream": "breaking-changes-and-migration-tooling",
     "nextReadySlice": {
-      "title": "Configured AddAuthentication migration diagnostic",
+      "title": "Migration report schema and output classes for activation diagnostics",
       "status": "ready",
       "dependsOn": [
-        "Redundant AddAuthorisation migration diagnostic committed."
+        "Configured AddAuthentication migration diagnostic committed."
       ],
       "failingProof": [
-        "A failing proof shows configured `AddAuthentication(...)` calls still produce no configuration-required migration diagnostic even though the auth plan now treats context-loading and custom registration as explicit configuration work rather than feature activation.",
-        "A failing proof shows the migration tooling still does not distinguish redundant `AddAuthorisation()` cleanup from `AddAuthentication(...)` usage that must survive migration as a manual or configuration-guided change."
+        "A failing proof shows the migration tooling still has no concrete report output classes or JSON payload shape for activation diagnostics even though the Phase 0 exit gate now expects structured report classes.",
+        "A failing proof shows activation diagnostics such as BPMIG001, BPMIG100, and BPMIG101 still cannot be serialized into a machine-readable category model that downstream codemod or review tooling can consume."
       ],
       "expectedFiles": [
-        "src\\Blueprint.Migration.Analyzers\\MigrationDiagnosticDescriptors.cs",
-        "src\\Blueprint.Migration.Analyzers\\Analyzers\\LegacyActivationAnalyzer.cs",
-        "src\\Blueprint.Migration.Analyzers.Tests\\LegacyActivationAnalyzerTests.cs",
-        "docs\\refactoring-workflow.md",
-        "migration\\authentication-and-authorisation\\plan.md",
+        "src\\Blueprint.Migration.Analyzers\\MigrationReport.cs",
+        "src\\Blueprint.Migration.Analyzers\\DiagnosticFinding.cs",
+        "src\\Blueprint.Migration.Analyzers.Tests\\MigrationReportSerializationTests.cs",
         "migration\\breaking-changes-and-migration-tooling\\plan.md",
         "migration\\plan.md",
         "migration\\progress.json"
       ],
-      "reviewGate": "Stop again for review before broader auth attribute/resource expansion if the first configured AddAuthentication diagnostic needs a different replacement seam than the current auth plan assumes."
+      "reviewGate": "Stop again for review before codemod scaffolding grows on top of the new report shape; the finding categories and JSON contract must be approved first."
     },
     "lastCompletedSlice": {
       "workstream": "breaking-changes-and-migration-tooling",
-      "title": "Redundant AddAuthorisation migration diagnostic"
+      "title": "Configured AddAuthentication migration diagnostic"
     },
     "openReviewGate": null
   },

@@ -234,6 +234,48 @@ public sealed class LegacyActivationAnalyzerTests
         diagnostics.Should().NotContain(static diagnostic => diagnostic.Id == "BPMIG003");
     }
 
+    [Xunit.Fact]
+    public async Task When_legacy_blueprint_builder_configures_addauthentication_then_reports_bpmig101_with_configuration_guidance()
+    {
+        const string source = """
+            namespace Legacy.Blueprint;
+
+            using System;
+
+            public sealed class BlueprintApiBuilder
+            {
+            }
+
+            public sealed class BlueprintAuthenticationBuilder
+            {
+            }
+
+            public static class BlueprintApiBuilderExtensions
+            {
+                public static BlueprintApiBuilder AddAuthentication(
+                    this BlueprintApiBuilder apiBuilder,
+                    Action<BlueprintAuthenticationBuilder> configure)
+                    => apiBuilder;
+            }
+
+            public static class ConsumerConfiguration
+            {
+                public static void Configure(BlueprintApiBuilder builder)
+                {
+                    builder.AddAuthentication(_ => { });
+                }
+            }
+            """;
+
+        var diagnostics = await GetDiagnosticsAsync(source);
+
+        diagnostics.Should().ContainSingle(static diagnostic => diagnostic.Id == "BPMIG101");
+
+        var diagnostic = diagnostics.Single(static candidate => candidate.Id == "BPMIG101");
+        diagnostic.GetMessage().Should().Contain("AddAuthentication");
+        diagnostic.GetMessage().Should().Contain("configuration");
+    }
+
     private static async Task<ImmutableArray<Diagnostic>> GetDiagnosticsAsync(string source)
     {
         var syntaxTree = CSharpSyntaxTree.ParseText(source, new CSharpParseOptions(LanguageVersion.Preview));

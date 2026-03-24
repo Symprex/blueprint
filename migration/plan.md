@@ -451,9 +451,9 @@ When delegating a workstream, include:
 
 ### Durable progress
 
-- the `BPMIG001`-`BPMIG399` range is now reserved in repo guidance, `Blueprint.Migration.Analyzers`, `Blueprint.Migration.Analyzers.CodeFixes`, and `Blueprint.Migration.Analyzers.Tests` now provide the first complete analyzer/code-fix/test seam, `BPMIG001` now flags plus safely removes redundant parameterless `BlueprintApiBuilder.AddOpenApi()` activation calls, `BPMIG002` now flags redundant parameterless `AddHateoasLinks()` activation calls, `BPMIG003` now flags redundant parameterless `AddAuthorisation()` activation calls, and `BPMIG100` now flags configured `AddOpenApi(Action<OpenApiOptions>)` usage as configuration-required migration work.
-- next approved follow-on for this workstream: add the next configuration-required migration diagnostic for configured `AddAuthentication(...)` usage so migration tooling starts covering the remaining auth activator that still carries consumer-owned setup.
-- keep broader auth attribute/resource rewrites, report-schema work, and codemod scaffolding deferred until that first authentication-configuration follow-on is review-closed.
+- the `BPMIG001`-`BPMIG399` range is now reserved in repo guidance, `Blueprint.Migration.Analyzers`, `Blueprint.Migration.Analyzers.CodeFixes`, and `Blueprint.Migration.Analyzers.Tests` now provide the first complete analyzer/code-fix/test seam, `BPMIG001` now flags plus safely removes redundant parameterless `BlueprintApiBuilder.AddOpenApi()` activation calls, `BPMIG002` now flags redundant parameterless `AddHateoasLinks()` activation calls, `BPMIG003` now flags redundant parameterless `AddAuthorisation()` activation calls, `BPMIG100` now flags configured `AddOpenApi(Action<OpenApiOptions>)` usage as configuration-required migration work, and `BPMIG101` now flags configured `AddAuthentication(...)` usage as configuration-required migration work.
+- next approved follow-on for this workstream: add migration report schema and output classes for activation diagnostics so structured migration findings exist before codemod scaffolding grows.
+- keep broader auth attribute/resource rewrites and codemod scaffolding deferred until that report-schema slice is review-closed.
 
 ### Sub-agent guidance
 
