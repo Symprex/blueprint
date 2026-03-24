@@ -2,33 +2,33 @@
   "schemaVersion": 1,
   "sourceOfTruth": {
     "masterPlan": "migration\\plan.md",
-    "workstreamPlan": "migration\\breaking-changes-and-migration-tooling\\plan.md"
+    "workstreamPlan": "migration\\performance-and-scale\\plan.md"
   },
   "current": {
-    "activeWorkstream": "breaking-changes-and-migration-tooling",
+    "activeWorkstream": "performance-and-scale",
     "nextReadySlice": {
-      "title": "Sample-app migration report review before broad rollout",
+      "title": "Publish benchmark and telemetry outputs in a reviewable format",
       "status": "ready",
       "dependsOn": [
-        "Dry-run idempotency tests for the codemod CLI committed."
+        "Sample-app migration report review before broad rollout completed."
       ],
       "failingProof": [
-        "A failing proof shows the repo still lacks a durable sample-app migration artifact set that a human reviewer can inspect before broader rollout.",
-        "A failing proof shows the current migration-tooling evidence is still limited to unit and fixture assertions rather than a preserved sample-app dry-run review package."
+        "A failing proof shows the repository has benchmark, build-telemetry, and invalidation artifacts, but still lacks a preserved human-review package that ties those outputs together for the scheduled/manual performance lane.",
+        "A failing proof shows the current performance evidence is dispersed across BenchmarkDotNet outputs, telemetry envelopes, and stress summaries instead of one reviewable publication bundle."
       ],
       "expectedFiles": [
-        "src\\Blueprint.Codemod\\Program.cs",
-        "src\\Blueprint.Codemod.Tests\\TestFixtures\\SimpleBlueprintApp\\SimpleBlueprintApp.sln",
-        "docs\\refactoring-workflow.md",
+        "docs\\observability-and-dev-experience.md",
+        "migration\\performance-and-scale\\plan.md",
+        "migration\\performance-and-scale\\Capture-SyntheticBuildTelemetry.ps1",
         "migration\\breaking-changes-and-migration-tooling\\plan.md",
         "migration\\plan.md",
         "migration\\progress.json"
       ],
-      "reviewGate": "Stop for review if the sample-app artifact set reveals missing migration buckets, unstable report contents, or a need to change the intended codemod CLI contract before broader rollout."
+      "reviewGate": "Stop for review if publishing the performance package requires changing the approved machine-readable artifact contracts instead of only curating and presenting the existing outputs."
     },
     "lastCompletedSlice": {
       "workstream": "breaking-changes-and-migration-tooling",
-      "title": "Dry-run idempotency tests for the codemod CLI"
+      "title": "Sample-app migration report review before broad rollout"
     },
     "openReviewGate": null
   },

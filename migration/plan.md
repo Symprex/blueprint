@@ -441,7 +441,7 @@ When delegating a workstream, include:
 - [x] Code-fix tests with before/after coverage.
 - [x] JSON/SARIF schema validation tests.
 - [x] Dry-run idempotency tests for the codemod CLI.
-- [ ] Sample-app migration report review before broad rollout.
+- [x] Sample-app migration report review before broad rollout.
 
 ### Docs and artifacts
 
@@ -462,7 +462,8 @@ When delegating a workstream, include:
 - the JSON contract-validation follow-on is now also complete: `MigrationReportSerializationTests` and `CodemodArtifactWriterTests` both assert the required `migration-diagnostics` top-level and finding-level JSON shape, adding an explicit drift guard without changing the payload itself.
 - the SARIF contract-validation follow-on is now also complete: `SarifDiagnosticReader` gives the dry-run collector a supported input-validation seam, `SarifDiagnosticReaderTests` guard valid rule-ID projection plus actionable failures for missing `runs` and malformed `ruleId` values, and `SolutionAnalysisRunner` now shares that seam so malformed analyzer output cannot silently drop findings.
 - the dry-run idempotency follow-on is now also complete: `Program.RunAsync` exposes a supported writer-injectable orchestration seam for tests, `ProgramCancellationTests` no longer use reflection to reach the CLI path, and `DryRunIdempotencyTests` now prove repeated review-only runs keep stdout, durable artifacts, and source files stable for the same copied fixture.
-- next approved follow-on after the dry-run idempotency slice: create and review a sample-app migration report artifact set before broader rollout.
+- the sample-app migration report review gate is now also complete: the `SimpleBlueprintApp` fixture now has a preserved dry-run review package with `codemod-report.json`, `codemod-report.md`, and captured stdout JSON, and that package shows the expected current finding mix (1 auto-fixable, 2 configuration-required, 2 consumer-extension rewrite, 0 manual-design-review) without surfacing a new tooling or contract blocker.
+- next approved cross-workstream follow-on after the tooling review gate: return to `migration\performance-and-scale\plan.md` and publish the existing benchmark/telemetry outputs in a reviewable format using the already-approved manifest and scheduled/manual-lane contracts.
 
 ### Sub-agent guidance
 
@@ -528,7 +529,8 @@ When delegating a workstream, include:
 - completed first repeated host startup and endpoint-mapping stress harness: `src\Blueprint.SourceGenerator.Tests\Artifacts\ManifestInspectionEndpointStressTests.cs` now rebuilds 40 development endpoint route builders, maps `MapBlueprintApi(...)`, and proves stable 5-endpoint counts plus 40/40 hosted manifest JSON route hits through a reusable `RepeatedEndpointMappingStressHarness`, keeping the first startup stress slice on the same host surface that `BlueprintEndpointMappingBenchmarks` measures
 - completed first PR-lane versus scheduled/manual benchmark split: `BenchmarkLaneGuidanceTests.cs` now proves the two-lane performance model from `migration\performance-and-scale\plan.md` is surfaced in `docs\implementation-checklists.md`, `docs\observability-and-dev-experience.md`, and `.agents\skills\extending-blueprint\SKILL.md`, so deterministic stress proofs stay in the pull-request lane while noisier wall-clock or higher-volume comparisons move to scheduled/manual guidance
 - completed first high-volume link-generation stress harness: `SyntheticBlueprintFixtureScaleHarnessTests.cs` now drives a 100-operation synthetic fixture with unique root links, proves descriptor output contains those links at scale, and requires a single root-link edit to change only `SyntheticOperation050_Descriptor.g.cs`; the same slice also fixes stale link-only descriptor output by removing the model-only combined-provider comparer from descriptor/app generators and by making `DescriptorPlan` equality include diagnostics plus metadata
-- next approved cross-workstream follow-on: shift to `migration\breaking-changes-and-migration-tooling\plan.md` and reserve the BPMIG diagnostic range while scaffolding the first analyzer test harness; keep further performance-specific broadening deferred until parameter-binding or OpenAPI implementation provides the next dependency-safe stress surface
+- the breaking-changes/tooling workstream has now completed that analyzer/codemod/report branch, including the preserved sample-app migration review package for the `SimpleBlueprintApp` fixture.
+- next approved cross-workstream follow-on: publish the existing benchmark and telemetry outputs in a reviewable format from `migration\performance-and-scale\plan.md`, keeping the approved `build-telemetry`, `scale-invalidation`, and scheduled/manual benchmark contracts intact while the repository prepares the next broader Phase 0 review package
 
 ## 4. Generated manifests and inspection surfaces
 
