@@ -20,6 +20,15 @@ public sealed class MigrationDiagnosticDescriptorsTests
     }
 
     [Xunit.Fact]
+    public void When_loading_migration_diagnostic_descriptors_then_redundant_addhateoaslinks_activation_is_enabled_and_actionable()
+    {
+        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.RedundantAddHateoasLinksActivation.Id.Should().Be("BPMIG002");
+        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.RedundantAddHateoasLinksActivation.DefaultSeverity.Should().Be(Microsoft.CodeAnalysis.DiagnosticSeverity.Info);
+        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.RedundantAddHateoasLinksActivation.IsEnabledByDefault.Should().BeTrue();
+        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.RedundantAddHateoasLinksActivation.MessageFormat.ToString().Should().Contain("AddHateoasLinks()");
+    }
+
+    [Xunit.Fact]
     public void When_loading_migration_diagnostic_descriptors_then_configured_addopenapi_uses_the_first_configuration_required_slot()
     {
         Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.ConfiguredAddOpenApiRequiresMigration.Id.Should().Be("BPMIG100");

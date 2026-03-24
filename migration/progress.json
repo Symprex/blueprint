@@ -7,30 +7,30 @@
   "current": {
     "activeWorkstream": "breaking-changes-and-migration-tooling",
     "nextReadySlice": {
-      "title": "Redundant AddHateoasLinks migration diagnostic",
+      "title": "Redundant AddAuthorisation migration diagnostic",
       "status": "ready",
       "dependsOn": [
-        "Configured AddOpenApi migration diagnostic committed."
+        "Redundant AddHateoasLinks migration diagnostic committed."
       ],
       "failingProof": [
-        "A failing proof shows parameterless `AddHateoasLinks()` calls still produce no migration diagnostic even though the migration plans now treat link generation as architecturally available without an explicit activation switch.",
-        "A failing proof shows the migration tooling still does not distinguish link-generation metadata from legacy `AddHateoasLinks()` activation boilerplate that should disappear in the source-generated model."
+        "A failing proof shows parameterless `AddAuthorisation()` calls still produce no migration diagnostic even though the migration plans now treat authorisation as architecturally available and able to compile away when unused.",
+        "A failing proof shows the migration tooling still does not distinguish redundant `AddAuthorisation()` activation boilerplate from explicit authentication configuration that should remain in the configuration-required bucket."
       ],
       "expectedFiles": [
         "src\\Blueprint.Migration.Analyzers\\MigrationDiagnosticDescriptors.cs",
         "src\\Blueprint.Migration.Analyzers\\Analyzers\\LegacyActivationAnalyzer.cs",
         "src\\Blueprint.Migration.Analyzers.Tests\\LegacyActivationAnalyzerTests.cs",
         "docs\\refactoring-workflow.md",
-        "migration\\resource-model-links-and-post-processing\\plan.md",
+        "migration\\authentication-and-authorisation\\plan.md",
         "migration\\breaking-changes-and-migration-tooling\\plan.md",
         "migration\\plan.md",
         "migration\\progress.json"
       ],
-      "reviewGate": "Stop again for review before broad auth/resource expansion if the first link-activation diagnostic needs a different safety contract than the current link-generation migration plan assumes."
+      "reviewGate": "Stop again for review before broader authentication configuration expansion if the first AddAuthorisation cleanup diagnostic needs a different safety boundary than the current auth plan assumes."
     },
     "lastCompletedSlice": {
       "workstream": "breaking-changes-and-migration-tooling",
-      "title": "Configured AddOpenApi migration diagnostic"
+      "title": "Redundant AddHateoasLinks migration diagnostic"
     },
     "openReviewGate": null
   },

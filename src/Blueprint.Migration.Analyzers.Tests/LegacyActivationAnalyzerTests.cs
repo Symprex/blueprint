@@ -128,6 +128,40 @@ public sealed class LegacyActivationAnalyzerTests
         diagnostic.GetMessage().Should().Contain("AddOpenApi");
     }
 
+    [Xunit.Fact]
+    public async Task When_legacy_blueprint_builder_calls_addhateoaslinks_then_reports_bpmig002_on_the_invocation()
+    {
+        const string source = """
+            namespace Legacy.Blueprint;
+
+            public sealed class BlueprintApiBuilder
+            {
+            }
+
+            public static class BlueprintApiBuilderExtensions
+            {
+                public static BlueprintApiBuilder AddHateoasLinks(this BlueprintApiBuilder apiBuilder)
+                    => apiBuilder;
+            }
+
+            public static class ConsumerConfiguration
+            {
+                public static void Configure(BlueprintApiBuilder builder)
+                {
+                    builder.AddHateoasLinks();
+                }
+            }
+            """;
+
+        var diagnostics = await GetDiagnosticsAsync(source);
+
+        diagnostics.Should().ContainSingle(static diagnostic => diagnostic.Id == "BPMIG002");
+
+        var diagnostic = diagnostics.Single(static candidate => candidate.Id == "BPMIG002");
+        diagnostic.GetMessage().Should().Contain("AddHateoasLinks");
+        diagnostic.Location.GetLineSpan().StartLinePosition.Line.Should().Be(16);
+    }
+
     private static async Task<ImmutableArray<Diagnostic>> GetDiagnosticsAsync(string source)
     {
         var syntaxTree = CSharpSyntaxTree.ParseText(source, new CSharpParseOptions(LanguageVersion.Preview));

@@ -52,6 +52,11 @@ Preserve or replace with thin equivalents:
 
 Resource expansion should not be treated as a core activation concept for the rewrite.
 
+Current migration-tooling status:
+
+- `BPMIG002` now flags parameterless `AddHateoasLinks()` activation as redundant safe-deletion cleanup.
+- Broader resource/link migration work remains separate from that activation cleanup; the analyzer only removes the legacy switch, not resource-event or link-post-processing design work.
+
 ## Resource events and re-query strategy
 
 This plan now contains the canonical resource-event direction directly rather than sending readers through a chain of round-by-round design notes.

@@ -73,6 +73,11 @@ Long-term target:
 - explicit registration remains for user-context loading, custom authorisers, claim sources, and consumer-owned ownership resolvers
 - consumer role/access projection inputs remain consumer-owned; if applications want build-time role-to-operation manifests, that role model must be exposed in a generator-friendly form
 
+Current migration-tooling direction:
+
+- parameterless `AddAuthorisation()` is the next safe-deletion activation candidate after the initial OpenAPI/link cleanup diagnostics
+- configured `AddAuthentication(...)` remains configuration-required migration work because context loading and consumer-owned auth registration still need an explicit seam
+
 ## Host coverage beyond HTTP
 
 Authentication and authorisation metadata should be host-agnostic even though HTTP is the primary case.

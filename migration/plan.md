@@ -451,9 +451,9 @@ When delegating a workstream, include:
 
 ### Durable progress
 
-- the `BPMIG001`-`BPMIG399` range is now reserved in repo guidance, `Blueprint.Migration.Analyzers`, `Blueprint.Migration.Analyzers.CodeFixes`, and `Blueprint.Migration.Analyzers.Tests` now provide the first complete analyzer/code-fix/test seam, `BPMIG001` now flags plus safely removes redundant parameterless `BlueprintApiBuilder.AddOpenApi()` activation calls, and `BPMIG100` now flags configured `AddOpenApi(Action<OpenApiOptions>)` usage as configuration-required migration work.
-- next approved follow-on for this workstream: add the next safe-deletion diagnostic for parameterless `AddHateoasLinks()` activation so migration tooling starts covering the other legacy activation calls that the plans treat as no longer required.
-- keep broader auth/resource diagnostics, report-schema work, and codemod scaffolding deferred until that first link-activation follow-on is review-closed.
+- the `BPMIG001`-`BPMIG399` range is now reserved in repo guidance, `Blueprint.Migration.Analyzers`, `Blueprint.Migration.Analyzers.CodeFixes`, and `Blueprint.Migration.Analyzers.Tests` now provide the first complete analyzer/code-fix/test seam, `BPMIG001` now flags plus safely removes redundant parameterless `BlueprintApiBuilder.AddOpenApi()` activation calls, `BPMIG002` now flags redundant parameterless `AddHateoasLinks()` activation calls, and `BPMIG100` now flags configured `AddOpenApi(Action<OpenApiOptions>)` usage as configuration-required migration work.
+- next approved follow-on for this workstream: add the next safe-deletion diagnostic for parameterless `AddAuthorisation()` activation so migration tooling starts covering the remaining legacy activation calls that the plans treat as architecturally implicit when unused.
+- keep broader authentication configuration diagnostics, resource/auth rewrites, report-schema work, and codemod scaffolding deferred until that first authorisation-activation follow-on is review-closed.
 
 ### Sub-agent guidance
 

@@ -15,6 +15,7 @@ public sealed class LegacyActivationAnalyzer : DiagnosticAnalyzer
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics =>
         [
             MigrationDiagnosticDescriptors.RedundantAddOpenApiActivation,
+            MigrationDiagnosticDescriptors.RedundantAddHateoasLinksActivation,
             MigrationDiagnosticDescriptors.ConfiguredAddOpenApiRequiresMigration,
         ];
 
@@ -30,7 +31,7 @@ public sealed class LegacyActivationAnalyzer : DiagnosticAnalyzer
     {
         if (context.Node is not InvocationExpressionSyntax invocation
             || invocation.Expression is not MemberAccessExpressionSyntax memberAccess
-            || memberAccess.Name.Identifier.ValueText != "AddOpenApi")
+            || memberAccess.Name.Identifier.ValueText is not ("AddOpenApi" or "AddHateoasLinks"))
         {
             return;
         }
@@ -46,13 +47,25 @@ public sealed class LegacyActivationAnalyzer : DiagnosticAnalyzer
         }
 
         if (context.SemanticModel.GetSymbolInfo(invocation, context.CancellationToken).Symbol is not IMethodSymbol methodSymbol
-            || methodSymbol.Name != "AddOpenApi"
+            || methodSymbol.Name != memberAccess.Name.Identifier.ValueText
             || !SymbolEqualityComparer.Default.Equals(methodSymbol.ReturnType, receiverType))
         {
             return;
         }
 
-        if (invocation.ArgumentList.Arguments.Count == 0 && methodSymbol.Parameters.Length == 0)
+        if (memberAccess.Name.Identifier.ValueText == "AddHateoasLinks"
+            && invocation.ArgumentList.Arguments.Count == 0
+            && methodSymbol.Parameters.Length == 0)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                MigrationDiagnosticDescriptors.RedundantAddHateoasLinksActivation,
+                memberAccess.Name.GetLocation()));
+            return;
+        }
+
+        if (memberAccess.Name.Identifier.ValueText == "AddOpenApi"
+            && invocation.ArgumentList.Arguments.Count == 0
+            && methodSymbol.Parameters.Length == 0)
         {
             context.ReportDiagnostic(Diagnostic.Create(
                 MigrationDiagnosticDescriptors.RedundantAddOpenApiActivation,
@@ -60,7 +73,8 @@ public sealed class LegacyActivationAnalyzer : DiagnosticAnalyzer
             return;
         }
 
-        if (invocation.ArgumentList.Arguments.Count == 1
+        if (memberAccess.Name.Identifier.ValueText == "AddOpenApi"
+            && invocation.ArgumentList.Arguments.Count == 1
             && methodSymbol.Parameters.Length == 1
             && methodSymbol.Parameters[0].Type is INamedTypeSymbol
             {
