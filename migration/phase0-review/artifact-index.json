@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "phase": "Phase 0",
+  "status": "technical-closeout-ready",
+  "artifacts": [
+    {
+      "kind": "manifest-schema",
+      "path": "src\\Blueprint.SourceGenerator\\Artifacts\\GeneratedManifestEnvelope.schema.json",
+      "description": "Machine-readable manifest envelope schema."
+    },
+    {
+      "kind": "manifest-example",
+      "path": "src\\Blueprint.SourceGenerator.Tests\\Artifacts\\ManifestResources\\operations.manifest.json",
+      "description": "Checked-in example operations manifest fixture."
+    },
+    {
+      "kind": "synthetic-fixture-example",
+      "path": "migration\\phase0-review\\synthetic-fixture-example.json",
+      "description": "Serialized closeout example captured from SyntheticBlueprintFixtureGenerator output."
+    },
+    {
+      "kind": "tier2-invalidation-evidence",
+      "path": "src\\Blueprint.SourceGenerator.Tests\\Scale\\ScaleSnapshots\\SyntheticFixtureInvalidationReportTests.When_mutating_single_operation_then_invalidation_report_serializes_localized_change_summary.verified.txt",
+      "description": "Localized single-operation invalidation snapshot."
+    },
+    {
+      "kind": "tier2-shared-contract-evidence",
+      "path": "src\\Blueprint.SourceGenerator.Tests\\Scale\\ScaleSnapshots\\SyntheticFixtureInvalidationReportTests.When_mutating_shared_contract_then_invalidation_report_serializes_broad_pipeline_change_summary.verified.txt",
+      "description": "Shared-contract invalidation snapshot."
+    },
+    {
+      "kind": "tier2-build-telemetry-evidence",
+      "path": "src\\Blueprint.SourceGenerator.Tests\\Scale\\ScaleSnapshots\\SyntheticBuildTelemetryReportTests.When_compiling_tier2_fixture_then_build_telemetry_report_serializes_cold_build_summary.verified.txt",
+      "description": "Cold-build telemetry snapshot for the Tier 2 synthetic harness."
+    },
+    {
+      "kind": "benchmark-baseline-registration",
+      "path": "BenchmarkDotNet.Artifacts\\results\\Blueprint.SourceGenerator.Benchmarks.RuntimeModel.BlueprintAppRegistrationBenchmarks-report-github.md",
+      "description": "Reviewable BlueprintApp registration baseline."
+    },
+    {
+      "kind": "benchmark-baseline-lookup",
+      "path": "BenchmarkDotNet.Artifacts\\results\\Blueprint.SourceGenerator.Benchmarks.RuntimeModel.BlueprintAppLookupBenchmarks-report-github.md",
+      "description": "Reviewable BlueprintApp lookup baseline."
+    }
+  ]
+}

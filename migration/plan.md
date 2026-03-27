@@ -228,12 +228,12 @@ No downstream feature work should be treated as "real" until Phase 0 closes.
 
 **Phase 0 exit gate**
 
-- [ ] Foundation module system minimum viable slice is implemented.
-- [ ] Migration diagnostic ranges, report classes, and analyzer/codemod direction are defined.
+- [x] Foundation module system minimum viable slice is implemented.
+- [x] Migration diagnostic ranges, report classes, and analyzer/codemod direction are defined.
 - [x] Tier 2 compile-time scale harness exists and is running deterministically.
-- [ ] Generated manifest envelope/schema contract is agreed and reviewable.
-- [ ] Benchmark baselines for the known `BlueprintApp` hotspots exist in a reviewable artifact location before Phase 1 starts.
-- [ ] The Phase 0 review artifact set exists: manifest schema/example, synthetic fixture example, Tier 2 test evidence, and hotspot benchmark baseline.
+- [x] Generated manifest envelope/schema contract is agreed and reviewable.
+- [x] Benchmark baselines for the known `BlueprintApp` hotspots exist in a reviewable artifact location before Phase 1 starts.
+- [x] The Phase 0 review artifact set exists: manifest schema/example, synthetic fixture example, Tier 2 test evidence, and hotspot benchmark baseline.
 
 ### Phase 1 - Core HTTP parity path
 
@@ -536,7 +536,8 @@ When delegating a workstream, include:
 - the first concurrent executor-dispatch shared-fixture follow-on is now also complete: `ConcurrentExecutorDispatchStressHarness` now keeps the existing generated integration proof intact while also driving the benchmark executor path through a result-projection seam, so the repeated 64-dispatch runtime proof and `ExecutorDispatchBenchmarks` now share synthetic descriptor identities.
 - the first repeated endpoint-mapping shared-fixture follow-on is now also complete: `ManifestInspectionEndpointStressTests.cs` now seeds a test-local `SharedSyntheticManifestInspectionBlueprintApp` from `BlueprintAppBenchmarkScenarioFactory.CreateDescriptors(10)`, so the repeated 40-iteration startup stress proof and `BlueprintEndpointMappingBenchmarks` now share synthetic descriptor identities without moving the hosted manifest resources out of the tests assembly that owns them.
 - completed hosted-manifest route widening follow-on: `ManifestInspectionEndpointStressTests.cs` now requires the repeated shared-synthetic startup stress harness to record 40/40 hits for the hosted manifest JSON, markdown, schema, and diagnostics routes on one 40-iteration run, closing the remaining manifest-side startup stress gap without changing route names, manifest ownership, or the diagnostics page contract. The focused proof `dotnet test .\src\Blueprint.SourceGenerator.Tests\Blueprint.SourceGenerator.Tests.csproj --filter "FullyQualifiedName~ManifestInspectionEndpointStressTests"` now passes after the harness records per-route hit counts instead of only the JSON route total.
-- no later concrete Workstream 3 follow-on is named yet in the durable plans after that hosted-manifest-route stress widening slice. Resolve and record the next approved dependency-safe Phase 0 slice before further implementation work resumes.
+- user-approved autonomous follow-on after the hosted-manifest-route stress widening slice: shift from Workstream 3 feature work into a cross-workstream Phase 0 closeout audit in this master plan. The next dependency-safe slice is to verify the Phase 0 exit-gate evidence, package the required review artifacts (manifest schema/example, synthetic fixture example, Tier 2 evidence, and hotspot benchmark baseline), and sync `migration\progress.json` for the formal Phase 0 exit review before any Phase 1 work begins.
+- completed the cross-workstream Phase 0 technical closeout audit: the top-level Phase 0 exit-gate checklist now mirrors the already-landed foundation, migration-safety, manifest-contract, benchmark-baseline, and Tier 2 evidence, and `migration\phase0-review\artifact-index.json` now indexes the checked-in schema/example, the serialized `migration\phase0-review\synthetic-fixture-example.json` captured from `SyntheticBlueprintFixtureGenerator` output during the closeout audit, the reviewed Tier 2 snapshot evidence, and the reviewable `BlueprintApp` hotspot benchmark baselines. The remaining blocker before Phase 1 is the explicit `Phase 0 exit` human review gate.
 
 ## 4. Generated manifests and inspection surfaces
 

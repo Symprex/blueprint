@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "artifactName": "phase0-synthetic-fixture-example",
+  "sourceGenerator": "SyntheticBlueprintFixtureGenerator",
+  "captureMethod": "Serialized during the Phase 0 closeout audit from SyntheticBlueprintFixtureGenerator.Create(...) output.",
+  "scenario": {
+    "namespaceName": "Synthetic.Scale",
+    "appName": "SyntheticScaleApp",
+    "operationCount": 3,
+    "sourceFileCount": 5,
+    "includeRootLinks": false
+  },
+  "sourceFiles": [
+    {
+      "path": "SyntheticScaleApp.cs",
+      "content": "namespace Synthetic.Scale\r\n{\r\n    [global::Blueprint.Model.BlueprintAppScan]\r\n    public partial class SyntheticScaleApp : global::Blueprint.Model.BlueprintApp\r\n    {\r\n    }\r\n}"
+    },
+    {
+      "path": "Shared\\SyntheticOperationBase.cs",
+      "content": "namespace Synthetic.Scale\r\n{\r\n    public abstract class SyntheticOperationBase\r\n    {\r\n        [global::System.ComponentModel.DataAnnotations.Required]\r\n        public string? Value { get; init; }\r\n    }\r\n}"
+    },
+    {
+      "path": "Operations\\SyntheticOperation001.cs",
+      "content": " namespace Synthetic.Scale\r\n {\r\n     \r\n     public partial class SyntheticOperation001 : SyntheticOperationBase, global::Blueprint.Model.IQuery<string>\r\n     {\r\n                 public static global::System.Threading.Tasks.Task<string> InvokeAsync()\r\n         {\r\n             return global::System.Threading.Tasks.Task.FromResult(\"SyntheticOperation001\");\r\n         }\r\n    }\r\n}"
+    },
+    {
+      "path": "Operations\\SyntheticOperation002.cs",
+      "content": " namespace Synthetic.Scale\r\n {\r\n     \r\n     public partial class SyntheticOperation002 : SyntheticOperationBase, global::Blueprint.Model.IQuery<string>\r\n     {\r\n                 public static global::System.Threading.Tasks.Task<string> InvokeAsync()\r\n         {\r\n             return global::System.Threading.Tasks.Task.FromResult(\"SyntheticOperation002\");\r\n         }\r\n    }\r\n}"
+    },
+    {
+      "path": "Operations\\SyntheticOperation003.cs",
+      "content": " namespace Synthetic.Scale\r\n {\r\n     \r\n     public partial class SyntheticOperation003 : SyntheticOperationBase, global::Blueprint.Model.IQuery<string>\r\n     {\r\n                 public static global::System.Threading.Tasks.Task<string> InvokeAsync()\r\n         {\r\n             return global::System.Threading.Tasks.Task.FromResult(\"SyntheticOperation003\");\r\n         }\r\n    }\r\n}"
+    }
+  ]
+}

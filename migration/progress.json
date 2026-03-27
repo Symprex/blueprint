@@ -8,10 +8,10 @@
     "activeWorkstream": "performance-and-scale",
     "nextReadySlice": null,
     "lastCompletedSlice": {
-      "workstream": "performance-and-scale",
-      "title": "Extend repeated manifest-inspection stress to all hosted manifest routes"
+        "workstream": "performance-and-scale",
+      "title": "Audit Phase 0 exit evidence and package the review artifact set"
     },
-    "openReviewGate": "Resolve and record the next approved dependency-safe Phase 0 slice before further implementation work resumes; the durable plans do not yet name a concrete successor after the hosted-manifest-route stress widening slice."
+    "openReviewGate": "Phase 0 is technically closed out, but the explicit Phase 0 exit human review gate in migration\\plan.md remains open before any Phase 1 implementation work begins."
   },
   "orchestrationContract": {
     "mustImplementAfterSliceSelection": true,
