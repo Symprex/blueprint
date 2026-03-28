@@ -1,5 +1,6 @@
 using Blueprint.SourceGenerator.Planning;
 using Microsoft.CodeAnalysis;
+using CSharpSymbolDisplay = Microsoft.CodeAnalysis.CSharp.SymbolDisplay;
 
 namespace Blueprint.SourceGenerator.Modules;
 
@@ -33,12 +34,26 @@ public sealed class OperationDiscoveryManifestModule : IBlueprintSourceGenerator
     {
         var typeSymbol = context.GetOperationTypeSymbol();
         var featureData = CreatePlanData(typeSymbol);
+        var hostNames = context.GetMetadata<HostExposureRegistration>()
+            .Select(static hostExposure => hostExposure.HostName)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(static hostName => hostName, StringComparer.Ordinal)
+            .ToArray();
 
         // AddMetadata drives DescriptorPlan equality so cache invalidation fires when kind/namespace/typeName change,
         // even though the runtime feature-data type itself lives in a different target framework.
         context.AddMetadata(featureData);
         context.AddRenderStep(w =>
-            w.AppendLine($"this.SetFeatureData(new global::Blueprint.Model.OperationDiscoveryFeatureData(\"{featureData.Kind}\", \"{featureData.Namespace}\", \"{featureData.TypeName}\"));"));
+            w.AppendLine($"this.SetFeatureData(new global::Blueprint.Model.OperationDiscoveryFeatureData({RenderStringLiteral(featureData.Kind)}, {RenderStringLiteral(featureData.Namespace)}, {RenderStringLiteral(featureData.TypeName)}));"));
+
+        if (hostNames.Length == 0)
+        {
+            return;
+        }
+
+        var renderedHostNames = string.Join(", ", hostNames.Select(RenderStringLiteral));
+        context.AddRenderStep(w =>
+            w.AppendLine($"this.SetFeatureData(new global::Blueprint.Model.OperationHostExposureFeatureData(global::System.Collections.Immutable.ImmutableArray.Create({renderedHostNames})));"));
     }
 
     /// <inheritdoc />
@@ -75,6 +90,11 @@ public sealed class OperationDiscoveryManifestModule : IBlueprintSourceGenerator
         }
 
         return "operation";
+    }
+
+    private static string RenderStringLiteral(string value)
+    {
+        return CSharpSymbolDisplay.FormatLiteral(value, quote: true);
     }
 
     private sealed record DiscoveryPlanData(string Kind, string Namespace, string TypeName);

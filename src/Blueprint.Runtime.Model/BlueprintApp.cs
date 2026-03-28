@@ -9,9 +9,11 @@ namespace Blueprint.Model;
 public class BlueprintApp
 {
     private static readonly List<ApiOperationLink> _emptyLinkList = new(0);
+    private static readonly List<ApiOperationDescriptor> _emptyOperationList = new(0);
 
     private readonly Dictionary<Type, ApiOperationDescriptor> _allOperations = new();
     private readonly Dictionary<string, ApiOperationDescriptor> _urlToOperation = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, List<ApiOperationDescriptor>> _hostToOperations = new(StringComparer.Ordinal);
 
     private readonly List<ApiOperationLink> _allLinks = new();
 
@@ -52,6 +54,7 @@ public class BlueprintApp
         }
 
         this._allOperations[descriptor.OperationType] = descriptor;
+        this.RegisterHostExposure(descriptor);
 
         foreach (var url in descriptor.Urls)
         {
@@ -133,6 +136,17 @@ public class BlueprintApp
     }
 
     /// <summary>
+    /// Gets all operations that are exposed on the requested host surface.
+    /// </summary>
+    /// <param name="hostName">The stable host name.</param>
+    /// <returns>The registered operations for that host, or an empty list when none are exposed.</returns>
+    public IReadOnlyList<ApiOperationDescriptor> GetOperationsForHost(string hostName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(hostName);
+        return this._hostToOperations.GetValueOrDefault(hostName, _emptyOperationList);
+    }
+
+    /// <summary>
     /// Gets the link that has been registered for the given resource type with the specified 'rel'
     /// property.
     /// </summary>
@@ -190,5 +204,24 @@ Operations will be found polymorphically, meaning an operation could be register
         }
 
         return true;
+    }
+
+    private void RegisterHostExposure(ApiOperationDescriptor descriptor)
+    {
+        if (!descriptor.TryGetFeatureData<OperationHostExposureFeatureData>(out var hostExposure))
+        {
+            return;
+        }
+
+        foreach (var hostName in hostExposure.HostNames.Distinct(StringComparer.Ordinal))
+        {
+            if (!this._hostToOperations.TryGetValue(hostName, out var operations))
+            {
+                operations = [];
+                this._hostToOperations[hostName] = operations;
+            }
+
+            operations.Add(descriptor);
+        }
     }
 }

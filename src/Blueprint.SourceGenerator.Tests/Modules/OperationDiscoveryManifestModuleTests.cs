@@ -1,4 +1,5 @@
 using Blueprint.SourceGenerator.Artifacts;
+using Blueprint.SourceGenerator.CodeWriter;
 using Blueprint.SourceGenerator.Modules;
 using Blueprint.SourceGenerator.Planning;
 using FluentAssertions;
@@ -110,6 +111,25 @@ public class OperationDiscoveryManifestModuleTests
         result.Diagnostics[0].ToDiagnostic().Id.Should().Be("BPMOD005");
     }
 
+    [Fact]
+    public void When_descriptor_host_exposure_contains_escaped_characters_then_rendered_feature_data_uses_valid_csharp_literals()
+    {
+        var compilation = CreateCompilation();
+        var operation = OperationModel.Create(compilation.GetTypeByMetadataName("TestNamespace.ListUsersQuery")!);
+        var plan = new DescriptorPlan(operation);
+        var context = new DescriptorContributorContext(operation, plan, new CompilationOperationLookup(compilation));
+        var module = new OperationDiscoveryManifestModule();
+
+        context.AddMetadata(new HostExposureRegistration("http\\\"beta"));
+
+        module.ContributeToDescriptor(context);
+
+        var generated = RenderDescriptor(plan);
+
+        generated.Should().Contain(
+            """this.SetFeatureData(new global::Blueprint.Model.OperationHostExposureFeatureData(global::System.Collections.Immutable.ImmutableArray.Create("http\\\"beta")));""");
+    }
+
     private static GeneratedDebugManifest BuildManifest(
         BlueprintSourceGenerationConfig config,
         Compilation compilation,
@@ -121,8 +141,18 @@ public class OperationDiscoveryManifestModuleTests
         return result.Value!;
     }
 
+    private static string RenderDescriptor(DescriptorPlan plan)
+    {
+        var builder = CodeBuilder.Create("TestNamespace");
+        builder.AddClass("Container")
+            .AddMethod("Render")
+            .WithBody(plan.Render);
+
+        return builder.Build();
+    }
+
     private static CSharpCompilation CreateCompilation(string source = """
-                                                            using Blueprint.Model;
+                                                             using Blueprint.Model;
 
                                                             namespace TestNamespace;
 

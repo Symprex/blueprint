@@ -127,6 +127,7 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
 
         var urlRegistration = new UrlRegistration(url, locationInfo);
         context.AddMetadata(urlRegistration);
+        context.AddMetadata(HostExposureRegistration.Http);
     }
 
     private static void LookForSelfLinks(DescriptorContributorContext context)
@@ -210,6 +211,7 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
 
             context.AddMetadata(urlRegistration);
             context.AddMetadata(linkRegistration);
+            context.AddMetadata(HostExposureRegistration.Http);
         }
     }
 

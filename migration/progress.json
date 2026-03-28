@@ -8,11 +8,11 @@
     "activeWorkstream": "operation-discovery-and-descriptors",
     "nextReadySlice": {
       "workstream": "operation-discovery-and-descriptors",
-      "title": "Make operation inclusion host-aware in compile-time descriptor/app-registration metadata"
+      "title": "Project host exposure per operation into the discovery manifest"
     },
     "lastCompletedSlice": {
       "workstream": "operation-discovery-and-descriptors",
-      "title": "Promote operation-discovery facts into typed descriptor feature data"
+      "title": "Make operation inclusion host-aware in compile-time descriptor/app-registration metadata"
     },
     "openReviewGate": null
   },
