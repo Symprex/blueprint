@@ -1,6 +1,6 @@
 # Operation discovery and descriptors
 
-- Status: Planned
+- Status: Active
 - Priority: P1
 - Classification: Core
 - Depends on: `../foundation-module-system/plan.md`
@@ -88,3 +88,10 @@ This should replace the need to infer discovery outcomes from runtime model obje
 ## Sequencing
 
 Implement after the foundation module system and before any module that depends on host or descriptor feature data.
+
+## Durable progress
+
+- The `Phase 0 exit` human review gate is closed, so this workstream is now the active Phase 1 implementation target.
+- First active slice for this workstream: promote the already-approved operation-discovery facts (`kind`, `namespace`, and `typeName`) into typed `ApiOperationDescriptor` feature data via the existing operation-discovery module, then prove that behavior through descriptor-generation output and a runtime-facing generated `Configure()` assertion before broader host/result/auth discovery work.
+- Completed first discovery-metadata slice: `OperationDiscoveryManifestModule` now also acts as an `IDescriptorContributor`, generated descriptors set `OperationDiscoveryFeatureData` with the same approved `kind`/`namespace`/`typeName` facts already emitted by the manifest path, `OperationDescriptorSourceGenerator` now wires that contributor into normal descriptor generation, and the slice is covered by focused generator assertions plus runtime-facing generated `Configure()` integration tests.
+- Next recommended follow-on: make operation inclusion host-aware in compile-time descriptor/app-registration metadata without reintroducing runtime scanning or prematurely freezing the broader result/auth contracts.

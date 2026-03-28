@@ -66,6 +66,7 @@ namespace TestNamespace
             public IncludedOperationDescriptor()
                 : base(typeof(IncludedOperation), "IncludedOperation", "Source Generated")
             {
+                this.SetFeatureData(new global::Blueprint.Model.OperationDiscoveryFeatureData("operation", "TestNamespace", "IncludedOperation"));
             }
         }
     }

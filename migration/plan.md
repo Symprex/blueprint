@@ -538,6 +538,8 @@ When delegating a workstream, include:
 - completed hosted-manifest route widening follow-on: `ManifestInspectionEndpointStressTests.cs` now requires the repeated shared-synthetic startup stress harness to record 40/40 hits for the hosted manifest JSON, markdown, schema, and diagnostics routes on one 40-iteration run, closing the remaining manifest-side startup stress gap without changing route names, manifest ownership, or the diagnostics page contract. The focused proof `dotnet test .\src\Blueprint.SourceGenerator.Tests\Blueprint.SourceGenerator.Tests.csproj --filter "FullyQualifiedName~ManifestInspectionEndpointStressTests"` now passes after the harness records per-route hit counts instead of only the JSON route total.
 - user-approved autonomous follow-on after the hosted-manifest-route stress widening slice: shift from Workstream 3 feature work into a cross-workstream Phase 0 closeout audit in this master plan. The next dependency-safe slice is to verify the Phase 0 exit-gate evidence, package the required review artifacts (manifest schema/example, synthetic fixture example, Tier 2 evidence, and hotspot benchmark baseline), and sync `migration\progress.json` for the formal Phase 0 exit review before any Phase 1 work begins.
 - completed the cross-workstream Phase 0 technical closeout audit: the top-level Phase 0 exit-gate checklist now mirrors the already-landed foundation, migration-safety, manifest-contract, benchmark-baseline, and Tier 2 evidence, and `migration\phase0-review\artifact-index.json` now indexes the checked-in schema/example, the serialized `migration\phase0-review\synthetic-fixture-example.json` captured from `SyntheticBlueprintFixtureGenerator` output during the closeout audit, the reviewed Tier 2 snapshot evidence, and the reviewable `BlueprintApp` hotspot benchmark baselines. The remaining blocker before Phase 1 is the explicit `Phase 0 exit` human review gate.
+- reconciled the stale orchestration pointer after that closeout audit: the previously expected Workstream 3 multi-source/Tier 2 harness slice was already complete, so `migration\progress.json` now points at `migration\operation-discovery-and-descriptors\plan.md` as the post-gate resume target. Phase 1 implementation remains blocked until the explicit `Phase 0 exit` human review gate closes or is explicitly waived.
+- the `Phase 0 exit` human review gate is now closed by user approval, so the active implementation track moves into `migration\operation-discovery-and-descriptors\plan.md` for the first narrow Phase 1 slice.
 
 ## 4. Generated manifests and inspection surfaces
 
@@ -645,6 +647,11 @@ When delegating a workstream, include:
 - Use `explore` to map current discovery paths in both this repo and Signature365.
 - Use `general-purpose` for descriptor-model implementation.
 - Use `task` for snapshot and targeted test loops.
+
+### Durable progress
+
+- Completed first Phase 1 discovery-metadata slice: the existing `OperationDiscoveryManifestModule` now also contributes descriptor render steps that set `OperationDiscoveryFeatureData` on generated descriptors, reusing the approved `kind`/`namespace`/`typeName` facts already carried by the manifest path. Focused descriptor-generator tests and runtime-facing generated `Configure()` integration tests now pin that contract before broader host-aware discovery work.
+- Next recommended follow-on for this workstream: make operation inclusion host-aware in compile-time descriptor/app-registration metadata without reviving runtime scanning or freezing result/auth decisions too early.
 
 ## 6. Pipeline composition and execution
 
@@ -1184,7 +1191,7 @@ Human review is required before closing:
 - [ ] Result model and host translation contract
 - [ ] Re-query decision gate
 - [ ] Authentication/authorisation compatibility model
-- [ ] Phase 0 exit
+- [x] Phase 0 exit
 - [ ] Phase 1 exit
 - [ ] Phase 2 exit
 - [ ] First analyzer-led migration release plan
