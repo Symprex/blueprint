@@ -259,7 +259,7 @@ This phase closes the richer API surface expected by consumer apps.
 - [ ] The reference app and artifacts demonstrate these capabilities end to end.
 - [ ] The Phase 2 review artifact set exists: resource/link manifest, OpenAPI artifact, and post-processing/resource-event test evidence.
 
-### Phase 3 - Non-HTTP and consumer-space extensibility
+### Phase 3 - Non-HTTP hosts and extensibility
 
 This phase proves that the architecture is general, not HTTP-only.
 
@@ -268,7 +268,7 @@ This phase proves that the architecture is general, not HTTP-only.
 - [ ] At least one non-HTTP host works through the shared module/contributor model.
 - [ ] At least one consumer-space integration seam is proven with a realistic package-style example.
 - [ ] The migration tooling and extension seams are credible enough for Signature365-style migrations beyond the reference app.
-- [ ] The Phase 3 review artifact set exists: non-HTTP host manifest, companion-package worked example, and a realistic migration dry-run/report sample.
+- [ ] The Phase 3 review artifact set exists: non-HTTP host manifest, a worked example that shows clear host/package separation in namespacing, and a realistic migration dry-run/report sample.
 
 ## Dependency summary
 
@@ -1173,6 +1173,7 @@ Run this as a paired design loop with workstream 6. The result contract must be 
 - Keep the result model host-agnostic.
 - Keep manifests canonical and machine-readable.
 - Keep consumer-specific integrations such as Marten/Rebus/resource-expansion ownership in companion packages or consumer space unless there is a strong reason to move them into core.
+- A generally reusable non-HTTP host may live in the core Blueprint package, but its namespaces and public type names must keep that host obviously separate from HTTP and package-specific integrations.
 
 ## Open questions that require explicit decisions
 

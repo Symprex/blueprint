@@ -2,7 +2,7 @@
 
 - Status: Planned
 - Priority: P3
-- Classification: Consumer-space extension seam / alternate host
+- Classification: Core and consumer-space host seam / alternate host
 - Depends on: `../foundation-module-system/plan.md`, `../operation-discovery-and-descriptors/plan.md`, `../pipeline-composition-and-execution/plan.md`, `../background-tasks/plan.md`
 
 ## Why this module exists
@@ -82,6 +82,8 @@ The preferred path should be able to express examples such as:
 
 - Treat `ApiOperations` / `OperationsHandlerScanner` behavior as core and move it out of this extension bucket.
 - Rebus integration should be treated as consumer-space or companion-package functionality, not core Blueprint.
+- A generally reusable non-HTTP host may live in the core Blueprint package when it represents a stable product capability rather than a package-specific integration.
+- Keep non-HTTP hosts obviously separate from HTTP in namespaces and public type names so host-specific concerns do not blur together inside the core package.
 - `SetTenantMiddleware` is evidence for required hooks, not evidence that tenant logic itself belongs in core.
 - Consumer-owned generator packages are a supported scenario and must be designed for, not tolerated accidentally.
 - A constrained runtime middleware fallback is acceptable as an escape hatch, but it is not the default extension model.
