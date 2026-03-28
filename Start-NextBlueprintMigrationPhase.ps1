@@ -3,6 +3,9 @@ Set-Location $PSScriptRoot
 $promptPath = Join-Path $PSScriptRoot 'migration\next-phase-orchestrator-prompt.md'
 $prompt = Get-Content $promptPath -Raw
 $progressPath = Join-Path $PSScriptRoot 'migration\progress.json'
+$diagramDirectories = @(
+    (Join-Path $HOME '.agent\diagrams')
+)
 
 if (Test-Path $progressPath)
 {
@@ -10,11 +13,22 @@ if (Test-Path $progressPath)
     $prompt = $prompt + "`r`n`r`n<progress_snapshot path=`"$progressPath`">`r`n$progress`r`n</progress_snapshot>"
 }
 
+foreach ($diagramDirectory in $diagramDirectories)
+{
+    New-Item -ItemType Directory -Path $diagramDirectory -Force | Out-Null
+}
+
 $commonArgs = @(
     '--experimental'
     '--allow-all-tools'
     '--enable-all-github-mcp-tools'
 )
+
+foreach ($diagramDirectory in $diagramDirectories)
+{
+    $commonArgs += '--add-dir'
+    $commonArgs += $diagramDirectory
+}
 
 copilot @commonArgs --model gpt-5.4 --interactive $prompt
 
