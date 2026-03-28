@@ -50,6 +50,8 @@ internal static class DebugManifestPlanBuilder
             contributor.ContributeToDescriptor(new DescriptorContributorContext(operationModel, descriptorPlan, operationLookup));
         }
 
+        HostExposureDiagnostics.AddUnsupportedHostDiagnostics(descriptorPlan, executionPlanResult.Value.HostContributors);
+
         if (descriptorPlan.Diagnostics.Count > 0)
         {
             return Result<GeneratedDebugManifest>.Failure(descriptorPlan.Diagnostics.ToArray());

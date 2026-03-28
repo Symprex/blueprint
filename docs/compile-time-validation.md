@@ -51,6 +51,20 @@ Migration diagnostics should be paired with machine-readable reporting such as S
 
 This is the clearest current example of the repository principle that string literals should be validated against symbols when possible.
 
+### Operation discovery and host diagnostics
+
+Operation-discovery and host-exposure checks should use their own stable range instead of borrowing link or validation IDs.
+
+Reserved direction:
+
+| Range | Meaning |
+| --- | --- |
+| `BPOD001`-`BPOD099` | operation-discovery and host-exposure diagnostics for descriptor/app-registration contracts that the generator can prove at build time |
+
+Current operation-discovery IDs in active use:
+
+- `BPOD001`: descriptor planning recorded host exposure that no enabled host contributor supports.
+
 ### Validation contributor diagnostics
 
 Validation-oriented compile-time checks should use a dedicated range instead of borrowing the link or foundation IDs.

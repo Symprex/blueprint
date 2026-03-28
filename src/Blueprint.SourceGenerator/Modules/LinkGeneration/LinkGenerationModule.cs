@@ -9,7 +9,7 @@ namespace Blueprint.SourceGenerator.Modules;
 /// <summary>
 /// A module that will configure URLs and links for operations.
 /// </summary>
-public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitializationContributor, IDescriptorContributor
+public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitializationContributor, IDescriptorContributor, IEnabledHostContributor
 {
     /// <inheritdoc />
     public string ModuleId => nameof(LinkGenerationModule);
@@ -28,6 +28,9 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
 
     /// <inheritdoc />
     public IReadOnlyList<string> DependsOn { get; } = [];
+
+    /// <inheritdoc />
+    public IReadOnlyList<string> HostNames { get; } = ["http"];
 
     private static readonly DiagnosticDescriptor _missingPlaceholderError = new(
         id: "BPLG001",
@@ -127,7 +130,7 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
 
         var urlRegistration = new UrlRegistration(url, locationInfo);
         context.AddMetadata(urlRegistration);
-        context.AddMetadata(HostExposureRegistration.Http);
+        context.AddMetadata(HostExposureRegistration.HttpAt(locationInfo));
     }
 
     private static void LookForSelfLinks(DescriptorContributorContext context)
@@ -211,7 +214,7 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
 
             context.AddMetadata(urlRegistration);
             context.AddMetadata(linkRegistration);
-            context.AddMetadata(HostExposureRegistration.Http);
+            context.AddMetadata(HostExposureRegistration.HttpAt(urlLocation));
         }
     }
 

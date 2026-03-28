@@ -1,10 +1,12 @@
 using Blueprint.SourceGenerator.Artifacts;
 using Blueprint.SourceGenerator.CodeWriter;
+using Blueprint.SourceGenerator.Helpers;
 using Blueprint.SourceGenerator.Modules;
 using Blueprint.SourceGenerator.Planning;
 using FluentAssertions;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.Text;
 using Newtonsoft.Json.Linq;
 
 namespace Blueprint.SourceGenerator.Tests.Modules;
@@ -132,6 +134,25 @@ public class OperationDiscoveryManifestModuleTests
     }
 
     [Fact]
+    public void When_host_exposure_has_no_enabled_host_contributor_then_public_api_returns_operation_discovery_diagnostic()
+    {
+        var compilation = CreateCompilation();
+        var config = new BlueprintSourceGenerationConfig(
+        [
+            new TestHostExposureDescriptorModule("http"),
+            new OperationDiscoveryManifestModule(),
+        ]);
+
+        var result = config.BuildDebugManifest("TestNamespace.ListUsersQuery", compilation);
+
+        result.Value.Should().BeNull();
+        result.Diagnostics.Should().ContainSingle();
+        result.Diagnostics[0].ToDiagnostic().Id.Should().Be("BPOD001");
+        result.Diagnostics[0].ToDiagnostic().GetMessage().Should().Contain("http");
+        result.Diagnostics[0].ToDiagnostic().GetMessage().Should().Contain("ListUsersQuery");
+    }
+
+    [Fact]
     public void When_descriptor_host_exposure_contains_escaped_characters_then_rendered_feature_data_uses_valid_csharp_literals()
     {
         var compilation = CreateCompilation();
@@ -148,6 +169,26 @@ public class OperationDiscoveryManifestModuleTests
 
         generated.Should().Contain(
             """this.SetFeatureData(new global::Blueprint.Model.OperationHostExposureFeatureData(global::System.Collections.Immutable.ImmutableArray.Create("http\\\"beta")));""");
+    }
+
+    [Fact]
+    public void When_host_exposure_locations_differ_then_cacheability_equality_ignores_location_metadata()
+    {
+        var left = new HostExposureRegistration(
+            "http",
+            new LocationInfo(
+                "left.cs",
+                new TextSpan(1, 2),
+                new LinePositionSpan(new LinePosition(0, 1), new LinePosition(0, 3))));
+        var right = new HostExposureRegistration(
+            "http",
+            new LocationInfo(
+                "right.cs",
+                new TextSpan(5, 2),
+                new LinePositionSpan(new LinePosition(4, 2), new LinePosition(4, 4))));
+
+        left.Should().Be(right);
+        left.GetHashCode().Should().Be(right.GetHashCode());
     }
 
     private static GeneratedDebugManifest BuildManifest(
@@ -242,5 +283,26 @@ public class OperationDiscoveryManifestModuleTests
             syntaxTrees: syntaxTrees,
             references: references,
             options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+    }
+
+    private sealed class TestHostExposureDescriptorModule(string hostName)
+        : IBlueprintSourceGeneratorModule, IDescriptorContributor
+    {
+        public string ModuleId => nameof(TestHostExposureDescriptorModule);
+
+        public BlueprintModuleCategory Category => BlueprintModuleCategory.Core;
+
+        public string ContributorId => nameof(TestHostExposureDescriptorModule);
+
+        public int Order => 0;
+
+        public bool IsUnique => true;
+
+        public IReadOnlyList<string> DependsOn { get; } = [];
+
+        public void ContributeToDescriptor(DescriptorContributorContext context)
+        {
+            context.AddMetadata(new HostExposureRegistration(hostName));
+        }
     }
 }

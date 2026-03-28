@@ -8,11 +8,11 @@
     "activeWorkstream": "operation-discovery-and-descriptors",
     "nextReadySlice": {
       "workstream": "operation-discovery-and-descriptors",
-      "title": "Add the first conflicting-host or enabled-host diagnostics"
+      "title": "Add the first conflicting-host diagnostic after a second concrete host contributor lands"
     },
     "lastCompletedSlice": {
       "workstream": "operation-discovery-and-descriptors",
-      "title": "Project host exposure per operation into the discovery manifest"
+      "title": "Add the first enabled-host diagnostic for unsupported host exposure"
     },
     "openReviewGate": null
   },

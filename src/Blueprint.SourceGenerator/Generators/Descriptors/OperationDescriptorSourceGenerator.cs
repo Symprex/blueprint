@@ -151,6 +151,8 @@ public sealed class OperationDescriptorSourceGenerator : IIncrementalGenerator, 
             contributor.ContributeToDescriptor(new DescriptorContributorContext(operationModel, descriptorPlan, operationLookup));
         }
 
+        HostExposureDiagnostics.AddUnsupportedHostDiagnostics(descriptorPlan, executionPlanResult.Value.HostContributors);
+
         var pipelinePlanResult = ConfigurePipelinePlan(operationFullClassName, compilation, executionPlanResult);
         var failures = descriptorPlan.Diagnostics
             .Concat(pipelinePlanResult.Diagnostics)
