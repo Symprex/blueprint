@@ -8,11 +8,11 @@
     "activeWorkstream": "operation-discovery-and-descriptors",
     "nextReadySlice": {
       "workstream": "operation-discovery-and-descriptors",
-      "title": "Project host exposure per operation into the discovery manifest"
+      "title": "Add the first conflicting-host or enabled-host diagnostics"
     },
     "lastCompletedSlice": {
       "workstream": "operation-discovery-and-descriptors",
-      "title": "Make operation inclusion host-aware in compile-time descriptor/app-registration metadata"
+      "title": "Project host exposure per operation into the discovery manifest"
     },
     "openReviewGate": null
   },

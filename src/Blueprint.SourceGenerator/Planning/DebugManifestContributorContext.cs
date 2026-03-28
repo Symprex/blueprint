@@ -1,4 +1,5 @@
 using Microsoft.CodeAnalysis;
+using Newtonsoft.Json.Linq;
 
 namespace Blueprint.SourceGenerator.Planning;
 
@@ -11,6 +12,7 @@ public sealed class DebugManifestContributorContext
     private readonly OperationModel _operation;
     private readonly GeneratedDebugManifest _manifest;
     private readonly IOperationLookup _operationLookup;
+    private readonly DescriptorPlan _descriptorPlan;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="DebugManifestContributorContext"/> class.
@@ -18,16 +20,19 @@ public sealed class DebugManifestContributorContext
     /// <param name="contributorId">The contributor currently populating the manifest.</param>
     /// <param name="operation">The current operation.</param>
     /// <param name="manifest">The manifest plan under construction.</param>
+    /// <param name="descriptorPlan">The descriptor planning state for the same operation.</param>
     /// <param name="operationLookup">A lookup for related operations.</param>
     public DebugManifestContributorContext(
         string contributorId,
         OperationModel operation,
         GeneratedDebugManifest manifest,
+        DescriptorPlan descriptorPlan,
         IOperationLookup operationLookup)
     {
         this._contributorId = contributorId;
         this._operation = operation;
         this._manifest = manifest;
+        this._descriptorPlan = descriptorPlan;
         this._operationLookup = operationLookup;
     }
 
@@ -53,6 +58,26 @@ public sealed class DebugManifestContributorContext
     public void AddEntry(string key, string value)
     {
         this._manifest.AddEntry(key, value, this._contributorId);
+    }
+
+    /// <summary>
+    /// Adds or replaces one structured manifest entry for the current operation.
+    /// </summary>
+    /// <param name="key">The manifest entry key.</param>
+    /// <param name="value">The manifest entry value.</param>
+    public void AddEntry(string key, JToken value)
+    {
+        this._manifest.AddEntry(key, value, this._contributorId);
+    }
+
+    /// <summary>
+    /// Gets descriptor metadata that earlier contributors already discovered for the current operation.
+    /// </summary>
+    /// <typeparam name="T">The metadata type.</typeparam>
+    /// <returns>The matching metadata items.</returns>
+    public IEnumerable<T> GetMetadata<T>()
+    {
+        return this._descriptorPlan.GetMetadata<T>();
     }
 
     /// <summary>

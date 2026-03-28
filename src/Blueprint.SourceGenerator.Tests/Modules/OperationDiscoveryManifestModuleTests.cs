@@ -5,6 +5,7 @@ using Blueprint.SourceGenerator.Planning;
 using FluentAssertions;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Newtonsoft.Json.Linq;
 
 namespace Blueprint.SourceGenerator.Tests.Modules;
 
@@ -22,12 +23,9 @@ public class OperationDiscoveryManifestModuleTests
 
         result.Diagnostics.Should().BeEmpty();
         result.Value.Should().NotBeNull();
-        result.Value!.Entries.Should().Contain(
-        [
-            new KeyValuePair<string, string>("kind", "query"),
-            new KeyValuePair<string, string>("namespace", "TestNamespace"),
-            new KeyValuePair<string, string>("typeName", "ListUsersQuery"),
-        ]);
+        result.Value!.Entries["kind"].ToString().Should().Be("query");
+        result.Value.Entries["namespace"].ToString().Should().Be("TestNamespace");
+        result.Value.Entries["typeName"].ToString().Should().Be("ListUsersQuery");
     }
 
     [Fact]
@@ -46,6 +44,28 @@ public class OperationDiscoveryManifestModuleTests
             "Test.Assembly",
             "1.2.3",
             manifests.Reverse());
+
+        await Verify(manifest.ToJson())
+            .UseDirectory(SnapshotsFolder);
+    }
+
+    [Fact]
+    public void When_http_host_exposure_exists_then_operations_manifest_includes_host_names()
+    {
+        var manifest = CreateHostExposedOperationsManifest();
+
+        var listUsersOperation = (JObject)manifest.Operations["TestNamespace.ListUsersQuery"];
+        listUsersOperation.TryGetValue("hostExposure", out var hostExposure).Should().BeTrue();
+        hostExposure.Should().NotBeNull();
+        hostExposure!.Type.Should().Be(JTokenType.Array);
+        hostExposure.Values<string>().Should().Equal("http");
+        ((JObject)manifest.Operations["TestNamespace.CreateUserCommand"]).Property("hostExposure").Should().BeNull();
+    }
+
+    [Fact]
+    public async Task When_http_host_exposure_present_then_operations_manifest_serializes_host_names()
+    {
+        var manifest = CreateHostExposedOperationsManifest();
 
         await Verify(manifest.ToJson())
             .UseDirectory(SnapshotsFolder);
@@ -95,7 +115,7 @@ public class OperationDiscoveryManifestModuleTests
 
         result.Diagnostics.Should().BeEmpty();
         result.Value.Should().NotBeNull();
-        result.Value!.Entries.Should().Contain(new KeyValuePair<string, string>("kind", "operation"));
+        result.Value!.Entries["kind"].ToString().Should().Be("operation");
     }
 
     [Fact]
@@ -141,6 +161,44 @@ public class OperationDiscoveryManifestModuleTests
         return result.Value!;
     }
 
+    private static GeneratedManifestEnvelope CreateHostExposedOperationsManifest()
+    {
+        var compilation = CreateCompilation(
+            """
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+
+            namespace TestNamespace;
+
+            public partial class CreateUserCommand : ICommand<string>
+            {
+            }
+
+            [RootLink("/users")]
+            public partial class ListUsersQuery : IQuery<string>
+            {
+            }
+            """);
+        compilation.GetTypeByMetadataName("Blueprint.Model.Attributes.RootLinkAttribute").Should().NotBeNull();
+
+        var config = new BlueprintSourceGenerationConfig(
+        [
+            new LinkGenerationModule(),
+            new OperationDiscoveryManifestModule(),
+        ]);
+        var manifests = new[]
+        {
+            BuildManifest(config, compilation, "TestNamespace.ListUsersQuery"),
+            BuildManifest(config, compilation, "TestNamespace.CreateUserCommand"),
+        };
+
+        return OperationsDiscoveryManifestEmitter.CreateBuildManifest(
+            "TestNamespace.TestBlueprintApp",
+            "Test.Assembly",
+            "1.2.3",
+            manifests);
+    }
+
     private static string RenderDescriptor(DescriptorPlan plan)
     {
         var builder = CodeBuilder.Create("TestNamespace");
@@ -152,20 +210,26 @@ public class OperationDiscoveryManifestModuleTests
     }
 
     private static CSharpCompilation CreateCompilation(string source = """
-                                                             using Blueprint.Model;
+                                                              using Blueprint.Model;
 
-                                                            namespace TestNamespace;
+                                                              namespace TestNamespace;
 
-                                                            public partial class CreateUserCommand : ICommand<string>
-                                                            {
-                                                            }
+                                                              public partial class CreateUserCommand : ICommand<string>
+                                                              {
+                                                              }
 
-                                                            public partial class ListUsersQuery : IQuery<string>
-                                                            {
-                                                            }
-                                                            """)
+                                                              public partial class ListUsersQuery : IQuery<string>
+                                                              {
+                                                              }
+                                                             """)
     {
-        var syntaxTree = CSharpSyntaxTree.ParseText(source, new CSharpParseOptions(LanguageVersion.Preview));
+        var parseOptions = new CSharpParseOptions(LanguageVersion.Preview);
+        var syntaxTrees = new[]
+        {
+            CSharpSyntaxTree.ParseText(source, parseOptions),
+            CSharpSyntaxTree.ParseText(RootLinkAttributeDescriptor.Instance.GenerateSource(), parseOptions),
+            CSharpSyntaxTree.ParseText(SelfLinkAttributeDescriptor.Instance.GenerateSource(), parseOptions),
+        };
         var references = AppDomain.CurrentDomain.GetAssemblies()
             .Where(static assembly => !assembly.IsDynamic && !string.IsNullOrWhiteSpace(assembly.Location))
             .Select(static assembly => MetadataReference.CreateFromFile(assembly.Location))
@@ -175,7 +239,7 @@ public class OperationDiscoveryManifestModuleTests
 
         return CSharpCompilation.Create(
             assemblyName: "OperationDiscoveryManifestModuleTests",
-            syntaxTrees: [syntaxTree],
+            syntaxTrees: syntaxTrees,
             references: references,
             options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
     }

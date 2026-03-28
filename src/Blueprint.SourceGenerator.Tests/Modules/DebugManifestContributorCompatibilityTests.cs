@@ -41,11 +41,8 @@ public class DebugManifestContributorCompatibilityTests
 
         result.Diagnostics.Should().BeEmpty();
         result.Value.Should().NotBeNull();
-        result.Value!.Entries.Should().Contain(
-        [
-            new KeyValuePair<string, string>("first-key", "alpha"),
-            new KeyValuePair<string, string>("second-key", "beta"),
-        ]);
+        result.Value!.Entries["first-key"].ToString().Should().Be("alpha");
+        result.Value.Entries["second-key"].ToString().Should().Be("beta");
     }
 
     private static CSharpCompilation CreateCompilation(string source = """

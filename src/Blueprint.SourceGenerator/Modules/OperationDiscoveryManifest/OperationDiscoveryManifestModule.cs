@@ -1,13 +1,14 @@
 using Blueprint.SourceGenerator.Planning;
 using Microsoft.CodeAnalysis;
+using Newtonsoft.Json.Linq;
 using CSharpSymbolDisplay = Microsoft.CodeAnalysis.CSharp.SymbolDisplay;
 
 namespace Blueprint.SourceGenerator.Modules;
 
 /// <summary>
-/// Contributes the approved operation discovery facts (<c>kind</c>, <c>namespace</c>, <c>typeName</c>) to both the
-/// per-operation debug manifest and each generated operation descriptor as typed
-/// <c>Blueprint.Model.OperationDiscoveryFeatureData</c> feature data, reusing the same kind-classification logic for both.
+/// Contributes the approved operation discovery facts (<c>kind</c>, <c>namespace</c>, <c>typeName</c>) plus ordered
+/// host-exposure metadata when available to both the per-operation debug manifest and each generated operation
+/// descriptor, reusing the same discovery logic across inspection and runtime-facing surfaces.
 /// </summary>
 public sealed class OperationDiscoveryManifestModule : IBlueprintSourceGeneratorModule, IDebugManifestContributor, IDescriptorContributor
 {
@@ -34,11 +35,7 @@ public sealed class OperationDiscoveryManifestModule : IBlueprintSourceGenerator
     {
         var typeSymbol = context.GetOperationTypeSymbol();
         var featureData = CreatePlanData(typeSymbol);
-        var hostNames = context.GetMetadata<HostExposureRegistration>()
-            .Select(static hostExposure => hostExposure.HostName)
-            .Distinct(StringComparer.Ordinal)
-            .OrderBy(static hostName => hostName, StringComparer.Ordinal)
-            .ToArray();
+        var hostNames = GetOrderedHostNames(context.GetMetadata<HostExposureRegistration>());
 
         // AddMetadata drives DescriptorPlan equality so cache invalidation fires when kind/namespace/typeName change,
         // even though the runtime feature-data type itself lives in a different target framework.
@@ -60,9 +57,15 @@ public sealed class OperationDiscoveryManifestModule : IBlueprintSourceGenerator
     public void ContributeToManifest(DebugManifestContributorContext context)
     {
         var featureData = CreatePlanData(context.GetOperationTypeSymbol());
+        var hostNames = GetOrderedHostNames(context.GetMetadata<HostExposureRegistration>());
         context.AddEntry("kind", featureData.Kind);
         context.AddEntry("namespace", featureData.Namespace);
         context.AddEntry("typeName", featureData.TypeName);
+
+        if (hostNames.Length > 0)
+        {
+            context.AddEntry("hostExposure", new JArray(hostNames));
+        }
     }
 
     private static DiscoveryPlanData CreatePlanData(INamedTypeSymbol typeSymbol)
@@ -90,6 +93,15 @@ public sealed class OperationDiscoveryManifestModule : IBlueprintSourceGenerator
         }
 
         return "operation";
+    }
+
+    private static string[] GetOrderedHostNames(IEnumerable<HostExposureRegistration> hostExposureRegistrations)
+    {
+        return hostExposureRegistrations
+            .Select(static hostExposure => hostExposure.HostName)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(static hostName => hostName, StringComparer.Ordinal)
+            .ToArray();
     }
 
     private static string RenderStringLiteral(string value)

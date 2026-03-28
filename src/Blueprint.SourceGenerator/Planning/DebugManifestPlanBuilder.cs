@@ -43,6 +43,17 @@ internal static class DebugManifestPlanBuilder
         var operationModel = OperationModel.Create(operationImplementationType);
         var debugManifest = new GeneratedDebugManifest(operationModel);
         var operationLookup = new CompilationOperationLookup(compilation);
+        var descriptorPlan = new DescriptorPlan(operationModel);
+
+        foreach (var contributor in executionPlanResult.Value.DescriptorContributors)
+        {
+            contributor.ContributeToDescriptor(new DescriptorContributorContext(operationModel, descriptorPlan, operationLookup));
+        }
+
+        if (descriptorPlan.Diagnostics.Count > 0)
+        {
+            return Result<GeneratedDebugManifest>.Failure(descriptorPlan.Diagnostics.ToArray());
+        }
 
         foreach (var contributor in executionPlanResult.Value.DebugManifestContributors)
         {
@@ -50,6 +61,7 @@ internal static class DebugManifestPlanBuilder
                 contributor.ContributorId,
                 operationModel,
                 debugManifest,
+                descriptorPlan,
                 operationLookup));
         }
 

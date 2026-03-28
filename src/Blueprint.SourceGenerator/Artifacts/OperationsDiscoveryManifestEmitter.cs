@@ -55,6 +55,6 @@ public static class OperationsDiscoveryManifestEmitter
         return new JObject(
             manifest.Entries
                 .OrderBy(static entry => entry.Key, StringComparer.Ordinal)
-                .Select(static entry => new JProperty(entry.Key, entry.Value)));
+                .Select(static entry => new JProperty(entry.Key, entry.Value.DeepClone())));
     }
 }
