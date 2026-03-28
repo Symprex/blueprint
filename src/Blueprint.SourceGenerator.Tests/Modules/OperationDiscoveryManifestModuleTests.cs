@@ -31,7 +31,7 @@ public class OperationDiscoveryManifestModuleTests
     }
 
     [Fact]
-    public async Task When_emitted_then_operations_manifest_serializes_stable_summary()
+    public async Task When_emitted_then_operations_manifest_serializes_stable_summary_Async()
     {
         var compilation = CreateCompilation();
         var config = new BlueprintSourceGenerationConfig([new OperationDiscoveryManifestModule()]);
@@ -65,7 +65,7 @@ public class OperationDiscoveryManifestModuleTests
     }
 
     [Fact]
-    public async Task When_http_host_exposure_present_then_operations_manifest_serializes_host_names()
+    public async Task When_http_host_exposure_present_then_operations_manifest_serializes_host_names_Async()
     {
         var manifest = CreateHostExposedOperationsManifest();
 
@@ -150,6 +150,39 @@ public class OperationDiscoveryManifestModuleTests
         result.Diagnostics[0].ToDiagnostic().Id.Should().Be("BPOD001");
         result.Diagnostics[0].ToDiagnostic().GetMessage().Should().Contain("http");
         result.Diagnostics[0].ToDiagnostic().GetMessage().Should().Contain("ListUsersQuery");
+    }
+
+    [Fact]
+    public void When_tasks_host_contributor_enabled_then_debug_manifest_includes_tasks_host_exposure()
+    {
+        var compilation = CreateCompilation(
+            """
+            using Blueprint.Model;
+            using Blueprint.Tasks;
+
+            namespace TestNamespace;
+
+            public partial class SendWelcomeEmailTask : IBackgroundTask
+            {
+            }
+            """);
+        var config = new BlueprintSourceGenerationConfig(
+        [
+            new TasksHostModule(),
+            new OperationDiscoveryManifestModule(),
+        ]);
+
+        var result = config.BuildDebugManifest("TestNamespace.SendWelcomeEmailTask", compilation);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Value.Should().NotBeNull();
+        result.Value!.Entries.Should().ContainKey("hostExposure");
+        result.Value.Entries["hostExposure"]
+            .Should()
+            .BeOfType<JArray>()
+            .Which.Values<string>()
+            .Should()
+            .Equal("tasks");
     }
 
     [Fact]

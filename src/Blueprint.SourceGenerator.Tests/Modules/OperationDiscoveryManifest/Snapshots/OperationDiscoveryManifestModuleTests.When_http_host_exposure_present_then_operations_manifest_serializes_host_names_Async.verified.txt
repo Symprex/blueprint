@@ -1,4 +1,4 @@
-{
+﻿{
   "schemaVersion": 1,
   "artifactName": "operations",
   "artifactFamily": "build-time-manifest",

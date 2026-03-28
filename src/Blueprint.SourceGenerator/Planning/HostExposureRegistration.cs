@@ -31,6 +31,11 @@ public sealed record HostExposureRegistration(string HostName)
     public static HostExposureRegistration Http { get; } = new("http");
 
     /// <summary>
+    /// Gets the shared registration for Blueprint's current tasks host surface.
+    /// </summary>
+    public static HostExposureRegistration Tasks { get; } = new("tasks");
+
+    /// <summary>
     /// Creates the shared HTTP host registration while preserving the source location that declared it.
     /// </summary>
     /// <param name="locationInfo">The host-exposure source location.</param>
@@ -38,6 +43,16 @@ public sealed record HostExposureRegistration(string HostName)
     public static HostExposureRegistration HttpAt(LocationInfo locationInfo)
     {
         return new("http", locationInfo);
+    }
+
+    /// <summary>
+    /// Creates the shared tasks host registration while preserving the source location that declared it.
+    /// </summary>
+    /// <param name="locationInfo">The host-exposure source location.</param>
+    /// <returns>The tasks host registration.</returns>
+    public static HostExposureRegistration TasksAt(LocationInfo locationInfo)
+    {
+        return new("tasks", locationInfo);
     }
 
     /// <inheritdoc />

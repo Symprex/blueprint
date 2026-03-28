@@ -63,3 +63,7 @@ Preserve familiar shapes where sensible:
 ## Sequencing
 
 Implement after the base execution and host model exists, but before deeper messaging integrations.
+
+A narrow prerequisite may land earlier in the operation-discovery workstream: a compile-time-only `IBackgroundTask` marker plus tasks host contributor can be introduced to provide the second concrete host contributor needed for host-exposure diagnostics. Keep that early prerequisite limited to host-specific marker and metadata flow; the scheduler/runtime/task-flush semantics in this plan still wait for the broader background-task workstream.
+
+That early prerequisite has now landed: `Blueprint.Tasks.IBackgroundTask` and `TasksHostModule` exist to make task-host intent visible to compile-time discovery and runtime host indexing, but the scheduler abstractions, generated task host, recurring-task metadata, and post-success flush behavior in this plan remain deferred work.

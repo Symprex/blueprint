@@ -22,7 +22,9 @@ public sealed class OperationDiscoveryManifestModule : IBlueprintSourceGenerator
     public string ContributorId => nameof(OperationDiscoveryManifestModule);
 
     /// <inheritdoc />
-    public int Order => 0;
+    // This module projects already-collected discovery metadata into descriptors and manifests, so it should run after
+    // descriptor contributors that add host exposure or other discovery facts.
+    public int Order => 100;
 
     /// <inheritdoc />
     public bool IsUnique => true;
