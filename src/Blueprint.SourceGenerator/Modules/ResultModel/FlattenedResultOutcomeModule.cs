@@ -63,16 +63,9 @@ public sealed class FlattenedResultOutcomeModule : IBlueprintSourceGeneratorModu
         ITypeSymbol declaredContractType,
         INamedTypeSymbol operationResultType)
     {
-        if (OperationResultContractHelper.TryGetResultsUnionMembers(declaredContractType, out var declaredUnionMembers))
-        {
-            return declaredUnionMembers
-                .Select(static member => CreateRegistration(member))
-                .ToImmutableArray();
-        }
-
-        return OperationResultContractHelper.IsOperationResultType(declaredContractType, operationResultType)
-            ? [CreateRegistration(declaredContractType)]
-            : [];
+        return OperationResultContractHelper.GetFlattenedSemanticResultTypes(declaredContractType, operationResultType)
+            .Select(static member => CreateRegistration(member))
+            .ToImmutableArray();
     }
 
     private static FlattenedResultOutcomeRegistration CreateRegistration(ITypeSymbol resultType)

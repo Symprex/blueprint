@@ -46,6 +46,24 @@ public static class OperationResultContractHelper
     }
 
     /// <summary>
+    /// Gets the flattened declared semantic result types for the supplied contract.
+    /// </summary>
+    /// <param name="declaredContractType">The declared operation result contract.</param>
+    /// <param name="operationResultType">The resolved <c>Blueprint.OperationResult</c> base type.</param>
+    /// <returns>The flattened semantic result types for the contract.</returns>
+    public static ImmutableArray<ITypeSymbol> GetFlattenedSemanticResultTypes(ITypeSymbol declaredContractType, INamedTypeSymbol operationResultType)
+    {
+        if (TryGetResultsUnionMembers(declaredContractType, out var declaredUnionMembers))
+        {
+            return declaredUnionMembers;
+        }
+
+        return IsOperationResultType(declaredContractType, operationResultType)
+            ? [declaredContractType]
+            : [];
+    }
+
+    /// <summary>
     /// Determines whether the given type is a concrete semantic result type rooted at <c>Blueprint.OperationResult</c>.
     /// </summary>
     /// <param name="candidateType">The candidate result type.</param>
@@ -53,9 +71,36 @@ public static class OperationResultContractHelper
     /// <returns>Whether the candidate inherits from the semantic result base type.</returns>
     public static bool IsOperationResultType(ITypeSymbol candidateType, INamedTypeSymbol operationResultType)
     {
+        return IsTypeOrDerivedFrom(candidateType, operationResultType);
+    }
+
+    /// <summary>
+    /// Determines whether the HTTP operation result executor can translate the supplied semantic result type.
+    /// </summary>
+    /// <param name="resultType">The semantic result type to inspect.</param>
+    /// <param name="okResultType">The resolved <c>Blueprint.Runtime.Exec.OkResult</c> base type.</param>
+    /// <param name="noResultType">The resolved <c>Blueprint.Runtime.Exec.NoResultOperationResult</c> type.</param>
+    /// <returns>Whether the current HTTP executor can translate the result type.</returns>
+    public static bool IsSupportedByHttpOperationResultExecutor(
+        ITypeSymbol resultType,
+        INamedTypeSymbol okResultType,
+        INamedTypeSymbol noResultType)
+    {
+        return IsTypeOrDerivedFrom(resultType, okResultType)
+            || SymbolEqualityComparer.Default.Equals(resultType, noResultType);
+    }
+
+    /// <summary>
+    /// Determines whether a symbol is the same as or derives from the supplied base type.
+    /// </summary>
+    /// <param name="candidateType">The candidate type to inspect.</param>
+    /// <param name="baseType">The base type to compare against.</param>
+    /// <returns>Whether the candidate is the same type as or derives from the base type.</returns>
+    public static bool IsTypeOrDerivedFrom(ITypeSymbol candidateType, INamedTypeSymbol baseType)
+    {
         for (var current = candidateType as INamedTypeSymbol; current is not null; current = current.BaseType)
         {
-            if (SymbolEqualityComparer.Default.Equals(current, operationResultType))
+            if (SymbolEqualityComparer.Default.Equals(current, baseType))
             {
                 return true;
             }

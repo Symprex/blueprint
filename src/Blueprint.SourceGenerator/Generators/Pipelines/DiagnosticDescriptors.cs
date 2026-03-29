@@ -107,6 +107,18 @@ internal static class DiagnosticDescriptors
         isEnabledByDefault: true,
         description: "Handlers must return a value that the generator can normalize into the declared operation result contract.");
 
+    /// <summary>
+    /// BP108: Declared semantic result contract has no enabled-host executor coverage.
+    /// </summary>
+    public static readonly DiagnosticDescriptor MissingHostExecutorForDeclaredResultContract = new(
+        id: "BP108",
+        title: "Declared semantic result contract has no enabled-host executor coverage",
+        messageFormat: "The operation '{0}' declares semantic result '{1}', but no executor or adapter currently handles it for enabled host '{2}'",
+        category: Category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "Host-exposed operations must declare semantic result contracts that the enabled host can translate.");
+
     // Warning diagnostics (BP200-BP299)
 
     /// <summary>

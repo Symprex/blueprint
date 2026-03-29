@@ -374,4 +374,8 @@ Close the result taxonomy and normalization rules together with the pipeline pla
   - `MapBlueprintApi(...)` now routes supported success shapes through `Blueprint.Runtime.Http.HttpOperationResultExecutor`, translating `OkResult<T>` payloads to JSON `200 OK` responses and `NoResultOperationResult` to empty `200 OK` responses without relying on `OkResult.ExecuteAsync(...)`.
   - Unsupported legacy results still fall back to direct `OperationResult.ExecuteAsync(...)`, making the new host-owned executor seam an explicit migration path rather than a quiet all-at-once replacement of the older contract.
   - The proof matrix now includes host-surface endpoint tests covering translated `OkResult<T>`, translated `NoResultOperationResult`, and the legacy fallback boundary, plus a green `Blueprint.SourceGenerator.Tests` project run.
-- Next approved follow-on: add the first compile-time diagnostic when a declared semantic result contract has no host executor/adapter for an enabled host.
+- Completed the first host-executor availability diagnostic slice:
+  - `HostExecutorAvailabilityModule` now runs during descriptor generation, reuses the flattened semantic-result helper surface, and reports `BP108` when an HTTP-exposed operation declares a semantic result shape that the current enabled HTTP executor path does not translate.
+  - Supported `OkResult<T>` and `NoResultOperationResult` contracts stay clean, while mixed `Results<T1, T2>` unions report only the unsupported semantic-result members.
+  - The proof matrix now includes a focused red-to-green descriptor diagnostic test file (`OperationDescriptorSourceGeneratorTests.HostExecutorAvailability.cs`) plus a green `Blueprint.SourceGenerator.Tests` project run.
+- Next approved follow-on: add the first compile-time diagnostic for semantic result shapes that would be ambiguous to translate for a declared host.
