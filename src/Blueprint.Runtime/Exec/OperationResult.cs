@@ -12,8 +12,12 @@ public abstract class OperationResult
     /// <summary>
     /// Executes this result.
     /// </summary>
-    /// <param name="context">The context representing the request and response.</param>
+    /// <param name="context">The context representing the current Blueprint operation execution.</param>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
+    /// <remarks>
+    /// Direct execution remains the legacy compatibility path while hosts migrate to explicit result executors/adapters.
+    /// New host integrations should prefer those host-owned translation seams rather than expanding self-executing result behavior.
+    /// </remarks>
     public abstract Task ExecuteAsync(ApiOperationContext context);
 
     /// <summary>

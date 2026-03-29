@@ -16,6 +16,8 @@ namespace Microsoft.AspNetCore.Builder;
 /// </summary>
 public static class EndpointRouteBuilderExtensions
 {
+    private static readonly HttpOperationResultExecutor DefaultOperationResultExecutor = new();
+
     /// <summary>
     /// Maps all Blueprint operation endpoints from the given <see cref="BlueprintAppExecutor" />.
     /// </summary>
@@ -199,8 +201,12 @@ public static class EndpointRouteBuilderExtensions
 
             var result = await nestedContainer.ServiceProvider.GetRequiredService<TExec>().GetPipeline(operation.OperationType).ExecuteAsync(apiContext);
 
-            // We want to immediately execute the result to allow it to write to the HTTP response
-            await result.ExecuteAsync(apiContext);
+            var operationResultExecutor = nestedContainer.ServiceProvider.GetService<HttpOperationResultExecutor>() ?? DefaultOperationResultExecutor;
+            if (await operationResultExecutor.TryExecuteAsync(httpContext, apiContext, result) == false)
+            {
+                // Legacy self-executing results still flow through the old path until the broader host-translation workstream lands.
+                await result.ExecuteAsync(apiContext);
+            }
         }
     }
 }

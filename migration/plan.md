@@ -765,7 +765,11 @@ Run this as a paired design loop with workstream 6. The result contract must be 
   - `FlattenedResultOutcomeModule` now projects declared semantic result contracts into additive `OperationResultOutcomesFeatureData`, flattening `Results<T1, T2>` into ordered `OperationResultOutcome` entries and surfacing single declared semantic result contracts as one-outcome descriptor metadata.
   - Contract-only compilations that do not reference `Blueprint.OperationResult` now skip that descriptor feature instead of failing generator execution, so descriptor generation stays safe in model-only consumer projects such as `Blueprint.SourceGenerator.Sample.Contract`.
   - The proof set now covers descriptor-source assertions, runtime `Configure().GetFeatureData<OperationResultOutcomesFeatureData>()` checks, the contract-only regression test, and a green verification matrix across `dotnet format`, `Blueprint.SourceGenerator.Tests`, `Blueprint.SourceGenerator.CodeWriter.Tests`, `Blueprint.SourceGenerator.Tests.Integration`, and `dotnet build .\Blueprint.sln`.
-- Next approved follow-on for this workstream: create the first migration path away from self-executing runtime results while still deferring host translation so the broader result semantics do not freeze accidentally.
+- Completed the first runtime-result migration slice:
+  - `MapBlueprintApi(...)` now routes supported success shapes through `Blueprint.Runtime.Http.HttpOperationResultExecutor`, translating `OkResult<T>` payloads to JSON `200 OK` responses and `NoResultOperationResult` to empty `200 OK` responses without relying on `OkResult.ExecuteAsync(...)`.
+  - Unsupported legacy results still fall back to direct `OperationResult.ExecuteAsync(...)`, so the new host-owned executor seam is an explicit migration path rather than an accidental wholesale replacement of the old contract.
+  - The proof set now includes host-surface endpoint tests for translated `OkResult<T>`, translated `NoResultOperationResult`, and the legacy fallback boundary, plus a green `Blueprint.SourceGenerator.Tests` project run.
+- Next approved follow-on for this workstream: add the first compile-time diagnostic when a declared semantic result contract has no host executor/adapter for an enabled host.
 
 ## 8. Error model and exception handling
 
