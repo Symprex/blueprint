@@ -92,7 +92,7 @@ then the relevant `/docs` file should be updated in the same change.
 - Start in `docs/README.md`.
 - Read the most relevant detailed docs for the change.
 - Identify the build, snapshot, and generator harness you expect to exercise.
-- For migration orchestrator sessions, finding the next slice is only the beginning of the loop. In the same session, move from slice selection to a failing proof and then to the first production change unless an explicit blocker or review gate stops you.
+- For migration orchestrator sessions, finding the next slice is only the beginning of the loop. In the same launcher invocation, move from slice selection to a failing proof and then to the first production change, and then keep going through up to 5 related slices one-by-one when the updated `migration\progress.json` state unlocks them and no blocker or review gate stops you.
 - For any feature, bugfix, refactor, or behavior change, use the repo-local `test-driven-development` skill mindset first: write the failing proof before production edits and watch it fail for the right reason.
 - Do not use reflection in tests to assert that a contract exists or to invoke private/internal helpers. If the right behavior is not testable through a supported seam, improve that seam first.
 - For pipeline contributor or module slices, write the test matrix down before coding. The default minimum is:
@@ -129,9 +129,11 @@ then the relevant `/docs` file should be updated in the same change.
 - Use the `verification-before-completion` skill mindset before any success claim: rerun the fresh verification command, read the output, and only then say the slice is passing or ready for review.
 - Finish your own review pass first, including tests, formatting, generated-output review, and any review-agent follow-up that the slice needs.
 - Generate a visual review handoff with the `visual-explainer` skill before commit for any migration-plan slice or phase gate.
+- Treat any feedback from that visual review handoff as input for another AI review/fix round before committing.
 - Write that visual review HTML to the launcher-provided allow-listed review artifact directory (currently `$HOME\.agent\diagrams`) so the artifact survives beyond the session workspace and is immediately accessible to the reviewer.
 - If review closes a decision about ordering, next slice selection, or architecture direction, write that decision back into `migration\plan.md` before ending the session.
 - If a slice is obviously complete and no review gate remains open, make a small, focused git commit before switching to unrelated work or ending the session.
+- For migration orchestrator batches, finish each completed slice before advancing: verify it, generate the visual review handoff, commit it, refresh `migration\progress.json`, and only then take the next related slice.
 - Treat that visual handoff as part of the artifact set, not as a presentation extra. It should show:
   - the architectural delta and why it matters
   - key code snippets and file touch points

@@ -80,6 +80,24 @@ open_review_gate: $openReviewGate
     $prompt = $prompt + "`r`n`r`n$progressSummary`r`n<progress_snapshot path=`"$progressPath`">`r`n$progress`r`n</progress_snapshot>"
 }
 
+$batchExecutionSummary = @"
+<orchestration_batch_contract>
+max_related_slices_per_invocation: 5
+batching_rule: Prefer up to 5 related slices per launcher invocation, executing them one-by-one and refreshing migration\progress.json after each completed slice.
+per_slice_loop:
+- identify the current next ready slice from migration\progress.json
+- write and observe the failing proof before production edits
+- implement the minimum safe change
+- verify, produce a visual review document, incorporate any review feedback, and commit if no explicit review gate remains open
+- update migration\progress.json and continue with the next related slice when ordering/dependencies still allow it
+stop_conditions:
+- explicit human stop instruction
+- an open human review gate recorded in migration\progress.json
+- an absolutely CRITICAL approval need that remains unresolved after different sub-agents cannot agree on a safe next step
+- unexpected repository changes or another concrete blocker
+</orchestration_batch_contract>
+"@
+
 foreach ($diagramDirectory in $diagramDirectories)
 {
     New-Item -ItemType Directory -Path $diagramDirectory -Force | Out-Null
@@ -91,7 +109,7 @@ Write visual review handoffs and similar HTML review artifacts here. This direct
 </review_artifact_directory>
 "@
 
-$prompt = $prompt + "`r`n`r`n$reviewArtifactSummary"
+    $prompt = $prompt + "`r`n`r`n$batchExecutionSummary`r`n`r`n$reviewArtifactSummary"
 
 $commonArgs = @(
     '--experimental'

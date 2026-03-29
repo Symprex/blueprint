@@ -38,6 +38,7 @@ If the repo-local skills `test-driven-development`, `systematic-debugging`, and 
 Execution goals:
 
 - Start at the next ready slice named in `migration\progress.json`.
+- Prefer to work through up to 5 related slices in one launcher invocation, but only one slice at a time and only when each next slice is newly unlocked by the updated `migration\progress.json` state plus the ordering rules in the plans.
 - Use `migration\plan.md` for ordering, dependency rules, and human-review gates, and use the referenced workstream plan for slice-specific acceptance criteria and design detail.
 - Follow the ordering, dependency, artifact, and human-review gates in `migration\plan.md` exactly.
 - Keep work small, reviewable, and resumable.
@@ -61,6 +62,9 @@ Non-negotiable operating rules:
 - Session `plan.md`, SQL todos, and chat checkpoints are working state only. Any durable decision about sequencing, approved slices, review outcomes, or human direction MUST update `migration\progress.json` first and then be recorded explicitly in `migration\plan.md` and the relevant `migration\...\plan.md` file before handoff or stop.
 - When a slice is obviously complete, review-closed, and verification-passing, create a small, focused git commit before starting unrelated work or ending the session. If a human review gate is still open, stop before committing and record that explicitly.
 - Slice selection, document reading, plan creation, and todo creation are setup steps, not a valid stopping point. Unless an explicit blocker or review gate stops you, the same session must continue into failing proof, observe that proof fail for the right reason, and start the production change for the selected slice.
+- After one slice is complete, verified, review-documented, and committed, re-read `migration\progress.json` and continue the loop with the next related slice until you have completed the safe batch, reached the limit of up to 5 related slices, or hit a real stop condition.
+- Treat any feedback from the visual review document as input for another AI review/fix round before committing the slice.
+- Implement, verify, produce a visual review document, incorporate any review feedback, and commit each completed slice before moving to the next one in the batch. Do not batch multiple unverified slices into one commit.
 - Do not hard-code an "Immediate expected first slice" in this prompt. The launcher must surface that from `migration\progress.json`, and any change to live state must be made there rather than by editing prompt prose.
 
 Resumability contract:
@@ -68,6 +72,7 @@ Resumability contract:
 - Treat `migration\progress.json` as the cross-session source of truth for live migration state, and treat `migration\plan.md` plus the relevant module plan as the cross-session reference plans for ordering, rationale, and acceptance criteria. Do not assume any prior session-local state will still be available.
 - At the start of the session, identify the exact slice you are taking on and record it in SQL todos.
 - After identifying the slice, begin executing it in the same session. Do not hand off or stop with only a slice summary unless the repo is truly blocked.
+- As each slice in the batch finishes, refresh the session plan and SQL todos for the next related slice before continuing so the loop remains resumable in the middle of a multi-slice invocation.
 - At the end of every meaningful work step, leave a checkpoint in your response with:
   - `Completed`
   - `Verified`
@@ -96,16 +101,18 @@ Safety and escalation rules:
 - If a slice cannot start with a failing proof and it touches a public contract, security behavior, dependency order, serializer ownership, result semantics, or a phase gate, stop and ask for help before coding.
 - If you hit unexpected repository changes that you did not make, stop and ask for help immediately.
 - If a human review gate is reached, stop and ask for review instead of silently continuing into the next architectural decision.
+- If you believe human approval is needed outside an explicit review gate, first consult the most relevant different sub-agents for a second opinion. Only stop for human approval when the issue is absolutely CRITICAL and those agents still cannot agree on a safe next step.
 - If you are blocked, use the structured question flow/tooling available to ask for the smallest decision needed to proceed. Give your recommendation first, include 2-3 concrete options when useful, cite consulted-agent input where relevant, and do not abandon the task silently.
 
 Definition of success for this session:
 
-- You complete one narrow, dependency-safe slice from the current next-ready workstream.
-- You validate it with tests/build/formatting appropriate to the slice.
-- You update any required docs/artifacts.
+- You complete one to five narrow, dependency-safe related slices, always one-by-one, starting from the current next-ready workstream/slice and only continuing when the updated live state unlocks the next item.
+- You validate each completed slice with tests/build/formatting appropriate to that slice.
+- You update any required docs/artifacts for each completed slice.
+- You produce a visual review document for each completed slice before commit or phase handoff.
 - You leave the repository and the migration plan easier to resume from than they were at session start.
 - Any approved review or human decision from the session is written explicitly into `migration\plan.md` before handoff.
-- Any obviously completed, review-closed slice is captured in a small, focused git commit unless an open review gate or explicit user instruction says otherwise.
+- Any obviously completed, review-closed slice is captured in its own small, focused git commit unless an open review gate or explicit user instruction says otherwise.
 - You do not stop at planning-only output after finding the next slice. By the end of the session, there must be concrete failing-proof evidence and at least one corresponding repo change unless the session is explicitly blocked.
 
 When you begin, first summarize:

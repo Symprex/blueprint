@@ -32,7 +32,7 @@ The target is **consumer-contract compatibility**, not byte-for-byte parity with
 - The bullets in this section are historical context and rationale, not a competing live progress tracker.
 - Planning and orchestration guidance are complete.
 - `migration\progress.json` is the single source of truth for live migration state; it must stay aligned with the durable rationale and acceptance criteria recorded in `migration\plan.md` and the active workstream plan whenever the ready slice or review-gate state changes.
-- The launcher contract is now stricter: once the next dependency-safe slice is identified, the same session must continue into failing proof and the first implementation step unless an explicit blocker or review gate stops the work.
+- The launcher contract is now stricter: once the next dependency-safe slice is identified, the same session must continue into failing proof and the first implementation step, then keep working through up to 5 related slices per invocation with verify-review-commit loops between slices unless an explicit blocker or review gate stops the work.
 - The initial minimum **Phase 0 / Workstream 1: Foundation module system** slice has landed, including contributor capability splits, deterministic execution-plan diagnostics, `LinkGenerationModule` contributor routing, planning models, and stage-aware pipeline variable validation.
 - The next session should read `migration\progress.json` immediately after this file, then treat the active workstream and detailed plan recorded there as the immediate execution target while keeping `migration\plan.md` as the ordering and safety contract.
 - The first approved production pipeline-contributor slice is now complete: `HandlerExecutionModule` routes handler invocation plus the produced `handler-result` variable through the activated pipeline seam while preserving the existing generated pipeline output and result wrapping.
@@ -120,14 +120,14 @@ The target is **consumer-contract compatibility**, not byte-for-byte parity with
 3. Read the detailed module plan named by `migration\progress.json` before making changes.
 4. Do not start a workstream until every listed dependency is complete or an explicit human override is recorded.
 5. Implement the smallest reviewable slice that can satisfy a meaningful acceptance criterion.
-6. Do not stop after slice selection, doc reading, or plan/todo setup alone. In the same session, continue into failing proof and the first production edit unless an explicit blocker or review gate prevents it.
+6. Do not stop after slice selection, doc reading, or plan/todo setup alone. In the same session, continue into failing proof and the first production edit unless an explicit blocker or review gate prevents it. When the slice lands cleanly, prefer to keep going through up to 5 related slices per invocation, always one-by-one with verify-review-commit checkpoints between them.
 7. Follow the TDD-first execution loop below for every slice, using the repo-local `test-driven-development`, `systematic-debugging`, and `verification-before-completion` skills when relevant.
 8. Update docs, machine-readable artifacts, and relevant Blueprint skill artifacts in the same change.
 9. Use the sub-agent guidance in this file to split investigation, implementation, testing, and review work.
-10. At every major design gate, request human review before declaring the phase complete.
+10. At every major design gate, request human review before declaring the phase complete. Outside those explicit gates, only escalate for human approval when the issue is absolutely critical and relevant different sub-agents still cannot agree on a safe next step.
 11. After a slice reaches local done and passes self-review, generate a visual human-review handoff with `visual-explainer` before commit or before moving to the next phase gate.
 12. Write that review artifact into the launcher-provided allow-listed review artifact directory (currently `$HOME\.agent\diagrams`) unless a human explicitly requests a different location.
-13. If review closes a decision about sequencing, slice selection, or architecture direction, write that decision explicitly into `migration\progress.json` first and then into `migration\plan.md` before ending the session.
+13. Treat any feedback from that visual review handoff as input for another AI review/fix round before committing. If review closes a decision about sequencing, slice selection, or architecture direction, write that decision explicitly into `migration\progress.json` first and then into `migration\plan.md` before ending the session.
 14. If a slice is obviously complete, review-closed, and verification-passing, make a small, focused git commit before switching to unrelated work or ending the session. If a review gate remains open, stop short of commit and record why.
 
 ## TDD-first execution loop
