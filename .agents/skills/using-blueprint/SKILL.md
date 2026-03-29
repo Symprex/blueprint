@@ -42,7 +42,9 @@ Do not use this skill to change Blueprint internals in `blueprint-source-gen`; u
 ## Result contract
 
 - The first public semantic-union surface is `Results<T1, T2>` in `Blueprint.Model`.
-- Keep that first slice narrow: it establishes the host-agnostic contract shape only. Handler-return normalization, flattened descriptor outcomes, and broader host translation remain follow-on work.
+- Plain non-null handler returns currently normalize to typed `Blueprint.Runtime.Exec.OkResult<T>`, and `void`/`Task` handlers normalize to the current no-result runtime shape.
+- Explicit `Blueprint.OperationResult` returns pass through unchanged, and `Results<T1, T2>` handlers must resolve to one of the declared member result types.
+- Nullable plain-value handler returns are a build-time error; flattened descriptor outcomes and broader host translation remain follow-on work.
 
 ## Working loop
 

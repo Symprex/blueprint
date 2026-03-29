@@ -756,7 +756,11 @@ Run this as a paired design loop with workstream 6. The result contract must be 
   - Focused model tests now cover implicit conversions plus wrong-member/default-state failures.
   - `using-blueprint` now points consumers at the new contract surface.
   - The verification matrix (`dotnet format .\Blueprint.sln --no-restore --include src\Blueprint.Runtime.Model\Results.cs src\Blueprint.SourceGenerator.Tests\Model\ResultsTests.cs`, `dotnet build .\Blueprint.sln --no-restore`, `dotnet test .\src\Blueprint.SourceGenerator.Tests\Blueprint.SourceGenerator.Tests.csproj --no-restore`, `dotnet test .\src\Blueprint.SourceGenerator.Tests.Integration\Blueprint.SourceGenerator.Tests.Integration.csproj --no-restore`, and `dotnet test .\src\Blueprint.SourceGenerator.CodeWriter.Tests\Blueprint.SourceGenerator.CodeWriter.Tests.csproj --no-restore`) is green after repairing the stale orchestration pointer that still targeted already-landed pipeline work.
-- Next approved follow-on for this workstream: add handler-return normalization on top of the new union/result contract surface while still deferring flattened descriptor outcomes, migration shims, and host translation to later slices so the broader result semantics do not freeze accidentally.
+- Completed the handler-return normalization slice:
+  - `HandlerExecutionModule` now normalizes plain non-null handler values into typed `Blueprint.Runtime.Exec.OkResult<T>`, `void`/`Task` into `Blueprint.Runtime.Exec.NoResultOperationResult`, explicit `Blueprint.OperationResult` returns through unchanged, and the first `Results<T1, T2>` contract into direct concrete-member returns.
+  - Pipeline diagnostics `BP105`-`BP107` now reject nullable plain-value returns, unsupported union members, and handler returns that do not match the declared operation result contract.
+  - The proof set covers generator snapshots, compile-time diagnostics, runtime execution in `src\Blueprint.SourceGenerator.Tests.Integration\Generators\Pipelines\HandlerReturnNormalizationIntegrationTests.cs`, and a green verification matrix across `dotnet format`, `Blueprint.SourceGenerator.Tests`, `Blueprint.SourceGenerator.CodeWriter.Tests`, `Blueprint.SourceGenerator.Tests.Integration`, and `dotnet build .\Blueprint.sln`.
+- Next approved follow-on for this workstream: project the first flattened descriptor outcome model from declared semantic result contracts while still deferring migration shims and host translation so the broader result semantics do not freeze accidentally.
 
 ## 8. Error model and exception handling
 

@@ -71,6 +71,42 @@ internal static class DiagnosticDescriptors
         isEnabledByDefault: true,
         description: "Operation classes with inline handlers must be declared as partial to allow the generator to extend them.");
 
+    /// <summary>
+    /// BP105: Nullable plain-value handler returns are not supported.
+    /// </summary>
+    public static readonly DiagnosticDescriptor NullablePlainValueHandlerReturn = new(
+        id: "BP105",
+        title: "Nullable plain-value handler return is not supported",
+        messageFormat: "The handler method '{0}' returns nullable plain value '{1}'. Use an explicit semantic result type or a non-null plain value.",
+        category: Category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "Plain handler return values are normalized into success results. Nullable plain values are ambiguous, so handlers must either return a non-null plain value or an explicit semantic result type.");
+
+    /// <summary>
+    /// BP106: Results union member type is not supported.
+    /// </summary>
+    public static readonly DiagnosticDescriptor UnsupportedResultsUnionMember = new(
+        id: "BP106",
+        title: "Results union member is not supported",
+        messageFormat: "The Results union member type '{0}' on handler '{1}' is not a supported semantic result shape",
+        category: Category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "Results<T1, T2> members must be concrete semantic result shapes that the pipeline can normalize without runtime type checks.");
+
+    /// <summary>
+    /// BP107: Handler return type is incompatible with the declared operation result contract.
+    /// </summary>
+    public static readonly DiagnosticDescriptor IncompatibleHandlerReturnContract = new(
+        id: "BP107",
+        title: "Handler return type is incompatible with the declared operation result contract",
+        messageFormat: "The handler method '{0}' returns '{1}', which is not compatible with the declared operation result contract '{2}'",
+        category: Category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "Handlers must return a value that the generator can normalize into the declared operation result contract.");
+
     // Warning diagnostics (BP200-BP299)
 
     /// <summary>

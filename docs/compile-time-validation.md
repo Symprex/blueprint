@@ -24,6 +24,8 @@ If the compiler or generator can detect a bad configuration, it should do so wit
 
 These diagnostics should stay stable and descriptive because they are part of the repo's human and AI feedback loop.
 
+Recent pipeline-contract coverage in that range includes `BP105` for nullable plain-value handler returns, `BP106` for unsupported `Results<T1, T2>` member types, and `BP107` for handler returns that do not match the declared operation result contract. Keep those rules compile-time-first: the generator should reject ambiguous or unsupported result shapes before runtime execution needs to guess how to normalize them.
+
 ### Migration and refactoring diagnostics
 
 Large-scale migrations should use a dedicated diagnostic range rather than mixing mechanically-fixable migration findings into the ordinary generator IDs.

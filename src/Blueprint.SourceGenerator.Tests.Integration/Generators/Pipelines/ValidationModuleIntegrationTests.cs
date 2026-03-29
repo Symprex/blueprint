@@ -115,7 +115,7 @@ public class ValidationModuleIntegrationTests
 
         var result = await pipeline.ExecuteAsync(context);
 
-        result.Should().BeOfType<OkResult>();
+        result.Should().BeOfType<OkResult<string>>();
         RequiredValidationOperation.HandlerCallCount.Should().Be(1);
         ((OkResult)result).Unwrap<string>().Should().Be("Blueprint");
     }
@@ -211,7 +211,7 @@ public class ValidationModuleIntegrationTests
 
         var result = await pipeline.ExecuteAsync(context);
 
-        result.Should().BeOfType<OkResult>();
+        result.Should().BeOfType<OkResult<string>>();
         RequiredMaxLengthValidationOperation.HandlerCallCount.Should().Be(1);
         ((OkResult)result).Unwrap<string>().Should().Be("abc");
     }
@@ -229,7 +229,7 @@ public class ValidationModuleIntegrationTests
 
         var result = await pipeline.ExecuteAsync(context);
 
-        result.Should().BeOfType<OkResult>();
+        result.Should().BeOfType<OkResult<string>>();
         RequiredAllowEmptyStringsOperation.HandlerCallCount.Should().Be(1);
         ((OkResult)result).Unwrap<string>().Should().Be(string.Empty);
     }
@@ -319,7 +319,7 @@ public class ValidationModuleIntegrationTests
 
         var result = await pipeline.ExecuteAsync(context);
 
-        result.Should().BeOfType<OkResult>();
+        result.Should().BeOfType<OkResult<string>>();
         MinLengthValidationOperation.HandlerCallCount.Should().Be(1);
         ((OkResult)result).Unwrap<string>().Should().Be("abc");
     }
@@ -377,7 +377,7 @@ public class ValidationModuleIntegrationTests
 
         var result = await pipeline.ExecuteAsync(context);
 
-        result.Should().BeOfType<OkResult>();
+        result.Should().BeOfType<OkResult<string>>();
         StringLengthValidationOperation.HandlerCallCount.Should().Be(1);
         ((OkResult)result).Unwrap<string>().Should().Be("abcd");
     }
@@ -415,7 +415,7 @@ public class ValidationModuleIntegrationTests
 
         var result = await pipeline.ExecuteAsync(context);
 
-        result.Should().BeOfType<OkResult>();
+        result.Should().BeOfType<OkResult<string>>();
         EmailAddressValidationOperation.HandlerCallCount.Should().Be(1);
         ((OkResult)result).Unwrap<string>().Should().Be("hello@example.com");
     }
@@ -456,7 +456,7 @@ public class ValidationModuleIntegrationTests
 
         var result = await pipeline.ExecuteAsync(context);
 
-        result.Should().BeOfType<OkResult>();
+        result.Should().BeOfType<OkResult<string>>();
         GreaterThanPropertyValidationOperation.HandlerCallCount.Should().Be(1);
         ((OkResult)result).Unwrap<string>().Should().Be("10:11");
     }
@@ -496,7 +496,7 @@ public class ValidationModuleIntegrationTests
 
         var result = await pipeline.ExecuteAsync(context);
 
-        result.Should().BeOfType<OkResult>();
+        result.Should().BeOfType<OkResult<string>>();
         GreaterThanValidationOperation.HandlerCallCount.Should().Be(1);
         ((OkResult)result).Unwrap<string>().Should().Be("11");
     }
@@ -537,7 +537,7 @@ public class ValidationModuleIntegrationTests
 
         var result = await pipeline.ExecuteAsync(context);
 
-        result.Should().BeOfType<OkResult>();
+        result.Should().BeOfType<OkResult<string>>();
         RequiredIfValidationOperation.HandlerCallCount.Should().Be(1);
         ((OkResult)result).Unwrap<string>().Should().Be("Blueprint");
     }
@@ -575,7 +575,7 @@ public class ValidationModuleIntegrationTests
 
         var result = await pipeline.ExecuteAsync(context);
 
-        result.Should().BeOfType<OkResult>();
+        result.Should().BeOfType<OkResult<string>>();
         RequiredIfNotValidationOperation.HandlerCallCount.Should().Be(1);
         ((OkResult)result).Unwrap<string>().Should().Be(string.Empty);
     }
@@ -616,7 +616,7 @@ public class ValidationModuleIntegrationTests
 
         var result = await pipeline.ExecuteAsync(context);
 
-        result.Should().BeOfType<OkResult>();
+        result.Should().BeOfType<OkResult<string>>();
         NotAllowedIfValidationOperation.HandlerCallCount.Should().Be(1);
         ((OkResult)result).Unwrap<string>().Should().Be(string.Empty);
     }
@@ -678,7 +678,7 @@ public class ValidationModuleIntegrationTests
 
         var result = await pipeline.ExecuteAsync(context);
 
-        result.Should().BeOfType<OkResult>();
+        result.Should().BeOfType<OkResult<string>>();
         MixedFastAndRuntimeValidationOperation.HandlerCallCount.Should().Be(1);
         ((OkResult)result).Unwrap<string>().Should().Be("abc:token");
     }
@@ -1099,3 +1099,4 @@ public partial class MixedFastAndRuntimeValidationOperation : ICommand<string>
         return Task.FromResult($"{operation.Name}:{operation.Code}");
     }
 }
+

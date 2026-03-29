@@ -47,7 +47,7 @@ namespace Blueprint.Generated
 
                 var handlerResult = await testCommandHandler.HandleAsync(operation, repository);
 
-                return new Blueprint.Runtime.Exec.OkResult(handlerResult);
+                return new Blueprint.Runtime.Exec.OkResult<bool>(handlerResult);
             }
             catch (Blueprint.Validation.ValidationException e)
             {

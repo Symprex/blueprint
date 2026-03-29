@@ -361,4 +361,8 @@ Close the result taxonomy and normalization rules together with the pipeline pla
   - `Blueprint.Model.Results<T1, T2>` now provides implicit conversions plus `IsT1`/`AsT1` and `IsT2`/`AsT2`.
   - The new contract-layer tests pin both wrong-member access and default-state failures.
   - The consumer guidance in `..\..\.agents\skills\using-blueprint\SKILL.md` now points at the new two-outcome contract surface.
-- Next approved follow-on: normalize handler returns against the new union/result contract surface while still deferring flattened descriptor outcome projection, migration shims, and host translation to later slices in the first implementation pass.
+- Completed the handler-return normalization slice:
+  - `HandlerExecutionModule` now normalizes plain non-null handler values into typed `Blueprint.Runtime.Exec.OkResult<T>`, `void`/`Task` into `Blueprint.Runtime.Exec.NoResultOperationResult`, explicit `Blueprint.OperationResult` returns through unchanged, and `Results<T1, T2>` handlers into direct concrete-member returns.
+  - Pipeline diagnostics `BP105`-`BP107` now reject nullable plain-value returns, unsupported union members, and handler returns that do not match the declared operation result contract.
+  - The proof matrix now includes reviewed pipeline snapshots, compile-time diagnostic tests, runtime execution coverage in `src\Blueprint.SourceGenerator.Tests.Integration\Generators\Pipelines\HandlerReturnNormalizationIntegrationTests.cs`, and a green repo verification matrix (`dotnet format`, the main generator tests, the CodeWriter tests, the integration tests, and `dotnet build .\Blueprint.sln`).
+- Next approved follow-on: project the first flattened descriptor outcome model from declared semantic result contracts while still deferring migration shims and host translation to later slices in the first implementation pass.

@@ -88,7 +88,7 @@ public class OperationExecutorPipelineGeneratorIntegrationTests
         renderStep.ContributorId.Should().Be(module.ContributorId);
         plan.VariableRegistry.Registrations.Should().ContainSingle().Which.Should().BeEquivalentTo(
             new VariableRegistration(
-                new VariableKey("string", HandlerExecutionModule.HandlerResultPurpose),
+                new VariableKey("global::Blueprint.Runtime.Exec.OkResult<string>", HandlerExecutionModule.HandlerResultPurpose),
                 module.ContributorId,
                 PipelineStage.Execution,
                 VariableSourceKind.ProducedValue,
@@ -99,8 +99,8 @@ public class OperationExecutorPipelineGeneratorIntegrationTests
     public void Handler_execution_render_step_owns_handler_invocation_rendering()
     {
         const string source = """
-                              using Blueprint.Model;
-                              using System.Threading.Tasks;
+                               using Blueprint.Model;
+                               using System.Threading.Tasks;
 
                               namespace TestNamespace;
 
@@ -130,7 +130,46 @@ public class OperationExecutorPipelineGeneratorIntegrationTests
         renderStep.Render(new PipelineRenderContext(writer, handlerResult.Value!, plan));
 
         writer.Rendered.Should().Contain("var handlerResult = await global::TestNamespace.TestQuery.InvokeAsync();");
-        writer.Rendered.Should().Contain("return new Blueprint.Runtime.Exec.OkResult(handlerResult);");
+        writer.Rendered.Should().Contain("return new Blueprint.Runtime.Exec.OkResult<string>(handlerResult);");
+    }
+
+    [Fact]
+    public void Handler_execution_render_step_treats_task_without_result_as_no_result()
+    {
+        const string source = """
+                               using Blueprint.Model;
+                               using System.Threading.Tasks;
+
+                               namespace TestNamespace;
+
+                               public partial class TestCommand : ICommand
+                               {
+                                   public static Task HandleAsync()
+                                   {
+                                       return Task.CompletedTask;
+                                   }
+                               }
+                               """;
+
+        var (compilation, operationType) = CompileAndGetOperationType(source, "TestCommand");
+        var handlerResult = HandlerDiscovery.FindHandler(operationType, compilation);
+        var operation = OperationModel.Create(operationType);
+        var plan = new PipelinePlan(operation, new VariableRegistry());
+        var module = new HandlerExecutionModule();
+
+        handlerResult.Diagnostics.Should().BeEmpty();
+        handlerResult.Value.Should().NotBeNull();
+
+        module.ContributeToPipeline(new PipelineContributorContext(module.ContributorId, operation, plan, new CompilationOperationLookup(compilation), handlerResult.Value!));
+
+        var renderStep = plan.RenderSteps.Should().ContainSingle().Subject;
+        var writer = new RecordingCodeWriter();
+
+        renderStep.Render(new PipelineRenderContext(writer, handlerResult.Value!, plan));
+
+        writer.Rendered.Should().Contain("await global::TestNamespace.TestCommand.HandleAsync();");
+        writer.Rendered.Should().Contain("var handlerResult = new Blueprint.Runtime.Exec.NoResultOperationResult();");
+        writer.Rendered.Should().Contain("return handlerResult;");
     }
 
     [Fact]
@@ -498,6 +537,233 @@ public class OperationExecutorPipelineGeneratorIntegrationTests
 
         await Compile(source)
             .VerifySuccessAsync(SnapshotsFolder);
+    }
+
+    [Fact]
+    public async Task Task_handler_without_result_generates_correctly()
+    {
+        var source = """
+                     using Blueprint;
+                     using Blueprint.Model;
+                     using System.Threading.Tasks;
+
+                     namespace TestNamespace;
+
+                     [BlueprintAppScan]
+                     public partial class TestApp : BlueprintApp
+                     {
+                         public TestApp()
+                         {
+                             this.Register(TestCommand.Configure());
+                         }
+                     }
+
+                     public class TestCommand : ICommand
+                     {
+                         public static ApiOperationDescriptor Configure()
+                         {
+                             return new ApiOperationDescriptor(typeof(TestCommand), nameof(TestCommand), "Tests");
+                         }
+
+                         public static Task HandleAsync()
+                         {
+                             return Task.CompletedTask;
+                         }
+                     }
+                     """;
+
+        await Compile(source)
+            .VerifySuccessAsync(SnapshotsFolder);
+    }
+
+    [Fact]
+    public async Task Explicit_operation_result_handler_generates_correctly()
+    {
+        var source = """
+                     using Blueprint;
+                     using Blueprint.Model;
+                     using Blueprint.Runtime.Exec;
+                     using System.Threading.Tasks;
+
+                     namespace TestNamespace;
+
+                     [BlueprintAppScan]
+                     public partial class TestApp : BlueprintApp
+                     {
+                         public TestApp()
+                         {
+                             this.Register(TestQuery.Configure());
+                         }
+                     }
+
+                     public class TestQuery : IQuery
+                     {
+                         public static ApiOperationDescriptor Configure()
+                         {
+                             return new ApiOperationDescriptor(typeof(TestQuery), nameof(TestQuery), "Tests");
+                         }
+
+                         public static Task<OkResult<string>> HandleAsync()
+                         {
+                             return Task.FromResult(new OkResult<string>("Hello World"));
+                         }
+                     }
+                     """;
+
+        await Compile(source)
+            .VerifySuccessAsync(SnapshotsFolder);
+    }
+
+    [Fact]
+    public async Task Results_union_handler_generates_correctly()
+    {
+        var source = """
+                     using Blueprint;
+                     using Blueprint.Model;
+                     using Blueprint.Runtime.Exec;
+                     using System.Threading.Tasks;
+
+                     namespace TestNamespace;
+
+                     [BlueprintAppScan]
+                     public partial class TestApp : BlueprintApp
+                     {
+                         public TestApp()
+                         {
+                             this.Register(TestQuery.Configure());
+                         }
+                     }
+
+                     public class TestQuery : IQuery<Results<OkResult<string>, NoResultOperationResult>>
+                     {
+                         public static ApiOperationDescriptor Configure()
+                         {
+                             return new ApiOperationDescriptor(typeof(TestQuery), nameof(TestQuery), "Tests");
+                         }
+
+                         public static Task<Results<OkResult<string>, NoResultOperationResult>> HandleAsync()
+                         {
+                             Results<OkResult<string>, NoResultOperationResult> result = new OkResult<string>("Hello World");
+                             return Task.FromResult(result);
+                         }
+                     }
+                     """;
+
+        await Compile(source)
+            .VerifySuccessAsync(SnapshotsFolder);
+    }
+
+    [Fact]
+    public void Nullable_plain_value_handler_return_generates_diagnostic()
+    {
+        var source = """
+                     using Blueprint;
+                     using Blueprint.Model;
+                     using System.Threading.Tasks;
+
+                     namespace TestNamespace;
+
+                     [BlueprintAppScan]
+                     public partial class TestApp : BlueprintApp
+                     {
+                         public TestApp()
+                         {
+                             this.Register(TestQuery.Configure());
+                         }
+                     }
+
+                     public class TestQuery : IQuery<string?>
+                     {
+                         public static ApiOperationDescriptor Configure()
+                         {
+                             return new ApiOperationDescriptor(typeof(TestQuery), nameof(TestQuery), "Tests");
+                         }
+
+                         public static Task<string?> InvokeAsync()
+                         {
+                             return Task.FromResult<string?>("Hello World");
+                         }
+                     }
+                     """;
+
+        var result = TestHelpers.Compile<OperationExecutorPipelineSourceGenerator>(source, assertCacheability: false);
+
+        result.Diagnostics.Should().ContainSingle(static diagnostic => diagnostic.Id == "BP105");
+    }
+
+    [Fact]
+    public void Unsupported_results_union_member_generates_diagnostic()
+    {
+        var source = """
+                     using Blueprint;
+                     using Blueprint.Model;
+                     using Blueprint.Runtime.Exec;
+
+                     namespace TestNamespace;
+
+                     [BlueprintAppScan]
+                     public partial class TestApp : BlueprintApp
+                     {
+                         public TestApp()
+                         {
+                             this.Register(TestQuery.Configure());
+                         }
+                     }
+
+                     public class TestQuery : IQuery<Results<string, OkResult<string>>>
+                     {
+                         public static ApiOperationDescriptor Configure()
+                         {
+                             return new ApiOperationDescriptor(typeof(TestQuery), nameof(TestQuery), "Tests");
+                         }
+
+                         public static Results<string, OkResult<string>> Invoke()
+                         {
+                             return "Hello World";
+                         }
+                     }
+                     """;
+
+        var result = TestHelpers.Compile<OperationExecutorPipelineSourceGenerator>(source, assertCacheability: false);
+
+        result.Diagnostics.Should().ContainSingle(static diagnostic => diagnostic.Id == "BP106");
+    }
+
+    [Fact]
+    public void Plain_value_handler_with_incompatible_declared_contract_generates_diagnostic()
+    {
+        var source = """
+                     using Blueprint;
+                     using Blueprint.Model;
+
+                     namespace TestNamespace;
+
+                     [BlueprintAppScan]
+                     public partial class TestApp : BlueprintApp
+                     {
+                         public TestApp()
+                         {
+                             this.Register(TestQuery.Configure());
+                         }
+                     }
+
+                     public class TestQuery : IQuery<int>
+                     {
+                         public static ApiOperationDescriptor Configure()
+                         {
+                             return new ApiOperationDescriptor(typeof(TestQuery), nameof(TestQuery), "Tests");
+                         }
+
+                         public static string Invoke()
+                         {
+                             return "Hello World";
+                         }
+                     }
+                     """;
+
+        var result = TestHelpers.Compile<OperationExecutorPipelineSourceGenerator>(source, assertCacheability: false);
+
+        result.Diagnostics.Should().ContainSingle(static diagnostic => diagnostic.Id == "BP107");
     }
 
     [Fact]

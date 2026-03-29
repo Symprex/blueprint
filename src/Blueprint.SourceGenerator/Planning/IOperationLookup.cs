@@ -22,6 +22,13 @@ public interface IOperationLookup
     /// <param name="typeSymbol">The candidate symbol.</param>
     /// <returns>The operation model, if found.</returns>
     OperationModel? Find(INamedTypeSymbol typeSymbol);
+
+    /// <summary>
+    /// Finds any named type by its metadata name.
+    /// </summary>
+    /// <param name="metadataName">The fully-qualified metadata name.</param>
+    /// <returns>The resolved type symbol, if found.</returns>
+    INamedTypeSymbol? FindTypeByMetadataName(string metadataName);
 }
 
 /// <summary>
@@ -45,6 +52,12 @@ public sealed class CompilationOperationLookup(Compilation compilation) : IOpera
         return this.TryCreate(typeSymbol);
     }
 
+    /// <inheritdoc />
+    public INamedTypeSymbol? FindTypeByMetadataName(string metadataName)
+    {
+        return compilation.GetTypeByMetadataName(NormalizeMetadataName(metadataName));
+    }
+
     private OperationModel? TryCreate(INamedTypeSymbol? typeSymbol)
     {
         if (typeSymbol is null || this._operationInterface is null)
@@ -58,5 +71,12 @@ public sealed class CompilationOperationLookup(Compilation compilation) : IOpera
         }
 
         return OperationModel.Create(typeSymbol);
+    }
+
+    private static string NormalizeMetadataName(string metadataName)
+    {
+        return metadataName.StartsWith("global::", StringComparison.Ordinal)
+            ? metadataName.Substring("global::".Length)
+            : metadataName;
     }
 }

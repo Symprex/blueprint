@@ -42,7 +42,7 @@ namespace Blueprint.Generated
 
                 var handlerResult = await global::TestNamespace.TestQuery.InvokeAsync(service, logger);
 
-                return new Blueprint.Runtime.Exec.OkResult(handlerResult);
+                return new Blueprint.Runtime.Exec.OkResult<string>(handlerResult);
             }
             catch (Blueprint.Validation.ValidationException e)
             {

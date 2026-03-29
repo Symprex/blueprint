@@ -45,12 +45,13 @@ namespace Blueprint.Generated
                 }
                 if (validationResults is not null)
                 {
-                    throw new global::Blueprint.Validation.ValidationException(validationResults);
+                    context.Activity?.SetTag("otel.status_code", "OK");
+                    return new Blueprint.Middleware.ValidationFailedOperationResult(validationResults);
                 }
 
                 var handlerResult = await global::TestNamespace.CreateUserCommand.HandleAsync(operation);
 
-                return new Blueprint.Runtime.Exec.OkResult(handlerResult);
+                return new Blueprint.Runtime.Exec.OkResult<string>(handlerResult);
             }
             catch (Blueprint.Validation.ValidationException e)
             {

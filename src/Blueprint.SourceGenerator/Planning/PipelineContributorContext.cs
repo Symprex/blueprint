@@ -1,4 +1,6 @@
 using Blueprint.SourceGenerator.Generators.Pipelines.Model;
+using Blueprint.SourceGenerator.Helpers;
+using Microsoft.CodeAnalysis;
 
 namespace Blueprint.SourceGenerator.Planning;
 
@@ -102,5 +104,24 @@ public sealed class PipelineContributorContext
     public OperationModel? FindOperationByMetadataName(string metadataName)
     {
         return this._operationLookup.FindByMetadataName(metadataName);
+    }
+
+    /// <summary>
+    /// Finds any named type by its metadata name.
+    /// </summary>
+    /// <param name="metadataName">The metadata name to resolve.</param>
+    /// <returns>The matching type symbol, if found.</returns>
+    public INamedTypeSymbol? FindTypeByMetadataName(string metadataName)
+    {
+        return this._operationLookup.FindTypeByMetadataName(metadataName);
+    }
+
+    /// <summary>
+    /// Adds a diagnostic to the active pipeline plan.
+    /// </summary>
+    /// <param name="diagnostic">The diagnostic to add.</param>
+    public void AddDiagnostic(DiagnosticInfo diagnostic)
+    {
+        this._plan.AddDiagnostic(diagnostic);
     }
 }

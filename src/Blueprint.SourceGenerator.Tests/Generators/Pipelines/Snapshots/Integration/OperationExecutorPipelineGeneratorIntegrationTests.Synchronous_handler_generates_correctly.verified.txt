@@ -39,7 +39,7 @@ namespace Blueprint.Generated
 
                 var handlerResult = global::TestNamespace.TestQuery.Invoke();
 
-                return System.Threading.Tasks.Task.FromResult<Blueprint.OperationResult>(new Blueprint.Runtime.Exec.OkResult(handlerResult));
+                return System.Threading.Tasks.Task.FromResult<Blueprint.OperationResult>(new Blueprint.Runtime.Exec.OkResult<int>(handlerResult));
             }
             catch (Blueprint.Validation.ValidationException e)
             {
