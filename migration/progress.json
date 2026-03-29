@@ -12,14 +12,14 @@
   "current": {
     "activeWorkstream": "result-model-and-host-translation",
     "nextReadySlice": {
+      "id": "result-model-and-host-translation/http-union-discrimination-diagnostic",
+      "workstream": "result-model-and-host-translation",
+      "title": "Add the first compile-time diagnostic ensuring HTTP-visible unions have an unambiguous host/client discrimination strategy"
+    },
+    "lastCompletedSlice": {
       "id": "result-model-and-host-translation/ambiguous-host-translation-diagnostic",
       "workstream": "result-model-and-host-translation",
       "title": "Add the first compile-time diagnostic for semantic result shapes that would be ambiguous to translate for a declared host"
-    },
-    "lastCompletedSlice": {
-      "id": "result-model-and-host-translation/host-executor-availability-diagnostic",
-      "workstream": "result-model-and-host-translation",
-      "title": "Add the first compile-time diagnostic when a declared semantic result contract has no host executor or adapter for an enabled host"
     },
     "openReviewGate": null
   },

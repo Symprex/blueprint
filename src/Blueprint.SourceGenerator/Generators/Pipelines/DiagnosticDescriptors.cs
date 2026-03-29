@@ -119,6 +119,18 @@ internal static class DiagnosticDescriptors
         isEnabledByDefault: true,
         description: "Host-exposed operations must declare semantic result contracts that the enabled host can translate.");
 
+    /// <summary>
+    /// BP109: Declared semantic result union has ambiguous enabled-host translation.
+    /// </summary>
+    public static readonly DiagnosticDescriptor AmbiguousHostTranslationForDeclaredResultContract = new(
+        id: "BP109",
+        title: "Declared semantic result union has ambiguous enabled-host translation",
+        messageFormat: "The operation '{0}' declares semantic results {1}, which all translate to the same '{2}' response shape for enabled host '{3}'",
+        category: Category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "HTTP-exposed results unions must not contain multiple semantic result members that collapse to the same current host response shape.");
+
     // Warning diagnostics (BP200-BP299)
 
     /// <summary>

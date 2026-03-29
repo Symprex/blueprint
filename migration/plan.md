@@ -773,7 +773,11 @@ Run this as a paired design loop with workstream 6. The result contract must be 
   - `HostExecutorAvailabilityModule` now runs during descriptor generation, reuses the flattened semantic-result helper surface, and reports `BP108` when an HTTP-exposed operation declares a semantic result shape that the current enabled HTTP executor path does not translate.
   - Supported `OkResult<T>` and `NoResultOperationResult` contracts stay clean, while mixed `Results<T1, T2>` unions report only the unsupported semantic-result members.
   - The proof set now includes a focused red-to-green descriptor diagnostic test file (`OperationDescriptorSourceGeneratorTests.HostExecutorAvailability.cs`) plus a green `Blueprint.SourceGenerator.Tests` project run.
-- Next approved follow-on for this workstream: add the first compile-time diagnostic for semantic result shapes that would be ambiguous to translate for a declared host.
+- Completed the first ambiguous host-translation diagnostic slice:
+  - `AmbiguousHostTranslationModule` now runs after the host-executor availability check and reports `BP109` when an HTTP-exposed `Results<T1, T2>` contract contains multiple supported semantic-result members that still collapse to the same current HTTP response shape.
+  - The first approved ambiguity rule stays intentionally narrow: it targets current same-shape HTTP success unions such as multiple `OkResult<T>` members that all translate to `200` JSON responses, while unsupported members remain owned by `BP108`.
+  - The proof set now includes a focused red-to-green descriptor diagnostic test file (`OperationDescriptorSourceGeneratorTests.AmbiguousHostTranslation.cs`) covering the ambiguous same-shape union, a clean single-result regression, the BP108/BP109 boundary, and a green `Blueprint.SourceGenerator.Tests` project run.
+- Next approved follow-on for this workstream: add the first compile-time diagnostic ensuring HTTP-visible unions have an unambiguous host/client discrimination strategy.
 
 ## 8. Error model and exception handling
 

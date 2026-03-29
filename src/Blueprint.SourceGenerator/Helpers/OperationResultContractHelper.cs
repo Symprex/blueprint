@@ -91,6 +91,41 @@ public static class OperationResultContractHelper
     }
 
     /// <summary>
+    /// Tries to map a semantic result type onto the current HTTP executor response shape.
+    /// </summary>
+    /// <param name="resultType">The semantic result type to inspect.</param>
+    /// <param name="okResultType">The resolved <c>Blueprint.Runtime.Exec.OkResult</c> base type.</param>
+    /// <param name="noResultType">The resolved <c>Blueprint.Runtime.Exec.NoResultOperationResult</c> type.</param>
+    /// <param name="statusCode">The HTTP status code for the current executor path.</param>
+    /// <param name="hasResponseBody">Whether the current executor path writes a response body.</param>
+    /// <returns>Whether the current executor path has a deterministic response shape for the semantic result type.</returns>
+    public static bool TryGetHttpOperationResultResponseShape(
+        ITypeSymbol resultType,
+        INamedTypeSymbol okResultType,
+        INamedTypeSymbol noResultType,
+        out int statusCode,
+        out bool hasResponseBody)
+    {
+        if (IsTypeOrDerivedFrom(resultType, okResultType))
+        {
+            statusCode = 200;
+            hasResponseBody = true;
+            return true;
+        }
+
+        if (SymbolEqualityComparer.Default.Equals(resultType, noResultType))
+        {
+            statusCode = 200;
+            hasResponseBody = false;
+            return true;
+        }
+
+        statusCode = default;
+        hasResponseBody = default;
+        return false;
+    }
+
+    /// <summary>
     /// Determines whether a symbol is the same as or derives from the supplied base type.
     /// </summary>
     /// <param name="candidateType">The candidate type to inspect.</param>
