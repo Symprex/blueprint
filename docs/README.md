@@ -18,7 +18,7 @@ This folder is the detailed source of truth for repository-specific architecture
 - If a change affects architecture, generator flow, diagnostics, observability, developer tooling, or project principles, update the relevant `/docs` file in the same change.
 - Treat Blueprint-specific skills as versioned guidance artifacts. Keep `using-blueprint` aligned with the current consumer contract and keep `extending-blueprint` aligned with the repo's extension workflow.
 - If a change alters how Blueprint is consumed or extended, update the relevant Blueprint skill in the same change as the code and docs.
-- Treat `migration\progress.json` as the machine-readable resume index for migration sessions. Keep it aligned with `migration\plan.md` and the relevant workstream plan whenever the next ready slice, active workstream, or open review gate changes.
+- Treat `migration\progress.json` as the single source of truth for live migration progress during migration sessions. Keep it aligned with the durable rationale and acceptance criteria in `migration\plan.md` and the relevant workstream plan whenever the next ready slice, active workstream, last completed slice, or open review gate changes. Do not infer live progress from markdown history when `migration\progress.json` is present.
 - Prefer updating an existing doc over creating a new one. Add a new doc only when the topic no longer fits the current structure cleanly.
 - Keep docs repo-specific and actionable. Link to concrete types, files, generators, diagnostics, and tests whenever possible.
 - Prefer deterministic rules over vague advice. If the repo wants something enforced, document both the principle and the harness that should enforce it.

@@ -56,7 +56,7 @@ For this repo that means:
 - `README.md` and `.github/copilot-instructions.md` should point into `/docs`
 - architecture, diagnostics, observability expectations, and implementation checklists should not live only in chat history
 - for migration-plan work, durable sequencing or review decisions belong in `migration\plan.md` and the relevant `migration\...\plan.md` file, not only in session-local state such as chat, SQL todos, or the session `plan.md`
-- for migration orchestration, `migration\progress.json` is the machine-readable resume index and must stay aligned with the current next-ready slice, active workstream, last completed slice, and open review gate
+- for migration orchestration, `migration\progress.json` is the single source of truth for live migration state and must stay aligned with the current next-ready slice, active workstream, last completed slice, and open review gate; the markdown plans are reference material for ordering, rationale, and acceptance criteria, not competing live trackers
 - Blueprint-specific usage and extension knowledge should also live in repo-local skills: keep `using-blueprint` as the canonical consumer-installable Blueprint skill, keep `extending-blueprint` as the repo-local overlay, and update the relevant skill in the same change when Blueprint behavior or workflow changes
 
 ### 4. Prefer machine-actionable outputs
@@ -122,13 +122,14 @@ then the relevant `/docs` file should be updated in the same change.
 - fix the immediate issue
 - decide whether a stronger diagnostic, test, doc, or tool should exist
 - add the improvement when it is reasonable and directly related
-- If the feedback is "the agent stopped at planning" or "the next slice was rediscovered but not actioned", treat that as an orchestration bug. Tighten the launcher prompt, durable migration guidance, and `migration\progress.json` contract in the same change instead of relying on memory.
+- If the feedback is "the agent stopped at planning" or "the next slice was rediscovered but not actioned", treat that as an orchestration bug. Tighten the launcher prompt, durable migration guidance, and `migration\progress.json` contract in the same change instead of relying on memory, and remove any stale prompt-owned slice summary that duplicates the JSON tracker.
 
 ### Before you ask for commit-level human review
 
 - Use the `verification-before-completion` skill mindset before any success claim: rerun the fresh verification command, read the output, and only then say the slice is passing or ready for review.
 - Finish your own review pass first, including tests, formatting, generated-output review, and any review-agent follow-up that the slice needs.
 - Generate a visual review handoff with the `visual-explainer` skill before commit for any migration-plan slice or phase gate.
+- Write that visual review HTML to the launcher-provided allow-listed review artifact directory (currently `$HOME\.agent\diagrams`) so the artifact survives beyond the session workspace and is immediately accessible to the reviewer.
 - If review closes a decision about ordering, next slice selection, or architecture direction, write that decision back into `migration\plan.md` before ending the session.
 - If a slice is obviously complete and no review gate remains open, make a small, focused git commit before switching to unrelated work or ending the session.
 - Treat that visual handoff as part of the artifact set, not as a presentation extra. It should show:

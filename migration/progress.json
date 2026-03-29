@@ -1,16 +1,23 @@
 {
-  "schemaVersion": 1,
-  "sourceOfTruth": {
+  "schemaVersion": 2,
+  "trackingContract": {
+    "singleSourceOfTruth": "migration\\progress.json",
+    "plansAreReferenceOnly": true,
+    "repairProgressArtifactBeforeImplementation": true
+  },
+  "referencePlans": {
     "masterPlan": "migration\\plan.md",
     "workstreamPlan": "migration\\operation-discovery-and-descriptors\\plan.md"
   },
   "current": {
     "activeWorkstream": "operation-discovery-and-descriptors",
     "nextReadySlice": {
+      "id": "operation-discovery-and-descriptors/conflicting-host-diagnostic",
       "workstream": "operation-discovery-and-descriptors",
       "title": "Add the first conflicting-host diagnostic now that HTTP and tasks host contributors both exist"
     },
     "lastCompletedSlice": {
+      "id": "operation-discovery-and-descriptors/tasks-host-prerequisite",
       "workstream": "operation-discovery-and-descriptors",
       "title": "Add the minimal tasks host contributor prerequisite that unlocks the conflicting-host diagnostic"
     },

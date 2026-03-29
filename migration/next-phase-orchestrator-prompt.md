@@ -6,7 +6,7 @@ Read these files first, in this order:
 
 1. `migration\progress.json`
 2. `migration\plan.md`
-3. The workstream plan named by `migration\progress.json` (from `sourceOfTruth.workstreamPlan`)
+3. The workstream plan named by `migration\progress.json` (from `referencePlans.workstreamPlan`)
 4. `docs\README.md`
 5. `docs\architecture.md`
 6. `docs\compile-time-validation.md`
@@ -14,7 +14,8 @@ Read these files first, in this order:
 8. `docs\refactoring-workflow.md`
 9. `docs\observability-and-dev-experience.md`
 
-Treat `migration\progress.json` as the machine-readable resume index for the current next-ready slice. Treat `migration\plan.md` plus the relevant `migration\...\plan.md` file as the narrative source of truth. If they disagree, do not stop at the disagreement alone: resolve the next dependency-safe slice from the durable plans, update `migration\progress.json` plus the relevant plan files in the same session, and then continue into implementation.
+Treat `migration\progress.json` as the single source of truth for live migration state: active workstream, next ready slice, last completed slice, and open review gate. Treat `migration\plan.md` plus the relevant `migration\...\plan.md` file as reference plans for ordering, acceptance criteria, rationale, and historical decisions. Do not infer the live next slice from markdown plan history when `migration\progress.json` is present. If the JSON is missing, malformed, or points at a removed slice, treat that as a tracking bug: repair `migration\progress.json` from the durable plans in the same session before continuing into implementation.
+The launcher will also provide a `<review_artifact_directory ...>` block naming the allow-listed output folder for visual review handoffs. Write `visual-explainer` HTML reviews and similar review artifacts into that directory unless the user explicitly requests a different path.
 
 If .NET skills are available in this session, load the .NET routing/baseline skills first and then load the testing/tooling/devops skills you need for the current slice.
 
@@ -36,8 +37,8 @@ If the repo-local skills `test-driven-development`, `systematic-debugging`, and 
 
 Execution goals:
 
-- Start at the next ready work in `migration\plan.md`.
-- Use `migration\progress.json` to determine the active workstream and next ready slice. If it is missing or stale, resolve the next dependency-complete slice from the durable plans, update the JSON and plans, and then continue.
+- Start at the next ready slice named in `migration\progress.json`.
+- Use `migration\plan.md` for ordering, dependency rules, and human-review gates, and use the referenced workstream plan for slice-specific acceptance criteria and design detail.
 - Follow the ordering, dependency, artifact, and human-review gates in `migration\plan.md` exactly.
 - Keep work small, reviewable, and resumable.
 
@@ -55,16 +56,16 @@ Non-negotiable operating rules:
 - Preserve incremental-generator cacheability. If generator behavior changes, use the existing cacheability-sensitive harness.
 - Review generated diffs intentionally. Never approve snapshot baselines blindly.
 - Update docs, machine-readable artifacts, and any relevant Blueprint skill artifacts in the same change.
-- Keep `migration\plan.md` fully up to date with durable progress, approved decisions, and next-step information, not session noise.
-- Keep `migration\progress.json` in sync with the current ready slice, the active workstream, the last completed slice, and any open review gate whenever those facts change.
-- Session `plan.md`, SQL todos, and chat checkpoints are working state only. Any durable decision about sequencing, approved slices, review outcomes, or human direction MUST be written explicitly to `migration\plan.md` and the relevant `migration\...\plan.md` file before handoff or stop.
+- Keep `migration\plan.md` and the relevant workstream plan up to date with durable rationale, acceptance criteria, and approved decisions, but do not use those markdown files as competing live status trackers.
+- Keep `migration\progress.json` in sync with the active workstream, current ready slice, last completed slice, and open review gate whenever those facts change. It is the only live tracker for that state.
+- Session `plan.md`, SQL todos, and chat checkpoints are working state only. Any durable decision about sequencing, approved slices, review outcomes, or human direction MUST update `migration\progress.json` first and then be recorded explicitly in `migration\plan.md` and the relevant `migration\...\plan.md` file before handoff or stop.
 - When a slice is obviously complete, review-closed, and verification-passing, create a small, focused git commit before starting unrelated work or ending the session. If a human review gate is still open, stop before committing and record that explicitly.
 - Slice selection, document reading, plan creation, and todo creation are setup steps, not a valid stopping point. Unless an explicit blocker or review gate stops you, the same session must continue into failing proof, observe that proof fail for the right reason, and start the production change for the selected slice.
-- If the prompt's "Immediate expected first slice" is stale compared with the durable plans or repository state, update the prompt, `migration\progress.json`, and the relevant plans in the same session and then implement the corrected next-ready slice instead of stopping at the correction.
+- Do not hard-code an "Immediate expected first slice" in this prompt. The launcher must surface that from `migration\progress.json`, and any change to live state must be made there rather than by editing prompt prose.
 
 Resumability contract:
 
-- Treat `migration\plan.md` and the relevant module plan as the cross-session source of truth. Do not assume any prior session-local state will still be available.
+- Treat `migration\progress.json` as the cross-session source of truth for live migration state, and treat `migration\plan.md` plus the relevant module plan as the cross-session reference plans for ordering, rationale, and acceptance criteria. Do not assume any prior session-local state will still be available.
 - At the start of the session, identify the exact slice you are taking on and record it in SQL todos.
 - After identifying the slice, begin executing it in the same session. Do not hand off or stop with only a slice summary unless the repo is truly blocked.
 - At the end of every meaningful work step, leave a checkpoint in your response with:
@@ -73,7 +74,7 @@ Resumability contract:
   - `Next slice`
   - `Open risks`
   - `Human input needed`
-- If a human or review-agent decision changes the approved next slice, architecture direction, or gating status, persist that decision into `migration\plan.md` before ending the session.
+- If a human or review-agent decision changes the approved next slice, architecture direction, or gating status, persist that decision into `migration\progress.json` first and then into `migration\plan.md` before ending the session.
 - If the context window gets tight, compact the session and restate the checkpoint clearly before continuing.
 - If you stop for any reason, do not just trail off. Either continue working, or explicitly say why you are blocked and what the next operator action should be.
 
@@ -106,12 +107,6 @@ Definition of success for this session:
 - Any approved review or human decision from the session is written explicitly into `migration\plan.md` before handoff.
 - Any obviously completed, review-closed slice is captured in a small, focused git commit unless an open review gate or explicit user instruction says otherwise.
 - You do not stop at planning-only output after finding the next slice. By the end of the session, there must be concrete failing-proof evidence and at least one corresponding repo change unless the session is explicitly blocked.
-
-Immediate expected first slice:
-
-- Focus on the approved next **Phase 0 / Workstream 3: Performance and scale** slice: add the multi-source compile harness and the first Tier 2 cacheability/invalidation-locality tests on top of `SyntheticBlueprintFixtureGenerator`.
-- Use the existing scale fixtures and tracked incremental-generator harnesses as the failing-proof starting point, especially `src\Blueprint.SourceGenerator.Tests\Scale\SyntheticBlueprintFixtureGeneratorTests.cs` and `src\Blueprint.SourceGenerator.Tests\TestHelpers.cs`.
-- Keep the scope narrow: first prove the synthetic fixture can drive the descriptor, app, and pipeline generators together, then add the smallest single-operation and shared-contract mutation checks that demonstrate localized invalidation without broad churn.
 
 When you begin, first summarize:
 
