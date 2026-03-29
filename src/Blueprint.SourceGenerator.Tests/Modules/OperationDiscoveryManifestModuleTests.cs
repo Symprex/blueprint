@@ -153,6 +153,41 @@ public class OperationDiscoveryManifestModuleTests
     }
 
     [Fact]
+    public void When_operation_is_exposed_to_http_and_tasks_hosts_then_public_api_returns_conflicting_host_diagnostic()
+    {
+        var compilation = CreateCompilation(
+            """
+            using Blueprint.Model.Attributes;
+            using Blueprint.Tasks;
+
+            namespace TestNamespace;
+
+            [RootLink("/tasks/send-welcome-email")]
+            public partial class SendWelcomeEmailTask : IBackgroundTask
+            {
+            }
+            """);
+        var config = new BlueprintSourceGenerationConfig(
+        [
+            new LinkGenerationModule(),
+            new TasksHostModule(),
+            new OperationDiscoveryManifestModule(),
+        ]);
+
+        var result = config.BuildDebugManifest("TestNamespace.SendWelcomeEmailTask", compilation);
+
+        result.Value.Should().BeNull();
+        result.Diagnostics.Should().ContainSingle();
+
+        var diagnostic = result.Diagnostics[0].ToDiagnostic();
+        diagnostic.Id.Should().Be("BPOD002");
+        diagnostic.Severity.Should().Be(DiagnosticSeverity.Error);
+        diagnostic.GetMessage().Should().Contain("SendWelcomeEmailTask");
+        diagnostic.GetMessage().Should().Contain("http");
+        diagnostic.GetMessage().Should().Contain("tasks");
+    }
+
+    [Fact]
     public void When_tasks_host_contributor_enabled_then_debug_manifest_includes_tasks_host_exposure()
     {
         var compilation = CreateCompilation(

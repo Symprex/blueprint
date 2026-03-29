@@ -42,4 +42,19 @@ public class OperationDescriptorSourceGeneratorTestsHostExposureTests
         descriptorSource!.Should().Contain(
             "this.SetFeatureData(new global::Blueprint.Model.OperationHostExposureFeatureData(global::System.Collections.Immutable.ImmutableArray.Create(\"tasks\")));");
     }
+
+    [Fact]
+    public void When_operation_is_exposed_to_http_and_tasks_hosts_then_generator_reports_conflicting_host_diagnostic()
+    {
+        var result = OperationDescriptorSourceGeneratorTests.Compile("""
+            using Blueprint.Tasks;
+
+            [global::Blueprint.Model.Attributes.RootLink("/tasks/send-welcome-email")]
+            public partial class SendWelcomeEmailTask : IBackgroundTask {}
+            """);
+
+        result.Diagnostics.Select(static diagnostic => diagnostic.Id)
+            .Should()
+            .Contain("BPOD002");
+    }
 }

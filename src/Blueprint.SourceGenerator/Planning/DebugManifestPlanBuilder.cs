@@ -51,6 +51,7 @@ internal static class DebugManifestPlanBuilder
         }
 
         HostExposureDiagnostics.AddUnsupportedHostDiagnostics(descriptorPlan, executionPlanResult.Value.HostContributors);
+        HostExposureDiagnostics.AddConflictingHostDiagnostics(descriptorPlan, executionPlanResult.Value.HostContributors);
 
         if (descriptorPlan.Diagnostics.Count > 0)
         {

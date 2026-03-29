@@ -7,19 +7,19 @@
   },
   "referencePlans": {
     "masterPlan": "migration\\plan.md",
-    "workstreamPlan": "migration\\operation-discovery-and-descriptors\\plan.md"
+    "workstreamPlan": "migration\\pipeline-composition-and-execution\\plan.md"
   },
   "current": {
-    "activeWorkstream": "operation-discovery-and-descriptors",
+    "activeWorkstream": "pipeline-composition-and-execution",
     "nextReadySlice": {
+      "id": "pipeline-composition-and-execution/handler-execution-activation",
+      "workstream": "pipeline-composition-and-execution",
+      "title": "Route HandlerExecutionModule through the activated seam first while preserving current result wrapping"
+    },
+    "lastCompletedSlice": {
       "id": "operation-discovery-and-descriptors/conflicting-host-diagnostic",
       "workstream": "operation-discovery-and-descriptors",
       "title": "Add the first conflicting-host diagnostic now that HTTP and tasks host contributors both exist"
-    },
-    "lastCompletedSlice": {
-      "id": "operation-discovery-and-descriptors/tasks-host-prerequisite",
-      "workstream": "operation-discovery-and-descriptors",
-      "title": "Add the minimal tasks host contributor prerequisite that unlocks the conflicting-host diagnostic"
     },
     "openReviewGate": null
   },

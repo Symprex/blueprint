@@ -17,4 +17,15 @@ internal static class OperationDiscoveryDiagnosticDescriptors
         category: "OperationDiscovery",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
+
+    /// <summary>
+    /// Gets the diagnostic reported when descriptor planning records exposure to more than one enabled host.
+    /// </summary>
+    public static DiagnosticDescriptor ConflictingHostExposure { get; } = new(
+        id: "BPOD002",
+        title: "Operation host exposure targets multiple enabled hosts",
+        messageFormat: "Operation '{0}' is exposed to multiple enabled hosts ({1}). Each operation must target exactly one host.",
+        category: "OperationDiscovery",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
 }

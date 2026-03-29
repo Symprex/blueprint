@@ -64,6 +64,7 @@ Reserved direction:
 Current operation-discovery IDs in active use:
 
 - `BPOD001`: descriptor planning recorded host exposure that no enabled host contributor supports.
+- `BPOD002`: descriptor planning recorded exposure to more than one enabled host contributor for the same operation.
 
 ### Validation contributor diagnostics
 
