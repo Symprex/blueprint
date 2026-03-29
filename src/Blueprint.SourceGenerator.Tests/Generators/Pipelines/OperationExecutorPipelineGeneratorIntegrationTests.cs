@@ -615,6 +615,44 @@ public class OperationExecutorPipelineGeneratorIntegrationTests
     }
 
     [Fact]
+    public async Task Explicit_operation_result_handler_with_plain_declared_contract_generates_correctly()
+    {
+        var source = """
+                     using Blueprint;
+                     using Blueprint.Model;
+                     using Blueprint.Runtime.Exec;
+                     using System.Threading.Tasks;
+
+                     namespace TestNamespace;
+
+                     [BlueprintAppScan]
+                     public partial class TestApp : BlueprintApp
+                     {
+                         public TestApp()
+                         {
+                             this.Register(TestQuery.Configure());
+                         }
+                     }
+
+                     public class TestQuery : IQuery<string>
+                     {
+                         public static ApiOperationDescriptor Configure()
+                         {
+                             return new ApiOperationDescriptor(typeof(TestQuery), nameof(TestQuery), "Tests");
+                         }
+
+                         public static Task<OkResult<string>> HandleAsync()
+                         {
+                             return Task.FromResult(new OkResult<string>("Hello World"));
+                         }
+                     }
+                     """;
+
+        await Compile(source)
+            .VerifySuccessAsync(SnapshotsFolder);
+    }
+
+    [Fact]
     public async Task Results_union_handler_generates_correctly()
     {
         var source = """
@@ -757,6 +795,45 @@ public class OperationExecutorPipelineGeneratorIntegrationTests
                          public static string Invoke()
                          {
                              return "Hello World";
+                         }
+                     }
+                     """;
+
+        var result = TestHelpers.Compile<OperationExecutorPipelineSourceGenerator>(source, assertCacheability: false);
+
+        result.Diagnostics.Should().ContainSingle(static diagnostic => diagnostic.Id == "BP107");
+    }
+
+    [Fact]
+    public void Nested_explicit_ok_result_handler_with_result_shaped_declared_contract_generates_diagnostic()
+    {
+        var source = """
+                     using Blueprint;
+                     using Blueprint.Model;
+                     using Blueprint.Runtime.Exec;
+                     using System.Threading.Tasks;
+
+                     namespace TestNamespace;
+
+                     [BlueprintAppScan]
+                     public partial class TestApp : BlueprintApp
+                     {
+                         public TestApp()
+                         {
+                             this.Register(TestQuery.Configure());
+                         }
+                     }
+
+                     public class TestQuery : IQuery<OkResult<string>>
+                     {
+                         public static ApiOperationDescriptor Configure()
+                         {
+                             return new ApiOperationDescriptor(typeof(TestQuery), nameof(TestQuery), "Tests");
+                         }
+
+                         public static Task<OkResult<OkResult<string>>> HandleAsync()
+                         {
+                             return Task.FromResult(new OkResult<OkResult<string>>(new OkResult<string>("Hello World")));
                          }
                      }
                      """;

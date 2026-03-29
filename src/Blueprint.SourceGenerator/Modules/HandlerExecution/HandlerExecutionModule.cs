@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Diagnostics.CodeAnalysis;
 using Blueprint.SourceGenerator.Generators.Pipelines;
 using Blueprint.SourceGenerator.Generators.Pipelines.Model;
 using Blueprint.SourceGenerator.Helpers;
@@ -182,7 +183,7 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
 
         if (effectiveHandlerReturnType is null)
         {
-            if (IsCompatibleWithDeclaredContract(handlerMethod, noResultType, declaredContractType, noResultType, context, allowMissingContract: true) == false)
+            if (IsCompatibleWithDeclaredContract(handlerMethod, noResultType, declaredContractType, noResultType, operationResultType, context, allowMissingContract: true) == false)
             {
                 return null;
             }
@@ -218,7 +219,7 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
 
         if (IsOperationResultType(effectiveHandlerReturnType, operationResultType))
         {
-            if (IsCompatibleWithDeclaredContract(handlerMethod, effectiveHandlerReturnType, declaredContractType, noResultType, context, allowMissingContract: true) == false)
+            if (IsCompatibleWithDeclaredContract(handlerMethod, effectiveHandlerReturnType, declaredContractType, noResultType, operationResultType, context, allowMissingContract: true) == false)
             {
                 return null;
             }
@@ -240,7 +241,7 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
         }
 
         var typedOkResult = okResultGenericType.Construct(effectiveHandlerReturnType);
-        if (IsCompatibleWithDeclaredContract(handlerMethod, typedOkResult, declaredContractType, noResultType, context, allowMissingContract: false, plainValueType: effectiveHandlerReturnType) == false)
+        if (IsCompatibleWithDeclaredContract(handlerMethod, typedOkResult, declaredContractType, noResultType, operationResultType, context, allowMissingContract: false, plainValueType: effectiveHandlerReturnType) == false)
         {
             return null;
         }
@@ -361,6 +362,7 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
         ITypeSymbol normalizedResultType,
         ITypeSymbol? declaredContractType,
         INamedTypeSymbol noResultType,
+        INamedTypeSymbol operationResultType,
         PipelineContributorContext context,
         bool allowMissingContract,
         ITypeSymbol? plainValueType = null)
@@ -412,11 +414,34 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
             return true;
         }
 
+        if (TryGetOkResultPayloadType(normalizedResultType, out var okResultPayloadType)
+            && IsOperationResultType(declaredContractType, operationResultType) == false
+            && SymbolEqualityComparer.Default.Equals(okResultPayloadType, declaredContractType))
+        {
+            return true;
+        }
+
         context.AddDiagnostic(
             new DiagnosticInfo(
                 DiagnosticDescriptors.IncompatibleHandlerReturnContract,
                 GetReturnTypeLocation(handlerMethod),
                 [handlerMethod.Name, normalizedResultType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat), declaredContractType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)]));
+        return false;
+    }
+
+    private static bool TryGetOkResultPayloadType(ITypeSymbol candidateType, [NotNullWhen(true)] out ITypeSymbol? payloadType)
+    {
+        if (candidateType is INamedTypeSymbol namedType
+            && namedType.IsGenericType
+            && namedType.ContainingNamespace.ToDisplayString() == "Blueprint.Runtime.Exec"
+            && namedType.Name == "OkResult"
+            && namedType.TypeArguments.Length == 1)
+        {
+            payloadType = namedType.TypeArguments[0];
+            return true;
+        }
+
+        payloadType = null;
         return false;
     }
 

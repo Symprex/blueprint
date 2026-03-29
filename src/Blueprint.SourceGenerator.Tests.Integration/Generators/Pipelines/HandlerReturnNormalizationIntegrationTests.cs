@@ -58,6 +58,23 @@ public class HandlerReturnNormalizationIntegrationTests
         UnionHandlerOperation.HandlerCallCount.Should().Be(1);
     }
 
+    [Fact]
+    public async Task When_handler_returns_explicit_ok_result_with_plain_contract_then_generated_pipeline_returns_same_result()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(ExplicitResultPlainContractOperation));
+        var context = CreateContext(app, ExplicitResultPlainContractOperation.Configure());
+
+        ExplicitResultPlainContractOperation.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<OkResult<string>>();
+        ((OkResult<string>)result).Content.Should().Be("Explicit");
+        ExplicitResultPlainContractOperation.HandlerCallCount.Should().Be(1);
+    }
+
     private static ApiOperationContext CreateContext(BlueprintApp app, ApiOperationDescriptor descriptor)
     {
         return new ApiOperationContext(new EmptyServiceProvider(), app, descriptor, CancellationToken.None);
@@ -118,5 +135,21 @@ public partial class UnionHandlerOperation : ICommand<Results<OkResult<string>, 
         HandlerCallCount++;
         Results<OkResult<string>, NoResultOperationResult> result = new OkResult<string>("Union");
         return Task.FromResult(result);
+    }
+}
+
+public partial class ExplicitResultPlainContractOperation : ICommand<string>
+{
+    public static int HandlerCallCount { get; private set; }
+
+    public static void Reset()
+    {
+        HandlerCallCount = 0;
+    }
+
+    public static Task<OkResult<string>> HandleAsync(ExplicitResultPlainContractOperation operation)
+    {
+        HandlerCallCount++;
+        return Task.FromResult(new OkResult<string>("Explicit"));
     }
 }
