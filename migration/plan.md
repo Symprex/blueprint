@@ -747,6 +747,17 @@ Run this as a paired design loop with workstream 6. The result contract must be 
 - Use `task` for integration verification.
 - Use `code-review` if result changes affect public API shapes.
 
+### Durable progress
+
+- Live active/next/last/gate tracking for this workstream lives only in `migration\progress.json`. This section records durable slice approvals and rationale; it is not the live tracker.
+- The paired workstream-6 activation baseline is already in the repository: handler execution is routed through the contributor seam and validation already participates as a production contributor, so the next dependency-safe result-model slice was to introduce the first public host-agnostic `Results<T1, T2>` contract surface in `Blueprint.Model`.
+- Completed the first result-model foundation slice:
+  - `Blueprint.Model.Results<T1, T2>` now exists as the first public host-agnostic semantic-union contract.
+  - Focused model tests now cover implicit conversions plus wrong-member/default-state failures.
+  - `using-blueprint` now points consumers at the new contract surface.
+  - The verification matrix (`dotnet format .\Blueprint.sln --no-restore --include src\Blueprint.Runtime.Model\Results.cs src\Blueprint.SourceGenerator.Tests\Model\ResultsTests.cs`, `dotnet build .\Blueprint.sln --no-restore`, `dotnet test .\src\Blueprint.SourceGenerator.Tests\Blueprint.SourceGenerator.Tests.csproj --no-restore`, `dotnet test .\src\Blueprint.SourceGenerator.Tests.Integration\Blueprint.SourceGenerator.Tests.Integration.csproj --no-restore`, and `dotnet test .\src\Blueprint.SourceGenerator.CodeWriter.Tests\Blueprint.SourceGenerator.CodeWriter.Tests.csproj --no-restore`) is green after repairing the stale orchestration pointer that still targeted already-landed pipeline work.
+- Next approved follow-on for this workstream: add handler-return normalization on top of the new union/result contract surface while still deferring flattened descriptor outcomes, migration shims, and host translation to later slices so the broader result semantics do not freeze accidentally.
+
 ## 8. Error model and exception handling
 
 **Priority:** P1  

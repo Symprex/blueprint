@@ -352,3 +352,13 @@ For generated clients and HTTP-visible unions, the model also needs an ambiguity
 ## Sequencing
 
 Close the result taxonomy and normalization rules together with the pipeline plan before HTTP, error handling, OpenAPI, and the full resource-event model depend on a stable result contract.
+
+## Durable progress
+
+- Live active/next/last/gate tracking for this workstream lives only in `..\progress.json`. This durable-progress section records approved slice sequencing and rationale; it is not the live tracker.
+- First approved paired-loop slice: introduce the first public host-agnostic `Results<T1, T2>` contract surface in `Blueprint.Model` with focused contract-layer tests. This gives the result-model and pipeline design loop a concrete union shape without yet changing pipeline return normalization, flattened descriptor outcomes, or compatibility shims.
+- Completed the first result-model foundation slice:
+  - `Blueprint.Model.Results<T1, T2>` now provides implicit conversions plus `IsT1`/`AsT1` and `IsT2`/`AsT2`.
+  - The new contract-layer tests pin both wrong-member access and default-state failures.
+  - The consumer guidance in `..\..\.agents\skills\using-blueprint\SKILL.md` now points at the new two-outcome contract surface.
+- Next approved follow-on: normalize handler returns against the new union/result contract surface while still deferring flattened descriptor outcome projection, migration shims, and host translation to later slices in the first implementation pass.

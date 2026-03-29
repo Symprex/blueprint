@@ -7,19 +7,19 @@
   },
   "referencePlans": {
     "masterPlan": "migration\\plan.md",
-    "workstreamPlan": "migration\\pipeline-composition-and-execution\\plan.md"
+    "workstreamPlan": "migration\\result-model-and-host-translation\\plan.md"
   },
   "current": {
-    "activeWorkstream": "pipeline-composition-and-execution",
+    "activeWorkstream": "result-model-and-host-translation",
     "nextReadySlice": {
-      "id": "pipeline-composition-and-execution/handler-execution-activation",
-      "workstream": "pipeline-composition-and-execution",
-      "title": "Route HandlerExecutionModule through the activated seam first while preserving current result wrapping"
+      "id": "result-model-and-host-translation/handler-return-normalization",
+      "workstream": "result-model-and-host-translation",
+      "title": "Normalize handler returns against the first host-agnostic result contract without widening into descriptor flattening or host translation"
     },
     "lastCompletedSlice": {
-      "id": "operation-discovery-and-descriptors/conflicting-host-diagnostic",
-      "workstream": "operation-discovery-and-descriptors",
-      "title": "Add the first conflicting-host diagnostic now that HTTP and tasks host contributors both exist"
+      "id": "result-model-and-host-translation/results-union-foundation",
+      "workstream": "result-model-and-host-translation",
+      "title": "Introduce the first host-agnostic Results<T1, T2> contract surface in Blueprint.Model before pipeline normalization and flattened descriptor work"
     },
     "openReviewGate": null
   },

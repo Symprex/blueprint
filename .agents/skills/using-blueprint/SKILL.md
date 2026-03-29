@@ -26,6 +26,7 @@ Do not use this skill to change Blueprint internals in `blueprint-source-gen`; u
 | --- | --- |
 | Operation type | Implement `ICommand` or `IQuery`, which extend `IOperation` |
 | Descriptor | Expect `static ApiOperationDescriptor Configure()` to be the contract entry point |
+| Multiple outcomes | Use `Results<T1, T2>` when an operation contract needs to declare one of two host-agnostic semantic result shapes |
 | App root | Create a `partial` `BlueprintApp` with `[BlueprintAppScan]`; use `FromAssemblyOf = typeof(...)` when operations live in another assembly |
 | Generator wiring | Reference Blueprint's generator as an analyzer so compile-time generation runs; in this repo the sample uses `ProjectReference` with `OutputItemType="Analyzer"` and `ReferenceOutputAssembly="false"` |
 | HTTP host | Map the generated surface with `MapBlueprintApi<TApp, TExec>()` |
@@ -37,6 +38,11 @@ Do not use this skill to change Blueprint internals in `blueprint-source-gen`; u
 - Treat validation attributes as compile-time inputs first and runtime behavior second; if the build can prove the contract is wrong, expect a diagnostic instead of a runtime repair path.
 - `Blueprint.Validation.GreaterThanPropertyAttribute` is now part of the retained Blueprint-specific validation surface for property-to-property greater-than checks.
 - The retained Blueprint-specific conditional validator set now includes `GreaterThan`, `RequiredIf`, `RequiredIfNot`, and `NotAllowedIf` alongside `GreaterThanProperty`; verify the exact fast-path versus fallback shape before relying on a specific constructor or comparison form.
+
+## Result contract
+
+- The first public semantic-union surface is `Results<T1, T2>` in `Blueprint.Model`.
+- Keep that first slice narrow: it establishes the host-agnostic contract shape only. Handler-return normalization, flattened descriptor outcomes, and broader host translation remain follow-on work.
 
 ## Working loop
 
