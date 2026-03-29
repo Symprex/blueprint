@@ -761,7 +761,11 @@ Run this as a paired design loop with workstream 6. The result contract must be 
   - A focused follow-up keeps explicit `Blueprint.Runtime.Exec.OkResult<T>` handlers compatible with matching plain declared contracts such as `IQuery<T>` / `ICommand<T>` so consumers can opt into explicit success semantics without widening the declared contract shape.
   - Pipeline diagnostics `BP105`-`BP107` now reject nullable plain-value returns, unsupported union members, and handler returns that do not match the declared operation result contract.
   - The proof set covers generator snapshots, compile-time diagnostics, runtime execution in `src\Blueprint.SourceGenerator.Tests.Integration\Generators\Pipelines\HandlerReturnNormalizationIntegrationTests.cs`, and a green verification matrix across `dotnet format`, `Blueprint.SourceGenerator.Tests`, `Blueprint.SourceGenerator.CodeWriter.Tests`, `Blueprint.SourceGenerator.Tests.Integration`, and `dotnet build .\Blueprint.sln`.
-- Next approved follow-on for this workstream: project the first flattened descriptor outcome model from declared semantic result contracts while still deferring migration shims and host translation so the broader result semantics do not freeze accidentally.
+- Completed the flattened descriptor outcomes slice:
+  - `FlattenedResultOutcomeModule` now projects declared semantic result contracts into additive `OperationResultOutcomesFeatureData`, flattening `Results<T1, T2>` into ordered `OperationResultOutcome` entries and surfacing single declared semantic result contracts as one-outcome descriptor metadata.
+  - Contract-only compilations that do not reference `Blueprint.OperationResult` now skip that descriptor feature instead of failing generator execution, so descriptor generation stays safe in model-only consumer projects such as `Blueprint.SourceGenerator.Sample.Contract`.
+  - The proof set now covers descriptor-source assertions, runtime `Configure().GetFeatureData<OperationResultOutcomesFeatureData>()` checks, the contract-only regression test, and a green verification matrix across `dotnet format`, `Blueprint.SourceGenerator.Tests`, `Blueprint.SourceGenerator.CodeWriter.Tests`, `Blueprint.SourceGenerator.Tests.Integration`, and `dotnet build .\Blueprint.sln`.
+- Next approved follow-on for this workstream: create the first migration path away from self-executing runtime results while still deferring host translation so the broader result semantics do not freeze accidentally.
 
 ## 8. Error model and exception handling
 

@@ -171,11 +171,11 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
             ?? throw new InvalidOperationException("The pipeline contributor could not resolve Blueprint.Runtime.Exec.NoResultOperationResult from the current compilation.");
         var okResultGenericType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.OkResult`1")
             ?? throw new InvalidOperationException("The pipeline contributor could not resolve Blueprint.Runtime.Exec.OkResult<T> from the current compilation.");
-        var declaredContractType = GetDeclaredOperationResultType(context.Operation.TypeSymbol);
+        var declaredContractType = OperationResultContractHelper.GetDeclaredOperationResultType(context.Operation.TypeSymbol);
         var effectiveHandlerReturnType = GetEffectiveHandlerReturnType(handlerMethod.ReturnType);
 
         if (declaredContractType is not null
-            && TryGetResultsUnionMembers(declaredContractType, out var declaredUnionMembers)
+            && OperationResultContractHelper.TryGetResultsUnionMembers(declaredContractType, out var declaredUnionMembers)
             && TryValidateResultsUnionMembers(context, handlerMethod, declaredUnionMembers, operationResultType) == false)
         {
             return null;
@@ -194,7 +194,7 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
                 null);
         }
 
-        if (TryGetResultsUnionMembers(effectiveHandlerReturnType, out var handlerUnionMembers))
+        if (OperationResultContractHelper.TryGetResultsUnionMembers(effectiveHandlerReturnType, out var handlerUnionMembers))
         {
             if (TryValidateResultsUnionMembers(context, handlerMethod, handlerUnionMembers, operationResultType) == false)
             {
@@ -217,7 +217,7 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
                 null);
         }
 
-        if (IsOperationResultType(effectiveHandlerReturnType, operationResultType))
+        if (OperationResultContractHelper.IsOperationResultType(effectiveHandlerReturnType, operationResultType))
         {
             if (IsCompatibleWithDeclaredContract(handlerMethod, effectiveHandlerReturnType, declaredContractType, noResultType, operationResultType, context, allowMissingContract: true) == false)
             {
@@ -272,16 +272,6 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
                 && SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, context.Operation.TypeSymbol));
     }
 
-    private static ITypeSymbol? GetDeclaredOperationResultType(INamedTypeSymbol operationType)
-    {
-        var operationResultInterface = operationType.AllInterfaces.FirstOrDefault(
-            static candidate => candidate.TypeArguments.Length == 1
-                && candidate.ContainingNamespace.ToDisplayString() == "Blueprint.Model"
-                && (candidate.Name == "ICommand" || candidate.Name == "IQuery" || candidate.Name == "IOperation"));
-
-        return operationResultInterface?.TypeArguments[0];
-    }
-
     private static ITypeSymbol? GetEffectiveHandlerReturnType(ITypeSymbol returnType)
     {
         if (returnType.SpecialType == SpecialType.System_Void)
@@ -301,30 +291,14 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
         return returnType;
     }
 
-    private static bool TryGetResultsUnionMembers(ITypeSymbol candidateType, out ImmutableArray<ITypeSymbol> memberTypes)
-    {
-        if (candidateType is INamedTypeSymbol namedType
-            && namedType.IsGenericType
-            && namedType.ContainingNamespace.ToDisplayString() == "Blueprint.Model"
-            && namedType.Name == "Results"
-            && namedType.TypeArguments.Length == 2)
-        {
-            memberTypes = namedType.TypeArguments;
-            return true;
-        }
-
-        memberTypes = [];
-        return false;
-    }
-
     private static bool TryValidateResultsUnionMembers(PipelineContributorContext context, IMethodSymbol handlerMethod, ImmutableArray<ITypeSymbol> memberTypes, INamedTypeSymbol operationResultType)
     {
         var isValid = true;
 
         foreach (var memberType in memberTypes)
         {
-            if (TryGetResultsUnionMembers(memberType, out _)
-                || IsOperationResultType(memberType, operationResultType) == false)
+            if (OperationResultContractHelper.TryGetResultsUnionMembers(memberType, out _)
+                || OperationResultContractHelper.IsOperationResultType(memberType, operationResultType) == false)
             {
                 context.AddDiagnostic(
                     new DiagnosticInfo(
@@ -336,19 +310,6 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
         }
 
         return isValid;
-    }
-
-    private static bool IsOperationResultType(ITypeSymbol candidateType, INamedTypeSymbol operationResultType)
-    {
-        for (var current = candidateType as INamedTypeSymbol; current is not null; current = current.BaseType)
-        {
-            if (SymbolEqualityComparer.Default.Equals(current, operationResultType))
-            {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     private static bool IsNullablePlainValue(ITypeSymbol candidateType)
@@ -382,7 +343,7 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
             return false;
         }
 
-        if (TryGetResultsUnionMembers(declaredContractType, out var declaredUnionMembers))
+        if (OperationResultContractHelper.TryGetResultsUnionMembers(declaredContractType, out var declaredUnionMembers))
         {
             if (declaredUnionMembers.Any(member => SymbolEqualityComparer.Default.Equals(member, normalizedResultType)))
             {
@@ -415,7 +376,7 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
         }
 
         if (TryGetOkResultPayloadType(normalizedResultType, out var okResultPayloadType)
-            && IsOperationResultType(declaredContractType, operationResultType) == false
+            && OperationResultContractHelper.IsOperationResultType(declaredContractType, operationResultType) == false
             && SymbolEqualityComparer.Default.Equals(okResultPayloadType, declaredContractType))
         {
             return true;

@@ -1,0 +1,101 @@
+using System.Collections.Immutable;
+using Blueprint.SourceGenerator.CodeWriter;
+using Blueprint.SourceGenerator.Helpers;
+using Blueprint.SourceGenerator.Planning;
+using Microsoft.CodeAnalysis;
+
+namespace Blueprint.SourceGenerator.Modules;
+
+/// <summary>
+/// Projects declared semantic result contracts into additive descriptor feature data without freezing host translation behavior.
+/// </summary>
+public sealed class FlattenedResultOutcomeModule : IBlueprintSourceGeneratorModule, IDescriptorContributor
+{
+    /// <inheritdoc />
+    public string ModuleId => nameof(FlattenedResultOutcomeModule);
+
+    /// <inheritdoc />
+    public BlueprintModuleCategory Category => BlueprintModuleCategory.Core;
+
+    /// <inheritdoc />
+    public string ContributorId => nameof(FlattenedResultOutcomeModule);
+
+    /// <inheritdoc />
+    public int Order => 50;
+
+    /// <inheritdoc />
+    public bool IsUnique => true;
+
+    /// <inheritdoc />
+    public IReadOnlyList<string> DependsOn { get; } = [];
+
+    /// <inheritdoc />
+    public void ContributeToDescriptor(DescriptorContributorContext context)
+    {
+        var operationResultType = context.FindTypeByMetadataName("Blueprint.OperationResult");
+        if (operationResultType is null)
+        {
+            return;
+        }
+
+        var declaredContractType = OperationResultContractHelper.GetDeclaredOperationResultType(context.GetOperationTypeSymbol());
+
+        if (declaredContractType is null)
+        {
+            return;
+        }
+
+        var flattenedOutcomes = GetFlattenedOutcomes(declaredContractType, operationResultType);
+        if (flattenedOutcomes.Length == 0)
+        {
+            return;
+        }
+
+        foreach (var outcome in flattenedOutcomes)
+        {
+            context.AddMetadata(outcome);
+        }
+
+        context.AddRenderStep(writer => RenderDescriptor(writer, context.GetMetadata<FlattenedResultOutcomeRegistration>()));
+    }
+
+    private static ImmutableArray<FlattenedResultOutcomeRegistration> GetFlattenedOutcomes(
+        ITypeSymbol declaredContractType,
+        INamedTypeSymbol operationResultType)
+    {
+        if (OperationResultContractHelper.TryGetResultsUnionMembers(declaredContractType, out var declaredUnionMembers))
+        {
+            return declaredUnionMembers
+                .Select(static member => CreateRegistration(member))
+                .ToImmutableArray();
+        }
+
+        return OperationResultContractHelper.IsOperationResultType(declaredContractType, operationResultType)
+            ? [CreateRegistration(declaredContractType)]
+            : [];
+    }
+
+    private static FlattenedResultOutcomeRegistration CreateRegistration(ITypeSymbol resultType)
+    {
+        return new(resultType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
+    }
+
+    private static void RenderDescriptor(ICodeWriter codeWriter, IEnumerable<FlattenedResultOutcomeRegistration> registrations)
+    {
+        var renderedRegistrations = registrations
+            .Select(static registration => $"new global::Blueprint.Model.OperationResultOutcome(typeof({registration.ResultTypeName}))")
+            .ToArray();
+
+        if (renderedRegistrations.Length == 0)
+        {
+            return;
+        }
+
+        codeWriter.AppendLine(
+            "this.SetFeatureData(new global::Blueprint.Model.OperationResultOutcomesFeatureData(global::System.Collections.Immutable.ImmutableArray.Create("
+            + string.Join(", ", renderedRegistrations)
+            + ")));");
+    }
+
+    private sealed record FlattenedResultOutcomeRegistration(string ResultTypeName);
+}

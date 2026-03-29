@@ -12,14 +12,14 @@
   "current": {
     "activeWorkstream": "result-model-and-host-translation",
     "nextReadySlice": {
+      "id": "result-model-and-host-translation/runtime-result-migration-path",
+      "workstream": "result-model-and-host-translation",
+      "title": "Create the first migration path away from self-executing runtime results while still deferring host translation"
+    },
+    "lastCompletedSlice": {
       "id": "result-model-and-host-translation/flattened-descriptor-outcomes",
       "workstream": "result-model-and-host-translation",
       "title": "Project the first flattened descriptor outcomes from declared semantic result contracts without widening into migration shims or host translation"
-    },
-    "lastCompletedSlice": {
-      "id": "result-model-and-host-translation/handler-return-normalization",
-      "workstream": "result-model-and-host-translation",
-      "title": "Normalize handler returns against the first host-agnostic result contract without widening into descriptor flattening or host translation"
     },
     "openReviewGate": null
   },

@@ -77,6 +77,16 @@ public sealed class DescriptorContributorContext
     }
 
     /// <summary>
+    /// Finds a named type by its metadata name.
+    /// </summary>
+    /// <param name="metadataName">The metadata name to resolve.</param>
+    /// <returns>The matching type symbol, if found.</returns>
+    public INamedTypeSymbol? FindTypeByMetadataName(string metadataName)
+    {
+        return this._operationLookup.FindTypeByMetadataName(metadataName);
+    }
+
+    /// <summary>
     /// Adds a constrained render step used to emit descriptor code.
     /// </summary>
     /// <param name="renderStep">The render step callback.</param>
