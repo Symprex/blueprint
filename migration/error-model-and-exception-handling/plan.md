@@ -69,3 +69,10 @@ Consumers should be able to declare failure semantics once and have execution, H
 ## Sequencing
 
 Implement alongside the core pipeline planning work, before OpenAPI and before broad host parity work depends on complete response contracts.
+
+## Approved follow-on after Workstream 7 result-model lock
+
+- Start with a narrow seam-extraction slice inside the generated executor shell:
+  - introduce a shared exception-translator seam that can preserve today's hard-coded `ApiException` non-5xx handling plus the generic unhandled-exception fallback without changing public failure taxonomy yet
+  - keep host behavior, documented failure contracts, and OpenAPI response projection out of this first slice
+- The acceptance target for that first slice is replaceable exception-translation structure, not new public failure-result families.

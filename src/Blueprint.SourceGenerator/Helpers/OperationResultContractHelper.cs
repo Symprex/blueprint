@@ -58,7 +58,7 @@ public static class OperationResultContractHelper
             return declaredUnionMembers;
         }
 
-        return IsOperationResultType(declaredContractType, operationResultType)
+        return IsPublicSemanticResultType(declaredContractType, operationResultType)
             ? [declaredContractType]
             : [];
     }
@@ -75,6 +75,19 @@ public static class OperationResultContractHelper
     }
 
     /// <summary>
+    /// Determines whether the given type is a valid public semantic result contract rooted at <c>Blueprint.OperationResult</c>.
+    /// Internal-only fallback result shapes remain runtime-valid but must not leak into declared operation contracts.
+    /// </summary>
+    /// <param name="candidateType">The candidate result type.</param>
+    /// <param name="operationResultType">The resolved <c>Blueprint.OperationResult</c> base type.</param>
+    /// <returns>Whether the candidate can participate in public semantic result contracts.</returns>
+    public static bool IsPublicSemanticResultType(ITypeSymbol candidateType, INamedTypeSymbol operationResultType)
+    {
+        return IsOperationResultType(candidateType, operationResultType)
+            && IsInternalOnlyUnhandledExceptionResultType(candidateType) == false;
+    }
+
+    /// <summary>
     /// Determines whether a declared <c>Results&lt;T1, T2&gt;</c> member is a supported semantic result type rather than a
     /// nested union or a plain CLR payload type.
     /// </summary>
@@ -84,7 +97,7 @@ public static class OperationResultContractHelper
     public static bool IsSupportedResultsUnionMember(ITypeSymbol memberType, INamedTypeSymbol operationResultType)
     {
         return TryGetResultsUnionMembers(memberType, out _) == false
-            && IsOperationResultType(memberType, operationResultType);
+            && IsPublicSemanticResultType(memberType, operationResultType);
     }
 
     /// <summary>
@@ -232,5 +245,25 @@ public static class OperationResultContractHelper
     private static bool IsTypeOrDerivedFromOptional(ITypeSymbol candidateType, INamedTypeSymbol? baseType)
     {
         return baseType is not null && IsTypeOrDerivedFrom(candidateType, baseType);
+    }
+
+    private static bool IsInternalOnlyUnhandledExceptionResultType(ITypeSymbol candidateType)
+    {
+        for (var current = candidateType as INamedTypeSymbol; current is not null; current = current.BaseType)
+        {
+            if (IsNamedType(current, "Blueprint.Runtime.Exec", "UnhandledExceptionResult")
+                || IsNamedType(current, "Blueprint", "UnhandledExceptionOperationResult"))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsNamedType(INamedTypeSymbol candidateType, string @namespace, string typeName)
+    {
+        return candidateType.Name == typeName
+            && candidateType.ContainingNamespace.ToDisplayString() == @namespace;
     }
 }

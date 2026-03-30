@@ -75,6 +75,23 @@ public class HandlerReturnNormalizationIntegrationTests
         ExplicitResultPlainContractOperation.HandlerCallCount.Should().Be(1);
     }
 
+    [Fact]
+    public async Task When_handler_throws_then_generated_pipeline_returns_canonical_unhandled_exception_result()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(ThrowingHandlerOperation));
+        var context = CreateContext(app, ThrowingHandlerOperation.Configure());
+
+        ThrowingHandlerOperation.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<UnhandledExceptionResult>();
+        ((UnhandledExceptionResult)result).Exception.Should().BeSameAs(ThrowingHandlerOperation.LastThrownException);
+        ThrowingHandlerOperation.HandlerCallCount.Should().Be(1);
+    }
+
     private static ApiOperationContext CreateContext(BlueprintApp app, ApiOperationDescriptor descriptor)
     {
         return new ApiOperationContext(new EmptyServiceProvider(), app, descriptor, CancellationToken.None);
@@ -151,5 +168,25 @@ public partial class ExplicitResultPlainContractOperation : ICommand<string>
     {
         HandlerCallCount++;
         return Task.FromResult(new OkResult<string>("Explicit"));
+    }
+}
+
+public partial class ThrowingHandlerOperation : ICommand<string>
+{
+    public static int HandlerCallCount { get; private set; }
+
+    public static Exception? LastThrownException { get; private set; }
+
+    public static void Reset()
+    {
+        HandlerCallCount = 0;
+        LastThrownException = null;
+    }
+
+    public static Task<string> HandleAsync(ThrowingHandlerOperation operation)
+    {
+        HandlerCallCount++;
+        LastThrownException = new InvalidOperationException("Boom");
+        return Task.FromException<string>(LastThrownException);
     }
 }

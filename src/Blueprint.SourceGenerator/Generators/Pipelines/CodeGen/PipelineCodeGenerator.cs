@@ -169,7 +169,7 @@ internal static class PipelineCodeGenerator
                     });
 
                 catchWriter.NewLine();
-                catchWriter.Return(WrapOperationResult("new Blueprint.UnhandledExceptionOperationResult(e)", isHandlerAsync));
+                catchWriter.Return(WrapOperationResult("new Blueprint.Runtime.Exec.UnhandledExceptionResult(e)", isHandlerAsync));
             });
     }
 

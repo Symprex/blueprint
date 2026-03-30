@@ -142,4 +142,74 @@ public class OperationDescriptorSourceGeneratorTestsFlattenedOutcomesTests
         descriptorSource!.Should().Contain("typeof(global::Blueprint.Runtime.Exec.NotFoundResult<string>)");
         descriptorSource.Should().Contain("typeof(global::Blueprint.Runtime.Exec.NoResultOperationResult)");
     }
+
+    [Fact]
+    public void When_declared_contract_contains_canonical_unhandled_exception_result_then_generator_reports_outcome_alignment_diagnostic_and_skips_flattened_outcome_feature_data()
+    {
+        var result = OperationDescriptorSourceGeneratorTests.Compile("""
+            using Blueprint.Runtime.Exec;
+
+            public partial class InvalidUnhandledExceptionOutcomeOperation : IQuery<UnhandledExceptionResult> {}
+            """);
+
+        result.Diagnostics.Select(static diagnostic => diagnostic.Id)
+            .Should()
+            .Contain("BP111");
+
+        result.Output.Select(static tree => tree.ToString())
+            .Should()
+            .NotContain(static source => source.Contains("InvalidUnhandledExceptionOutcomeOperationDescriptor"));
+    }
+
+    [Fact]
+    public void When_declared_contract_contains_legacy_unhandled_exception_alias_then_generator_reports_outcome_alignment_diagnostic_and_skips_flattened_outcome_feature_data()
+    {
+        var result = OperationDescriptorSourceGeneratorTests.Compile("""
+            public partial class InvalidLegacyUnhandledExceptionOutcomeOperation : IQuery<Blueprint.UnhandledExceptionOperationResult> {}
+            """);
+
+        result.Diagnostics.Select(static diagnostic => diagnostic.Id)
+            .Should()
+            .Contain("BP111");
+
+        result.Output.Select(static tree => tree.ToString())
+            .Should()
+            .NotContain(static source => source.Contains("InvalidLegacyUnhandledExceptionOutcomeOperationDescriptor"));
+    }
+
+    [Fact]
+    public void When_results_union_contains_canonical_unhandled_exception_result_then_generator_reports_outcome_alignment_diagnostic_and_skips_flattened_outcome_feature_data()
+    {
+        var result = OperationDescriptorSourceGeneratorTests.Compile("""
+            using Blueprint.Runtime.Exec;
+
+            public partial class InvalidUnhandledExceptionUnionOperation : IQuery<Results<OkResult<string>, UnhandledExceptionResult>> {}
+            """);
+
+        result.Diagnostics.Select(static diagnostic => diagnostic.Id)
+            .Should()
+            .Contain("BP111");
+
+        result.Output.Select(static tree => tree.ToString())
+            .Should()
+            .NotContain(static source => source.Contains("InvalidUnhandledExceptionUnionOperationDescriptor"));
+    }
+
+    [Fact]
+    public void When_results_union_contains_legacy_unhandled_exception_alias_then_generator_reports_outcome_alignment_diagnostic_and_skips_flattened_outcome_feature_data()
+    {
+        var result = OperationDescriptorSourceGeneratorTests.Compile("""
+            using Blueprint.Runtime.Exec;
+
+            public partial class InvalidLegacyUnhandledExceptionUnionOperation : IQuery<Results<OkResult<string>, Blueprint.UnhandledExceptionOperationResult>> {}
+            """);
+
+        result.Diagnostics.Select(static diagnostic => diagnostic.Id)
+            .Should()
+            .Contain("BP111");
+
+        result.Output.Select(static tree => tree.ToString())
+            .Should()
+            .NotContain(static source => source.Contains("InvalidLegacyUnhandledExceptionUnionOperationDescriptor"));
+    }
 }

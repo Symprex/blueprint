@@ -240,6 +240,47 @@ public class OperationExecutorPipelineGeneratorIntegrationTests
     }
 
     [Fact]
+    public void Generated_outer_exception_shell_uses_canonical_unhandled_exception_result_name()
+    {
+        const string source = """
+                              using Blueprint;
+                              using Blueprint.Model;
+                              using System.Threading.Tasks;
+
+                              namespace TestNamespace;
+
+                              [BlueprintAppScan]
+                              public partial class TestApp : BlueprintApp
+                              {
+                              }
+
+                              public class TestQuery : IQuery<string>
+                              {
+                                  public static ApiOperationDescriptor Configure()
+                                  {
+                                      return new ApiOperationDescriptor(typeof(TestQuery), nameof(TestQuery), "Tests");
+                                  }
+
+                                  public static Task<string> InvokeAsync()
+                                  {
+                                      return Task.FromResult("Hello World");
+                                  }
+                              }
+                              """;
+
+        var result = Compile(source);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var pipelineSource = result.Output
+            .Select(static tree => tree.ToString())
+            .FirstOrDefault(static sourceText => sourceText.Contains("TestQueryExecutorPipeline"));
+
+        pipelineSource.Should().NotBeNull();
+        pipelineSource!.Should().Contain("return new Blueprint.Runtime.Exec.UnhandledExceptionResult(e);");
+    }
+
+    [Fact]
     public async Task Inline_instance_handler_generates_correctly()
     {
         var source = """

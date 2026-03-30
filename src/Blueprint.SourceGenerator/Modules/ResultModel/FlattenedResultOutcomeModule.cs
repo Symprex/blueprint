@@ -46,7 +46,19 @@ public sealed class FlattenedResultOutcomeModule : IBlueprintSourceGeneratorModu
             return;
         }
 
-        if (OperationResultContractHelper.TryGetResultsUnionMembers(declaredContractType, out var declaredUnionMembers)
+        if (OperationResultContractHelper.TryGetResultsUnionMembers(declaredContractType, out var declaredUnionMembers) == false
+            && OperationResultContractHelper.IsOperationResultType(declaredContractType, operationResultType)
+            && OperationResultContractHelper.IsPublicSemanticResultType(declaredContractType, operationResultType) == false)
+        {
+            context.AddDiagnostic(
+                new DiagnosticInfo(
+                    DiagnosticDescriptors.MisalignedFlattenedDescriptorOutcomes,
+                    GetOperationLocation(context.GetOperationTypeSymbol()),
+                    [context.GetOperationTypeSymbol().Name, declaredContractType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)]));
+            return;
+        }
+
+        if (declaredUnionMembers.IsDefaultOrEmpty == false
             && TryValidateFlattenedOutcomeMembers(context, declaredUnionMembers, operationResultType) == false)
         {
             return;

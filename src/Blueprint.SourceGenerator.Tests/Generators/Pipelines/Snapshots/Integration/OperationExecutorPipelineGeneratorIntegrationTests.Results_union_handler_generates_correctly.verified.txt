@@ -70,7 +70,7 @@ namespace Blueprint.Generated
                     context.Activity?.SetTag("otel.status_description", e.Message);
                 }
 
-                return new Blueprint.UnhandledExceptionOperationResult(e);
+                return new Blueprint.Runtime.Exec.UnhandledExceptionResult(e);
             }
         }
     }

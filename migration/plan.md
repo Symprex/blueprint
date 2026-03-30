@@ -838,6 +838,13 @@ Run this as a paired design loop with workstream 6. The result contract must be 
 - Next approved follow-on after ValidationFailedResult canonicalization:
   - Stay in Workstream 7 long enough to introduce an internal canonical `UnhandledExceptionResult` shape while retaining `UnhandledExceptionOperationResult` as the compatibility/internal legacy name.
   - That choice closes the remaining shared result-taxonomy gap recorded in the workstream plan and keeps Workstream 8 (`error-model-and-exception-handling`) from having to invent failure-result taxonomy before the result model is explicitly locked.
+- Completed the UnhandledExceptionResult canonicalization slice:
+  - `Blueprint.Runtime.Exec.UnhandledExceptionResult` is now the canonical internal fallback result, while `Blueprint.UnhandledExceptionOperationResult` remains available only as a compatibility alias inheriting from it.
+  - The shared outer exception shell now emits the canonical name, while descriptor validation keeps both direct and `Results<T1, T2>` contracts that reference either unhandled-exception name on the `BP111` side of the public semantic-contract boundary.
+  - The proof matrix now includes a red-to-green generated pipeline-source proof, direct and union `BP111` boundary proofs for canonical and legacy names, a runtime integration proof for thrown handlers, a green `Blueprint.SourceGenerator.Tests` run (`280` tests), a green `Blueprint.SourceGenerator.Tests.Integration` run (`56` tests), a green solution build, and clean independent review.
+- Next approved follow-on after UnhandledExceptionResult canonicalization:
+  - Pivot into Workstream 8 with a narrow first slice: extract a minimal exception-translator seam around the shared executor shell while preserving the current `ApiException` handling and the generic unhandled fallback.
+  - That is the safest next step because the result-model taxonomy is now locked enough for failure work, and the error-model plan explicitly starts with shared executor-shell exception boundaries and pipeline exception translators before host-specific failure documentation or OpenAPI work.
 
 ## 8. Error model and exception handling
 

@@ -3,29 +3,16 @@ using Blueprint.Runtime.Exec;
 namespace Blueprint;
 
 /// <summary>
-/// An <see cref="OperationResult"/> that represents an unhandled exception.
+/// Compatibility alias for legacy callers that still refer to the pre-canonical unhandled-exception result name.
 /// </summary>
-public class UnhandledExceptionOperationResult : OperationResult
+public class UnhandledExceptionOperationResult : UnhandledExceptionResult
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="UnhandledExceptionOperationResult"/> class.
     /// </summary>
     /// <param name="exception">The exception.</param>
     public UnhandledExceptionOperationResult(Exception exception)
+        : base(exception)
     {
-        this.Exception = exception;
-    }
-
-    /// <summary>
-    /// Gets the exception.
-    /// </summary>
-    public Exception Exception { get; }
-
-    /// <inheritdoc />
-    public override Task ExecuteAsync(ApiOperationContext context)
-    {
-        // In a real implementation, this would write error details to the response
-        // For now, just complete
-        return Task.CompletedTask;
     }
 }

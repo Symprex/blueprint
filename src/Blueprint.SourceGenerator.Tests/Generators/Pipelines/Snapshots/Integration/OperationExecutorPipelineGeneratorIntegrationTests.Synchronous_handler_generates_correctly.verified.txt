@@ -66,7 +66,7 @@ namespace Blueprint.Generated
                     context.Activity?.SetTag("otel.status_description", e.Message);
                 }
 
-                return System.Threading.Tasks.Task.FromResult<Blueprint.OperationResult>(new Blueprint.UnhandledExceptionOperationResult(e));
+                return System.Threading.Tasks.Task.FromResult<Blueprint.OperationResult>(new Blueprint.Runtime.Exec.UnhandledExceptionResult(e));
             }
         }
     }
