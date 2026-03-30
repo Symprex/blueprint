@@ -8,17 +8,29 @@ namespace Blueprint.Middleware;
 public static class ValidationMiddlewareBuilder
 {
     /// <summary>
-    /// Converts a <see cref="ValidationException"/> to a <see cref="ValidationFailedOperationResult"/>.
+    /// Converts a <see cref="ValidationException"/> to the canonical <see cref="Blueprint.Runtime.Exec.ValidationFailedResult"/>.
     /// </summary>
     /// <param name="exception">The validation exception.</param>
-    /// <returns>A <see cref="ValidationFailedOperationResult"/>.</returns>
-    public static ValidationFailedOperationResult ToValidationFailedOperationResult(ValidationException exception)
+    /// <returns>A <see cref="Blueprint.Runtime.Exec.ValidationFailedResult"/>.</returns>
+    public static Blueprint.Runtime.Exec.ValidationFailedResult ToValidationFailedResult(ValidationException exception)
     {
         var validationResults = new[]
         {
             new ValidationResult(exception.Message, exception.ValidationResult?.MemberNames),
         };
 
-        return new ValidationFailedOperationResult(validationResults);
+        return new Blueprint.Runtime.Exec.ValidationFailedResult(validationResults);
+    }
+
+    /// <summary>
+    /// Converts a <see cref="ValidationException"/> to the legacy compatibility alias for validation failures.
+    /// </summary>
+    /// <param name="exception">The validation exception.</param>
+    /// <returns>A <see cref="ValidationFailedOperationResult"/>.</returns>
+    public static ValidationFailedOperationResult ToValidationFailedOperationResult(ValidationException exception)
+    {
+        var canonicalResult = ToValidationFailedResult(exception);
+
+        return new ValidationFailedOperationResult(canonicalResult.ValidationResults);
     }
 }

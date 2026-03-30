@@ -136,7 +136,7 @@ internal static class PipelineCodeGenerator
             catchWriter =>
             {
                 catchWriter.AppendLine("context.Activity?.SetTag(\"otel.status_code\", \"OK\");");
-                catchWriter.Return(WrapOperationResult("new Blueprint.Middleware.ValidationFailedOperationResult(e.ValidationResults)", isHandlerAsync));
+                catchWriter.Return(WrapOperationResult("new Blueprint.Runtime.Exec.ValidationFailedResult(e.ValidationResults)", isHandlerAsync));
             });
 
         writer.Catch(
@@ -144,7 +144,7 @@ internal static class PipelineCodeGenerator
             catchWriter =>
             {
                 catchWriter.AppendLine("context.Activity?.SetTag(\"otel.status_code\", \"OK\");");
-                catchWriter.Return(WrapOperationResult("Blueprint.Middleware.ValidationMiddlewareBuilder.ToValidationFailedOperationResult(e)", isHandlerAsync));
+                catchWriter.Return(WrapOperationResult("Blueprint.Middleware.ValidationMiddlewareBuilder.ToValidationFailedResult(e)", isHandlerAsync));
             });
 
         writer.Catch(

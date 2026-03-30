@@ -1,6 +1,5 @@
 using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
-using Blueprint.Middleware;
 using Blueprint.Model;
 using Blueprint.Runtime.Exec;
 using Blueprint.SourceGenerator.Tests.Integration.Generators.OperationDescriptors;
@@ -24,9 +23,9 @@ public class ValidationModuleIntegrationTests
 
         var result = await pipeline.ExecuteAsync(context);
 
-        result.Should().BeOfType<ValidationFailedOperationResult>();
+        result.Should().BeOfType<ValidationFailedResult>();
         RequiredValidationOperation.HandlerCallCount.Should().Be(0);
-        var validationResult = ((ValidationFailedOperationResult)result).ValidationResults.Should().ContainSingle().Subject;
+        var validationResult = ((ValidationFailedResult)result).ValidationResults.Should().ContainSingle().Subject;
         validationResult.MemberNames.Should().Contain(nameof(RequiredValidationOperation.Name));
     }
 
@@ -46,7 +45,7 @@ public class ValidationModuleIntegrationTests
 
         var result = await pipeline.ExecuteAsync(context);
 
-        result.Should().BeOfType<ValidationFailedOperationResult>();
+        result.Should().BeOfType<ValidationFailedResult>();
         RequiredValidationOperation.HandlerCallCount.Should().Be(0);
         activity.GetTagItem("otel.status_code").Should().Be("OK");
         activity.Events.Should().BeEmpty();
@@ -68,9 +67,9 @@ public class ValidationModuleIntegrationTests
 
         var result = await pipeline.ExecuteAsync(context);
 
-        result.Should().BeOfType<ValidationFailedOperationResult>();
+        result.Should().BeOfType<ValidationFailedResult>();
         LegacyValidationExceptionOperation.HandlerCallCount.Should().Be(1);
-        var validationResult = ((ValidationFailedOperationResult)result).ValidationResults.Should().ContainSingle().Subject;
+        var validationResult = ((ValidationFailedResult)result).ValidationResults.Should().ContainSingle().Subject;
         validationResult.MemberNames.Should().Contain(nameof(LegacyValidationExceptionOperation.Name));
         validationResult.ErrorMessage.Should().Be("Legacy validation failure.");
         activity.GetTagItem("otel.status_code").Should().Be("OK");
@@ -93,9 +92,9 @@ public class ValidationModuleIntegrationTests
 
         var result = await pipeline.ExecuteAsync(context);
 
-        result.Should().BeOfType<ValidationFailedOperationResult>();
+        result.Should().BeOfType<ValidationFailedResult>();
         DataAnnotationsValidationExceptionOperation.HandlerCallCount.Should().Be(1);
-        var validationResult = ((ValidationFailedOperationResult)result).ValidationResults.Should().ContainSingle().Subject;
+        var validationResult = ((ValidationFailedResult)result).ValidationResults.Should().ContainSingle().Subject;
         validationResult.MemberNames.Should().Contain(nameof(DataAnnotationsValidationExceptionOperation.Name));
         validationResult.ErrorMessage.Should().Be("Framework validation failure.");
         activity.GetTagItem("otel.status_code").Should().Be("OK");
@@ -133,9 +132,9 @@ public class ValidationModuleIntegrationTests
 
         var result = await pipeline.ExecuteAsync(context);
 
-        result.Should().BeOfType<ValidationFailedOperationResult>();
+        result.Should().BeOfType<ValidationFailedResult>();
         RequiredValidationOperation.HandlerCallCount.Should().Be(0);
-        var validationResult = ((ValidationFailedOperationResult)result).ValidationResults.Should().ContainSingle().Subject;
+        var validationResult = ((ValidationFailedResult)result).ValidationResults.Should().ContainSingle().Subject;
         validationResult.MemberNames.Should().Contain(nameof(RequiredValidationOperation.Name));
     }
 
@@ -151,9 +150,9 @@ public class ValidationModuleIntegrationTests
 
         var result = await pipeline.ExecuteAsync(context);
 
-        result.Should().BeOfType<ValidationFailedOperationResult>();
+        result.Should().BeOfType<ValidationFailedResult>();
         MultiRequiredValidationOperation.HandlerCallCount.Should().Be(0);
-        var validationResults = ((ValidationFailedOperationResult)result).ValidationResults;
+        var validationResults = ((ValidationFailedResult)result).ValidationResults;
         validationResults.Should().HaveCount(2);
         validationResults.SelectMany(static validationResult => validationResult.MemberNames).Should().Contain([nameof(MultiRequiredValidationOperation.Name), nameof(MultiRequiredValidationOperation.Age)]);
     }
@@ -171,9 +170,9 @@ public class ValidationModuleIntegrationTests
 
         var result = await pipeline.ExecuteAsync(context);
 
-        result.Should().BeOfType<ValidationFailedOperationResult>();
+        result.Should().BeOfType<ValidationFailedResult>();
         RequiredMaxLengthValidationOperation.HandlerCallCount.Should().Be(0);
-        var validationResult = ((ValidationFailedOperationResult)result).ValidationResults.Should().ContainSingle().Subject;
+        var validationResult = ((ValidationFailedResult)result).ValidationResults.Should().ContainSingle().Subject;
         validationResult.MemberNames.Should().Contain(nameof(RequiredMaxLengthValidationOperation.Name));
         validationResult.ErrorMessage.Should().Be("The Name field is required.");
     }
@@ -191,9 +190,9 @@ public class ValidationModuleIntegrationTests
 
         var result = await pipeline.ExecuteAsync(context);
 
-        result.Should().BeOfType<ValidationFailedOperationResult>();
+        result.Should().BeOfType<ValidationFailedResult>();
         RequiredMaxLengthValidationOperation.HandlerCallCount.Should().Be(0);
-        var validationResult = ((ValidationFailedOperationResult)result).ValidationResults.Should().ContainSingle().Subject;
+        var validationResult = ((ValidationFailedResult)result).ValidationResults.Should().ContainSingle().Subject;
         validationResult.MemberNames.Should().Contain(nameof(RequiredMaxLengthValidationOperation.Name));
         validationResult.ErrorMessage.Should().Be("The field Name must be a string or array type with a maximum length of '3'.");
     }
@@ -246,9 +245,9 @@ public class ValidationModuleIntegrationTests
 
         var result = await pipeline.ExecuteAsync(context);
 
-        result.Should().BeOfType<ValidationFailedOperationResult>();
+        result.Should().BeOfType<ValidationFailedResult>();
         RequiredCustomMessageOperation.HandlerCallCount.Should().Be(0);
-        var validationResult = ((ValidationFailedOperationResult)result).ValidationResults.Should().ContainSingle().Subject;
+        var validationResult = ((ValidationFailedResult)result).ValidationResults.Should().ContainSingle().Subject;
         validationResult.MemberNames.Should().Contain(nameof(RequiredCustomMessageOperation.Name));
         validationResult.ErrorMessage.Should().Be("Please provide a name.");
     }
@@ -299,9 +298,9 @@ public class ValidationModuleIntegrationTests
 
         var result = await pipeline.ExecuteAsync(context);
 
-        result.Should().BeOfType<ValidationFailedOperationResult>();
+        result.Should().BeOfType<ValidationFailedResult>();
         MinLengthValidationOperation.HandlerCallCount.Should().Be(0);
-        var validationResult = ((ValidationFailedOperationResult)result).ValidationResults.Should().ContainSingle().Subject;
+        var validationResult = ((ValidationFailedResult)result).ValidationResults.Should().ContainSingle().Subject;
         validationResult.MemberNames.Should().Contain(nameof(MinLengthValidationOperation.Name));
         validationResult.ErrorMessage.Should().Be("The field Name must be a string or array type with a minimum length of '3'.");
     }
@@ -337,9 +336,9 @@ public class ValidationModuleIntegrationTests
 
         var result = await pipeline.ExecuteAsync(context);
 
-        result.Should().BeOfType<ValidationFailedOperationResult>();
+        result.Should().BeOfType<ValidationFailedResult>();
         StringLengthValidationOperation.HandlerCallCount.Should().Be(0);
-        var validationResult = ((ValidationFailedOperationResult)result).ValidationResults.Should().ContainSingle().Subject;
+        var validationResult = ((ValidationFailedResult)result).ValidationResults.Should().ContainSingle().Subject;
         validationResult.MemberNames.Should().Contain(nameof(StringLengthValidationOperation.Name));
         validationResult.ErrorMessage.Should().Be("The field Name must be a string with a minimum length of 3 and a maximum length of 5.");
     }
@@ -357,9 +356,9 @@ public class ValidationModuleIntegrationTests
 
         var result = await pipeline.ExecuteAsync(context);
 
-        result.Should().BeOfType<ValidationFailedOperationResult>();
+        result.Should().BeOfType<ValidationFailedResult>();
         StringLengthValidationOperation.HandlerCallCount.Should().Be(0);
-        var validationResult = ((ValidationFailedOperationResult)result).ValidationResults.Should().ContainSingle().Subject;
+        var validationResult = ((ValidationFailedResult)result).ValidationResults.Should().ContainSingle().Subject;
         validationResult.MemberNames.Should().Contain(nameof(StringLengthValidationOperation.Name));
         validationResult.ErrorMessage.Should().Be("The field Name must be a string with a minimum length of 3 and a maximum length of 5.");
     }
@@ -395,9 +394,9 @@ public class ValidationModuleIntegrationTests
 
         var result = await pipeline.ExecuteAsync(context);
 
-        result.Should().BeOfType<ValidationFailedOperationResult>();
+        result.Should().BeOfType<ValidationFailedResult>();
         EmailAddressValidationOperation.HandlerCallCount.Should().Be(0);
-        var validationResult = ((ValidationFailedOperationResult)result).ValidationResults.Should().ContainSingle().Subject;
+        var validationResult = ((ValidationFailedResult)result).ValidationResults.Should().ContainSingle().Subject;
         validationResult.MemberNames.Should().Contain(nameof(EmailAddressValidationOperation.Email));
         validationResult.ErrorMessage.Should().Be("The Email field is not a valid e-mail address.");
     }
@@ -435,9 +434,9 @@ public class ValidationModuleIntegrationTests
 
         var result = await pipeline.ExecuteAsync(context);
 
-        result.Should().BeOfType<ValidationFailedOperationResult>();
+        result.Should().BeOfType<ValidationFailedResult>();
         GreaterThanPropertyValidationOperation.HandlerCallCount.Should().Be(0);
-        var validationResult = ((ValidationFailedOperationResult)result).ValidationResults.Should().ContainSingle().Subject;
+        var validationResult = ((ValidationFailedResult)result).ValidationResults.Should().ContainSingle().Subject;
         validationResult.MemberNames.Should().Contain(nameof(GreaterThanPropertyValidationOperation.Maximum));
     }
 
@@ -475,9 +474,9 @@ public class ValidationModuleIntegrationTests
 
         var result = await pipeline.ExecuteAsync(context);
 
-        result.Should().BeOfType<ValidationFailedOperationResult>();
+        result.Should().BeOfType<ValidationFailedResult>();
         GreaterThanValidationOperation.HandlerCallCount.Should().Be(0);
-        var validationResult = ((ValidationFailedOperationResult)result).ValidationResults.Should().ContainSingle().Subject;
+        var validationResult = ((ValidationFailedResult)result).ValidationResults.Should().ContainSingle().Subject;
         validationResult.MemberNames.Should().Contain(nameof(GreaterThanValidationOperation.Count));
         validationResult.ErrorMessage.Should().Be("The field Count must be greater than '10'.");
     }
@@ -515,9 +514,9 @@ public class ValidationModuleIntegrationTests
 
         var result = await pipeline.ExecuteAsync(context);
 
-        result.Should().BeOfType<ValidationFailedOperationResult>();
+        result.Should().BeOfType<ValidationFailedResult>();
         RequiredIfValidationOperation.HandlerCallCount.Should().Be(0);
-        var validationResult = ((ValidationFailedOperationResult)result).ValidationResults.Should().ContainSingle().Subject;
+        var validationResult = ((ValidationFailedResult)result).ValidationResults.Should().ContainSingle().Subject;
         validationResult.MemberNames.Should().Contain(nameof(RequiredIfValidationOperation.Name));
         validationResult.ErrorMessage.Should().Be("The Name field is required.");
     }
@@ -556,9 +555,9 @@ public class ValidationModuleIntegrationTests
 
         var result = await pipeline.ExecuteAsync(context);
 
-        result.Should().BeOfType<ValidationFailedOperationResult>();
+        result.Should().BeOfType<ValidationFailedResult>();
         RequiredIfNotValidationOperation.HandlerCallCount.Should().Be(0);
-        var validationResult = ((ValidationFailedOperationResult)result).ValidationResults.Should().ContainSingle().Subject;
+        var validationResult = ((ValidationFailedResult)result).ValidationResults.Should().ContainSingle().Subject;
         validationResult.MemberNames.Should().Contain(nameof(RequiredIfNotValidationOperation.PaymentIntentId));
         validationResult.ErrorMessage.Should().Be("The PaymentIntentId field is required.");
     }
@@ -595,9 +594,9 @@ public class ValidationModuleIntegrationTests
 
         var result = await pipeline.ExecuteAsync(context);
 
-        result.Should().BeOfType<ValidationFailedOperationResult>();
+        result.Should().BeOfType<ValidationFailedResult>();
         NotAllowedIfValidationOperation.HandlerCallCount.Should().Be(0);
-        var validationResult = ((ValidationFailedOperationResult)result).ValidationResults.Should().ContainSingle().Subject;
+        var validationResult = ((ValidationFailedResult)result).ValidationResults.Should().ContainSingle().Subject;
         validationResult.MemberNames.Should().Contain(nameof(NotAllowedIfValidationOperation.Name));
         validationResult.ErrorMessage.Should().Be("This field is not allowed to be set if Enabled field is True.");
     }
@@ -635,9 +634,9 @@ public class ValidationModuleIntegrationTests
 
         var result = await pipeline.ExecuteAsync(context);
 
-        result.Should().BeOfType<ValidationFailedOperationResult>();
+        result.Should().BeOfType<ValidationFailedResult>();
         NotAllowedIfNullDependentValueValidationOperation.HandlerCallCount.Should().Be(0);
-        var validationResult = ((ValidationFailedOperationResult)result).ValidationResults.Should().ContainSingle().Subject;
+        var validationResult = ((ValidationFailedResult)result).ValidationResults.Should().ContainSingle().Subject;
         validationResult.MemberNames.Should().Contain(nameof(NotAllowedIfNullDependentValueValidationOperation.Name));
         validationResult.ErrorMessage.Should().Be("This field is not allowed to be set if TokenId field is null.");
     }
@@ -656,9 +655,9 @@ public class ValidationModuleIntegrationTests
 
         var result = await pipeline.ExecuteAsync(context);
 
-        result.Should().BeOfType<ValidationFailedOperationResult>();
+        result.Should().BeOfType<ValidationFailedResult>();
         MixedFastAndRuntimeValidationOperation.HandlerCallCount.Should().Be(0);
-        var validationResult = ((ValidationFailedOperationResult)result).ValidationResults.Should().ContainSingle().Subject;
+        var validationResult = ((ValidationFailedResult)result).ValidationResults.Should().ContainSingle().Subject;
         validationResult.MemberNames.Should().Contain(nameof(MixedFastAndRuntimeValidationOperation.Code));
         validationResult.ErrorMessage.Should().Be("Please provide a code.");
     }
@@ -695,9 +694,9 @@ public class ValidationModuleIntegrationTests
 
         var result = await pipeline.ExecuteAsync(context);
 
-        result.Should().BeOfType<ValidationFailedOperationResult>();
+        result.Should().BeOfType<ValidationFailedResult>();
         ValidatableOperation.HandlerCallCount.Should().Be(0);
-        var validationResult = ((ValidationFailedOperationResult)result).ValidationResults.Should().ContainSingle().Subject;
+        var validationResult = ((ValidationFailedResult)result).ValidationResults.Should().ContainSingle().Subject;
         validationResult.MemberNames.Should().Contain(nameof(ValidatableOperation.Code));
         validationResult.ErrorMessage.Should().Be("Code is required.");
     }

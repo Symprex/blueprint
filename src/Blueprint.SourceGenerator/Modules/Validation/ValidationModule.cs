@@ -160,7 +160,7 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
             "validationResults is not null",
             static branch => ReturnValidationFailure(
                 branch,
-                "new Blueprint.Middleware.ValidationFailedOperationResult(validationResults)"));
+                "new Blueprint.Runtime.Exec.ValidationFailedResult(validationResults)"));
         context.WriteBlankLine();
     }
 
@@ -236,7 +236,7 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
             "isValid == false",
             static branch => ReturnValidationFailure(
                 branch,
-                "new Blueprint.Middleware.ValidationFailedOperationResult(validationResults)"));
+                "new Blueprint.Runtime.Exec.ValidationFailedResult(validationResults)"));
         context.WriteBlankLine();
     }
 

@@ -24,6 +24,7 @@ The rewrite needs a single canonical result model that is:
 
 - Current: `src\Blueprint.Runtime\Exec\OperationResult.cs`
 - Current: `src\Blueprint.Runtime\Exec\OkResult.cs`
+- Current: `src\Blueprint.Runtime\Exec\ValidationFailedResult.cs`
 - Current: `src\Blueprint.Runtime\Exec\ValidationFailedOperationResult.cs`
 - Current: `src\Blueprint.Runtime\Exec\UnhandledExceptionOperationResult.cs`
 - Current: `src\Blueprint.SourceGenerator\Generators\Pipelines\CodeGen\PipelineCodeGenerator.cs`
@@ -433,3 +434,13 @@ Close the result taxonomy and normalization rules together with the pipeline pla
 - Review gate after the NotFound-result slice:
   - `NotFoundResult` is now landed, but this workstream plan still does not record an explicit post-NotFound follow-on.
   - If execution stops here, `migration\progress.json` should reopen a human-direction gate rather than guessing whether the next safe move is another semantic result slice or a pivot into the paired error-model workstream.
+- Cleared the post-NotFound review gate by later session judgment:
+  - The next approved follow-on remains inside this workstream: introduce canonical `ValidationFailedResult` and treat legacy `ValidationFailedOperationResult` as a compatibility alias or shim rather than leaving validation failures on a legacy-only surface.
+  - That follow-on is explicitly grounded in this plan's canonical taxonomy (`ValidationFailedResult`) and legacy-alias guidance (`ValidationFailedOperationResult`-style names remain compatibility aliases where needed), while still preserving the current unsupported-host boundary until the broader error-model workstream deliberately widens host translation for failure results.
+- Completed the ValidationFailedResult canonicalization slice:
+  - `Blueprint.Runtime.Exec.ValidationFailedResult` now closes the canonical semantic name gap for known input-contract failures, and `Blueprint.Middleware.ValidationFailedOperationResult` remains available only as a compatibility alias inheriting from that canonical type.
+  - Generator-owned validation short-circuits and validation-exception catch translation now emit the canonical result/helper names, but HTTP-visible contracts using validation-failure results still intentionally remain outside the supported host-executor surface and continue to report `BP108`.
+  - The proof matrix now includes a red-to-green generated validation pipeline proof, a red-to-green canonical `BP108` boundary proof, a green `Blueprint.SourceGenerator.Tests` project run (`275` tests), a green `Blueprint.SourceGenerator.Tests.Integration` run (`55` tests), and a green `dotnet build .\Blueprint.sln --no-restore`.
+- Next approved follow-on after ValidationFailedResult canonicalization:
+  - Stay in this workstream long enough to introduce the still-planned internal canonical `UnhandledExceptionResult` shape while treating `UnhandledExceptionOperationResult` as the compatibility/internal legacy name.
+  - That remains the safest next step because this plan still explicitly requires an internal unhandled-exception result shape in the shared taxonomy, and `migration\error-model-and-exception-handling\plan.md` depends on a locked result model plus a generic unhandled-exception fallback.

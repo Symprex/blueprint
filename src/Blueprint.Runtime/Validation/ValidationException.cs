@@ -5,7 +5,8 @@ namespace Blueprint.Validation;
 /// <summary>
 /// Exception thrown when validation fails.
 /// Retained as a compatibility surface for legacy callers; generated validation now short-circuits
-/// to <c>ValidationFailedOperationResult</c> instead of throwing this type.
+/// to canonical <c>ValidationFailedResult</c> semantics instead of throwing this type, while the older
+/// <c>ValidationFailedOperationResult</c> name remains only as a compatibility alias.
 /// </summary>
 public class ValidationException : Exception
 {

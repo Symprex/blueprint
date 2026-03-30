@@ -11,13 +11,17 @@
   },
   "current": {
     "activeWorkstream": "result-model-and-host-translation",
-    "nextReadySlice": null,
-    "lastCompletedSlice": {
-      "id": "result-model-and-host-translation/not-found-result-first-pass-support",
+    "nextReadySlice": {
+      "id": "result-model-and-host-translation/unhandled-exception-result-canonicalization",
       "workstream": "result-model-and-host-translation",
-      "title": "Add NotFoundResult and NotFoundResult<T> as the next semantic missing-resource results with default HTTP 404 mapping"
+      "title": "Introduce internal canonical UnhandledExceptionResult and retain UnhandledExceptionOperationResult as a compatibility alias while preserving its non-public-contract boundary"
     },
-    "openReviewGate": "Human direction required: NotFoundResult slice complete. No next slice is explicitly approved after NotFoundResult in migration\\plan.md or migration\\result-model-and-host-translation\\plan.md."
+    "lastCompletedSlice": {
+      "id": "result-model-and-host-translation/validation-failed-result-canonicalization",
+      "workstream": "result-model-and-host-translation",
+      "title": "Introduce canonical ValidationFailedResult and retain ValidationFailedOperationResult as a compatibility alias while preserving the current unsupported-host boundary"
+    },
+    "openReviewGate": null
   },
   "orchestrationContract": {
     "mustImplementAfterSliceSelection": true,

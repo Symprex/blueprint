@@ -19,6 +19,19 @@ public class OperationDescriptorSourceGeneratorTestsHostExecutorAvailabilityTest
     }
 
     [Fact]
+    public void When_http_exposed_operation_declares_canonical_validation_failed_result_then_generator_still_reports_missing_host_executor_diagnostic()
+    {
+        var result = OperationDescriptorSourceGeneratorTests.Compile("""
+            using Blueprint.Runtime.Exec;
+
+            [RootLink("/host-aware/canonical-validation-failed")]
+            public partial class CanonicalValidationFailedResultOperation : IQuery<ValidationFailedResult> {}
+            """);
+
+        result.Diagnostics.Should().ContainSingle(static diagnostic => diagnostic.Id == "BP108");
+    }
+
+    [Fact]
     public void When_http_exposed_operation_declares_supported_semantic_result_then_generator_does_not_report_missing_host_executor_diagnostic()
     {
         var result = OperationDescriptorSourceGeneratorTests.Compile("""

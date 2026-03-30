@@ -7,7 +7,7 @@
 
 ## Why this module exists
 
-Validation is part of Blueprint's normal execution contract, not an optional afterthought. The legacy library supports both DataAnnotations and Blueprint-specific validation attributes, and returns `ValidationFailedOperationResult` rather than generic unhandled errors.
+Validation is part of Blueprint's normal execution contract, not an optional afterthought. The legacy library supports both DataAnnotations and Blueprint-specific validation attributes, and returns a validation-failure result rather than generic unhandled errors; the rewrite now canonicalizes that shared result shape as `ValidationFailedResult` while retaining `ValidationFailedOperationResult` as a compatibility alias.
 
 This is also one of the clearest areas where the rewrite can improve by precomputing more validation behavior at compile time.
 
@@ -30,7 +30,7 @@ Move to a DataAnnotations-first, source-generated validation model that keeps th
 
 - A generated property-validation plan per operation
 - Generated DataAnnotations-style validation code, using the .NET options-validation generator approach as the reference pattern for what "generated validation instead of reflective validation" should look like
-- A stable semantic validation-failure path, with `ValidationFailedOperationResult` available as a migration alias where needed while the shared result model converges on canonical data-first names
+- A stable semantic validation-failure path, with `ValidationFailedResult` as the canonical name and `ValidationFailedOperationResult` available as a migration alias where needed while the shared result model converges on canonical data-first names
 - Minimal runtime helpers only where truly required for async/contextual validators
 - Optional validation-source registration for package-provided validators
 - Compatibility handling for the retained Blueprint-specific validator subset
@@ -123,5 +123,5 @@ Implement as part of the first parity wave, alongside execution and auth.
 - `BPV005` now rejects missing referenced-property names for `NotAllowedIfAttribute`, completing the retained validation property-reference diagnostic family.
 - The current `ShortRun` benchmark evidence now also shows `NotAllowedIfValidAsync` at about `3.4 us` / `2.14 KB`, `NotAllowedIfInvalidAsync` at about `3.8 us` / `3.04 KB`, and `NotAllowedIfRuntimeFallbackInvalidAsync` at about `5.7 us` / `3.41 KB`; this slice continues to deliver the expected invalid-path allocation drop, and this rerun now also shows a mean-time win over the display-name fallback path.
 - The retained-validator queue is now clear; the next follow-on after this validation parity pass is the deferred no-exception validation-failure redesign.
-- The deferred no-exception validation-failure redesign is now complete locally too: generated property-validation and whole-object fallback branches no longer throw `Blueprint.Validation.ValidationException`, and instead short-circuit directly to `ValidationFailedOperationResult` while still tagging the activity with `otel.status_code=OK`; the generated pipeline also keeps compatibility translation catches for both legacy `Blueprint.Validation.ValidationException` callers and framework `System.ComponentModel.DataAnnotations.ValidationException` runtime-fallback seams.
+- The deferred no-exception validation-failure redesign is now complete locally too: generated property-validation and whole-object fallback branches no longer throw `Blueprint.Validation.ValidationException`, and instead short-circuit directly to canonical `ValidationFailedResult` while still tagging the activity with `otel.status_code=OK`; `ValidationFailedOperationResult` remains as the migration alias, and the generated pipeline also keeps compatibility translation catches for both legacy `Blueprint.Validation.ValidationException` callers and framework `System.ComponentModel.DataAnnotations.ValidationException` runtime-fallback seams.
 - The current `ShortRun` benchmark evidence now reflects the exception-free generated invalid path: `RequiredOnlyInvalidAsync` is about `3.2 us` / `2.27 KB` versus `RequiredFallbackInvalidAsync` at about `6.7 us` / `3.36 KB`, `RequiredRuntimeFallbackInvalidAsync` is about `3.8 us` / `2.48 KB`, `RequiredIfInvalidAsync` is about `2.8 us` / `2.7 KB` versus `RequiredIfRuntimeFallbackInvalidAsync` at about `4.8 us` / `3.23 KB`, `NotAllowedIfInvalidAsync` is about `3.8 us` / `3.04 KB` versus `NotAllowedIfRuntimeFallbackInvalidAsync` at about `5.7 us` / `3.41 KB`, and whole-object `ValidatableObjectFallbackInvalidAsync` is about `3.0 us` / `2.28 KB`.
