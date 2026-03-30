@@ -101,4 +101,23 @@ public class OperationDescriptorSourceGeneratorTestsHttpUnionDiscriminationTests
             .Should()
             .Contain("BP110");
     }
+
+    [Fact]
+    public void When_http_exposed_operation_declares_accepted_and_ok_union_then_generator_keeps_status_based_diagnostics_clear()
+    {
+        var result = OperationDescriptorSourceGeneratorTests.Compile("""
+            using Blueprint.Runtime.Exec;
+
+            [RootLink("/host-aware/accepted-and-ok-union")]
+            public partial class AcceptedAndOkUnionOperation : IQuery<Results<AcceptedResult<string>, OkResult<string>>> {}
+            """);
+
+        result.Diagnostics.Where(static diagnostic => diagnostic.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error)
+            .Should()
+            .BeEmpty();
+        result.Diagnostics.Select(static diagnostic => diagnostic.Id)
+            .Should()
+            .NotContain("BP109")
+            .And.NotContain("BP110");
+    }
 }
