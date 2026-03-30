@@ -107,3 +107,20 @@ Implement after HTTP descriptors, error-model metadata, and resource metadata ar
 - Autonomous next slice:
   - Continue with `openapi/project-response-body-type-metadata-into-http-response-metadata`.
   - That is the narrowest safe follow-on because the status/body/result-family layer now exists, and the next schema-facing gap is surfacing the body payload contract for body-bearing responses without yet widening to full schema emission or document generation.
+- Completed `openapi/project-response-body-type-metadata-into-http-response-metadata`.
+- Why it was the right follow-on:
+  - the previous response-metadata slice already exposed stable status/body/result-family facts for HTTP-visible outcomes
+  - later schema/document slices still lacked the payload contract for those body-bearing responses and would otherwise fall back to executor knowledge or runtime reflection
+- What landed in this slice:
+  - `OperationHttpResponseMetadata` entries now also carry `BodyTypeNames`
+  - `HttpResponseMetadataModule` now projects compile-time-known payload types for typed semantic HTTP results such as `OkResult<T>`, `CreatedResult<T>`, `AcceptedResult<T>`, `ConflictResult<T>`, and `NotFoundResult<T>`
+  - the same seam now also records the current host-owned MVC problem-details body contracts for descriptor-advertised validation (`422`) and unhandled (`500`) fallback responses
+- Proof closed for this slice:
+  - descriptor-source proof for generated HTTP response body-type metadata
+  - runtime `Configure().GetFeatureData<OperationHttpResponseMetadataFeatureData>()` proof covering `200`, `422`, and `500` body-type metadata
+- Deferred by design:
+  - serializer-context coverage and schema projection
+  - richer same-status discriminator shaping and full OpenAPI document generation
+- Autonomous next slice:
+  - Continue with `openapi/project-serializer-context-coverage-into-http-response-metadata`.
+  - That is the narrowest safe follow-on because body-bearing HTTP responses now expose payload CLR types, but later OpenAPI/schema work still needs an explicit compile-time serializer-coverage seam instead of ad-hoc runtime reflection or undocumented serializer assumptions.

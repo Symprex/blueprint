@@ -892,6 +892,13 @@ Run this as a paired design loop with workstream 6. The result contract must be 
   - Stay in the OpenAPI workstream and project response body-type metadata onto the new HTTP response-metadata seam.
   - That is the narrowest dependency-safe next slice because status-code/body-presence/result-family projection now exists, and the next missing ingredient for schema-ready OpenAPI generation is the payload/body type contract for body-bearing responses rather than full document emission or richer discriminator work.
   - The live tracker should therefore keep `activeWorkstream` as `openapi` and advance `nextReadySlice` to `openapi/project-response-body-type-metadata-into-http-response-metadata` unless a review gate or blocker appears.
+- Completed the OpenAPI response body-type metadata slice:
+  - `OperationHttpResponseMetadata` now also carries `BodyTypeNames`, and `HttpResponseMetadataModule` projects compile-time-known payload CLR type names for typed semantic HTTP results plus the current MVC problem-details contracts for descriptor-advertised `422` and `500` fallback responses.
+  - The proof matrix for this slice is green at the focused seam level: descriptor-source and runtime `Configure().GetFeatureData<OperationHttpResponseMetadataFeatureData>()` proofs both passed after starting red on the missing body-type contract itself, covering `200`, `422`, and `500`.
+- Autonomous next OpenAPI follow-on after response body-type metadata:
+  - Stay in the OpenAPI workstream and project serializer-context coverage metadata onto the HTTP response-metadata seam.
+  - That is the narrowest dependency-safe next slice because response metadata now knows which CLR payload types each body-bearing response carries, but later schema/document work still needs a compile-time serializer-coverage contract instead of runtime reflection or implicit serializer assumptions.
+  - The live tracker should therefore keep `activeWorkstream` as `openapi` and advance `nextReadySlice` to `openapi/project-serializer-context-coverage-into-http-response-metadata` unless a review gate or blocker appears.
 
 ## 8. Error model and exception handling
 

@@ -19,6 +19,17 @@ public class AppDataModelSourceGeneratorHttpResponseMetadataTests
         data.Responses[1].ResultTypeNames.Should().Equal("Blueprint.Runtime.Exec.ValidationFailedResult");
         data.Responses[2].ResultTypeNames.Should().Equal("Blueprint.Runtime.Exec.UnhandledExceptionResult");
     }
+
+    [Fact]
+    public void When_http_descriptor_is_configured_then_http_response_metadata_feature_data_matches_body_type_metadata()
+    {
+        var data = HttpResponseMetadataQueryOp.Configure().GetFeatureData<OperationHttpResponseMetadataFeatureData>();
+
+        data.Should().NotBeNull();
+        data!.Responses[0].BodyTypeNames.Should().Equal("string");
+        data.Responses[1].BodyTypeNames.Should().Equal("Microsoft.AspNetCore.Mvc.ValidationProblemDetails");
+        data.Responses[2].BodyTypeNames.Should().Equal("Microsoft.AspNetCore.Mvc.ProblemDetails");
+    }
 }
 
 [Blueprint.Model.Attributes.RootLink("/openapi/http-response-metadata")]

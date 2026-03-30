@@ -9,7 +9,9 @@ namespace Blueprint.SourceGenerator.Modules;
 /// <param name="StatusCode">The HTTP status code emitted by this response family.</param>
 /// <param name="HasResponseBody">Whether the response family writes a body.</param>
 /// <param name="ResultTypeNames">The semantic result type names contributing to this response.</param>
+/// <param name="BodyTypeNames">The compile-time body payload types currently known for this response.</param>
 internal sealed record HttpResponseMetadataRegistration(
     int StatusCode,
     bool HasResponseBody,
-    ImmutableArray<string> ResultTypeNames);
+    ImmutableArray<string> ResultTypeNames,
+    ImmutableArray<string> BodyTypeNames);

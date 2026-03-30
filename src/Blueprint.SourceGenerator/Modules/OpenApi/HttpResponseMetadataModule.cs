@@ -13,6 +13,9 @@ namespace Blueprint.SourceGenerator.Modules;
 /// </summary>
 public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule, IDescriptorContributor
 {
+    private const string ValidationProblemDetailsTypeName = "Microsoft.AspNetCore.Mvc.ValidationProblemDetails";
+    private const string ProblemDetailsTypeName = "Microsoft.AspNetCore.Mvc.ProblemDetails";
+
     /// <inheritdoc />
     public string ModuleId => nameof(HttpResponseMetadataModule);
 
@@ -82,6 +85,7 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
         var notFoundResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.NotFoundResult");
         var createdResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.CreatedResult");
         var validationFailedResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.ValidationFailedResult");
+        var unhandledExceptionResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.UnhandledExceptionResult");
         var noResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.NoResultOperationResult");
         var keyOnlyResourceEventResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.KeyOnlyResourceEventResult");
         var httpNoContentResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Http.HttpNoContentResult");
@@ -110,7 +114,11 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
                 continue;
             }
 
-            responses.Add(CreateResponse(statusCode, hasResponseBody, GetTypeName(flattenedResult)));
+            responses.Add(CreateResponse(
+                statusCode,
+                hasResponseBody,
+                GetTypeName(flattenedResult),
+                GetResponseBodyTypeNames(flattenedResult, hasResponseBody, validationFailedResultType, unhandledExceptionResultType)));
         }
 
         return responses.ToImmutable();
@@ -150,9 +158,10 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
                     httpNoContentResultType,
                     unhandledExceptionResultType,
                     out var statusCode,
-                    out var hasResponseBody))
+                    out var hasResponseBody,
+                    out var bodyTypeNames))
             {
-                responses.Add(CreateResponse(statusCode, hasResponseBody, failureOutcome.ResultTypeName));
+                responses.Add(CreateResponse(statusCode, hasResponseBody, failureOutcome.ResultTypeName, bodyTypeNames));
             }
         }
 
@@ -173,12 +182,14 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
         INamedTypeSymbol? httpNoContentResultType,
         INamedTypeSymbol? unhandledExceptionResultType,
         out int statusCode,
-        out bool hasResponseBody)
+        out bool hasResponseBody,
+        out ImmutableArray<string> bodyTypeNames)
     {
         var resultType = context.FindTypeByMetadataName(resultTypeName);
         if (resultType is not null
             && OperationResultContractHelper.TryGetHttpOperationResultResponseShape(resultType, okResultType, acceptedResultType, conflictResultType, notFoundResultType, createdResultType, validationFailedResultType, noResultType, keyOnlyResourceEventResultType, httpNoContentResultType, out statusCode, out hasResponseBody))
         {
+            bodyTypeNames = GetResponseBodyTypeNames(resultType, hasResponseBody, validationFailedResultType, unhandledExceptionResultType);
             return true;
         }
 
@@ -187,6 +198,7 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
         {
             statusCode = 500;
             hasResponseBody = true;
+            bodyTypeNames = ImmutableArray.Create(ProblemDetailsTypeName);
             return true;
         }
 
@@ -194,20 +206,27 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
         {
             statusCode = 500;
             hasResponseBody = true;
+            bodyTypeNames = ImmutableArray.Create(ProblemDetailsTypeName);
             return true;
         }
 
         statusCode = default;
         hasResponseBody = default;
+        bodyTypeNames = default;
         return false;
     }
 
-    private static HttpResponseMetadataRegistration CreateResponse(int statusCode, bool hasResponseBody, string resultTypeName)
+    private static HttpResponseMetadataRegistration CreateResponse(
+        int statusCode,
+        bool hasResponseBody,
+        string resultTypeName,
+        ImmutableArray<string> bodyTypeNames)
     {
         return new HttpResponseMetadataRegistration(
             statusCode,
             hasResponseBody,
-            ImmutableArray.Create(resultTypeName));
+            ImmutableArray.Create(resultTypeName),
+            bodyTypeNames);
     }
 
     private static bool HasHttpHostExposure(DescriptorContributorContext context)
@@ -221,6 +240,60 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
         return typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat).Replace("global::", string.Empty, StringComparison.Ordinal);
     }
 
+    private static ImmutableArray<string> GetResponseBodyTypeNames(
+        ITypeSymbol resultType,
+        bool hasResponseBody,
+        INamedTypeSymbol? validationFailedResultType,
+        INamedTypeSymbol? unhandledExceptionResultType)
+    {
+        if (hasResponseBody == false)
+        {
+            return [];
+        }
+
+        if (IsTypeOrDerivedFromOptional(resultType, validationFailedResultType)
+            || string.Equals(GetTypeName(resultType), "Blueprint.Runtime.Exec.ValidationFailedResult", StringComparison.Ordinal))
+        {
+            return ImmutableArray.Create(ValidationProblemDetailsTypeName);
+        }
+
+        if (IsTypeOrDerivedFromOptional(resultType, unhandledExceptionResultType)
+            || string.Equals(GetTypeName(resultType), "Blueprint.Runtime.Exec.UnhandledExceptionResult", StringComparison.Ordinal))
+        {
+            return ImmutableArray.Create(ProblemDetailsTypeName);
+        }
+
+        var bodyType = GetTypedResultBodyType(resultType);
+        return bodyType is null
+            ? []
+            : ImmutableArray.Create(GetTypeName(bodyType));
+    }
+
+    private static ITypeSymbol? GetTypedResultBodyType(ITypeSymbol resultType)
+    {
+        for (var current = resultType as INamedTypeSymbol; current is not null; current = current.BaseType)
+        {
+            if (current.IsGenericType == false
+                || current.TypeArguments.Length != 1
+                || string.Equals(current.ContainingNamespace.ToDisplayString(), "Blueprint.Runtime.Exec", StringComparison.Ordinal) == false)
+            {
+                continue;
+            }
+
+            if (current.Name is "OkResult" or "AcceptedResult" or "ConflictResult" or "NotFoundResult" or "CreatedResult")
+            {
+                return current.TypeArguments[0];
+            }
+        }
+
+        return null;
+    }
+
+    private static bool IsTypeOrDerivedFromOptional(ITypeSymbol candidateType, INamedTypeSymbol? baseType)
+    {
+        return baseType is not null && OperationResultContractHelper.IsTypeOrDerivedFrom(candidateType, baseType);
+    }
+
     private static HttpResponseMetadataRegistration CreateGroupedResponse(IGrouping<int, HttpResponseMetadataRegistration> responseGroup)
     {
         // Same-status mixed body shapes are already diagnosed for declared HTTP unions, and current failure families are
@@ -232,6 +305,10 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
             responseGroup
                 .SelectMany(static response => response.ResultTypeNames)
                 .Distinct(StringComparer.Ordinal)
+                .ToImmutableArray(),
+            responseGroup
+                .SelectMany(static response => response.BodyTypeNames)
+                .Distinct(StringComparer.Ordinal)
                 .ToImmutableArray());
     }
 
@@ -239,7 +316,7 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
     {
         var renderedResponses = responses
             .Select(static response =>
-                $"new global::Blueprint.Model.OperationHttpResponseMetadata({response.StatusCode}, {(response.HasResponseBody ? "true" : "false")}, global::System.Collections.Immutable.ImmutableArray.Create({string.Join(", ", response.ResultTypeNames.Select(RenderStringLiteral))}))")
+                $"new global::Blueprint.Model.OperationHttpResponseMetadata({response.StatusCode}, {(response.HasResponseBody ? "true" : "false")}, {RenderStringArray(response.ResultTypeNames)}, {RenderStringArray(response.BodyTypeNames)})")
             .ToArray();
 
         if (renderedResponses.Length == 0)
@@ -256,5 +333,16 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
     private static string RenderStringLiteral(string value)
     {
         return CSharpSymbolDisplay.FormatLiteral(value, quote: true);
+    }
+
+    private static string RenderStringArray(IEnumerable<string> values)
+    {
+        var renderedValues = values
+            .Select(RenderStringLiteral)
+            .ToArray();
+
+        return renderedValues.Length == 0
+            ? "global::System.Collections.Immutable.ImmutableArray<string>.Empty"
+            : $"global::System.Collections.Immutable.ImmutableArray.Create<string>({string.Join(", ", renderedValues)})";
     }
 }

@@ -12,14 +12,14 @@
   "current": {
     "activeWorkstream": "openapi",
     "nextReadySlice": {
+      "id": "openapi/project-serializer-context-coverage-into-http-response-metadata",
+      "workstream": "openapi",
+      "title": "Project serializer-context coverage metadata into generated HTTP response metadata"
+    },
+    "lastCompletedSlice": {
       "id": "openapi/project-response-body-type-metadata-into-http-response-metadata",
       "workstream": "openapi",
       "title": "Project response body-type metadata into generated HTTP response metadata"
-    },
-    "lastCompletedSlice": {
-      "id": "openapi/project-descriptor-failure-outcomes-into-http-response-metadata",
-      "workstream": "openapi",
-      "title": "Project descriptor-provided failure outcomes into generated HTTP response metadata"
     },
     "openReviewGate": null
   },

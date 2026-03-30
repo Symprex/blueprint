@@ -29,4 +29,26 @@ public class OperationDescriptorSourceGeneratorTestsHttpResponseMetadata
         descriptorSource.Should().Contain("\"Blueprint.Runtime.Exec.ValidationFailedResult\"");
         descriptorSource.Should().Contain("\"Blueprint.Runtime.Exec.UnhandledExceptionResult\"");
     }
+
+    [Fact]
+    public void When_http_operation_declares_success_contract_and_default_failure_outcomes_then_generated_descriptor_sets_http_response_body_type_metadata()
+    {
+        var result = OperationDescriptorSourceGeneratorTests.Compile("""
+            using Blueprint.Runtime.Exec;
+
+            [Blueprint.Model.Attributes.RootLink("/openapi/http-response-metadata")]
+            public partial class HttpResponseBodyTypeOperation : IQuery<OkResult<string>> {}
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var descriptorSource = result.Output
+            .Select(static tree => tree.ToString())
+            .FirstOrDefault(static source => source.Contains("HttpResponseBodyTypeOperationDescriptor"));
+
+        descriptorSource.Should().NotBeNull();
+        descriptorSource!.Should().Contain("\"string\"");
+        descriptorSource.Should().Contain("\"Microsoft.AspNetCore.Mvc.ValidationProblemDetails\"");
+        descriptorSource.Should().Contain("\"Microsoft.AspNetCore.Mvc.ProblemDetails\"");
+    }
 }
