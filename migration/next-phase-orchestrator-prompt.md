@@ -41,6 +41,7 @@ Execution goals:
 - Prefer to work through up to 5 related slices in one launcher invocation, but only one slice at a time and only when each next slice is newly unlocked by the updated `migration\progress.json` state plus the ordering rules in the plans.
 - Use `migration\plan.md` for ordering, dependency rules, and human-review gates, and use the referenced workstream plan for slice-specific acceptance criteria and design detail.
 - Follow the ordering, dependency, artifact, and human-review gates in `migration\plan.md` exactly.
+- If the durable plans do not explicitly bless the next slice, that is not a stop condition by itself. Pick the narrowest dependency-safe next slice autonomously, write it into `migration\progress.json` first, record the rationale in `migration\plan.md` plus the relevant workstream plan, and continue unless a real blocker or explicit review gate exists.
 - Keep work small, reviewable, and resumable.
 
 Non-negotiable operating rules:
@@ -60,6 +61,7 @@ Non-negotiable operating rules:
 - Keep `migration\plan.md` and the relevant workstream plan up to date with durable rationale, acceptance criteria, and approved decisions, but do not use those markdown files as competing live status trackers.
 - Keep `migration\progress.json` in sync with the active workstream, current ready slice, last completed slice, and open review gate whenever those facts change. It is the only live tracker for that state.
 - Session `plan.md`, SQL todos, and chat checkpoints are working state only. Any durable decision about sequencing, approved slices, review outcomes, or human direction MUST update `migration\progress.json` first and then be recorded explicitly in `migration\plan.md` and the relevant `migration\...\plan.md` file before handoff or stop.
+- Do not stop just because the next slice is not explicitly pre-approved in the plans. Use the plans to synthesize the narrowest safe follow-on yourself, persist it, and continue.
 - When a slice is obviously complete, review-closed, and verification-passing, create a small, focused git commit before starting unrelated work or ending the session. If a human review gate is still open, stop before committing and record that explicitly.
 - Slice selection, document reading, plan creation, and todo creation are setup steps, not a valid stopping point. Unless an explicit blocker or review gate stops you, the same session must continue into failing proof, observe that proof fail for the right reason, and start the production change for the selected slice.
 - After one slice is complete, verified, review-documented, and committed, re-read `migration\progress.json` and continue the loop with the next related slice until you have completed the safe batch, reached the limit of up to 5 related slices, or hit a real stop condition.
@@ -79,6 +81,7 @@ Resumability contract:
   - `Next slice`
   - `Open risks`
   - `Human input needed`
+- In ordinary autonomous flow, `Human input needed` should usually be `none`. Do not populate it just because the next slice had to be chosen from plan context rather than an explicit prior approval.
 - If a human or review-agent decision changes the approved next slice, architecture direction, or gating status, persist that decision into `migration\progress.json` first and then into `migration\plan.md` before ending the session.
 - If the context window gets tight, compact the session and restate the checkpoint clearly before continuing.
 - If you stop for any reason, do not just trail off. Either continue working, or explicitly say why you are blocked and what the next operator action should be.
@@ -99,6 +102,7 @@ Safety and escalation rules:
 - If the detailed module plan is too vague to produce executable acceptance criteria, stop and ask for help before coding.
 - If `migration\plan.md` and a module plan disagree on ordering or dependencies, stop and ask for help before coding.
 - If a slice cannot start with a failing proof and it touches a public contract, security behavior, dependency order, serializer ownership, result semantics, or a phase gate, stop and ask for help before coding.
+- Do not treat "the next slice is not explicitly approved yet" as equivalent to vagueness. First synthesize the narrowest safe follow-on from dependencies, remaining work areas, and prior slice outcomes, and only escalate if no dependency-safe slice can be justified.
 - If you hit unexpected repository changes that you did not make, stop and ask for help immediately.
 - If a human review gate is reached, stop and ask for review instead of silently continuing into the next architectural decision.
 - If you believe human approval is needed outside an explicit review gate, first consult the most relevant different sub-agents for a second opinion. Only stop for human approval when the issue is absolutely CRITICAL and those agents still cannot agree on a safe next step.

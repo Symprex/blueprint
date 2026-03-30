@@ -100,6 +100,7 @@ The target is **consumer-contract compatibility**, not byte-for-byte parity with
 - `migration\plan.md` plus the relevant `migration\...\plan.md` file are the cross-session reference plans for ordering, acceptance criteria, rationale, and human/review decisions. They must not be treated as competing live status trackers.
 - If `migration\progress.json` is missing, malformed, or points at a removed slice, repair it first from these plans before continuing.
 - Session-local state such as chat history, session `plan.md`, SQL todos, or transient review artifacts is not sufficient to carry a decision into the next orchestrator session.
+- Lack of an explicitly human-approved next slice is not, by itself, a reason to stop. The orchestrator should pick the narrowest dependency-safe next slice autonomously, persist that choice into `migration\progress.json` first, and then record the rationale here and in the relevant `migration\...\plan.md` file before continuing.
 - If a human or review step approves a next slice, changes architectural direction, or closes a gate, update `migration\progress.json` first and then record the rationale here and in the relevant `migration\...\plan.md` file before the session ends.
 
 ## Non-negotiable engineering rules
@@ -848,9 +849,10 @@ Run this as a paired design loop with workstream 6. The result contract must be 
 - Completed the first Workstream 8 exception-translator seam slice:
   - `PipelineCodeGenerator` now delegates outer catch-shell emission to `IPipelineExceptionTranslator`, and `DefaultPipelineExceptionTranslator` preserves the current validation-exception handling, non-5xx `ApiException` logging path, and generic unhandled fallback behavior.
   - The proof matrix now includes a red-to-green direct codegen proof that a custom translator can replace the default shell, unchanged generator behavior locks for canonical validation and unhandled results, a green runtime thrown-handler integration proof, green `dotnet format .\Blueprint.sln --no-restore`, a green `dotnet build .\Blueprint.sln --no-restore`, and green `Blueprint.SourceGenerator.Tests` (`281`), `Blueprint.SourceGenerator.CodeWriter.Tests` (`45`), and `Blueprint.SourceGenerator.Tests.Integration` (`56`) runs.
-- No explicit next Workstream 8 slice is approved yet after the seam extraction:
-  - Neither `migration\plan.md` nor `migration\error-model-and-exception-handling\plan.md` currently narrows the next executable slice far enough to pick one safely between descriptor-level failure metadata, ordered translator policy, or package-provided translator follow-ons.
-  - If execution stops here, the live tracker should set `nextReadySlice = null` and open a human-direction gate instead of guessing the next error-model slice.
+- Autonomous next Workstream 8 follow-on after seam extraction:
+  - Stay in Workstream 8 and implement ordered exception translator policy with compile-time conflict detection.
+  - That is the narrowest dependency-safe next slice because the seam extraction made exception translation replaceable, but it did not yet define how multiple translators compose or conflict; that ordering policy is a prerequisite for later descriptor-level failure metadata, host-aware mapping, and package-provided translator work.
+  - The live tracker should therefore keep Workstream 8 active, set `nextReadySlice` to the ordered-translator-policy slice, and continue without reopening a human-direction gate unless a real blocker or explicit review gate appears.
 
 ## 8. Error model and exception handling
 

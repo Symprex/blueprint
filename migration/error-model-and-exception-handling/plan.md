@@ -79,6 +79,11 @@ Implement alongside the core pipeline planning work, before OpenAPI and before b
 - Completed the narrow executor-shell seam-extraction slice:
   - `PipelineCodeGenerator` now routes generated catch-block emission through `IPipelineExceptionTranslator`, and `DefaultPipelineExceptionTranslator` preserves the current `Blueprint.Validation.ValidationException`, `System.ComponentModel.DataAnnotations.ValidationException`, non-5xx `ApiException`, and generic unhandled fallback behavior without widening the public result taxonomy.
   - The proof matrix now includes a red-to-green direct codegen seam-replacement test, unchanged generated-source checks for canonical validation and unhandled fallback names, a green runtime integration proof for thrown handlers, green `dotnet format .\Blueprint.sln --no-restore`, a green solution build, and green `Blueprint.SourceGenerator.Tests`, `Blueprint.SourceGenerator.CodeWriter.Tests`, and `Blueprint.SourceGenerator.Tests.Integration` runs.
-- No later Workstream 8 slice is explicitly approved yet after the seam extraction:
-  - This plan still identifies the remaining work areas (`descriptor-level failure metadata`, `ordered exception translators`, `host-aware mapping`, and `package-provided translators`), but it does not yet narrow the next executable slice enough to be safely resumed without fresh human direction.
-  - If execution stops here, `migration\progress.json` should hold `nextReadySlice = null` with an open human-direction gate rather than guessing the next follow-on.
+- Autonomous follow-on after seam extraction:
+  - Implement ordered exception translator policy with compile-time conflict detection.
+  - That is the safest next slice because the new `IPipelineExceptionTranslator` seam is now pluggable, but the repository still needs one deterministic policy for translator precedence and overlap before it can safely add descriptor-level failure metadata, host-aware mapping, or package-provided translator seams.
+  - Acceptance target for this next slice:
+    - define how multiple exception translators are ordered and applied
+    - add compile-time conflict detection for overlapping translator ownership
+    - keep host-specific mapping and public failure-taxonomy expansion deferred
+    - prove the ordering behavior with focused generator and integration coverage before widening the contract further

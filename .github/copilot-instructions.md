@@ -57,6 +57,7 @@
 - Treat human feedback from that visual review as input for another AI review/fix round before committing.
 - Migration orchestration sessions must not end at slice selection, plan creation, or todo creation alone. Once the next ready slice is identified, continue in the same session into failing proof and the first implementation step, and then keep working through up to 5 related slices per invocation: verify, create the visual review handoff, commit, refresh `migration\progress.json`, and repeat until an explicit blocker or human review gate stops the work.
 - Keep `migration\progress.json` aligned with the durable rationale and acceptance criteria in `migration\plan.md` and the active workstream plan whenever the current ready slice, last completed slice, or open review gate changes. `migration\progress.json` is the only live tracker for that state.
+- If the plans do not explicitly name the next slice, do not stop just to ask for permission. Pick the narrowest dependency-safe follow-on autonomously, persist it into `migration\progress.json`, record the rationale in the durable migration plans, and continue unless a real blocker or explicit review gate exists.
 
 ## TDD and verification expectations
 

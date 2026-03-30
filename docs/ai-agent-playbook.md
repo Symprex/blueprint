@@ -95,6 +95,7 @@ then the relevant `/docs` file should be updated in the same change.
 - Read the most relevant detailed docs for the change.
 - Identify the build, snapshot, and generator harness you expect to exercise.
 - For migration orchestrator sessions, finding the next slice is only the beginning of the loop. In the same launcher invocation, move from slice selection to a failing proof and then to the first production change, and then keep going through up to 5 related slices one-by-one when the updated `migration\progress.json` state unlocks them and no blocker or review gate stops you.
+- For migration orchestrator sessions, lack of an explicitly human-approved next slice is not a reason to pause. Choose the narrowest dependency-safe follow-on autonomously, write that choice into `migration\progress.json` first, record the rationale in the durable plans, and keep going unless a real blocker or explicit review gate exists.
 - For any feature, bugfix, refactor, or behavior change, use the repo-local `test-driven-development` skill mindset first: write the failing proof before production edits and watch it fail for the right reason.
 - Do not use reflection in tests to assert that a contract exists or to invoke private/internal helpers. If the right behavior is not testable through a supported seam, improve that seam first.
 - For pipeline contributor or module slices, write the test matrix down before coding. The default minimum is:
@@ -125,6 +126,7 @@ then the relevant `/docs` file should be updated in the same change.
 - decide whether a stronger diagnostic, test, doc, or tool should exist
 - add the improvement when it is reasonable and directly related
 - If the feedback is "the agent stopped at planning" or "the next slice was rediscovered but not actioned", treat that as an orchestration bug. Tighten the launcher prompt, durable migration guidance, and `migration\progress.json` contract in the same change instead of relying on memory, and remove any stale prompt-owned slice summary that duplicates the JSON tracker.
+- If the feedback is "the agent asked for approval just to choose the next slice", treat that as the same orchestration bug. Tighten the durable guidance so the orchestrator picks the next safe slice itself and only escalates when a real blocker or explicit review gate remains.
 
 ### Before you ask for commit-level human review
 
