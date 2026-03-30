@@ -792,7 +792,11 @@ Run this as a paired design loop with workstream 6. The result contract must be 
   - `Blueprint.Runtime.Exec.NoResultOperationResult` remains the host-neutral success shape and is now explicitly locked to the default empty HTTP `200 OK` translation path.
   - `Blueprint.Runtime.Http.HttpNoContentResult` is now the first concrete host-owned no-content result family member, translating to empty HTTP `204 No Content` through `HttpOperationResultExecutor` rather than widening the core taxonomy.
   - The proof set now includes a red-to-green descriptor support test in `OperationDescriptorSourceGeneratorTests.HostExecutorAvailability.cs`, a red-to-green host translation test in `OperationResultTranslationEndpointTests.cs`, and a green targeted `Blueprint.SourceGenerator.Tests` run for those new seams.
-- Next approved follow-on for this workstream: add the first no-result-shape-separation diagnostic so descriptor generation keeps host-neutral `NoResultOperationResult` distinct from host-owned no-content/status-only HTTP result families.
+- Completed the first no-result-shape-separation diagnostic slice:
+  - `NoResultShapeSeparationModule` now reports `BP112` when HTTP-visible `Results<T1, T2>` contracts mix host-neutral `NoResultOperationResult` with host-owned no-content/status-only result families such as `Blueprint.Runtime.Http.HttpNoContentResult`, preserving the semantic distinction before descriptor flattening or client generation can blur it.
+  - The first approved rule stays intentionally narrow: unsupported members remain owned by `BP108`, same-shape collisions remain owned by `BP109`, and same-status body/no-body unions remain owned by `BP110`.
+  - The proof set now includes the new red-to-green descriptor test file `OperationDescriptorSourceGeneratorTests.NoResultShapeSeparation.cs` covering both member orders, clean single-result regressions, and explicit `BP108`/`BP110` boundaries.
+- Next approved follow-on for this workstream: lock the default HTTP status mapping for key-only resource-event results and decide how much of that mapping should be convention versus explicit metadata.
 
 ## 8. Error model and exception handling
 

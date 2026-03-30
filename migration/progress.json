@@ -12,14 +12,14 @@
   "current": {
     "activeWorkstream": "result-model-and-host-translation",
     "nextReadySlice": {
+      "id": "result-model-and-host-translation/key-only-resource-event-default-http-mapping",
+      "workstream": "result-model-and-host-translation",
+      "title": "Lock the default HTTP status mapping for key-only resource-event results and decide how much of that mapping should be convention versus explicit metadata"
+    },
+    "lastCompletedSlice": {
       "id": "result-model-and-host-translation/no-result-shape-separation-diagnostic",
       "workstream": "result-model-and-host-translation",
       "title": "Add the first no-result-shape separation diagnostic so descriptor generation keeps host-neutral NoResult distinct from host-owned no-content/status-only HTTP result families"
-    },
-    "lastCompletedSlice": {
-      "id": "result-model-and-host-translation/default-http-status-mapping-and-host-specific-result-families",
-      "workstream": "result-model-and-host-translation",
-      "title": "Lock the default HTTP 200 status mapping for NoResult and define host-specific result families as host-package extensions rather than core taxonomy members"
     },
     "openReviewGate": null
   },

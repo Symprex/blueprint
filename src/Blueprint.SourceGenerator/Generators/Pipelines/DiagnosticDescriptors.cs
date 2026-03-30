@@ -155,6 +155,18 @@ internal static class DiagnosticDescriptors
         isEnabledByDefault: true,
         description: "Descriptor outcome feature data must stay aligned with semantic result members declared by the operation contract.");
 
+    /// <summary>
+    /// BP112: Host-neutral and host-specific no-result shapes are mixed in one HTTP-visible union.
+    /// </summary>
+    public static readonly DiagnosticDescriptor ConflictingNoResultShapeCategories = new(
+        id: "BP112",
+        title: "Host-neutral and host-specific no-result shapes are mixed",
+        messageFormat: "The operation '{0}' declares semantic results {1}, which mix host-neutral no-result shapes with host-specific no-content/status-only result families for enabled host '{2}'",
+        category: Category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "Results unions must not mix host-neutral NoResultOperationResult with host-specific no-content or status-only result families such as HttpNoContentResult.");
+
     // Warning diagnostics (BP200-BP299)
 
     /// <summary>
