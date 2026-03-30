@@ -143,6 +143,18 @@ internal static class DiagnosticDescriptors
         isEnabledByDefault: true,
         description: "HTTP-visible unions that share a status code must declare an explicit host/client discrimination strategy unless a dedicated generated exception applies.");
 
+    /// <summary>
+    /// BP111: Declared results contract cannot be projected into aligned flattened descriptor outcomes.
+    /// </summary>
+    public static readonly DiagnosticDescriptor MisalignedFlattenedDescriptorOutcomes = new(
+        id: "BP111",
+        title: "Declared results contract cannot be projected into aligned flattened descriptor outcomes",
+        messageFormat: "The operation '{0}' declares Results member '{1}', which cannot be projected into aligned flattened descriptor outcomes",
+        category: Category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "Descriptor outcome feature data must stay aligned with semantic result members declared by the operation contract.");
+
     // Warning diagnostics (BP200-BP299)
 
     /// <summary>

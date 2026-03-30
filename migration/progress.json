@@ -12,14 +12,14 @@
   "current": {
     "activeWorkstream": "result-model-and-host-translation",
     "nextReadySlice": {
+      "id": "result-model-and-host-translation/no-result-shape-separation-diagnostic",
+      "workstream": "result-model-and-host-translation",
+      "title": "Add the first compile-time diagnostic ensuring host-neutral no-result shapes and host-specific no-content/status-only shapes are not conflated in descriptor generation"
+    },
+    "lastCompletedSlice": {
       "id": "result-model-and-host-translation/flattened-descriptor-outcome-alignment-diagnostic",
       "workstream": "result-model-and-host-translation",
       "title": "Add the first compile-time diagnostic ensuring flattened descriptor outcomes stay aligned with the declared Results<T1, ...> member set"
-    },
-    "lastCompletedSlice": {
-      "id": "result-model-and-host-translation/http-union-discrimination-diagnostic",
-      "workstream": "result-model-and-host-translation",
-      "title": "Add the first compile-time diagnostic ensuring HTTP-visible unions have an unambiguous host/client discrimination strategy"
     },
     "openReviewGate": null
   },

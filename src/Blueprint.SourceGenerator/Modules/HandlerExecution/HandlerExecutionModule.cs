@@ -297,8 +297,7 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
 
         foreach (var memberType in memberTypes)
         {
-            if (OperationResultContractHelper.TryGetResultsUnionMembers(memberType, out _)
-                || OperationResultContractHelper.IsOperationResultType(memberType, operationResultType) == false)
+            if (OperationResultContractHelper.IsSupportedResultsUnionMember(memberType, operationResultType) == false)
             {
                 context.AddDiagnostic(
                     new DiagnosticInfo(

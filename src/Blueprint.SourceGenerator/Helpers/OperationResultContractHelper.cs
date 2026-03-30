@@ -75,6 +75,19 @@ public static class OperationResultContractHelper
     }
 
     /// <summary>
+    /// Determines whether a declared <c>Results&lt;T1, T2&gt;</c> member is a supported semantic result type rather than a
+    /// nested union or a plain CLR payload type.
+    /// </summary>
+    /// <param name="memberType">The union member type to inspect.</param>
+    /// <param name="operationResultType">The resolved <c>Blueprint.OperationResult</c> base type.</param>
+    /// <returns>Whether the member can participate directly in semantic result unions and flattened outcome projection.</returns>
+    public static bool IsSupportedResultsUnionMember(ITypeSymbol memberType, INamedTypeSymbol operationResultType)
+    {
+        return TryGetResultsUnionMembers(memberType, out _) == false
+            && IsOperationResultType(memberType, operationResultType);
+    }
+
+    /// <summary>
     /// Determines whether the HTTP operation result executor can translate the supplied semantic result type.
     /// </summary>
     /// <param name="resultType">The semantic result type to inspect.</param>

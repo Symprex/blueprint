@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using Blueprint.SourceGenerator.CodeWriter;
+using Blueprint.SourceGenerator.Generators.Pipelines;
 using Blueprint.SourceGenerator.Helpers;
 using Blueprint.SourceGenerator.Planning;
 using Microsoft.CodeAnalysis;
@@ -45,6 +46,12 @@ public sealed class FlattenedResultOutcomeModule : IBlueprintSourceGeneratorModu
             return;
         }
 
+        if (OperationResultContractHelper.TryGetResultsUnionMembers(declaredContractType, out var declaredUnionMembers)
+            && TryValidateFlattenedOutcomeMembers(context, declaredUnionMembers, operationResultType) == false)
+        {
+            return;
+        }
+
         var flattenedOutcomes = GetFlattenedOutcomes(declaredContractType, operationResultType);
         if (flattenedOutcomes.Length == 0)
         {
@@ -73,6 +80,33 @@ public sealed class FlattenedResultOutcomeModule : IBlueprintSourceGeneratorModu
         return new(resultType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
     }
 
+    private static bool TryValidateFlattenedOutcomeMembers(
+        DescriptorContributorContext context,
+        ImmutableArray<ITypeSymbol> declaredUnionMembers,
+        INamedTypeSymbol operationResultType)
+    {
+        var isValid = true;
+        var operationName = context.GetOperationTypeSymbol().Name;
+        var diagnosticLocation = GetOperationLocation(context.GetOperationTypeSymbol());
+
+        foreach (var declaredUnionMember in declaredUnionMembers)
+        {
+            if (OperationResultContractHelper.IsSupportedResultsUnionMember(declaredUnionMember, operationResultType))
+            {
+                continue;
+            }
+
+            context.AddDiagnostic(
+                new DiagnosticInfo(
+                    DiagnosticDescriptors.MisalignedFlattenedDescriptorOutcomes,
+                    diagnosticLocation,
+                    [operationName, declaredUnionMember.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)]));
+            isValid = false;
+        }
+
+        return isValid;
+    }
+
     private static void RenderDescriptor(ICodeWriter codeWriter, IEnumerable<FlattenedResultOutcomeRegistration> registrations)
     {
         var renderedRegistrations = registrations
@@ -88,6 +122,12 @@ public sealed class FlattenedResultOutcomeModule : IBlueprintSourceGeneratorModu
             "this.SetFeatureData(new global::Blueprint.Model.OperationResultOutcomesFeatureData(global::System.Collections.Immutable.ImmutableArray.Create("
             + string.Join(", ", renderedRegistrations)
             + ")));");
+    }
+
+    private static LocationInfo? GetOperationLocation(INamedTypeSymbol operationType)
+    {
+        var location = operationType.Locations.FirstOrDefault(static candidate => candidate.IsInSource);
+        return location is null ? null : LocationInfo.CreateFrom(location);
     }
 
     private sealed record FlattenedResultOutcomeRegistration(string ResultTypeName);
