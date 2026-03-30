@@ -49,4 +49,22 @@ public class OperationDescriptorSourceGeneratorTestsHttpUnionDiscriminationTests
             .Contain("BP108")
             .And.NotContain("BP110");
     }
+
+    [Fact]
+    public void When_http_exposed_operation_declares_key_only_resource_event_and_no_result_union_then_generator_keeps_http_union_discrimination_diagnostic_clear()
+    {
+        var result = OperationDescriptorSourceGeneratorTests.Compile("""
+            using Blueprint.Runtime.Exec;
+
+            [RootLink("/host-aware/key-only-resource-event-with-no-result")]
+            public partial class KeyOnlyResourceEventAndNoResultOperation : IQuery<Results<KeyOnlyResourceEventResult, NoResultOperationResult>> {}
+            """);
+
+        result.Diagnostics.Where(static diagnostic => diagnostic.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error)
+            .Should()
+            .BeEmpty();
+        result.Diagnostics.Select(static diagnostic => diagnostic.Id)
+            .Should()
+            .NotContain("BP110");
+    }
 }

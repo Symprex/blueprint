@@ -93,16 +93,19 @@ public static class OperationResultContractHelper
     /// <param name="resultType">The semantic result type to inspect.</param>
     /// <param name="okResultType">The resolved <c>Blueprint.Runtime.Exec.OkResult</c> base type.</param>
     /// <param name="noResultType">The resolved <c>Blueprint.Runtime.Exec.NoResultOperationResult</c> type.</param>
+    /// <param name="keyOnlyResourceEventResultType">The resolved <c>Blueprint.Runtime.Exec.KeyOnlyResourceEventResult</c> type when available.</param>
     /// <param name="httpNoContentResultType">The resolved <c>Blueprint.Runtime.Http.HttpNoContentResult</c> type when available.</param>
     /// <returns>Whether the current HTTP executor can translate the result type.</returns>
     public static bool IsSupportedByHttpOperationResultExecutor(
         ITypeSymbol resultType,
         INamedTypeSymbol okResultType,
         INamedTypeSymbol noResultType,
+        INamedTypeSymbol? keyOnlyResourceEventResultType,
         INamedTypeSymbol? httpNoContentResultType)
     {
         return IsTypeOrDerivedFrom(resultType, okResultType)
             || SymbolEqualityComparer.Default.Equals(resultType, noResultType)
+            || SymbolEqualityComparer.Default.Equals(resultType, keyOnlyResourceEventResultType)
             || SymbolEqualityComparer.Default.Equals(resultType, httpNoContentResultType);
     }
 
@@ -112,6 +115,7 @@ public static class OperationResultContractHelper
     /// <param name="resultType">The semantic result type to inspect.</param>
     /// <param name="okResultType">The resolved <c>Blueprint.Runtime.Exec.OkResult</c> base type.</param>
     /// <param name="noResultType">The resolved <c>Blueprint.Runtime.Exec.NoResultOperationResult</c> type.</param>
+    /// <param name="keyOnlyResourceEventResultType">The resolved <c>Blueprint.Runtime.Exec.KeyOnlyResourceEventResult</c> type when available.</param>
     /// <param name="httpNoContentResultType">The resolved <c>Blueprint.Runtime.Http.HttpNoContentResult</c> type when available.</param>
     /// <param name="statusCode">The HTTP status code for the current executor path.</param>
     /// <param name="hasResponseBody">Whether the current executor path writes a response body.</param>
@@ -120,6 +124,7 @@ public static class OperationResultContractHelper
         ITypeSymbol resultType,
         INamedTypeSymbol okResultType,
         INamedTypeSymbol noResultType,
+        INamedTypeSymbol? keyOnlyResourceEventResultType,
         INamedTypeSymbol? httpNoContentResultType,
         out int statusCode,
         out bool hasResponseBody)
@@ -134,6 +139,13 @@ public static class OperationResultContractHelper
         if (SymbolEqualityComparer.Default.Equals(resultType, noResultType))
         {
             statusCode = 200;
+            hasResponseBody = false;
+            return true;
+        }
+
+        if (SymbolEqualityComparer.Default.Equals(resultType, keyOnlyResourceEventResultType))
+        {
+            statusCode = 201;
             hasResponseBody = false;
             return true;
         }

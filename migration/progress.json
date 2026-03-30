@@ -12,14 +12,14 @@
   "current": {
     "activeWorkstream": "result-model-and-host-translation",
     "nextReadySlice": {
+      "id": "result-model-and-host-translation/first-semantic-result-family-cut",
+      "workstream": "result-model-and-host-translation",
+      "title": "Lock which semantic result families land in the first implementation pass versus a second pass (CreatedResult<T>, AcceptedResult<T>, ConflictResult)"
+    },
+    "lastCompletedSlice": {
       "id": "result-model-and-host-translation/key-only-resource-event-default-http-mapping",
       "workstream": "result-model-and-host-translation",
       "title": "Lock the default HTTP status mapping for key-only resource-event results and decide how much of that mapping should be convention versus explicit metadata"
-    },
-    "lastCompletedSlice": {
-      "id": "result-model-and-host-translation/no-result-shape-separation-diagnostic",
-      "workstream": "result-model-and-host-translation",
-      "title": "Add the first no-result-shape separation diagnostic so descriptor generation keeps host-neutral NoResult distinct from host-owned no-content/status-only HTTP result families"
     },
     "openReviewGate": null
   },

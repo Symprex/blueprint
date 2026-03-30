@@ -38,6 +38,7 @@ public sealed class AmbiguousHostTranslationModule : IBlueprintSourceGeneratorMo
 
         var okResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.OkResult");
         var noResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.NoResultOperationResult");
+        var keyOnlyResourceEventResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.KeyOnlyResourceEventResult");
         var httpNoContentResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Http.HttpNoContentResult");
         if (okResultType is null || noResultType is null)
         {
@@ -55,7 +56,7 @@ public sealed class AmbiguousHostTranslationModule : IBlueprintSourceGeneratorMo
         var translatedMembers = new List<TranslatedResultMember>(unionMembers.Length);
         foreach (var unionMember in unionMembers)
         {
-            if (OperationResultContractHelper.TryGetHttpOperationResultResponseShape(unionMember, okResultType, noResultType, httpNoContentResultType, out var statusCode, out var hasResponseBody) == false)
+            if (OperationResultContractHelper.TryGetHttpOperationResultResponseShape(unionMember, okResultType, noResultType, keyOnlyResourceEventResultType, httpNoContentResultType, out var statusCode, out var hasResponseBody) == false)
             {
                 return;
             }

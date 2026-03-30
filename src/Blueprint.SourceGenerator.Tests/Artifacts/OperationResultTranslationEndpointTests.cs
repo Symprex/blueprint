@@ -64,6 +64,23 @@ public class OperationResultTranslationEndpointTests
     }
 
     [Fact]
+    public async Task When_http_endpoint_pipeline_returns_key_only_resource_event_result_then_host_route_completes_with_empty_201_response()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<ResultTranslationBlueprintApp, ResultTranslationBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/key-only-resource-event-operation");
+
+        endpoint.Should().NotBeNull();
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider);
+
+        response.StatusCode.Should().Be(StatusCodes.Status201Created);
+        response.ContentType.Should().BeNull();
+        response.Body.Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task When_http_endpoint_pipeline_returns_unsupported_result_then_route_falls_back_to_legacy_self_executing_contract()
     {
         var endpoints = CreateEndpoints();
@@ -154,6 +171,10 @@ public class OperationResultTranslationEndpointTests
             httpNoContentDescriptor.AddUrl(new ApiOperationUrl("/http-no-content-operation"));
             this.Register(httpNoContentDescriptor);
 
+            var keyOnlyResourceEventDescriptor = new ApiOperationDescriptor(typeof(KeyOnlyResourceEventTranslationOperation), "KeyOnlyResourceEventTranslationOperation", nameof(OperationResultTranslationEndpointTests));
+            keyOnlyResourceEventDescriptor.AddUrl(new ApiOperationUrl("/key-only-resource-event-operation"));
+            this.Register(keyOnlyResourceEventDescriptor);
+
             var legacyDescriptor = new ApiOperationDescriptor(typeof(LegacyFallbackOperation), "LegacyFallbackOperation", nameof(OperationResultTranslationEndpointTests));
             legacyDescriptor.AddUrl(new ApiOperationUrl("/legacy-operation"));
             this.Register(legacyDescriptor);
@@ -172,6 +193,7 @@ public class OperationResultTranslationEndpointTests
             this.Register(typeof(ResultTranslationOperation), new SuccessfulResultPipeline());
             this.Register(typeof(NoResultTranslationOperation), new NoResultPipeline());
             this.Register(typeof(HttpNoContentTranslationOperation), new HttpNoContentPipeline());
+            this.Register(typeof(KeyOnlyResourceEventTranslationOperation), new KeyOnlyResourceEventPipeline());
             this.Register(typeof(LegacyFallbackOperation), new LegacyFallbackPipeline());
             this.Register(typeof(NullOkResultOperation), new NullOkResultPipeline());
         }
@@ -201,6 +223,14 @@ public class OperationResultTranslationEndpointTests
         }
     }
 
+    private sealed class KeyOnlyResourceEventPipeline : IOperationExecutorPipeline
+    {
+        public Task<OperationResult> ExecuteAsync(ApiOperationContext context)
+        {
+            return Task.FromResult<OperationResult>(new KeyOnlyResourceEventResult("events.deleted", "resource-123"));
+        }
+    }
+
     private sealed class LegacyFallbackPipeline : IOperationExecutorPipeline
     {
         public Task<OperationResult> ExecuteAsync(ApiOperationContext context)
@@ -222,6 +252,8 @@ public class OperationResultTranslationEndpointTests
     private sealed class NoResultTranslationOperation;
 
     private sealed class HttpNoContentTranslationOperation;
+
+    private sealed class KeyOnlyResourceEventTranslationOperation;
 
     private sealed class LegacyFallbackOperation;
 

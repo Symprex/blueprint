@@ -339,6 +339,7 @@ For generated clients and HTTP-visible unions, the model also needs an ambiguity
 - Let resource-event results build on this shared result model instead of defining a separate parallel outcome system.
 - Keep host-specific result families such as explicit status-only or plain-text HTTP results in host packages rather than promoting them into the core taxonomy.
 - Lock host-neutral `NoResultOperationResult` to the default empty HTTP `200 OK` translation path, and keep explicit no-content/status-only HTTP responses in host-owned result families instead of folding them into that core semantic shape.
+- Default the first host-neutral key-only resource-event semantic shape to empty HTTP `201 Created` by convention, and defer explicit host-hint overrides until a later slice that deliberately introduces them.
 - Require distinct HTTP status codes by default for HTTP-visible unions; same-status unions require explicit discriminator opt-in.
 - Allow body-bearing resource-event unions to auto-satisfy the same-status rule through a generated serialized `eventId` discriminator; key-only/no-body event outcomes are not part of that carve-out.
 - Treat legacy `ValidationFailedOperationResult`-style names as compatibility aliases where needed, but converge the semantic model on canonical data-first result names.
@@ -347,7 +348,6 @@ For generated clients and HTTP-visible unions, the model also needs an ambiguity
 
 - How should `IQuery<T>` / `ICommand<T>` / `IReturn<T>` metadata interact with `Results<T1, ...>` so descriptor generation and OpenAPI/client generation see the expanded contract rather than a raw wrapper type?
 - Which semantic result families must land in the first implementation pass versus a second pass (`CreatedResult<T>`, `AcceptedResult<T>`, `ConflictResult`)?
-- What is the default HTTP status mapping for key-only resource-event results, and how much of that mapping should be convention versus explicit metadata?
 
 ## Sequencing
 
@@ -401,4 +401,8 @@ Close the result taxonomy and normalization rules together with the pipeline pla
   - `NoResultShapeSeparationModule` now runs between host-translation ambiguity and HTTP same-status discrimination, and reports `BP112` when an HTTP-visible `Results<T1, T2>` contract mixes host-neutral `NoResultOperationResult` with host-owned no-content/status-only result families such as `Blueprint.Runtime.Http.HttpNoContentResult`.
   - The first approved separation rule stays intentionally narrow: it protects the semantic boundary between host-neutral and host-owned no-body success shapes, while unsupported members remain owned by `BP108` and same-status body/no-body unions remain owned by `BP110`.
   - The proof matrix now includes a red-to-green descriptor diagnostic test file (`OperationDescriptorSourceGeneratorTests.NoResultShapeSeparation.cs`) covering both member orders, clean single-result regressions, and explicit `BP108`/`BP110` boundary cases, plus a green targeted `Blueprint.SourceGenerator.Tests` run.
-- Next approved follow-on: lock the default HTTP status mapping for key-only resource-event results and decide how much of that mapping should be convention versus explicit metadata.
+- Completed the first key-only resource-event HTTP mapping slice:
+  - `Blueprint.Runtime.Exec.KeyOnlyResourceEventResult` now defines the first host-neutral semantic resource-event shape for event/resource identity without a response body, carrying stable `EventId` and `ResourceId` values while remaining distinct from both `NoResultOperationResult` and host-owned HTTP no-content results.
+  - `Blueprint.Runtime.Http.HttpOperationResultExecutor` now translates that semantic result to empty HTTP `201 Created` responses by convention, and the shared response-shape helper threads that same mapping through `HostExecutorAvailabilityModule`, `AmbiguousHostTranslationModule`, and `HttpUnionDiscriminationStrategyModule`.
+  - The proof matrix now includes a red-to-green descriptor support test, a red-to-green endpoint translation test, a flattened descriptor-outcome proof, and a same-status boundary test proving `Results<KeyOnlyResourceEventResult, NoResultOperationResult>` no longer triggers `BP110`.
+- Next approved follow-on: lock which semantic result families land in the first implementation pass versus a second pass (`CreatedResult<T>`, `AcceptedResult<T>`, `ConflictResult`).

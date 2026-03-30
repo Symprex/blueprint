@@ -42,4 +42,24 @@ public class OperationDescriptorSourceGeneratorTestsFlattenedOutcomesTests
             .Should()
             .NotContain(static source => source.Contains("InvalidFlattenedOutcomeOperationDescriptor"));
     }
+
+    [Fact]
+    public void When_declared_contract_contains_key_only_resource_event_result_then_generated_descriptor_keeps_it_in_flattened_outcome_feature_data()
+    {
+        var result = OperationDescriptorSourceGeneratorTests.Compile("""
+            using Blueprint.Runtime.Exec;
+
+            public partial class KeyOnlyResourceEventOperation : IQuery<Results<KeyOnlyResourceEventResult, NoResultOperationResult>> {}
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var descriptorSource = result.Output
+            .Select(static tree => tree.ToString())
+            .FirstOrDefault(static source => source.Contains("KeyOnlyResourceEventOperationDescriptor"));
+
+        descriptorSource.Should().NotBeNull();
+        descriptorSource!.Should().Contain("typeof(global::Blueprint.Runtime.Exec.KeyOnlyResourceEventResult)");
+        descriptorSource.Should().Contain("typeof(global::Blueprint.Runtime.Exec.NoResultOperationResult)");
+    }
 }

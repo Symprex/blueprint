@@ -796,7 +796,11 @@ Run this as a paired design loop with workstream 6. The result contract must be 
   - `NoResultShapeSeparationModule` now reports `BP112` when HTTP-visible `Results<T1, T2>` contracts mix host-neutral `NoResultOperationResult` with host-owned no-content/status-only result families such as `Blueprint.Runtime.Http.HttpNoContentResult`, preserving the semantic distinction before descriptor flattening or client generation can blur it.
   - The first approved rule stays intentionally narrow: unsupported members remain owned by `BP108`, same-shape collisions remain owned by `BP109`, and same-status body/no-body unions remain owned by `BP110`.
   - The proof set now includes the new red-to-green descriptor test file `OperationDescriptorSourceGeneratorTests.NoResultShapeSeparation.cs` covering both member orders, clean single-result regressions, and explicit `BP108`/`BP110` boundaries.
-- Next approved follow-on for this workstream: lock the default HTTP status mapping for key-only resource-event results and decide how much of that mapping should be convention versus explicit metadata.
+- Completed the first key-only resource-event HTTP mapping slice:
+  - `Blueprint.Runtime.Exec.KeyOnlyResourceEventResult` now provides the first host-neutral key-only resource-event semantic shape, carrying stable event/resource identity while staying distinct from both host-neutral `NoResultOperationResult` and host-owned HTTP no-content conveniences.
+  - The current HTTP host now translates that semantic result to empty `201 Created` responses by convention through `HttpOperationResultExecutor`, and the shared response-shape helper threads the same mapping through descriptor availability and ambiguity checks.
+  - The proof set now includes a red-to-green descriptor support test, a red-to-green endpoint translation test, a flattened descriptor-outcome proof, and a same-status boundary test proving `Results<KeyOnlyResourceEventResult, NoResultOperationResult>` stays clear of `BP110`.
+- Next approved follow-on for this workstream: lock which semantic result families land in the first implementation pass versus a second pass (`CreatedResult<T>`, `AcceptedResult<T>`, `ConflictResult`).
 
 ## 8. Error model and exception handling
 

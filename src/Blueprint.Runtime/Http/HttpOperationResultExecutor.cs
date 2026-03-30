@@ -36,6 +36,9 @@ public class HttpOperationResultExecutor
             case NoResultOperationResult:
                 httpContext.Response.StatusCode = StatusCodes.Status200OK;
                 return true;
+            case KeyOnlyResourceEventResult:
+                httpContext.Response.StatusCode = StatusCodes.Status201Created;
+                return true;
             case HttpNoContentResult:
                 httpContext.Response.StatusCode = StatusCodes.Status204NoContent;
                 return true;
