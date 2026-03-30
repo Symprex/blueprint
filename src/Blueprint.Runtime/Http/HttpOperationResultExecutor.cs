@@ -33,6 +33,11 @@ public class HttpOperationResultExecutor
                 httpContext.Response.ContentType = "application/json; charset=utf-8";
                 await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(acceptedResult.Content), httpContext.RequestAborted);
                 return true;
+            case ConflictResult conflictResult:
+                httpContext.Response.StatusCode = StatusCodes.Status409Conflict;
+                httpContext.Response.ContentType = "application/json; charset=utf-8";
+                await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(conflictResult.Content), httpContext.RequestAborted);
+                return true;
             case OkResult okResult:
                 if (okResult.Content is null)
                 {

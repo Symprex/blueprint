@@ -64,6 +64,23 @@ public class OperationResultTranslationEndpointTests
     }
 
     [Fact]
+    public async Task When_http_endpoint_pipeline_returns_conflict_result_then_host_route_completes_with_409_json_response()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<ResultTranslationBlueprintApp, ResultTranslationBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/conflict-operation");
+
+        endpoint.Should().NotBeNull();
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider);
+
+        response.StatusCode.Should().Be(StatusCodes.Status409Conflict);
+        response.ContentType.Should().Be("application/json; charset=utf-8");
+        response.Body.Should().Be("\"Blueprint\"");
+    }
+
+    [Fact]
     public async Task When_http_endpoint_pipeline_returns_no_result_then_host_route_completes_with_empty_200_response()
     {
         var endpoints = CreateEndpoints();
@@ -205,6 +222,10 @@ public class OperationResultTranslationEndpointTests
             acceptedDescriptor.AddUrl(new ApiOperationUrl("/accepted-operation"));
             this.Register(acceptedDescriptor);
 
+            var conflictDescriptor = new ApiOperationDescriptor(typeof(ConflictTranslationOperation), "ConflictTranslationOperation", nameof(OperationResultTranslationEndpointTests));
+            conflictDescriptor.AddUrl(new ApiOperationUrl("/conflict-operation"));
+            this.Register(conflictDescriptor);
+
             var noResultDescriptor = new ApiOperationDescriptor(typeof(NoResultTranslationOperation), "NoResultTranslationOperation", nameof(OperationResultTranslationEndpointTests));
             noResultDescriptor.AddUrl(new ApiOperationUrl("/no-result-operation"));
             this.Register(noResultDescriptor);
@@ -235,6 +256,7 @@ public class OperationResultTranslationEndpointTests
             this.Register(typeof(ResultTranslationOperation), new SuccessfulResultPipeline());
             this.Register(typeof(CreatedTranslationOperation), new CreatedResultPipeline());
             this.Register(typeof(AcceptedTranslationOperation), new AcceptedResultPipeline());
+            this.Register(typeof(ConflictTranslationOperation), new ConflictResultPipeline());
             this.Register(typeof(NoResultTranslationOperation), new NoResultPipeline());
             this.Register(typeof(HttpNoContentTranslationOperation), new HttpNoContentPipeline());
             this.Register(typeof(KeyOnlyResourceEventTranslationOperation), new KeyOnlyResourceEventPipeline());
@@ -264,6 +286,14 @@ public class OperationResultTranslationEndpointTests
         public Task<OperationResult> ExecuteAsync(ApiOperationContext context)
         {
             return Task.FromResult<OperationResult>(new AcceptedResult<string>("Blueprint"));
+        }
+    }
+
+    private sealed class ConflictResultPipeline : IOperationExecutorPipeline
+    {
+        public Task<OperationResult> ExecuteAsync(ApiOperationContext context)
+        {
+            return Task.FromResult<OperationResult>(new ConflictResult<string>("Blueprint"));
         }
     }
 
@@ -312,6 +342,8 @@ public class OperationResultTranslationEndpointTests
     private sealed class CreatedTranslationOperation;
 
     private sealed class AcceptedTranslationOperation;
+
+    private sealed class ConflictTranslationOperation;
 
     private sealed class NoResultTranslationOperation;
 

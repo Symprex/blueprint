@@ -120,4 +120,23 @@ public class OperationDescriptorSourceGeneratorTestsHttpUnionDiscriminationTests
             .NotContain("BP109")
             .And.NotContain("BP110");
     }
+
+    [Fact]
+    public void When_http_exposed_operation_declares_conflict_and_ok_union_then_generator_keeps_status_based_diagnostics_clear()
+    {
+        var result = OperationDescriptorSourceGeneratorTests.Compile("""
+            using Blueprint.Runtime.Exec;
+
+            [RootLink("/host-aware/conflict-and-ok-union")]
+            public partial class ConflictAndOkUnionOperation : IQuery<Results<ConflictResult<string>, OkResult<string>>> {}
+            """);
+
+        result.Diagnostics.Where(static diagnostic => diagnostic.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error)
+            .Should()
+            .BeEmpty();
+        result.Diagnostics.Select(static diagnostic => diagnostic.Id)
+            .Should()
+            .NotContain("BP109")
+            .And.NotContain("BP110");
+    }
 }

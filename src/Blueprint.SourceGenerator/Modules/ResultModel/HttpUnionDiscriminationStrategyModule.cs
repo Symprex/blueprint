@@ -39,6 +39,7 @@ public sealed class HttpUnionDiscriminationStrategyModule : IBlueprintSourceGene
 
         var okResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.OkResult");
         var acceptedResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.AcceptedResult");
+        var conflictResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.ConflictResult");
         var createdResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.CreatedResult");
         var noResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.NoResultOperationResult");
         var keyOnlyResourceEventResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.KeyOnlyResourceEventResult");
@@ -59,7 +60,7 @@ public sealed class HttpUnionDiscriminationStrategyModule : IBlueprintSourceGene
         var translatedMembers = new List<TranslatedResultMember>(unionMembers.Length);
         foreach (var unionMember in unionMembers)
         {
-            if (OperationResultContractHelper.TryGetHttpOperationResultResponseShape(unionMember, okResultType, acceptedResultType, createdResultType, noResultType, keyOnlyResourceEventResultType, httpNoContentResultType, out var statusCode, out var hasResponseBody) == false)
+            if (OperationResultContractHelper.TryGetHttpOperationResultResponseShape(unionMember, okResultType, acceptedResultType, conflictResultType, createdResultType, noResultType, keyOnlyResourceEventResultType, httpNoContentResultType, out var statusCode, out var hasResponseBody) == false)
             {
                 return;
             }

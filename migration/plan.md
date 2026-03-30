@@ -811,7 +811,13 @@ Run this as a paired design loop with workstream 6. The result contract must be 
   - `Blueprint.Runtime.Exec.AcceptedResult` / `AcceptedResult<T>` now provide the next host-neutral "accepted but not yet completed" semantic success family, and the current HTTP host maps it to JSON `202 Accepted` responses without collapsing it into either immediate `OkResult<T>` success (`200`) or body-bearing created-resource success (`201`).
   - The descriptor-time result helpers now treat that family as part of the supported HTTP executor surface and keep its `202` body-bearing response shape distinct in both flattened-outcome validation and host-translation ambiguity checks.
   - The proof set now includes a red-to-green endpoint translation test, a red-to-green descriptor support test, a flattened descriptor-outcome proof, and a clean status boundary proving `Results<AcceptedResult<string>, OkResult<string>>` stays clear of `BP109` and `BP110`.
-- Next approved follow-on for this workstream: add `ConflictResult` as the next semantic conflict result family with default HTTP `409 Conflict` mapping.
+- Completed the Conflict-result semantic conflict slice:
+  - `Blueprint.Runtime.Exec.ConflictResult` / `ConflictResult<T>` now provide the final host-neutral semantic family in the currently approved first result-family cut, and the current HTTP host maps it to JSON `409 Conflict` responses without collapsing it into any of the `200`, `201`, or `202` success paths.
+  - The descriptor-time result helpers now treat that family as part of the supported HTTP executor surface and keep its `409` body-bearing response shape distinct in both flattened-outcome validation and host-translation ambiguity checks.
+  - The proof set now includes a red-to-green endpoint translation test, a red-to-green descriptor support test, a flattened descriptor-outcome proof, and a clean status boundary proving `Results<ConflictResult<string>, OkResult<string>>` stays clear of `BP109` and `BP110`.
+- Review gate after the first semantic result-family cut:
+  - The explicitly approved family cut for Workstream 7 is now complete: `CreatedResult<T>`, `AcceptedResult` / `AcceptedResult<T>`, and `ConflictResult` are all landed.
+  - No explicit next slice is approved in `migration\plan.md` or `migration\result-model-and-host-translation\plan.md` after Conflict, so the live tracker should stop with `nextReadySlice = null` and open a human-direction gate instead of guessing between more result-model work and a pivot into the paired error/HTTP workstreams.
 
 ## 8. Error model and exception handling
 
