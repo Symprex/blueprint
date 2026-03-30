@@ -35,6 +35,12 @@
 - If a change affects architecture, generator flow, diagnostics, observability, developer tooling, or project principles, update the relevant `/docs` file in the same change.
 - If a change affects how Blueprint is consumed by downstream repos or extended in this repo, update the relevant Blueprint skill in the same change: `using-blueprint` for consumer/install guidance and `extending-blueprint` for repo-internal contributor guidance.
 
+## Repo-local scratch workspace
+
+- If an AI session genuinely needs repo-local temporary or scratch files, create them under `.scratch\` at the repository root, not beside source files and not at the repo root.
+- `.scratch\` is gitignored and is only for disposable work files; delete scratch files when the task is done unless the user explicitly asks to keep them.
+- Do not use `.scratch\` for durable review artifacts or planning state. Visual review HTML still belongs in the launcher-provided allow-listed review artifact directory, and session-local planning still belongs in the session workspace `plan.md`.
+
 - Start with these docs for non-trivial work:
   - `docs/guiding-principles.md`
   - `docs/architecture.md`

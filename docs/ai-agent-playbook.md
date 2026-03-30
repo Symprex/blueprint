@@ -58,6 +58,8 @@ For this repo that means:
 - for migration-plan work, durable sequencing or review decisions belong in `migration\plan.md` and the relevant `migration\...\plan.md` file, not only in session-local state such as chat, SQL todos, or the session `plan.md`
 - for migration orchestration, `migration\progress.json` is the single source of truth for live migration state and must stay aligned with the current next-ready slice, active workstream, last completed slice, and open review gate; the markdown plans are reference material for ordering, rationale, and acceptance criteria, not competing live trackers
 - Blueprint-specific usage and extension knowledge should also live in repo-local skills: keep `using-blueprint` as the canonical consumer-installable Blueprint skill, keep `extending-blueprint` as the repo-local overlay, and update the relevant skill in the same change when Blueprint behavior or workflow changes
+- if an AI session needs repo-local disposable files, use `.scratch\` at the repository root so temporary experiments, copied output, and scratch notes stay out of tracked source trees
+- `.scratch\` is disposable-only: review HTML still belongs in the launcher-provided review-artifact directory, and session-local plans still belong in the session workspace `plan.md`
 
 ### 4. Prefer machine-actionable outputs
 
