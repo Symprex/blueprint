@@ -800,7 +800,14 @@ Run this as a paired design loop with workstream 6. The result contract must be 
   - `Blueprint.Runtime.Exec.KeyOnlyResourceEventResult` now provides the first host-neutral key-only resource-event semantic shape, carrying stable event/resource identity while staying distinct from both host-neutral `NoResultOperationResult` and host-owned HTTP no-content conveniences.
   - The current HTTP host now translates that semantic result to empty `201 Created` responses by convention through `HttpOperationResultExecutor`, and the shared response-shape helper threads the same mapping through descriptor availability and ambiguity checks.
   - The proof set now includes a red-to-green descriptor support test, a red-to-green endpoint translation test, a flattened descriptor-outcome proof, and a same-status boundary test proving `Results<KeyOnlyResourceEventResult, NoResultOperationResult>` stays clear of `BP110`.
-- Next approved follow-on for this workstream: lock which semantic result families land in the first implementation pass versus a second pass (`CreatedResult<T>`, `AcceptedResult<T>`, `ConflictResult`).
+- Approved the first semantic result-family cut for this workstream:
+  - Human direction now keeps `CreatedResult<T>`, `AcceptedResult` / `AcceptedResult<T>`, and `ConflictResult` in the first implementation pass instead of deferring any of them to a later phase.
+  - Even with that broader pass-1 scope, the implementation batch still lands one family at a time; `CreatedResult<T>` is the next executable slice because it extends the newly locked `201 Created` success path without pulling in accepted/conflict semantics at the same time.
+- Completed the first body-bearing created-result slice:
+  - `Blueprint.Runtime.Exec.CreatedResult` / `CreatedResult<T>` now provide the first host-neutral created-with-payload semantic success family, and the current HTTP host maps it to JSON `201 Created` responses without collapsing it into either `OkResult<T>` (`200`) or the empty-body key-only event path.
+  - The descriptor-time result helpers now treat that family as part of the supported HTTP executor surface and keep its `201` body-bearing response shape distinct in both flattened-outcome validation and host-translation ambiguity checks.
+  - The proof set now includes a red-to-green endpoint translation test, a red-to-green descriptor support test, a flattened descriptor-outcome proof, a clean same-status boundary proving `Results<CreatedResult<string>, OkResult<string>>` stays clear of `BP109` and `BP110`, and a new regression test proving `Results<CreatedResult<string>, KeyOnlyResourceEventResult>` still belongs to the intentional `BP110` same-status guard.
+- Next approved follow-on for this workstream: add `AcceptedResult` / `AcceptedResult<T>` as the next semantic asynchronous success result family with default HTTP `202 Accepted` mapping.
 
 ## 8. Error model and exception handling
 

@@ -340,6 +340,7 @@ For generated clients and HTTP-visible unions, the model also needs an ambiguity
 - Keep host-specific result families such as explicit status-only or plain-text HTTP results in host packages rather than promoting them into the core taxonomy.
 - Lock host-neutral `NoResultOperationResult` to the default empty HTTP `200 OK` translation path, and keep explicit no-content/status-only HTTP responses in host-owned result families instead of folding them into that core semantic shape.
 - Default the first host-neutral key-only resource-event semantic shape to empty HTTP `201 Created` by convention, and defer explicit host-hint overrides until a later slice that deliberately introduces them.
+- Land `CreatedResult<T>`, `AcceptedResult` / `AcceptedResult<T>`, and `ConflictResult` in the first implementation pass, but execute those families as separate narrow slices starting with `CreatedResult<T>` so the body-bearing `201 Created` pattern is proven before the accepted/conflict variants widen the semantic surface.
 - Require distinct HTTP status codes by default for HTTP-visible unions; same-status unions require explicit discriminator opt-in.
 - Allow body-bearing resource-event unions to auto-satisfy the same-status rule through a generated serialized `eventId` discriminator; key-only/no-body event outcomes are not part of that carve-out.
 - Treat legacy `ValidationFailedOperationResult`-style names as compatibility aliases where needed, but converge the semantic model on canonical data-first result names.
@@ -347,7 +348,6 @@ For generated clients and HTTP-visible unions, the model also needs an ambiguity
 ## Open questions to resolve
 
 - How should `IQuery<T>` / `ICommand<T>` / `IReturn<T>` metadata interact with `Results<T1, ...>` so descriptor generation and OpenAPI/client generation see the expanded contract rather than a raw wrapper type?
-- Which semantic result families must land in the first implementation pass versus a second pass (`CreatedResult<T>`, `AcceptedResult<T>`, `ConflictResult`)?
 
 ## Sequencing
 
@@ -405,4 +405,11 @@ Close the result taxonomy and normalization rules together with the pipeline pla
   - `Blueprint.Runtime.Exec.KeyOnlyResourceEventResult` now defines the first host-neutral semantic resource-event shape for event/resource identity without a response body, carrying stable `EventId` and `ResourceId` values while remaining distinct from both `NoResultOperationResult` and host-owned HTTP no-content results.
   - `Blueprint.Runtime.Http.HttpOperationResultExecutor` now translates that semantic result to empty HTTP `201 Created` responses by convention, and the shared response-shape helper threads that same mapping through `HostExecutorAvailabilityModule`, `AmbiguousHostTranslationModule`, and `HttpUnionDiscriminationStrategyModule`.
   - The proof matrix now includes a red-to-green descriptor support test, a red-to-green endpoint translation test, a flattened descriptor-outcome proof, and a same-status boundary test proving `Results<KeyOnlyResourceEventResult, NoResultOperationResult>` no longer triggers `BP110`.
-- Next approved follow-on: lock which semantic result families land in the first implementation pass versus a second pass (`CreatedResult<T>`, `AcceptedResult<T>`, `ConflictResult`).
+- Approved the first semantic result-family cut:
+  - Human direction now locks `CreatedResult<T>`, `AcceptedResult` / `AcceptedResult<T>`, and `ConflictResult` into the first implementation pass instead of deferring any of those families to a later phase.
+  - Even with that broader pass-1 scope, execution stays intentionally incremental: land those families as separate narrow slices, starting with `CreatedResult<T>` so the body-bearing `201 Created` path extends the already-proven `KeyOnlyResourceEventResult` precedent.
+- Completed the first body-bearing created-result slice:
+  - `Blueprint.Runtime.Exec.CreatedResult` / `CreatedResult<T>` now provide the first host-neutral "resource created with payload" semantic result family, keeping the body-bearing `201 Created` path distinct from both `OkResult<T>` (`200` JSON) and `KeyOnlyResourceEventResult` (`201` empty).
+  - `Blueprint.Runtime.Http.HttpOperationResultExecutor` now translates that semantic family to JSON `201 Created` responses, and the shared response-shape helper threads the same mapping through `HostExecutorAvailabilityModule`, `AmbiguousHostTranslationModule`, and `HttpUnionDiscriminationStrategyModule`.
+  - The proof matrix now includes a red-to-green endpoint translation test, a red-to-green descriptor support test, a flattened descriptor-outcome proof, a status-boundary proof showing `Results<CreatedResult<string>, OkResult<string>>` stays clear of both `BP109` and `BP110`, and an explicit same-status regression proving `Results<CreatedResult<string>, KeyOnlyResourceEventResult>` still triggers `BP110` until a later discriminator slice deliberately widens that rule.
+- Next approved follow-on: add `AcceptedResult` / `AcceptedResult<T>` as the next semantic asynchronous success result family with default HTTP `202 Accepted` mapping.

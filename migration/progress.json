@@ -12,14 +12,14 @@
   "current": {
     "activeWorkstream": "result-model-and-host-translation",
     "nextReadySlice": {
-      "id": "result-model-and-host-translation/first-semantic-result-family-cut",
+      "id": "result-model-and-host-translation/accepted-result-first-pass-support",
       "workstream": "result-model-and-host-translation",
-      "title": "Lock which semantic result families land in the first implementation pass versus a second pass (CreatedResult<T>, AcceptedResult<T>, ConflictResult)"
+      "title": "Add AcceptedResult and AcceptedResult<T> as the next semantic asynchronous success results with default HTTP 202 mapping"
     },
     "lastCompletedSlice": {
-      "id": "result-model-and-host-translation/key-only-resource-event-default-http-mapping",
+      "id": "result-model-and-host-translation/created-result-first-pass-support",
       "workstream": "result-model-and-host-translation",
-      "title": "Lock the default HTTP status mapping for key-only resource-event results and decide how much of that mapping should be convention versus explicit metadata"
+      "title": "Add CreatedResult<T> as the first body-bearing semantic success result with default HTTP 201 mapping"
     },
     "openReviewGate": null
   },

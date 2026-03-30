@@ -23,6 +23,11 @@ public class HttpOperationResultExecutor
 
         switch (result)
         {
+            case CreatedResult createdResult:
+                httpContext.Response.StatusCode = StatusCodes.Status201Created;
+                httpContext.Response.ContentType = "application/json; charset=utf-8";
+                await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(createdResult.Content), httpContext.RequestAborted);
+                return true;
             case OkResult okResult:
                 if (okResult.Content is null)
                 {

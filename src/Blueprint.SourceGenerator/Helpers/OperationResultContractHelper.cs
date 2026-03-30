@@ -92,6 +92,7 @@ public static class OperationResultContractHelper
     /// </summary>
     /// <param name="resultType">The semantic result type to inspect.</param>
     /// <param name="okResultType">The resolved <c>Blueprint.Runtime.Exec.OkResult</c> base type.</param>
+    /// <param name="createdResultType">The resolved <c>Blueprint.Runtime.Exec.CreatedResult</c> base type when available.</param>
     /// <param name="noResultType">The resolved <c>Blueprint.Runtime.Exec.NoResultOperationResult</c> type.</param>
     /// <param name="keyOnlyResourceEventResultType">The resolved <c>Blueprint.Runtime.Exec.KeyOnlyResourceEventResult</c> type when available.</param>
     /// <param name="httpNoContentResultType">The resolved <c>Blueprint.Runtime.Http.HttpNoContentResult</c> type when available.</param>
@@ -99,11 +100,13 @@ public static class OperationResultContractHelper
     public static bool IsSupportedByHttpOperationResultExecutor(
         ITypeSymbol resultType,
         INamedTypeSymbol okResultType,
+        INamedTypeSymbol? createdResultType,
         INamedTypeSymbol noResultType,
         INamedTypeSymbol? keyOnlyResourceEventResultType,
         INamedTypeSymbol? httpNoContentResultType)
     {
         return IsTypeOrDerivedFrom(resultType, okResultType)
+            || IsTypeOrDerivedFromOptional(resultType, createdResultType)
             || SymbolEqualityComparer.Default.Equals(resultType, noResultType)
             || SymbolEqualityComparer.Default.Equals(resultType, keyOnlyResourceEventResultType)
             || SymbolEqualityComparer.Default.Equals(resultType, httpNoContentResultType);
@@ -114,6 +117,7 @@ public static class OperationResultContractHelper
     /// </summary>
     /// <param name="resultType">The semantic result type to inspect.</param>
     /// <param name="okResultType">The resolved <c>Blueprint.Runtime.Exec.OkResult</c> base type.</param>
+    /// <param name="createdResultType">The resolved <c>Blueprint.Runtime.Exec.CreatedResult</c> base type when available.</param>
     /// <param name="noResultType">The resolved <c>Blueprint.Runtime.Exec.NoResultOperationResult</c> type.</param>
     /// <param name="keyOnlyResourceEventResultType">The resolved <c>Blueprint.Runtime.Exec.KeyOnlyResourceEventResult</c> type when available.</param>
     /// <param name="httpNoContentResultType">The resolved <c>Blueprint.Runtime.Http.HttpNoContentResult</c> type when available.</param>
@@ -123,6 +127,7 @@ public static class OperationResultContractHelper
     public static bool TryGetHttpOperationResultResponseShape(
         ITypeSymbol resultType,
         INamedTypeSymbol okResultType,
+        INamedTypeSymbol? createdResultType,
         INamedTypeSymbol noResultType,
         INamedTypeSymbol? keyOnlyResourceEventResultType,
         INamedTypeSymbol? httpNoContentResultType,
@@ -132,6 +137,13 @@ public static class OperationResultContractHelper
         if (IsTypeOrDerivedFrom(resultType, okResultType))
         {
             statusCode = 200;
+            hasResponseBody = true;
+            return true;
+        }
+
+        if (IsTypeOrDerivedFromOptional(resultType, createdResultType))
+        {
+            statusCode = 201;
             hasResponseBody = true;
             return true;
         }
@@ -179,5 +191,10 @@ public static class OperationResultContractHelper
         }
 
         return false;
+    }
+
+    private static bool IsTypeOrDerivedFromOptional(ITypeSymbol candidateType, INamedTypeSymbol? baseType)
+    {
+        return baseType is not null && IsTypeOrDerivedFrom(candidateType, baseType);
     }
 }

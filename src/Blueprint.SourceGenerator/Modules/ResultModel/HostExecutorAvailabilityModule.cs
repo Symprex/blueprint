@@ -38,6 +38,7 @@ public sealed class HostExecutorAvailabilityModule : IBlueprintSourceGeneratorMo
 
         var operationResultType = context.FindTypeByMetadataName("Blueprint.OperationResult");
         var okResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.OkResult");
+        var createdResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.CreatedResult");
         var noResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.NoResultOperationResult");
         var keyOnlyResourceEventResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.KeyOnlyResourceEventResult");
         var httpNoContentResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Http.HttpNoContentResult");
@@ -62,7 +63,7 @@ public sealed class HostExecutorAvailabilityModule : IBlueprintSourceGeneratorMo
         var operationName = context.GetOperationTypeSymbol().Name;
         foreach (var flattenedResult in flattenedResults)
         {
-            if (OperationResultContractHelper.IsSupportedByHttpOperationResultExecutor(flattenedResult, okResultType, noResultType, keyOnlyResourceEventResultType, httpNoContentResultType))
+            if (OperationResultContractHelper.IsSupportedByHttpOperationResultExecutor(flattenedResult, okResultType, createdResultType, noResultType, keyOnlyResourceEventResultType, httpNoContentResultType))
             {
                 continue;
             }
