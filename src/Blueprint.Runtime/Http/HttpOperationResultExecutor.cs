@@ -36,6 +36,9 @@ public class HttpOperationResultExecutor
             case NoResultOperationResult:
                 httpContext.Response.StatusCode = StatusCodes.Status200OK;
                 return true;
+            case HttpNoContentResult:
+                httpContext.Response.StatusCode = StatusCodes.Status204NoContent;
+                return true;
             default:
                 return false;
         }

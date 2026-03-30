@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Microsoft.CodeAnalysis;
 
 namespace Blueprint.SourceGenerator.Tests.Generators.OperationDescriptor;
 
@@ -27,6 +28,24 @@ public class OperationDescriptorSourceGeneratorTestsHostExecutorAvailabilityTest
             public partial class SupportedHttpResultOperation : IQuery<OkResult<string>> {}
             """);
 
+        result.Diagnostics.Select(static diagnostic => diagnostic.Id)
+            .Should()
+            .NotContain("BP108");
+    }
+
+    [Fact]
+    public void When_http_exposed_operation_declares_http_owned_no_content_result_then_generator_treats_it_as_supported_by_current_http_executor()
+    {
+        var result = OperationDescriptorSourceGeneratorTests.Compile("""
+            using Blueprint.Runtime.Http;
+
+            [RootLink("/host-aware/http-no-content")]
+            public partial class HttpNoContentResultOperation : IQuery<HttpNoContentResult> {}
+            """);
+
+        result.Diagnostics.Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+            .Should()
+            .BeEmpty();
         result.Diagnostics.Select(static diagnostic => diagnostic.Id)
             .Should()
             .NotContain("BP108");

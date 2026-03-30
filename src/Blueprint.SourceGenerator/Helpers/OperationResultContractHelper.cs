@@ -93,14 +93,17 @@ public static class OperationResultContractHelper
     /// <param name="resultType">The semantic result type to inspect.</param>
     /// <param name="okResultType">The resolved <c>Blueprint.Runtime.Exec.OkResult</c> base type.</param>
     /// <param name="noResultType">The resolved <c>Blueprint.Runtime.Exec.NoResultOperationResult</c> type.</param>
+    /// <param name="httpNoContentResultType">The resolved <c>Blueprint.Runtime.Http.HttpNoContentResult</c> type when available.</param>
     /// <returns>Whether the current HTTP executor can translate the result type.</returns>
     public static bool IsSupportedByHttpOperationResultExecutor(
         ITypeSymbol resultType,
         INamedTypeSymbol okResultType,
-        INamedTypeSymbol noResultType)
+        INamedTypeSymbol noResultType,
+        INamedTypeSymbol? httpNoContentResultType)
     {
         return IsTypeOrDerivedFrom(resultType, okResultType)
-            || SymbolEqualityComparer.Default.Equals(resultType, noResultType);
+            || SymbolEqualityComparer.Default.Equals(resultType, noResultType)
+            || SymbolEqualityComparer.Default.Equals(resultType, httpNoContentResultType);
     }
 
     /// <summary>
@@ -109,6 +112,7 @@ public static class OperationResultContractHelper
     /// <param name="resultType">The semantic result type to inspect.</param>
     /// <param name="okResultType">The resolved <c>Blueprint.Runtime.Exec.OkResult</c> base type.</param>
     /// <param name="noResultType">The resolved <c>Blueprint.Runtime.Exec.NoResultOperationResult</c> type.</param>
+    /// <param name="httpNoContentResultType">The resolved <c>Blueprint.Runtime.Http.HttpNoContentResult</c> type when available.</param>
     /// <param name="statusCode">The HTTP status code for the current executor path.</param>
     /// <param name="hasResponseBody">Whether the current executor path writes a response body.</param>
     /// <returns>Whether the current executor path has a deterministic response shape for the semantic result type.</returns>
@@ -116,6 +120,7 @@ public static class OperationResultContractHelper
         ITypeSymbol resultType,
         INamedTypeSymbol okResultType,
         INamedTypeSymbol noResultType,
+        INamedTypeSymbol? httpNoContentResultType,
         out int statusCode,
         out bool hasResponseBody)
     {
@@ -129,6 +134,13 @@ public static class OperationResultContractHelper
         if (SymbolEqualityComparer.Default.Equals(resultType, noResultType))
         {
             statusCode = 200;
+            hasResponseBody = false;
+            return true;
+        }
+
+        if (SymbolEqualityComparer.Default.Equals(resultType, httpNoContentResultType))
+        {
+            statusCode = 204;
             hasResponseBody = false;
             return true;
         }

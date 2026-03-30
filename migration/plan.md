@@ -788,7 +788,11 @@ Run this as a paired design loop with workstream 6. The result contract must be 
 - Repaired the queued no-result-shape-separation follow-on:
   - The previously queued diagnostic depends on an unresolved result-model question in the workstream plan (`What is the default HTTP status mapping for host-neutral NoResult, and how should that interact with explicit host-specific no-content/status-only result families?`) and the current repo still exposes only host-neutral `NoResultOperationResult`, not a concrete host-specific no-content/status-only result family to prove against.
   - That leaves the diagnostic slice without executable acceptance criteria today, so the next ready slice must first lock the default HTTP status mapping plus the ownership model for host-specific result families.
-- Next approved follow-on for this workstream: lock the default HTTP 200 status mapping for `NoResult` and define host-specific result families as host-package extensions rather than core taxonomy members.
+- Completed the default HTTP status mapping and host-specific result-family ownership slice:
+  - `Blueprint.Runtime.Exec.NoResultOperationResult` remains the host-neutral success shape and is now explicitly locked to the default empty HTTP `200 OK` translation path.
+  - `Blueprint.Runtime.Http.HttpNoContentResult` is now the first concrete host-owned no-content result family member, translating to empty HTTP `204 No Content` through `HttpOperationResultExecutor` rather than widening the core taxonomy.
+  - The proof set now includes a red-to-green descriptor support test in `OperationDescriptorSourceGeneratorTests.HostExecutorAvailability.cs`, a red-to-green host translation test in `OperationResultTranslationEndpointTests.cs`, and a green targeted `Blueprint.SourceGenerator.Tests` run for those new seams.
+- Next approved follow-on for this workstream: add the first no-result-shape-separation diagnostic so descriptor generation keeps host-neutral `NoResultOperationResult` distinct from host-owned no-content/status-only HTTP result families.
 
 ## 8. Error model and exception handling
 

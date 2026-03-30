@@ -1,6 +1,7 @@
 using System.Text;
 using Blueprint.Model;
 using Blueprint.Runtime.Exec;
+using Blueprint.Runtime.Http;
 using FluentAssertions;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -41,6 +42,23 @@ public class OperationResultTranslationEndpointTests
         var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider);
 
         response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        response.ContentType.Should().BeNull();
+        response.Body.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task When_http_endpoint_pipeline_returns_http_owned_no_content_result_then_host_route_completes_with_empty_204_response()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<ResultTranslationBlueprintApp, ResultTranslationBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/http-no-content-operation");
+
+        endpoint.Should().NotBeNull();
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider);
+
+        response.StatusCode.Should().Be(StatusCodes.Status204NoContent);
         response.ContentType.Should().BeNull();
         response.Body.Should().BeEmpty();
     }
@@ -132,6 +150,10 @@ public class OperationResultTranslationEndpointTests
             noResultDescriptor.AddUrl(new ApiOperationUrl("/no-result-operation"));
             this.Register(noResultDescriptor);
 
+            var httpNoContentDescriptor = new ApiOperationDescriptor(typeof(HttpNoContentTranslationOperation), "HttpNoContentTranslationOperation", nameof(OperationResultTranslationEndpointTests));
+            httpNoContentDescriptor.AddUrl(new ApiOperationUrl("/http-no-content-operation"));
+            this.Register(httpNoContentDescriptor);
+
             var legacyDescriptor = new ApiOperationDescriptor(typeof(LegacyFallbackOperation), "LegacyFallbackOperation", nameof(OperationResultTranslationEndpointTests));
             legacyDescriptor.AddUrl(new ApiOperationUrl("/legacy-operation"));
             this.Register(legacyDescriptor);
@@ -149,6 +171,7 @@ public class OperationResultTranslationEndpointTests
         {
             this.Register(typeof(ResultTranslationOperation), new SuccessfulResultPipeline());
             this.Register(typeof(NoResultTranslationOperation), new NoResultPipeline());
+            this.Register(typeof(HttpNoContentTranslationOperation), new HttpNoContentPipeline());
             this.Register(typeof(LegacyFallbackOperation), new LegacyFallbackPipeline());
             this.Register(typeof(NullOkResultOperation), new NullOkResultPipeline());
         }
@@ -167,6 +190,14 @@ public class OperationResultTranslationEndpointTests
         public Task<OperationResult> ExecuteAsync(ApiOperationContext context)
         {
             return Task.FromResult<OperationResult>(new NoResultOperationResult());
+        }
+    }
+
+    private sealed class HttpNoContentPipeline : IOperationExecutorPipeline
+    {
+        public Task<OperationResult> ExecuteAsync(ApiOperationContext context)
+        {
+            return Task.FromResult<OperationResult>(new HttpNoContentResult());
         }
     }
 
@@ -189,6 +220,8 @@ public class OperationResultTranslationEndpointTests
     private sealed class ResultTranslationOperation;
 
     private sealed class NoResultTranslationOperation;
+
+    private sealed class HttpNoContentTranslationOperation;
 
     private sealed class LegacyFallbackOperation;
 

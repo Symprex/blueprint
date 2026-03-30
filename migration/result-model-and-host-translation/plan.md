@@ -338,6 +338,7 @@ For generated clients and HTTP-visible unions, the model also needs an ambiguity
 - Let hosts execute/translate results; result types themselves should not own transport execution.
 - Let resource-event results build on this shared result model instead of defining a separate parallel outcome system.
 - Keep host-specific result families such as explicit status-only or plain-text HTTP results in host packages rather than promoting them into the core taxonomy.
+- Lock host-neutral `NoResultOperationResult` to the default empty HTTP `200 OK` translation path, and keep explicit no-content/status-only HTTP responses in host-owned result families instead of folding them into that core semantic shape.
 - Require distinct HTTP status codes by default for HTTP-visible unions; same-status unions require explicit discriminator opt-in.
 - Allow body-bearing resource-event unions to auto-satisfy the same-status rule through a generated serialized `eventId` discriminator; key-only/no-body event outcomes are not part of that carve-out.
 - Treat legacy `ValidationFailedOperationResult`-style names as compatibility aliases where needed, but converge the semantic model on canonical data-first result names.
@@ -346,7 +347,6 @@ For generated clients and HTTP-visible unions, the model also needs an ambiguity
 
 - How should `IQuery<T>` / `ICommand<T>` / `IReturn<T>` metadata interact with `Results<T1, ...>` so descriptor generation and OpenAPI/client generation see the expanded contract rather than a raw wrapper type?
 - Which semantic result families must land in the first implementation pass versus a second pass (`CreatedResult<T>`, `AcceptedResult<T>`, `ConflictResult`)?
-- What is the default HTTP status mapping for host-neutral `NoResult`, and how should that interact with explicit host-specific no-content/status-only result families?
 - What is the default HTTP status mapping for key-only resource-event results, and how much of that mapping should be convention versus explicit metadata?
 
 ## Sequencing
@@ -393,4 +393,8 @@ Close the result taxonomy and normalization rules together with the pipeline pla
 - Repaired the queued no-result-shape separation follow-on:
   - The previously queued diagnostic depends on an unresolved design question in this plan (`What is the default HTTP status mapping for host-neutral NoResult, and how should that interact with explicit host-specific no-content/status-only result families?`) and the current codebase still exposes only host-neutral `NoResultOperationResult`, not a concrete host-specific no-content/status-only result family to write a failing proof against.
   - That makes the diagnostic slice non-executable today, so the next ready slice must first lock the default HTTP status mapping plus the ownership model for host-specific result families.
-- Next approved follow-on: lock the default HTTP 200 status mapping for `NoResult` and define host-specific result families as host-package extensions rather than core taxonomy members.
+- Completed the default HTTP status mapping and host-specific result-family ownership slice:
+  - Host-neutral `Blueprint.Runtime.Exec.NoResultOperationResult` is now explicitly locked to the default empty HTTP `200 OK` translation path when `MapBlueprintApi(...)` uses `Blueprint.Runtime.Http.HttpOperationResultExecutor`.
+  - `Blueprint.Runtime.Http.HttpNoContentResult` is now the first concrete host-owned no-content result family member, translating to empty HTTP `204 No Content` without widening the core semantic result taxonomy.
+  - `HostExecutorAvailabilityModule` now treats that HTTP-owned no-content result as part of the current HTTP executor surface, and the proof matrix includes a red-to-green descriptor support test plus a red-to-green endpoint translation test in `OperationResultTranslationEndpointTests`.
+- Next approved follow-on: add the first no-result-shape separation diagnostic so descriptor generation keeps host-neutral `NoResultOperationResult` distinct from host-owned no-content/status-only HTTP result families.
