@@ -17,6 +17,18 @@ internal static class PipelineCodeGenerator
     /// <returns>The generated pipeline source for the supplied handler.</returns>
     public static string GeneratePipeline(OperationHandlerModel handler, PipelinePlan plan)
     {
+        return GeneratePipeline(handler, plan, DefaultPipelineExceptionTranslator.Instance);
+    }
+
+    /// <summary>
+    /// Generates the complete pipeline class for an operation handler using the supplied exception translator.
+    /// </summary>
+    /// <param name="handler">The discovered handler model that drives generated type and method names.</param>
+    /// <param name="plan">The contributor-built plan that determines the rendered pipeline steps.</param>
+    /// <param name="exceptionTranslator">The exception translator that owns the generated catch shell.</param>
+    /// <returns>The generated pipeline source for the supplied handler.</returns>
+    public static string GeneratePipeline(OperationHandlerModel handler, PipelinePlan plan, IPipelineExceptionTranslator exceptionTranslator)
+    {
         var codeBuilder = CodeBuilder.Create("Blueprint.Generated");
 
         var pipelineClass = codeBuilder.AddClass(handler.PipelineClassName)
@@ -26,7 +38,7 @@ internal static class PipelineCodeGenerator
         AddLoggingFields(pipelineClass);
         AddLoggerField(pipelineClass);
         AddConstructor(pipelineClass, handler);
-        AddExecuteAsyncMethod(pipelineClass, handler, plan);
+        AddExecuteAsyncMethod(pipelineClass, handler, plan, exceptionTranslator);
 
         return codeBuilder.Build();
     }
@@ -87,7 +99,11 @@ internal static class PipelineCodeGenerator
             .WithBody(writer => writer.Assign("_logger", $"loggerFactory.CreateLogger(\"{handler.PipelineClassName}\")"));
     }
 
-    private static void AddExecuteAsyncMethod(ClassBuilder pipelineClass, OperationHandlerModel handler, PipelinePlan plan)
+    private static void AddExecuteAsyncMethod(
+        ClassBuilder pipelineClass,
+        OperationHandlerModel handler,
+        PipelinePlan plan,
+        IPipelineExceptionTranslator exceptionTranslator)
     {
         var executeMethod = pipelineClass.AddMethod("ExecuteAsync")
             .MakePublicMethod()
@@ -114,7 +130,7 @@ internal static class PipelineCodeGenerator
                         WritePipelineSteps(tryWriter, handler, plan);
                     });
 
-                WriteExceptionHandling(writer, handler.IsHandlerAsync);
+                exceptionTranslator.WriteExceptionHandling(writer, handler.IsHandlerAsync);
             });
     }
 
@@ -129,51 +145,13 @@ internal static class PipelineCodeGenerator
         }
     }
 
-    private static void WriteExceptionHandling(ICodeWriter writer, bool isHandlerAsync)
-    {
-        writer.Catch(
-            "Blueprint.Validation.ValidationException e",
-            catchWriter =>
-            {
-                catchWriter.AppendLine("context.Activity?.SetTag(\"otel.status_code\", \"OK\");");
-                catchWriter.Return(WrapOperationResult("new Blueprint.Runtime.Exec.ValidationFailedResult(e.ValidationResults)", isHandlerAsync));
-            });
-
-        writer.Catch(
-            "System.ComponentModel.DataAnnotations.ValidationException e",
-            catchWriter =>
-            {
-                catchWriter.AppendLine("context.Activity?.SetTag(\"otel.status_code\", \"OK\");");
-                catchWriter.Return(WrapOperationResult("Blueprint.Middleware.ValidationMiddlewareBuilder.ToValidationFailedResult(e)", isHandlerAsync));
-            });
-
-        writer.Catch(
-            "System.Exception e",
-            catchWriter =>
-            {
-                catchWriter.If(
-                    "e is Blueprint.ApiException apiException && apiException.HttpStatus < 500",
-                    ifWriter =>
-                    {
-                        ifWriter.AppendLine("_NonException(_logger, e.Message, e);");
-                        ifWriter.AppendLine("context.Activity?.SetTag(\"otel.status_code\", \"OK\");");
-                    });
-
-                catchWriter.Else(
-                    elseWriter =>
-                    {
-                        elseWriter.AppendLine("Blueprint.Diagnostics.BlueprintActivitySource.RecordException(context.Activity, e, false);");
-                        elseWriter.AppendLine("_UnhandledException(_logger, e.Message, e);");
-                        elseWriter.AppendLine("context.Activity?.SetTag(\"otel.status_code\", \"ERROR\");");
-                        elseWriter.AppendLine("context.Activity?.SetTag(\"otel.status_description\", e.Message);");
-                    });
-
-                catchWriter.NewLine();
-                catchWriter.Return(WrapOperationResult("new Blueprint.Runtime.Exec.UnhandledExceptionResult(e)", isHandlerAsync));
-            });
-    }
-
-    private static string WrapOperationResult(string operationResultExpression, bool isHandlerAsync)
+    /// <summary>
+    /// Wraps a generated result expression for synchronous handlers so the surrounding execute method still returns a task.
+    /// </summary>
+    /// <param name="operationResultExpression">The generated operation-result expression.</param>
+    /// <param name="isHandlerAsync">Whether the enclosing handler already returns asynchronously.</param>
+    /// <returns>The expression to emit from the generated catch or handler-return path.</returns>
+    internal static string WrapOperationResult(string operationResultExpression, bool isHandlerAsync)
     {
         return isHandlerAsync
             ? operationResultExpression

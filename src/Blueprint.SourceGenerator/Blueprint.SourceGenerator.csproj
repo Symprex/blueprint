@@ -8,6 +8,7 @@
     <LangVersion>preview</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <MeziantouPolyfill_ExcludedPolyfills>T:System.Runtime.CompilerServices.ModuleInitializerAttribute</MeziantouPolyfill_ExcludedPolyfills>
   </PropertyGroup>
 
   <ItemGroup>
@@ -23,6 +24,10 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Blueprint.SourceGenerator.CodeWriter\Blueprint.SourceGenerator.CodeWriter.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Blueprint.SourceGenerator.Tests" />
   </ItemGroup>
 
   <!-- See https://github.com/dotnet/roslyn/discussions/47517#discussioncomment-3542590 for why the below is necessary -->

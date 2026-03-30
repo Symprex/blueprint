@@ -207,6 +207,43 @@ public class OperationExecutorPipelineGeneratorIntegrationTests
     }
 
     [Fact]
+    public void Pipeline_code_generator_allows_exception_translation_to_be_replaced()
+    {
+        const string source = """
+                               using Blueprint.Model;
+                               using System.Threading.Tasks;
+
+                               namespace TestNamespace;
+
+                               public partial class TestQuery : IQuery<string>
+                               {
+                                   public static Task<string> InvokeAsync()
+                                   {
+                                       return Task.FromResult("Hello World");
+                                   }
+                               }
+                               """;
+
+        var (compilation, operationType) = CompileAndGetOperationType(source, "TestQuery");
+        var handlerResult = HandlerDiscovery.FindHandler(operationType, compilation);
+        var operation = OperationModel.Create(operationType);
+        var plan = new PipelinePlan(operation, new VariableRegistry());
+        var module = new HandlerExecutionModule();
+
+        handlerResult.Diagnostics.Should().BeEmpty();
+        handlerResult.Value.Should().NotBeNull();
+
+        module.ContributeToPipeline(new PipelineContributorContext(module.ContributorId, operation, plan, new CompilationOperationLookup(compilation), handlerResult.Value!));
+
+        var pipelineSource = PipelineCodeGenerator.GeneratePipeline(handlerResult.Value!, plan, new TestExceptionTranslator());
+
+        pipelineSource.Should().Contain("catch (System.InvalidOperationException e)");
+        pipelineSource.Should().Contain("return new Blueprint.Runtime.Exec.UnhandledExceptionResult(e);");
+        pipelineSource.Should().NotContain("catch (Blueprint.Validation.ValidationException e)");
+        pipelineSource.Should().NotContain("catch (System.Exception e)");
+    }
+
+    [Fact]
     public async Task Inline_static_handler_generates_correctly()
     {
         var source = """
@@ -980,6 +1017,22 @@ public class OperationExecutorPipelineGeneratorIntegrationTests
         operationType.Should().NotBeNull($"Type {typeName} should exist in compilation");
 
         return (compilation, operationType!);
+    }
+
+    private sealed class TestExceptionTranslator : IPipelineExceptionTranslator
+    {
+        public void WriteExceptionHandling(ICodeWriter writer, bool isHandlerAsync)
+        {
+            writer.Catch(
+                "System.InvalidOperationException e",
+                catchWriter =>
+                {
+                    catchWriter.Return(
+                        isHandlerAsync
+                            ? "new Blueprint.Runtime.Exec.UnhandledExceptionResult(e)"
+                            : "System.Threading.Tasks.Task.FromResult<Blueprint.OperationResult>(new Blueprint.Runtime.Exec.UnhandledExceptionResult(e))");
+                });
+        }
     }
 
     private sealed class RecordingCodeWriter : ICodeWriter

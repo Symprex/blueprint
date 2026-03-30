@@ -845,6 +845,12 @@ Run this as a paired design loop with workstream 6. The result contract must be 
 - Next approved follow-on after UnhandledExceptionResult canonicalization:
   - Pivot into Workstream 8 with a narrow first slice: extract a minimal exception-translator seam around the shared executor shell while preserving the current `ApiException` handling and the generic unhandled fallback.
   - That is the safest next step because the result-model taxonomy is now locked enough for failure work, and the error-model plan explicitly starts with shared executor-shell exception boundaries and pipeline exception translators before host-specific failure documentation or OpenAPI work.
+- Completed the first Workstream 8 exception-translator seam slice:
+  - `PipelineCodeGenerator` now delegates outer catch-shell emission to `IPipelineExceptionTranslator`, and `DefaultPipelineExceptionTranslator` preserves the current validation-exception handling, non-5xx `ApiException` logging path, and generic unhandled fallback behavior.
+  - The proof matrix now includes a red-to-green direct codegen proof that a custom translator can replace the default shell, unchanged generator behavior locks for canonical validation and unhandled results, a green runtime thrown-handler integration proof, green `dotnet format .\Blueprint.sln --no-restore`, a green `dotnet build .\Blueprint.sln --no-restore`, and green `Blueprint.SourceGenerator.Tests` (`281`), `Blueprint.SourceGenerator.CodeWriter.Tests` (`45`), and `Blueprint.SourceGenerator.Tests.Integration` (`56`) runs.
+- No explicit next Workstream 8 slice is approved yet after the seam extraction:
+  - Neither `migration\plan.md` nor `migration\error-model-and-exception-handling\plan.md` currently narrows the next executable slice far enough to pick one safely between descriptor-level failure metadata, ordered translator policy, or package-provided translator follow-ons.
+  - If execution stops here, the live tracker should set `nextReadySlice = null` and open a human-direction gate instead of guessing the next error-model slice.
 
 ## 8. Error model and exception handling
 
