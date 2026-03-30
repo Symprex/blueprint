@@ -896,9 +896,17 @@ Run this as a paired design loop with workstream 6. The result contract must be 
   - `OperationHttpResponseMetadata` now also carries `BodyTypeNames`, and `HttpResponseMetadataModule` projects compile-time-known payload CLR type names for typed semantic HTTP results plus the current MVC problem-details contracts for descriptor-advertised `422` and `500` fallback responses.
   - The proof matrix for this slice is green at the focused seam level: descriptor-source and runtime `Configure().GetFeatureData<OperationHttpResponseMetadataFeatureData>()` proofs both passed after starting red on the missing body-type contract itself, covering `200`, `422`, and `500`.
 - Autonomous next OpenAPI follow-on after response body-type metadata:
-  - Stay in the OpenAPI workstream and project serializer-context coverage metadata onto the HTTP response-metadata seam.
-  - That is the narrowest dependency-safe next slice because response metadata now knows which CLR payload types each body-bearing response carries, but later schema/document work still needs a compile-time serializer-coverage contract instead of runtime reflection or implicit serializer assumptions.
-  - The live tracker should therefore keep `activeWorkstream` as `openapi` and advance `nextReadySlice` to `openapi/project-serializer-context-coverage-into-http-response-metadata` unless a review gate or blocker appears.
+  - Stay in the OpenAPI workstream and project serializer-context coverage feature data from the HTTP response-metadata seam.
+  - Follow-up inspection after the body-type slice showed there is still no existing `JsonSerializerContext` declaration/config seam in source and the current HTTP runtime still serializes through `Newtonsoft.Json`, so the narrowest dependency-safe next step is a parallel descriptor feature-data inventory derived from `OperationHttpResponseMetadata.BodyTypeNames`, not another direct response-record expansion and not a runtime options seam.
+  - The live tracker should therefore keep `activeWorkstream` as `openapi` and advance `nextReadySlice` to `openapi/project-serializer-context-coverage-feature-data-from-http-response-metadata` unless a review gate or blocker appears.
+- Completed the OpenAPI serializer-context coverage feature-data slice:
+  - `SerializerContextCoverageModule` now derives additive `OperationSerializerContextCoverageFeatureData` from `OperationHttpResponseMetadata.BodyTypeNames`, recording the distinct body payload CLR type names later serializer-context validation and schema slices must account for.
+  - The slice intentionally leaves runtime JSON ownership unchanged: the current HTTP runtime still serializes through `Newtonsoft.Json`, and there is still no explicit app-owned `JsonSerializerContext` declaration/config seam in source.
+  - The proof matrix for this slice is green at the focused seam level: descriptor-source and runtime `Configure().GetFeatureData<OperationSerializerContextCoverageFeatureData>()` proofs both passed after starting red on the missing feature-data seam itself, covering the current `200`, `422`, and `500` body payload types.
+- Autonomous next OpenAPI follow-on after serializer-context coverage feature data:
+  - Stay in the OpenAPI workstream and declare an app-owned serializer-context seam for later coverage validation.
+  - That is the narrowest dependency-safe next slice because serializer requirements are now inspectable from descriptor facts, but later validation/schema work still needs a trustworthy app-owned declaration of which serializer context is expected before any coverage diagnostics can be accurate.
+  - The live tracker should therefore keep `activeWorkstream` as `openapi` and advance `nextReadySlice` to `openapi/declare-app-owned-serializer-context-seam-for-coverage-validation` unless a review gate or blocker appears.
 
 ## 8. Error model and exception handling
 

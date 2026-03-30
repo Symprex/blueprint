@@ -122,5 +122,23 @@ Implement after HTTP descriptors, error-model metadata, and resource metadata ar
   - serializer-context coverage and schema projection
   - richer same-status discriminator shaping and full OpenAPI document generation
 - Autonomous next slice:
-  - Continue with `openapi/project-serializer-context-coverage-into-http-response-metadata`.
-  - That is the narrowest safe follow-on because body-bearing HTTP responses now expose payload CLR types, but later OpenAPI/schema work still needs an explicit compile-time serializer-coverage seam instead of ad-hoc runtime reflection or undocumented serializer assumptions.
+  - Continue with `openapi/project-serializer-context-coverage-feature-data-from-http-response-metadata`.
+  - Inspection after the body-type slice showed that there is still no existing `JsonSerializerContext` declaration/config seam in code and the HTTP runtime still serializes through `Newtonsoft.Json`, so the narrowest safe follow-on is a parallel descriptor feature-data inventory derived from `OperationHttpResponseMetadata.BodyTypeNames`, not another direct expansion of the response record and not a runtime host-options change.
+- Completed `openapi/project-serializer-context-coverage-feature-data-from-http-response-metadata`.
+- Why it was the right follow-on:
+  - the response-metadata seam already exposed body payload CLR names per operation
+  - there is still no explicit `JsonSerializerContext` declaration/config seam in source and the current HTTP runtime still serializes through `Newtonsoft.Json`, so the safest next step was to make serializer requirements inspectable without changing runtime ownership
+- What landed in this slice:
+  - `SerializerContextCoverageModule` now derives additive `OperationSerializerContextCoverageFeatureData` from `OperationHttpResponseMetadata.BodyTypeNames`
+  - the new feature data records the distinct body payload CLR type names later serializer-context validation and schema slices must account for
+  - the slice deliberately leaves runtime JSON execution, app-owned serializer declaration, and diagnostic severity decisions deferred
+- Proof closed for this slice:
+  - descriptor-source proof for generated `OperationSerializerContextCoverageFeatureData`
+  - runtime `Configure().GetFeatureData<OperationSerializerContextCoverageFeatureData>()` proof covering the current `200`, `422`, and `500` body payload types
+- Deferred by design:
+  - app-owned `JsonSerializerContext` declaration/config
+  - coverage validation diagnostics and schema emission
+  - runtime serializer switching away from `Newtonsoft.Json`
+- Autonomous next slice:
+  - Continue with `openapi/declare-app-owned-serializer-context-seam-for-coverage-validation`.
+  - That is the narrowest safe follow-on because serializer requirements are now inspectable from descriptor facts, but later validation and schema slices still need an explicit app-owned declaration seam to say which serializer context is expected for a given Blueprint app before any coverage diagnostics can become trustworthy.
