@@ -3,21 +3,138 @@ using Blueprint.SourceGenerator.CodeWriter;
 namespace Blueprint.SourceGenerator.Generators.Pipelines;
 
 /// <summary>
-/// Emits the executor-shell catch blocks that translate exceptions into operation results.
-/// Custom implementations can replace the default shell without widening the public result contract.
+/// Emits one catch block inside the ordered executor-shell exception translation policy.
+/// Translators declare the exception family they own so the policy can keep catch ordering deterministic and reject
+/// accidental overlap before generation continues.
 /// </summary>
 internal interface IPipelineExceptionTranslator
 {
     /// <summary>
-    /// Writes the exception-handling shell for a generated pipeline execute method.
+    /// Gets the stable identifier used in diagnostics and deterministic ordering.
+    /// </summary>
+    string TranslatorId { get; }
+
+    /// <summary>
+    /// Gets the primary exception type name owned by this translator.
+    /// This value is used for deterministic ordering and for the top-level type called out in diagnostics.
+    /// </summary>
+    string HandledExceptionTypeName { get; }
+
+    /// <summary>
+    /// Gets the exception family names claimed by this translator for conflict detection.
+    /// Most translators only need their direct catch type, while more specific translators can also claim broader family
+    /// names when overlap with another non-fallback translator would be ambiguous.
+    /// </summary>
+    IReadOnlyList<string> OwnedExceptionTypeNames { get; }
+
+    /// <summary>
+    /// Gets the relative ordering used before the policy writes catch blocks.
+    /// Lower values run earlier inside the same fallback category.
+    /// </summary>
+    int Order { get; }
+
+    /// <summary>
+    /// Gets a value indicating whether this translator owns the final catch-all path.
+    /// Fallback translators are always emitted after specific translators so catch ordering stays legal and explicit.
+    /// </summary>
+    bool IsFallback { get; }
+
+    /// <summary>
+    /// Writes the catch block owned by this translator for a generated pipeline execute method.
     /// </summary>
     /// <param name="writer">The writer receiving the generated catch blocks.</param>
     /// <param name="isHandlerAsync">Whether the generated execute method returns directly or must wrap synchronous results.</param>
-    void WriteExceptionHandling(ICodeWriter writer, bool isHandlerAsync);
+    void WriteCatchBlock(ICodeWriter writer, bool isHandlerAsync);
 }
 
 /// <summary>
-/// Preserves Blueprint's current validation, <c>Blueprint.ApiException</c>, and generic unhandled-exception fallback behavior.
+/// Preserves the legacy Blueprint validation-exception compatibility path as a specific translator.
+/// </summary>
+internal sealed class LegacyValidationExceptionTranslator : IPipelineExceptionTranslator
+{
+    /// <summary>
+    /// Gets the shared translator instance.
+    /// </summary>
+    public static LegacyValidationExceptionTranslator Instance { get; } = new();
+
+    private LegacyValidationExceptionTranslator()
+    {
+    }
+
+    /// <inheritdoc />
+    public string TranslatorId => "legacy-validation-exception";
+
+    /// <inheritdoc />
+    public string HandledExceptionTypeName => "Blueprint.Validation.ValidationException";
+
+    /// <inheritdoc />
+    public IReadOnlyList<string> OwnedExceptionTypeNames { get; } = ["Blueprint.Validation.ValidationException"];
+
+    /// <inheritdoc />
+    public int Order => 100;
+
+    /// <inheritdoc />
+    public bool IsFallback => false;
+
+    /// <inheritdoc />
+    public void WriteCatchBlock(ICodeWriter writer, bool isHandlerAsync)
+    {
+        writer.Catch(
+            "Blueprint.Validation.ValidationException e",
+            catchWriter =>
+            {
+                catchWriter.AppendLine("context.Activity?.SetTag(\"otel.status_code\", \"OK\");");
+                catchWriter.Return(PipelineCodeGenerator.WrapOperationResult("new Blueprint.Runtime.Exec.ValidationFailedResult(e.ValidationResults)", isHandlerAsync));
+            });
+    }
+}
+
+/// <summary>
+/// Preserves the framework <c>System.ComponentModel.DataAnnotations.ValidationException</c> compatibility path as a
+/// specific translator so it stays ordered ahead of the catch-all fallback.
+/// </summary>
+internal sealed class DataAnnotationsValidationExceptionTranslator : IPipelineExceptionTranslator
+{
+    /// <summary>
+    /// Gets the shared translator instance.
+    /// </summary>
+    public static DataAnnotationsValidationExceptionTranslator Instance { get; } = new();
+
+    private DataAnnotationsValidationExceptionTranslator()
+    {
+    }
+
+    /// <inheritdoc />
+    public string TranslatorId => "data-annotations-validation-exception";
+
+    /// <inheritdoc />
+    public string HandledExceptionTypeName => "System.ComponentModel.DataAnnotations.ValidationException";
+
+    /// <inheritdoc />
+    public IReadOnlyList<string> OwnedExceptionTypeNames { get; } = ["System.ComponentModel.DataAnnotations.ValidationException"];
+
+    /// <inheritdoc />
+    public int Order => 200;
+
+    /// <inheritdoc />
+    public bool IsFallback => false;
+
+    /// <inheritdoc />
+    public void WriteCatchBlock(ICodeWriter writer, bool isHandlerAsync)
+    {
+        writer.Catch(
+            "System.ComponentModel.DataAnnotations.ValidationException e",
+            catchWriter =>
+            {
+                catchWriter.AppendLine("context.Activity?.SetTag(\"otel.status_code\", \"OK\");");
+                catchWriter.Return(PipelineCodeGenerator.WrapOperationResult("Blueprint.Middleware.ValidationMiddlewareBuilder.ToValidationFailedResult(e)", isHandlerAsync));
+            });
+    }
+}
+
+/// <summary>
+/// Preserves Blueprint's current <c>Blueprint.ApiException</c> logging path plus the generic unhandled-exception
+/// fallback behavior.
 /// </summary>
 internal sealed class DefaultPipelineExceptionTranslator : IPipelineExceptionTranslator
 {
@@ -31,24 +148,23 @@ internal sealed class DefaultPipelineExceptionTranslator : IPipelineExceptionTra
     }
 
     /// <inheritdoc />
-    public void WriteExceptionHandling(ICodeWriter writer, bool isHandlerAsync)
+    public string TranslatorId => "default-unhandled-exception";
+
+    /// <inheritdoc />
+    public string HandledExceptionTypeName => "System.Exception";
+
+    /// <inheritdoc />
+    public IReadOnlyList<string> OwnedExceptionTypeNames { get; } = ["System.Exception"];
+
+    /// <inheritdoc />
+    public int Order => int.MaxValue;
+
+    /// <inheritdoc />
+    public bool IsFallback => true;
+
+    /// <inheritdoc />
+    public void WriteCatchBlock(ICodeWriter writer, bool isHandlerAsync)
     {
-        writer.Catch(
-            "Blueprint.Validation.ValidationException e",
-            catchWriter =>
-            {
-                catchWriter.AppendLine("context.Activity?.SetTag(\"otel.status_code\", \"OK\");");
-                catchWriter.Return(PipelineCodeGenerator.WrapOperationResult("new Blueprint.Runtime.Exec.ValidationFailedResult(e.ValidationResults)", isHandlerAsync));
-            });
-
-        writer.Catch(
-            "System.ComponentModel.DataAnnotations.ValidationException e",
-            catchWriter =>
-            {
-                catchWriter.AppendLine("context.Activity?.SetTag(\"otel.status_code\", \"OK\");");
-                catchWriter.Return(PipelineCodeGenerator.WrapOperationResult("Blueprint.Middleware.ValidationMiddlewareBuilder.ToValidationFailedResult(e)", isHandlerAsync));
-            });
-
         writer.Catch(
             "System.Exception e",
             catchWriter =>

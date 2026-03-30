@@ -61,6 +61,14 @@ public sealed partial class OperationExecutorPipelineSourceGenerator : IIncremen
                     return;
                 }
 
+                var exceptionTranslatorPolicyResult = PipelineExceptionTranslatorPolicy.CreateDefault();
+                exceptionTranslatorPolicyResult.ReportDiagnostics(spc);
+
+                if (exceptionTranslatorPolicyResult.Value is null)
+                {
+                    return;
+                }
+
                 var successfulHandlers = new List<OperationHandlerModel>();
 
                 // Generate a pipeline for each handler
@@ -80,7 +88,7 @@ public sealed partial class OperationExecutorPipelineSourceGenerator : IIncremen
 
                     successfulHandlers.Add(handler);
 
-                    var pipelineSource = PipelineCodeGenerator.GeneratePipeline(handler, pipelinePlanResult.Value);
+                    var pipelineSource = PipelineCodeGenerator.GeneratePipeline(handler, pipelinePlanResult.Value, exceptionTranslatorPolicyResult.Value);
                     spc.AddSource(
                         $"{handler.OperationTypeName}ExecutorPipeline.g.cs",
                         SourceText.From(pipelineSource, Encoding.UTF8));

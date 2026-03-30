@@ -853,6 +853,14 @@ Run this as a paired design loop with workstream 6. The result contract must be 
   - Stay in Workstream 8 and implement ordered exception translator policy with compile-time conflict detection.
   - That is the narrowest dependency-safe next slice because the seam extraction made exception translation replaceable, but it did not yet define how multiple translators compose or conflict; that ordering policy is a prerequisite for later descriptor-level failure metadata, host-aware mapping, and package-provided translator work.
   - The live tracker should therefore keep Workstream 8 active, set `nextReadySlice` to the ordered-translator-policy slice, and continue without reopening a human-direction gate unless a real blocker or explicit review gate appears.
+- Completed the ordered exception-translator policy slice:
+  - `PipelineExceptionTranslatorPolicy.CreateDefault()` now validates and orders the default executor-shell translators before pipeline generation continues, keeping the two validation translators explicit and the catch-all fallback last.
+  - `BP113` now rejects overlapping non-fallback translator ownership, so exception translation can no longer drift based on incidental translator registration order.
+  - The proof matrix now includes red-to-green policy ordering/conflict tests, a direct codegen catch-order proof, targeted integration proofs for `ApiException` plus validation-exception paths, green `dotnet format .\Blueprint.sln --no-restore`, a green `dotnet build .\Blueprint.sln --no-restore`, and green `Blueprint.SourceGenerator.Tests` (`285`), `Blueprint.SourceGenerator.CodeWriter.Tests` (`45`), and `Blueprint.SourceGenerator.Tests.Integration` (`58`) runs.
+- Autonomous next Workstream 8 follow-on after ordered translator policy:
+  - Stay in Workstream 8 and introduce descriptor-level failure metadata model aligned with ordered translator ownership.
+  - That is the narrowest dependency-safe next slice because translator precedence and overlap are now explicit, which lets descriptor generation project stable failure facts before host-aware mapping or package-provided translator activation widens the contract.
+  - The live tracker should therefore keep Workstream 8 active, set `nextReadySlice` to the descriptor-level-failure-metadata slice, and continue without reopening a human-direction gate unless a real blocker or explicit review gate appears.
 
 ## 8. Error model and exception handling
 

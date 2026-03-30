@@ -167,6 +167,18 @@ internal static class DiagnosticDescriptors
         isEnabledByDefault: true,
         description: "Results unions must not mix host-neutral NoResultOperationResult with host-specific no-content or status-only result families such as HttpNoContentResult.");
 
+    /// <summary>
+    /// BP113: Multiple non-fallback exception translators overlap on the same exception family.
+    /// </summary>
+    public static readonly DiagnosticDescriptor ConflictingExceptionTranslatorOwnership = new(
+        id: "BP113",
+        title: "Exception translator ownership is ambiguous",
+        messageFormat: "The exception translators '{0}' for '{1}' and '{2}' for '{3}' overlap. Only the catch-all fallback translator may overlap another translator's exception family.",
+        category: Category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "Pipeline exception translator ownership must stay deterministic so the generated catch shell does not depend on incidental registration order.");
+
     // Warning diagnostics (BP200-BP299)
 
     /// <summary>

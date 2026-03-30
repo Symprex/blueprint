@@ -12,14 +12,14 @@
   "current": {
     "activeWorkstream": "error-model-and-exception-handling",
     "nextReadySlice": {
+      "id": "error-model-and-exception-handling/descriptor-level-failure-metadata-model",
+      "workstream": "error-model-and-exception-handling",
+      "title": "Introduce descriptor-level failure metadata model aligned with ordered translator ownership"
+    },
+    "lastCompletedSlice": {
       "id": "error-model-and-exception-handling/ordered-exception-translator-policy-with-conflict-detection",
       "workstream": "error-model-and-exception-handling",
       "title": "Implement ordered exception translator policy with compile-time conflict detection"
-    },
-    "lastCompletedSlice": {
-      "id": "error-model-and-exception-handling/extract-exception-translator-seam-with-generic-fallback",
-      "workstream": "error-model-and-exception-handling",
-      "title": "Extract a minimal exception-translator seam around the shared executor shell while preserving ApiException handling and the generic unhandled fallback"
     },
     "openReviewGate": null
   },

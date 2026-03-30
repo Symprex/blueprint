@@ -235,7 +235,12 @@ public class OperationExecutorPipelineGeneratorIntegrationTests
 
         module.ContributeToPipeline(new PipelineContributorContext(module.ContributorId, operation, plan, new CompilationOperationLookup(compilation), handlerResult.Value!));
 
-        var pipelineSource = PipelineCodeGenerator.GeneratePipeline(handlerResult.Value!, plan, new TestExceptionTranslator());
+        var policyResult = PipelineExceptionTranslatorPolicy.Create([new TestExceptionTranslator()]);
+
+        policyResult.Diagnostics.Should().BeEmpty();
+        policyResult.Value.Should().NotBeNull();
+
+        var pipelineSource = PipelineCodeGenerator.GeneratePipeline(handlerResult.Value!, plan, policyResult.Value!);
 
         pipelineSource.Should().Contain("catch (System.InvalidOperationException e)");
         pipelineSource.Should().Contain("return new Blueprint.Runtime.Exec.UnhandledExceptionResult(e);");
@@ -1021,7 +1026,17 @@ public class OperationExecutorPipelineGeneratorIntegrationTests
 
     private sealed class TestExceptionTranslator : IPipelineExceptionTranslator
     {
-        public void WriteExceptionHandling(ICodeWriter writer, bool isHandlerAsync)
+        public string TranslatorId => "test-invalid-operation-exception";
+
+        public string HandledExceptionTypeName => "System.InvalidOperationException";
+
+        public IReadOnlyList<string> OwnedExceptionTypeNames { get; } = ["System.InvalidOperationException"];
+
+        public int Order => 100;
+
+        public bool IsFallback => false;
+
+        public void WriteCatchBlock(ICodeWriter writer, bool isHandlerAsync)
         {
             writer.Catch(
                 "System.InvalidOperationException e",

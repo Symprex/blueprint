@@ -87,3 +87,15 @@ Implement alongside the core pipeline planning work, before OpenAPI and before b
     - add compile-time conflict detection for overlapping translator ownership
     - keep host-specific mapping and public failure-taxonomy expansion deferred
     - prove the ordering behavior with focused generator and integration coverage before widening the contract further
+- Completed the ordered exception-translator policy slice:
+  - `PipelineExceptionTranslatorPolicy.CreateDefault()` now validates and orders the default translator set before `PipelineCodeGenerator` emits the outer catch shell.
+  - The default policy keeps `LegacyValidationExceptionTranslator`, `DataAnnotationsValidationExceptionTranslator`, and the catch-all `DefaultPipelineExceptionTranslator` explicit, preserves the previous validation and `ApiException` behavior, and emits the fallback translator last.
+  - `BP113` now rejects overlapping non-fallback translator ownership so exception translation does not silently depend on incidental registration order.
+  - The proof matrix now includes red-to-green policy ordering/conflict tests, a direct codegen catch-order proof, targeted integration proofs for `ApiException` and validation-exception paths, green `dotnet format .\Blueprint.sln --no-restore`, a green `dotnet build .\Blueprint.sln --no-restore`, and green `Blueprint.SourceGenerator.Tests` (`285`), `Blueprint.SourceGenerator.CodeWriter.Tests` (`45`), and `Blueprint.SourceGenerator.Tests.Integration` (`58`) runs.
+- Autonomous follow-on after ordered translator policy:
+  - Introduce descriptor-level failure metadata model aligned with ordered translator ownership.
+  - That is the narrowest safe next slice because translator precedence and overlap are now explicit, so descriptor generation can project failure facts without guessing which translator owns an exception family.
+  - Acceptance target for this next slice:
+    - record descriptor-level failure metadata for known translator-owned exception families
+    - keep host-aware status/body mapping and package-provided translator activation deferred
+    - prove metadata projection and compile-time validation before widening host or OpenAPI consumers

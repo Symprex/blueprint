@@ -69,6 +69,8 @@ Key files:
 
 `ParameterAnalyzer` is the bridge between handler signatures and runtime behavior. It decides which parameters come from the operation, the context, context properties, or DI.
 
+The outer executor-shell exception path is now also ordered explicitly through `PipelineExceptionTranslatorPolicy`, which keeps specific `IPipelineExceptionTranslator` catch blocks deterministic and rejects ambiguous non-fallback overlap before the generator emits the catch shell.
+
 ### 6. Runtime executes precomputed metadata
 
 At runtime:

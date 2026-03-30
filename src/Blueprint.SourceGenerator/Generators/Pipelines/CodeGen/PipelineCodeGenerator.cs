@@ -10,24 +10,13 @@ namespace Blueprint.SourceGenerator.Generators.Pipelines;
 internal static class PipelineCodeGenerator
 {
     /// <summary>
-    /// Generates the complete pipeline class for an operation handler.
+    /// Generates the complete pipeline class for an operation handler using the supplied exception-translation policy.
     /// </summary>
     /// <param name="handler">The discovered handler model that drives generated type and method names.</param>
     /// <param name="plan">The contributor-built plan that determines the rendered pipeline steps.</param>
+    /// <param name="exceptionTranslatorPolicy">The validated exception translator policy that owns the generated catch shell.</param>
     /// <returns>The generated pipeline source for the supplied handler.</returns>
-    public static string GeneratePipeline(OperationHandlerModel handler, PipelinePlan plan)
-    {
-        return GeneratePipeline(handler, plan, DefaultPipelineExceptionTranslator.Instance);
-    }
-
-    /// <summary>
-    /// Generates the complete pipeline class for an operation handler using the supplied exception translator.
-    /// </summary>
-    /// <param name="handler">The discovered handler model that drives generated type and method names.</param>
-    /// <param name="plan">The contributor-built plan that determines the rendered pipeline steps.</param>
-    /// <param name="exceptionTranslator">The exception translator that owns the generated catch shell.</param>
-    /// <returns>The generated pipeline source for the supplied handler.</returns>
-    public static string GeneratePipeline(OperationHandlerModel handler, PipelinePlan plan, IPipelineExceptionTranslator exceptionTranslator)
+    public static string GeneratePipeline(OperationHandlerModel handler, PipelinePlan plan, PipelineExceptionTranslatorPolicy exceptionTranslatorPolicy)
     {
         var codeBuilder = CodeBuilder.Create("Blueprint.Generated");
 
@@ -38,7 +27,7 @@ internal static class PipelineCodeGenerator
         AddLoggingFields(pipelineClass);
         AddLoggerField(pipelineClass);
         AddConstructor(pipelineClass, handler);
-        AddExecuteAsyncMethod(pipelineClass, handler, plan, exceptionTranslator);
+        AddExecuteAsyncMethod(pipelineClass, handler, plan, exceptionTranslatorPolicy);
 
         return codeBuilder.Build();
     }
@@ -103,7 +92,7 @@ internal static class PipelineCodeGenerator
         ClassBuilder pipelineClass,
         OperationHandlerModel handler,
         PipelinePlan plan,
-        IPipelineExceptionTranslator exceptionTranslator)
+        PipelineExceptionTranslatorPolicy exceptionTranslatorPolicy)
     {
         var executeMethod = pipelineClass.AddMethod("ExecuteAsync")
             .MakePublicMethod()
@@ -130,7 +119,7 @@ internal static class PipelineCodeGenerator
                         WritePipelineSteps(tryWriter, handler, plan);
                     });
 
-                exceptionTranslator.WriteExceptionHandling(writer, handler.IsHandlerAsync);
+                exceptionTranslatorPolicy.WriteExceptionHandling(writer, handler.IsHandlerAsync);
             });
     }
 
