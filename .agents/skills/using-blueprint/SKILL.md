@@ -48,6 +48,7 @@ Do not use this skill to change Blueprint internals in `blueprint-source-gen`; u
 - `MapBlueprintApi(...)` now starts the runtime migration away from self-executing results by translating `OkResult<T>` and `NoResultOperationResult` through `Blueprint.Runtime.Http.HttpOperationResultExecutor`; unsupported legacy results still fall back to direct `OperationResult.ExecuteAsync(...)` for now.
 - Host-exposed operations now also fail build-time validation with `BP108` when the declared semantic result contract includes a shape that the current enabled HTTP executor path does not translate.
 - Host-exposed `Results<T1, T2>` contracts now also fail build-time validation with `BP109` when multiple supported semantic result members would still collapse to the same current HTTP response shape, such as multiple `OkResult<T>` members that all translate to `200` JSON responses.
+- Host-exposed `Results<T1, T2>` contracts now also fail build-time validation with `BP110` when supported members still share the same HTTP status code without explicit host/client discrimination metadata, such as `OkResult<T>` plus `NoResultOperationResult` both mapping to `200 OK`.
 - Nullable plain-value handler returns are a build-time error, and broader host translation remains follow-on work.
 
 ## Working loop

@@ -777,7 +777,11 @@ Run this as a paired design loop with workstream 6. The result contract must be 
   - `AmbiguousHostTranslationModule` now runs after the host-executor availability check and reports `BP109` when an HTTP-exposed `Results<T1, T2>` contract contains multiple supported semantic-result members that still collapse to the same current HTTP response shape.
   - The first approved ambiguity rule stays intentionally narrow: it targets current same-shape HTTP success unions such as multiple `OkResult<T>` members that all translate to `200` JSON responses, while unsupported members remain owned by `BP108`.
   - The proof set now includes a focused red-to-green descriptor diagnostic test file (`OperationDescriptorSourceGeneratorTests.AmbiguousHostTranslation.cs`) covering the ambiguous same-shape union, a clean single-result regression, the BP108/BP109 boundary, and a green `Blueprint.SourceGenerator.Tests` project run.
-- Next approved follow-on for this workstream: add the first compile-time diagnostic ensuring HTTP-visible unions have an unambiguous host/client discrimination strategy.
+- Completed the first HTTP union discrimination diagnostic slice:
+  - `HttpUnionDiscriminationStrategyModule` now runs after the host-translation ambiguity check and reports `BP110` when an HTTP-exposed `Results<T1, T2>` contract keeps the same current HTTP status code across supported members without an explicit host/client discrimination strategy.
+  - The first approved discrimination rule stays intentionally narrow: it targets same-status mixed-shape unions such as `OkResult<T>` plus `NoResultOperationResult`, while unsupported members remain owned by `BP108` and same-shape collisions remain owned by `BP109`.
+  - The proof set now includes a red-to-green descriptor diagnostic test file (`OperationDescriptorSourceGeneratorTests.HttpUnionDiscrimination.cs`) covering the same-status mixed-shape union plus the `BP108`/`BP109` boundaries, a green `Blueprint.SourceGenerator.Tests` project run, and a green `dotnet build .\Blueprint.sln --no-restore` verification pass.
+- Next approved follow-on for this workstream: add the first compile-time diagnostic ensuring flattened descriptor outcomes stay aligned with the declared `Results<T1, ...>` member set.
 
 ## 8. Error model and exception handling
 

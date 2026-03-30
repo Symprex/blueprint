@@ -131,6 +131,18 @@ internal static class DiagnosticDescriptors
         isEnabledByDefault: true,
         description: "HTTP-exposed results unions must not contain multiple semantic result members that collapse to the same current host response shape.");
 
+    /// <summary>
+    /// BP110: HTTP-visible union lacks an explicit same-status discrimination strategy.
+    /// </summary>
+    public static readonly DiagnosticDescriptor MissingHttpUnionDiscriminationStrategy = new(
+        id: "BP110",
+        title: "HTTP-visible union lacks an explicit same-status discrimination strategy",
+        messageFormat: "The operation '{0}' declares semantic results {1}, which all use HTTP status code '{2}' for enabled host '{3}' without an explicit host/client discrimination strategy",
+        category: Category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "HTTP-visible unions that share a status code must declare an explicit host/client discrimination strategy unless a dedicated generated exception applies.");
+
     // Warning diagnostics (BP200-BP299)
 
     /// <summary>

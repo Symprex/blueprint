@@ -34,7 +34,7 @@ public sealed class OperationDescriptorSourceGenerator : IIncrementalGenerator, 
     /// <param name="context">The incremental generator initialization context.</param>
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
-        var config = new BlueprintSourceGenerationConfig([new LinkGenerationModule(), new TasksHostModule(), new ValidationModule(), new FlattenedResultOutcomeModule(), new HostExecutorAvailabilityModule(), new AmbiguousHostTranslationModule(), new OperationDiscoveryManifestModule()]);
+        var config = new BlueprintSourceGenerationConfig([new LinkGenerationModule(), new TasksHostModule(), new ValidationModule(), new FlattenedResultOutcomeModule(), new HostExecutorAvailabilityModule(), new AmbiguousHostTranslationModule(), new HttpUnionDiscriminationStrategyModule(), new OperationDiscoveryManifestModule()]);
         var executionPlanResult = config.BuildExecutionPlan();
 
         context.RegisterPostInitializationOutput(i =>
