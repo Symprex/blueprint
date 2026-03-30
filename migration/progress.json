@@ -12,9 +12,9 @@
   "current": {
     "activeWorkstream": "result-model-and-host-translation",
     "nextReadySlice": {
-      "id": "result-model-and-host-translation/no-result-shape-separation-diagnostic",
+      "id": "result-model-and-host-translation/default-http-status-mapping-and-host-specific-result-families",
       "workstream": "result-model-and-host-translation",
-      "title": "Add the first compile-time diagnostic ensuring host-neutral no-result shapes and host-specific no-content/status-only shapes are not conflated in descriptor generation"
+      "title": "Lock the default HTTP 200 status mapping for NoResult and define host-specific result families as host-package extensions rather than core taxonomy members"
     },
     "lastCompletedSlice": {
       "id": "result-model-and-host-translation/flattened-descriptor-outcome-alignment-diagnostic",

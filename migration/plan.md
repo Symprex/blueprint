@@ -785,7 +785,10 @@ Run this as a paired design loop with workstream 6. The result contract must be 
   - `FlattenedResultOutcomeModule` now reports `BP111` before descriptor emission when a `Results<T1, T2>` contract would force `OperationResultOutcomesFeatureData` away from the declared semantic member set, such as plain CLR payload members or nested union members.
   - The descriptor and pipeline seams now share the same union-member validity predicate, so unsupported `Results<T1, T2>` members no longer pass descriptor projection while only failing later in handler validation.
   - The proof set now includes a red-to-green descriptor diagnostic test in `OperationDescriptorSourceGeneratorTests.FlattenedOutcomes.cs`, a green `Blueprint.SourceGenerator.Tests` project run (`244` tests), a green targeted integration check for `AppDataModelSourceGeneratorResultOutcomesFeatureDataTests`, and a green `dotnet build .\Blueprint.sln --no-restore` verification pass.
-- Next approved follow-on for this workstream: add the first compile-time diagnostic ensuring host-neutral no-result shapes and host-specific no-content/status-only shapes are not conflated in descriptor generation.
+- Repaired the queued no-result-shape-separation follow-on:
+  - The previously queued diagnostic depends on an unresolved result-model question in the workstream plan (`What is the default HTTP status mapping for host-neutral NoResult, and how should that interact with explicit host-specific no-content/status-only result families?`) and the current repo still exposes only host-neutral `NoResultOperationResult`, not a concrete host-specific no-content/status-only result family to prove against.
+  - That leaves the diagnostic slice without executable acceptance criteria today, so the next ready slice must first lock the default HTTP status mapping plus the ownership model for host-specific result families.
+- Next approved follow-on for this workstream: lock the default HTTP 200 status mapping for `NoResult` and define host-specific result families as host-package extensions rather than core taxonomy members.
 
 ## 8. Error model and exception handling
 
