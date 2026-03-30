@@ -818,6 +818,16 @@ Run this as a paired design loop with workstream 6. The result contract must be 
 - Review gate after the first semantic result-family cut:
   - The explicitly approved family cut for Workstream 7 is now complete: `CreatedResult<T>`, `AcceptedResult` / `AcceptedResult<T>`, and `ConflictResult` are all landed.
   - No explicit next slice is approved in `migration\plan.md` or `migration\result-model-and-host-translation\plan.md` after Conflict, so the live tracker should stop with `nextReadySlice = null` and open a human-direction gate instead of guessing between more result-model work and a pivot into the paired error/HTTP workstreams.
+- Cleared the post-Conflict review gate by later human direction:
+  - The human explicitly delegated next-slice selection to this session, so the next approved follow-on is `NotFoundResult` / `NotFoundResult<T>` as the next semantic missing-resource result family with default HTTP `404 Not Found` mapping.
+  - That choice stays in Workstream 7 because `NotFoundResult` is already part of the canonical shared semantic taxonomy and extends the same proven distinct-status host-translation pattern without forcing Workstream 8 to invent or borrow a missing-resource failure shape first.
+- Completed the NotFound-result semantic missing-resource slice:
+  - `Blueprint.Runtime.Exec.NotFoundResult` / `NotFoundResult<T>` now provide the next host-neutral semantic family for missing-resource outcomes, and the current HTTP host maps that family to body-bearing JSON `404 Not Found` responses without collapsing it into either success or conflict semantics.
+  - The descriptor-time result helpers now treat that family as part of the supported HTTP executor surface and keep its `404` body-bearing response shape aligned across host-availability, flattened-outcome, ambiguity, and same-status discrimination checks.
+  - The proof set now includes a red-to-green endpoint translation test, a red-to-green descriptor support test, a flattened descriptor-outcome proof, and a clean status boundary proving `Results<NotFoundResult<string>, OkResult<string>>` stays clear of `BP109` and `BP110`.
+- Review gate after the NotFound-result slice:
+  - `NotFoundResult` is now landed, but no explicit post-NotFound follow-on is recorded in the durable plans yet.
+  - If execution stops here, the live tracker should reopen a human-direction gate rather than guessing between more result-model taxonomy work and a pivot into Workstream 8.
 
 ## 8. Error model and exception handling
 

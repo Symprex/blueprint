@@ -38,6 +38,11 @@ public class HttpOperationResultExecutor
                 httpContext.Response.ContentType = "application/json; charset=utf-8";
                 await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(conflictResult.Content), httpContext.RequestAborted);
                 return true;
+            case NotFoundResult notFoundResult:
+                httpContext.Response.StatusCode = StatusCodes.Status404NotFound;
+                httpContext.Response.ContentType = "application/json; charset=utf-8";
+                await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(notFoundResult.Content), httpContext.RequestAborted);
+                return true;
             case OkResult okResult:
                 if (okResult.Content is null)
                 {

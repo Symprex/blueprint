@@ -13,11 +13,11 @@
     "activeWorkstream": "result-model-and-host-translation",
     "nextReadySlice": null,
     "lastCompletedSlice": {
-      "id": "result-model-and-host-translation/conflict-result-first-pass-support",
+      "id": "result-model-and-host-translation/not-found-result-first-pass-support",
       "workstream": "result-model-and-host-translation",
-      "title": "Add ConflictResult as the next semantic conflict result with default HTTP 409 mapping"
+      "title": "Add NotFoundResult and NotFoundResult<T> as the next semantic missing-resource results with default HTTP 404 mapping"
     },
-    "openReviewGate": "Human direction required: Workstream 7 has completed its explicitly approved first semantic result-family cut (CreatedResult<T>, AcceptedResult/AcceptedResult<T>, ConflictResult). No next slice is explicitly approved in migration\\plan.md or migration\\result-model-and-host-translation\\plan.md after Conflict."
+    "openReviewGate": "Human direction required: NotFoundResult slice complete. No next slice is explicitly approved after NotFoundResult in migration\\plan.md or migration\\result-model-and-host-translation\\plan.md."
   },
   "orchestrationContract": {
     "mustImplementAfterSliceSelection": true,

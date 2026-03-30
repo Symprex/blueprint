@@ -423,3 +423,13 @@ Close the result taxonomy and normalization rules together with the pipeline pla
 - Review gate after the first semantic result-family cut:
   - The currently approved family cut is now complete: `CreatedResult<T>`, `AcceptedResult` / `AcceptedResult<T>`, and `ConflictResult` are all landed.
   - Neither `migration\plan.md` nor this workstream plan explicitly approves a next slice after Conflict, so `migration\progress.json` should stop with `lastCompletedSlice = conflict-result-first-pass-support`, `nextReadySlice = null`, and an open human-direction review gate instead of fabricating another follow-on.
+- Cleared the post-Conflict review gate by later human direction:
+  - The human explicitly delegated next-slice selection to this session, so the next approved follow-on is `NotFoundResult` / `NotFoundResult<T>` as the next semantic missing-resource result family with default HTTP `404 Not Found` mapping.
+  - `NotFoundResult` is already part of the canonical shared semantic taxonomy in this workstream, and it extends the same distinct-status result-family pattern proven by the `CreatedResult<T>`, `AcceptedResult`, and `ConflictResult` slices without widening into host-specific status-only families or the separate exception/error workstream yet.
+- Completed the NotFound-result semantic missing-resource slice:
+  - `Blueprint.Runtime.Exec.NotFoundResult` / `NotFoundResult<T>` now provide the next host-neutral semantic family for missing-resource outcomes, and the current HTTP host maps that family to body-bearing JSON `404 Not Found` responses without collapsing it into success or conflict semantics.
+  - The shared response-shape helper now threads that `404 + body` mapping through `HostExecutorAvailabilityModule`, `AmbiguousHostTranslationModule`, and `HttpUnionDiscriminationStrategyModule`, keeping descriptor-time validation aligned with runtime translation.
+  - The proof matrix now includes a red-to-green endpoint translation test, a red-to-green descriptor support test, a flattened descriptor-outcome proof, and a clean status-boundary proof showing `Results<NotFoundResult<string>, OkResult<string>>` stays clear of both `BP109` and `BP110`.
+- Review gate after the NotFound-result slice:
+  - `NotFoundResult` is now landed, but this workstream plan still does not record an explicit post-NotFound follow-on.
+  - If execution stops here, `migration\progress.json` should reopen a human-direction gate rather than guessing whether the next safe move is another semantic result slice or a pivot into the paired error-model workstream.

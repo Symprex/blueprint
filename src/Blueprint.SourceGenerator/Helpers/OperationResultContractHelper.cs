@@ -94,6 +94,7 @@ public static class OperationResultContractHelper
     /// <param name="okResultType">The resolved <c>Blueprint.Runtime.Exec.OkResult</c> base type.</param>
     /// <param name="acceptedResultType">The resolved <c>Blueprint.Runtime.Exec.AcceptedResult</c> base type when available.</param>
     /// <param name="conflictResultType">The resolved <c>Blueprint.Runtime.Exec.ConflictResult</c> base type when available.</param>
+    /// <param name="notFoundResultType">The resolved <c>Blueprint.Runtime.Exec.NotFoundResult</c> base type when available.</param>
     /// <param name="createdResultType">The resolved <c>Blueprint.Runtime.Exec.CreatedResult</c> base type when available.</param>
     /// <param name="noResultType">The resolved <c>Blueprint.Runtime.Exec.NoResultOperationResult</c> type.</param>
     /// <param name="keyOnlyResourceEventResultType">The resolved <c>Blueprint.Runtime.Exec.KeyOnlyResourceEventResult</c> type when available.</param>
@@ -104,6 +105,7 @@ public static class OperationResultContractHelper
         INamedTypeSymbol okResultType,
         INamedTypeSymbol? acceptedResultType,
         INamedTypeSymbol? conflictResultType,
+        INamedTypeSymbol? notFoundResultType,
         INamedTypeSymbol? createdResultType,
         INamedTypeSymbol noResultType,
         INamedTypeSymbol? keyOnlyResourceEventResultType,
@@ -112,6 +114,7 @@ public static class OperationResultContractHelper
         return IsTypeOrDerivedFrom(resultType, okResultType)
             || IsTypeOrDerivedFromOptional(resultType, acceptedResultType)
             || IsTypeOrDerivedFromOptional(resultType, conflictResultType)
+            || IsTypeOrDerivedFromOptional(resultType, notFoundResultType)
             || IsTypeOrDerivedFromOptional(resultType, createdResultType)
             || SymbolEqualityComparer.Default.Equals(resultType, noResultType)
             || SymbolEqualityComparer.Default.Equals(resultType, keyOnlyResourceEventResultType)
@@ -125,6 +128,7 @@ public static class OperationResultContractHelper
     /// <param name="okResultType">The resolved <c>Blueprint.Runtime.Exec.OkResult</c> base type.</param>
     /// <param name="acceptedResultType">The resolved <c>Blueprint.Runtime.Exec.AcceptedResult</c> base type when available.</param>
     /// <param name="conflictResultType">The resolved <c>Blueprint.Runtime.Exec.ConflictResult</c> base type when available.</param>
+    /// <param name="notFoundResultType">The resolved <c>Blueprint.Runtime.Exec.NotFoundResult</c> base type when available.</param>
     /// <param name="createdResultType">The resolved <c>Blueprint.Runtime.Exec.CreatedResult</c> base type when available.</param>
     /// <param name="noResultType">The resolved <c>Blueprint.Runtime.Exec.NoResultOperationResult</c> type.</param>
     /// <param name="keyOnlyResourceEventResultType">The resolved <c>Blueprint.Runtime.Exec.KeyOnlyResourceEventResult</c> type when available.</param>
@@ -137,6 +141,7 @@ public static class OperationResultContractHelper
         INamedTypeSymbol okResultType,
         INamedTypeSymbol? acceptedResultType,
         INamedTypeSymbol? conflictResultType,
+        INamedTypeSymbol? notFoundResultType,
         INamedTypeSymbol? createdResultType,
         INamedTypeSymbol noResultType,
         INamedTypeSymbol? keyOnlyResourceEventResultType,
@@ -161,6 +166,13 @@ public static class OperationResultContractHelper
         if (IsTypeOrDerivedFromOptional(resultType, conflictResultType))
         {
             statusCode = 409;
+            hasResponseBody = true;
+            return true;
+        }
+
+        if (IsTypeOrDerivedFromOptional(resultType, notFoundResultType))
+        {
+            statusCode = 404;
             hasResponseBody = true;
             return true;
         }

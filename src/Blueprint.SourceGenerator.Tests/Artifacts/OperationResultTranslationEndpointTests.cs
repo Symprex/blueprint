@@ -81,6 +81,23 @@ public class OperationResultTranslationEndpointTests
     }
 
     [Fact]
+    public async Task When_http_endpoint_pipeline_returns_not_found_result_then_host_route_completes_with_404_json_response()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<ResultTranslationBlueprintApp, ResultTranslationBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/not-found-operation");
+
+        endpoint.Should().NotBeNull();
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider);
+
+        response.StatusCode.Should().Be(StatusCodes.Status404NotFound);
+        response.ContentType.Should().Be("application/json; charset=utf-8");
+        response.Body.Should().Be("\"Blueprint\"");
+    }
+
+    [Fact]
     public async Task When_http_endpoint_pipeline_returns_no_result_then_host_route_completes_with_empty_200_response()
     {
         var endpoints = CreateEndpoints();
@@ -226,6 +243,10 @@ public class OperationResultTranslationEndpointTests
             conflictDescriptor.AddUrl(new ApiOperationUrl("/conflict-operation"));
             this.Register(conflictDescriptor);
 
+            var notFoundDescriptor = new ApiOperationDescriptor(typeof(NotFoundTranslationOperation), "NotFoundTranslationOperation", nameof(OperationResultTranslationEndpointTests));
+            notFoundDescriptor.AddUrl(new ApiOperationUrl("/not-found-operation"));
+            this.Register(notFoundDescriptor);
+
             var noResultDescriptor = new ApiOperationDescriptor(typeof(NoResultTranslationOperation), "NoResultTranslationOperation", nameof(OperationResultTranslationEndpointTests));
             noResultDescriptor.AddUrl(new ApiOperationUrl("/no-result-operation"));
             this.Register(noResultDescriptor);
@@ -257,6 +278,7 @@ public class OperationResultTranslationEndpointTests
             this.Register(typeof(CreatedTranslationOperation), new CreatedResultPipeline());
             this.Register(typeof(AcceptedTranslationOperation), new AcceptedResultPipeline());
             this.Register(typeof(ConflictTranslationOperation), new ConflictResultPipeline());
+            this.Register(typeof(NotFoundTranslationOperation), new NotFoundResultPipeline());
             this.Register(typeof(NoResultTranslationOperation), new NoResultPipeline());
             this.Register(typeof(HttpNoContentTranslationOperation), new HttpNoContentPipeline());
             this.Register(typeof(KeyOnlyResourceEventTranslationOperation), new KeyOnlyResourceEventPipeline());
@@ -321,6 +343,14 @@ public class OperationResultTranslationEndpointTests
         }
     }
 
+    private sealed class NotFoundResultPipeline : IOperationExecutorPipeline
+    {
+        public Task<OperationResult> ExecuteAsync(ApiOperationContext context)
+        {
+            return Task.FromResult<OperationResult>(new NotFoundResult<string>("Blueprint"));
+        }
+    }
+
     private sealed class LegacyFallbackPipeline : IOperationExecutorPipeline
     {
         public Task<OperationResult> ExecuteAsync(ApiOperationContext context)
@@ -344,6 +374,8 @@ public class OperationResultTranslationEndpointTests
     private sealed class AcceptedTranslationOperation;
 
     private sealed class ConflictTranslationOperation;
+
+    private sealed class NotFoundTranslationOperation;
 
     private sealed class NoResultTranslationOperation;
 
