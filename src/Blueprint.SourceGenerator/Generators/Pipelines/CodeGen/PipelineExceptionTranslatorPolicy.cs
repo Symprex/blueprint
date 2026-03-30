@@ -1,5 +1,7 @@
 using Blueprint.SourceGenerator.CodeWriter;
 using Blueprint.SourceGenerator.Helpers;
+using Blueprint.SourceGenerator.Modules;
+using Blueprint.SourceGenerator.Planning;
 using Microsoft.CodeAnalysis;
 
 namespace Blueprint.SourceGenerator.Generators.Pipelines;
@@ -33,17 +35,29 @@ internal sealed record PipelineExceptionTranslatorPolicy(IReadOnlyList<IPipeline
     }
 
     /// <summary>
+    /// Creates and validates a policy from the translators contributed by the supplied modules.
+    /// </summary>
+    /// <param name="contributors">The contributors that add translators to the shared policy.</param>
+    /// <returns>The ordered policy, or diagnostics if translator ownership overlaps unsafely.</returns>
+    public static Result<PipelineExceptionTranslatorPolicy> CreateFromContributors(IReadOnlyList<IExceptionTranslationContributor> contributors)
+    {
+        var context = new ExceptionTranslationContributorContext();
+
+        foreach (var contributor in contributors)
+        {
+            contributor.ContributeToExceptionTranslation(context);
+        }
+
+        return Create(context.GetTranslators());
+    }
+
+    /// <summary>
     /// Creates the default ordered policy that preserves the current validation and unhandled fallback behavior.
     /// </summary>
     /// <returns>The ordered default policy, or diagnostics if a future edit makes the configured translators overlap.</returns>
     public static Result<PipelineExceptionTranslatorPolicy> CreateDefault()
     {
-        return Create(
-        [
-            LegacyValidationExceptionTranslator.Instance,
-            DataAnnotationsValidationExceptionTranslator.Instance,
-            DefaultPipelineExceptionTranslator.Instance,
-        ]);
+        return CreateFromContributors([new DefaultExceptionTranslationModule()]);
     }
 
     /// <summary>

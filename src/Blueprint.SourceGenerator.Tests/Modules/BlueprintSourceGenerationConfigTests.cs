@@ -21,6 +21,19 @@ public class BlueprintSourceGenerationConfigTests
     }
 
     [Fact]
+    public void When_exception_translation_module_used_then_exposes_real_contributors()
+    {
+        var module = new TestExceptionTranslationModule();
+        var config = new BlueprintSourceGenerationConfig([module]);
+
+        var result = config.BuildExecutionPlan();
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Value.Should().NotBeNull();
+        result.Value!.ExceptionTranslationContributors.Should().ContainSingle().Which.Should().BeSameAs(module);
+    }
+
+    [Fact]
     public void When_dependency_requires_reorder_then_orders_contributors_deterministically()
     {
         var config = new BlueprintSourceGenerationConfig(
@@ -155,6 +168,25 @@ public class BlueprintSourceGenerationConfigTests
         public IReadOnlyList<string> DependsOn { get; } = dependsOn;
 
         public void ContributeToDescriptor(DescriptorContributorContext context)
+        {
+        }
+    }
+
+    private sealed class TestExceptionTranslationModule : IBlueprintSourceGeneratorModule, IExceptionTranslationContributor
+    {
+        public string ModuleId => nameof(TestExceptionTranslationModule);
+
+        public BlueprintModuleCategory Category => BlueprintModuleCategory.Consumer;
+
+        public string ContributorId => "package-exception-translation";
+
+        public int Order => 0;
+
+        public bool IsUnique => true;
+
+        public IReadOnlyList<string> DependsOn { get; } = [];
+
+        public void ContributeToExceptionTranslation(ExceptionTranslationContributorContext context)
         {
         }
     }

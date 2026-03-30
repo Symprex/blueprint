@@ -19,6 +19,7 @@ public record BlueprintSourceGenerationConfig(IReadOnlyList<IBlueprintSourceGene
     {
         var postInitialization = new List<ContributorRegistration<IPostInitializationContributor>>();
         var descriptor = new List<ContributorRegistration<IDescriptorContributor>>();
+        var exceptionTranslation = new List<ContributorRegistration<IExceptionTranslationContributor>>();
         var pipeline = new List<ContributorRegistration<IPipelineContributor>>();
         var host = new List<ContributorRegistration<IHostContributor>>();
         var appRegistration = new List<ContributorRegistration<IAppRegistrationContributor>>();
@@ -34,6 +35,11 @@ public record BlueprintSourceGenerationConfig(IReadOnlyList<IBlueprintSourceGene
             if (module is IDescriptorContributor descriptorContributor)
             {
                 descriptor.Add(new ContributorRegistration<IDescriptorContributor>(module, descriptorContributor));
+            }
+
+            if (module is IExceptionTranslationContributor exceptionTranslationContributor)
+            {
+                exceptionTranslation.Add(new ContributorRegistration<IExceptionTranslationContributor>(module, exceptionTranslationContributor));
             }
 
             if (module is IPipelineContributor pipelineContributor)
@@ -60,6 +66,7 @@ public record BlueprintSourceGenerationConfig(IReadOnlyList<IBlueprintSourceGene
         var diagnostics = new List<DiagnosticInfo>();
         var orderedPostInitialization = OrderContributors(postInitialization, "post-initialization", diagnostics);
         var orderedDescriptor = OrderContributors(descriptor, "descriptor", diagnostics);
+        var orderedExceptionTranslation = OrderContributors(exceptionTranslation, "exception-translation", diagnostics);
         var orderedPipeline = OrderContributors(pipeline, "pipeline", diagnostics);
         var orderedHost = OrderContributors(host, "host", diagnostics);
         var orderedAppRegistration = OrderContributors(appRegistration, "app-registration", diagnostics);
@@ -74,6 +81,7 @@ public record BlueprintSourceGenerationConfig(IReadOnlyList<IBlueprintSourceGene
             new BlueprintModuleExecutionPlan(
                 orderedPostInitialization,
                 orderedDescriptor,
+                orderedExceptionTranslation,
                 orderedPipeline,
                 orderedHost,
                 orderedAppRegistration,

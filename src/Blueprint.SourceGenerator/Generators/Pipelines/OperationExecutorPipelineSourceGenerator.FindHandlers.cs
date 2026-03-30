@@ -7,7 +7,7 @@ namespace Blueprint.SourceGenerator.Generators.Pipelines;
 /// <summary>
 /// Incremental source generator that discovers operation handlers and generates executor pipelines.
 /// </summary>
-public sealed partial class OperationExecutorPipelineSourceGenerator
+public partial class OperationExecutorPipelineSourceGenerator
 {
     /// <summary>
     /// Finds handlers for all operations in the BlueprintApp.

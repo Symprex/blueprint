@@ -1,5 +1,4 @@
 using Blueprint.SourceGenerator.CodeWriter;
-using Blueprint.SourceGenerator.Generators.Pipelines;
 using Blueprint.SourceGenerator.Planning;
 using CSharpSymbolDisplay = Microsoft.CodeAnalysis.CSharp.SymbolDisplay;
 
@@ -32,15 +31,15 @@ public sealed class FailureOutcomesModule : IBlueprintSourceGeneratorModule, IDe
     /// <inheritdoc />
     public void ContributeToDescriptor(DescriptorContributorContext context)
     {
-        var policyResult = PipelineExceptionTranslatorPolicy.CreateDefault();
-        if (policyResult.Value is null)
+        var policy = context.GetExceptionTranslatorPolicy();
+        if (policy is null)
         {
             // The pipeline generator already reports policy diagnostics; descriptor projection should not duplicate them
             // per operation when the shared default policy becomes invalid.
             return;
         }
 
-        var registrations = policyResult.Value.Translators
+        var registrations = policy.Translators
             .Select(static translator => new FailureOutcomeRegistration(
                 translator.TranslatorId,
                 translator.HandledExceptionTypeName,

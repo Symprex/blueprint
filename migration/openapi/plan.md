@@ -86,3 +86,12 @@ Planned direction:
 ## Sequencing
 
 Implement after HTTP descriptors, error-model metadata, and resource metadata are stable enough to describe accurately. Even though the work can land after the base HTTP host, it is still part of HTTP completeness rather than an optional extra.
+
+## Autonomous next slice after Workstream 8 failure-contract completion
+
+- Start with `openapi/project-descriptor-failure-outcomes-into-http-response-metadata`.
+- That is the narrowest safe entry because the completed error-model work now leaves stable `OperationFailureOutcomesFeatureData` for both built-in and package-provided translators, and this plan already expects cross-cutting outcomes from error modules to merge with operation-specific response metadata.
+- Acceptance target for this first OpenAPI slice:
+  - consume `OperationFailureOutcomesFeatureData` alongside flattened success outcomes when building generated HTTP response metadata
+  - surface validation-failure and unhandled-fallback families from descriptor metadata without rediscovering exception policy at runtime
+  - keep richer schema/discriminator and same-status-union shaping deferred until later OpenAPI slices

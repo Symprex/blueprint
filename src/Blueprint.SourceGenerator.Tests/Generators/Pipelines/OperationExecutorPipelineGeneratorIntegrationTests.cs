@@ -249,6 +249,123 @@ public class OperationExecutorPipelineGeneratorIntegrationTests
     }
 
     [Fact]
+    public void When_package_exception_translation_module_is_enabled_then_generated_pipeline_includes_package_translator_in_policy_order()
+    {
+        const string source = """
+                             using Blueprint;
+                             using Blueprint.Model;
+                             using System.Threading.Tasks;
+
+                             namespace TestNamespace;
+
+                             [BlueprintAppScan]
+                             public partial class TestApp : BlueprintApp
+                             {
+                             }
+
+                             public partial class IncludedOperation : IQuery<string>
+                             {
+                                 public static ApiOperationDescriptor Configure()
+                                 {
+                                     return new ApiOperationDescriptor(typeof(IncludedOperation), nameof(IncludedOperation), "Tests");
+                                 }
+
+                                 public static Task<string> HandleAsync(IncludedOperation operation)
+                                 {
+                                     return Task.FromResult("ok");
+                                 }
+                             }
+                             """;
+
+        var result = TestHelpers.Compile<PackageAwareOperationExecutorPipelineSourceGenerator>(source, assertCacheability: false);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var pipelineSource = result.Output
+            .Select(static tree => tree.ToString())
+            .FirstOrDefault(static output => output.Contains("IncludedOperationExecutorPipeline"));
+
+        pipelineSource.Should().NotBeNull();
+
+        var legacyValidationCatch = pipelineSource!.IndexOf("catch (Blueprint.Validation.ValidationException e)", StringComparison.Ordinal);
+        var packageCatch = pipelineSource.IndexOf("catch (System.Security.SecurityException e)", StringComparison.Ordinal);
+        var dataAnnotationsCatch = pipelineSource.IndexOf("catch (System.ComponentModel.DataAnnotations.ValidationException e)", StringComparison.Ordinal);
+        var fallbackCatch = pipelineSource.IndexOf("catch (System.Exception e)", StringComparison.Ordinal);
+
+        legacyValidationCatch.Should().BeGreaterThan(-1);
+        packageCatch.Should().BeGreaterThan(legacyValidationCatch);
+        dataAnnotationsCatch.Should().BeGreaterThan(packageCatch);
+        fallbackCatch.Should().BeGreaterThan(dataAnnotationsCatch);
+    }
+
+    [Fact]
+    public async Task When_package_exception_translation_module_is_enabled_then_generated_pipeline_matches_snapshot()
+    {
+        const string source = """
+                             using Blueprint;
+                             using Blueprint.Model;
+                             using System.Threading.Tasks;
+
+                             namespace TestNamespace;
+
+                             [BlueprintAppScan]
+                             public partial class TestApp : BlueprintApp
+                             {
+                             }
+
+                             public partial class IncludedOperation : IQuery<string>
+                             {
+                                 public static ApiOperationDescriptor Configure()
+                                 {
+                                     return new ApiOperationDescriptor(typeof(IncludedOperation), nameof(IncludedOperation), "Tests");
+                                 }
+
+                                 public static Task<string> HandleAsync(IncludedOperation operation)
+                                 {
+                                     return Task.FromResult("ok");
+                                 }
+                             }
+                             """;
+
+        await TestHelpers.Compile<PackageAwareOperationExecutorPipelineSourceGenerator>(source, assertCacheability: false)
+            .VerifySuccessAsync(SnapshotsFolder);
+    }
+
+    [Fact]
+    public void When_package_exception_translation_module_conflicts_with_builtin_translator_then_generator_reports_bp113()
+    {
+        const string source = """
+                             using Blueprint;
+                             using Blueprint.Model;
+                             using System.Threading.Tasks;
+
+                             namespace TestNamespace;
+
+                             [BlueprintAppScan]
+                             public partial class TestApp : BlueprintApp
+                             {
+                             }
+
+                             public partial class IncludedOperation : IQuery<string>
+                             {
+                                 public static ApiOperationDescriptor Configure()
+                                 {
+                                     return new ApiOperationDescriptor(typeof(IncludedOperation), nameof(IncludedOperation), "Tests");
+                                 }
+
+                                 public static Task<string> HandleAsync(IncludedOperation operation)
+                                 {
+                                     return Task.FromResult("ok");
+                                 }
+                             }
+                             """;
+
+        var result = TestHelpers.Compile<ConflictingPackageAwareOperationExecutorPipelineSourceGenerator>(source, assertCacheability: false);
+
+        result.Diagnostics.Should().ContainSingle(static diagnostic => diagnostic.Id == "BP113");
+    }
+
+    [Fact]
     public async Task Inline_static_handler_generates_correctly()
     {
         var source = """
@@ -997,6 +1114,22 @@ public class OperationExecutorPipelineGeneratorIntegrationTests
         return TestHelpers.Compile<OperationExecutorPipelineSourceGenerator>(source, assertCacheability: false);
     }
 
+    private sealed class PackageAwareOperationExecutorPipelineSourceGenerator : OperationExecutorPipelineSourceGenerator
+    {
+        public PackageAwareOperationExecutorPipelineSourceGenerator()
+            : base(CreateDefaultConfig([new PackageExceptionTranslationModule()]))
+        {
+        }
+    }
+
+    private sealed class ConflictingPackageAwareOperationExecutorPipelineSourceGenerator : OperationExecutorPipelineSourceGenerator
+    {
+        public ConflictingPackageAwareOperationExecutorPipelineSourceGenerator()
+            : base(CreateDefaultConfig([new ConflictingPackageExceptionTranslationModule()]))
+        {
+        }
+    }
+
     private static (Compilation Compilation, INamedTypeSymbol OperationType) CompileAndGetOperationType(
         string source,
         string typeName)
@@ -1048,6 +1181,102 @@ public class OperationExecutorPipelineGeneratorIntegrationTests
                         isHandlerAsync
                             ? "new Blueprint.Runtime.Exec.UnhandledExceptionResult(e)"
                             : "System.Threading.Tasks.Task.FromResult<Blueprint.OperationResult>(new Blueprint.Runtime.Exec.UnhandledExceptionResult(e))");
+                });
+        }
+    }
+
+    private sealed class PackageExceptionTranslationModule : IBlueprintSourceGeneratorModule, IExceptionTranslationContributor
+    {
+        public string ModuleId => nameof(PackageExceptionTranslationModule);
+
+        public BlueprintModuleCategory Category => BlueprintModuleCategory.Consumer;
+
+        public string ContributorId => "package-exception-translation";
+
+        public int Order => 0;
+
+        public bool IsUnique => true;
+
+        public IReadOnlyList<string> DependsOn { get; } = [];
+
+        public void ContributeToExceptionTranslation(ExceptionTranslationContributorContext context)
+        {
+            context.AddTranslator(new PackageSecurityExceptionTranslator());
+        }
+    }
+
+    private sealed class PackageSecurityExceptionTranslator : IPipelineExceptionTranslator
+    {
+        public string TranslatorId => "package-security-exception";
+
+        public string HandledExceptionTypeName => "System.Security.SecurityException";
+
+        public IReadOnlyList<string> OwnedExceptionTypeNames { get; } = ["System.Security.SecurityException"];
+
+        public string ResultTypeName => "Blueprint.Runtime.Exec.UnhandledExceptionResult";
+
+        public int Order => 150;
+
+        public bool IsFallback => false;
+
+        public void WriteCatchBlock(ICodeWriter writer, bool isHandlerAsync)
+        {
+            writer.Catch(
+                "System.Security.SecurityException e",
+                catchWriter =>
+                {
+                    catchWriter.Return(
+                        isHandlerAsync
+                            ? "new Blueprint.Runtime.Exec.UnhandledExceptionResult(e)"
+                            : "System.Threading.Tasks.Task.FromResult<Blueprint.OperationResult>(new Blueprint.Runtime.Exec.UnhandledExceptionResult(e))");
+                });
+        }
+    }
+
+    private sealed class ConflictingPackageExceptionTranslationModule : IBlueprintSourceGeneratorModule, IExceptionTranslationContributor
+    {
+        public string ModuleId => nameof(ConflictingPackageExceptionTranslationModule);
+
+        public BlueprintModuleCategory Category => BlueprintModuleCategory.Consumer;
+
+        public string ContributorId => "conflicting-package-exception-translation";
+
+        public int Order => 0;
+
+        public bool IsUnique => true;
+
+        public IReadOnlyList<string> DependsOn { get; } = [];
+
+        public void ContributeToExceptionTranslation(ExceptionTranslationContributorContext context)
+        {
+            context.AddTranslator(new ConflictingLegacyValidationExceptionTranslator());
+        }
+    }
+
+    private sealed class ConflictingLegacyValidationExceptionTranslator : IPipelineExceptionTranslator
+    {
+        public string TranslatorId => "conflicting-legacy-validation-exception";
+
+        public string HandledExceptionTypeName => "Blueprint.Validation.ValidationException";
+
+        public IReadOnlyList<string> OwnedExceptionTypeNames { get; } = ["Blueprint.Validation.ValidationException"];
+
+        public string ResultTypeName => "Blueprint.Runtime.Exec.ValidationFailedResult";
+
+        public int Order => 125;
+
+        public bool IsFallback => false;
+
+        public void WriteCatchBlock(ICodeWriter writer, bool isHandlerAsync)
+        {
+            writer.Catch(
+                "Blueprint.Validation.ValidationException e",
+                catchWriter =>
+                {
+                    catchWriter.Return(
+                        isHandlerAsync
+                            ? "new Blueprint.Runtime.Exec.ValidationFailedResult(e.Results)"
+                            : "System.Threading.Tasks.Task.FromResult<Blueprint.OperationResult>(new Blueprint.Runtime.Exec.ValidationFailedResult(e.Results))");
                 });
         }
     }

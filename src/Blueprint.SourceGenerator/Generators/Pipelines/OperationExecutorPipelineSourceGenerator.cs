@@ -13,8 +13,30 @@ namespace Blueprint.SourceGenerator.Generators.Pipelines;
 /// Incremental source generator that discovers operation handlers and generates executor pipelines.
 /// </summary>
 [Generator(LanguageNames.CSharp)]
-public sealed partial class OperationExecutorPipelineSourceGenerator : IIncrementalGenerator, ITrackedSourceGenerator
+public partial class OperationExecutorPipelineSourceGenerator : IIncrementalGenerator, ITrackedSourceGenerator
 {
+    private readonly BlueprintSourceGenerationConfig _config;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="OperationExecutorPipelineSourceGenerator"/> class with Blueprint's
+    /// default pipeline-module composition.
+    /// </summary>
+    public OperationExecutorPipelineSourceGenerator()
+        : this(CreateDefaultConfig())
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="OperationExecutorPipelineSourceGenerator"/> class with an explicit
+    /// module configuration. Companion generator packages can derive from this generator and extend the shared pipeline
+    /// module set without copying executor-generation logic.
+    /// </summary>
+    /// <param name="config">The generator configuration to use.</param>
+    protected OperationExecutorPipelineSourceGenerator(BlueprintSourceGenerationConfig config)
+    {
+        this._config = config;
+    }
+
     /// <inheritdoc />
     public string[] StageNames { get; } = StageHelpers.FindAll(typeof(Stages));
 
@@ -52,8 +74,7 @@ public sealed partial class OperationExecutorPipelineSourceGenerator : IIncremen
                     return;
                 }
 
-                var config = new BlueprintSourceGenerationConfig([new ValidationModule(), new HandlerExecutionModule()]);
-                var executionPlanResult = config.BuildExecutionPlan();
+                var executionPlanResult = this._config.BuildExecutionPlan();
                 executionPlanResult.ReportDiagnostics(spc);
 
                 if (executionPlanResult.Value is null)
@@ -61,7 +82,7 @@ public sealed partial class OperationExecutorPipelineSourceGenerator : IIncremen
                     return;
                 }
 
-                var exceptionTranslatorPolicyResult = PipelineExceptionTranslatorPolicy.CreateDefault();
+                var exceptionTranslatorPolicyResult = CreateExceptionTranslatorPolicy(executionPlanResult);
                 exceptionTranslatorPolicyResult.ReportDiagnostics(spc);
 
                 if (exceptionTranslatorPolicyResult.Value is null)
@@ -109,6 +130,30 @@ public sealed partial class OperationExecutorPipelineSourceGenerator : IIncremen
                     $"{compilationModel.AppTypeName}Executor.g.cs",
                     SourceText.From(executorSource, Encoding.UTF8));
             });
+    }
+
+    /// <summary>
+    /// Creates Blueprint's default pipeline-generator configuration and appends any additional modules after the built-in
+    /// baseline so companion generator packages can extend the shared composition root.
+    /// </summary>
+    /// <param name="additionalModules">The additional modules to append.</param>
+    /// <returns>The composed pipeline-generator configuration.</returns>
+    protected static BlueprintSourceGenerationConfig CreateDefaultConfig(params IBlueprintSourceGeneratorModule[] additionalModules)
+    {
+        return new BlueprintSourceGenerationConfig(
+        [
+            new ValidationModule(),
+            new HandlerExecutionModule(),
+            new DefaultExceptionTranslationModule(),
+            .. additionalModules,
+        ]);
+    }
+
+    private static Result<PipelineExceptionTranslatorPolicy> CreateExceptionTranslatorPolicy(Result<BlueprintModuleExecutionPlan> executionPlanResult)
+    {
+        return executionPlanResult.Value is null
+            ? Result<PipelineExceptionTranslatorPolicy>.Failure(executionPlanResult.Diagnostics)
+            : PipelineExceptionTranslatorPolicy.CreateFromContributors(executionPlanResult.Value.ExceptionTranslationContributors);
     }
 
     /// <summary>

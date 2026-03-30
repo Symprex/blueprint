@@ -1,6 +1,7 @@
 using System.Text;
 using Blueprint.SourceGenerator.CodeWriter;
 using Blueprint.SourceGenerator.Generators.ApiResources;
+using Blueprint.SourceGenerator.Generators.Pipelines;
 using Blueprint.SourceGenerator.Helpers;
 using Blueprint.SourceGenerator.Modules;
 using Blueprint.SourceGenerator.Planning;
@@ -15,7 +16,7 @@ namespace Blueprint.SourceGenerator.Generators.Descriptors;
 /// Incremental source generator that emits operation descriptor implementations for Blueprint operations.
 /// </summary>
 [Generator(LanguageNames.CSharp)]
-public sealed class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITrackedSourceGenerator
+public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITrackedSourceGenerator
 {
     private static readonly DiagnosticDescriptor _missingPartialModifierRule = new(
         id: "BP005",
@@ -24,6 +25,28 @@ public sealed class OperationDescriptorSourceGenerator : IIncrementalGenerator, 
         category: nameof(OperationDescriptorSourceGenerator),
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
+
+    private readonly BlueprintSourceGenerationConfig _config;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="OperationDescriptorSourceGenerator"/> class with Blueprint's default
+    /// descriptor-module composition.
+    /// </summary>
+    public OperationDescriptorSourceGenerator()
+        : this(CreateDefaultConfig())
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="OperationDescriptorSourceGenerator"/> class with an explicit module
+    /// configuration. Companion generator packages can derive from this generator and extend the shared module set
+    /// without copying descriptor-generation logic.
+    /// </summary>
+    /// <param name="config">The generator configuration to use.</param>
+    protected OperationDescriptorSourceGenerator(BlueprintSourceGenerationConfig config)
+    {
+        this._config = config;
+    }
 
     /// <inheritdoc />
     public string[] StageNames { get; } = StageHelpers.FindAll(typeof(Stages));
@@ -34,8 +57,7 @@ public sealed class OperationDescriptorSourceGenerator : IIncrementalGenerator, 
     /// <param name="context">The incremental generator initialization context.</param>
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
-        var config = new BlueprintSourceGenerationConfig([new LinkGenerationModule(), new TasksHostModule(), new ValidationModule(), new FlattenedResultOutcomeModule(), new FailureOutcomesModule(), new HostExecutorAvailabilityModule(), new AmbiguousHostTranslationModule(), new NoResultShapeSeparationModule(), new HttpUnionDiscriminationStrategyModule(), new OperationDiscoveryManifestModule()]);
-        var executionPlanResult = config.BuildExecutionPlan();
+        var executionPlanResult = this._config.BuildExecutionPlan();
 
         context.RegisterPostInitializationOutput(i =>
             {
@@ -53,6 +75,9 @@ public sealed class OperationDescriptorSourceGenerator : IIncrementalGenerator, 
         var executionPlanProvider = context.ParseOptionsProvider
             .Select((_, _) => executionPlanResult)
             .WithTrackingName(Stages.ExecutionPlan);
+        var exceptionTranslationPolicyProvider = executionPlanProvider
+            .Select((result, _) => CreateExceptionTranslatorPolicy(result))
+            .WithTrackingName(Stages.ExceptionTranslationPolicy);
 
         context.RegisterSourceOutput(
             executionPlanProvider,
@@ -72,7 +97,8 @@ public sealed class OperationDescriptorSourceGenerator : IIncrementalGenerator, 
 
         var configuredModels = combinedProvider
             .Combine(executionPlanProvider)
-            .Select((x, _) => Configure(x.Left, x.Right))
+            .Combine(exceptionTranslationPolicyProvider)
+            .Select((x, _) => Configure(x.Left.Left, x.Left.Right, x.Right))
             .WithTrackingName(Stages.Configuration);
 
         context.RegisterSourceOutput(
@@ -119,7 +145,8 @@ public sealed class OperationDescriptorSourceGenerator : IIncrementalGenerator, 
 
     private static Result<DescriptorPlan> Configure(
         (Result<OperationClassToGenerate> Result, Compilation Compilation) context,
-        Result<BlueprintModuleExecutionPlan> executionPlanResult)
+        Result<BlueprintModuleExecutionPlan> executionPlanResult,
+        Result<PipelineExceptionTranslatorPolicy> exceptionTranslatorPolicyResult)
     {
         var (result, compilation) = context;
 
@@ -128,17 +155,26 @@ public sealed class OperationDescriptorSourceGenerator : IIncrementalGenerator, 
             return Result<DescriptorPlan>.Failure(result.Diagnostics);
         }
 
-        return ConfigureDescriptorPlan(result.Value.FullClassName, compilation, executionPlanResult);
+        return ConfigureDescriptorPlan(result.Value.FullClassName, compilation, executionPlanResult, exceptionTranslatorPolicyResult);
     }
 
     private static Result<DescriptorPlan> ConfigureDescriptorPlan(
         string operationFullClassName,
         Compilation compilation,
-        Result<BlueprintModuleExecutionPlan> executionPlanResult)
+        Result<BlueprintModuleExecutionPlan> executionPlanResult,
+        Result<PipelineExceptionTranslatorPolicy> exceptionTranslatorPolicyResult)
     {
         if (executionPlanResult.Value is null)
         {
             return Result<DescriptorPlan>.Failure(executionPlanResult.Diagnostics);
+        }
+
+        if (exceptionTranslatorPolicyResult.Value is null)
+        {
+            // Shared exception-translation policy diagnostics are reported once by the pipeline generator.
+            // Descriptor generation stops quietly here so one invalid policy does not fan out into per-operation
+            // duplicates while descriptor contributors still avoid projecting stale failure metadata.
+            return Result<DescriptorPlan>.Failure(Array.Empty<DiagnosticInfo>());
         }
 
         var operationImplementationType = compilation.GetTypeByMetadataName(operationFullClassName);
@@ -148,7 +184,7 @@ public sealed class OperationDescriptorSourceGenerator : IIncrementalGenerator, 
 
         foreach (var contributor in executionPlanResult.Value.DescriptorContributors)
         {
-            contributor.ContributeToDescriptor(new DescriptorContributorContext(operationModel, descriptorPlan, operationLookup));
+            contributor.ContributeToDescriptor(new DescriptorContributorContext(operationModel, descriptorPlan, operationLookup, exceptionTranslatorPolicyResult.Value));
         }
 
         HostExposureDiagnostics.AddUnsupportedHostDiagnostics(descriptorPlan, executionPlanResult.Value.HostContributors);
@@ -210,6 +246,38 @@ public sealed class OperationDescriptorSourceGenerator : IIncrementalGenerator, 
     }
 
     /// <summary>
+    /// Creates Blueprint's default descriptor-generator configuration and appends any additional modules after the built-in
+    /// baseline so companion generator packages can extend the shared composition root.
+    /// </summary>
+    /// <param name="additionalModules">The additional modules to append.</param>
+    /// <returns>The composed descriptor-generator configuration.</returns>
+    protected static BlueprintSourceGenerationConfig CreateDefaultConfig(params IBlueprintSourceGeneratorModule[] additionalModules)
+    {
+        return new BlueprintSourceGenerationConfig(
+        [
+            new LinkGenerationModule(),
+            new TasksHostModule(),
+            new ValidationModule(),
+            new DefaultExceptionTranslationModule(),
+            new FlattenedResultOutcomeModule(),
+            new FailureOutcomesModule(),
+            new HostExecutorAvailabilityModule(),
+            new AmbiguousHostTranslationModule(),
+            new NoResultShapeSeparationModule(),
+            new HttpUnionDiscriminationStrategyModule(),
+            new OperationDiscoveryManifestModule(),
+            .. additionalModules,
+        ]);
+    }
+
+    private static Result<PipelineExceptionTranslatorPolicy> CreateExceptionTranslatorPolicy(Result<BlueprintModuleExecutionPlan> executionPlanResult)
+    {
+        return executionPlanResult.Value is null
+            ? Result<PipelineExceptionTranslatorPolicy>.Failure(executionPlanResult.Diagnostics)
+            : PipelineExceptionTranslatorPolicy.CreateFromContributors(executionPlanResult.Value.ExceptionTranslationContributors);
+    }
+
+    /// <summary>
     /// Captures the operation identity needed to render a descriptor companion type.
     /// </summary>
     /// <param name="FullClassName">The fully-qualified operation type name.</param>
@@ -226,6 +294,7 @@ public sealed class OperationDescriptorSourceGenerator : IIncrementalGenerator, 
     {
         public const string InitialExtraction = nameof(InitialExtraction);
         public const string ExecutionPlan = nameof(ExecutionPlan);
+        public const string ExceptionTranslationPolicy = nameof(ExceptionTranslationPolicy);
         public const string CombineWithCompilation = nameof(CombineWithCompilation);
         public const string Configuration = nameof(Configuration);
     }

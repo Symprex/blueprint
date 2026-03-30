@@ -1,4 +1,4 @@
-﻿{
+{
   "schemaVersion": 1,
   "artifactName": "build-telemetry",
   "artifactFamily": "build-time-manifest",
@@ -44,6 +44,7 @@
             "trackedStages": {
               "CombineWithCompilation": 100,
               "Configuration": 100,
+              "ExceptionTranslationPolicy": 1,
               "ExecutionPlan": 1,
               "InitialExtraction": 100
             }

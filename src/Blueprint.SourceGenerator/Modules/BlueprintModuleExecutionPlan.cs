@@ -5,6 +5,7 @@ namespace Blueprint.SourceGenerator.Modules;
 /// </summary>
 /// <param name="PostInitializationContributors">The post-initialization contributors.</param>
 /// <param name="DescriptorContributors">The descriptor contributors.</param>
+/// <param name="ExceptionTranslationContributors">The exception-translation contributors.</param>
 /// <param name="PipelineContributors">The pipeline contributors.</param>
 /// <param name="HostContributors">The host contributors.</param>
 /// <param name="AppRegistrationContributors">The app-registration contributors.</param>
@@ -12,6 +13,7 @@ namespace Blueprint.SourceGenerator.Modules;
 public sealed record BlueprintModuleExecutionPlan(
     IPostInitializationContributor[] PostInitializationContributors,
     IDescriptorContributor[] DescriptorContributors,
+    IExceptionTranslationContributor[] ExceptionTranslationContributors,
     IPipelineContributor[] PipelineContributors,
     IHostContributor[] HostContributors,
     IAppRegistrationContributor[] AppRegistrationContributors,
@@ -32,6 +34,7 @@ public sealed record BlueprintModuleExecutionPlan(
 
         return ContributorsEqual(this.PostInitializationContributors, other.PostInitializationContributors)
             && ContributorsEqual(this.DescriptorContributors, other.DescriptorContributors)
+            && ContributorsEqual(this.ExceptionTranslationContributors, other.ExceptionTranslationContributors)
             && ContributorsEqual(this.PipelineContributors, other.PipelineContributors)
             && ContributorsEqual(this.HostContributors, other.HostContributors)
             && ContributorsEqual(this.AppRegistrationContributors, other.AppRegistrationContributors)
@@ -45,6 +48,7 @@ public sealed record BlueprintModuleExecutionPlan(
 
         AddContributors(ref hashCode, this.PostInitializationContributors);
         AddContributors(ref hashCode, this.DescriptorContributors);
+        AddContributors(ref hashCode, this.ExceptionTranslationContributors);
         AddContributors(ref hashCode, this.PipelineContributors);
         AddContributors(ref hashCode, this.HostContributors);
         AddContributors(ref hashCode, this.AppRegistrationContributors);

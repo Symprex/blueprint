@@ -33,6 +33,11 @@ Do not use this skill to change Blueprint internals in `blueprint-source-gen`; u
 | Validation | Prefer declarative `ValidationAttribute` usage; Blueprint generates validation from those contracts, and the current retained Blueprint-specific set now includes `Blueprint.Validation.GreaterThanPropertyAttribute` |
 | Debugging | Prefer build diagnostics, generated output, manifests, and sample patterns over runtime guesswork |
 
+## Advanced analyzer extensions
+
+- Companion analyzer packages should derive from Blueprint's default descriptor/pipeline generator composition instead of replacing the built-in module set wholesale.
+- Package-owned exception translators belong in generator modules that contribute through `IExceptionTranslationContributor`; that keeps ordering/conflict diagnostics and descriptor failure metadata aligned with Blueprint's built-in translators.
+
 ## Validation contract
 
 - Treat validation attributes as compile-time inputs first and runtime behavior second; if the build can prove the contract is wrong, expect a diagnostic instead of a runtime repair path.
@@ -53,10 +58,11 @@ Do not use this skill to change Blueprint internals in `blueprint-source-gen`; u
 - Use `Blueprint.Runtime.Exec.NotFoundResult<T>` when the consumer contract should communicate a missing-resource outcome with a response body; the current HTTP host maps it to JSON `404 Not Found`, so it stays distinct from success-shaped responses and from state/conflict results.
 - Use `Blueprint.Runtime.Exec.ConflictResult<T>` when the consumer contract should communicate a domain or state conflict with a response body; the current HTTP host maps it to JSON `409 Conflict`, so it stays distinct from success-shaped responses and can participate in declared `Results<T1, T2>` contracts without collapsing into the `200`/`201`/`202` paths.
 - Treat `Blueprint.Runtime.Exec.ValidationFailedResult` as the canonical semantic validation-failure name when generated validation or consumer contracts need to talk about known input-contract failures; the older `Blueprint.Middleware.ValidationFailedOperationResult` name now exists only as a compatibility alias.
+- `ValidationFailedResult` is now on the supported HTTP side of the current host boundary too: host-exposed operations may declare it, and the current HTTP host translates descriptor-advertised validation-failure families to `422 Unprocessable Entity` problem responses.
 - Do not declare `Blueprint.Runtime.Exec.UnhandledExceptionResult` or `Blueprint.UnhandledExceptionOperationResult` in consumer result contracts; those names identify the generated pipeline's internal fallback shell, and `BP111` keeps them out of public semantic outcome contracts until later error-model work defines explicit translation for that boundary.
 - Use `Blueprint.Runtime.Exec.KeyOnlyResourceEventResult` for the first host-neutral key-only resource-event semantic shape when the result carries event/resource identity but intentionally returns no HTTP body; the current HTTP host translates it to empty `201 Created` responses by convention.
 - Host-exposed operations now also fail build-time validation with `BP108` when the declared semantic result contract includes a shape that the current enabled HTTP executor path does not translate.
-- Validation-failure results remain on that unsupported side of the current host boundary: host-exposed operations that declare `ValidationFailedResult` or the legacy alias still hit `BP108` until the broader error-model work introduces host translation for semantic failure results.
+- Internal unhandled-fallback results remain on that unsupported side of the current host boundary, even though the HTTP host can translate descriptor-advertised fallback failures at runtime.
 - Host-exposed `Results<T1, T2>` contracts now also fail build-time validation with `BP109` when multiple supported semantic result members would still collapse to the same current HTTP response shape, such as multiple `OkResult<T>` members that all translate to `200` JSON responses.
 - Host-exposed `Results<T1, T2>` contracts now also fail build-time validation with `BP110` when supported members still share the same HTTP status code without explicit host/client discrimination metadata, such as `OkResult<T>` plus `NoResultOperationResult` both mapping to `200 OK`.
 - Host-exposed `Results<T1, T2>` contracts now also fail build-time validation with `BP112` when they try to mix host-neutral `NoResultOperationResult` with host-owned no-content/status-only result families such as `Blueprint.Runtime.Http.HttpNoContentResult`; that semantic split is deliberate, so use one shape or the other instead of combining them.

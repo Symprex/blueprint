@@ -7,7 +7,7 @@ namespace Blueprint.SourceGenerator.Generators.Pipelines;
 /// Translators declare the exception family they own so the policy can keep catch ordering deterministic and reject
 /// accidental overlap before generation continues.
 /// </summary>
-internal interface IPipelineExceptionTranslator
+public interface IPipelineExceptionTranslator
 {
     /// <summary>
     /// Gets the stable identifier used in diagnostics and deterministic ordering.
