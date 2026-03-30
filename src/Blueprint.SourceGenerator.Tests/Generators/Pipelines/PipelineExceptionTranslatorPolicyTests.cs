@@ -155,6 +155,8 @@ public class PipelineExceptionTranslatorPolicyTests
 
         public int Order { get; } = order;
 
+        public string ResultTypeName => "Blueprint.Runtime.Exec.UnhandledExceptionResult";
+
         public bool IsFallback { get; } = isFallback;
 
         public void WriteCatchBlock(ICodeWriter writer, bool isHandlerAsync)

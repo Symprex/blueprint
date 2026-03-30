@@ -99,3 +99,14 @@ Implement alongside the core pipeline planning work, before OpenAPI and before b
     - record descriptor-level failure metadata for known translator-owned exception families
     - keep host-aware status/body mapping and package-provided translator activation deferred
     - prove metadata projection and compile-time validation before widening host or OpenAPI consumers
+- Completed the descriptor-level failure metadata slice:
+  - `FailureOutcomesModule` now projects ordered `OperationFailureOutcomesFeatureData` onto generated descriptors using the validated default translator policy, so descriptor consumers can inspect known failure families without reverse-engineering generated catch blocks.
+  - The new `OperationFailureOutcome` contract currently carries the stable translator identifier, handled exception type name, and translated result type name as strings; this keeps the slice host agnostic and preserves contract-only descriptor generation without forcing runtime-only failure CLR types into the contract yet.
+  - The proof matrix now includes red-to-green descriptor-generator assertions for emitted failure metadata, a contract-only descriptor proof that the string-based feature data survives without `Blueprint.OperationResult`, a green runtime `Configure()` integration proof for ordered failure metadata lookup, and the broader verification sweep captured with this slice before widening into host-aware mapping.
+- Autonomous follow-on after descriptor-level failure metadata:
+  - Introduce host-aware mapping from descriptor failure metadata to HTTP status and response-body conventions.
+  - That is the narrowest safe next slice because failure ownership is now explicit at descriptor time, which gives host translation one compile-time source of truth without yet widening into package-provided translators or OpenAPI projection.
+  - Acceptance target for this next slice:
+    - map the known failure result families surfaced by descriptor metadata to the current HTTP host response model
+    - keep package-provided translator activation and OpenAPI response projection deferred
+    - prove host-aware failure translation from descriptor metadata before widening the public failure contract further

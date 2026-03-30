@@ -32,6 +32,7 @@ public class OperationDescriptorSourceGeneratorTestsContractOnlyCompilationTests
 
         descriptorSource.Should().NotBeNull();
         descriptorSource!.Should().Contain("OperationDiscoveryFeatureData");
+        descriptorSource.Should().Contain("OperationFailureOutcomesFeatureData");
         descriptorSource.Should().NotContain("OperationResultOutcomesFeatureData");
     }
 

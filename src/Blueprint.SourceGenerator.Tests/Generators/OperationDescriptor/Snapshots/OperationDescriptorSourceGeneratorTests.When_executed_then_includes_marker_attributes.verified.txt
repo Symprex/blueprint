@@ -66,6 +66,7 @@ namespace TestNamespace
             public IncludedOperationDescriptor()
                 : base(typeof(IncludedOperation), "IncludedOperation", "Source Generated")
             {
+                this.SetFeatureData(new global::Blueprint.Model.OperationFailureOutcomesFeatureData(global::System.Collections.Immutable.ImmutableArray.Create(new global::Blueprint.Model.OperationFailureOutcome("legacy-validation-exception", "Blueprint.Validation.ValidationException", "Blueprint.Runtime.Exec.ValidationFailedResult"), new global::Blueprint.Model.OperationFailureOutcome("data-annotations-validation-exception", "System.ComponentModel.DataAnnotations.ValidationException", "Blueprint.Runtime.Exec.ValidationFailedResult"), new global::Blueprint.Model.OperationFailureOutcome("default-unhandled-exception", "System.Exception", "Blueprint.Runtime.Exec.UnhandledExceptionResult"))));
                 this.SetFeatureData(new global::Blueprint.Model.OperationDiscoveryFeatureData("operation", "TestNamespace", "IncludedOperation"));
             }
         }

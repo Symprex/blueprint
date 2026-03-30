@@ -1034,6 +1034,8 @@ public class OperationExecutorPipelineGeneratorIntegrationTests
 
         public int Order => 100;
 
+        public string ResultTypeName => "Blueprint.Runtime.Exec.UnhandledExceptionResult";
+
         public bool IsFallback => false;
 
         public void WriteCatchBlock(ICodeWriter writer, bool isHandlerAsync)

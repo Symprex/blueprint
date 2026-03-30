@@ -28,6 +28,12 @@ internal interface IPipelineExceptionTranslator
     IReadOnlyList<string> OwnedExceptionTypeNames { get; }
 
     /// <summary>
+    /// Gets the fully-qualified operation result type name produced when this translator handles its owned exception
+    /// family.
+    /// </summary>
+    string ResultTypeName { get; }
+
+    /// <summary>
     /// Gets the relative ordering used before the policy writes catch blocks.
     /// Lower values run earlier inside the same fallback category.
     /// </summary>
@@ -69,6 +75,9 @@ internal sealed class LegacyValidationExceptionTranslator : IPipelineExceptionTr
 
     /// <inheritdoc />
     public IReadOnlyList<string> OwnedExceptionTypeNames { get; } = ["Blueprint.Validation.ValidationException"];
+
+    /// <inheritdoc />
+    public string ResultTypeName => "Blueprint.Runtime.Exec.ValidationFailedResult";
 
     /// <inheritdoc />
     public int Order => 100;
@@ -114,6 +123,9 @@ internal sealed class DataAnnotationsValidationExceptionTranslator : IPipelineEx
     public IReadOnlyList<string> OwnedExceptionTypeNames { get; } = ["System.ComponentModel.DataAnnotations.ValidationException"];
 
     /// <inheritdoc />
+    public string ResultTypeName => "Blueprint.Runtime.Exec.ValidationFailedResult";
+
+    /// <inheritdoc />
     public int Order => 200;
 
     /// <inheritdoc />
@@ -155,6 +167,9 @@ internal sealed class DefaultPipelineExceptionTranslator : IPipelineExceptionTra
 
     /// <inheritdoc />
     public IReadOnlyList<string> OwnedExceptionTypeNames { get; } = ["System.Exception"];
+
+    /// <inheritdoc />
+    public string ResultTypeName => "Blueprint.Runtime.Exec.UnhandledExceptionResult";
 
     /// <inheritdoc />
     public int Order => int.MaxValue;

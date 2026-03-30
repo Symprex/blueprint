@@ -12,14 +12,14 @@
   "current": {
     "activeWorkstream": "error-model-and-exception-handling",
     "nextReadySlice": {
+      "id": "error-model-and-exception-handling/host-aware-failure-mapping-from-descriptor-metadata",
+      "workstream": "error-model-and-exception-handling",
+      "title": "Introduce host-aware mapping from descriptor failure metadata to HTTP status and response body"
+    },
+    "lastCompletedSlice": {
       "id": "error-model-and-exception-handling/descriptor-level-failure-metadata-model",
       "workstream": "error-model-and-exception-handling",
       "title": "Introduce descriptor-level failure metadata model aligned with ordered translator ownership"
-    },
-    "lastCompletedSlice": {
-      "id": "error-model-and-exception-handling/ordered-exception-translator-policy-with-conflict-detection",
-      "workstream": "error-model-and-exception-handling",
-      "title": "Implement ordered exception translator policy with compile-time conflict detection"
     },
     "openReviewGate": null
   },

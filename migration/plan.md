@@ -861,6 +861,14 @@ Run this as a paired design loop with workstream 6. The result contract must be 
   - Stay in Workstream 8 and introduce descriptor-level failure metadata model aligned with ordered translator ownership.
   - That is the narrowest dependency-safe next slice because translator precedence and overlap are now explicit, which lets descriptor generation project stable failure facts before host-aware mapping or package-provided translator activation widens the contract.
   - The live tracker should therefore keep Workstream 8 active, set `nextReadySlice` to the descriptor-level-failure-metadata slice, and continue without reopening a human-direction gate unless a real blocker or explicit review gate appears.
+- Completed the descriptor-level failure metadata slice:
+  - `FailureOutcomesModule` now projects ordered `OperationFailureOutcomesFeatureData` onto generated descriptors using the validated default translator policy, so failure ownership is available from descriptor feature data instead of only from generated catch blocks.
+  - `OperationFailureOutcome` currently keeps the translator id, handled exception type name, and translated result type name as strings, which preserves contract-only descriptor generation while deferring any runtime-type or host-mapping freeze to the next slice.
+  - The proof matrix now includes red-to-green descriptor-generator assertions for emitted failure metadata, a contract-only descriptor proof that the feature data survives without `Blueprint.OperationResult`, a green runtime `Configure()` integration proof for ordered failure metadata lookup, and the broader verification sweep captured with this slice before widening the contract again.
+- Autonomous next Workstream 8 follow-on after descriptor-level failure metadata:
+  - Stay in Workstream 8 and introduce host-aware mapping from descriptor failure metadata to HTTP status and response-body conventions.
+  - That is the narrowest dependency-safe next slice because descriptor generation now exposes stable failure facts, which lets the HTTP host translate known failure families from one compile-time source of truth before package-provided translators or OpenAPI projection broaden the surface area.
+  - The live tracker should therefore keep Workstream 8 active, set `nextReadySlice` to the host-aware-failure-mapping slice, and continue without reopening a human-direction gate unless a real blocker or explicit review gate appears.
 
 ## 8. Error model and exception handling
 
