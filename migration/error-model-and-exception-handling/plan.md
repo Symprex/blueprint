@@ -110,3 +110,14 @@ Implement alongside the core pipeline planning work, before OpenAPI and before b
     - map the known failure result families surfaced by descriptor metadata to the current HTTP host response model
     - keep package-provided translator activation and OpenAPI response projection deferred
     - prove host-aware failure translation from descriptor metadata before widening the public failure contract further
+- Completed the host-aware failure mapping slice:
+  - `HttpOperationResultExecutor` now reads `OperationFailureOutcomesFeatureData` from the current descriptor and translates matching `ValidationFailedResult` families to `422 Unprocessable Entity` problem responses plus matching `UnhandledExceptionResult` families to `500 Internal Server Error` problem responses, while descriptors that do not advertise the relevant failure outcome still fall back to the legacy self-executing `OperationResult.ExecuteAsync(...)` path.
+  - `OperationResultContractHelper`, `HostExecutorAvailabilityModule`, `AmbiguousHostTranslationModule`, and `HttpUnionDiscriminationStrategyModule` now treat declared `ValidationFailedResult` contracts as part of the supported HTTP executor surface, so `BP108`, `BP109`, `BP110`, and `BP112` reason from the widened `422`-with-body response shape without widening the internal-only unhandled fallback contract.
+  - The proof matrix now includes red-to-green descriptor diagnostics for declared validation-failure contracts and their HTTP-visible unions, red-to-green endpoint translation tests that prove descriptor-gated `422` / `500` problem responses plus the metadata-missing fallback path, and the broader verification sweep captured with this slice after the runtime host mapping landed.
+- Autonomous follow-on after host-aware failure mapping:
+  - Activate package-provided exception translators through the module system.
+  - That is the narrowest safe next slice because the default translator policy, descriptor failure metadata, and host-aware HTTP mapping now agree on one failure contract; the remaining in-workstream gap is letting packages contribute new translators without bypassing ordering/conflict validation or fragmenting descriptor and host behavior.
+  - Acceptance target for this next slice:
+    - activate package-provided exception translators while reusing `PipelineExceptionTranslatorPolicy` ordering and conflict detection
+    - project package-contributed failure ownership through the same descriptor failure metadata contract that the HTTP host now consumes
+    - keep OpenAPI response projection deferred until the later OpenAPI workstream consumes the richer failure contract deliberately

@@ -41,6 +41,7 @@ public sealed class AmbiguousHostTranslationModule : IBlueprintSourceGeneratorMo
         var conflictResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.ConflictResult");
         var notFoundResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.NotFoundResult");
         var createdResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.CreatedResult");
+        var validationFailedResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.ValidationFailedResult");
         var noResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.NoResultOperationResult");
         var keyOnlyResourceEventResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.KeyOnlyResourceEventResult");
         var httpNoContentResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Http.HttpNoContentResult");
@@ -60,7 +61,7 @@ public sealed class AmbiguousHostTranslationModule : IBlueprintSourceGeneratorMo
         var translatedMembers = new List<TranslatedResultMember>(unionMembers.Length);
         foreach (var unionMember in unionMembers)
         {
-            if (OperationResultContractHelper.TryGetHttpOperationResultResponseShape(unionMember, okResultType, acceptedResultType, conflictResultType, notFoundResultType, createdResultType, noResultType, keyOnlyResourceEventResultType, httpNoContentResultType, out var statusCode, out var hasResponseBody) == false)
+            if (OperationResultContractHelper.TryGetHttpOperationResultResponseShape(unionMember, okResultType, acceptedResultType, conflictResultType, notFoundResultType, createdResultType, validationFailedResultType, noResultType, keyOnlyResourceEventResultType, httpNoContentResultType, out var statusCode, out var hasResponseBody) == false)
             {
                 return;
             }

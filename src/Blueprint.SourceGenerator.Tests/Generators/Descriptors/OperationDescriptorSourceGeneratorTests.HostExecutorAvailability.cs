@@ -6,7 +6,7 @@ namespace Blueprint.SourceGenerator.Tests.Generators.OperationDescriptor;
 public class OperationDescriptorSourceGeneratorTestsHostExecutorAvailabilityTests
 {
     [Fact]
-    public void When_http_exposed_operation_declares_unsupported_semantic_result_then_generator_reports_missing_host_executor_diagnostic()
+    public void When_http_exposed_operation_declares_legacy_validation_failed_result_then_generator_treats_it_as_supported_by_current_http_executor()
     {
         var result = OperationDescriptorSourceGeneratorTests.Compile("""
             using Blueprint.Middleware;
@@ -15,11 +15,17 @@ public class OperationDescriptorSourceGeneratorTestsHostExecutorAvailabilityTest
             public partial class UnsupportedHttpResultOperation : IQuery<ValidationFailedOperationResult> {}
             """);
 
-        result.Diagnostics.Should().ContainSingle(static diagnostic => diagnostic.Id == "BP108");
+        result.Diagnostics.Select(static diagnostic => diagnostic.Id)
+            .Should()
+            .NotContain("BP108");
+
+        result.Output.Select(static tree => tree.ToString())
+            .Should()
+            .Contain(static source => source.Contains("UnsupportedHttpResultOperationDescriptor"));
     }
 
     [Fact]
-    public void When_http_exposed_operation_declares_canonical_validation_failed_result_then_generator_still_reports_missing_host_executor_diagnostic()
+    public void When_http_exposed_operation_declares_canonical_validation_failed_result_then_generator_treats_it_as_supported_by_current_http_executor()
     {
         var result = OperationDescriptorSourceGeneratorTests.Compile("""
             using Blueprint.Runtime.Exec;
@@ -28,7 +34,13 @@ public class OperationDescriptorSourceGeneratorTestsHostExecutorAvailabilityTest
             public partial class CanonicalValidationFailedResultOperation : IQuery<ValidationFailedResult> {}
             """);
 
-        result.Diagnostics.Should().ContainSingle(static diagnostic => diagnostic.Id == "BP108");
+        result.Diagnostics.Select(static diagnostic => diagnostic.Id)
+            .Should()
+            .NotContain("BP108");
+
+        result.Output.Select(static tree => tree.ToString())
+            .Should()
+            .Contain(static source => source.Contains("CanonicalValidationFailedResultOperationDescriptor"));
     }
 
     [Fact]
@@ -155,7 +167,7 @@ public class OperationDescriptorSourceGeneratorTestsHostExecutorAvailabilityTest
     }
 
     [Fact]
-    public void When_http_exposed_operation_declares_mixed_results_union_then_generator_reports_missing_host_executor_for_only_the_unsupported_member()
+    public void When_http_exposed_operation_declares_mixed_results_union_with_validation_failure_then_generator_treats_both_members_as_supported()
     {
         var result = OperationDescriptorSourceGeneratorTests.Compile("""
             using Blueprint.Middleware;
@@ -165,8 +177,12 @@ public class OperationDescriptorSourceGeneratorTestsHostExecutorAvailabilityTest
             public partial class MixedUnionHttpResultOperation : IQuery<Results<OkResult<string>, ValidationFailedOperationResult>> {}
             """);
 
-        result.Diagnostics.Where(static diagnostic => diagnostic.Id == "BP108")
+        result.Diagnostics.Select(static diagnostic => diagnostic.Id)
             .Should()
-            .ContainSingle();
+            .NotContain("BP108");
+
+        result.Output.Select(static tree => tree.ToString())
+            .Should()
+            .Contain(static source => source.Contains("MixedUnionHttpResultOperationDescriptor"));
     }
 }

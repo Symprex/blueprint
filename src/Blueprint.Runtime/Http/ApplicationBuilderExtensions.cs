@@ -202,7 +202,7 @@ public static class EndpointRouteBuilderExtensions
             var result = await nestedContainer.ServiceProvider.GetRequiredService<TExec>().GetPipeline(operation.OperationType).ExecuteAsync(apiContext);
 
             var operationResultExecutor = nestedContainer.ServiceProvider.GetService<HttpOperationResultExecutor>() ?? DefaultOperationResultExecutor;
-            if (await operationResultExecutor.TryExecuteAsync(httpContext, apiContext, result) == false)
+            if (await operationResultExecutor.TryExecuteAsync(httpContext, apiContext, result, this._httpOptions) == false)
             {
                 // Legacy self-executing results still flow through the old path until the broader host-translation workstream lands.
                 await result.ExecuteAsync(apiContext);

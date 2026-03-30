@@ -42,6 +42,7 @@ public sealed class HostExecutorAvailabilityModule : IBlueprintSourceGeneratorMo
         var conflictResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.ConflictResult");
         var notFoundResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.NotFoundResult");
         var createdResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.CreatedResult");
+        var validationFailedResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.ValidationFailedResult");
         var noResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.NoResultOperationResult");
         var keyOnlyResourceEventResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.KeyOnlyResourceEventResult");
         var httpNoContentResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Http.HttpNoContentResult");
@@ -66,7 +67,7 @@ public sealed class HostExecutorAvailabilityModule : IBlueprintSourceGeneratorMo
         var operationName = context.GetOperationTypeSymbol().Name;
         foreach (var flattenedResult in flattenedResults)
         {
-            if (OperationResultContractHelper.IsSupportedByHttpOperationResultExecutor(flattenedResult, okResultType, acceptedResultType, conflictResultType, notFoundResultType, createdResultType, noResultType, keyOnlyResourceEventResultType, httpNoContentResultType))
+            if (OperationResultContractHelper.IsSupportedByHttpOperationResultExecutor(flattenedResult, okResultType, acceptedResultType, conflictResultType, notFoundResultType, createdResultType, validationFailedResultType, noResultType, keyOnlyResourceEventResultType, httpNoContentResultType))
             {
                 continue;
             }

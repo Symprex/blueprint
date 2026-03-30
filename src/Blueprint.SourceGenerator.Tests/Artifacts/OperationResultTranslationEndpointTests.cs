@@ -1,3 +1,5 @@
+using System.Collections.Immutable;
+using System.ComponentModel.DataAnnotations;
 using System.Text;
 using Blueprint.Model;
 using Blueprint.Runtime.Exec;
@@ -7,6 +9,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace Blueprint.SourceGenerator.Tests.Artifacts;
 
@@ -165,6 +168,64 @@ public class OperationResultTranslationEndpointTests
     }
 
     [Fact]
+    public async Task When_http_endpoint_pipeline_returns_validation_failed_result_with_matching_failure_metadata_then_host_route_completes_with_422_problem_response()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<ResultTranslationBlueprintApp, ResultTranslationBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/validation-failed-operation");
+
+        endpoint.Should().NotBeNull();
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider);
+
+        response.StatusCode.Should().Be(StatusCodes.Status422UnprocessableEntity);
+        response.ContentType.Should().Be("application/problem+json; charset=utf-8");
+        response.Body.Should().Contain("\"Status\":422")
+            .And.Contain("Name is required")
+            .And.Contain("Name");
+    }
+
+    [Fact]
+    public async Task When_http_endpoint_pipeline_returns_validation_failed_result_without_matching_failure_metadata_then_route_falls_back_to_legacy_self_executing_contract()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<ResultTranslationBlueprintApp, ResultTranslationBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/validation-failed-without-metadata-operation");
+
+        endpoint.Should().NotBeNull();
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider);
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        response.ContentType.Should().BeNull();
+        response.Body.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task When_http_endpoint_pipeline_returns_unhandled_exception_result_with_matching_failure_metadata_then_host_route_completes_with_500_problem_response()
+    {
+        var endpoints = CreateEndpoints(static services =>
+            services.AddSingleton<IOptions<BlueprintHttpOptions>>(Options.Create(new BlueprintHttpOptions
+            {
+                ExposeExceptionDetailsInErrorResponses = true,
+            })));
+        endpoints.MapBlueprintApi<ResultTranslationBlueprintApp, ResultTranslationBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/unhandled-exception-operation");
+
+        endpoint.Should().NotBeNull();
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider);
+
+        response.StatusCode.Should().Be(StatusCodes.Status500InternalServerError);
+        response.ContentType.Should().Be("application/problem+json; charset=utf-8");
+        response.Body.Should().Contain("\"Status\":500")
+            .And.Contain("Unhandled failure");
+    }
+
+    [Fact]
     public async Task When_http_endpoint_pipeline_returns_ok_result_with_null_content_then_host_route_fails_fast()
     {
         var endpoints = CreateEndpoints();
@@ -213,14 +274,15 @@ public class OperationResultTranslationEndpointTests
             .SingleOrDefault(endpoint => string.Equals(endpoint.RoutePattern.RawText, routePattern, StringComparison.Ordinal));
     }
 
-    private static TestEndpointRouteBuilder CreateEndpoints()
+    private static TestEndpointRouteBuilder CreateEndpoints(Action<IServiceCollection>? configureServices = null)
     {
         var services = new ServiceCollection()
             .AddLogging()
-            .AddSingleton<ResultTranslationBlueprintAppExecutor>()
-            .BuildServiceProvider();
+            .AddSingleton<ResultTranslationBlueprintAppExecutor>();
 
-        return new TestEndpointRouteBuilder(services);
+        configureServices?.Invoke(services);
+
+        return new TestEndpointRouteBuilder(services.BuildServiceProvider());
     }
 
     private sealed class ResultTranslationBlueprintApp : BlueprintApp
@@ -263,6 +325,22 @@ public class OperationResultTranslationEndpointTests
             legacyDescriptor.AddUrl(new ApiOperationUrl("/legacy-operation"));
             this.Register(legacyDescriptor);
 
+            var validationFailedDescriptor = new ApiOperationDescriptor(typeof(ValidationFailedTranslationOperation), "ValidationFailedTranslationOperation", nameof(OperationResultTranslationEndpointTests));
+            validationFailedDescriptor.AddUrl(new ApiOperationUrl("/validation-failed-operation"));
+            validationFailedDescriptor.SetFeatureData(CreateFailureOutcomes(
+                new OperationFailureOutcome("data-annotations-validation-exception", "System.ComponentModel.DataAnnotations.ValidationException", "Blueprint.Runtime.Exec.ValidationFailedResult")));
+            this.Register(validationFailedDescriptor);
+
+            var validationFailedWithoutMetadataDescriptor = new ApiOperationDescriptor(typeof(ValidationFailedWithoutMetadataOperation), "ValidationFailedWithoutMetadataOperation", nameof(OperationResultTranslationEndpointTests));
+            validationFailedWithoutMetadataDescriptor.AddUrl(new ApiOperationUrl("/validation-failed-without-metadata-operation"));
+            this.Register(validationFailedWithoutMetadataDescriptor);
+
+            var unhandledExceptionDescriptor = new ApiOperationDescriptor(typeof(UnhandledExceptionTranslationOperation), "UnhandledExceptionTranslationOperation", nameof(OperationResultTranslationEndpointTests));
+            unhandledExceptionDescriptor.AddUrl(new ApiOperationUrl("/unhandled-exception-operation"));
+            unhandledExceptionDescriptor.SetFeatureData(CreateFailureOutcomes(
+                new OperationFailureOutcome("default-exception", "System.Exception", "Blueprint.Runtime.Exec.UnhandledExceptionResult")));
+            this.Register(unhandledExceptionDescriptor);
+
             var nullOkDescriptor = new ApiOperationDescriptor(typeof(NullOkResultOperation), "NullOkResultOperation", nameof(OperationResultTranslationEndpointTests));
             nullOkDescriptor.AddUrl(new ApiOperationUrl("/null-ok-operation"));
             this.Register(nullOkDescriptor);
@@ -283,6 +361,9 @@ public class OperationResultTranslationEndpointTests
             this.Register(typeof(HttpNoContentTranslationOperation), new HttpNoContentPipeline());
             this.Register(typeof(KeyOnlyResourceEventTranslationOperation), new KeyOnlyResourceEventPipeline());
             this.Register(typeof(LegacyFallbackOperation), new LegacyFallbackPipeline());
+            this.Register(typeof(ValidationFailedTranslationOperation), new ValidationFailedResultPipeline());
+            this.Register(typeof(ValidationFailedWithoutMetadataOperation), new ValidationFailedWithoutMetadataPipeline());
+            this.Register(typeof(UnhandledExceptionTranslationOperation), new UnhandledExceptionResultPipeline());
             this.Register(typeof(NullOkResultOperation), new NullOkResultPipeline());
         }
     }
@@ -359,6 +440,36 @@ public class OperationResultTranslationEndpointTests
         }
     }
 
+    private sealed class ValidationFailedResultPipeline : IOperationExecutorPipeline
+    {
+        public Task<OperationResult> ExecuteAsync(ApiOperationContext context)
+        {
+            return Task.FromResult<OperationResult>(new ValidationFailedResult(
+            [
+                new ValidationResult("Name is required", ["Name"]),
+            ]));
+        }
+    }
+
+    private sealed class ValidationFailedWithoutMetadataPipeline : IOperationExecutorPipeline
+    {
+        public Task<OperationResult> ExecuteAsync(ApiOperationContext context)
+        {
+            return Task.FromResult<OperationResult>(new ValidationFailedResult(
+            [
+                new ValidationResult("Name is required", ["Name"]),
+            ]));
+        }
+    }
+
+    private sealed class UnhandledExceptionResultPipeline : IOperationExecutorPipeline
+    {
+        public Task<OperationResult> ExecuteAsync(ApiOperationContext context)
+        {
+            return Task.FromResult<OperationResult>(new UnhandledExceptionResult(new InvalidOperationException("Unhandled failure")));
+        }
+    }
+
     private sealed class NullOkResultPipeline : IOperationExecutorPipeline
     {
         public Task<OperationResult> ExecuteAsync(ApiOperationContext context)
@@ -385,7 +496,18 @@ public class OperationResultTranslationEndpointTests
 
     private sealed class LegacyFallbackOperation;
 
+    private sealed class ValidationFailedTranslationOperation;
+
+    private sealed class ValidationFailedWithoutMetadataOperation;
+
+    private sealed class UnhandledExceptionTranslationOperation;
+
     private sealed class NullOkResultOperation;
+
+    private static OperationFailureOutcomesFeatureData CreateFailureOutcomes(params OperationFailureOutcome[] outcomes)
+    {
+        return new OperationFailureOutcomesFeatureData(ImmutableArray.Create(outcomes));
+    }
 
     private sealed class LegacySelfExecutingResult : OperationResult
     {

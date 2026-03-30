@@ -34,7 +34,7 @@ public class OperationDescriptorSourceGeneratorTestsHttpUnionDiscriminationTests
     }
 
     [Fact]
-    public void When_http_exposed_operation_declares_union_with_missing_executor_member_then_generator_keeps_host_executor_diagnostic_distinct()
+    public void When_http_exposed_operation_declares_union_with_validation_failure_then_generator_keeps_http_union_discrimination_diagnostic_clear()
     {
         var result = OperationDescriptorSourceGeneratorTests.Compile("""
             using Blueprint.Middleware;
@@ -46,8 +46,12 @@ public class OperationDescriptorSourceGeneratorTestsHttpUnionDiscriminationTests
 
         result.Diagnostics.Select(static diagnostic => diagnostic.Id)
             .Should()
-            .Contain("BP108")
+            .NotContain("BP108")
             .And.NotContain("BP110");
+
+        result.Output.Select(static tree => tree.ToString())
+            .Should()
+            .Contain(static source => source.Contains("UnionWithUnsupportedMemberOperationDescriptor"));
     }
 
     [Fact]

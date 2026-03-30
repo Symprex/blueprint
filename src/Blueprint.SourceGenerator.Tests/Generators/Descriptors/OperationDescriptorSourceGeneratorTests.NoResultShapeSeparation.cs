@@ -79,7 +79,7 @@ public class OperationDescriptorSourceGeneratorTestsNoResultShapeSeparationTests
     }
 
     [Fact]
-    public void When_http_exposed_operation_declares_union_with_missing_executor_member_then_generator_keeps_no_result_shape_separation_diagnostic_distinct_from_missing_executor_diagnostic()
+    public void When_http_exposed_operation_declares_union_with_validation_failure_then_generator_keeps_no_result_shape_separation_diagnostic_clear()
     {
         var result = OperationDescriptorSourceGeneratorTests.Compile("""
             using Blueprint.Middleware;
@@ -91,7 +91,11 @@ public class OperationDescriptorSourceGeneratorTestsNoResultShapeSeparationTests
 
         result.Diagnostics.Select(static diagnostic => diagnostic.Id)
             .Should()
-            .Contain("BP108")
+            .NotContain("BP108")
             .And.NotContain("BP112");
+
+        result.Output.Select(static tree => tree.ToString())
+            .Should()
+            .Contain(static source => source.Contains("MissingExecutorMemberOperationDescriptor"));
     }
 }

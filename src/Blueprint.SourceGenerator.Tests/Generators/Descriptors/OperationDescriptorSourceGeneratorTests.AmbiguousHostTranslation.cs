@@ -33,7 +33,7 @@ public class OperationDescriptorSourceGeneratorTestsAmbiguousHostTranslationTest
     }
 
     [Fact]
-    public void When_http_exposed_operation_declares_union_with_missing_executor_member_then_generator_keeps_missing_executor_diagnostic_distinct()
+    public void When_http_exposed_operation_declares_union_with_validation_failure_then_generator_keeps_ambiguous_host_translation_diagnostic_clear()
     {
         var result = OperationDescriptorSourceGeneratorTests.Compile("""
             using Blueprint.Middleware;
@@ -45,7 +45,11 @@ public class OperationDescriptorSourceGeneratorTestsAmbiguousHostTranslationTest
 
         result.Diagnostics.Select(static diagnostic => diagnostic.Id)
             .Should()
-            .Contain("BP108")
+            .NotContain("BP108")
             .And.NotContain("BP109");
+
+        result.Output.Select(static tree => tree.ToString())
+            .Should()
+            .Contain(static source => source.Contains("MissingExecutorMemberOperationDescriptor"));
     }
 }

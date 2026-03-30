@@ -109,6 +109,7 @@ public static class OperationResultContractHelper
     /// <param name="conflictResultType">The resolved <c>Blueprint.Runtime.Exec.ConflictResult</c> base type when available.</param>
     /// <param name="notFoundResultType">The resolved <c>Blueprint.Runtime.Exec.NotFoundResult</c> base type when available.</param>
     /// <param name="createdResultType">The resolved <c>Blueprint.Runtime.Exec.CreatedResult</c> base type when available.</param>
+    /// <param name="validationFailedResultType">The resolved <c>Blueprint.Runtime.Exec.ValidationFailedResult</c> base type when available.</param>
     /// <param name="noResultType">The resolved <c>Blueprint.Runtime.Exec.NoResultOperationResult</c> type.</param>
     /// <param name="keyOnlyResourceEventResultType">The resolved <c>Blueprint.Runtime.Exec.KeyOnlyResourceEventResult</c> type when available.</param>
     /// <param name="httpNoContentResultType">The resolved <c>Blueprint.Runtime.Http.HttpNoContentResult</c> type when available.</param>
@@ -120,6 +121,7 @@ public static class OperationResultContractHelper
         INamedTypeSymbol? conflictResultType,
         INamedTypeSymbol? notFoundResultType,
         INamedTypeSymbol? createdResultType,
+        INamedTypeSymbol? validationFailedResultType,
         INamedTypeSymbol noResultType,
         INamedTypeSymbol? keyOnlyResourceEventResultType,
         INamedTypeSymbol? httpNoContentResultType)
@@ -129,6 +131,7 @@ public static class OperationResultContractHelper
             || IsTypeOrDerivedFromOptional(resultType, conflictResultType)
             || IsTypeOrDerivedFromOptional(resultType, notFoundResultType)
             || IsTypeOrDerivedFromOptional(resultType, createdResultType)
+            || IsTypeOrDerivedFromOptional(resultType, validationFailedResultType)
             || SymbolEqualityComparer.Default.Equals(resultType, noResultType)
             || SymbolEqualityComparer.Default.Equals(resultType, keyOnlyResourceEventResultType)
             || SymbolEqualityComparer.Default.Equals(resultType, httpNoContentResultType);
@@ -143,6 +146,7 @@ public static class OperationResultContractHelper
     /// <param name="conflictResultType">The resolved <c>Blueprint.Runtime.Exec.ConflictResult</c> base type when available.</param>
     /// <param name="notFoundResultType">The resolved <c>Blueprint.Runtime.Exec.NotFoundResult</c> base type when available.</param>
     /// <param name="createdResultType">The resolved <c>Blueprint.Runtime.Exec.CreatedResult</c> base type when available.</param>
+    /// <param name="validationFailedResultType">The resolved <c>Blueprint.Runtime.Exec.ValidationFailedResult</c> base type when available.</param>
     /// <param name="noResultType">The resolved <c>Blueprint.Runtime.Exec.NoResultOperationResult</c> type.</param>
     /// <param name="keyOnlyResourceEventResultType">The resolved <c>Blueprint.Runtime.Exec.KeyOnlyResourceEventResult</c> type when available.</param>
     /// <param name="httpNoContentResultType">The resolved <c>Blueprint.Runtime.Http.HttpNoContentResult</c> type when available.</param>
@@ -156,6 +160,7 @@ public static class OperationResultContractHelper
         INamedTypeSymbol? conflictResultType,
         INamedTypeSymbol? notFoundResultType,
         INamedTypeSymbol? createdResultType,
+        INamedTypeSymbol? validationFailedResultType,
         INamedTypeSymbol noResultType,
         INamedTypeSymbol? keyOnlyResourceEventResultType,
         INamedTypeSymbol? httpNoContentResultType,
@@ -193,6 +198,13 @@ public static class OperationResultContractHelper
         if (IsTypeOrDerivedFromOptional(resultType, createdResultType))
         {
             statusCode = 201;
+            hasResponseBody = true;
+            return true;
+        }
+
+        if (IsTypeOrDerivedFromOptional(resultType, validationFailedResultType))
+        {
+            statusCode = 422;
             hasResponseBody = true;
             return true;
         }
