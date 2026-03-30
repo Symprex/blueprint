@@ -885,6 +885,13 @@ Run this as a paired design loop with workstream 6. The result contract must be 
   - Pivot into the OpenAPI workstream with a narrow first slice: project descriptor-provided failure outcomes into generated HTTP response metadata.
   - That is the narrowest dependency-safe next slice because built-in and package-provided exception translators now share one compile-time descriptor contract, and the OpenAPI plan explicitly needs cross-cutting error outcomes to merge with operation-specific response metadata.
   - The live tracker should therefore switch `activeWorkstream` to `openapi`, point `referencePlans.workstreamPlan` at `migration\openapi\plan.md`, and set `nextReadySlice` to `openapi/project-descriptor-failure-outcomes-into-http-response-metadata` unless a review gate or blocker appears.
+- Completed the first OpenAPI response-metadata slice:
+  - `HttpResponseMetadataModule` now projects additive `OperationHttpResponseMetadataFeatureData` for HTTP-exposed operations, merging flattened semantic success outcomes with descriptor-advertised failure families into distinct status-code entries that carry the current response-body flag plus contributing semantic result type names.
+  - The proof matrix for this slice is green at the focused seam level: the new descriptor-source proof and runtime `Configure().GetFeatureData<OperationHttpResponseMetadataFeatureData>()` proof both passed after starting red on the missing feature-data seam itself.
+- Autonomous next OpenAPI follow-on after response-metadata projection:
+  - Stay in the OpenAPI workstream and project response body-type metadata onto the new HTTP response-metadata seam.
+  - That is the narrowest dependency-safe next slice because status-code/body-presence/result-family projection now exists, and the next missing ingredient for schema-ready OpenAPI generation is the payload/body type contract for body-bearing responses rather than full document emission or richer discriminator work.
+  - The live tracker should therefore keep `activeWorkstream` as `openapi` and advance `nextReadySlice` to `openapi/project-response-body-type-metadata-into-http-response-metadata` unless a review gate or blocker appears.
 
 ## 8. Error model and exception handling
 

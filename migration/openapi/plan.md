@@ -87,11 +87,23 @@ Planned direction:
 
 Implement after HTTP descriptors, error-model metadata, and resource metadata are stable enough to describe accurately. Even though the work can land after the base HTTP host, it is still part of HTTP completeness rather than an optional extra.
 
-## Autonomous next slice after Workstream 8 failure-contract completion
+## Autonomous slice log
 
-- Start with `openapi/project-descriptor-failure-outcomes-into-http-response-metadata`.
-- That is the narrowest safe entry because the completed error-model work now leaves stable `OperationFailureOutcomesFeatureData` for both built-in and package-provided translators, and this plan already expects cross-cutting outcomes from error modules to merge with operation-specific response metadata.
-- Acceptance target for this first OpenAPI slice:
-  - consume `OperationFailureOutcomesFeatureData` alongside flattened success outcomes when building generated HTTP response metadata
-  - surface validation-failure and unhandled-fallback families from descriptor metadata without rediscovering exception policy at runtime
-  - keep richer schema/discriminator and same-status-union shaping deferred until later OpenAPI slices
+- Completed `openapi/project-descriptor-failure-outcomes-into-http-response-metadata`.
+- Why it was the right entry slice:
+  - the completed error-model work already left stable `OperationFailureOutcomesFeatureData` for both built-in and package-provided translators
+  - this workstream already required cross-cutting error outcomes to merge with operation-specific response metadata
+- What landed in this slice:
+  - `HttpResponseMetadataModule` now projects additive `OperationHttpResponseMetadataFeatureData` for HTTP-exposed operations
+  - the projected response entries merge flattened semantic success outcomes with descriptor-advertised failure families
+  - each response entry currently carries the status code, whether the response has a body, and the contributing semantic result type names
+- Proof closed for this slice:
+  - descriptor-source proof for generated `OperationHttpResponseMetadataFeatureData`
+  - runtime `Configure().GetFeatureData<OperationHttpResponseMetadataFeatureData>()` proof covering `200`, `422`, and `500`
+- Deferred by design:
+  - payload/body type metadata for body-bearing responses
+  - serializer/schema projection
+  - richer same-status discriminator shaping and full OpenAPI document generation
+- Autonomous next slice:
+  - Continue with `openapi/project-response-body-type-metadata-into-http-response-metadata`.
+  - That is the narrowest safe follow-on because the status/body/result-family layer now exists, and the next schema-facing gap is surfacing the body payload contract for body-bearing responses without yet widening to full schema emission or document generation.

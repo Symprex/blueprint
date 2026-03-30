@@ -265,6 +265,7 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
             new AmbiguousHostTranslationModule(),
             new NoResultShapeSeparationModule(),
             new HttpUnionDiscriminationStrategyModule(),
+            new HttpResponseMetadataModule(),
             new OperationDiscoveryManifestModule(),
             .. additionalModules,
         ]);

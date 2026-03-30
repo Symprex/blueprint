@@ -39,16 +39,16 @@ public sealed class FailureOutcomesModule : IBlueprintSourceGeneratorModule, IDe
             return;
         }
 
-        var registrations = policy.Translators
+        var outcomes = policy.Translators
             .Select(static translator => new FailureOutcomeRegistration(
                 translator.TranslatorId,
                 translator.HandledExceptionTypeName,
                 translator.ResultTypeName))
             .ToArray();
 
-        foreach (var registration in registrations)
+        foreach (var outcome in outcomes)
         {
-            context.AddMetadata(registration);
+            context.AddMetadata(outcome);
         }
 
         context.AddRenderStep(writer => RenderDescriptor(writer, context.GetMetadata<FailureOutcomeRegistration>()));
@@ -76,9 +76,4 @@ public sealed class FailureOutcomesModule : IBlueprintSourceGeneratorModule, IDe
     {
         return CSharpSymbolDisplay.FormatLiteral(value, quote: true);
     }
-
-    private sealed record FailureOutcomeRegistration(
-        string TranslatorId,
-        string HandledExceptionTypeName,
-        string ResultTypeName);
 }
