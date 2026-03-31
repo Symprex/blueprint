@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 
 namespace Blueprint.Model;
@@ -37,6 +38,12 @@ public class BlueprintApp
     /// descriptor-published body payload inventory for this Blueprint app.
     /// </summary>
     public Type? AppOwnedSerializerContextType { get; protected set; }
+
+    /// <summary>
+    /// Gets the body payload CLR type names declared through the app-owned serializer context so later OpenAPI/schema
+    /// slices can reason from stable app metadata instead of rediscovering <c>JsonSerializable</c> attributes.
+    /// </summary>
+    public ImmutableArray<string> AppOwnedSerializerContextBodyTypeNames { get; protected set; } = ImmutableArray<string>.Empty;
 
     /// <summary>
     /// Registers the given operation descriptor.

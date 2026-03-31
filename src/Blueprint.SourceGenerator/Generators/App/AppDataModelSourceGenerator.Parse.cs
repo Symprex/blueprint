@@ -12,6 +12,7 @@ namespace Blueprint.SourceGenerator.Generators.App;
 public sealed partial class AppDataModelSourceGenerator
 {
     private const string SerializerContextAttributeMetadataName = "Blueprint.Model.BlueprintAppSerializerContextAttribute";
+    private const string JsonSerializableAttributeMetadataName = "System.Text.Json.Serialization.JsonSerializableAttribute";
 
     private static Result<ParseOnlyDataModel>? ParseDataModelWithScanAttributes(GeneratorAttributeSyntaxContext context)
     {
@@ -46,7 +47,8 @@ public sealed partial class AppDataModelSourceGenerator
             classSymbol,
             context.TargetNode,
             serializerContext.TypeName,
-            serializerContext.Location);
+            serializerContext.Location,
+            serializerContext.BodyTypeNames);
 
         return Result.Success(new ParseOnlyDataModel(model, [.. parseAttributes]));
     }
@@ -71,15 +73,29 @@ public sealed partial class AppDataModelSourceGenerator
 
                     return new SerializerContextDeclaration(
                         serializerContextType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
-                        serializerContextLocation);
+                        serializerContextLocation,
+                        GetSerializerContextBodyTypeNames(serializerContextType));
                 }
             }
         }
 
-        return new SerializerContextDeclaration(null, null);
+        return new SerializerContextDeclaration(null, null, new EquatableList<string>());
     }
 
-    private sealed record SerializerContextDeclaration(string? TypeName, LocationInfo? Location);
+    private static EquatableList<string> GetSerializerContextBodyTypeNames(INamedTypeSymbol serializerContextType)
+    {
+        var bodyTypeNames = serializerContextType.GetAttributes()
+            .Where(static attribute => string.Equals(attribute.AttributeClass?.ToDisplayString(), JsonSerializableAttributeMetadataName, StringComparison.Ordinal))
+            .Select(static attribute => attribute.ConstructorArguments.FirstOrDefault().Value)
+            .OfType<ITypeSymbol>()
+            .Select(static typeSymbol => typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat).Replace("global::", string.Empty, StringComparison.Ordinal))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        return new EquatableList<string>(bodyTypeNames);
+    }
+
+    private sealed record SerializerContextDeclaration(string? TypeName, LocationInfo? Location, EquatableList<string> BodyTypeNames);
 }
 
 

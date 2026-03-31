@@ -42,7 +42,7 @@ public sealed partial class AppDataModelSourceGenerator
         var requiredSerializerCoverageOperations = new HashSet<string>(StringComparer.Ordinal);
         var coveredSerializerContextTypeNames = dataModelClass.SerializerContextTypeName is null
             ? null
-            : GetCoveredSerializerContextTypeNames(dataModelClass.SerializerContextTypeName, compilation);
+            : new HashSet<string>(dataModelClass.SerializerContextBodyTypeNames.AsArray(), StringComparer.Ordinal);
 
         foreach (var attribute in attributes)
         {
@@ -216,24 +216,6 @@ public sealed partial class AppDataModelSourceGenerator
         }
     }
 
-    private static HashSet<string> GetCoveredSerializerContextTypeNames(
-        string serializerContextTypeName,
-        Compilation compilation)
-    {
-        var serializerContextType = compilation.GetTypeByMetadataName(NormalizeMetadataName(serializerContextTypeName));
-        if (serializerContextType is null)
-        {
-            return new HashSet<string>(StringComparer.Ordinal);
-        }
-
-        return serializerContextType.GetAttributes()
-            .Where(static attribute => string.Equals(attribute.AttributeClass?.ToDisplayString(), "System.Text.Json.Serialization.JsonSerializableAttribute", StringComparison.Ordinal))
-            .Select(static attribute => attribute.ConstructorArguments.FirstOrDefault().Value)
-            .OfType<ITypeSymbol>()
-            .Select(static typeSymbol => typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat).Replace("global::", string.Empty, StringComparison.Ordinal))
-            .ToHashSet(StringComparer.Ordinal);
-    }
-
     private static string[] GetRequiredSerializerContextCoverage(
         INamedTypeSymbol operation,
         Compilation compilation,
@@ -262,13 +244,6 @@ public sealed partial class AppDataModelSourceGenerator
         return requiredBodyTypeNames
             .OrderBy(static typeName => typeName, StringComparer.Ordinal)
             .ToArray();
-    }
-
-    private static string NormalizeMetadataName(string metadataName)
-    {
-        return metadataName.StartsWith("global::", StringComparison.Ordinal)
-            ? metadataName.Substring("global::".Length)
-            : metadataName;
     }
 }
 

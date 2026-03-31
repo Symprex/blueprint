@@ -932,6 +932,14 @@ Run this as a paired design loop with workstream 6. The result contract must be 
   - Stay in the OpenAPI workstream and project schema coverage from the serializer-context declaration.
   - That is the narrowest dependency-safe next slice because the repository now has both serializer inputs it previously lacked: descriptor-derived body payload requirements and an app-owned serializer-context declaration guarded by `BP006`/`BP007`. The next OpenAPI/schema gap is turning that declared serializer context into stable schema-ready coverage facts before widening into full document emission or runtime serializer changes.
   - The live tracker should therefore keep `activeWorkstream` as `openapi` and advance `nextReadySlice` to `openapi/project-schema-coverage-from-serializer-context-declaration` unless a review gate or blocker appears.
+- Completed the OpenAPI serializer-context declaration coverage projection slice:
+  - `BlueprintApp` now exposes `AppOwnedSerializerContextBodyTypeNames`, and `AppDataModelSourceGenerator` persists the distinct declared `JsonSerializable(...)` body payload CLR names alongside `AppOwnedSerializerContextType` in generated app registrations.
+  - The same parsed declared inventory now feeds app-level serializer coverage validation, keeping later OpenAPI/schema work on one app-owned declaration seam instead of re-reading serializer metadata in a second path.
+  - Fresh evidence is green: `dotnet format .\Blueprint.sln --no-restore`, `dotnet build .\Blueprint.sln --no-restore`, `dotnet test .\src\Blueprint.SourceGenerator.Tests\Blueprint.SourceGenerator.Tests.csproj --no-restore`, `dotnet test .\src\Blueprint.SourceGenerator.CodeWriter.Tests\Blueprint.SourceGenerator.CodeWriter.Tests.csproj --no-restore`, and `dotnet test .\src\Blueprint.SourceGenerator.Tests.Integration\Blueprint.SourceGenerator.Tests.Integration.csproj --no-restore`.
+- Autonomous next OpenAPI follow-on after serializer-context declaration coverage projection:
+  - Stay in the OpenAPI workstream and establish an OpenAPI document-builder seam consuming app serializer context.
+  - That is the narrowest dependency-safe next slice because descriptor feature data must remain app-agnostic, so the next missing OpenAPI/schema seam has to live at the app/runtime or document-builder boundary where the app-owned declared serializer inventory can be combined with descriptor-published coverage requirements.
+  - The live tracker should therefore keep `activeWorkstream` as `openapi` and advance `nextReadySlice` to `openapi/establish-openapi-document-builder-seam-consuming-app-serializer-context` unless a review gate or blocker appears.
 
 ## 8. Error model and exception handling
 

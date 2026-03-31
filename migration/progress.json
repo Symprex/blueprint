@@ -12,14 +12,14 @@
   "current": {
     "activeWorkstream": "openapi",
     "nextReadySlice": {
+      "id": "openapi/establish-openapi-document-builder-seam-consuming-app-serializer-context",
+      "workstream": "openapi",
+      "title": "Establish OpenAPI document-builder seam consuming app serializer context"
+    },
+    "lastCompletedSlice": {
       "id": "openapi/project-schema-coverage-from-serializer-context-declaration",
       "workstream": "openapi",
       "title": "Project schema coverage from the serializer-context declaration"
-    },
-    "lastCompletedSlice": {
-      "id": "openapi/diagnose-missing-app-serializer-context-declaration-for-http-coverage",
-      "workstream": "openapi",
-      "title": "Diagnose missing app serializer-context declarations for HTTP coverage"
     },
     "openReviewGate": null
   },

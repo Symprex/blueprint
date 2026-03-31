@@ -200,3 +200,22 @@ Implement after HTTP descriptors, error-model metadata, and resource metadata ar
 - Autonomous next slice:
   - Continue with `openapi/project-schema-coverage-from-serializer-context-declaration`.
   - That is the narrowest safe follow-on because the codebase now knows both sides of the serializer contract: descriptor-derived required body types and the app-declared serializer context. The next schema-facing gap is projecting the declared context into stable coverage facts OpenAPI can consume, without yet widening into full document emission or runtime serializer changes.
+- Completed `openapi/project-schema-coverage-from-serializer-context-declaration`.
+- Why it was the right follow-on:
+  - the previous OpenAPI slices had already established the required side of the serializer contract on descriptors and the app-owned declaration/validation seam, but later schema/document work still lacked a durable app-level inventory of which `JsonSerializable(...)` payloads the app had actually declared
+  - projecting that declared inventory onto the generated app model was the narrowest way to make serializer coverage consumable by later OpenAPI work without leaking app-specific facts into app-agnostic descriptor feature data
+- What landed in this slice:
+  - `BlueprintApp` now exposes `AppOwnedSerializerContextBodyTypeNames` as the app-owned declared body payload CLR type inventory for later OpenAPI/schema consumers
+  - `AppDataModelSourceGenerator` now parses distinct `JsonSerializable(...)` body type names from the declared serializer context once and persists them through the generated app registration constructor beside `AppOwnedSerializerContextType`
+  - app-level serializer coverage validation (`BP006`/`BP007`) now reuses that parsed declared inventory instead of re-inspecting the serializer context symbol in a second later stage
+- Proof closed for this slice:
+  - app-generator source proof for emitted `AppOwnedSerializerContextBodyTypeNames` assignment when the declared serializer context includes `JsonSerializable(...)` entries
+  - runtime app-model integration proof for constructed app `AppOwnedSerializerContextBodyTypeNames`
+  - fresh repo verification sweep: `dotnet format .\Blueprint.sln --no-restore`, `dotnet build .\Blueprint.sln --no-restore`, `dotnet test .\src\Blueprint.SourceGenerator.Tests\Blueprint.SourceGenerator.Tests.csproj --no-restore`, `dotnet test .\src\Blueprint.SourceGenerator.CodeWriter.Tests\Blueprint.SourceGenerator.CodeWriter.Tests.csproj --no-restore`, and `dotnet test .\src\Blueprint.SourceGenerator.Tests.Integration\Blueprint.SourceGenerator.Tests.Integration.csproj --no-restore`
+- Deferred by design:
+  - establishing the first OpenAPI document-builder/runtime seam that consumes both descriptor-published serializer requirements and the app-owned declared serializer inventory
+  - full schema projection and document emission
+  - runtime serializer switching away from `Newtonsoft.Json`
+- Autonomous next slice:
+  - Continue with `openapi/establish-openapi-document-builder-seam-consuming-app-serializer-context`.
+  - That is the narrowest safe follow-on because descriptor feature data remains app-agnostic, so the next missing OpenAPI seam must live at the app/runtime or document-builder boundary where `BlueprintApp.AppOwnedSerializerContextBodyTypeNames` can be combined with per-operation descriptor coverage facts without widening yet into full schema rendering or document emission.
