@@ -1,3 +1,4 @@
+using Blueprint.SourceGenerator.Generators.App;
 using Blueprint.SourceGenerator.Generators.Descriptors;
 using FluentAssertions;
 
@@ -57,5 +58,43 @@ public class SyntheticBlueprintFixtureGeneratorTests
         result.Output.Count(static tree => tree.FilePath.Contains("SyntheticOperation", StringComparison.Ordinal))
             .Should()
             .Be(5);
+    }
+
+    [Fact]
+    public void When_generating_link_heavy_fixture_then_combined_source_compiles_with_app_generator_without_serializer_context_diagnostics()
+    {
+        var fixture = SyntheticBlueprintFixtureGenerator.Create(
+            new SyntheticBlueprintFixtureOptions(
+                namespaceName: "Synthetic.Scale",
+                appName: "SyntheticScaleApp",
+                operationCount: 5,
+                includeRootLinks: true));
+
+        var result = TestHelpers.Compile<AppDataModelSourceGenerator>(fixture.CombinedSource);
+
+        result.Diagnostics.Select(static diagnostic => diagnostic.Id)
+            .Should()
+            .NotContain("BP007");
+    }
+
+    [Fact]
+    public void When_generating_link_heavy_fixture_then_tracked_descriptor_and_app_generators_compile_without_diagnostics()
+    {
+        var fixture = SyntheticBlueprintFixtureGenerator.Create(
+            new SyntheticBlueprintFixtureOptions(
+                namespaceName: "Synthetic.Scale",
+                appName: "SyntheticScaleApp",
+                operationCount: 5,
+                includeRootLinks: true));
+
+        var result = TestHelpers.CompileWithTrackedGenerators(
+            [
+                TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>(),
+                TestHelpers.CreateTrackedGenerator<AppDataModelSourceGenerator>(),
+            ],
+            fixture.SourceFiles.Select(static file => file.Content).ToArray(),
+            fixture.SourceFiles.Select(static file => file.Path).ToArray());
+
+        result.Diagnostics.Should().BeEmpty();
     }
 }

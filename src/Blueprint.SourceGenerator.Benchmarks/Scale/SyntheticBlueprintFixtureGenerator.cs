@@ -165,27 +165,48 @@ public static class SyntheticBlueprintFixtureGenerator
     {
         ArgumentNullException.ThrowIfNull(options);
 
-        var sourceFiles = ImmutableArray.CreateBuilder<SyntheticBlueprintFixtureSourceFile>(options.OperationCount + 2);
-        var appSource = $$"""
-                           namespace {{options.NamespaceName}}
-                           {
-                               [global::Blueprint.Model.BlueprintAppScan]
-                               public partial class {{options.AppName}} : global::Blueprint.Model.BlueprintApp
-                               {
-                               }
-                           }
-                           """;
+        var serializerContextTypeName = $"{options.AppName}JsonContext";
+        var sourceFiles = ImmutableArray.CreateBuilder<SyntheticBlueprintFixtureSourceFile>(options.OperationCount + (options.IncludeRootLinks ? 3 : 2));
+        var appSource = options.IncludeRootLinks
+            ? $$"""
+               namespace {{options.NamespaceName}}
+               {
+                   [global::Blueprint.Model.BlueprintAppScan]
+                   [global::Blueprint.Model.BlueprintAppSerializerContext(JsonSerializerContextType = typeof({{serializerContextTypeName}}))]
+                   public partial class {{options.AppName}} : global::Blueprint.Model.BlueprintApp
+                   {
+                   }
+               }
+               """
+            : $$"""
+               namespace {{options.NamespaceName}}
+               {
+                   [global::Blueprint.Model.BlueprintAppScan]
+                   public partial class {{options.AppName}} : global::Blueprint.Model.BlueprintApp
+                   {
+                   }
+               }
+               """;
 
         sourceFiles.Add(new SyntheticBlueprintFixtureSourceFile(
             $"{options.AppName}.cs",
             appSource));
 
+        if (options.IncludeRootLinks)
+        {
+            sourceFiles.Add(new SyntheticBlueprintFixtureSourceFile(
+                $@"Shared\{serializerContextTypeName}.cs",
+                CreateSerializerContextSource(options.NamespaceName, serializerContextTypeName)));
+        }
+
         var sharedBaseSource = $$"""
-                                 namespace {{options.NamespaceName}}
-                                 {
-                                     public abstract class SyntheticOperationBase
-                                     {
-                                         [global::System.ComponentModel.DataAnnotations.Required]
+                                 #nullable enable
+
+                                  namespace {{options.NamespaceName}}
+                                  {
+                                      public abstract class SyntheticOperationBase
+                                      {
+                                          [global::System.ComponentModel.DataAnnotations.Required]
                                          public string? Value { get; init; }
                                      }
                                  }
@@ -206,6 +227,46 @@ public static class SyntheticBlueprintFixtureGenerator
         }
 
         return new SyntheticBlueprintFixture(options, sourceFiles.MoveToImmutable());
+    }
+
+    private static string CreateSerializerContextSource(string namespaceName, string serializerContextTypeName)
+    {
+        return $$"""
+                 #nullable enable
+
+                 using System;
+                 using System.Text.Json;
+                 using System.Text.Json.Serialization;
+                 using System.Text.Json.Serialization.Metadata;
+
+                 namespace Microsoft.AspNetCore.Mvc
+                 {
+                     public sealed class ValidationProblemDetails : ProblemDetails
+                     {
+                     }
+                 }
+
+                 namespace {{namespaceName}}
+                 {
+                     [global::System.Text.Json.Serialization.JsonSerializable(typeof(string))]
+                     [global::System.Text.Json.Serialization.JsonSerializable(typeof(global::Microsoft.AspNetCore.Mvc.ProblemDetails))]
+                     [global::System.Text.Json.Serialization.JsonSerializable(typeof(global::Microsoft.AspNetCore.Mvc.ValidationProblemDetails))]
+                     public partial class {{serializerContextTypeName}} : global::System.Text.Json.Serialization.JsonSerializerContext
+                     {
+                         public {{serializerContextTypeName}}()
+                             : base(new JsonSerializerOptions())
+                         {
+                         }
+
+                         protected override JsonSerializerOptions? GeneratedSerializerOptions => new JsonSerializerOptions();
+
+                         public override JsonTypeInfo? GetTypeInfo(Type type)
+                         {
+                             return null;
+                         }
+                     }
+                 }
+                 """;
     }
 
     private static string CreateOperationSource(string namespaceName, string operationName, int operationIndex, bool includeRootLinks)

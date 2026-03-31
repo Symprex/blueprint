@@ -10,12 +10,14 @@ namespace Blueprint.SourceGenerator.Generators.App.Model;
 /// <param name="Namespace">The namespace of the source class.</param>
 /// <param name="Name">The name of the source class.</param>
 /// <param name="MetadataName">The "metadata name" of the source class (i.e. includes namespace and name).</param>
+/// <param name="DeclarationLocation">The source location of the app class declaration.</param>
 /// <param name="SerializerContextTypeName">The fully-qualified serializer context type declared by the app, when present.</param>
 /// <param name="SerializerContextLocation">The source location of the serializer-context declaration, when present.</param>
 internal record ParseOnlyBlueprintAppClassModel(
     string? Namespace,
     string Name,
     string MetadataName,
+    LocationInfo? DeclarationLocation,
     string? SerializerContextTypeName,
     LocationInfo? SerializerContextLocation)
 {
@@ -33,10 +35,17 @@ internal record ParseOnlyBlueprintAppClassModel(
         string? serializerContextTypeName,
         LocationInfo? serializerContextLocation)
     {
+        var declarationLocation = type.Locations.Length > 0
+            ? LocationInfo.CreateFrom(type.Locations[0])
+            : syntax is null
+                ? null
+                : LocationInfo.CreateFrom(syntax);
+
         return new ParseOnlyBlueprintAppClassModel(
             Namespace: type.ContainingNamespace.IsGlobalNamespace ? null : type.ContainingNamespace.ToDisplayString(),
             Name: type.Name,
             MetadataName: type.ToFullMetadataName(),
+            DeclarationLocation: declarationLocation,
             SerializerContextTypeName: serializerContextTypeName,
             SerializerContextLocation: serializerContextLocation);
     }

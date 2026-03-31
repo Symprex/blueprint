@@ -12,14 +12,14 @@
   "current": {
     "activeWorkstream": "openapi",
     "nextReadySlice": {
+      "id": "openapi/project-schema-coverage-from-serializer-context-declaration",
+      "workstream": "openapi",
+      "title": "Project schema coverage from the serializer-context declaration"
+    },
+    "lastCompletedSlice": {
       "id": "openapi/diagnose-missing-app-serializer-context-declaration-for-http-coverage",
       "workstream": "openapi",
       "title": "Diagnose missing app serializer-context declarations for HTTP coverage"
-    },
-    "lastCompletedSlice": {
-      "id": "openapi/validate-serializer-context-coverage-against-app-declaration",
-      "workstream": "openapi",
-      "title": "Validate serializer-context coverage against the app-owned declaration"
     },
     "openReviewGate": null
   },

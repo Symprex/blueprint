@@ -37,7 +37,9 @@ public sealed partial class AppDataModelSourceGenerator
         var registrations = new EquatableList<string>();
         var diagnostics = new EquatableList<DiagnosticInfo>();
         var missingSerializerCoverageTypeNames = new HashSet<string>(StringComparer.Ordinal);
-        var affectedSerializerCoverageOperations = new HashSet<string>(StringComparer.Ordinal);
+        var missingSerializerCoverageOperations = new HashSet<string>(StringComparer.Ordinal);
+        var requiredSerializerCoverageTypeNames = new HashSet<string>(StringComparer.Ordinal);
+        var requiredSerializerCoverageOperations = new HashSet<string>(StringComparer.Ordinal);
         var coveredSerializerContextTypeNames = dataModelClass.SerializerContextTypeName is null
             ? null
             : GetCoveredSerializerContextTypeNames(dataModelClass.SerializerContextTypeName, compilation);
@@ -50,20 +52,31 @@ public sealed partial class AppDataModelSourceGenerator
             {
                 registrations.Add(operation.ToDisplayString());
 
-                if (dataModelClass.SerializerContextTypeName is null)
+                var requiredTypeNames = GetRequiredSerializerContextCoverage(
+                    operation,
+                    compilation,
+                    executionPlanResult,
+                    exceptionTranslatorPolicyResult);
+                if (requiredTypeNames.Length == 0)
                 {
                     continue;
                 }
 
-                foreach (var missingTypeName in GetMissingSerializerContextCoverage(
-                             operation,
-                             compilation,
-                             executionPlanResult,
-                             exceptionTranslatorPolicyResult,
-                             coveredSerializerContextTypeNames))
+                foreach (var requiredTypeName in requiredTypeNames)
+                {
+                    requiredSerializerCoverageTypeNames.Add(requiredTypeName);
+                    requiredSerializerCoverageOperations.Add(operation.Name);
+                }
+
+                if (coveredSerializerContextTypeNames is null)
+                {
+                    continue;
+                }
+
+                foreach (var missingTypeName in requiredTypeNames.Where(requiredTypeName => !coveredSerializerContextTypeNames.Contains(requiredTypeName)))
                 {
                     missingSerializerCoverageTypeNames.Add(missingTypeName);
-                    affectedSerializerCoverageOperations.Add(operation.Name);
+                    missingSerializerCoverageOperations.Add(operation.Name);
                 }
             }
 
@@ -72,6 +85,20 @@ public sealed partial class AppDataModelSourceGenerator
                 return Result<BlueprintAppDataModelCompilationModel>.Failure(
                     new DiagnosticInfo(_noMatchingTypesFound, attribute.Location));
             }
+        }
+
+        if (dataModelClass.SerializerContextTypeName is null
+            && requiredSerializerCoverageTypeNames.Count > 0)
+        {
+            diagnostics.Add(
+                new DiagnosticInfo(
+                    _missingSerializerContextDeclarationRule,
+                    dataModelClass.DeclarationLocation,
+                    [
+                        dataModelClass.MetadataName.Replace("global::", string.Empty, StringComparison.Ordinal),
+                        string.Join(", ", requiredSerializerCoverageTypeNames.OrderBy(static typeName => typeName, StringComparer.Ordinal)),
+                        string.Join(", ", requiredSerializerCoverageOperations.OrderBy(static operationName => operationName, StringComparer.Ordinal)),
+                    ]));
         }
 
         if (dataModelClass.SerializerContextTypeName is not null
@@ -84,7 +111,7 @@ public sealed partial class AppDataModelSourceGenerator
                     [
                         dataModelClass.SerializerContextTypeName.Replace("global::", string.Empty, StringComparison.Ordinal),
                         string.Join(", ", missingSerializerCoverageTypeNames.OrderBy(static typeName => typeName, StringComparer.Ordinal)),
-                        string.Join(", ", affectedSerializerCoverageOperations.OrderBy(static operationName => operationName, StringComparer.Ordinal)),
+                        string.Join(", ", missingSerializerCoverageOperations.OrderBy(static operationName => operationName, StringComparer.Ordinal)),
                     ]));
         }
 
@@ -207,18 +234,12 @@ public sealed partial class AppDataModelSourceGenerator
             .ToHashSet(StringComparer.Ordinal);
     }
 
-    private static string[] GetMissingSerializerContextCoverage(
+    private static string[] GetRequiredSerializerContextCoverage(
         INamedTypeSymbol operation,
         Compilation compilation,
         Result<BlueprintModuleExecutionPlan> executionPlanResult,
-        Result<PipelineExceptionTranslatorPolicy> exceptionTranslatorPolicyResult,
-        HashSet<string>? coveredSerializerContextTypeNames)
+        Result<PipelineExceptionTranslatorPolicy> exceptionTranslatorPolicyResult)
     {
-        if (coveredSerializerContextTypeNames is null)
-        {
-            return [];
-        }
-
         var plannedDescriptor = DescriptorPlanBuilder.Build(
             operation.ToFullMetadataName(),
             compilation,
@@ -239,7 +260,6 @@ public sealed partial class AppDataModelSourceGenerator
         }
 
         return requiredBodyTypeNames
-            .Where(requiredTypeName => !coveredSerializerContextTypeNames.Contains(requiredTypeName))
             .OrderBy(static typeName => typeName, StringComparer.Ordinal)
             .ToArray();
     }

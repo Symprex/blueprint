@@ -924,6 +924,14 @@ Run this as a paired design loop with workstream 6. The result contract must be 
   - Stay in the OpenAPI workstream and diagnose missing app serializer-context declarations for HTTP coverage.
   - That is the narrowest dependency-safe next slice because the current implementation now covers the "declared but incomplete" half of the serializer contract, while the plans already call out a separate "missing configuration" diagnostic need before broader schema/document generation work.
   - The live tracker should therefore keep `activeWorkstream` as `openapi` and advance `nextReadySlice` to `openapi/diagnose-missing-app-serializer-context-declaration-for-http-coverage` unless a review gate or blocker appears.
+- Completed the OpenAPI missing serializer-context declaration slice:
+  - `AppDataModelSourceGenerator` now reports `BP007` when an HTTP-visible Blueprint app has descriptor-derived serializer coverage requirements but declares no `[BlueprintAppSerializerContext(JsonSerializerContextType = typeof(...))]`, anchoring the diagnostic to the app type declaration while leaving `BP006` focused on incomplete declared coverage.
+  - The shared synthetic scale fixture now emits an app-owned serializer context for link-heavy HTTP-visible shapes so the tracked descriptor+app verification harness stays aligned with the current serializer contract instead of failing spuriously during scale/telemetry proofs.
+  - Fresh evidence is green: `dotnet format .\Blueprint.sln --no-restore`, `dotnet build .\Blueprint.sln --no-restore`, `dotnet test .\src\Blueprint.SourceGenerator.Tests\Blueprint.SourceGenerator.Tests.csproj --no-restore`, `dotnet test .\src\Blueprint.SourceGenerator.CodeWriter.Tests\Blueprint.SourceGenerator.CodeWriter.Tests.csproj --no-restore`, and `dotnet test .\src\Blueprint.SourceGenerator.Tests.Integration\Blueprint.SourceGenerator.Tests.Integration.csproj --no-restore`.
+- Autonomous next OpenAPI follow-on after missing serializer-context declaration:
+  - Stay in the OpenAPI workstream and project schema coverage from the serializer-context declaration.
+  - That is the narrowest dependency-safe next slice because the repository now has both serializer inputs it previously lacked: descriptor-derived body payload requirements and an app-owned serializer-context declaration guarded by `BP006`/`BP007`. The next OpenAPI/schema gap is turning that declared serializer context into stable schema-ready coverage facts before widening into full document emission or runtime serializer changes.
+  - The live tracker should therefore keep `activeWorkstream` as `openapi` and advance `nextReadySlice` to `openapi/project-schema-coverage-from-serializer-context-declaration` unless a review gate or blocker appears.
 
 ## 8. Error model and exception handling
 

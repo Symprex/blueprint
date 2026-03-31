@@ -1,0 +1,36 @@
+﻿File: Input0.cs
+#nullable enable
+using System;
+using Blueprint.Model;
+using Blueprint.Model.Attributes;
+using Blueprint.Runtime.Exec;
+
+namespace Blueprint.Model.Attributes
+{
+    [AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = true)]
+    internal sealed class RootLinkAttribute : Attribute
+    {
+        public RootLinkAttribute(string url)
+        {
+        }
+    }
+}
+
+namespace TestNamespace
+{
+    public sealed class MissingPayload
+    {
+    }
+
+    [RootLink("/serializer-context/missing-declaration")]
+    public partial class IncludedOperation : IQuery<OkResult<MissingPayload>>
+    {
+        public static ApiOperationDescriptor Configure() => throw new NotImplementedException();
+    }
+
+    [BlueprintAppScan]
+    public partial class TestBlueprintApp : BlueprintApp
+                         ^^^^^^^^^^^^^^^^ [Error:BP007] The Blueprint app 'TestNamespace.TestBlueprintApp' exposes HTTP response body payload types Microsoft.AspNetCore.Mvc.ProblemDetails, Microsoft.AspNetCore.Mvc.ValidationProblemDetails, TestNamespace.MissingPayload for operations IncludedOperation but does not declare [BlueprintAppSerializerContext(JsonSerializerContextType = typeof(...))]
+    {
+    }
+}

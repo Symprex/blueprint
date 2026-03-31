@@ -49,6 +49,15 @@ public sealed partial class AppDataModelSourceGenerator : IIncrementalGenerator,
         isEnabledByDefault: true,
         description: "HTTP-visible Blueprint operations must have their response body payload types covered by the app-owned JsonSerializerContext declaration before OpenAPI/schema generation can trust the compile-time contract.");
 
+    private static readonly DiagnosticDescriptor _missingSerializerContextDeclarationRule = new(
+        id: "BP007",
+        title: "App is missing a serializer context declaration",
+        messageFormat: "The Blueprint app '{0}' exposes HTTP response body payload types {1} for operations {2} but does not declare [BlueprintAppSerializerContext(JsonSerializerContextType = typeof(...))]",
+        category: "AppDataModelSourceGenerator",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "HTTP-visible Blueprint apps must declare an app-owned JsonSerializerContext before OpenAPI/schema generation can trust the compile-time serializer contract.");
+
     private readonly BlueprintSourceGenerationConfig _config;
 
     /// <summary>

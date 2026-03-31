@@ -52,7 +52,7 @@ parses that app-owned serializer context type once and carries it into `Blueprin
 through the generated registration constructor, giving later OpenAPI coverage-validation slices a consumer-owned JSON
 metadata seam without routing through runtime host options first.
 
-That same generator now also reuses the shared descriptor-planning seam (`src\Blueprint.SourceGenerator\Planning\DescriptorPlanBuilder.cs`) before it emits registrations. That keeps app-level serializer coverage validation (`BP006`) on the same contributor ordering, host-exposure metadata, and exception-translation policy used by `OperationDescriptorSourceGenerator`, rather than duplicating HTTP/result/body-shape analysis in a separate app-only code path.
+That same generator now also reuses the shared descriptor-planning seam (`src\Blueprint.SourceGenerator\Planning\DescriptorPlanBuilder.cs`) before it emits registrations. That keeps app-level serializer coverage validation (`BP006`) and missing-declaration validation (`BP007`) on the same contributor ordering, host-exposure metadata, and exception-translation policy used by `OperationDescriptorSourceGenerator`, rather than duplicating HTTP/result/body-shape analysis in a separate app-only code path.
 
 The generated app registration means the runtime registry is built from generated descriptors rather than startup-time discovery logic.
 
