@@ -15,6 +15,7 @@ namespace TestNamespace
     {
         public TestBlueprintApp()
         {
+            this.AppOwnedSerializerContext = new global::TestNamespace.TestBlueprintJsonContext();
             this.AppOwnedSerializerContextType = typeof(global::TestNamespace.TestBlueprintJsonContext);
             this.Register(TestNamespace.IncludedOperation.Configure());
         }

@@ -23,4 +23,24 @@ public class AppModelSerializerContextTests
             "Microsoft.AspNetCore.Mvc.ProblemDetails",
             "Microsoft.AspNetCore.Mvc.ValidationProblemDetails");
     }
+
+    [Fact]
+    public void When_app_declares_serializer_context_then_constructed_app_exposes_declared_serializer_context_instance()
+    {
+        var app = new IntegrationTestBlueprintApp();
+
+        app.AppOwnedSerializerContext.Should().NotBeNull();
+        app.AppOwnedSerializerContext.Should().BeOfType<IntegrationTestAppJsonContext>();
+    }
+
+    [Fact]
+    public void When_app_declares_serializer_context_then_constructed_app_exposes_declared_serializer_context_body_types()
+    {
+        var app = new IntegrationTestBlueprintApp();
+
+        app.AppOwnedSerializerContextBodyTypes.Should().Equal(
+            typeof(string),
+            typeof(Microsoft.AspNetCore.Mvc.ProblemDetails),
+            typeof(Microsoft.AspNetCore.Mvc.ValidationProblemDetails));
+    }
 }

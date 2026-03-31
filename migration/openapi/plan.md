@@ -238,3 +238,23 @@ Implement after HTTP descriptors, error-model metadata, and resource metadata ar
 - Autonomous next slice:
   - Continue with `openapi/establish-schema-projection-seam-for-covered-body-types`.
   - That is the narrowest safe follow-on because the new document-builder seam now centralizes the declared serializer inventory plus per-operation required body metadata, so the next OpenAPI gap is projecting covered body payload types into a stable schema-ready shape without yet widening into full operation/document rendering.
+- Completed `openapi/establish-schema-projection-seam-for-covered-body-types`.
+- Why it was the right follow-on:
+  - the document-builder seam had already centralized the app-owned serializer declaration and the per-operation coverage requirements, but later OpenAPI work still lacked a durable schema-ready model derived from actual serializer metadata
+  - app registrations previously persisted only serializer type/name facts, which would have forced later runtime schema work to rediscover typed serializer coverage or reflect over serializer metadata ad hoc
+- What landed in this slice:
+  - `BlueprintApp` now also persists `AppOwnedSerializerContext` and `AppOwnedSerializerContextBodyTypes` beside the existing serializer declaration facts
+  - `AppDataModelSourceGenerator` now emits the constructed serializer context instance plus the typed declared `JsonSerializable(...)` inventory through generated app registrations
+  - new `Blueprint.Runtime.Http.OpenApiSchemaProjectionContext.Create(document)` seam projects covered serializer-backed body types into ordered `OpenApiSchemaModel` entries with broad `OpenApiSchemaKind` values and ordered property-name inventories
+- Proof closed for this slice:
+  - generator source proof for emitted `AppOwnedSerializerContext` and `AppOwnedSerializerContextBodyTypes` assignments
+  - runtime app-model integration proof for the constructed serializer-context instance plus typed body inventory
+  - runtime integration proof for `OpenApiSchemaProjectionContext` covering both the covered-app path and the uncovered-app exclusion path
+  - fresh repo verification sweep: `dotnet format .\Blueprint.sln --no-restore`, `dotnet build .\Blueprint.sln --no-restore`, `dotnet test .\src\Blueprint.SourceGenerator.Tests\Blueprint.SourceGenerator.Tests.csproj --no-restore`, `dotnet test .\src\Blueprint.SourceGenerator.CodeWriter.Tests\Blueprint.SourceGenerator.CodeWriter.Tests.csproj --no-restore`, and `dotnet test .\src\Blueprint.SourceGenerator.Tests.Integration\Blueprint.SourceGenerator.Tests.Integration.csproj --no-restore`
+- Deferred by design:
+  - per-response schema reference projection
+  - full OpenAPI document emission and HTTP endpoint wiring
+  - runtime serializer switching away from `Newtonsoft.Json`
+- Autonomous next slice:
+  - Continue with `openapi/project-response-schema-references-from-covered-body-types`.
+  - That is the narrowest safe follow-on because the runtime now has stable type-level schema models for covered serializer-backed body payloads, but per-operation HTTP response metadata still only carries body-type names. The next OpenAPI gap is merging response metadata with covered schema projections into per-response schema references before widening into full document rendering or endpoint wiring.

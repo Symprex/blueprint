@@ -153,7 +153,13 @@ public sealed partial class AppDataModelSourceGenerator : IIncrementalGenerator,
             {
                 if (compilationModel.Class.SerializerContextTypeName is { } serializerContextTypeName)
                 {
+                    c.AppendLine($"this.AppOwnedSerializerContext = new {serializerContextTypeName}();");
                     c.AppendLine($"this.AppOwnedSerializerContextType = typeof({serializerContextTypeName});");
+                    if (compilationModel.Class.SerializerContextBodyTypeTypeNames.Count > 0)
+                    {
+                        c.AppendLine($"this.AppOwnedSerializerContextBodyTypes = {RenderTypeArray(compilationModel.Class.SerializerContextBodyTypeTypeNames)};");
+                    }
+
                     if (compilationModel.Class.SerializerContextBodyTypeNames.Count > 0)
                     {
                         c.AppendLine($"this.AppOwnedSerializerContextBodyTypeNames = {RenderStringArray(compilationModel.Class.SerializerContextBodyTypeNames)};");
@@ -178,6 +184,17 @@ public sealed partial class AppDataModelSourceGenerator : IIncrementalGenerator,
         return renderedValues.Length == 0
             ? "global::System.Collections.Immutable.ImmutableArray<string>.Empty"
             : $"global::System.Collections.Immutable.ImmutableArray.Create<string>({string.Join(", ", renderedValues)})";
+    }
+
+    private static string RenderTypeArray(IEnumerable<string> values)
+    {
+        var renderedValues = values
+            .Select(static value => $"typeof({value})")
+            .ToArray();
+
+        return renderedValues.Length == 0
+            ? "global::System.Collections.Immutable.ImmutableArray<global::System.Type>.Empty"
+            : $"global::System.Collections.Immutable.ImmutableArray.Create<global::System.Type>({string.Join(", ", renderedValues)})";
     }
 
     private static class Stages

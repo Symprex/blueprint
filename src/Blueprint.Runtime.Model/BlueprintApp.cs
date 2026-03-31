@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
+using System.Text.Json.Serialization;
 
 namespace Blueprint.Model;
 
@@ -34,10 +35,22 @@ public class BlueprintApp
     public IEnumerable<ApiOperationDescriptor> Operations => this._allOperations.Values;
 
     /// <summary>
+    /// Gets the app-owned serializer context instance that later OpenAPI/schema work can interrogate for generated JSON
+    /// metadata without rediscovering serializer ownership from host options.
+    /// </summary>
+    public JsonSerializerContext? AppOwnedSerializerContext { get; protected set; }
+
+    /// <summary>
     /// Gets the optional app-owned serializer context type that later OpenAPI validation can compare against the
     /// descriptor-published body payload inventory for this Blueprint app.
     /// </summary>
     public Type? AppOwnedSerializerContextType { get; protected set; }
+
+    /// <summary>
+    /// Gets the declared body payload CLR types from the app-owned serializer context so runtime schema projection can
+    /// resolve serializer metadata without re-parsing compile-time type-name strings.
+    /// </summary>
+    public ImmutableArray<Type> AppOwnedSerializerContextBodyTypes { get; protected set; } = ImmutableArray<Type>.Empty;
 
     /// <summary>
     /// Gets the body payload CLR type names declared through the app-owned serializer context so later OpenAPI/schema

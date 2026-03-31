@@ -48,11 +48,12 @@ This stage is where string-based metadata should be turned into symbol-backed, v
 `AppDataModelSourceGenerator` scans `[BlueprintAppScan]` types and emits `*_DataModelRegistration.g.cs` partials that call `this.Register(Operation.Configure())` (`src\Blueprint.SourceGenerator\Generators\App\AppDataModelSourceGenerator.cs`).
 
 App roots may now also declare `[BlueprintAppSerializerContext(JsonSerializerContextType = typeof(...))]`. The generator
-parses that app-owned serializer context declaration once and carries both the declared serializer-context type and the
-declared `JsonSerializable(...)` body-type inventory into `BlueprintApp.AppOwnedSerializerContextType` and
-`BlueprintApp.AppOwnedSerializerContextBodyTypeNames` through the generated registration constructor, giving later
-OpenAPI coverage-validation and schema slices a consumer-owned JSON metadata seam without routing through runtime host
-options first.
+parses that app-owned serializer context declaration once and carries the declared serializer-context instance, the
+declared serializer-context type, and both the typed and string-backed `JsonSerializable(...)` body-type inventories into
+`BlueprintApp.AppOwnedSerializerContext`, `BlueprintApp.AppOwnedSerializerContextType`,
+`BlueprintApp.AppOwnedSerializerContextBodyTypes`, and `BlueprintApp.AppOwnedSerializerContextBodyTypeNames` through the
+generated registration constructor. That gives later OpenAPI coverage-validation and schema slices a consumer-owned JSON
+metadata seam without routing through runtime host options first.
 
 That same generator now also reuses the shared descriptor-planning seam (`src\Blueprint.SourceGenerator\Planning\DescriptorPlanBuilder.cs`) before it emits registrations. That keeps app-level serializer coverage validation (`BP006`) and missing-declaration validation (`BP007`) on the same contributor ordering, host-exposure metadata, and exception-translation policy used by `OperationDescriptorSourceGenerator`, rather than duplicating HTTP/result/body-shape analysis in a separate app-only code path.
 
@@ -88,6 +89,7 @@ At runtime:
 - `BlueprintAppExecutor` uses generated pipeline registrations (`src\Blueprint.Runtime\Exec\BlueprintAppDataModel.cs`)
 - `MapBlueprintApi<TApp, TExec>()` maps the generated surface into ASP.NET Core endpoints (`src\Blueprint.Runtime\Http\ApplicationBuilderExtensions.cs`)
 - `OpenApiDocumentBuilderContext.Create(app)` snapshots the app-owned serializer declaration plus descriptor-published HTTP response and serializer-coverage metadata for HTTP-exposed operations so later OpenAPI document builders can consume one stable runtime seam (`src\Blueprint.Runtime\Http\OpenApiDocumentBuilderContext.cs`)
+- `OpenApiSchemaProjectionContext.Create(document)` projects the covered serializer-backed body payload types from that document-builder seam into stable `OpenApiSchemaModel` entries with broad schema kind and ordered property-name facts (`src\Blueprint.Runtime\Http\OpenApiSchemaProjectionContext.cs`)
 
 The important architectural rule is that runtime code consumes generated knowledge. It should not re-scan the compilation model or re-derive contracts that the generators already knew.
 

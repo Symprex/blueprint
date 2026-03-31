@@ -48,7 +48,8 @@ public sealed partial class AppDataModelSourceGenerator
             context.TargetNode,
             serializerContext.TypeName,
             serializerContext.Location,
-            serializerContext.BodyTypeNames);
+            serializerContext.BodyTypeNames,
+            serializerContext.BodyTypeTypeNames);
 
         return Result.Success(new ParseOnlyDataModel(model, [.. parseAttributes]));
     }
@@ -74,12 +75,13 @@ public sealed partial class AppDataModelSourceGenerator
                     return new SerializerContextDeclaration(
                         serializerContextType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                         serializerContextLocation,
-                        GetSerializerContextBodyTypeNames(serializerContextType));
+                        GetSerializerContextBodyTypeNames(serializerContextType),
+                        GetSerializerContextBodyTypeTypeNames(serializerContextType));
                 }
             }
         }
 
-        return new SerializerContextDeclaration(null, null, new EquatableList<string>());
+        return new SerializerContextDeclaration(null, null, new EquatableList<string>(), new EquatableList<string>());
     }
 
     private static EquatableList<string> GetSerializerContextBodyTypeNames(INamedTypeSymbol serializerContextType)
@@ -95,7 +97,24 @@ public sealed partial class AppDataModelSourceGenerator
         return new EquatableList<string>(bodyTypeNames);
     }
 
-    private sealed record SerializerContextDeclaration(string? TypeName, LocationInfo? Location, EquatableList<string> BodyTypeNames);
+    private static EquatableList<string> GetSerializerContextBodyTypeTypeNames(INamedTypeSymbol serializerContextType)
+    {
+        var bodyTypeNames = serializerContextType.GetAttributes()
+            .Where(static attribute => string.Equals(attribute.AttributeClass?.ToDisplayString(), JsonSerializableAttributeMetadataName, StringComparison.Ordinal))
+            .Select(static attribute => attribute.ConstructorArguments.FirstOrDefault().Value)
+            .OfType<ITypeSymbol>()
+            .Select(static typeSymbol => typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        return new EquatableList<string>(bodyTypeNames);
+    }
+
+    private sealed record SerializerContextDeclaration(
+        string? TypeName,
+        LocationInfo? Location,
+        EquatableList<string> BodyTypeNames,
+        EquatableList<string> BodyTypeTypeNames);
 }
 
 

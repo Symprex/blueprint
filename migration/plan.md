@@ -948,6 +948,14 @@ Run this as a paired design loop with workstream 6. The result contract must be 
   - Stay in the OpenAPI workstream and establish a schema projection seam for covered body types.
   - That is the narrowest dependency-safe next slice because the new runtime seam now centralizes the declared serializer inventory plus per-operation coverage requirements, so the next missing OpenAPI/schema contract is projecting the covered body payload types into a stable schema-ready model before widening into full document emission or endpoint wiring.
   - The live tracker should therefore keep `activeWorkstream` as `openapi` and advance `nextReadySlice` to `openapi/establish-schema-projection-seam-for-covered-body-types` unless a review gate or blocker appears.
+- Completed the OpenAPI schema projection seam for covered body types:
+  - `BlueprintApp` now persists `AppOwnedSerializerContext` and `AppOwnedSerializerContextBodyTypes` alongside the existing serializer declaration facts, so runtime OpenAPI work can interrogate generated `JsonTypeInfo` metadata without reconstructing coverage from strings or host options.
+  - `AppDataModelSourceGenerator` now emits the constructed serializer context instance plus the typed `JsonSerializable(...)` body-type inventory through the generated app registration constructor, and `Blueprint.Runtime.Http.OpenApiSchemaProjectionContext.Create(document)` now projects covered body types into ordered `OpenApiSchemaModel` entries with broad `OpenApiSchemaKind` values plus ordered property-name inventories.
+  - The focused proof matrix is green: generator source proof for the new app-registration assignments, runtime app-model integration proof for the constructed serializer-context instance plus typed body inventory, runtime OpenAPI schema-projection integration proof for covered and uncovered apps, and the full verification sweep (`dotnet format`, `dotnet build`, the main generator test project, the CodeWriter test project, and the integration test project).
+- Autonomous next OpenAPI follow-on after the schema projection seam:
+  - Stay in the OpenAPI workstream and project response schema references from covered body types.
+  - That is the narrowest dependency-safe next slice because the runtime now has stable type-level schema models for covered serializer-backed body payloads, but HTTP response metadata still only carries body-type names. The next missing OpenAPI/document contract is to merge response metadata with covered schema projections into per-response schema references before widening into full document emission or endpoint wiring.
+  - The live tracker should therefore keep `activeWorkstream` as `openapi` and advance `nextReadySlice` to `openapi/project-response-schema-references-from-covered-body-types` unless a review gate or blocker appears.
 
 ## 8. Error model and exception handling
 
