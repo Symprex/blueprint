@@ -963,6 +963,14 @@ Run this as a paired design loop with workstream 6. The result contract must be 
   - Stay in the OpenAPI workstream and project property types and constraints from serializer metadata into schema models.
   - That is the narrowest dependency-safe next slice because the runtime now has stable response-to-schema links, but the current `OpenApiSchemaModel` contract still only exposes body type names, broad schema kinds, and ordered property-name inventories. The next missing OpenAPI/document contract is property-level type and constraint metadata from `System.Text.Json` serializer metadata before widening into full document emission or endpoint wiring.
   - The live tracker should therefore keep `activeWorkstream` as `openapi` and advance `nextReadySlice` to `openapi/project-property-types-and-constraints-from-serializer-metadata-into-schema-models` unless a review gate or blocker appears.
+- Completed the OpenAPI schema property metadata slice:
+  - `Blueprint.Runtime.Http.OpenApiSchemaProjectionContext.Create(document)` now projects additive `OpenApiSchemaPropertyModel` entries on each `OpenApiSchemaModel`, preserving the existing `PropertyNames` compatibility surface while surfacing per-property `OpenApiSchemaKind`, `IsRequired`, and `IsExtensionData` facts from `System.Text.Json`.
+  - Scalar property kinds now map deterministically for string-like, integer, number, and boolean CLR shapes, while object/array/dictionary kinds continue to come from serializer metadata.
+  - The focused proof matrix is green: a failing-then-passing runtime integration proof exercises a manual serializer-backed fixture DTO with required string, integer, boolean, nested-object, array, dictionary, and extension-data properties, and the nearby OpenAPI integration proofs (`OpenApiSchemaProjectionContext`, property metadata, and response schema references) pass together.
+- Autonomous next OpenAPI follow-on after schema property metadata:
+  - Stay in the OpenAPI workstream and render OpenAPI schema components from projected schema models.
+  - That is the narrowest dependency-safe next slice because the runtime now has deterministic per-schema property metadata, but no reusable OpenAPI component-rendering seam yet consumes it. Rendering schema components in isolation is smaller and easier to verify than widening immediately into full document rendering.
+  - The live tracker should therefore keep `activeWorkstream` as `openapi` and advance `nextReadySlice` to `openapi/render-openapi-schema-components-from-projected-schema-models` unless a review gate or blocker appears.
 
 ## 8. Error model and exception handling
 

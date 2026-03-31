@@ -54,25 +54,78 @@ public sealed record OpenApiSchemaProjectionContext(
     {
         var typeInfo = serializerContext.GetTypeInfo(bodyType)
             ?? throw new InvalidOperationException($"The serializer context did not expose metadata for covered body type '{bodyTypeName}'.");
-        var propertyNames = typeInfo.Kind == JsonTypeInfoKind.Object
+        var properties = typeInfo.Kind == JsonTypeInfoKind.Object
             ? typeInfo.Properties
-                .Select(static property => property.Name)
-                .OrderBy(static propertyName => propertyName, StringComparer.Ordinal)
+                .Select(property => CreateProperty(property, serializerContext))
+                .OrderBy(static property => property.Name, StringComparer.Ordinal)
                 .ToImmutableArray()
-            : ImmutableArray<string>.Empty;
+            : ImmutableArray<OpenApiSchemaPropertyModel>.Empty;
+        var propertyNames = properties
+            .Select(static property => property.Name)
+            .ToImmutableArray();
 
         return new OpenApiSchemaModel(
             bodyTypeName,
             MapKind(bodyType, typeInfo.Kind),
             true,
-            propertyNames);
+            propertyNames,
+            properties);
+    }
+
+    private static OpenApiSchemaPropertyModel CreateProperty(
+        JsonPropertyInfo property,
+        JsonSerializerContext serializerContext)
+    {
+        var propertyTypeInfo = serializerContext.GetTypeInfo(property.PropertyType);
+        var propertyKind = propertyTypeInfo is null
+            ? MapKind(property.PropertyType, JsonTypeInfoKind.None)
+            : MapKind(property.PropertyType, propertyTypeInfo.Kind);
+
+        return new OpenApiSchemaPropertyModel(
+            property.Name,
+            propertyKind,
+            property.IsRequired,
+            property.IsExtensionData);
     }
 
     private static OpenApiSchemaKind MapKind(Type bodyType, JsonTypeInfoKind kind)
     {
-        if (bodyType == typeof(string))
+        var nonNullableType = Nullable.GetUnderlyingType(bodyType) ?? bodyType;
+
+        if (nonNullableType == typeof(string)
+            || nonNullableType == typeof(char)
+            || nonNullableType == typeof(DateOnly)
+            || nonNullableType == typeof(TimeOnly)
+            || nonNullableType == typeof(DateTime)
+            || nonNullableType == typeof(DateTimeOffset)
+            || nonNullableType == typeof(Guid)
+            || nonNullableType == typeof(Uri))
         {
             return OpenApiSchemaKind.String;
+        }
+
+        if (nonNullableType == typeof(bool))
+        {
+            return OpenApiSchemaKind.Boolean;
+        }
+
+        if (nonNullableType == typeof(byte)
+            || nonNullableType == typeof(short)
+            || nonNullableType == typeof(int)
+            || nonNullableType == typeof(long)
+            || nonNullableType == typeof(sbyte)
+            || nonNullableType == typeof(ushort)
+            || nonNullableType == typeof(uint)
+            || nonNullableType == typeof(ulong))
+        {
+            return OpenApiSchemaKind.Integer;
+        }
+
+        if (nonNullableType == typeof(float)
+            || nonNullableType == typeof(double)
+            || nonNullableType == typeof(decimal))
+        {
+            return OpenApiSchemaKind.Number;
         }
 
         return kind switch
@@ -100,11 +153,26 @@ public sealed record OpenApiSchemaProjectionContext(
 /// <param name="Kind">The broad schema shape derived from serializer metadata.</param>
 /// <param name="IsCoveredBySerializerContext">Whether the serializer context explicitly covers this type.</param>
 /// <param name="PropertyNames">The ordered JSON-visible property names when the serializer metadata exposes an object shape.</param>
+/// <param name="Properties">The ordered JSON-visible property metadata projected from serializer metadata.</param>
 public sealed record OpenApiSchemaModel(
     string BodyTypeName,
     OpenApiSchemaKind Kind,
     bool IsCoveredBySerializerContext,
-    ImmutableArray<string> PropertyNames);
+    ImmutableArray<string> PropertyNames,
+    ImmutableArray<OpenApiSchemaPropertyModel> Properties);
+
+/// <summary>
+/// Captures one JSON-visible property projected from serializer metadata for a covered schema.
+/// </summary>
+/// <param name="Name">The JSON property name.</param>
+/// <param name="Kind">The broad schema shape for the property payload.</param>
+/// <param name="IsRequired">Whether serializer metadata marks the property as required.</param>
+/// <param name="IsExtensionData">Whether the property acts as JSON extension data.</param>
+public sealed record OpenApiSchemaPropertyModel(
+    string Name,
+    OpenApiSchemaKind Kind,
+    bool IsRequired,
+    bool IsExtensionData);
 
 /// <summary>
 /// Describes the broad schema shape currently projected from serializer metadata.
@@ -130,4 +198,19 @@ public enum OpenApiSchemaKind
     /// The serializer metadata describes a string scalar.
     /// </summary>
     String = 3,
+
+    /// <summary>
+    /// The serializer metadata describes an integer scalar.
+    /// </summary>
+    Integer = 4,
+
+    /// <summary>
+    /// The serializer metadata describes a floating-point or decimal scalar.
+    /// </summary>
+    Number = 5,
+
+    /// <summary>
+    /// The serializer metadata describes a boolean scalar.
+    /// </summary>
+    Boolean = 6,
 }

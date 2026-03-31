@@ -277,3 +277,22 @@ Implement after HTTP descriptors, error-model metadata, and resource metadata ar
 - Autonomous next slice:
   - Continue with `openapi/project-property-types-and-constraints-from-serializer-metadata-into-schema-models`.
   - That is the narrowest safe follow-on because response metadata now links deterministically to covered schema models, but the current schema contract still only exposes body names, broad kinds, and ordered property-name inventories. The next OpenAPI gap is enriching those schema models with property-level type and constraint metadata from `System.Text.Json` before widening into document rendering or endpoint wiring.
+- Completed `openapi/project-property-types-and-constraints-from-serializer-metadata-into-schema-models`.
+- Why it was the right follow-on:
+  - the response/schema-reference slice established stable links from HTTP response families onto covered schema models, but those schema models still only exposed body names, broad kinds, and ordered property-name inventories
+  - later OpenAPI schema/document work needed richer property-level shape facts from `System.Text.Json` metadata without reopening descriptor generation, host wiring, or serializer-coverage analysis
+- What landed in this slice:
+  - `Blueprint.Runtime.Http.OpenApiSchemaProjectionContext.Create(document)` now projects ordered `OpenApiSchemaPropertyModel` entries on each `OpenApiSchemaModel`, while preserving the existing `PropertyNames` compatibility surface for already-landed runtime seams
+  - the projected property metadata captures the serializer-owned facts currently available from `System.Text.Json`: broad property kind, `IsRequired`, and `IsExtensionData`
+  - scalar property kinds now map deterministically for string-like, boolean, integer, and number CLR shapes while object/array/dictionary kinds continue to come from serializer metadata
+- Proof closed for this slice:
+  - failing-then-passing runtime integration proof using an isolated manual app/descriptor fixture with a custom response DTO that mixes required string, integer, boolean, nested-object, array, dictionary, and extension-data properties
+  - nearby OpenAPI integration regression sweep covering the pre-existing schema projection and response-schema reference seams alongside the new property-metadata proof
+- Deferred by design:
+  - validation/data-annotation constraints not surfaced by `System.Text.Json` metadata
+  - reusable OpenAPI schema component rendering
+  - full OpenAPI document emission and HTTP endpoint wiring
+  - runtime serializer switching away from `Newtonsoft.Json`
+- Autonomous next slice:
+  - Continue with `openapi/render-openapi-schema-components-from-projected-schema-models`.
+  - That is the narrowest safe follow-on because the runtime now has stable per-schema property metadata, but no seam yet renders those models into reusable OpenAPI schema components. Rendering components in isolation keeps schema-shape proof separate from response/operation/document assembly and is narrower than full document rendering.
