@@ -142,3 +142,22 @@ Implement after HTTP descriptors, error-model metadata, and resource metadata ar
 - Autonomous next slice:
   - Continue with `openapi/declare-app-owned-serializer-context-seam-for-coverage-validation`.
   - That is the narrowest safe follow-on because serializer requirements are now inspectable from descriptor facts, but later validation and schema slices still need an explicit app-owned declaration seam to say which serializer context is expected for a given Blueprint app before any coverage diagnostics can become trustworthy.
+- Completed `openapi/declare-app-owned-serializer-context-seam-for-coverage-validation`.
+- Why it was the right follow-on:
+  - serializer requirements were already inspectable from generated descriptor facts, but no app-owned contract said which serializer context was authoritative for a Blueprint app
+  - later coverage diagnostics needed that consumer-declared seam before they could distinguish missing serializer coverage from missing configuration
+- What landed in this slice:
+  - new `[BlueprintAppSerializerContext(JsonSerializerContextType = typeof(...))]` contract in `Blueprint.Runtime.Model`
+  - `BlueprintApp.AppOwnedSerializerContextType` plus app-generator parsing/emission so generated app constructors persist the declared serializer-context type
+  - the integration test app and `Blueprint.SourceGenerator.Sample` now both declare serializer contexts through the new seam
+- Proof closed for this slice:
+  - app-generator snapshot proof for emitted serializer-context assignment
+  - runtime app-model integration proof for constructed app `AppOwnedSerializerContextType`
+  - full verification sweep: `dotnet build .\Blueprint.sln --no-restore` and the three repository test commands passed after the sample/docs updates
+- Deferred by design:
+  - compile-time diagnostics validating body-type coverage against the declared serializer context
+  - runtime serializer switching away from `Newtonsoft.Json`
+  - full schema projection and document emission
+- Autonomous next slice:
+  - Continue with `openapi/validate-serializer-context-coverage-against-app-declaration`.
+  - That is the narrowest safe follow-on because body payload types are already inventoried on descriptors and the app now declares the expected `JsonSerializerContext`, so the next missing seam is compile-time coverage validation rather than more ownership work or runtime serializer changes.

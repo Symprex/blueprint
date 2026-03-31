@@ -11,6 +11,8 @@ namespace Blueprint.SourceGenerator.Generators.App;
 /// </summary>
 public sealed partial class AppDataModelSourceGenerator
 {
+    private const string SerializerContextAttributeMetadataName = "Blueprint.Model.BlueprintAppSerializerContextAttribute";
+
     private static Result<ParseOnlyDataModel>? ParseDataModelWithScanAttributes(GeneratorAttributeSyntaxContext context)
     {
         // Should not happen as the attribute can only be applied to a class
@@ -39,9 +41,34 @@ public sealed partial class AppDataModelSourceGenerator
             }
         }
 
-        var model = ParseOnlyBlueprintAppClassModel.Create(classSymbol, context.TargetNode);
+        var model = ParseOnlyBlueprintAppClassModel.Create(
+            classSymbol,
+            context.TargetNode,
+            GetSerializerContextTypeName(classSymbol));
 
         return Result.Success(new ParseOnlyDataModel(model, [.. parseAttributes]));
+    }
+
+    private static string? GetSerializerContextTypeName(INamedTypeSymbol classSymbol)
+    {
+        foreach (var attribute in classSymbol.GetAttributes())
+        {
+            if (attribute.AttributeClass?.ToFullMetadataName() != SerializerContextAttributeMetadataName)
+            {
+                continue;
+            }
+
+            foreach (var namedArgument in attribute.NamedArguments)
+            {
+                if (namedArgument.Key == "JsonSerializerContextType"
+                    && namedArgument.Value.Value is INamedTypeSymbol serializerContextType)
+                {
+                    return serializerContextType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                }
+            }
+        }
+
+        return null;
     }
 }
 

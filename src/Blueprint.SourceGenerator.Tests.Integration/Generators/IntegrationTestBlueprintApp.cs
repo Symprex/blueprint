@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Blueprint.Model;
 
 namespace Blueprint.SourceGenerator.Tests.Integration.Generators.OperationDescriptors;
@@ -7,4 +8,12 @@ namespace Blueprint.SourceGenerator.Tests.Integration.Generators.OperationDescri
 /// app-scan entry point used by real Blueprint consumers.
 /// </summary>
 [BlueprintAppScan]
+[BlueprintAppSerializerContext(JsonSerializerContextType = typeof(IntegrationTestAppJsonContext))]
 public partial class IntegrationTestBlueprintApp : BlueprintApp;
+
+/// <summary>
+/// Provides a minimal serializer-context declaration for integration tests that need the generated app shell to expose
+/// an app-owned JSON metadata type without changing runtime serializer behavior.
+/// </summary>
+[JsonSerializable(typeof(string))]
+public partial class IntegrationTestAppJsonContext : JsonSerializerContext;

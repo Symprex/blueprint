@@ -336,6 +336,7 @@ public static class TestHelpers
         references.Add(MetadataReference.CreateFromFile(typeof(Microsoft.Extensions.Logging.Abstractions.NullLogger).Assembly.Location));
         references.Add(MetadataReference.CreateFromFile(typeof(Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions).Assembly.Location));
         references.Add(MetadataReference.CreateFromFile(typeof(System.Diagnostics.Activity).Assembly.Location));
+        references.Add(MetadataReference.CreateFromFile(typeof(System.Text.Json.Serialization.JsonSerializerContext).Assembly.Location));
         return references;
     }
 

@@ -28,6 +28,7 @@ Do not use this skill to change Blueprint internals in `blueprint-source-gen`; u
 | Descriptor | Expect `static ApiOperationDescriptor Configure()` to be the contract entry point |
 | Multiple outcomes | Use `Results<T1, T2>` when an operation contract needs to declare one of two host-agnostic semantic result shapes |
 | App root | Create a `partial` `BlueprintApp` with `[BlueprintAppScan]`; use `FromAssemblyOf = typeof(...)` when operations live in another assembly |
+| Serializer context | When a consumer app wants to declare which `JsonSerializerContext` should cover its generated HTTP contracts, add `[BlueprintAppSerializerContext(JsonSerializerContextType = typeof(AppJsonContext))]` to the `BlueprintApp` root; this is currently a compile-time/OpenAPI ownership seam, not a runtime serializer switch |
 | Generator wiring | Reference Blueprint's generator as an analyzer so compile-time generation runs; in this repo the sample uses `ProjectReference` with `OutputItemType="Analyzer"` and `ReferenceOutputAssembly="false"` |
 | HTTP host | Map the generated surface with `MapBlueprintApi<TApp, TExec>()` |
 | Validation | Prefer declarative `ValidationAttribute` usage; Blueprint generates validation from those contracts, and the current retained Blueprint-specific set now includes `Blueprint.Validation.GreaterThanPropertyAttribute` |
@@ -80,6 +81,7 @@ Do not use this skill to change Blueprint internals in `blueprint-source-gen`; u
 - Treating Blueprint as runtime-discovery-first
 - Hand-registering operations instead of relying on generated registration
 - Forgetting `partial`, `[BlueprintAppScan]`, or analyzer wiring
+- Forgetting to keep `[BlueprintAppSerializerContext(...)]` aligned with the app-owned `JsonSerializerContext` once OpenAPI/serializer coverage slices become part of the consumer contract
 - Expecting runtime fallbacks to repair a missing compile-time contract
 - Ignoring generator diagnostics or generated output diffs
 

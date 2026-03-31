@@ -33,6 +33,12 @@ public class BlueprintApp
     public IEnumerable<ApiOperationDescriptor> Operations => this._allOperations.Values;
 
     /// <summary>
+    /// Gets the optional app-owned serializer context type that later OpenAPI validation can compare against the
+    /// descriptor-published body payload inventory for this Blueprint app.
+    /// </summary>
+    public Type? AppOwnedSerializerContextType { get; protected set; }
+
+    /// <summary>
     /// Registers the given operation descriptor.
     /// </summary>
     /// <param name="descriptor">The descriptor to register, must be non-null.</param>

@@ -12,14 +12,14 @@
   "current": {
     "activeWorkstream": "openapi",
     "nextReadySlice": {
+      "id": "openapi/validate-serializer-context-coverage-against-app-declaration",
+      "workstream": "openapi",
+      "title": "Validate serializer-context coverage against the app-owned declaration"
+    },
+    "lastCompletedSlice": {
       "id": "openapi/declare-app-owned-serializer-context-seam-for-coverage-validation",
       "workstream": "openapi",
       "title": "Declare an app-owned serializer-context seam for coverage validation"
-    },
-    "lastCompletedSlice": {
-      "id": "openapi/project-serializer-context-coverage-feature-data-from-http-response-metadata",
-      "workstream": "openapi",
-      "title": "Project serializer-context coverage feature data from generated HTTP response metadata"
     },
     "openReviewGate": null
   },

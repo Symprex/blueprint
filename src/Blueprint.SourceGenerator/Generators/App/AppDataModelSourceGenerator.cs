@@ -90,6 +90,11 @@ public sealed partial class AppDataModelSourceGenerator : IIncrementalGenerator,
         classBuilder.AddConstructor()
             .WithBody(c =>
             {
+                if (compilationModel.Class.SerializerContextTypeName is { } serializerContextTypeName)
+                {
+                    c.AppendLine($"this.AppOwnedSerializerContextType = typeof({serializerContextTypeName});");
+                }
+
                 foreach (var registration in compilationModel.Operations)
                 {
                     c.AppendLine($"this.Register({registration}.Configure());");

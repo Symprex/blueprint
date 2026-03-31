@@ -907,6 +907,14 @@ Run this as a paired design loop with workstream 6. The result contract must be 
   - Stay in the OpenAPI workstream and declare an app-owned serializer-context seam for later coverage validation.
   - That is the narrowest dependency-safe next slice because serializer requirements are now inspectable from descriptor facts, but later validation/schema work still needs a trustworthy app-owned declaration of which serializer context is expected before any coverage diagnostics can be accurate.
   - The live tracker should therefore keep `activeWorkstream` as `openapi` and advance `nextReadySlice` to `openapi/declare-app-owned-serializer-context-seam-for-coverage-validation` unless a review gate or blocker appears.
+- Completed the OpenAPI app-owned serializer-context declaration slice:
+  - `BlueprintAppSerializerContextAttribute` and `BlueprintApp.AppOwnedSerializerContextType` now provide an explicit app-owned serializer declaration seam, and `AppDataModelSourceGenerator` parses the attribute and assigns the declared serializer-context type in generated app constructors.
+  - The integration test app and `Blueprint.SourceGenerator.Sample` now both declare serializer contexts through that seam, keeping the reference/test application current with the contract instead of leaving the sample behind.
+  - The proof matrix for this slice is green at the focused seam level: an app-generator snapshot proof and a runtime app-model integration proof both started red on the missing seam and now pass; repo-wide `dotnet build .\Blueprint.sln --no-restore` plus the three existing test suites also passed after the sample/docs updates.
+- Autonomous next OpenAPI follow-on after app-owned serializer-context declaration:
+  - Stay in the OpenAPI workstream and validate serializer-context coverage against the app-owned declaration.
+  - That is the narrowest dependency-safe next slice because descriptors already inventory the body payload CLR names and the app now declares the expected `JsonSerializerContext`; the remaining schema-facing gap is surfacing compile-time coverage diagnostics before widening into runtime serializer switching or full OpenAPI/schema emission.
+  - The live tracker should therefore keep `activeWorkstream` as `openapi` and advance `nextReadySlice` to `openapi/validate-serializer-context-coverage-against-app-declaration` unless a review gate or blocker appears.
 
 ## 8. Error model and exception handling
 
