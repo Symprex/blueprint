@@ -73,6 +73,7 @@ They are intentionally short and repeatable so future humans and AI agents can u
 - [ ] If a build or telemetry runner emits compiler-generated inspection files, keep them out of `Compile` on later builds (for example with `Compile Remove="artifacts\generated\**\*.cs"`) so no-op or design-time captures do not accidentally measure stale generated inputs.
 - [ ] If a tool closes a recurring confusion gap, document the new workflow in `/docs`.
 - [ ] If the change alters how Blueprint is consumed or extended, update `using-blueprint` and/or `extending-blueprint` in the same change.
+- [ ] If the change alters consumer-visible Blueprint contracts, generated registration/output, or sample-visible workflow, keep `src\Blueprint.SourceGenerator.Sample` current in the same change.
 - [ ] If a slice claims Tier 3 or Signature365-scale readiness, update the explicit measurement plan in `migration\performance-and-scale\plan.md` and publish a scheduled/manual review package that links benchmark, telemetry, and invalidation artifacts.
 
 ## Breaking change or migration work
@@ -92,6 +93,7 @@ They are intentionally short and repeatable so future humans and AI agents can u
 - [ ] Run the relevant tests, snapshots, and formatting flow.
 - [ ] Review the generated diff, not just the source diff.
 - [ ] Make sure the docs and harness changes match the implementation.
+- [ ] When the change affects consumer-visible contracts, generated registration/output, or sample-visible workflow, verify the sample app still matches the current contract and update it before commit if it drifts.
 - [ ] If a benchmark harness exists for the touched hot path, rerun it and review the output before handoff or commit.
 - [ ] Re-run the final verification commands immediately before claiming success or commit readiness.
 - [ ] If the slice is obviously complete and no review gate remains open, make a small, focused git commit before switching tasks or ending the session.

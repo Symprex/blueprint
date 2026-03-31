@@ -58,6 +58,7 @@ For this repo that means:
 - for migration-plan work, durable sequencing or review decisions belong in `migration\plan.md` and the relevant `migration\...\plan.md` file, not only in session-local state such as chat, SQL todos, or the session `plan.md`
 - for migration orchestration, `migration\progress.json` is the single source of truth for live migration state and must stay aligned with the current next-ready slice, active workstream, last completed slice, and open review gate; the markdown plans are reference material for ordering, rationale, and acceptance criteria, not competing live trackers
 - Blueprint-specific usage and extension knowledge should also live in repo-local skills: keep `using-blueprint` as the canonical consumer-installable Blueprint skill, keep `extending-blueprint` as the repo-local overlay, and update the relevant skill in the same change when Blueprint behavior or workflow changes
+- The sample app is part of the contract too: when Blueprint behavior changes in a consumer-visible way, keep `src\Blueprint.SourceGenerator.Sample` and any directly relevant sample-style fixture current in the same change instead of treating sample drift as a later cleanup task
 - if an AI session needs repo-local disposable files, use `.scratch\` at the repository root so temporary experiments, copied output, and scratch notes stay out of tracked source trees
 - `.scratch\` is disposable-only: review HTML still belongs in the launcher-provided review-artifact directory, and session-local plans still belong in the session workspace `plan.md`
 
@@ -132,6 +133,7 @@ then the relevant `/docs` file should be updated in the same change.
 
 - Use the `verification-before-completion` skill mindset before any success claim: rerun the fresh verification command, read the output, and only then say the slice is passing or ready for review.
 - Finish your own review pass first, including tests, formatting, generated-output review, and any review-agent follow-up that the slice needs.
+- Include a sample-app check in that verification pass whenever the change affects consumer-visible contracts, generated registration/output, or sample-visible workflow. If `Blueprint.SourceGenerator.Sample` or a directly relevant sample-style fixture drifts, update it before commit.
 - Generate a visual review handoff with the `visual-explainer` skill before commit for any migration-plan slice or phase gate.
 - Treat any feedback from that visual review handoff as input for another AI review/fix round before committing.
 - Write that visual review HTML to the launcher-provided allow-listed review artifact directory (currently `$HOME\.agent\diagrams`) so the artifact survives beyond the session workspace and is immediately accessible to the reviewer.

@@ -34,6 +34,7 @@
 
 - If a change affects architecture, generator flow, diagnostics, observability, developer tooling, or project principles, update the relevant `/docs` file in the same change.
 - If a change affects how Blueprint is consumed by downstream repos or extended in this repo, update the relevant Blueprint skill in the same change: `using-blueprint` for consumer/install guidance and `extending-blueprint` for repo-internal contributor guidance.
+- If a change affects Blueprint's consumer contract, generated registration/output shape, or sample-visible workflow, keep `src\Blueprint.SourceGenerator.Sample` up to date in the same change instead of leaving the reference app behind.
 
 ## Repo-local scratch workspace
 
@@ -66,6 +67,7 @@
   - `test-driven-development` before feature, bugfix, refactor, or behavior-change edits
   - `systematic-debugging` before fixing any unexpected test/build/runtime failure
   - `verification-before-completion` before claiming success, moving on, or preparing to commit
+- Treat sample-app alignment as part of verification work, not as optional cleanup: when a change affects consumer-visible contracts, generated registration/output, or sample-visible workflow, confirm the sample app still reflects the current contract and update it before claiming success or commit readiness.
 - For new planning helpers, registries, and orchestration seams, aim test coverage at happy paths, failure/diagnostic paths, and determinism edge cases.
 - For pipeline or module feature work, the minimum proof set is stricter than a line-presence assertion:
   - a full generator snapshot that captures the complete pipeline shape
