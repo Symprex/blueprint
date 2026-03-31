@@ -12,14 +12,14 @@
   "current": {
     "activeWorkstream": "openapi",
     "nextReadySlice": {
+      "id": "openapi/establish-schema-projection-seam-for-covered-body-types",
+      "workstream": "openapi",
+      "title": "Establish schema projection seam for covered body types"
+    },
+    "lastCompletedSlice": {
       "id": "openapi/establish-openapi-document-builder-seam-consuming-app-serializer-context",
       "workstream": "openapi",
       "title": "Establish OpenAPI document-builder seam consuming app serializer context"
-    },
-    "lastCompletedSlice": {
-      "id": "openapi/project-schema-coverage-from-serializer-context-declaration",
-      "workstream": "openapi",
-      "title": "Project schema coverage from the serializer-context declaration"
     },
     "openReviewGate": null
   },

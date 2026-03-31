@@ -940,6 +940,14 @@ Run this as a paired design loop with workstream 6. The result contract must be 
   - Stay in the OpenAPI workstream and establish an OpenAPI document-builder seam consuming app serializer context.
   - That is the narrowest dependency-safe next slice because descriptor feature data must remain app-agnostic, so the next missing OpenAPI/schema seam has to live at the app/runtime or document-builder boundary where the app-owned declared serializer inventory can be combined with descriptor-published coverage requirements.
   - The live tracker should therefore keep `activeWorkstream` as `openapi` and advance `nextReadySlice` to `openapi/establish-openapi-document-builder-seam-consuming-app-serializer-context` unless a review gate or blocker appears.
+- Completed the OpenAPI document-builder context slice:
+  - `Blueprint.Runtime.Http.OpenApiDocumentBuilderContext.Create(app)` now snapshots the app-owned serializer declaration plus descriptor-published HTTP response and serializer-coverage metadata for HTTP-exposed operations only, so later OpenAPI work can consume one runtime seam instead of re-deriving those facts ad hoc.
+  - Per-operation `OpenApiDocumentOperationContext` entries now carry the required serializer-context body payload types, any missing declared body payload types, the current HTTP response metadata, and a deterministic coverage-satisfied flag.
+  - The focused runtime proof matrix is green: integration tests started red on the missing seam itself, then passed for both a covered generated app and an uncovered manual app shell, while also proving that non-HTTP operations stay out of the OpenAPI snapshot.
+- Autonomous next OpenAPI follow-on after the document-builder context slice:
+  - Stay in the OpenAPI workstream and establish a schema projection seam for covered body types.
+  - That is the narrowest dependency-safe next slice because the new runtime seam now centralizes the declared serializer inventory plus per-operation coverage requirements, so the next missing OpenAPI/schema contract is projecting the covered body payload types into a stable schema-ready model before widening into full document emission or endpoint wiring.
+  - The live tracker should therefore keep `activeWorkstream` as `openapi` and advance `nextReadySlice` to `openapi/establish-schema-projection-seam-for-covered-body-types` unless a review gate or blocker appears.
 
 ## 8. Error model and exception handling
 

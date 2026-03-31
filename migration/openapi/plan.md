@@ -219,3 +219,22 @@ Implement after HTTP descriptors, error-model metadata, and resource metadata ar
 - Autonomous next slice:
   - Continue with `openapi/establish-openapi-document-builder-seam-consuming-app-serializer-context`.
   - That is the narrowest safe follow-on because descriptor feature data remains app-agnostic, so the next missing OpenAPI seam must live at the app/runtime or document-builder boundary where `BlueprintApp.AppOwnedSerializerContextBodyTypeNames` can be combined with per-operation descriptor coverage facts without widening yet into full schema rendering or document emission.
+- Completed `openapi/establish-openapi-document-builder-seam-consuming-app-serializer-context`.
+- Why it was the right follow-on:
+  - the repository now had both serializer inputs needed for OpenAPI work, but there was still no single runtime seam that combined the app-owned declared serializer inventory with per-operation HTTP response and serializer-coverage metadata
+  - later schema/document slices would otherwise have to rediscover those facts ad hoc from `BlueprintApp` plus descriptor feature data instead of consuming one stable HTTP/OpenAPI-specific context
+- What landed in this slice:
+  - new `Blueprint.Runtime.Http.OpenApiDocumentBuilderContext.Create(app)` seam that snapshots the constructed app, its declared serializer-context type, its declared body payload CLR names, and the HTTP-exposed operations prepared for later OpenAPI work
+  - per-operation `OpenApiDocumentOperationContext` entries that carry `OperationHttpResponseMetadataFeatureData`, `OperationSerializerContextCoverageFeatureData`, the missing declared serializer body types, and a deterministic coverage-satisfied flag
+  - the seam stays deliberately host-specific and runtime-facing: it only inspects `app.GetOperationsForHost("http")` and does not widen into schema generation, document emission, or `BlueprintHttpOptions` ownership
+- Proof closed for this slice:
+  - failing-then-passing runtime integration proof for a covered app-owned serializer declaration using `IntegrationTestBlueprintApp`
+  - failing-then-passing runtime integration proof for an uncovered app shell that registers the same HTTP descriptor but declares no serializer context
+  - the proof also asserts the seam excludes non-HTTP operations from the OpenAPI snapshot
+- Deferred by design:
+  - JSON schema projection for the covered serializer-context body types
+  - full OpenAPI document emission and HTTP endpoint wiring
+  - runtime serializer switching away from `Newtonsoft.Json`
+- Autonomous next slice:
+  - Continue with `openapi/establish-schema-projection-seam-for-covered-body-types`.
+  - That is the narrowest safe follow-on because the new document-builder seam now centralizes the declared serializer inventory plus per-operation required body metadata, so the next OpenAPI gap is projecting covered body payload types into a stable schema-ready shape without yet widening into full operation/document rendering.

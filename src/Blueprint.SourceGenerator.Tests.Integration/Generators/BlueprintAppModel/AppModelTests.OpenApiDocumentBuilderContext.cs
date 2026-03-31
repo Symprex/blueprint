@@ -1,0 +1,59 @@
+using Blueprint.Runtime.Http;
+using Blueprint.SourceGenerator.Tests.Integration.Generators.OperationDescriptors;
+using FluentAssertions;
+
+namespace Blueprint.SourceGenerator.Tests.Integration.Generators.BlueprintAppModel;
+
+public class AppModelOpenApiDocumentBuilderContextTests
+{
+    [Fact]
+    public void When_http_operation_serializer_requirements_are_declared_by_the_app_then_openapi_document_builder_context_marks_the_operation_as_covered()
+    {
+        var app = new IntegrationTestBlueprintApp();
+
+        var context = OpenApiDocumentBuilderContext.Create(app);
+        var operationContext = context.Operations.Single(static operation => operation.Operation.OperationType == typeof(HttpResponseMetadataQueryOp));
+
+        context.DeclaredSerializerContextType.Should().Be(typeof(IntegrationTestAppJsonContext));
+        context.DeclaredSerializerContextBodyTypeNames.Should().Equal(
+            "string",
+            "Microsoft.AspNetCore.Mvc.ProblemDetails",
+            "Microsoft.AspNetCore.Mvc.ValidationProblemDetails");
+        context.Operations.Select(static operation => operation.Operation.OperationType)
+            .Should()
+            .NotContain(typeof(InternalOnlyOperationToScan))
+            .And.NotContain(typeof(BackgroundTaskOperationToScan));
+
+        operationContext.RequiredSerializerContextBodyTypeNames.Should().Equal(
+            "string",
+            "Microsoft.AspNetCore.Mvc.ValidationProblemDetails",
+            "Microsoft.AspNetCore.Mvc.ProblemDetails");
+        operationContext.MissingSerializerContextBodyTypeNames.Should().BeEmpty();
+        operationContext.IsSerializerContextCoverageSatisfied.Should().BeTrue();
+        operationContext.Responses.Select(static response => response.StatusCode).Should().Equal(200, 422, 500);
+    }
+
+    [Fact]
+    public void When_http_operation_serializer_requirements_are_not_declared_by_the_app_then_openapi_document_builder_context_reports_the_missing_body_types()
+    {
+        var app = new NoSerializerContextBlueprintApp();
+        app.Register(HttpResponseMetadataQueryOp.Configure());
+
+        var context = OpenApiDocumentBuilderContext.Create(app);
+        var operationContext = context.Operations.Single(static operation => operation.Operation.OperationType == typeof(HttpResponseMetadataQueryOp));
+
+        context.DeclaredSerializerContextType.Should().BeNull();
+        context.DeclaredSerializerContextBodyTypeNames.Should().BeEmpty();
+        operationContext.RequiredSerializerContextBodyTypeNames.Should().Equal(
+            "string",
+            "Microsoft.AspNetCore.Mvc.ValidationProblemDetails",
+            "Microsoft.AspNetCore.Mvc.ProblemDetails");
+        operationContext.MissingSerializerContextBodyTypeNames.Should().Equal(
+            "string",
+            "Microsoft.AspNetCore.Mvc.ValidationProblemDetails",
+            "Microsoft.AspNetCore.Mvc.ProblemDetails");
+        operationContext.IsSerializerContextCoverageSatisfied.Should().BeFalse();
+    }
+
+    private sealed class NoSerializerContextBlueprintApp : Blueprint.Model.BlueprintApp;
+}
