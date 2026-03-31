@@ -12,14 +12,14 @@
   "current": {
     "activeWorkstream": "openapi",
     "nextReadySlice": {
+      "id": "openapi/render-openapi-response-objects-from-schema-components",
+      "workstream": "openapi",
+      "title": "Render OpenAPI response objects from schema components"
+    },
+    "lastCompletedSlice": {
       "id": "openapi/render-openapi-schema-components-from-projected-schema-models",
       "workstream": "openapi",
       "title": "Render OpenAPI schema components from projected schema models"
-    },
-    "lastCompletedSlice": {
-      "id": "openapi/project-property-types-and-constraints-from-serializer-metadata-into-schema-models",
-      "workstream": "openapi",
-      "title": "Project property types and constraints from serializer metadata into schema models"
     },
     "openReviewGate": null
   },

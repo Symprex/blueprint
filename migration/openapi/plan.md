@@ -296,3 +296,22 @@ Implement after HTTP descriptors, error-model metadata, and resource metadata ar
 - Autonomous next slice:
   - Continue with `openapi/render-openapi-schema-components-from-projected-schema-models`.
   - That is the narrowest safe follow-on because the runtime now has stable per-schema property metadata, but no seam yet renders those models into reusable OpenAPI schema components. Rendering components in isolation keeps schema-shape proof separate from response/operation/document assembly and is narrower than full document rendering.
+- Completed `openapi/render-openapi-schema-components-from-projected-schema-models`.
+- Why it was the right follow-on:
+  - the prior schema-projection slice already established stable per-schema property metadata from serializer-owned facts, but there was still no reusable OpenAPI-facing contract that rendered those schema models into component-shaped output
+  - later operation/document slices need a deterministic schema-component layer before they can bind response metadata or operation structure onto those schemas without recomputing shape rules
+- What landed in this slice:
+  - `Blueprint.Runtime.Http.OpenApiSchemaComponentRenderingContext.Create(schemaProjection)` now renders the projected covered-schema inventory into ordered `OpenApiSchemaComponentModel` entries with OpenAPI-style `Type`, ordered `RequiredPropertyNames`, and ordered `OpenApiSchemaComponentPropertyModel` members
+  - component property rendering currently carries the serializer-owned facts already exposed by `OpenApiSchemaPropertyModel`: broad property type plus `IsExtensionData`, while requiredness remains modeled at the component level through `RequiredPropertyNames`
+  - the seam deliberately consumes `OpenApiSchemaProjectionContext` directly so schema rendering stays isolated from response grouping and document assembly
+- Proof closed for this slice:
+  - failing-then-passing runtime integration proof covering rendered components for covered app-owned serializer types, uncovered apps with no rendered components, and richer property-metadata rendering from the isolated serializer-backed DTO fixture
+  - nearby OpenAPI integration regression sweep covering document-builder, schema-projection, property-metadata, response-schema-reference, and schema-component seams together
+- Deferred by design:
+  - per-response OpenAPI response-object rendering
+  - operation-level OpenAPI rendering and full document emission
+  - validation/data-annotation constraints not surfaced by `System.Text.Json` metadata
+  - runtime serializer switching away from `Newtonsoft.Json`
+- Autonomous next slice:
+  - Continue with `openapi/render-openapi-response-objects-from-schema-components`.
+  - That is the narrowest safe follow-on because reusable schema components now exist in isolation, but the current response metadata still does not render stable OpenAPI response-object shapes that bind status codes and response-body metadata onto those components. Rendering response objects keeps response-level proof separate from operation/document assembly and is narrower than jumping straight to full document rendering.

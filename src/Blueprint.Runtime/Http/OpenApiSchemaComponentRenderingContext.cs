@@ -1,0 +1,96 @@
+using System.Collections.Immutable;
+
+namespace Blueprint.Runtime.Http;
+
+/// <summary>
+/// Renders the covered schema projection into deterministic OpenAPI-style component contracts so later document assembly
+/// can reuse schema facts without coupling schema rendering to response grouping or endpoint emission.
+/// </summary>
+/// <param name="SchemaProjection">The previously prepared schema projection snapshot for the app.</param>
+/// <param name="Components">The rendered reusable schema components in deterministic covered body-type order.</param>
+public sealed record OpenApiSchemaComponentRenderingContext(
+    OpenApiSchemaProjectionContext SchemaProjection,
+    ImmutableArray<OpenApiSchemaComponentModel> Components)
+{
+    /// <summary>
+    /// Creates reusable schema components from the supplied schema projection snapshot.
+    /// This seam intentionally stays schema-only: it renders covered schemas in isolation and leaves document assembly for
+    /// a later slice.
+    /// </summary>
+    /// <param name="schemaProjection">The schema projection snapshot to render.</param>
+    /// <returns>The rendered schema-component context.</returns>
+    public static OpenApiSchemaComponentRenderingContext Create(OpenApiSchemaProjectionContext schemaProjection)
+    {
+        ArgumentNullException.ThrowIfNull(schemaProjection);
+
+        var components = schemaProjection.Schemas
+            .Select(static schema => CreateComponent(schema))
+            .ToImmutableArray();
+
+        return new OpenApiSchemaComponentRenderingContext(schemaProjection, components);
+    }
+
+    private static OpenApiSchemaComponentModel CreateComponent(OpenApiSchemaModel schema)
+    {
+        var requiredPropertyNames = schema.Properties
+            .Where(static property => property.IsRequired)
+            .Select(static property => property.Name)
+            .ToImmutableArray();
+        var properties = schema.Properties
+            .Select(static property => CreateProperty(property))
+            .ToImmutableArray();
+
+        return new OpenApiSchemaComponentModel(
+            schema.BodyTypeName,
+            MapType(schema.Kind),
+            requiredPropertyNames,
+            properties);
+    }
+
+    private static OpenApiSchemaComponentPropertyModel CreateProperty(OpenApiSchemaPropertyModel property)
+    {
+        return new OpenApiSchemaComponentPropertyModel(
+            property.Name,
+            MapType(property.Kind),
+            property.IsExtensionData);
+    }
+
+    private static string? MapType(OpenApiSchemaKind kind)
+    {
+        return kind switch
+        {
+            OpenApiSchemaKind.None => null,
+            OpenApiSchemaKind.Object => "object",
+            OpenApiSchemaKind.Array => "array",
+            OpenApiSchemaKind.String => "string",
+            OpenApiSchemaKind.Integer => "integer",
+            OpenApiSchemaKind.Number => "number",
+            OpenApiSchemaKind.Boolean => "boolean",
+            _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unsupported OpenAPI schema kind."),
+        };
+    }
+}
+
+/// <summary>
+/// Captures one rendered reusable OpenAPI schema component for a covered body type.
+/// </summary>
+/// <param name="BodyTypeName">The stable covered body type name that identifies the component.</param>
+/// <param name="Type">The OpenAPI-style schema type when the current projection can determine one.</param>
+/// <param name="RequiredPropertyNames">The ordered required property names for object schemas.</param>
+/// <param name="Properties">The ordered rendered property contracts for object schemas.</param>
+public sealed record OpenApiSchemaComponentModel(
+    string BodyTypeName,
+    string? Type,
+    ImmutableArray<string> RequiredPropertyNames,
+    ImmutableArray<OpenApiSchemaComponentPropertyModel> Properties);
+
+/// <summary>
+/// Captures one rendered property within a reusable OpenAPI schema component.
+/// </summary>
+/// <param name="Name">The JSON-visible property name.</param>
+/// <param name="Type">The OpenAPI-style schema type when the current projection can determine one.</param>
+/// <param name="IsExtensionData">Whether the property acts as serializer extension data.</param>
+public sealed record OpenApiSchemaComponentPropertyModel(
+    string Name,
+    string? Type,
+    bool IsExtensionData);
