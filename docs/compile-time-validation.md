@@ -10,6 +10,7 @@ If the compiler or generator can detect a bad configuration, it should do so wit
 
 - `BP001` comes from `ApiResourceSourceGenerator` and enforces partial resource types when the generator needs to synthesize the `Object` property (`src\Blueprint.SourceGenerator\Generators\ApiResources\ApiResourceSourceGenerator.cs`).
 - `BP002`, `BP003`, and `BP004` come from `AppDataModelSourceGenerator` and cover app registration shape and scan issues (`src\Blueprint.SourceGenerator\Generators\App\AppDataModelSourceGenerator.cs`).
+- `BP006` now also comes from `AppDataModelSourceGenerator` and fails HTTP-visible app registrations when the declared `[BlueprintAppSerializerContext(JsonSerializerContextType = typeof(...))]` omits one or more descriptor-derived response body payload types. The generator reuses the shared descriptor-planning path before app registration emits source so later OpenAPI/schema slices can trust the app-owned serializer contract without rediscovering HTTP body shapes in a second code path.
 - `BP005` comes from `OperationDescriptorSourceGenerator` and enforces required partial types for descriptor generation (`src\Blueprint.SourceGenerator\Generators\Descriptors\OperationDescriptorSourceGenerator.cs`).
 
 ### Pipeline and handler validation

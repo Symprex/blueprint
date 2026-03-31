@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using Blueprint.Model;
+using Microsoft.AspNetCore.Mvc;
 
 namespace Blueprint.SourceGenerator.Tests.Integration.Generators.OperationDescriptors;
 
@@ -16,4 +17,6 @@ public partial class IntegrationTestBlueprintApp : BlueprintApp;
 /// an app-owned JSON metadata type without changing runtime serializer behavior.
 /// </summary>
 [JsonSerializable(typeof(string))]
+[JsonSerializable(typeof(ProblemDetails))]
+[JsonSerializable(typeof(ValidationProblemDetails))]
 public partial class IntegrationTestAppJsonContext : JsonSerializerContext;

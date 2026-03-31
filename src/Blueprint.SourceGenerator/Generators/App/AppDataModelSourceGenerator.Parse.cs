@@ -41,15 +41,17 @@ public sealed partial class AppDataModelSourceGenerator
             }
         }
 
+        var serializerContext = GetSerializerContext(classSymbol);
         var model = ParseOnlyBlueprintAppClassModel.Create(
             classSymbol,
             context.TargetNode,
-            GetSerializerContextTypeName(classSymbol));
+            serializerContext.TypeName,
+            serializerContext.Location);
 
         return Result.Success(new ParseOnlyDataModel(model, [.. parseAttributes]));
     }
 
-    private static string? GetSerializerContextTypeName(INamedTypeSymbol classSymbol)
+    private static SerializerContextDeclaration GetSerializerContext(INamedTypeSymbol classSymbol)
     {
         foreach (var attribute in classSymbol.GetAttributes())
         {
@@ -63,13 +65,21 @@ public sealed partial class AppDataModelSourceGenerator
                 if (namedArgument.Key == "JsonSerializerContextType"
                     && namedArgument.Value.Value is INamedTypeSymbol serializerContextType)
                 {
-                    return serializerContextType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                    var serializerContextLocation = attribute.ApplicationSyntaxReference is null
+                        ? null
+                        : LocationInfo.CreateFrom(attribute.ApplicationSyntaxReference.GetSyntax());
+
+                    return new SerializerContextDeclaration(
+                        serializerContextType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                        serializerContextLocation);
                 }
             }
         }
 
-        return null;
+        return new SerializerContextDeclaration(null, null);
     }
+
+    private sealed record SerializerContextDeclaration(string? TypeName, LocationInfo? Location);
 }
 
 

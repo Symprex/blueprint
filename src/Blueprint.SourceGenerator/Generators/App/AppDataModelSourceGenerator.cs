@@ -1,7 +1,9 @@
 using System.Text;
 using Blueprint.SourceGenerator.CodeWriter;
 using Blueprint.SourceGenerator.Generators.App.Model;
+using Blueprint.SourceGenerator.Generators.Descriptors;
 using Blueprint.SourceGenerator.Helpers;
+using Blueprint.SourceGenerator.Planning;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
@@ -38,12 +40,54 @@ public sealed partial class AppDataModelSourceGenerator : IIncrementalGenerator,
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
+    private static readonly DiagnosticDescriptor _serializerContextMissingCoverageRule = new(
+        id: "BP006",
+        title: "Serializer context is missing required response body coverage",
+        messageFormat: "The declared app-owned serializer context '{0}' does not cover required HTTP response body types {1} for operations {2}",
+        category: "AppDataModelSourceGenerator",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "HTTP-visible Blueprint operations must have their response body payload types covered by the app-owned JsonSerializerContext declaration before OpenAPI/schema generation can trust the compile-time contract.");
+
+    private readonly BlueprintSourceGenerationConfig _config;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="AppDataModelSourceGenerator"/> class with Blueprint's default
+    /// descriptor-module composition so app registration and descriptor-derived validation reuse the same contributor set.
+    /// </summary>
+    public AppDataModelSourceGenerator()
+        : this(OperationDescriptorSourceGenerator.CreateDefaultConfig())
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="AppDataModelSourceGenerator"/> class with an explicit module
+    /// configuration. Tests and companion packages can reuse the app generator while keeping descriptor-derived
+    /// validation aligned with the configured module set.
+    /// </summary>
+    /// <param name="config">The generator configuration to use.</param>
+    internal AppDataModelSourceGenerator(BlueprintSourceGenerationConfig config)
+    {
+        this._config = config;
+    }
+
     /// <inheritdoc />
     public string[] StageNames { get; } = StageHelpers.FindAll(typeof(Stages));
 
     /// <inheritdoc />
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
+        var executionPlanProvider = context.ParseOptionsProvider
+            .Select((_, _) => this._config.BuildExecutionPlan())
+            .WithTrackingName(Stages.ExecutionPlan);
+        var exceptionTranslationPolicyProvider = executionPlanProvider
+            .Select((result, _) => DescriptorPlanBuilder.CreateExceptionTranslatorPolicy(result))
+            .WithTrackingName(Stages.ExceptionTranslationPolicy);
+
+        context.RegisterSourceOutput(
+            executionPlanProvider,
+            (spc, result) => result.ReportDiagnostics(spc));
+
         var classProvider = context.SyntaxProvider.ForAttributeWithMetadataName(
                 "Blueprint.Model.BlueprintAppScanAttribute",
                 predicate: static (syntaxNode, _) => syntaxNode is ClassDeclarationSyntax,
@@ -56,7 +100,9 @@ public sealed partial class AppDataModelSourceGenerator : IIncrementalGenerator,
             .WithTrackingName(Stages.CombineWithCompilation);
 
         var generationModelProvider = combinedProvider
-            .Select((scanModelContext, _) => FindOperations(scanModelContext))
+            .Combine(executionPlanProvider)
+            .Combine(exceptionTranslationPolicyProvider)
+            .Select((context, _) => FindOperations(context.Left.Left, context.Left.Right, context.Right))
             .WithTrackingName(Stages.FindServicesToRegister);
 
         context.RegisterSourceOutput(
@@ -68,6 +114,11 @@ public sealed partial class AppDataModelSourceGenerator : IIncrementalGenerator,
                 if (result.Value is not { } classToGenerate)
                 {
                     return;
+                }
+
+                foreach (var diagnostic in classToGenerate.Diagnostics)
+                {
+                    spc.ReportDiagnostic(diagnostic.ToDiagnostic());
                 }
 
                 spc.AddSource(
@@ -106,6 +157,16 @@ public sealed partial class AppDataModelSourceGenerator : IIncrementalGenerator,
 
     private static class Stages
     {
+        /// <summary>
+        /// Tracks construction of the shared descriptor-module execution plan reused for app validation.
+        /// </summary>
+        public const string ExecutionPlan = nameof(ExecutionPlan);
+
+        /// <summary>
+        /// Tracks the point where the shared exception-translation policy is derived for descriptor-backed app validation.
+        /// </summary>
+        public const string ExceptionTranslationPolicy = nameof(ExceptionTranslationPolicy);
+
         /// <summary>
         /// Tracks syntax discovery for candidate Blueprint app declarations.
         /// </summary>

@@ -1,0 +1,70 @@
+﻿File: Input0.cs
+#nullable enable
+
+using System;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
+using Blueprint.Model;
+using Blueprint.Model.Attributes;
+using Blueprint.Runtime.Exec;
+using Microsoft.AspNetCore.Mvc;
+
+namespace Microsoft.AspNetCore.Mvc
+{
+    public class ProblemDetails
+    {
+    }
+
+    public sealed class ValidationProblemDetails : ProblemDetails
+    {
+    }
+}
+
+namespace Blueprint.Model.Attributes
+{
+    [AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = true)]
+    internal sealed class RootLinkAttribute : Attribute
+    {
+        public RootLinkAttribute(string url)
+        {
+        }
+    }
+}
+
+namespace TestNamespace
+{
+    public sealed class MissingPayload
+    {
+    }
+
+    [JsonSerializable(typeof(ProblemDetails))]
+    [JsonSerializable(typeof(ValidationProblemDetails))]
+    public partial class TestBlueprintJsonContext : JsonSerializerContext
+    {
+        public TestBlueprintJsonContext()
+            : base(new JsonSerializerOptions())
+        {
+        }
+
+        protected override JsonSerializerOptions? GeneratedSerializerOptions => new JsonSerializerOptions();
+
+        public override JsonTypeInfo? GetTypeInfo(Type type)
+        {
+            return null;
+        }
+    }
+
+    [RootLink("/serializer-context-coverage/missing")]
+    public partial class IncludedOperation : IQuery<OkResult<MissingPayload>>
+    {
+        public static ApiOperationDescriptor Configure() => throw new NotImplementedException();
+    }
+
+    [BlueprintAppScan]
+    [BlueprintAppSerializerContext(JsonSerializerContextType = typeof(TestBlueprintJsonContext))]
+     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [Error:BP006] The declared app-owned serializer context 'TestNamespace.TestBlueprintJsonContext' does not cover required HTTP response body types TestNamespace.MissingPayload for operations IncludedOperation
+    public partial class TestBlueprintApp : BlueprintApp
+    {
+    }
+}

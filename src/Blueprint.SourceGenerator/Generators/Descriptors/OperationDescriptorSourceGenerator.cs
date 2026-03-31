@@ -76,7 +76,7 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
             .Select((_, _) => executionPlanResult)
             .WithTrackingName(Stages.ExecutionPlan);
         var exceptionTranslationPolicyProvider = executionPlanProvider
-            .Select((result, _) => CreateExceptionTranslatorPolicy(result))
+            .Select((result, _) => DescriptorPlanBuilder.CreateExceptionTranslatorPolicy(result))
             .WithTrackingName(Stages.ExceptionTranslationPolicy);
 
         context.RegisterSourceOutput(
@@ -155,47 +155,7 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
             return Result<DescriptorPlan>.Failure(result.Diagnostics);
         }
 
-        return ConfigureDescriptorPlan(result.Value.FullClassName, compilation, executionPlanResult, exceptionTranslatorPolicyResult);
-    }
-
-    private static Result<DescriptorPlan> ConfigureDescriptorPlan(
-        string operationFullClassName,
-        Compilation compilation,
-        Result<BlueprintModuleExecutionPlan> executionPlanResult,
-        Result<PipelineExceptionTranslatorPolicy> exceptionTranslatorPolicyResult)
-    {
-        if (executionPlanResult.Value is null)
-        {
-            return Result<DescriptorPlan>.Failure(executionPlanResult.Diagnostics);
-        }
-
-        if (exceptionTranslatorPolicyResult.Value is null)
-        {
-            // Shared exception-translation policy diagnostics are reported once by the pipeline generator.
-            // Descriptor generation stops quietly here so one invalid policy does not fan out into per-operation
-            // duplicates while descriptor contributors still avoid projecting stale failure metadata.
-            return Result<DescriptorPlan>.Failure(Array.Empty<DiagnosticInfo>());
-        }
-
-        var operationImplementationType = compilation.GetTypeByMetadataName(operationFullClassName);
-        var operationModel = OperationModel.Create(operationImplementationType!);
-        var descriptorPlan = new DescriptorPlan(operationModel);
-        var operationLookup = new CompilationOperationLookup(compilation);
-
-        foreach (var contributor in executionPlanResult.Value.DescriptorContributors)
-        {
-            contributor.ContributeToDescriptor(new DescriptorContributorContext(operationModel, descriptorPlan, operationLookup, exceptionTranslatorPolicyResult.Value));
-        }
-
-        HostExposureDiagnostics.AddUnsupportedHostDiagnostics(descriptorPlan, executionPlanResult.Value.HostContributors);
-        HostExposureDiagnostics.AddConflictingHostDiagnostics(descriptorPlan, executionPlanResult.Value.HostContributors);
-
-        var pipelinePlanResult = ConfigurePipelinePlan(operationFullClassName, compilation, executionPlanResult);
-        var failures = descriptorPlan.Diagnostics
-            .Concat(pipelinePlanResult.Diagnostics)
-            .ToArray();
-
-        return failures.Length > 0 ? Result<DescriptorPlan>.Failure(failures) : Result.Success(descriptorPlan);
+        return DescriptorPlanBuilder.Build(result.Value.FullClassName, compilation, executionPlanResult, exceptionTranslatorPolicyResult);
     }
 
     private static Result<PipelinePlan> ConfigurePipelinePlan(
@@ -251,7 +211,7 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
     /// </summary>
     /// <param name="additionalModules">The additional modules to append.</param>
     /// <returns>The composed descriptor-generator configuration.</returns>
-    protected static BlueprintSourceGenerationConfig CreateDefaultConfig(params IBlueprintSourceGeneratorModule[] additionalModules)
+    protected internal static BlueprintSourceGenerationConfig CreateDefaultConfig(params IBlueprintSourceGeneratorModule[] additionalModules)
     {
         return new BlueprintSourceGenerationConfig(
         [
@@ -270,13 +230,6 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
             new OperationDiscoveryManifestModule(),
             .. additionalModules,
         ]);
-    }
-
-    private static Result<PipelineExceptionTranslatorPolicy> CreateExceptionTranslatorPolicy(Result<BlueprintModuleExecutionPlan> executionPlanResult)
-    {
-        return executionPlanResult.Value is null
-            ? Result<PipelineExceptionTranslatorPolicy>.Failure(executionPlanResult.Diagnostics)
-            : PipelineExceptionTranslatorPolicy.CreateFromContributors(executionPlanResult.Value.ExceptionTranslationContributors);
     }
 
     /// <summary>

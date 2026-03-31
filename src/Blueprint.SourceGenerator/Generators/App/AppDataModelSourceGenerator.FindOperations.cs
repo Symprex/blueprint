@@ -1,5 +1,8 @@
 using Blueprint.SourceGenerator.Generators.App.Model;
+using Blueprint.SourceGenerator.Generators.Pipelines;
 using Blueprint.SourceGenerator.Helpers;
+using Blueprint.SourceGenerator.Modules;
+using Blueprint.SourceGenerator.Planning;
 using Microsoft.CodeAnalysis;
 
 namespace Blueprint.SourceGenerator.Generators.App;
@@ -14,9 +17,13 @@ public sealed partial class AppDataModelSourceGenerator
     /// be registered, based on the (possibly multiple) scan attributes.
     /// </summary>
     /// <param name="context">The context containing Compilation and the AppDataModel class to generate operation registrations for.</param>
+    /// <param name="executionPlanResult">The shared descriptor-module execution plan used to inspect serializer requirements.</param>
+    /// <param name="exceptionTranslatorPolicyResult">The shared exception-translation policy required by descriptor contributors.</param>
     /// <returns>A compilation model with all found operations.</returns>
     private static Result<BlueprintAppDataModelCompilationModel> FindOperations(
-        (Result<ParseOnlyDataModel> Result, Compilation Compilation) context)
+        (Result<ParseOnlyDataModel> Result, Compilation Compilation) context,
+        Result<BlueprintModuleExecutionPlan> executionPlanResult,
+        Result<PipelineExceptionTranslatorPolicy> exceptionTranslatorPolicyResult)
     {
         var (diagnosticModel, compilation) = context;
 
@@ -28,6 +35,12 @@ public sealed partial class AppDataModelSourceGenerator
         var (dataModelClass, attributes) = diagnosticModel.Value;
 
         var registrations = new EquatableList<string>();
+        var diagnostics = new EquatableList<DiagnosticInfo>();
+        var missingSerializerCoverageTypeNames = new HashSet<string>(StringComparer.Ordinal);
+        var affectedSerializerCoverageOperations = new HashSet<string>(StringComparer.Ordinal);
+        var coveredSerializerContextTypeNames = dataModelClass.SerializerContextTypeName is null
+            ? null
+            : GetCoveredSerializerContextTypeNames(dataModelClass.SerializerContextTypeName, compilation);
 
         foreach (var attribute in attributes)
         {
@@ -36,6 +49,22 @@ public sealed partial class AppDataModelSourceGenerator
             foreach (var operation in ScanForOperationTypes(compilation, attribute, modelClassType!))
             {
                 registrations.Add(operation.ToDisplayString());
+
+                if (dataModelClass.SerializerContextTypeName is null)
+                {
+                    continue;
+                }
+
+                foreach (var missingTypeName in GetMissingSerializerContextCoverage(
+                             operation,
+                             compilation,
+                             executionPlanResult,
+                             exceptionTranslatorPolicyResult,
+                             coveredSerializerContextTypeNames))
+                {
+                    missingSerializerCoverageTypeNames.Add(missingTypeName);
+                    affectedSerializerCoverageOperations.Add(operation.Name);
+                }
             }
 
             if (registrations.Count == 0)
@@ -45,7 +74,21 @@ public sealed partial class AppDataModelSourceGenerator
             }
         }
 
-        return Result.Success(new BlueprintAppDataModelCompilationModel(dataModelClass, registrations));
+        if (dataModelClass.SerializerContextTypeName is not null
+            && missingSerializerCoverageTypeNames.Count > 0)
+        {
+            diagnostics.Add(
+                new DiagnosticInfo(
+                    _serializerContextMissingCoverageRule,
+                    dataModelClass.SerializerContextLocation,
+                    [
+                        dataModelClass.SerializerContextTypeName.Replace("global::", string.Empty, StringComparison.Ordinal),
+                        string.Join(", ", missingSerializerCoverageTypeNames.OrderBy(static typeName => typeName, StringComparer.Ordinal)),
+                        string.Join(", ", affectedSerializerCoverageOperations.OrderBy(static operationName => operationName, StringComparer.Ordinal)),
+                    ]));
+        }
+
+        return Result.Success(new BlueprintAppDataModelCompilationModel(dataModelClass, registrations, diagnostics));
     }
 
     /// <summary>
@@ -144,6 +187,68 @@ public sealed partial class AppDataModelSourceGenerator
                 }
             }
         }
+    }
+
+    private static HashSet<string> GetCoveredSerializerContextTypeNames(
+        string serializerContextTypeName,
+        Compilation compilation)
+    {
+        var serializerContextType = compilation.GetTypeByMetadataName(NormalizeMetadataName(serializerContextTypeName));
+        if (serializerContextType is null)
+        {
+            return new HashSet<string>(StringComparer.Ordinal);
+        }
+
+        return serializerContextType.GetAttributes()
+            .Where(static attribute => string.Equals(attribute.AttributeClass?.ToDisplayString(), "System.Text.Json.Serialization.JsonSerializableAttribute", StringComparison.Ordinal))
+            .Select(static attribute => attribute.ConstructorArguments.FirstOrDefault().Value)
+            .OfType<ITypeSymbol>()
+            .Select(static typeSymbol => typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat).Replace("global::", string.Empty, StringComparison.Ordinal))
+            .ToHashSet(StringComparer.Ordinal);
+    }
+
+    private static string[] GetMissingSerializerContextCoverage(
+        INamedTypeSymbol operation,
+        Compilation compilation,
+        Result<BlueprintModuleExecutionPlan> executionPlanResult,
+        Result<PipelineExceptionTranslatorPolicy> exceptionTranslatorPolicyResult,
+        HashSet<string>? coveredSerializerContextTypeNames)
+    {
+        if (coveredSerializerContextTypeNames is null)
+        {
+            return [];
+        }
+
+        var plannedDescriptor = DescriptorPlanBuilder.Build(
+            operation.ToFullMetadataName(),
+            compilation,
+            executionPlanResult,
+            exceptionTranslatorPolicyResult);
+        if (plannedDescriptor.Value is null)
+        {
+            return [];
+        }
+
+        var requiredBodyTypeNames = plannedDescriptor.Value.GetMetadata<SerializerContextCoverageRegistration>()
+            .Select(static registration => registration.BodyTypeName)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        if (requiredBodyTypeNames.Length == 0)
+        {
+            return [];
+        }
+
+        return requiredBodyTypeNames
+            .Where(requiredTypeName => !coveredSerializerContextTypeNames.Contains(requiredTypeName))
+            .OrderBy(static typeName => typeName, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static string NormalizeMetadataName(string metadataName)
+    {
+        return metadataName.StartsWith("global::", StringComparison.Ordinal)
+            ? metadataName.Substring("global::".Length)
+            : metadataName;
     }
 }
 

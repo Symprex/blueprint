@@ -161,3 +161,23 @@ Implement after HTTP descriptors, error-model metadata, and resource metadata ar
 - Autonomous next slice:
   - Continue with `openapi/validate-serializer-context-coverage-against-app-declaration`.
   - That is the narrowest safe follow-on because body payload types are already inventoried on descriptors and the app now declares the expected `JsonSerializerContext`, so the next missing seam is compile-time coverage validation rather than more ownership work or runtime serializer changes.
+- Completed `openapi/validate-serializer-context-coverage-against-app-declaration`.
+- Why it was the right follow-on:
+  - body payload requirements were already inspectable from descriptor facts and the app-owned declaration seam was now explicit, so the next missing contract was deterministic compile-time validation instead of more ownership plumbing
+  - the prior slice explicitly deferred distinguishing incomplete declared coverage from missing configuration, and this slice closes the first half of that split
+- What landed in this slice:
+  - `AppDataModelSourceGenerator` now reuses `DescriptorPlanBuilder` before registration emission so app-level serializer validation shares descriptor contributor ordering, host metadata, and exception-policy construction
+  - `BP006` now reports one app-level diagnostic when the declared serializer context omits descriptor-derived HTTP response body payload types required by the scanned operations
+  - the integration test app serializer context now includes `ProblemDetails` and `ValidationProblemDetails`, matching the current descriptor-projected HTTP fallback body contracts
+  - synthetic build telemetry snapshots now record the new `ExecutionPlan` and `ExceptionTranslationPolicy` tracked stages for `AppDataModelSourceGenerator`
+- Proof closed for this slice:
+  - app-generator diagnostic snapshot proof for missing serializer coverage
+  - app-generator success snapshot proof for satisfied serializer coverage
+  - repo verification sweep: `dotnet build .\Blueprint.sln --no-restore`, `dotnet test .\src\Blueprint.SourceGenerator.Tests\Blueprint.SourceGenerator.Tests.csproj`, `dotnet test .\src\Blueprint.SourceGenerator.CodeWriter.Tests\Blueprint.SourceGenerator.CodeWriter.Tests.csproj`, and `dotnet test .\src\Blueprint.SourceGenerator.Tests.Integration\Blueprint.SourceGenerator.Tests.Integration.csproj`
+- Deferred by design:
+  - diagnosing HTTP coverage requirements when no app-owned serializer context is declared at all
+  - runtime serializer switching away from `Newtonsoft.Json`
+  - full schema projection and document emission
+- Autonomous next slice:
+  - Continue with `openapi/diagnose-missing-app-serializer-context-declaration-for-http-coverage`.
+  - That is the narrowest safe follow-on because the current validation now covers the "declared but incomplete" half of the contract, while the remaining missing-configuration diagnostic is still needed before broader schema/document work.

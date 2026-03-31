@@ -83,7 +83,7 @@ public readonly struct EquatableList<T> : IEquatable<EquatableList<T>>, IEnumera
     /// <inheritdoc/>
     public override bool Equals(object? obj)
     {
-        return obj is EquatableList<T> array && Equals(this, array);
+        return obj is EquatableList<T> array && this.Equals(array);
     }
 
     /// <inheritdoc/>

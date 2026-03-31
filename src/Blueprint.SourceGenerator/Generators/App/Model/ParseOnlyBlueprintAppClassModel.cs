@@ -11,11 +11,13 @@ namespace Blueprint.SourceGenerator.Generators.App.Model;
 /// <param name="Name">The name of the source class.</param>
 /// <param name="MetadataName">The "metadata name" of the source class (i.e. includes namespace and name).</param>
 /// <param name="SerializerContextTypeName">The fully-qualified serializer context type declared by the app, when present.</param>
+/// <param name="SerializerContextLocation">The source location of the serializer-context declaration, when present.</param>
 internal record ParseOnlyBlueprintAppClassModel(
     string? Namespace,
     string Name,
     string MetadataName,
-    string? SerializerContextTypeName)
+    string? SerializerContextTypeName,
+    LocationInfo? SerializerContextLocation)
 {
     /// <summary>
     /// Creates the cacheable app model used by later generator stages.
@@ -23,13 +25,19 @@ internal record ParseOnlyBlueprintAppClassModel(
     /// <param name="type">The Blueprint app type being scanned.</param>
     /// <param name="syntax">The declaring syntax node for the app type, when available.</param>
     /// <param name="serializerContextTypeName">The fully-qualified serializer context type declared by the app, when present.</param>
+    /// <param name="serializerContextLocation">The source location of the serializer-context declaration, when present.</param>
     /// <returns>A compact model describing the app type.</returns>
-    public static ParseOnlyBlueprintAppClassModel Create(INamedTypeSymbol type, SyntaxNode? syntax, string? serializerContextTypeName)
+    public static ParseOnlyBlueprintAppClassModel Create(
+        INamedTypeSymbol type,
+        SyntaxNode? syntax,
+        string? serializerContextTypeName,
+        LocationInfo? serializerContextLocation)
     {
         return new ParseOnlyBlueprintAppClassModel(
             Namespace: type.ContainingNamespace.IsGlobalNamespace ? null : type.ContainingNamespace.ToDisplayString(),
             Name: type.Name,
             MetadataName: type.ToFullMetadataName(),
-            SerializerContextTypeName: serializerContextTypeName);
+            SerializerContextTypeName: serializerContextTypeName,
+            SerializerContextLocation: serializerContextLocation);
     }
 }
