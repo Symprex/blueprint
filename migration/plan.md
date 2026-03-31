@@ -956,6 +956,13 @@ Run this as a paired design loop with workstream 6. The result contract must be 
   - Stay in the OpenAPI workstream and project response schema references from covered body types.
   - That is the narrowest dependency-safe next slice because the runtime now has stable type-level schema models for covered serializer-backed body payloads, but HTTP response metadata still only carries body-type names. The next missing OpenAPI/document contract is to merge response metadata with covered schema projections into per-response schema references before widening into full document emission or endpoint wiring.
   - The live tracker should therefore keep `activeWorkstream` as `openapi` and advance `nextReadySlice` to `openapi/project-response-schema-references-from-covered-body-types` unless a review gate or blocker appears.
+- Completed the OpenAPI response schema reference slice:
+  - `Blueprint.Runtime.Http.OpenApiResponseSchemaReferenceProjectionContext.Create(schemaProjection)` now composes `OperationHttpResponseMetadata` response entries with the covered `OpenApiSchemaModel` inventory, preserving response metadata while resolving each covered body type onto a stable per-response schema-reference contract.
+  - The focused proof matrix is green: new runtime integration proofs started red on the missing seam itself, then passed for both a covered generated app and an uncovered manual app shell while confirming the existing `200`, `422`, and `500` response families keep their current metadata and gain schema references only when coverage exists.
+- Autonomous next OpenAPI follow-on after response schema reference projection:
+  - Stay in the OpenAPI workstream and project property types and constraints from serializer metadata into schema models.
+  - That is the narrowest dependency-safe next slice because the runtime now has stable response-to-schema links, but the current `OpenApiSchemaModel` contract still only exposes body type names, broad schema kinds, and ordered property-name inventories. The next missing OpenAPI/document contract is property-level type and constraint metadata from `System.Text.Json` serializer metadata before widening into full document emission or endpoint wiring.
+  - The live tracker should therefore keep `activeWorkstream` as `openapi` and advance `nextReadySlice` to `openapi/project-property-types-and-constraints-from-serializer-metadata-into-schema-models` unless a review gate or blocker appears.
 
 ## 8. Error model and exception handling
 

@@ -12,14 +12,14 @@
   "current": {
     "activeWorkstream": "openapi",
     "nextReadySlice": {
+      "id": "openapi/project-property-types-and-constraints-from-serializer-metadata-into-schema-models",
+      "workstream": "openapi",
+      "title": "Project property types and constraints from serializer metadata into schema models"
+    },
+    "lastCompletedSlice": {
       "id": "openapi/project-response-schema-references-from-covered-body-types",
       "workstream": "openapi",
       "title": "Project response schema references from covered body types"
-    },
-    "lastCompletedSlice": {
-      "id": "openapi/establish-schema-projection-seam-for-covered-body-types",
-      "workstream": "openapi",
-      "title": "Establish schema projection seam for covered body types"
     },
     "openReviewGate": null
   },

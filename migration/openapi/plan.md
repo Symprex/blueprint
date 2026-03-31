@@ -258,3 +258,22 @@ Implement after HTTP descriptors, error-model metadata, and resource metadata ar
 - Autonomous next slice:
   - Continue with `openapi/project-response-schema-references-from-covered-body-types`.
   - That is the narrowest safe follow-on because the runtime now has stable type-level schema models for covered serializer-backed body payloads, but per-operation HTTP response metadata still only carries body-type names. The next OpenAPI gap is merging response metadata with covered schema projections into per-response schema references before widening into full document rendering or endpoint wiring.
+- Completed `openapi/project-response-schema-references-from-covered-body-types`.
+- Why it was the right follow-on:
+  - the previous schema projection slice established stable covered `OpenApiSchemaModel` entries, but per-response HTTP metadata still only carried body-type names
+  - later OpenAPI document work would otherwise have to recompute response-to-schema joins ad hoc instead of consuming one deterministic runtime seam
+- What landed in this slice:
+  - new `Blueprint.Runtime.Http.OpenApiResponseSchemaReferenceProjectionContext.Create(schemaProjection)` seam that preserves each `OperationHttpResponseMetadata` response entry while resolving its covered `BodyTypeNames` onto `OpenApiResponseSchemaReference` records
+  - per-operation `OpenApiResponseSchemaReferenceOperationContext` entries that keep the existing response ordering and metadata while layering in the resolved schema references needed for later document emission
+  - the seam stays deliberately host-specific and runtime-facing: it composes the existing document-builder and schema-projection seams without widening into OpenAPI document rendering, endpoint wiring, or `BlueprintHttpOptions` ownership
+- Proof closed for this slice:
+  - failing-then-passing runtime integration proof for a covered generated app using `IntegrationTestBlueprintApp`
+  - failing-then-passing runtime integration proof for an uncovered manual app shell that registers the same HTTP descriptor but exposes no serializer context
+  - the proof also asserts the seam preserves the current `200`, `422`, and `500` response ordering while only adding schema references for covered body types
+- Deferred by design:
+  - property-level schema type and constraint metadata from serializer metadata
+  - full OpenAPI document emission and HTTP endpoint wiring
+  - runtime serializer switching away from `Newtonsoft.Json`
+- Autonomous next slice:
+  - Continue with `openapi/project-property-types-and-constraints-from-serializer-metadata-into-schema-models`.
+  - That is the narrowest safe follow-on because response metadata now links deterministically to covered schema models, but the current schema contract still only exposes body names, broad kinds, and ordered property-name inventories. The next OpenAPI gap is enriching those schema models with property-level type and constraint metadata from `System.Text.Json` before widening into document rendering or endpoint wiring.
