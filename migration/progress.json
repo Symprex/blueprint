@@ -12,14 +12,14 @@
   "current": {
     "activeWorkstream": "openapi",
     "nextReadySlice": {
-      "id": "openapi/integrate-cross-cutting-failure-outcomes-in-openapi-document",
+      "id": "openapi/add-tags-to-openapi-operations-from-operation-group-metadata",
       "workstream": "openapi",
-      "title": "Integrate cross-cutting failure outcomes in OpenAPI document"
+      "title": "Add tags to OpenAPI operations from operation group metadata"
     },
     "lastCompletedSlice": {
-      "id": "openapi/configure-openapi-info-metadata",
+      "id": "openapi/sanitise-schema-component-keys-for-openapi-tooling-compatibility",
       "workstream": "openapi",
-      "title": "Configure OpenAPI info metadata (title, version, description)"
+      "title": "Sanitise schema component keys for OpenAPI tooling compatibility"
     },
     "openReviewGate": null
   },

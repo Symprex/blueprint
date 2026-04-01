@@ -19,6 +19,18 @@ public sealed record OpenApiOutputRenderingContext(
     private const string OpenApiVersion = "3.0.4";
 
     /// <summary>
+    /// Converts a raw CLR type name into a safe OpenAPI schema component key by replacing <c>.</c> with <c>_</c>.
+    /// CLR names such as <c>Microsoft.AspNetCore.Mvc.ProblemDetails</c> are allowed by the OpenAPI 3.x component-name
+    /// regex (<c>^[a-zA-Z0-9\.\-_]+$</c>), but many popular tools (Swagger UI, openapi-generator, etc.) treat dots as
+    /// namespace separators and fail to resolve <c>$ref</c> pointers that contain them. Using underscores preserves
+    /// the full type identity while remaining universally safe.
+    /// </summary>
+    private static string SanitiseSchemaKey(string clrTypeName)
+    {
+        return clrTypeName.Replace('.', '_');
+    }
+
+    /// <summary>
     /// Creates a rendered OpenAPI 3.x JSON string from the supplied assembled document model.
     /// The rendered output follows the standard OpenAPI 3.x object structure: a top-level <c>openapi</c> version
     /// string, a stub <c>info</c> object, a <c>paths</c> object keyed by route template, and a
@@ -179,7 +191,7 @@ public sealed record OpenApiOutputRenderingContext(
         if (schemaComponents.Length == 1)
         {
             writer.WriteStartObject();
-            writer.WriteString("$ref", $"#/components/schemas/{schemaComponents[0].BodyTypeName}");
+            writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(schemaComponents[0].BodyTypeName)}");
             writer.WriteEndObject();
         }
         else if (schemaComponents.Length > 1)
@@ -191,7 +203,7 @@ public sealed record OpenApiOutputRenderingContext(
             foreach (var component in schemaComponents)
             {
                 writer.WriteStartObject();
-                writer.WriteString("$ref", $"#/components/schemas/{component.BodyTypeName}");
+                writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(component.BodyTypeName)}");
                 writer.WriteEndObject();
             }
 
@@ -229,7 +241,7 @@ public sealed record OpenApiOutputRenderingContext(
 
     private static void WriteSchemaComponent(Utf8JsonWriter writer, OpenApiSchemaComponentModel component)
     {
-        writer.WritePropertyName(component.BodyTypeName);
+        writer.WritePropertyName(SanitiseSchemaKey(component.BodyTypeName));
         writer.WriteStartObject();
 
         if (component.Type is not null)

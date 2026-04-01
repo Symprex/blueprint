@@ -497,3 +497,25 @@ Implement after HTTP descriptors, error-model metadata, and resource metadata ar
 - Autonomous next slice:
   - Continue with `openapi/configure-openapi-info-metadata`.
   - That is the narrowest safe follow-on because the endpoint now serves a valid OpenAPI document, but the stub `info` block hardcodes `"Blueprint API"` and `"1.0.0"`. Providing a `ConfigureOpenApi(Action<OpenApiInfoOptions>)` customisation seam on `MapBlueprintApi` is the smallest consumer-visible improvement that builds on the complete rendering pipeline without widening into tags, schema processors, or discriminator work.
+
+- Completed `openapi/configure-openapi-info-metadata`.
+- Why it was the right follow-on:
+  - the HTTP endpoint slice deliberately hardcoded `"Blueprint API"` / `"1.0.0"` in the `info` block
+  - adding a `configureOpenApi: Action<OpenApiInfoOptions>?` optional parameter to `MapBlueprintApi` is the narrowest consumer-facing improvement without touching tags, schema processors, or discriminators
+- What landed in this slice:
+  - new `Blueprint.Runtime.Http.OpenApiInfoOptions` sealed class with `Title`, `Version`, and nullable `Description`
+  - `OpenApiOutputRenderingContext.Create` extended with optional `OpenApiInfoOptions?` parameter
+  - `OpenApiDocumentEndpoint.Create` extended with optional `OpenApiInfoOptions?` parameter
+  - `MapBlueprintApi<T, TExec>` extended with optional `Action<OpenApiInfoOptions>? configureOpenApi` parameter
+- Proof closed: four new failing-then-passing artifact tests; all three test suites (321 + 103 + 45 = 469 passing).
+- Autonomous next slice: `openapi/sanitise-schema-component-keys-for-openapi-tooling-compatibility`
+  - Skipped `integrate-cross-cutting-failure-outcomes` because inspection confirmed 422 and 500 already flow via `OperationHttpResponseMetadataFeatureData`; no implementation gap existed.
+- Completed `openapi/sanitise-schema-component-keys-for-openapi-tooling-compatibility`.
+- Why it was the right follow-on:
+  - raw CLR type names (dots) in component keys broke common OpenAPI tooling; replacing `.` with `_` in the rendering layer fixes this while keeping the model canonical
+- What landed in this slice:
+  - `SanitiseSchemaKey` private static helper in `OpenApiOutputRenderingContext` replacing `.` with `_`
+  - applied to component key, single-schema `___BEGIN___COMMAND_DONE_MARKER___$LASTEXITCODEref`, and `oneOf` `___BEGIN___COMMAND_DONE_MARKER___$LASTEXITCODEref` emissions
+- Proof closed: updated integration test assertions to expect `Microsoft_AspNetCore_Mvc_ProblemDetails` keys; `___BEGIN___COMMAND_DONE_MARKER___$LASTEXITCODEref` assertion checks for no dots; all three test suites (321 + 103 + 45 = 469 passing).
+- Autonomous next slice:
+  - Continue with `openapi/add-tags-to-openapi-operations-from-operation-group-metadata`.

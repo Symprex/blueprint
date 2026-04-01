@@ -64,8 +64,8 @@ public class AppModelOpenApiOutputRenderingContextTests
             .Select(static p => p.Name)
             .Should()
             .Contain(
-                "Microsoft.AspNetCore.Mvc.ProblemDetails",
-                "Microsoft.AspNetCore.Mvc.ValidationProblemDetails",
+                "Microsoft_AspNetCore_Mvc_ProblemDetails",
+                "Microsoft_AspNetCore_Mvc_ValidationProblemDetails",
                 "string");
     }
 
@@ -84,7 +84,10 @@ public class AppModelOpenApiOutputRenderingContextTests
 
         response200.TryGetProperty("content", out var content).Should().BeTrue();
         content.TryGetProperty("application/json", out var json).Should().BeTrue();
-        json.GetProperty("schema").TryGetProperty("$ref", out _).Should().BeTrue();
+
+        var refValue = json.GetProperty("schema").GetProperty("$ref").GetString();
+        refValue.Should().NotContain(".", "schema component $ref keys must use underscores instead of dots for tooling compatibility");
+        refValue.Should().Be("#/components/schemas/string");
     }
 
     [Fact]
@@ -117,7 +120,7 @@ public class AppModelOpenApiOutputRenderingContextTests
         var schema = doc.RootElement
             .GetProperty("components")
             .GetProperty("schemas")
-            .GetProperty("Sample.ResponseDto");
+            .GetProperty("Sample_ResponseDto");
 
         schema.GetProperty("type").GetString().Should().Be("object");
         schema.GetProperty("required").EnumerateArray().Select(static e => e.GetString()).Should().Equal("RequiredProp");
