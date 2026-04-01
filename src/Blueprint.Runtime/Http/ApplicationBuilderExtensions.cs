@@ -50,6 +50,15 @@ public static class EndpointRouteBuilderExtensions
 
         var builders = new List<IEndpointConventionBuilder>();
 
+        // OpenAPI is a required part of the HTTP host and is always exposed regardless of environment.
+        var openApiBuilder = endpoints.Map(
+            RoutePatternFactory.Parse(basePath.TrimEnd('/') + "/.blueprint/openapi.json"),
+            OpenApiDocumentEndpoint.Create(runtimeModel));
+        openApiBuilder.WithDisplayName("GET Blueprint OpenAPI document");
+        openApiBuilder.WithMetadata(new HttpMethodMetadata([HttpMethods.Get]));
+
+        builders.Add(openApiBuilder);
+
         // Ordering by 'indexOf {' means we put those URLs which are not placeholders
         // first (e.g. /users/{id} and /users/me will put /users/me first) because those without would return -1
         // foreach (var link in apiDataModel.Links.OrderBy(l => l.UrlFormat.IndexOf('{')))

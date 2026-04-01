@@ -12,14 +12,14 @@
   "current": {
     "activeWorkstream": "openapi",
     "nextReadySlice": {
+      "id": "openapi/configure-openapi-info-metadata",
+      "workstream": "openapi",
+      "title": "Configure OpenAPI info metadata (title, version, description)"
+    },
+    "lastCompletedSlice": {
       "id": "openapi/expose-openapi-document-via-http-endpoint",
       "workstream": "openapi",
       "title": "Expose OpenAPI document via HTTP endpoint"
-    },
-    "lastCompletedSlice": {
-      "id": "openapi/render-openapi-output-from-document-model",
-      "workstream": "openapi",
-      "title": "Render OpenAPI output from document model"
     },
     "openReviewGate": null
   },
