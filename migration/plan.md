@@ -995,6 +995,13 @@ Run this as a paired design loop with workstream 6. The result contract must be 
 - The next narrow OpenAPI follow-on should therefore be `openapi/render-openapi-path-items-from-operation-models`.
 - That is the narrowest dependency-safe next slice because operation models now expose stable identity, route formats, HTTP methods, and rendered responses, but the runtime still lacks a path-item seam that groups those facts by route/method before widening into full document emission.
 - The live tracker should therefore keep `activeWorkstream` as `openapi` and advance `nextReadySlice` to `openapi/render-openapi-path-items-from-operation-models` unless a review gate or blocker appears.
+- The OpenAPI path-item rendering slice is now complete locally:
+  - `Blueprint.Runtime.Http.OpenApiPathItemRenderingContext.Create(operationRendering)` now groups rendered `OpenApiOperationModel` entries by ordinal-stable route template and HTTP method, producing deterministic `OpenApiPathItemModel` / `OpenApiPathItemMethodModel` contracts for later document emission.
+  - the seam deliberately keeps same-path/same-method operation lists intact instead of collapsing them early, and it omits operations that have no URLs or HTTP methods because they are not representable as path-item entries yet.
+  - the proof set now records an important current runtime boundary: `BlueprintApp.Register(...)` still forbids duplicate URL formats across descriptors, so same-path grouping across multiple operations is currently proven through synthetic `OpenApiOperationModel` fixtures while the generated-app proof stays inside the existing registration invariant.
+- The next narrow OpenAPI follow-on should therefore be `openapi/render-openapi-document-model-from-path-items`.
+- That is the narrowest dependency-safe next slice because the runtime now has deterministic path-item contracts plus reusable schema components, but still lacks a single final document-model seam that assembles those facts into one host-facing OpenAPI document before any endpoint/serialization polish.
+- The live tracker should therefore keep `activeWorkstream` as `openapi` and advance `nextReadySlice` to `openapi/render-openapi-document-model-from-path-items` unless a review gate or blocker appears.
 
 ## 8. Error model and exception handling
 

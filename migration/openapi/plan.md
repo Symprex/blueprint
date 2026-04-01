@@ -373,3 +373,23 @@ Implement after HTTP descriptors, error-model metadata, and resource metadata ar
 - Autonomous next slice:
   - Continue with `openapi/render-openapi-path-items-from-operation-models`.
   - That is the narrowest safe follow-on because operation models now expose stable identity, URL formats, HTTP methods, and rendered responses, so the next missing OpenAPI seam is grouping those operation models into deterministic path-item contracts before widening into full document emission.
+- Completed `openapi/render-openapi-path-items-from-operation-models`.
+- Why it was the right follow-on:
+  - operation models already exposed the full per-operation OpenAPI facts needed for route grouping, but there was still no runtime seam that collected those facts into path-keyed contracts for later document emission
+  - keeping path grouping separate from final document rendering made the next step narrow enough to prove deterministically without jumping ahead into serialized OpenAPI output
+- What landed in this slice:
+  - new `Blueprint.Runtime.Http.OpenApiPathItemRenderingContext.Create(operationRendering)` seam that groups `OpenApiOperationModel` entries by ordinal-stable `UrlFormat` and then by ordinal-stable `HttpMethod`
+  - new `OpenApiPathItemModel` and `OpenApiPathItemMethodModel` runtime contracts that retain deterministic per-method operation lists instead of collapsing same-path/same-method contributions prematurely
+  - the seam intentionally excludes operations that lack URLs or HTTP methods because they are not yet representable as path-item entries
+  - the proof matrix now documents an existing runtime boundary too: real `BlueprintApp` registration still rejects duplicate URL formats across descriptors, so same-path grouping across multiple operations is currently exercised through synthetic `OpenApiOperationModel` fixtures while real generated-app proofs stay inside today's registration invariant
+- Proof closed for this slice:
+  - failing-then-passing runtime integration proof for a generated app operation flowing through the full `OpenApiDocumentBuilderContext` -> `OpenApiOperationRenderingContext` -> `OpenApiPathItemRenderingContext` chain
+  - failing-then-passing runtime integration proofs for synthetic operation-model fixtures covering same-path distinct-method grouping, same-path same-method deterministic ordering, multi-URL multi-method fan-out, and zero-URL exclusion
+- Deferred by design:
+  - final OpenAPI document model emission
+  - any widening of `BlueprintApp.Register(...)` duplicate-URL behavior to permit same-path multi-descriptor HTTP surfaces
+  - validation/data-annotation constraints not surfaced by `System.Text.Json` metadata
+  - runtime serializer switching away from `Newtonsoft.Json`
+- Autonomous next slice:
+  - Continue with `openapi/render-openapi-document-model-from-path-items`.
+  - That is the narrowest safe follow-on because the runtime now has deterministic path-item contracts, but there is still no final OpenAPI document model that assembles path items plus reusable schema components into one host-facing document seam.
