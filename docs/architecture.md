@@ -95,6 +95,7 @@ At runtime:
 - `OpenApiResponseObjectRenderingContext.Create(responseSchemaProjection)` then binds the current HTTP response families onto those reusable schema components, preserving per-response status/body/result metadata while adding deterministic JSON response content only for covered schema components and still leaving operation/document assembly to later slices (`src\Blueprint.Runtime\Http\OpenApiResponseObjectRenderingContext.cs`)
 - `OpenApiOperationRenderingContext.Create(responseObjects)` then binds descriptor-published operation identity, ordered HTTP methods, and ordinal-stable URL formats onto those rendered response objects (`src\Blueprint.Runtime\Http\OpenApiOperationRenderingContext.cs`)
 - `OpenApiPathItemRenderingContext.Create(operationRendering)` then groups those operation models into deterministic path-item contracts keyed by route template and HTTP method, leaving only final document emission to later slices (`src\Blueprint.Runtime\Http\OpenApiPathItemRenderingContext.cs`)
+- `OpenApiDocumentRenderingContext.Create(pathItemRendering)` then assembles the deterministic path-item inventory and reusable schema-component inventory into one host-facing document model, leaving only output rendering and host exposure to later slices (`src\Blueprint.Runtime\Http\OpenApiDocumentRenderingContext.cs`)
 
 The important architectural rule is that runtime code consumes generated knowledge. It should not re-scan the compilation model or re-derive contracts that the generators already knew.
 

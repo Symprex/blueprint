@@ -393,3 +393,23 @@ Implement after HTTP descriptors, error-model metadata, and resource metadata ar
 - Autonomous next slice:
   - Continue with `openapi/render-openapi-document-model-from-path-items`.
   - That is the narrowest safe follow-on because the runtime now has deterministic path-item contracts, but there is still no final OpenAPI document model that assembles path items plus reusable schema components into one host-facing document seam.
+- Completed `openapi/render-openapi-document-model-from-path-items`.
+- Why it was the right follow-on:
+  - the runtime already had deterministic path-item contracts and reusable schema components, but there was still no single host-facing OpenAPI document seam that assembled those facts together for later output and host exposure work
+  - keeping this slice model-only preserved the incremental migration rule: assemble the final runtime document contract first, then decide separately how it should be rendered or exposed
+- What landed in this slice:
+  - new `Blueprint.Runtime.Http.OpenApiDocumentRenderingContext.Create(pathItemRendering)` seam that assembles the current path-item inventory and schema-component inventory into one deterministic runtime document contract
+  - the document seam exposes ordered `Paths` plus ordered `SchemaComponents`, reusing the earlier `OpenApiPathItemModel` and `OpenApiSchemaComponentModel` contracts instead of re-walking descriptor or serializer metadata
+  - the seam intentionally stays model-only and defers titles, tags, customization hooks, serialized OpenAPI JSON shaping, and HTTP endpoint exposure
+- Proof closed for this slice:
+  - failing-then-passing runtime integration proof for a generated app showing the assembled document contract contains both the expected path item and the expected reusable schema components
+  - failing-then-passing runtime integration proofs for synthetic document inputs covering deterministic ordering of paths/components plus the valid empty-path and empty-component document shapes
+- Deferred by design:
+  - rendered OpenAPI JSON or other output projection from the assembled document model
+  - endpoint/host exposure of the final OpenAPI document
+  - titles, tags, schema processors, and other post-configuration hooks
+  - validation/data-annotation constraints not surfaced by `System.Text.Json` metadata
+  - runtime serializer switching away from `Newtonsoft.Json`
+- Autonomous next slice:
+  - Continue with `openapi/render-openapi-output-from-document-model`.
+  - That is the narrowest safe follow-on because the runtime now has one deterministic document contract, but there is still no output-facing seam that projects that model into the final OpenAPI payload or hosted document shape.

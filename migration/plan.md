@@ -1002,6 +1002,12 @@ Run this as a paired design loop with workstream 6. The result contract must be 
 - The next narrow OpenAPI follow-on should therefore be `openapi/render-openapi-document-model-from-path-items`.
 - That is the narrowest dependency-safe next slice because the runtime now has deterministic path-item contracts plus reusable schema components, but still lacks a single final document-model seam that assembles those facts into one host-facing OpenAPI document before any endpoint/serialization polish.
 - The live tracker should therefore keep `activeWorkstream` as `openapi` and advance `nextReadySlice` to `openapi/render-openapi-document-model-from-path-items` unless a review gate or blocker appears.
+- The OpenAPI document-model slice is now complete locally:
+  - `Blueprint.Runtime.Http.OpenApiDocumentRenderingContext.Create(pathItemRendering)` now assembles the deterministic path-item inventory and reusable schema-component inventory into one host-facing runtime document contract.
+  - the seam deliberately stays model-only and exposes ordered `Paths` plus ordered `SchemaComponents`, leaving titles/tags/customization hooks, rendered OpenAPI payload output, and endpoint exposure for later deliberate follow-ons.
+- The next narrow OpenAPI follow-on should therefore be `openapi/render-openapi-output-from-document-model`.
+- That is the narrowest dependency-safe next slice because the runtime now has one deterministic document contract, but there is still no output-facing seam that turns that model into the final OpenAPI payload or hosted document surface.
+- The live tracker should therefore keep `activeWorkstream` as `openapi` and advance `nextReadySlice` to `openapi/render-openapi-output-from-document-model` unless a review gate or blocker appears.
 
 ## 8. Error model and exception handling
 

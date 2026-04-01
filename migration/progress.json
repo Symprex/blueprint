@@ -12,14 +12,14 @@
   "current": {
     "activeWorkstream": "openapi",
     "nextReadySlice": {
+      "id": "openapi/render-openapi-output-from-document-model",
+      "workstream": "openapi",
+      "title": "Render OpenAPI output from document model"
+    },
+    "lastCompletedSlice": {
       "id": "openapi/render-openapi-document-model-from-path-items",
       "workstream": "openapi",
       "title": "Render OpenAPI document model from path items"
-    },
-    "lastCompletedSlice": {
-      "id": "openapi/render-openapi-path-items-from-operation-models",
-      "workstream": "openapi",
-      "title": "Render OpenAPI path items from operation models"
     },
     "openReviewGate": null
   },
