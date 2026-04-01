@@ -413,3 +413,24 @@ Implement after HTTP descriptors, error-model metadata, and resource metadata ar
 - Autonomous next slice:
   - Continue with `openapi/render-openapi-output-from-document-model`.
   - That is the narrowest safe follow-on because the runtime now has one deterministic document contract, but there is still no output-facing seam that projects that model into the final OpenAPI payload or hosted document shape.
+- Completed `openapi/render-openapi-output-from-document-model`.
+- Why it was the right follow-on:
+  - the document-assembly slice deliberately stopped at the model layer, deferring any JSON serialization or output shape
+  - later endpoint-wiring or host-exposure work still needed a stable rendered output contract before widening into HTTP endpoint registration or customization hooks
+- What landed in this slice:
+  - new `Blueprint.Runtime.Http.OpenApiOutputRenderingContext.Create(documentRendering)` seam that projects the assembled `OpenApiDocumentRenderingContext` into a standards-conformant OpenAPI 3.x JSON string using `Utf8JsonWriter`
+  - the rendered output carries the `openapi` version string, a stub `info` object, a `paths` object keyed by route template with lowercased HTTP method slots and `operationId` / `responses` per method, and a `components/schemas` section for covered reusable body types
+  - response content uses `$ref` for single-schema responses and `oneOf` for multi-schema unions; uncovered responses emit no `content`
+  - the seam deliberately defers titles, tags, customization hooks, and HTTP endpoint registration to later slices
+- Proof closed for this slice:
+  - failing-then-passing runtime integration proof for a generated app showing valid OpenAPI 3.x JSON with expected path, operationId, status-code responses, and `$ref`-linked schema components
+  - failing-then-passing runtime integration proofs for synthetic document inputs covering empty paths, empty components, and correct schema component structure with `required` and `properties`
+  - fresh repo verification sweep: `dotnet format`, `dotnet build .\Blueprint.sln --no-restore`, and all three test suites (312 + 103 + 45 = 460 passing)
+- Deferred by design:
+  - HTTP endpoint exposure of the rendered OpenAPI document
+  - titles, tags, schema processors, and other post-configuration hooks
+  - validation/data-annotation constraints not surfaced by `System.Text.Json` metadata
+  - runtime serializer switching away from `Newtonsoft.Json`
+- Autonomous next slice:
+  - Continue with `openapi/expose-openapi-document-via-http-endpoint`.
+  - That is the narrowest safe follow-on because the runtime now has a rendered OpenAPI JSON string, but there is still no HTTP endpoint that serves it. Wiring the output to an endpoint is the next narrowest gap before any consumer can retrieve the document.
