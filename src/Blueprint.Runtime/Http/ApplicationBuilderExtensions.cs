@@ -25,10 +25,15 @@ public static class EndpointRouteBuilderExtensions
     /// <typeparam name="TExec">The generated executor type that can route those operations.</typeparam>
     /// <param name="endpoints">The endpoint builder to register with.</param>
     /// <param name="basePath">A base path to prepend to all routes.</param>
+    /// <param name="configureOpenApi">
+    /// An optional delegate that customises the OpenAPI <c>info</c> block (title, version, description).
+    /// When <see langword="null"/> the defaults from <see cref="OpenApiInfoOptions"/> are used.
+    /// </param>
     /// <returns>A builder that allows adding metadata / conventions to all mapped endpoints.</returns>
     public static IEndpointConventionBuilder MapBlueprintApi<T, TExec>(
         this IEndpointRouteBuilder endpoints,
-        string basePath) where T : BlueprintApp, new()
+        string basePath,
+        Action<OpenApiInfoOptions>? configureOpenApi = null) where T : BlueprintApp, new()
                          where TExec : BlueprintAppExecutor
     {
         // Ensure ends with a slash, but only one
@@ -51,9 +56,16 @@ public static class EndpointRouteBuilderExtensions
         var builders = new List<IEndpointConventionBuilder>();
 
         // OpenAPI is a required part of the HTTP host and is always exposed regardless of environment.
+        OpenApiInfoOptions? infoOptions = null;
+        if (configureOpenApi is not null)
+        {
+            infoOptions = new OpenApiInfoOptions();
+            configureOpenApi(infoOptions);
+        }
+
         var openApiBuilder = endpoints.Map(
             RoutePatternFactory.Parse(basePath.TrimEnd('/') + "/.blueprint/openapi.json"),
-            OpenApiDocumentEndpoint.Create(runtimeModel));
+            OpenApiDocumentEndpoint.Create(runtimeModel, infoOptions));
         openApiBuilder.WithDisplayName("GET Blueprint OpenAPI document");
         openApiBuilder.WithMetadata(new HttpMethodMetadata([HttpMethods.Get]));
 

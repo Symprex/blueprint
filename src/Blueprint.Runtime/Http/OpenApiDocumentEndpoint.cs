@@ -14,12 +14,16 @@ internal static class OpenApiDocumentEndpoint
     /// so each request receives a pre-rendered response without repeating the rendering chain per call.
     /// </summary>
     /// <param name="app">The Blueprint app whose registered operations should be projected into the OpenAPI document.</param>
+    /// <param name="infoOptions">
+    /// Optional customisation for the OpenAPI <c>info</c> block (title, version, description).
+    /// When <see langword="null"/> the defaults from <see cref="OpenApiInfoOptions"/> are used.
+    /// </param>
     /// <returns>A request delegate that writes the rendered OpenAPI 3.x JSON to the response.</returns>
-    public static RequestDelegate Create(BlueprintApp app)
+    public static RequestDelegate Create(BlueprintApp app, OpenApiInfoOptions? infoOptions = null)
     {
         ArgumentNullException.ThrowIfNull(app);
 
-        var json = RenderDocument(app);
+        var json = RenderDocument(app, infoOptions);
 
         return async httpContext =>
         {
@@ -29,7 +33,7 @@ internal static class OpenApiDocumentEndpoint
         };
     }
 
-    private static string RenderDocument(BlueprintApp app)
+    private static string RenderDocument(BlueprintApp app, OpenApiInfoOptions? infoOptions)
     {
         var documentBuilderContext = OpenApiDocumentBuilderContext.Create(app);
         var schemaProjectionContext = OpenApiSchemaProjectionContext.Create(documentBuilderContext);
@@ -39,6 +43,6 @@ internal static class OpenApiDocumentEndpoint
         var pathItemContext = OpenApiPathItemRenderingContext.Create(operationContext);
         var documentContext = OpenApiDocumentRenderingContext.Create(pathItemContext);
 
-        return OpenApiOutputRenderingContext.Create(documentContext).Json;
+        return OpenApiOutputRenderingContext.Create(documentContext, infoOptions).Json;
     }
 }

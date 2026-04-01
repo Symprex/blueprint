@@ -80,6 +80,66 @@ public class OpenApiDocumentEndpointTests
         endpoint.Should().NotBeNull();
     }
 
+    [Fact]
+    public async Task When_configure_openapi_sets_custom_title_then_info_title_appears_in_rendered_json()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<OpenApiTestBlueprintApp, BlueprintAppExecutor>(
+            "api/",
+            configureOpenApi: options => options.Title = "My Custom API");
+
+        var endpoint = FindEndpoint(endpoints, "api/.blueprint/openapi.json")!;
+        var response = await InvokeEndpointAsync(endpoint);
+
+        var doc = JsonDocument.Parse(response.Body);
+        doc.RootElement.GetProperty("info").GetProperty("title").GetString().Should().Be("My Custom API");
+    }
+
+    [Fact]
+    public async Task When_configure_openapi_sets_custom_version_then_info_version_appears_in_rendered_json()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<OpenApiTestBlueprintApp, BlueprintAppExecutor>(
+            "api/",
+            configureOpenApi: options => options.Version = "2.5.0");
+
+        var endpoint = FindEndpoint(endpoints, "api/.blueprint/openapi.json")!;
+        var response = await InvokeEndpointAsync(endpoint);
+
+        var doc = JsonDocument.Parse(response.Body);
+        doc.RootElement.GetProperty("info").GetProperty("version").GetString().Should().Be("2.5.0");
+    }
+
+    [Fact]
+    public async Task When_configure_openapi_sets_description_then_info_description_appears_in_rendered_json()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<OpenApiTestBlueprintApp, BlueprintAppExecutor>(
+            "api/",
+            configureOpenApi: options => options.Description = "A detailed description.");
+
+        var endpoint = FindEndpoint(endpoints, "api/.blueprint/openapi.json")!;
+        var response = await InvokeEndpointAsync(endpoint);
+
+        var doc = JsonDocument.Parse(response.Body);
+        doc.RootElement.GetProperty("info").GetProperty("description").GetString().Should().Be("A detailed description.");
+    }
+
+    [Fact]
+    public async Task When_configure_openapi_is_not_provided_then_info_uses_default_title_and_version()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<OpenApiTestBlueprintApp, BlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/.blueprint/openapi.json")!;
+        var response = await InvokeEndpointAsync(endpoint);
+
+        var doc = JsonDocument.Parse(response.Body);
+        var info = doc.RootElement.GetProperty("info");
+        info.GetProperty("title").GetString().Should().Be("Blueprint API");
+        info.GetProperty("version").GetString().Should().Be("1.0.0");
+    }
+
     private static async Task<TestEndpointInvocationResult> InvokeEndpointAsync(RouteEndpoint endpoint)
     {
         await using var body = new MemoryStream();

@@ -26,44 +26,56 @@ public sealed record OpenApiOutputRenderingContext(
     /// the <c>$ref</c> pointer format to the matching component entry.
     /// </summary>
     /// <param name="documentRendering">The assembled document model to render.</param>
+    /// <param name="infoOptions">
+    /// Optional customisation for the <c>info</c> block. When <see langword="null"/> the defaults in
+    /// <see cref="OpenApiInfoOptions"/> are used.
+    /// </param>
     /// <returns>The rendered output context carrying the JSON string.</returns>
-    public static OpenApiOutputRenderingContext Create(OpenApiDocumentRenderingContext documentRendering)
+    public static OpenApiOutputRenderingContext Create(
+        OpenApiDocumentRenderingContext documentRendering,
+        OpenApiInfoOptions? infoOptions = null)
     {
         ArgumentNullException.ThrowIfNull(documentRendering);
 
-        var json = RenderJson(documentRendering);
+        var json = RenderJson(documentRendering, infoOptions ?? new OpenApiInfoOptions());
         return new OpenApiOutputRenderingContext(documentRendering, json);
     }
 
-    private static string RenderJson(OpenApiDocumentRenderingContext document)
+    private static string RenderJson(OpenApiDocumentRenderingContext document, OpenApiInfoOptions infoOptions)
     {
         var buffer = new ArrayBufferWriter<byte>();
         using var writer = new Utf8JsonWriter(buffer, new JsonWriterOptions { Indented = true });
 
-        WriteDocument(writer, document);
+        WriteDocument(writer, document, infoOptions);
         writer.Flush();
 
         return Encoding.UTF8.GetString(buffer.WrittenSpan);
     }
 
-    private static void WriteDocument(Utf8JsonWriter writer, OpenApiDocumentRenderingContext document)
+    private static void WriteDocument(Utf8JsonWriter writer, OpenApiDocumentRenderingContext document, OpenApiInfoOptions infoOptions)
     {
         writer.WriteStartObject();
 
         writer.WriteString("openapi", OpenApiVersion);
-        WriteInfo(writer);
+        WriteInfo(writer, infoOptions);
         WritePaths(writer, document.Paths);
         WriteComponents(writer, document.SchemaComponents);
 
         writer.WriteEndObject();
     }
 
-    private static void WriteInfo(Utf8JsonWriter writer)
+    private static void WriteInfo(Utf8JsonWriter writer, OpenApiInfoOptions infoOptions)
     {
         writer.WritePropertyName("info");
         writer.WriteStartObject();
-        writer.WriteString("title", "Blueprint API");
-        writer.WriteString("version", "1.0.0");
+        writer.WriteString("title", infoOptions.Title);
+        writer.WriteString("version", infoOptions.Version);
+
+        if (!string.IsNullOrEmpty(infoOptions.Description))
+        {
+            writer.WriteString("description", infoOptions.Description);
+        }
+
         writer.WriteEndObject();
     }
 

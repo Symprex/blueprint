@@ -12,14 +12,14 @@
   "current": {
     "activeWorkstream": "openapi",
     "nextReadySlice": {
+      "id": "openapi/integrate-cross-cutting-failure-outcomes-in-openapi-document",
+      "workstream": "openapi",
+      "title": "Integrate cross-cutting failure outcomes in OpenAPI document"
+    },
+    "lastCompletedSlice": {
       "id": "openapi/configure-openapi-info-metadata",
       "workstream": "openapi",
       "title": "Configure OpenAPI info metadata (title, version, description)"
-    },
-    "lastCompletedSlice": {
-      "id": "openapi/expose-openapi-document-via-http-endpoint",
-      "workstream": "openapi",
-      "title": "Expose OpenAPI document via HTTP endpoint"
     },
     "openReviewGate": null
   },

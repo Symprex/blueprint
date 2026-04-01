@@ -455,3 +455,45 @@ Implement after HTTP descriptors, error-model metadata, and resource metadata ar
 - Autonomous next slice:
   - Continue with `openapi/configure-openapi-info-metadata`.
   - That is the narrowest safe follow-on because the endpoint now serves a valid OpenAPI document, but the stub `info` block hardcodes `"Blueprint API"` and `"1.0.0"`. Providing a `ConfigureOpenApi(Action<OpenApiInfoOptions>)` customisation seam on `MapBlueprintApi` is the smallest consumer-visible improvement that builds on the complete rendering pipeline without widening into tags, schema processors, or discriminator work.
+- Completed `openapi/configure-openapi-info-metadata`.
+- Why it was the right follow-on:
+  - the HTTP endpoint slice deliberately hardcoded `"Blueprint API"` / `"1.0.0"` in the `info` block
+  - that made the rendered document unusable for any consumer with a different API identity without source edits
+  - adding a `configureOpenApi: Action<OpenApiInfoOptions>?` optional parameter to `MapBlueprintApi` is the narrowest consumer-facing improvement without touching tags, schema processors, or discriminators
+- What landed in this slice:
+  - new `Blueprint.Runtime.Http.OpenApiInfoOptions` sealed class with `Title` (default `"Blueprint API"`), `Version` (default `"1.0.0"`), and nullable `Description` (omitted from output when null/empty)
+  - `OpenApiOutputRenderingContext.Create` extended with an optional `OpenApiInfoOptions?` parameter; `WriteInfo` now uses the provided or default options and emits `description` only when non-null/non-empty
+  - `OpenApiDocumentEndpoint.Create` extended with an optional `OpenApiInfoOptions?` parameter, threaded to `OpenApiOutputRenderingContext.Create`
+  - `MapBlueprintApi<T, TExec>` extended with an optional `Action<OpenApiInfoOptions>? configureOpenApi` parameter; when provided, the delegate is invoked against a fresh `OpenApiInfoOptions` instance before passing to the endpoint factory
+- Proof closed for this slice:
+  - four new failing-then-passing artifact tests: custom title in `info.title`, custom version in `info.version`, optional description in `info.description`, and default values when `ConfigureOpenApi` is not provided
+  - full repo verification sweep: all three test suites (321 + 103 + 45 = 469 passing)
+- Deferred by design:
+  - operation-level tags from `ApiOperations` metadata
+  - schema component key sanitisation for tooling edge cases
+  - validation/data-annotation constraints not surfaced by `System.Text.Json` metadata
+  - runtime serializer switching away from `Newtonsoft.Json`
+- Autonomous next slice:
+  - Continue with `openapi/integrate-cross-cutting-failure-outcomes-in-openapi-document`.
+  - That is the narrowest safe follow-on because all existing cross-cutting failure outcomes (auth 401, validation 400, unhandled exception 500) are already tracked in `OperationHttpResponseMetadata` via `FlattenedResultOutcomeModule`, but the current rendering chain still only surfaces the operation-specific outcomes from descriptors. Making those cross-cutting failures appear in the generated OpenAPI document is the next smallest gap before the document is genuinely complete for real API consumers.
+- Completed `openapi/expose-openapi-document-via-http-endpoint`.
+- Why it was the right follow-on:
+  - the output-rendering slice deliberately stopped at producing a JSON string, deferring HTTP host integration
+  - the rendered document remained inaccessible to any consumer until an HTTP endpoint served it; endpoint wiring was the narrowest remaining gap
+- What landed in this slice:
+  - new `Blueprint.Runtime.Http.OpenApiDocumentEndpoint` static factory that runs the full rendering chain once at `MapBlueprintApi<T, TExec>` call time and returns a pre-rendered `RequestDelegate`
+  - unconditional (always-on) OpenAPI endpoint registered at `{basePath}/.blueprint/openapi.json` before the operation loop in `ApplicationBuilderExtensions.MapBlueprintApi`
+  - stress-test baseline updated to expect `descriptors.Count + 5` endpoints and to verify the OpenAPI route pattern alongside the four manifest inspection route patterns
+- Proof closed for this slice:
+  - failing-then-passing artifact tests for five endpoint scenarios: endpoint present at the expected path, trailing-slash path normalisation, HTTP 200 + `application/json` response, valid OpenAPI 3.x JSON body with expected keys, and always-on status in a non-development environment
+  - stress-test regression fixed and re-verified: `ManifestInspectionEndpointStressTests` now tracks the OpenAPI route in `requiredRoutePatterns` and expects `+ 5` total endpoints
+  - fresh repo verification sweep: all three test suites (317 + 103 + 45 = 465 passing)
+- Deferred by design:
+  - `info` block customisation (title, version, description via `ConfigureOpenApi` hook)
+  - operation-level tags from `ApiOperations` metadata
+  - schema component key sanitisation for tooling edge cases
+  - validation/data-annotation constraints not surfaced by `System.Text.Json` metadata
+  - runtime serializer switching away from `Newtonsoft.Json`
+- Autonomous next slice:
+  - Continue with `openapi/configure-openapi-info-metadata`.
+  - That is the narrowest safe follow-on because the endpoint now serves a valid OpenAPI document, but the stub `info` block hardcodes `"Blueprint API"` and `"1.0.0"`. Providing a `ConfigureOpenApi(Action<OpenApiInfoOptions>)` customisation seam on `MapBlueprintApi` is the smallest consumer-visible improvement that builds on the complete rendering pipeline without widening into tags, schema processors, or discriminator work.
