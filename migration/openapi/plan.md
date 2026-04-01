@@ -353,3 +353,23 @@ Implement after HTTP descriptors, error-model metadata, and resource metadata ar
 - Autonomous next slice:
   - Continue with `openapi/project-operation-http-method-metadata-from-descriptor-attributes`.
   - That is the narrowest safe follow-on because operation rendering now binds identity and URL formats onto response objects, but path-item/document assembly still needs stable HTTP method metadata and the current repo only exposes dormant `HttpMethodAttribute` contracts plus commented legacy runtime hooks instead of a live descriptor/runtime seam.
+- Completed `openapi/project-operation-http-method-metadata-from-descriptor-attributes`.
+- Why it was the right follow-on:
+  - operation models already exposed stable identity, URL formats, and response objects, but later path-item/document assembly still had no trustworthy HTTP method contract to consume
+  - projecting HTTP methods through descriptors kept the next OpenAPI seam generator-backed and deterministic instead of re-reading attributes or re-deriving command/query conventions at runtime
+- What landed in this slice:
+  - new additive descriptor/runtime feature data `OperationHttpMethodMetadataFeatureData` carrying the ordered HTTP method inventory for HTTP-exposed operations
+  - new `OperationHttpMethodMetadataModule` contributor that projects explicit `[HttpMethod(...)]` / `[HttpGet]` / `[HttpPost]` / `[HttpPut]` / `[HttpPatch]` / `[HttpDelete]` overrides, otherwise falls back to the Blueprint convention of `POST` for commands and `GET` otherwise
+  - the same contributor now fails build-time invalid explicit method contracts with `BPOA001` when an `HttpMethod` declaration is blank or whitespace-only
+  - `Blueprint.Runtime.Http.OpenApiOperationRenderingContext.Create(responseObjects)` now carries ordered `HttpMethods` alongside `OperationName`, `OperationTypeName`, `UrlFormats`, and rendered responses
+- Proof closed for this slice:
+  - failing-then-passing descriptor-source proofs for conventional query/command defaults, explicit method override, ordered distinct multi-method projection, and invalid blank explicit method diagnostics
+  - failing-then-passing runtime integration proofs for `Configure().GetFeatureData<OperationHttpMethodMetadataFeatureData>()` on generated descriptors
+  - failing-then-passing runtime integration proofs for `OpenApiOperationRenderingContext` exposing ordered `HttpMethods` on generated operation models
+- Deferred by design:
+  - path-item/path grouping and full OpenAPI document emission
+  - validation/data-annotation constraints not surfaced by `System.Text.Json` metadata
+  - runtime serializer switching away from `Newtonsoft.Json`
+- Autonomous next slice:
+  - Continue with `openapi/render-openapi-path-items-from-operation-models`.
+  - That is the narrowest safe follow-on because operation models now expose stable identity, URL formats, HTTP methods, and rendered responses, so the next missing OpenAPI seam is grouping those operation models into deterministic path-item contracts before widening into full document emission.

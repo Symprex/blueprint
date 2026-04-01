@@ -44,7 +44,8 @@
 
   <Target Name="GetDependencyTargetPaths">
     <ItemGroup>
-      <TargetPathWithTargetPlatformMoniker Include="$(MSBuildThisFileDirectory)..\Blueprint.SourceGenerator.CodeWriter\bin\$(Configuration)\netstandard2.0\Blueprint.SourceGenerator.CodeWriter.dll" IncludeRuntimeDependency="false" />
+      <!-- Match CodeWriter's evaluated output layout instead of assuming configuration is part of the path. -->
+      <TargetPathWithTargetPlatformMoniker Include="$(MSBuildThisFileDirectory)..\Blueprint.SourceGenerator.CodeWriter\$(OutputPath)Blueprint.SourceGenerator.CodeWriter.dll" IncludeRuntimeDependency="false" />
     </ItemGroup>
   </Target>
 </Project>

@@ -988,6 +988,13 @@ Run this as a paired design loop with workstream 6. The result contract must be 
 - The next narrow OpenAPI follow-on should therefore be `openapi/project-operation-http-method-metadata-from-descriptor-attributes`.
 - That is the narrowest dependency-safe next slice because operation rendering now exposes stable identity plus route formats, but path-item/document assembly still depends on trustworthy HTTP method metadata and the current repo only has dormant `[HttpMethod(...)]` contracts plus commented `HttpOperationFeatureData` runtime hooks rather than a live projected seam.
 - The live tracker should therefore keep `activeWorkstream` as `openapi` and advance `nextReadySlice` to `openapi/project-operation-http-method-metadata-from-descriptor-attributes` unless a review gate or blocker appears.
+- The OpenAPI HTTP-method metadata slice is now complete locally:
+  - generated descriptors now publish additive `OperationHttpMethodMetadataFeatureData`, projected by `OperationHttpMethodMetadataModule` for HTTP-exposed operations only, using explicit `[HttpMethod(...)]` / shorthand HTTP method attributes when present and otherwise the Blueprint convention of `POST` for commands and `GET` otherwise.
+  - the same compile-time seam now fails invalid blank explicit method contracts with `BPOA001`, and `Blueprint.Runtime.Http.OpenApiOperationRenderingContext.Create(responseObjects)` carries ordered `HttpMethods` so later path/document work can consume descriptor-published method facts without rediscovering attributes or conventions.
+- The focused proof set is green: descriptor-source proofs cover conventional defaults, explicit overrides, ordered distinct multi-method projection, and invalid blank explicit method diagnostics; integration proofs cover both runtime `Configure().GetFeatureData<OperationHttpMethodMetadataFeatureData>()` behavior and `OpenApiOperationRenderingContext` exposing ordered `HttpMethods`.
+- The next narrow OpenAPI follow-on should therefore be `openapi/render-openapi-path-items-from-operation-models`.
+- That is the narrowest dependency-safe next slice because operation models now expose stable identity, route formats, HTTP methods, and rendered responses, but the runtime still lacks a path-item seam that groups those facts by route/method before widening into full document emission.
+- The live tracker should therefore keep `activeWorkstream` as `openapi` and advance `nextReadySlice` to `openapi/render-openapi-path-items-from-operation-models` unless a review gate or blocker appears.
 
 ## 8. Error model and exception handling
 

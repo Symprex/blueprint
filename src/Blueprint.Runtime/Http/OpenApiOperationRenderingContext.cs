@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using Blueprint.Model;
 
 namespace Blueprint.Runtime.Http;
 
@@ -31,6 +32,11 @@ public sealed record OpenApiOperationRenderingContext(
 
     private static OpenApiOperationModel CreateOperation(OpenApiResponseObjectOperationContext operation)
     {
+        var httpMethods = operation.Operation.TryGetFeatureData<OperationHttpMethodMetadataFeatureData>(out var httpMethodMetadata)
+            ? httpMethodMetadata.HttpMethods
+                .OrderBy(static httpMethod => httpMethod, StringComparer.Ordinal)
+                .ToImmutableArray()
+            : ImmutableArray<string>.Empty;
         var urlFormats = operation.Operation.Urls
             .Select(static url => url.UrlFormat)
             .OrderBy(static urlFormat => urlFormat, StringComparer.Ordinal)
@@ -39,6 +45,7 @@ public sealed record OpenApiOperationRenderingContext(
         return new OpenApiOperationModel(
             operation.Operation.Name,
             operation.Operation.OperationType.FullName ?? operation.Operation.OperationType.Name,
+            httpMethods,
             urlFormats,
             operation.Responses);
     }
@@ -50,10 +57,12 @@ public sealed record OpenApiOperationRenderingContext(
 /// </summary>
 /// <param name="OperationName">The stable descriptor name for the operation.</param>
 /// <param name="OperationTypeName">The CLR type name for the operation used as stable identity across later seams.</param>
+/// <param name="HttpMethods">The deterministic HTTP method inventory published for the operation.</param>
 /// <param name="UrlFormats">The deterministic route templates published for the operation.</param>
 /// <param name="Responses">The rendered OpenAPI-style response objects for the operation.</param>
 public sealed record OpenApiOperationModel(
     string OperationName,
     string OperationTypeName,
+    ImmutableArray<string> HttpMethods,
     ImmutableArray<string> UrlFormats,
     ImmutableArray<OpenApiResponseObjectModel> Responses);

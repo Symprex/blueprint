@@ -21,9 +21,44 @@ public class AppModelOpenApiOperationRenderingContextTests
             .Operations.Single(static operation => operation.OperationTypeName == (typeof(HttpResponseMetadataQueryOp).FullName ?? typeof(HttpResponseMetadataQueryOp).Name));
 
         operationContext.OperationName.Should().Be(registeredDescriptorName);
+        operationContext.HttpMethods.Should().Equal("GET");
         operationContext.UrlFormats.Should().Equal("/openapi/http-response-metadata");
         operationContext.Responses.Select(static response => response.StatusCode).Should().Equal(200, 422, 500);
         operationContext.Responses[0].Content.Select(static content => content.MediaType).Should().Equal("application/json");
+    }
+
+    [Fact]
+    public void When_http_command_uses_the_conventional_method_then_operation_rendering_context_exposes_post_method_metadata()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var documentContext = OpenApiDocumentBuilderContext.Create(app);
+        var schemaContext = OpenApiSchemaProjectionContext.Create(documentContext);
+        var responseSchemaContext = OpenApiResponseSchemaReferenceProjectionContext.Create(schemaContext);
+        var responseObjectContext = OpenApiResponseObjectRenderingContext.Create(responseSchemaContext);
+
+        var operationContext = OpenApiOperationRenderingContext.Create(responseObjectContext)
+            .Operations.Single(static operation => operation.OperationTypeName == (typeof(HttpMethodConventionCommandOp).FullName ?? typeof(HttpMethodConventionCommandOp).Name));
+
+        operationContext.HttpMethods.Should().Equal("POST");
+        operationContext.UrlFormats.Should().Equal("/openapi/http-method-convention-command");
+        operationContext.Responses.Select(static response => response.StatusCode).Should().Equal(200, 422, 500);
+    }
+
+    [Fact]
+    public void When_http_operation_declares_multiple_explicit_methods_then_operation_rendering_context_preserves_the_ordered_method_inventory()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var documentContext = OpenApiDocumentBuilderContext.Create(app);
+        var schemaContext = OpenApiSchemaProjectionContext.Create(documentContext);
+        var responseSchemaContext = OpenApiResponseSchemaReferenceProjectionContext.Create(schemaContext);
+        var responseObjectContext = OpenApiResponseObjectRenderingContext.Create(responseSchemaContext);
+
+        var operationContext = OpenApiOperationRenderingContext.Create(responseObjectContext)
+            .Operations.Single(static operation => operation.OperationTypeName == (typeof(HttpMethodMultipleExplicitQueryOp).FullName ?? typeof(HttpMethodMultipleExplicitQueryOp).Name));
+
+        operationContext.HttpMethods.Should().Equal("GET", "POST");
+        operationContext.UrlFormats.Should().Equal("/openapi/http-method-multi-explicit-query");
+        operationContext.Responses.Select(static response => response.StatusCode).Should().Equal(200, 422, 500);
     }
 
     [Fact]

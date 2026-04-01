@@ -70,6 +70,20 @@ Current operation-discovery IDs in active use:
 - `BPOD001`: descriptor planning recorded host exposure that no enabled host contributor supports.
 - `BPOD002`: descriptor planning recorded exposure to more than one enabled host contributor for the same operation.
 
+### OpenAPI descriptor diagnostics
+
+OpenAPI descriptor metadata checks should use their own stable range instead of borrowing the link, validation, or host-exposure IDs.
+
+Reserved direction:
+
+| Range | Meaning |
+| --- | --- |
+| `BPOA001`-`BPOA099` | OpenAPI descriptor diagnostics for invalid OpenAPI-facing declarative contracts that the generator can prove at build time |
+
+Current OpenAPI descriptor IDs in active use:
+
+- `BPOA001`: `HttpMethodAttribute` declares a null, empty, or whitespace-only explicit HTTP method for an HTTP-exposed operation.
+
 ### Validation contributor diagnostics
 
 Validation-oriented compile-time checks should use a dedicated range instead of borrowing the link or foundation IDs.
