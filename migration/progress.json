@@ -12,14 +12,14 @@
   "current": {
     "activeWorkstream": "openapi",
     "nextReadySlice": {
+      "id": "openapi/project-operation-http-method-metadata-from-descriptor-attributes",
+      "workstream": "openapi",
+      "title": "Project operation HTTP method metadata from descriptor attributes"
+    },
+    "lastCompletedSlice": {
       "id": "openapi/render-openapi-operations-from-response-objects",
       "workstream": "openapi",
       "title": "Render OpenAPI operations from response objects"
-    },
-    "lastCompletedSlice": {
-      "id": "openapi/render-openapi-response-objects-from-schema-components",
-      "workstream": "openapi",
-      "title": "Render OpenAPI response objects from schema components"
     },
     "openReviewGate": null
   },

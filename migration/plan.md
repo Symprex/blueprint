@@ -982,6 +982,12 @@ Run this as a paired design loop with workstream 6. The result contract must be 
 - The next narrow OpenAPI follow-on should therefore be `openapi/render-openapi-operations-from-response-objects`.
 - That is the narrowest dependency-safe next slice because response objects now exist as a stable runtime contract, but the runtime still lacks an operation-level OpenAPI seam that binds operation identity and URLs onto those responses before widening into full document emission.
 - The live tracker should therefore keep `activeWorkstream` as `openapi` and advance `nextReadySlice` to `openapi/render-openapi-operations-from-response-objects` unless a review gate or blocker appears.
+- The next OpenAPI operation-rendering slice is now complete locally:
+  - `Blueprint.Runtime.Http.OpenApiOperationRenderingContext.Create(responseObjects)` now binds descriptor-published operation identity and deterministic URL-format ordering onto the previously rendered response objects, producing stable per-operation OpenAPI models without widening into path grouping or full document emission.
+  - The proof set now includes a red-to-green integration proof for the generated `HttpResponseMetadataQueryOp` path plus manual-app proofs that multi-URL operations sort `UrlFormats` ordinally and zero-URL operations remain representable without inventing path/document behavior.
+- The next narrow OpenAPI follow-on should therefore be `openapi/project-operation-http-method-metadata-from-descriptor-attributes`.
+- That is the narrowest dependency-safe next slice because operation rendering now exposes stable identity plus route formats, but path-item/document assembly still depends on trustworthy HTTP method metadata and the current repo only has dormant `[HttpMethod(...)]` contracts plus commented `HttpOperationFeatureData` runtime hooks rather than a live projected seam.
+- The live tracker should therefore keep `activeWorkstream` as `openapi` and advance `nextReadySlice` to `openapi/project-operation-http-method-metadata-from-descriptor-attributes` unless a review gate or blocker appears.
 
 ## 8. Error model and exception handling
 

@@ -334,3 +334,22 @@ Implement after HTTP descriptors, error-model metadata, and resource metadata ar
 - Autonomous next slice:
   - Continue with `openapi/render-openapi-operations-from-response-objects`.
   - That is the narrowest safe follow-on because response objects now exist as stable runtime contracts, but the runtime still lacks an operation-level OpenAPI seam that binds operation identity and URLs onto those rendered responses before widening into full document assembly.
+- Completed `openapi/render-openapi-operations-from-response-objects`.
+- Why it was the right follow-on:
+  - response objects were already stable runtime contracts, but the OpenAPI chain still had no seam that bound descriptor-published operation identity and route formats onto those responses
+  - rendering operation models remained narrower and easier to verify than jumping straight to path grouping or full document emission
+- What landed in this slice:
+  - new `Blueprint.Runtime.Http.OpenApiOperationRenderingContext.Create(responseObjects)` seam that composes the response-object layer with operation identity and deterministic route-format ordering
+  - per-operation `OpenApiOperationModel` entries now carry the descriptor-published `OperationName`, stable CLR `OperationTypeName`, ordinal-sorted `UrlFormats`, and the previously rendered response objects without widening into path-item or document assembly
+  - manual integration fixtures now prove the seam preserves empty URL sets and sorts multiple URL formats deterministically instead of depending on descriptor registration order
+- Proof closed for this slice:
+  - failing-then-passing runtime integration proof for a covered generated app using `IntegrationTestBlueprintApp`
+  - failing-then-passing runtime integration proofs for manual HTTP app shells covering deterministic multi-URL ordering and zero-URL preservation
+- Deferred by design:
+  - projecting HTTP method metadata for OpenAPI-visible operations
+  - path-item/path grouping and full OpenAPI document emission
+  - validation/data-annotation constraints not surfaced by `System.Text.Json` metadata
+  - runtime serializer switching away from `Newtonsoft.Json`
+- Autonomous next slice:
+  - Continue with `openapi/project-operation-http-method-metadata-from-descriptor-attributes`.
+  - That is the narrowest safe follow-on because operation rendering now binds identity and URL formats onto response objects, but path-item/document assembly still needs stable HTTP method metadata and the current repo only exposes dormant `HttpMethodAttribute` contracts plus commented legacy runtime hooks instead of a live descriptor/runtime seam.
