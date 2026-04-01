@@ -315,3 +315,22 @@ Implement after HTTP descriptors, error-model metadata, and resource metadata ar
 - Autonomous next slice:
   - Continue with `openapi/render-openapi-response-objects-from-schema-components`.
   - That is the narrowest safe follow-on because reusable schema components now exist in isolation, but the current response metadata still does not render stable OpenAPI response-object shapes that bind status codes and response-body metadata onto those components. Rendering response objects keeps response-level proof separate from operation/document assembly and is narrower than jumping straight to full document rendering.
+- Completed `openapi/render-openapi-response-objects-from-schema-components`.
+- Why it was the right follow-on:
+  - reusable schema components already existed in isolation, but the runtime still had no OpenAPI-facing response-object seam that reconnected status/body/result metadata to those rendered components
+  - rendering response objects remained narrower and easier to verify than widening directly into operation or full document assembly
+- What landed in this slice:
+  - new `Blueprint.Runtime.Http.OpenApiResponseObjectRenderingContext.Create(responseSchemaProjection)` seam that composes the response-schema-reference and schema-component seams without widening into operation/document assembly
+  - per-operation `OpenApiResponseObjectOperationContext` entries that preserve response ordering while rendering `OpenApiResponseObjectModel` instances with status code, body-presence flag, semantic result names, and deterministic JSON content entries for covered schema components
+  - uncovered apps or uncovered body types now keep the underlying response metadata but render no response content, preserving the existing coverage boundary instead of inventing runtime fallback schemas
+- Proof closed for this slice:
+  - failing-then-passing runtime integration proof for a covered generated app using `IntegrationTestBlueprintApp`
+  - failing-then-passing runtime integration proof for an uncovered manual app shell that registers the same HTTP descriptor but exposes no serializer context
+- Deferred by design:
+  - operation-level OpenAPI rendering that binds operation identity, URLs, and response objects together
+  - full OpenAPI document emission and HTTP endpoint wiring
+  - validation/data-annotation constraints not surfaced by `System.Text.Json` metadata
+  - runtime serializer switching away from `Newtonsoft.Json`
+- Autonomous next slice:
+  - Continue with `openapi/render-openapi-operations-from-response-objects`.
+  - That is the narrowest safe follow-on because response objects now exist as stable runtime contracts, but the runtime still lacks an operation-level OpenAPI seam that binds operation identity and URLs onto those rendered responses before widening into full document assembly.

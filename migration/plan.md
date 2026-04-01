@@ -976,9 +976,12 @@ Run this as a paired design loop with workstream 6. The result contract must be 
   - The seam intentionally stays schema-only: it consumes the existing schema projection contract without widening into response grouping, operation assembly, external OpenAPI-library ASTs, or final document emission.
   - The focused proof matrix is green: new failing-then-passing runtime integration proofs cover covered-schema rendering, uncovered apps with no rendered components, and richer property-metadata rendering from the isolated serializer-backed DTO fixture, and the nearby OpenAPI integration sweep (`OpenApiDocumentBuilderContext`, schema projection, property metadata, response-schema references, and component rendering) passes together.
 - Autonomous next OpenAPI follow-on after schema-component rendering:
-  - Stay in the OpenAPI workstream and render OpenAPI response objects from schema components.
-  - That is the narrowest dependency-safe next slice because reusable schema components now exist in isolation, but HTTP response families still do not render stable OpenAPI response-object shapes that bind status-code metadata to those components. Rendering response objects stays smaller than operation or full document assembly while reconnecting the already-landed response metadata seam to the new component inventory.
-  - The live tracker should therefore keep `activeWorkstream` as `openapi` and advance `nextReadySlice` to `openapi/render-openapi-response-objects-from-schema-components` unless a review gate or blocker appears.
+- Stay in the OpenAPI workstream and render OpenAPI response objects from schema components.
+- That is the narrowest dependency-safe next slice because reusable schema components now exist in isolation, but HTTP response families still do not render stable OpenAPI response-object shapes that bind status-code metadata to those components. Rendering response objects stays smaller than operation or full document assembly while reconnecting the already-landed response metadata seam to the new component inventory.
+- `Blueprint.Runtime.Http.OpenApiResponseObjectRenderingContext.Create(responseSchemaProjection)` now composes the response-schema-reference and schema-component seams into deterministic per-operation response objects, preserving status/body/result metadata and adding JSON content entries only when covered schema components exist.
+- The next narrow OpenAPI follow-on should therefore be `openapi/render-openapi-operations-from-response-objects`.
+- That is the narrowest dependency-safe next slice because response objects now exist as a stable runtime contract, but the runtime still lacks an operation-level OpenAPI seam that binds operation identity and URLs onto those responses before widening into full document emission.
+- The live tracker should therefore keep `activeWorkstream` as `openapi` and advance `nextReadySlice` to `openapi/render-openapi-operations-from-response-objects` unless a review gate or blocker appears.
 
 ## 8. Error model and exception handling
 
