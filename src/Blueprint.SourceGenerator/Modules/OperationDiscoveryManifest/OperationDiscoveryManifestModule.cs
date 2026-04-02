@@ -111,5 +111,12 @@ public sealed class OperationDiscoveryManifestModule : IBlueprintSourceGenerator
         return CSharpSymbolDisplay.FormatLiteral(value, quote: true);
     }
 
-    private sealed record DiscoveryPlanData(string Kind, string Namespace, string TypeName);
+    /// <summary>
+    /// Captures the stable discovery facts that other descriptor contributors can reuse without re-deriving operation
+    /// identity from Roslyn symbols independently.
+    /// </summary>
+    /// <param name="Kind">The approved operation kind.</param>
+    /// <param name="Namespace">The CLR namespace of the operation type.</param>
+    /// <param name="TypeName">The simple operation type name.</param>
+    internal sealed record DiscoveryPlanData(string Kind, string Namespace, string TypeName);
 }

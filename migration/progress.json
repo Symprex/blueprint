@@ -12,14 +12,14 @@
   "current": {
     "activeWorkstream": "openapi",
     "nextReadySlice": {
+      "id": "openapi/add-schema-processor-hooks-to-openapi-output",
+      "workstream": "openapi",
+      "title": "Add schema processor hooks to OpenAPI output"
+    },
+    "lastCompletedSlice": {
       "id": "openapi/add-tags-to-openapi-operations-from-operation-group-metadata",
       "workstream": "openapi",
       "title": "Add tags to OpenAPI operations from operation group metadata"
-    },
-    "lastCompletedSlice": {
-      "id": "openapi/sanitise-schema-component-keys-for-openapi-tooling-compatibility",
-      "workstream": "openapi",
-      "title": "Sanitise schema component keys for OpenAPI tooling compatibility"
     },
     "openReviewGate": null
   },

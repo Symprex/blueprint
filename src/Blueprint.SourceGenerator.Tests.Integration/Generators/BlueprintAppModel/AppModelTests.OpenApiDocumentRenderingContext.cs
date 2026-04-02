@@ -126,6 +126,7 @@ public class AppModelOpenApiDocumentRenderingContextTests
                             operationType.FullName ?? operationType.Name,
                             [httpMethod],
                             [urlFormat],
+                            ImmutableArray<string>.Empty,
                             ImmutableArray<OpenApiResponseObjectModel>.Empty),
                     ]),
             ]);

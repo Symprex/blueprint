@@ -1008,6 +1008,12 @@ Run this as a paired design loop with workstream 6. The result contract must be 
 - The next narrow OpenAPI follow-on should therefore be `openapi/render-openapi-output-from-document-model`.
 - That is the narrowest dependency-safe next slice because the runtime now has one deterministic document contract, but there is still no output-facing seam that turns that model into the final OpenAPI payload or hosted document surface.
 - The live tracker should therefore keep `activeWorkstream` as `openapi` and advance `nextReadySlice` to `openapi/render-openapi-output-from-document-model` unless a review gate or blocker appears.
+- The OpenAPI tags slice is now complete locally:
+  - descriptor generation now projects `OperationGroupMetadataFeatureData` for HTTP-exposed operations by reusing the approved discovery namespace facts from `OperationDiscoveryManifestModule`
+  - `OpenApiOperationRenderingContext` now carries ordered `Tags`, and `OpenApiOutputRenderingContext` now emits operation-level `tags` arrays in the rendered OpenAPI payload
+  - the current group-name convention intentionally derives from the last namespace segment until the broader `ApiOperations` / grouped-handler discovery workstream lands a richer provenance contract
+- The next narrow OpenAPI follow-on should therefore be `openapi/add-schema-processor-hooks-to-openapi-output`.
+- That is the narrowest dependency-safe next slice because titles and operation tags now both flow through the completed OpenAPI output seam, leaving schema processors as the remaining planned post-configuration hook in that same customization family while larger deferred items still require wider metadata or serializer work.
 
 ## 8. Error model and exception handling
 

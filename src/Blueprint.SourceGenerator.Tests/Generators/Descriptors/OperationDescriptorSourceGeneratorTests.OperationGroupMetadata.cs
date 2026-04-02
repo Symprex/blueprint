@@ -1,0 +1,25 @@
+using FluentAssertions;
+
+namespace Blueprint.SourceGenerator.Tests.Generators.OperationDescriptor;
+
+public class OperationDescriptorSourceGeneratorTestsOperationGroupMetadataTests
+{
+    [Fact]
+    public void When_http_operation_is_generated_then_descriptor_sets_operation_group_metadata_from_namespace()
+    {
+        var result = OperationDescriptorSourceGeneratorTests.Compile("""
+            [RootLink("/operation-group/default-query")]
+            public partial class DefaultQueryOperation : IQuery<string> {}
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var descriptorSource = result.Output
+            .Select(static tree => tree.ToString())
+            .FirstOrDefault(static source => source.Contains("DefaultQueryOperationDescriptor"));
+
+        descriptorSource.Should().NotBeNull();
+        descriptorSource!.Should().Contain(
+            "this.SetFeatureData(new global::Blueprint.Model.OperationGroupMetadataFeatureData(\"TestNamespace\"));");
+    }
+}

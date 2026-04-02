@@ -33,6 +33,7 @@ namespace TestNamespace
                 this.SetFeatureData(new global::Blueprint.Model.OperationSerializerContextCoverageFeatureData(global::System.Collections.Immutable.ImmutableArray.Create<string>("Microsoft.AspNetCore.Mvc.ValidationProblemDetails", "Microsoft.AspNetCore.Mvc.ProblemDetails")));
                 this.SetFeatureData(new global::Blueprint.Model.OperationDiscoveryFeatureData("operation", "TestNamespace", "OperationA"));
                 this.SetFeatureData(new global::Blueprint.Model.OperationHostExposureFeatureData(global::System.Collections.Immutable.ImmutableArray.Create("http")));
+                this.SetFeatureData(new global::Blueprint.Model.OperationGroupMetadataFeatureData("TestNamespace"));
             }
         }
     }

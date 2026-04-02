@@ -41,12 +41,17 @@ public sealed record OpenApiOperationRenderingContext(
             .Select(static url => url.UrlFormat)
             .OrderBy(static urlFormat => urlFormat, StringComparer.Ordinal)
             .ToImmutableArray();
+        var tags = operation.Operation.TryGetFeatureData<OperationGroupMetadataFeatureData>(out var operationGroupMetadata)
+            && string.IsNullOrWhiteSpace(operationGroupMetadata.GroupName) == false
+            ? ImmutableArray.Create(operationGroupMetadata.GroupName)
+            : ImmutableArray<string>.Empty;
 
         return new OpenApiOperationModel(
             operation.Operation.Name,
             operation.Operation.OperationType.FullName ?? operation.Operation.OperationType.Name,
             httpMethods,
             urlFormats,
+            tags,
             operation.Responses);
     }
 }
@@ -59,10 +64,12 @@ public sealed record OpenApiOperationRenderingContext(
 /// <param name="OperationTypeName">The CLR type name for the operation used as stable identity across later seams.</param>
 /// <param name="HttpMethods">The deterministic HTTP method inventory published for the operation.</param>
 /// <param name="UrlFormats">The deterministic route templates published for the operation.</param>
+/// <param name="Tags">The deterministic OpenAPI tag inventory projected from descriptor-published group metadata.</param>
 /// <param name="Responses">The rendered OpenAPI-style response objects for the operation.</param>
 public sealed record OpenApiOperationModel(
     string OperationName,
     string OperationTypeName,
     ImmutableArray<string> HttpMethods,
     ImmutableArray<string> UrlFormats,
+    ImmutableArray<string> Tags,
     ImmutableArray<OpenApiResponseObjectModel> Responses);

@@ -127,6 +127,7 @@ public sealed record OpenApiOutputRenderingContext(
         if (primaryOperation is not null)
         {
             writer.WriteString("operationId", primaryOperation.OperationName);
+            WriteTags(writer, primaryOperation.Tags);
             WriteResponses(writer, primaryOperation.Responses);
         }
         else
@@ -135,6 +136,24 @@ public sealed record OpenApiOutputRenderingContext(
         }
 
         writer.WriteEndObject();
+    }
+
+    private static void WriteTags(Utf8JsonWriter writer, ImmutableArray<string> tags)
+    {
+        if (tags.IsEmpty)
+        {
+            return;
+        }
+
+        writer.WritePropertyName("tags");
+        writer.WriteStartArray();
+
+        foreach (var tag in tags)
+        {
+            writer.WriteStringValue(tag);
+        }
+
+        writer.WriteEndArray();
     }
 
     private static void WriteResponses(Utf8JsonWriter writer, ImmutableArray<OpenApiResponseObjectModel> responses)

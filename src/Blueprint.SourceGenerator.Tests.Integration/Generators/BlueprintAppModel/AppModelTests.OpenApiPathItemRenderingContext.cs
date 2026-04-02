@@ -120,6 +120,7 @@ public class AppModelOpenApiPathItemRenderingContextTests
             operationType.FullName ?? operationType.Name,
             [.. httpMethods],
             [.. urlFormats],
+            ImmutableArray<string>.Empty,
             ImmutableArray<OpenApiResponseObjectModel>.Empty);
     }
 

@@ -519,3 +519,25 @@ Implement after HTTP descriptors, error-model metadata, and resource metadata ar
 - Proof closed: updated integration test assertions to expect `Microsoft_AspNetCore_Mvc_ProblemDetails` keys; `___BEGIN___COMMAND_DONE_MARKER___$LASTEXITCODEref` assertion checks for no dots; all three test suites (321 + 103 + 45 = 469 passing).
 - Autonomous next slice:
   - Continue with `openapi/add-tags-to-openapi-operations-from-operation-group-metadata`.
+- Completed `openapi/add-tags-to-openapi-operations-from-operation-group-metadata`.
+- Why it was the right follow-on:
+  - the OpenAPI endpoint/info/schema-key slices had already left operation-level tags as the next adjacent deferred OpenAPI surface
+  - the current repo still did not expose a live `ApiOperations` grouping producer, so the narrowest executable step in this slice was to publish descriptor-level operation-group metadata from the already-approved discovery namespace facts and consume that metadata in the OpenAPI rendering chain
+- What landed in this slice:
+  - new `Blueprint.Model.OperationGroupMetadataFeatureData` runtime-model record carrying one stable group name per HTTP-exposed operation
+  - new `OperationGroupMetadataModule` descriptor contributor that depends on `OperationDiscoveryManifestModule`, derives the group name from the last namespace segment in `OperationDiscoveryFeatureData.Namespace`, and projects that fact into generated descriptors for HTTP-exposed operations only
+  - `OpenApiOperationRenderingContext.Create(...)` now binds descriptor-published `OperationGroupMetadataFeatureData` onto a new `OpenApiOperationModel.Tags` inventory
+  - `OpenApiOutputRenderingContext` now emits a `tags` array for operations that publish one or more tags
+  - new descriptor-generation, descriptor-feature-data, operation-rendering, and OpenAPI-output tests proving the new seam end to end
+- Proof closed for this slice:
+  - failing-then-passing descriptor proof for generated `OperationGroupMetadataFeatureData`
+  - failing-then-passing integration proofs for `Configure().GetFeatureData<OperationGroupMetadataFeatureData>()`, `OpenApiOperationRenderingContext.Tags`, and rendered OpenAPI `tags`
+  - focused verification plus full repo validation: `dotnet build .\Blueprint.sln --nologo`, `dotnet test .\src\Blueprint.SourceGenerator.Tests\Blueprint.SourceGenerator.Tests.csproj`, `dotnet test .\src\Blueprint.SourceGenerator.Tests.Integration\Blueprint.SourceGenerator.Tests.Integration.csproj`, and `dotnet test .\src\Blueprint.SourceGenerator.CodeWriter.Tests\Blueprint.SourceGenerator.CodeWriter.Tests.csproj`
+- Deferred by design:
+  - explicit grouped-handler / `ApiOperations` provenance instead of the current namespace-derived group-name convention
+  - OpenAPI schema-processor hooks
+  - validation/data-annotation constraints not surfaced by `System.Text.Json` metadata
+  - runtime serializer switching away from `Newtonsoft.Json`
+- Autonomous next slice:
+  - Continue with `openapi/add-schema-processor-hooks-to-openapi-output`.
+  - That is the narrowest safe follow-on because the runtime now supports both `info` customization and operation tags, leaving schema processors as the remaining planned post-configuration hook called out alongside titles and tags. Adding schema-processor hooks widens the already-complete output seam without reworking descriptor metadata, serializer ownership, or response/result semantics.
