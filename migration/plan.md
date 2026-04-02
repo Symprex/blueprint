@@ -1014,6 +1014,12 @@ Run this as a paired design loop with workstream 6. The result contract must be 
   - the current group-name convention intentionally derives from the last namespace segment until the broader `ApiOperations` / grouped-handler discovery workstream lands a richer provenance contract
 - The next narrow OpenAPI follow-on should therefore be `openapi/add-schema-processor-hooks-to-openapi-output`.
 - That is the narrowest dependency-safe next slice because titles and operation tags now both flow through the completed OpenAPI output seam, leaving schema processors as the remaining planned post-configuration hook in that same customization family while larger deferred items still require wider metadata or serializer work.
+- The OpenAPI schema-processor slice is now complete locally:
+  - `MapBlueprintApi<TApp, TExec>(..., configureOpenApiSchemas: ...)` now collects ordered runtime schema processors and threads them through `OpenApiDocumentEndpoint.Create(...)`
+  - `OpenApiOutputRenderingContext.Create(...)` now applies those ordered schema processors to each rendered `OpenApiSchemaComponentModel` before emitting the final `components/schemas` payload
+  - focused integration and endpoint proofs now cover ordered schema transformation through both the low-level output seam and the hosted OpenAPI document route
+- The next narrow OpenAPI follow-on should therefore be `openapi/project-validation-and-data-annotation-constraints-into-openapi-schemas`.
+- That is the narrowest dependency-safe next slice because the OpenAPI output seam now exposes all planned post-configuration hooks in this family (info, tags, schema processors), leaving validation/data-annotation constraint projection as the next additive schema improvement on the existing serializer-backed projection path. A runtime serializer pivot away from `Newtonsoft.Json` remains a wider substrate change and is therefore not the next safe slice.
 
 ## 8. Error model and exception handling
 

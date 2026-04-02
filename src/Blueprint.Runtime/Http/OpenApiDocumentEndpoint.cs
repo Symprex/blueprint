@@ -18,12 +18,19 @@ internal static class OpenApiDocumentEndpoint
     /// Optional customisation for the OpenAPI <c>info</c> block (title, version, description).
     /// When <see langword="null"/> the defaults from <see cref="OpenApiInfoOptions"/> are used.
     /// </param>
+    /// <param name="schemaProcessorOptions">
+    /// Optional ordered schema processors that can customise rendered schema components before the document is cached.
+    /// When <see langword="null"/> no schema processors are applied.
+    /// </param>
     /// <returns>A request delegate that writes the rendered OpenAPI 3.x JSON to the response.</returns>
-    public static RequestDelegate Create(BlueprintApp app, OpenApiInfoOptions? infoOptions = null)
+    public static RequestDelegate Create(
+        BlueprintApp app,
+        OpenApiInfoOptions? infoOptions = null,
+        OpenApiSchemaProcessorOptions? schemaProcessorOptions = null)
     {
         ArgumentNullException.ThrowIfNull(app);
 
-        var json = RenderDocument(app, infoOptions);
+        var json = RenderDocument(app, infoOptions, schemaProcessorOptions);
 
         return async httpContext =>
         {
@@ -33,7 +40,10 @@ internal static class OpenApiDocumentEndpoint
         };
     }
 
-    private static string RenderDocument(BlueprintApp app, OpenApiInfoOptions? infoOptions)
+    private static string RenderDocument(
+        BlueprintApp app,
+        OpenApiInfoOptions? infoOptions,
+        OpenApiSchemaProcessorOptions? schemaProcessorOptions)
     {
         var documentBuilderContext = OpenApiDocumentBuilderContext.Create(app);
         var schemaProjectionContext = OpenApiSchemaProjectionContext.Create(documentBuilderContext);
@@ -43,6 +53,6 @@ internal static class OpenApiDocumentEndpoint
         var pathItemContext = OpenApiPathItemRenderingContext.Create(operationContext);
         var documentContext = OpenApiDocumentRenderingContext.Create(pathItemContext);
 
-        return OpenApiOutputRenderingContext.Create(documentContext, infoOptions).Json;
+        return OpenApiOutputRenderingContext.Create(documentContext, infoOptions, schemaProcessorOptions).Json;
     }
 }

@@ -7,8 +7,9 @@ namespace Blueprint.Runtime.Http;
 
 /// <summary>
 /// Renders the assembled OpenAPI document model into a standards-conformant OpenAPI 3.x JSON string.
-/// This seam deliberately stays output-only: it writes the current path and schema inventory without widening
-/// into HTTP endpoint exposure, titles, tags, or other post-configuration hooks.
+/// This seam deliberately stays output-only: it writes the current path and schema inventory while allowing narrow
+/// post-configuration hooks such as info customisation, tags, and schema processors without widening into descriptor
+/// or host-registration changes.
 /// </summary>
 /// <param name="DocumentRendering">The assembled document model that was rendered to produce this output.</param>
 /// <param name="Json">The rendered OpenAPI 3.x JSON string for the assembled document.</param>
@@ -42,36 +43,51 @@ public sealed record OpenApiOutputRenderingContext(
     /// Optional customisation for the <c>info</c> block. When <see langword="null"/> the defaults in
     /// <see cref="OpenApiInfoOptions"/> are used.
     /// </param>
+    /// <param name="schemaProcessorOptions">
+    /// Optional ordered schema processors that can transform rendered schema components before they are written into the
+    /// <c>components/schemas</c> section. When <see langword="null"/> no schema processors are applied.
+    /// </param>
     /// <returns>The rendered output context carrying the JSON string.</returns>
     public static OpenApiOutputRenderingContext Create(
         OpenApiDocumentRenderingContext documentRendering,
-        OpenApiInfoOptions? infoOptions = null)
+        OpenApiInfoOptions? infoOptions = null,
+        OpenApiSchemaProcessorOptions? schemaProcessorOptions = null)
     {
         ArgumentNullException.ThrowIfNull(documentRendering);
 
-        var json = RenderJson(documentRendering, infoOptions ?? new OpenApiInfoOptions());
+        var json = RenderJson(
+            documentRendering,
+            infoOptions ?? new OpenApiInfoOptions(),
+            schemaProcessorOptions ?? new OpenApiSchemaProcessorOptions());
         return new OpenApiOutputRenderingContext(documentRendering, json);
     }
 
-    private static string RenderJson(OpenApiDocumentRenderingContext document, OpenApiInfoOptions infoOptions)
+    private static string RenderJson(
+        OpenApiDocumentRenderingContext document,
+        OpenApiInfoOptions infoOptions,
+        OpenApiSchemaProcessorOptions schemaProcessorOptions)
     {
         var buffer = new ArrayBufferWriter<byte>();
         using var writer = new Utf8JsonWriter(buffer, new JsonWriterOptions { Indented = true });
 
-        WriteDocument(writer, document, infoOptions);
+        WriteDocument(writer, document, infoOptions, schemaProcessorOptions);
         writer.Flush();
 
         return Encoding.UTF8.GetString(buffer.WrittenSpan);
     }
 
-    private static void WriteDocument(Utf8JsonWriter writer, OpenApiDocumentRenderingContext document, OpenApiInfoOptions infoOptions)
+    private static void WriteDocument(
+        Utf8JsonWriter writer,
+        OpenApiDocumentRenderingContext document,
+        OpenApiInfoOptions infoOptions,
+        OpenApiSchemaProcessorOptions schemaProcessorOptions)
     {
         writer.WriteStartObject();
 
         writer.WriteString("openapi", OpenApiVersion);
         WriteInfo(writer, infoOptions);
         WritePaths(writer, document.Paths);
-        WriteComponents(writer, document.SchemaComponents);
+        WriteComponents(writer, document.SchemaComponents, schemaProcessorOptions);
 
         writer.WriteEndObject();
     }
@@ -236,7 +252,10 @@ public sealed record OpenApiOutputRenderingContext(
         }
     }
 
-    private static void WriteComponents(Utf8JsonWriter writer, ImmutableArray<OpenApiSchemaComponentModel> schemaComponents)
+    private static void WriteComponents(
+        Utf8JsonWriter writer,
+        ImmutableArray<OpenApiSchemaComponentModel> schemaComponents,
+        OpenApiSchemaProcessorOptions schemaProcessorOptions)
     {
         if (schemaComponents.IsEmpty)
         {
@@ -251,7 +270,7 @@ public sealed record OpenApiOutputRenderingContext(
 
         foreach (var component in schemaComponents)
         {
-            WriteSchemaComponent(writer, component);
+            WriteSchemaComponent(writer, ProcessSchemaComponent(component, schemaProcessorOptions));
         }
 
         writer.WriteEndObject();
@@ -295,6 +314,22 @@ public sealed record OpenApiOutputRenderingContext(
         }
 
         writer.WriteEndObject();
+    }
+
+    private static OpenApiSchemaComponentModel ProcessSchemaComponent(
+        OpenApiSchemaComponentModel component,
+        OpenApiSchemaProcessorOptions schemaProcessorOptions)
+    {
+        var processedComponent = component;
+
+        foreach (var processor in schemaProcessorOptions.Processors)
+        {
+            var processorContext = new OpenApiSchemaProcessorContext(processedComponent);
+            processor(processorContext);
+            processedComponent = processorContext.Component;
+        }
+
+        return processedComponent;
     }
 
     private static void WriteSchemaProperty(Utf8JsonWriter writer, OpenApiSchemaComponentPropertyModel property)

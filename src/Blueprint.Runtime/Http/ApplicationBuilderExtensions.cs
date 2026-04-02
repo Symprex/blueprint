@@ -29,11 +29,16 @@ public static class EndpointRouteBuilderExtensions
     /// An optional delegate that customises the OpenAPI <c>info</c> block (title, version, description).
     /// When <see langword="null"/> the defaults from <see cref="OpenApiInfoOptions"/> are used.
     /// </param>
+    /// <param name="configureOpenApiSchemas">
+    /// An optional delegate that registers ordered schema processors for the rendered OpenAPI <c>components/schemas</c>
+    /// section. Processors run once when the document is pre-rendered at startup.
+    /// </param>
     /// <returns>A builder that allows adding metadata / conventions to all mapped endpoints.</returns>
     public static IEndpointConventionBuilder MapBlueprintApi<T, TExec>(
         this IEndpointRouteBuilder endpoints,
         string basePath,
-        Action<OpenApiInfoOptions>? configureOpenApi = null) where T : BlueprintApp, new()
+        Action<OpenApiInfoOptions>? configureOpenApi = null,
+        Action<OpenApiSchemaProcessorOptions>? configureOpenApiSchemas = null) where T : BlueprintApp, new()
                          where TExec : BlueprintAppExecutor
     {
         // Ensure ends with a slash, but only one
@@ -63,9 +68,16 @@ public static class EndpointRouteBuilderExtensions
             configureOpenApi(infoOptions);
         }
 
+        OpenApiSchemaProcessorOptions? schemaProcessorOptions = null;
+        if (configureOpenApiSchemas is not null)
+        {
+            schemaProcessorOptions = new OpenApiSchemaProcessorOptions();
+            configureOpenApiSchemas(schemaProcessorOptions);
+        }
+
         var openApiBuilder = endpoints.Map(
             RoutePatternFactory.Parse(basePath.TrimEnd('/') + "/.blueprint/openapi.json"),
-            OpenApiDocumentEndpoint.Create(runtimeModel, infoOptions));
+            OpenApiDocumentEndpoint.Create(runtimeModel, infoOptions, schemaProcessorOptions));
         openApiBuilder.WithDisplayName("GET Blueprint OpenAPI document");
         openApiBuilder.WithMetadata(new HttpMethodMetadata([HttpMethods.Get]));
 

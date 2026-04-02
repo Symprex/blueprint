@@ -12,14 +12,14 @@
   "current": {
     "activeWorkstream": "openapi",
     "nextReadySlice": {
+      "id": "openapi/project-validation-and-data-annotation-constraints-into-openapi-schemas",
+      "workstream": "openapi",
+      "title": "Project validation and data-annotation constraints into OpenAPI schemas"
+    },
+    "lastCompletedSlice": {
       "id": "openapi/add-schema-processor-hooks-to-openapi-output",
       "workstream": "openapi",
       "title": "Add schema processor hooks to OpenAPI output"
-    },
-    "lastCompletedSlice": {
-      "id": "openapi/add-tags-to-openapi-operations-from-operation-group-metadata",
-      "workstream": "openapi",
-      "title": "Add tags to OpenAPI operations from operation group metadata"
     },
     "openReviewGate": null
   },

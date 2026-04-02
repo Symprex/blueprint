@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Blueprint.Model;
 using Blueprint.Runtime.Http;
 using FluentAssertions;
@@ -140,6 +141,42 @@ public class OpenApiDocumentEndpointTests
         info.GetProperty("version").GetString().Should().Be("1.0.0");
     }
 
+    [Fact]
+    public async Task When_schema_processors_are_configured_then_openapi_endpoint_renders_processed_schema_components()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<OpenApiSchemaComponentBlueprintApp, BlueprintAppExecutor>(
+            "api/",
+            configureOpenApiSchemas: options =>
+            {
+                options.Processors.Add(static processorContext =>
+                    processorContext.Component = processorContext.Component with
+                    {
+                        Type = "number",
+                    });
+
+                options.Processors.Add(static processorContext =>
+                    processorContext.Component = processorContext.Component with
+                    {
+                        Type = processorContext.Component.Type?.ToUpperInvariant(),
+                    });
+            });
+
+        var endpoint = FindEndpoint(endpoints, "api/.blueprint/openapi.json")!;
+        var response = await InvokeEndpointAsync(endpoint);
+
+        var doc = JsonDocument.Parse(response.Body);
+        var schemaKey = typeof(OpenApiSchemaComponentEndpointResponseDto).FullName!.Replace('.', '_');
+        doc.RootElement
+            .GetProperty("components")
+            .GetProperty("schemas")
+            .GetProperty(schemaKey)
+            .GetProperty("type")
+            .GetString()
+            .Should()
+            .Be("NUMBER");
+    }
+
     private static async Task<TestEndpointInvocationResult> InvokeEndpointAsync(RouteEndpoint endpoint)
     {
         await using var body = new MemoryStream();
@@ -191,6 +228,26 @@ public class OpenApiDocumentEndpointTests
 
     private sealed class TestOperation;
 
+    private sealed class OpenApiSchemaComponentBlueprintApp : BlueprintApp
+    {
+        public OpenApiSchemaComponentBlueprintApp()
+        {
+            var descriptor = new ApiOperationDescriptor(typeof(TestOperation), "TestOperation", "OpenApiDocumentEndpointTests");
+            descriptor.AddUrl(new ApiOperationUrl("/test"));
+            descriptor.SetFeatureData(new OperationHostExposureFeatureData(["http"]));
+            descriptor.SetFeatureData(new OperationHttpResponseMetadataFeatureData([
+                new OperationHttpResponseMetadata(200, true, ["OkResult"], [typeof(OpenApiSchemaComponentEndpointResponseDto).FullName!]),
+            ]));
+            descriptor.SetFeatureData(new OperationSerializerContextCoverageFeatureData([typeof(OpenApiSchemaComponentEndpointResponseDto).FullName!]));
+
+            this.AppOwnedSerializerContext = new OpenApiSchemaComponentEndpointJsonContext(new JsonSerializerOptions());
+            this.AppOwnedSerializerContextType = typeof(OpenApiSchemaComponentEndpointJsonContext);
+            this.AppOwnedSerializerContextBodyTypes = [typeof(OpenApiSchemaComponentEndpointResponseDto)];
+            this.AppOwnedSerializerContextBodyTypeNames = [typeof(OpenApiSchemaComponentEndpointResponseDto).FullName!];
+            this.Register(descriptor);
+        }
+    }
+
     private sealed class TestEndpointRouteBuilder(IServiceProvider serviceProvider) : IEndpointRouteBuilder
     {
         public ICollection<EndpointDataSource> DataSources { get; } = [];
@@ -223,3 +280,11 @@ public class OpenApiDocumentEndpointTests
         string? ContentType,
         string Body);
 }
+
+public sealed class OpenApiSchemaComponentEndpointResponseDto
+{
+    public string? Name { get; init; }
+}
+
+[JsonSerializable(typeof(OpenApiSchemaComponentEndpointResponseDto))]
+public partial class OpenApiSchemaComponentEndpointJsonContext : JsonSerializerContext;

@@ -127,6 +127,43 @@ public class AppModelOpenApiOutputRenderingContextTests
         schema.GetProperty("properties").GetProperty("RequiredProp").GetProperty("type").GetString().Should().Be("string");
     }
 
+    [Fact]
+    public void When_schema_processors_are_configured_then_they_transform_components_in_registration_order()
+    {
+        var context = CreateSyntheticOutputContext(
+            [],
+            [
+                new OpenApiSchemaComponentModel(
+                    "Sample.ResponseDto",
+                    "object",
+                    ["RequiredProp"],
+                    [new OpenApiSchemaComponentPropertyModel("RequiredProp", "string", false)]),
+            ],
+            options =>
+            {
+                options.Processors.Add(static processorContext =>
+                    processorContext.Component = processorContext.Component with
+                    {
+                        Type = "number",
+                    });
+
+                options.Processors.Add(static processorContext =>
+                    processorContext.Component = processorContext.Component with
+                    {
+                        Type = processorContext.Component.Type?.ToUpperInvariant(),
+                    });
+            });
+
+        var doc = JsonDocument.Parse(context.Json);
+
+        var schema = doc.RootElement
+            .GetProperty("components")
+            .GetProperty("schemas")
+            .GetProperty("Sample_ResponseDto");
+
+        schema.GetProperty("type").GetString().Should().Be("NUMBER");
+    }
+
     private static OpenApiOutputRenderingContext CreateOutputContext(BlueprintApp app)
     {
         var documentBuilderContext = OpenApiDocumentBuilderContext.Create(app);
@@ -142,7 +179,8 @@ public class AppModelOpenApiOutputRenderingContextTests
 
     private static OpenApiOutputRenderingContext CreateSyntheticOutputContext(
         OpenApiPathItemModel[] pathItems,
-        OpenApiSchemaComponentModel[] schemaComponents)
+        OpenApiSchemaComponentModel[] schemaComponents,
+        Action<OpenApiSchemaProcessorOptions>? configureSchemaProcessors = null)
     {
         var documentBuilderContext = new OpenApiDocumentBuilderContext(
             new BlueprintApp(),
@@ -164,6 +202,13 @@ public class AppModelOpenApiOutputRenderingContextTests
         var pathItemContext = new OpenApiPathItemRenderingContext(operationContext, [.. pathItems]);
         var documentContext = OpenApiDocumentRenderingContext.Create(pathItemContext);
 
-        return OpenApiOutputRenderingContext.Create(documentContext);
+        OpenApiSchemaProcessorOptions? schemaProcessorOptions = null;
+        if (configureSchemaProcessors is not null)
+        {
+            schemaProcessorOptions = new OpenApiSchemaProcessorOptions();
+            configureSchemaProcessors(schemaProcessorOptions);
+        }
+
+        return OpenApiOutputRenderingContext.Create(documentContext, schemaProcessorOptions: schemaProcessorOptions);
     }
 }

@@ -541,3 +541,23 @@ Implement after HTTP descriptors, error-model metadata, and resource metadata ar
 - Autonomous next slice:
   - Continue with `openapi/add-schema-processor-hooks-to-openapi-output`.
   - That is the narrowest safe follow-on because the runtime now supports both `info` customization and operation tags, leaving schema processors as the remaining planned post-configuration hook called out alongside titles and tags. Adding schema-processor hooks widens the already-complete output seam without reworking descriptor metadata, serializer ownership, or response/result semantics.
+- Completed `openapi/add-schema-processor-hooks-to-openapi-output`.
+- Why it was the right follow-on:
+  - the OpenAPI endpoint/info/tags slices had already left schema processors as the final planned post-configuration hook in the current output-rendering family
+  - adding ordered runtime schema processors widened only the already-landed OpenAPI output seam and avoided reworking descriptor metadata, serializer ownership, schema projection, or response/result semantics
+- What landed in this slice:
+  - new `Blueprint.Runtime.Http.OpenApiSchemaProcessorOptions` and `OpenApiSchemaProcessorContext` runtime seam so consumers can register ordered schema-component processors
+  - `MapBlueprintApi<T, TExec>(..., configureOpenApiSchemas: ...)` now accepts an optional schema-processor configuration delegate and threads the collected processors through `OpenApiDocumentEndpoint.Create(...)`
+  - `OpenApiOutputRenderingContext.Create(...)` now applies the ordered schema processors to each rendered `OpenApiSchemaComponentModel` before writing the final `components/schemas` payload
+  - new focused integration and artifact tests proving processor ordering and endpoint-visible schema customization
+- Proof closed for this slice:
+  - failing-then-passing integration proof for ordered schema-processor transformation in `AppModelOpenApiOutputRenderingContextTests`
+  - failing-then-passing endpoint proof for `MapBlueprintApi(..., configureOpenApiSchemas: ...)` rendering processed schema components in `OpenApiDocumentEndpointTests`
+  - focused verification plus repo validation: `dotnet format .\Blueprint.sln --no-restore --include ...`, targeted OpenAPI test sweeps in `Blueprint.SourceGenerator.Tests` and `Blueprint.SourceGenerator.Tests.Integration`, and `dotnet build .\Blueprint.sln --no-restore`
+- Deferred by design:
+  - explicit grouped-handler / `ApiOperations` provenance instead of the current namespace-derived group-name convention
+  - validation/data-annotation constraints not surfaced by `System.Text.Json` metadata
+  - runtime serializer switching away from `Newtonsoft.Json`
+- Autonomous next slice:
+  - Continue with `openapi/project-validation-and-data-annotation-constraints-into-openapi-schemas`.
+  - That is the narrowest safe follow-on because schema processors now cover consumer-owned post-configuration without changing the underlying schema model, leaving validation/data-annotation constraint projection as the next additive schema/output improvement. It stays narrower than a serializer-stack pivot away from `Newtonsoft.Json` because it extends the existing serializer-backed schema projection seam instead of reworking the runtime serialization substrate.
