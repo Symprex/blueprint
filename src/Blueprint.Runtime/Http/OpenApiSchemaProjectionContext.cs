@@ -63,7 +63,7 @@ public sealed record OpenApiSchemaProjectionContext(
         var validationAttributesByJsonPropertyName = CreateValidationAttributesByJsonPropertyName(bodyType, serializerContext);
         var properties = typeInfo.Kind == JsonTypeInfoKind.Object
             ? typeInfo.Properties
-                .Select(property => CreateProperty(property, serializerContext, validationAttributesByJsonPropertyName))
+                .Select(property => CreateProperty(property, bodyTypeName, serializerContext, validationAttributesByJsonPropertyName))
                 .OrderBy(static property => property.Name, StringComparer.Ordinal)
                 .ToImmutableArray()
             : ImmutableArray<OpenApiSchemaPropertyModel>.Empty;
@@ -81,6 +81,7 @@ public sealed record OpenApiSchemaProjectionContext(
 
     private static OpenApiSchemaPropertyModel CreateProperty(
         JsonPropertyInfo property,
+        string bodyTypeName,
         JsonSerializerContext serializerContext,
         IReadOnlyDictionary<string, IReadOnlyList<ValidationAttribute>> validationAttributesByJsonPropertyName)
     {
@@ -89,6 +90,7 @@ public sealed record OpenApiSchemaProjectionContext(
             ? MapKind(property.PropertyType, JsonTypeInfoKind.None)
             : MapKind(property.PropertyType, propertyTypeInfo.Kind);
         var validationAttributes = GetValidationAttributes(property, validationAttributesByJsonPropertyName);
+        ThrowIfUnsupportedCrossPropertyValidationAttribute(bodyTypeName, property.Name, validationAttributes);
         var minimum = GetMinimum(validationAttributes);
         var maximum = GetMaximum(validationAttributes);
 
@@ -210,6 +212,24 @@ public sealed record OpenApiSchemaProjectionContext(
         return validationAttributesByJsonPropertyName.TryGetValue(property.Name, out var mappedAttributes)
             ? mappedAttributes
             : [];
+    }
+
+    private static void ThrowIfUnsupportedCrossPropertyValidationAttribute(
+        string bodyTypeName,
+        string propertyName,
+        IReadOnlyList<ValidationAttribute> validationAttributes)
+    {
+        var unsupportedAttribute = validationAttributes.FirstOrDefault(static attribute =>
+            attribute is CompareAttribute
+            || string.Equals(attribute.GetType().FullName, typeof(GreaterThanPropertyAttribute).FullName, StringComparison.Ordinal));
+
+        if (unsupportedAttribute is null)
+        {
+            return;
+        }
+
+        throw new InvalidOperationException(
+            $"The covered OpenAPI body type '{bodyTypeName}' property '{propertyName}' uses validation attribute '{unsupportedAttribute.GetType().Name}', which the current OpenAPI schema projection cannot represent.");
     }
 
     [UnconditionalSuppressMessage(

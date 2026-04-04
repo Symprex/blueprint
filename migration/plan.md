@@ -1058,6 +1058,11 @@ Run this as a paired design loop with workstream 6. The result contract must be 
   - focused model proof plus repo build validation now cover the STJ contract directly
 - The next narrow OpenAPI follow-on should therefore be `openapi/diagnose-unsupported-cross-property-validation-shapes`.
   - That is the narrowest dependency-safe next slice because serializer ownership is now aligned end to end for the current OpenAPI path, while the next nearby gap is that cross-property validation semantics still cannot be represented faithfully by the local property-constraint model. A compile-time fail-fast guard for unsupported cross-property validation shapes is narrower and safer than widening first into richer same-status discriminator design, which still depends on future body-bearing resource-event contracts.
+- The cross-property OpenAPI fail-fast slice is now complete locally:
+  - `OpenApiSchemaProjectionContext` now rejects covered serializer-backed body types that use cross-property validation attributes the current local property-constraint model cannot represent, instead of silently emitting incomplete schema facts
+  - the first guarded shapes are `CompareAttribute` and `GreaterThanPropertyAttribute`, both proven through real serializer-backed integration tests
+- The next narrow OpenAPI follow-on should therefore be `openapi/project-cross-property-openapi-validation-failures-to-compile-time-diagnostics`.
+  - That is the narrowest dependency-safe next slice because the repo now fails fast at runtime/projection time, but Blueprint guidance still prefers compile-time diagnostics when unsupported contracts are knowable from generation inputs. Surfacing the same unsupported cross-property OpenAPI shapes during generation is narrower than attempting full cross-property schema modelling or same-status discriminator expansion.
 
 ## 8. Error model and exception handling
 

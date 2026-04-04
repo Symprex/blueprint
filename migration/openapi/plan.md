@@ -626,3 +626,20 @@ Implement after HTTP descriptors, error-model metadata, and resource metadata ar
 - Autonomous next slice:
   - Continue with `openapi/diagnose-unsupported-cross-property-validation-shapes`.
   - That is the narrowest dependency-safe follow-on because the current OpenAPI schema projection now covers local per-property constraints and serializer ownership end to end, but still cannot faithfully represent cross-property validation semantics such as `CompareAttribute`. Failing fast on those unsupported shapes is narrower and safer than widening immediately into same-status discriminator design, which still depends on future body-bearing resource-event contracts.
+- Completed `openapi/diagnose-unsupported-cross-property-validation-shapes`.
+- Why it was the right follow-on:
+  - after the runtime-model serializer-alignment slice, the next nearby OpenAPI gap was no longer serializer ownership but unsupported schema semantics that the current local property-constraint model would silently ignore
+  - adding a fail-fast guard at schema projection time stayed narrower than inventing full cross-property OpenAPI modelling or moving straight into same-status discriminator design
+- What landed in this slice:
+  - `OpenApiSchemaProjectionContext` now throws a focused `InvalidOperationException` when a covered serializer-backed body type uses unsupported cross-property validation attributes
+  - the first guarded shapes are `CompareAttribute` and Blueprint's `GreaterThanPropertyAttribute`, which both depend on sibling-property semantics the current OpenAPI schema projection cannot represent
+  - new integration proofs exercise both attribute families through the real serializer-backed OpenAPI schema projection seam
+- Proof closed for this slice:
+  - failing-then-passing integration proof in `AppModelOpenApiSchemaProjectionContextUnsupportedValidationShapesTests` for `CompareAttribute`
+  - companion integration proof for `GreaterThanPropertyAttribute`, plus targeted `OpenApiSchemaProjectionContext` integration sweep and `dotnet build .\Blueprint.sln --no-restore`
+- Deferred by design:
+  - compile-time diagnostics for the same unsupported OpenAPI validation shapes
+  - richer same-status discriminator shaping for future body-bearing resource-event unions
+- Autonomous next slice:
+  - Continue with `openapi/project-cross-property-openapi-validation-failures-to-compile-time-diagnostics`.
+  - That is the narrowest dependency-safe follow-on because the runtime now fails fast instead of silently under-documenting those contracts, but Blueprint guidance still prefers compile-time diagnostics whenever the generator can know a contract is unsupported. Projecting the same unsupported cross-property shapes into compile-time diagnostics is narrower than modelling them in OpenAPI or widening into same-status union discrimination.
