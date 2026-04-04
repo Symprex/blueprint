@@ -1076,6 +1076,15 @@ Run this as a paired design loop with workstream 6. The result contract must be 
 - The next dependency-safe move for OpenAPI completion returns to `openapi/allow-same-status-body-bearing-resource-event-unions-with-eventid-discriminator`.
   - The prerequisite contract now exists and the serialized body already carries the stable `eventId` required by the approved same-status carve-out.
   - The remaining work should therefore stay tightly focused on letting descriptor/OpenAPI discrimination consume that fact for body-bearing resource-event unions without widening unrelated same-status unions.
+- A follow-up review corrected that next step:
+  - the runtime contract now serializes `eventId`, but the generator still cannot prove that value from a declared `ResourceEventResult<T>` contract alone
+  - the actual next narrow prerequisite is therefore `result-model-and-host-translation/expose-compile-time-resource-event-discriminator-metadata`, so descriptor planning can prove same-status body-bearing resource-event union members before the remaining OpenAPI discriminator slice resumes
+- The compile-time resource-event discriminator prerequisite is now complete locally:
+  - consumers can now declare `[ResourceEvent("...")]` on payload types used by `Blueprint.Runtime.Exec.ResourceEventResult<T>` so the event identity becomes part of the compile-time contract instead of living only in runtime constructor calls
+  - descriptor generation now publishes that proof through `OperationResourceEventMetadataFeatureData`, giving later OpenAPI work a stable result-type/body-type/event-id seam to inspect
+- The next dependency-safe move for OpenAPI completion returns to `openapi/allow-same-status-body-bearing-resource-event-unions-with-eventid-discriminator`.
+  - The generator can now prove per-member body-bearing resource-event discriminators from declared contracts.
+  - The remaining work should stay tightly focused on letting same-status descriptor/OpenAPI logic consume that metadata without widening unrelated unions or the empty-body `KeyOnlyResourceEventResult` path.
 
 ## 8. Error model and exception handling
 

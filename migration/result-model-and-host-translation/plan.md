@@ -468,3 +468,18 @@ Close the result taxonomy and normalization rules together with the pipeline pla
   - return the live tracker to `migration\openapi\plan.md`
   - continue with `openapi/allow-same-status-body-bearing-resource-event-unions-with-eventid-discriminator`
   - that is now the narrowest dependency-safe follow-on because the prerequisite semantic result family exists, the HTTP body now carries a stable serialized `eventId`, and the remaining work is to let descriptor/OpenAPI discrimination consume that fact without widening other same-status unions accidentally
+- Follow-up correction after implementation review:
+  - the new runtime envelope now carries a stable serialized `eventId`, but the generator still has no compile-time source for that value from a declared `ResourceEventResult<T>` contract alone
+  - before OpenAPI can safely auto-discriminate same-status body-bearing resource-event unions, this workstream therefore needs one more narrow prerequisite: `result-model-and-host-translation/expose-compile-time-resource-event-discriminator-metadata`
+  - keep that slice intentionally narrow: add a compile-time-stable event-id declaration seam for body-bearing resource-event outcomes, then return to the OpenAPI discriminator slice once descriptor planning can prove each union member's `eventId`
+- Completed the compile-time resource-event discriminator metadata prerequisite:
+  - consumers can now declare `[ResourceEvent("...")]` on the payload type used by `Blueprint.Runtime.Exec.ResourceEventResult<T>` to provide the stable compile-time `eventId` contract that later descriptor and OpenAPI slices can inspect
+  - descriptor generation now projects that proof into `OperationResourceEventMetadataFeatureData`, carrying the semantic result type name, payload type name, and stable `eventId` for each body-bearing resource-event outcome it can prove from the declared contract
+  - the slice stays intentionally narrow: it does not yet widen same-status union discrimination or OpenAPI rendering, it only exposes the compile-time source of truth those follow-on slices need
+- Proof closed for this slice:
+  - red-to-green descriptor proof that `[ResourceEvent("events.created")]` on a `ResourceEventResult<T>` payload emits `OperationResourceEventMetadataFeatureData`
+  - negative descriptor proof that the same contract without `[ResourceEvent]` does not emit resource-event metadata
+- Handoff after this prerequisite:
+  - return the live tracker to `migration\openapi\plan.md`
+  - resume `openapi/allow-same-status-body-bearing-resource-event-unions-with-eventid-discriminator`
+  - that is now the narrowest dependency-safe follow-on because the generator can finally prove per-member `eventId` metadata from the declared body-bearing resource-event contracts instead of inferring only from runtime constructor arguments

@@ -667,3 +667,13 @@ Implement after HTTP descriptors, error-model metadata, and resource metadata ar
 - Autonomous next slice:
   - return to `openapi/allow-same-status-body-bearing-resource-event-unions-with-eventid-discriminator`
   - that is the narrowest dependency-safe follow-on because the prerequisite body-bearing resource-event contract now exists and carries the stable serialized `eventId` that the approved same-status OpenAPI carve-out depends on. The remaining work should stay tightly scoped to descriptor/OpenAPI discrimination for body-bearing resource-event unions, without widening other same-status unions or key-only event flows.
+- Follow-up correction after inspecting the landed prerequisite:
+  - the runtime now serializes a stable `eventId`, but a declared `ResourceEventResult<T>` contract still does not expose that `eventId` as compile-time metadata the generator can prove
+  - before this OpenAPI slice can land honestly, the live tracker should step back to `result-model-and-host-translation/expose-compile-time-resource-event-discriminator-metadata`
+  - once that compile-time event-id seam exists, return here and project the approved same-status resource-event discriminator rule through descriptor and OpenAPI generation
+- Cross-workstream compile-time prerequisite now landed:
+  - consumers can now declare `[ResourceEvent("...")]` on the payload type used by `ResourceEventResult<T>`, and descriptor generation projects the proven result-type/body-type/event-id triple into `OperationResourceEventMetadataFeatureData`
+  - the generator therefore now has a compile-time source of truth for body-bearing resource-event discriminators instead of depending on runtime constructor arguments alone
+- Autonomous next slice:
+  - resume `openapi/allow-same-status-body-bearing-resource-event-unions-with-eventid-discriminator`
+  - keep the scope tight: widen same-status handling only for body-bearing `ResourceEventResult<T>` union members whose declared payloads all expose compile-time-proven `eventId` metadata, while leaving key-only event results and unrelated same-status unions on the existing diagnostic path

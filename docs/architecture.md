@@ -64,6 +64,9 @@ The supported semantic HTTP surface now also includes `Blueprint.Runtime.Exec.Re
 body-bearing resource-event responses distinct from ordinary `CreatedResult<T>` flows. The current HTTP host translates
 that family to `201 Created` JSON envelopes with top-level `eventId`, `resourceId`, and `content`, so later same-status
 union and OpenAPI slices can reason from a stable serialized discriminator instead of an implicit payload convention.
+Consumers can now declare `[ResourceEvent("...")]` on the payload type carried by `ResourceEventResult<T>`, and
+descriptor generation projects that compile-time proof into `OperationResourceEventMetadataFeatureData` so later
+discriminator/OpenAPI steps do not need to infer event identities from runtime-only constructor arguments.
 
 The runtime model now follows that same serializer contract end to end: `Blueprint.Model.ApiResource` and
 `Blueprint.Model.Link` rely only on `System.Text.Json` attributes, so `$object`, `$links`, `$partial`, and null-link

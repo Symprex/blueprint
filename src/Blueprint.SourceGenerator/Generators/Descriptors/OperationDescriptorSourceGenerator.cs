@@ -221,6 +221,7 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
             new DefaultExceptionTranslationModule(),
             new FlattenedResultOutcomeModule(),
             new FailureOutcomesModule(),
+            new ResourceEventMetadataModule(),
             new HostExecutorAvailabilityModule(),
             new AmbiguousHostTranslationModule(),
             new NoResultShapeSeparationModule(),
