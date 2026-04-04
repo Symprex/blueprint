@@ -88,6 +88,7 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
         var unhandledExceptionResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.UnhandledExceptionResult");
         var noResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.NoResultOperationResult");
         var keyOnlyResourceEventResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.KeyOnlyResourceEventResult");
+        var resourceEventResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.ResourceEventResult");
         var httpNoContentResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Http.HttpNoContentResult");
         if (operationResultType is null || okResultType is null || noResultType is null)
         {
@@ -109,7 +110,7 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
         var responses = ImmutableArray.CreateBuilder<HttpResponseMetadataRegistration>(flattenedResults.Length);
         foreach (var flattenedResult in flattenedResults)
         {
-            if (OperationResultContractHelper.TryGetHttpOperationResultResponseShape(flattenedResult, okResultType, acceptedResultType, conflictResultType, notFoundResultType, createdResultType, validationFailedResultType, noResultType, keyOnlyResourceEventResultType, httpNoContentResultType, out var statusCode, out var hasResponseBody) == false)
+            if (OperationResultContractHelper.TryGetHttpOperationResultResponseShape(flattenedResult, okResultType, acceptedResultType, conflictResultType, notFoundResultType, createdResultType, validationFailedResultType, noResultType, keyOnlyResourceEventResultType, resourceEventResultType, httpNoContentResultType, out var statusCode, out var hasResponseBody) == false)
             {
                 continue;
             }
@@ -134,6 +135,7 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
         var validationFailedResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.ValidationFailedResult");
         var noResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.NoResultOperationResult");
         var keyOnlyResourceEventResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.KeyOnlyResourceEventResult");
+        var resourceEventResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.ResourceEventResult");
         var httpNoContentResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Http.HttpNoContentResult");
         var unhandledExceptionResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.UnhandledExceptionResult");
         if (okResultType is null || noResultType is null)
@@ -155,6 +157,7 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
                     validationFailedResultType,
                     noResultType,
                     keyOnlyResourceEventResultType,
+                    resourceEventResultType,
                     httpNoContentResultType,
                     unhandledExceptionResultType,
                     out var statusCode,
@@ -179,6 +182,7 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
         INamedTypeSymbol? validationFailedResultType,
         INamedTypeSymbol noResultType,
         INamedTypeSymbol? keyOnlyResourceEventResultType,
+        INamedTypeSymbol? resourceEventResultType,
         INamedTypeSymbol? httpNoContentResultType,
         INamedTypeSymbol? unhandledExceptionResultType,
         out int statusCode,
@@ -187,7 +191,7 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
     {
         var resultType = context.FindTypeByMetadataName(resultTypeName);
         if (resultType is not null
-            && OperationResultContractHelper.TryGetHttpOperationResultResponseShape(resultType, okResultType, acceptedResultType, conflictResultType, notFoundResultType, createdResultType, validationFailedResultType, noResultType, keyOnlyResourceEventResultType, httpNoContentResultType, out statusCode, out hasResponseBody))
+            && OperationResultContractHelper.TryGetHttpOperationResultResponseShape(resultType, okResultType, acceptedResultType, conflictResultType, notFoundResultType, createdResultType, validationFailedResultType, noResultType, keyOnlyResourceEventResultType, resourceEventResultType, httpNoContentResultType, out statusCode, out hasResponseBody))
         {
             bodyTypeNames = GetResponseBodyTypeNames(resultType, hasResponseBody, validationFailedResultType, unhandledExceptionResultType);
             return true;
@@ -280,7 +284,7 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
                 continue;
             }
 
-            if (current.Name is "OkResult" or "AcceptedResult" or "ConflictResult" or "NotFoundResult" or "CreatedResult")
+            if (current.Name is "OkResult" or "AcceptedResult" or "ConflictResult" or "NotFoundResult" or "CreatedResult" or "ResourceEventResult")
             {
                 return current.TypeArguments[0];
             }

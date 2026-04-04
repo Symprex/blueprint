@@ -1070,6 +1070,12 @@ Run this as a paired design loop with workstream 6. The result contract must be 
 - The next dependency-safe move for OpenAPI completion now shifts cross-workstream to `result-model-and-host-translation/introduce-body-bearing-resource-event-results`.
   - The remaining meaningful nearby OpenAPI gap is richer same-status discriminator support, and the approved OpenAPI exception for same-status unions depends on body-bearing resource-event contracts with a stable serialized `eventId`.
   - Those result contracts do not exist yet, so the narrowest honest follow-on is to land that prerequisite in the result-model workstream before returning to the remaining OpenAPI discriminator slice.
+- The body-bearing resource-event prerequisite slice is now complete locally:
+  - `Blueprint.Runtime.Exec.ResourceEventResult` / `ResourceEventResult<T>` now provide the missing host-neutral semantic family for body-bearing resource-event responses, carrying stable event/resource identity plus a typed payload
+  - the current HTTP host now materializes that family as a `201 Created` JSON envelope with top-level `eventId`, `resourceId`, and `content`, and descriptor support/flattened outcomes now recognize that family as part of the supported semantic surface
+- The next dependency-safe move for OpenAPI completion returns to `openapi/allow-same-status-body-bearing-resource-event-unions-with-eventid-discriminator`.
+  - The prerequisite contract now exists and the serialized body already carries the stable `eventId` required by the approved same-status carve-out.
+  - The remaining work should therefore stay tightly focused on letting descriptor/OpenAPI discrimination consume that fact for body-bearing resource-event unions without widening unrelated same-status unions.
 
 ## 8. Error model and exception handling
 

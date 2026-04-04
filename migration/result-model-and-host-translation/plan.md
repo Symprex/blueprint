@@ -455,3 +455,16 @@ Close the result taxonomy and normalization rules together with the pipeline pla
   - temporarily override the earlier error-model handoff and return to this workstream for `result-model-and-host-translation/introduce-body-bearing-resource-event-results`
   - this is the narrowest dependency-safe prerequisite because OpenAPI's remaining same-status discriminator carve-out depends on body-bearing resource-event outcomes with a stable serialized `eventId`, and that result contract does not exist yet
   - keep the slice intentionally narrow: introduce the canonical body-bearing resource-event result shape and defer broader discriminator emission, grouped-event unions, and other OpenAPI rendering work to the follow-on slices that consume it
+- Completed the body-bearing resource-event prerequisite slice:
+  - `Blueprint.Runtime.Exec.ResourceEventResult` / `ResourceEventResult<T>` now provide the canonical host-neutral body-bearing resource-event semantic family, carrying stable `EventId`, `ResourceId`, and a typed payload while remaining distinct from both `CreatedResult<T>` and the empty-body `KeyOnlyResourceEventResult` path
+  - `HttpOperationResultExecutor` now translates that semantic family to JSON `201 Created` envelopes with top-level `eventId`, `resourceId`, and `content`, and the descriptor helper surface now treats that family as supported by the current HTTP executor and flattened outcome projection
+  - the serializer fallback path now keeps app-owned source-generated metadata first but can still serialize uncovered wrapper roots through a reflection fallback while the broader serializer-coverage migration remains in progress
+- Proof closed for this slice:
+  - red-to-green endpoint translation proof in `OperationResultTranslationEndpointTests`
+  - red-to-green descriptor support proof in `OperationDescriptorSourceGeneratorTests.HostExecutorAvailability`
+  - red-to-green flattened-outcome proof in `OperationDescriptorSourceGeneratorTests.FlattenedOutcomes`
+  - green `Blueprint.SourceGenerator.Tests` project run
+- Next handoff back to OpenAPI:
+  - return the live tracker to `migration\openapi\plan.md`
+  - continue with `openapi/allow-same-status-body-bearing-resource-event-unions-with-eventid-discriminator`
+  - that is now the narrowest dependency-safe follow-on because the prerequisite semantic result family exists, the HTTP body now carries a stable serialized `eventId`, and the remaining work is to let descriptor/OpenAPI discrimination consume that fact without widening other same-status unions accidentally

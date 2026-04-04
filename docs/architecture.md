@@ -60,6 +60,11 @@ declares a `JsonSerializerContext`, the executor prefers its generated type meta
 problem responses; uncovered fallback bodies still serialize through `System.Text.Json` using the context's options when
 available rather than routing back through `Newtonsoft.Json`.
 
+The supported semantic HTTP surface now also includes `Blueprint.Runtime.Exec.ResourceEventResult<T>`, which keeps
+body-bearing resource-event responses distinct from ordinary `CreatedResult<T>` flows. The current HTTP host translates
+that family to `201 Created` JSON envelopes with top-level `eventId`, `resourceId`, and `content`, so later same-status
+union and OpenAPI slices can reason from a stable serialized discriminator instead of an implicit payload convention.
+
 The runtime model now follows that same serializer contract end to end: `Blueprint.Model.ApiResource` and
 `Blueprint.Model.Link` rely only on `System.Text.Json` attributes, so `$object`, `$links`, `$partial`, and null-link
 omission behavior no longer depend on leftover `Newtonsoft.Json` annotations in `Blueprint.Runtime.Model`.

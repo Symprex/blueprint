@@ -64,6 +64,26 @@ public class OperationDescriptorSourceGeneratorTestsFlattenedOutcomesTests
     }
 
     [Fact]
+    public void When_declared_contract_contains_body_bearing_resource_event_result_then_generated_descriptor_keeps_it_in_flattened_outcome_feature_data()
+    {
+        var result = OperationDescriptorSourceGeneratorTests.Compile("""
+            using Blueprint.Runtime.Exec;
+
+            public partial class BodyResourceEventOperation : IQuery<Results<ResourceEventResult<string>, NoResultOperationResult>> {}
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var descriptorSource = result.Output
+            .Select(static tree => tree.ToString())
+            .FirstOrDefault(static source => source.Contains("BodyResourceEventOperationDescriptor"));
+
+        descriptorSource.Should().NotBeNull();
+        descriptorSource!.Should().Contain("typeof(global::Blueprint.Runtime.Exec.ResourceEventResult<string>)");
+        descriptorSource.Should().Contain("typeof(global::Blueprint.Runtime.Exec.NoResultOperationResult)");
+    }
+
+    [Fact]
     public void When_declared_contract_contains_created_result_then_generated_descriptor_keeps_it_in_flattened_outcome_feature_data()
     {
         var result = OperationDescriptorSourceGeneratorTests.Compile("""

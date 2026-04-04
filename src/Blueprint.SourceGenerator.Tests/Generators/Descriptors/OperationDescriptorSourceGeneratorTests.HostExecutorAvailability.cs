@@ -149,6 +149,24 @@ public class OperationDescriptorSourceGeneratorTestsHostExecutorAvailabilityTest
     }
 
     [Fact]
+    public void When_http_exposed_operation_declares_body_bearing_resource_event_result_then_generator_treats_it_as_supported_by_current_http_executor()
+    {
+        var result = OperationDescriptorSourceGeneratorTests.Compile("""
+            using Blueprint.Runtime.Exec;
+
+            [RootLink("/host-aware/body-resource-event")]
+            public partial class BodyResourceEventResultOperation : IQuery<ResourceEventResult<string>> {}
+            """);
+
+        result.Diagnostics.Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+            .Should()
+            .BeEmpty();
+        result.Diagnostics.Select(static diagnostic => diagnostic.Id)
+            .Should()
+            .NotContain("BP108");
+    }
+
+    [Fact]
     public void When_http_exposed_operation_declares_http_owned_no_content_result_then_generator_treats_it_as_supported_by_current_http_executor()
     {
         var result = OperationDescriptorSourceGeneratorTests.Compile("""

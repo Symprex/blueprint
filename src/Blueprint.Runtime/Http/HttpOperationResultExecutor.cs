@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
 using Blueprint.Model;
 using Blueprint.Runtime.Exec;
@@ -74,6 +75,11 @@ public class HttpOperationResultExecutor
             case KeyOnlyResourceEventResult:
                 httpContext.Response.StatusCode = StatusCodes.Status201Created;
                 return true;
+            case ResourceEventResult resourceEventResult:
+                httpContext.Response.StatusCode = StatusCodes.Status201Created;
+                httpContext.Response.ContentType = "application/json; charset=utf-8";
+                await WriteJsonAsync(httpContext, operationContext, ResourceEventEnvelope.Create(resourceEventResult));
+                return true;
             case HttpNoContentResult:
                 httpContext.Response.StatusCode = StatusCodes.Status204NoContent;
                 return true;
@@ -92,9 +98,24 @@ public class HttpOperationResultExecutor
         var serializerOptions = serializerContext?.Options ?? new JsonSerializerOptions();
         var json = serializerContext?.GetTypeInfo(content.GetType()) is JsonTypeInfo jsonTypeInfo
             ? JsonSerializer.Serialize(content, jsonTypeInfo)
-            : JsonSerializer.Serialize(content, content.GetType(), serializerOptions);
+            : JsonSerializer.Serialize(content, content.GetType(), CreateFallbackSerializerOptions(serializerOptions));
 
         await httpContext.Response.WriteAsync(json, httpContext.RequestAborted);
+    }
+
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2026",
+        Justification = "The HTTP executor already relies on runtime serialization for uncovered response roots while the serializer-coverage migration remains in progress. This fallback keeps app-owned source-generated metadata first and only adds reflection metadata for wrapper roots the app context does not declare.")]
+    private static JsonSerializerOptions CreateFallbackSerializerOptions(JsonSerializerOptions serializerOptions)
+    {
+        var fallbackOptions = new JsonSerializerOptions(serializerOptions)
+        {
+            TypeInfoResolver = serializerOptions.TypeInfoResolver is null
+            ? new DefaultJsonTypeInfoResolver()
+            : JsonTypeInfoResolver.Combine(serializerOptions.TypeInfoResolver, new DefaultJsonTypeInfoResolver()),
+        };
+        return fallbackOptions;
     }
 
     private static bool DescriptorSupportsFailureResult(ApiOperationDescriptor descriptor, OperationResult result)
@@ -184,5 +205,27 @@ public class HttpOperationResultExecutor
         httpContext.Response.StatusCode = StatusCodes.Status500InternalServerError;
         httpContext.Response.ContentType = "application/problem+json; charset=utf-8";
         await WriteJsonAsync(httpContext, operationContext, problemDetails);
+    }
+
+    private sealed class ResourceEventEnvelope
+    {
+        [JsonPropertyName("eventId")]
+        public required string EventId { get; init; }
+
+        [JsonPropertyName("resourceId")]
+        public required string ResourceId { get; init; }
+
+        [JsonPropertyName("content")]
+        public required object Content { get; init; }
+
+        public static ResourceEventEnvelope Create(ResourceEventResult result)
+        {
+            return new ResourceEventEnvelope
+            {
+                EventId = result.EventId,
+                ResourceId = result.ResourceId,
+                Content = result.Content,
+            };
+        }
     }
 }

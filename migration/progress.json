@@ -7,19 +7,19 @@
   },
   "referencePlans": {
     "masterPlan": "migration\\plan.md",
-    "workstreamPlan": "migration\\result-model-and-host-translation\\plan.md"
+    "workstreamPlan": "migration\\openapi\\plan.md"
   },
   "current": {
-    "activeWorkstream": "result-model-and-host-translation",
+    "activeWorkstream": "openapi",
     "nextReadySlice": {
+      "id": "openapi/allow-same-status-body-bearing-resource-event-unions-with-eventid-discriminator",
+      "workstream": "openapi",
+      "title": "Allow same-status body-bearing resource-event OpenAPI discrimination"
+    },
+    "lastCompletedSlice": {
       "id": "result-model-and-host-translation/introduce-body-bearing-resource-event-results",
       "workstream": "result-model-and-host-translation",
       "title": "Introduce body-bearing resource-event result contracts"
-    },
-    "lastCompletedSlice": {
-      "id": "openapi/project-cross-property-openapi-validation-failures-to-compile-time-diagnostics",
-      "workstream": "openapi",
-      "title": "Project unsupported cross-property OpenAPI validation failures to compile-time diagnostics"
     },
     "openReviewGate": null
   },

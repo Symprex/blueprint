@@ -661,3 +661,9 @@ Implement after HTTP descriptors, error-model metadata, and resource metadata ar
   - shift the live tracker to `migration\result-model-and-host-translation\plan.md`
   - continue with `result-model-and-host-translation/introduce-body-bearing-resource-event-results`
   - that is the narrowest dependency-safe next move for OpenAPI completion because the remaining nearby OpenAPI gap is same-status discriminator support, and the approved OpenAPI carve-out depends on body-bearing resource-event outcomes carrying a stable serialized `eventId`. Those result contracts do not exist yet, so the prerequisite belongs in the result-model workstream before OpenAPI can finish that union path honestly.
+- Cross-workstream prerequisite now landed:
+  - `Blueprint.Runtime.Exec.ResourceEventResult` / `ResourceEventResult<T>` now define the missing body-bearing resource-event semantic family, and the HTTP host serializes that family as a `201 Created` JSON envelope with top-level `eventId`, `resourceId`, and `content`
+  - descriptor-time host availability and flattened-outcome projection now both recognize that semantic family, so the remaining OpenAPI work no longer depends on inventing the contract first
+- Autonomous next slice:
+  - return to `openapi/allow-same-status-body-bearing-resource-event-unions-with-eventid-discriminator`
+  - that is the narrowest dependency-safe follow-on because the prerequisite body-bearing resource-event contract now exists and carries the stable serialized `eventId` that the approved same-status OpenAPI carve-out depends on. The remaining work should stay tightly scoped to descriptor/OpenAPI discrimination for body-bearing resource-event unions, without widening other same-status unions or key-only event flows.
