@@ -1,6 +1,5 @@
 ﻿using System.Text.Json.Serialization;
 using Blueprint.Model.Attributes;
-using Newtonsoft.Json;
 
 namespace Blueprint.Model;
 
@@ -17,7 +16,6 @@ public abstract class ApiResource : ILinkableResource, IHaveResourceKey
     /// The object type of this resource, used to indicate to clients what they
     /// are dealing with (i.e. 'user', 'account', 'group').
     /// </summary>
-    [JsonProperty(PropertyName = "$object")]
     [JsonPropertyName("$object")]
     public abstract string Object { get; }
 
@@ -26,22 +24,19 @@ public abstract class ApiResource : ILinkableResource, IHaveResourceKey
     /// in it's current state.
     /// </summary>
     [DoNotCompare]
-    [JsonProperty(PropertyName = "$links")]
     [JsonPropertyName("$links")]
     public IDictionary<string, Link> Links => this._links;
 
     /// <summary>
     /// Gets the stable key used when link generation needs to identify this resource instance in URLs.
     /// </summary>
-    [Newtonsoft.Json.JsonIgnore]
-    [System.Text.Json.Serialization.JsonIgnore]
+    [JsonIgnore]
     public virtual string ResourceKey => null!;
 
     /// <summary>
     /// Gets or sets a value indicating whether or not this resource is 'partial', an indication that not all properties have been
     /// populated for performance reasons and a client should reload from the 'self' link to retrieve all values.
     /// </summary>
-    [JsonProperty(PropertyName = "$partial")]
     [JsonPropertyName("$partial")]
     public bool IsPartial { get; set; }
 

@@ -1052,6 +1052,12 @@ Run this as a paired design loop with workstream 6. The result contract must be 
   - continue with `openapi/align-runtime-model-json-contracts-with-system-text-json`
   - this is the narrowest dependency-safe next slice because the remaining nearby OpenAPI gaps are either broader discriminator/cross-property-schema work or broader serializer cleanup, and the last serializer-alignment seam still visible to OpenAPI-driven consumer contracts is the runtime-model `ApiResource` / `Link` JSON contract that still carries `Newtonsoft.Json` annotations
   - keep the slice intentionally narrow: align `ApiResource` and `Link` with `System.Text.Json` contract attributes first, and defer richer same-status discriminator shaping or cross-property schema semantics to later follow-ons
+- The runtime-model serializer-alignment slice is now complete locally:
+  - `Blueprint.Model.ApiResource` and `Blueprint.Model.Link` now rely only on `System.Text.Json` annotations, so the `$object` / `$links` / `$partial` resource contract and null-link omission behavior no longer depend on `Newtonsoft.Json`
+  - `Blueprint.Runtime.Model` no longer carries the `Newtonsoft.Json` package reference, closing the last runtime-model serializer dependency still adjacent to the OpenAPI consumer contract
+  - focused model proof plus repo build validation now cover the STJ contract directly
+- The next narrow OpenAPI follow-on should therefore be `openapi/diagnose-unsupported-cross-property-validation-shapes`.
+  - That is the narrowest dependency-safe next slice because serializer ownership is now aligned end to end for the current OpenAPI path, while the next nearby gap is that cross-property validation semantics still cannot be represented faithfully by the local property-constraint model. A compile-time fail-fast guard for unsupported cross-property validation shapes is narrower and safer than widening first into richer same-status discriminator design, which still depends on future body-bearing resource-event contracts.
 
 ## 8. Error model and exception handling
 

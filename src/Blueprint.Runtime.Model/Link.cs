@@ -1,4 +1,4 @@
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 namespace Blueprint.Model;
 
@@ -16,6 +16,6 @@ public record Link
     /// <summary>
     /// The type of resource this link will return.
     /// </summary>
-    [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Type { get; set; }
 }

@@ -12,14 +12,14 @@
   "current": {
     "activeWorkstream": "openapi",
     "nextReadySlice": {
+      "id": "openapi/diagnose-unsupported-cross-property-validation-shapes",
+      "workstream": "openapi",
+      "title": "Diagnose unsupported cross-property validation shapes for OpenAPI"
+    },
+    "lastCompletedSlice": {
       "id": "openapi/align-runtime-model-json-contracts-with-system-text-json",
       "workstream": "openapi",
       "title": "Align ApiResource and Link JSON contracts with System.Text.Json"
-    },
-    "lastCompletedSlice": {
-      "id": "breaking-changes-and-migration-tooling/introduce-core-apioperations-contract",
-      "workstream": "breaking-changes-and-migration-tooling",
-      "title": "Introduce core ApiOperations grouped-handler contract"
     },
     "openReviewGate": null
   },

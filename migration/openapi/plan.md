@@ -609,3 +609,20 @@ Implement after HTTP descriptors, error-model metadata, and resource metadata ar
   - continue with `openapi/align-runtime-model-json-contracts-with-system-text-json`
   - this is the narrowest dependency-safe next slice because the remaining nearby OpenAPI gaps are either broader discriminator/cross-property-schema work or broader serializer cleanup, and the last serializer-alignment seam still visible to OpenAPI-driven consumer contracts is the runtime-model `ApiResource` / `Link` JSON contract that still carries `Newtonsoft.Json` annotations
   - keep the slice intentionally narrow: align `ApiResource` and `Link` with `System.Text.Json` contract annotations first, and defer richer same-status discriminator shaping or cross-property schema semantics to later follow-ons
+- Completed `openapi/align-runtime-model-json-contracts-with-system-text-json`.
+- Why it was the right follow-on:
+  - the HTTP host serializer pivot was already complete, but the runtime-model `ApiResource` / `Link` contract still carried leftover `Newtonsoft.Json` annotations that kept OpenAPI-adjacent consumer types on a mixed serializer substrate
+  - aligning that runtime-model seam stayed narrower than richer same-status discriminator work or broader cross-property schema semantics because it only touched the remaining serializer-contract surface already visible to consumers
+- What landed in this slice:
+  - new focused model proof in `ApiResourceSystemTextJsonTests` that serializes an `ApiResource` instance with `System.Text.Json` and asserts the existing `$object`, `$links`, `$partial`, and `ResourceKey` behavior while proving null `Link.Type` values are omitted
+  - `Blueprint.Model.Link.Type` now uses `JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)` and `Blueprint.Model.ApiResource` now relies only on `System.Text.Json` attributes for its wire contract
+  - `Blueprint.Runtime.Model` no longer references `Newtonsoft.Json`, removing the last serializer-package dependency from that runtime-model project
+- Proof closed for this slice:
+  - failing-then-passing model proof in `Blueprint.SourceGenerator.Tests.Model.ApiResourceSystemTextJsonTests`
+  - targeted verification plus repo build validation: `dotnet test .\src\Blueprint.SourceGenerator.Tests\Blueprint.SourceGenerator.Tests.csproj --filter "FullyQualifiedName~ApiResourceSystemTextJsonTests"` and `dotnet build .\Blueprint.sln --no-restore`
+- Deferred by design:
+  - richer same-status discriminator shaping for OpenAPI unions
+  - cross-property schema semantics beyond the current local property-constraint model
+- Autonomous next slice:
+  - Continue with `openapi/diagnose-unsupported-cross-property-validation-shapes`.
+  - That is the narrowest dependency-safe follow-on because the current OpenAPI schema projection now covers local per-property constraints and serializer ownership end to end, but still cannot faithfully represent cross-property validation semantics such as `CompareAttribute`. Failing fast on those unsupported shapes is narrower and safer than widening immediately into same-status discriminator design, which still depends on future body-bearing resource-event contracts.

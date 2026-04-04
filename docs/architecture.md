@@ -60,6 +60,10 @@ declares a `JsonSerializerContext`, the executor prefers its generated type meta
 problem responses; uncovered fallback bodies still serialize through `System.Text.Json` using the context's options when
 available rather than routing back through `Newtonsoft.Json`.
 
+The runtime model now follows that same serializer contract end to end: `Blueprint.Model.ApiResource` and
+`Blueprint.Model.Link` rely only on `System.Text.Json` attributes, so `$object`, `$links`, `$partial`, and null-link
+omission behavior no longer depend on leftover `Newtonsoft.Json` annotations in `Blueprint.Runtime.Model`.
+
 That same generator now also reuses the shared descriptor-planning seam (`src\Blueprint.SourceGenerator\Planning\DescriptorPlanBuilder.cs`) before it emits registrations. That keeps app-level serializer coverage validation (`BP006`) and missing-declaration validation (`BP007`) on the same contributor ordering, host-exposure metadata, and exception-translation policy used by `OperationDescriptorSourceGenerator`, rather than duplicating HTTP/result/body-shape analysis in a separate app-only code path.
 
 The generated app registration means the runtime registry is built from generated descriptors rather than startup-time discovery logic.
