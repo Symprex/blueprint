@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using System.ComponentModel.DataAnnotations;
 using System.Text;
+using System.Text.Json.Serialization;
 using Blueprint.Model;
 using Blueprint.Runtime.Exec;
 using Blueprint.Runtime.Http;
@@ -13,7 +14,7 @@ using Microsoft.Extensions.Options;
 
 namespace Blueprint.SourceGenerator.Tests.Artifacts;
 
-public class OperationResultTranslationEndpointTests
+public partial class OperationResultTranslationEndpointTests
 {
     [Fact]
     public async Task When_http_endpoint_pipeline_returns_ok_result_then_host_route_translates_it_without_self_executing_result_call()
@@ -101,6 +102,23 @@ public class OperationResultTranslationEndpointTests
     }
 
     [Fact]
+    public async Task When_http_endpoint_pipeline_returns_object_result_and_app_declares_serializer_context_then_host_route_uses_the_app_owned_system_text_json_contract()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<ResultTranslationBlueprintApp, ResultTranslationBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/object-operation");
+
+        endpoint.Should().NotBeNull();
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider);
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        response.ContentType.Should().Be("application/json; charset=utf-8");
+        response.Body.Should().Be("{\"displayName\":\"Blueprint\",\"totalCount\":3}");
+    }
+
+    [Fact]
     public async Task When_http_endpoint_pipeline_returns_no_result_then_host_route_completes_with_empty_200_response()
     {
         var endpoints = CreateEndpoints();
@@ -181,7 +199,7 @@ public class OperationResultTranslationEndpointTests
 
         response.StatusCode.Should().Be(StatusCodes.Status422UnprocessableEntity);
         response.ContentType.Should().Be("application/problem+json; charset=utf-8");
-        response.Body.Should().Contain("\"Status\":422")
+        response.Body.Should().Contain("\"status\":422")
             .And.Contain("Name is required")
             .And.Contain("Name");
     }
@@ -221,7 +239,7 @@ public class OperationResultTranslationEndpointTests
 
         response.StatusCode.Should().Be(StatusCodes.Status500InternalServerError);
         response.ContentType.Should().Be("application/problem+json; charset=utf-8");
-        response.Body.Should().Contain("\"Status\":500")
+        response.Body.Should().Contain("\"status\":500")
             .And.Contain("Unhandled failure");
     }
 
@@ -289,6 +307,23 @@ public class OperationResultTranslationEndpointTests
     {
         public ResultTranslationBlueprintApp()
         {
+            this.AppOwnedSerializerContext = new ResultTranslationJsonContext();
+            this.AppOwnedSerializerContextType = typeof(ResultTranslationJsonContext);
+            this.AppOwnedSerializerContextBodyTypes =
+            [
+                typeof(string),
+                typeof(ResultTranslationResponseDto),
+                typeof(Microsoft.AspNetCore.Mvc.ProblemDetails),
+                typeof(Microsoft.AspNetCore.Mvc.ValidationProblemDetails),
+            ];
+            this.AppOwnedSerializerContextBodyTypeNames =
+            [
+                typeof(string).FullName!,
+                typeof(ResultTranslationResponseDto).FullName!,
+                typeof(Microsoft.AspNetCore.Mvc.ProblemDetails).FullName!,
+                typeof(Microsoft.AspNetCore.Mvc.ValidationProblemDetails).FullName!,
+            ];
+
             var descriptor = new ApiOperationDescriptor(typeof(ResultTranslationOperation), "ResultTranslationOperation", nameof(OperationResultTranslationEndpointTests));
             descriptor.AddUrl(new ApiOperationUrl("/ok-operation"));
             this.Register(descriptor);
@@ -308,6 +343,10 @@ public class OperationResultTranslationEndpointTests
             var notFoundDescriptor = new ApiOperationDescriptor(typeof(NotFoundTranslationOperation), "NotFoundTranslationOperation", nameof(OperationResultTranslationEndpointTests));
             notFoundDescriptor.AddUrl(new ApiOperationUrl("/not-found-operation"));
             this.Register(notFoundDescriptor);
+
+            var objectDescriptor = new ApiOperationDescriptor(typeof(ObjectTranslationOperation), "ObjectTranslationOperation", nameof(OperationResultTranslationEndpointTests));
+            objectDescriptor.AddUrl(new ApiOperationUrl("/object-operation"));
+            this.Register(objectDescriptor);
 
             var noResultDescriptor = new ApiOperationDescriptor(typeof(NoResultTranslationOperation), "NoResultTranslationOperation", nameof(OperationResultTranslationEndpointTests));
             noResultDescriptor.AddUrl(new ApiOperationUrl("/no-result-operation"));
@@ -357,6 +396,7 @@ public class OperationResultTranslationEndpointTests
             this.Register(typeof(AcceptedTranslationOperation), new AcceptedResultPipeline());
             this.Register(typeof(ConflictTranslationOperation), new ConflictResultPipeline());
             this.Register(typeof(NotFoundTranslationOperation), new NotFoundResultPipeline());
+            this.Register(typeof(ObjectTranslationOperation), new ObjectResultPipeline());
             this.Register(typeof(NoResultTranslationOperation), new NoResultPipeline());
             this.Register(typeof(HttpNoContentTranslationOperation), new HttpNoContentPipeline());
             this.Register(typeof(KeyOnlyResourceEventTranslationOperation), new KeyOnlyResourceEventPipeline());
@@ -405,6 +445,18 @@ public class OperationResultTranslationEndpointTests
         public Task<OperationResult> ExecuteAsync(ApiOperationContext context)
         {
             return Task.FromResult<OperationResult>(new NoResultOperationResult());
+        }
+    }
+
+    private sealed class ObjectResultPipeline : IOperationExecutorPipeline
+    {
+        public Task<OperationResult> ExecuteAsync(ApiOperationContext context)
+        {
+            return Task.FromResult<OperationResult>(new OkResult<ResultTranslationResponseDto>(new ResultTranslationResponseDto
+            {
+                DisplayName = "Blueprint",
+                TotalCount = 3,
+            }));
         }
     }
 
@@ -488,6 +540,8 @@ public class OperationResultTranslationEndpointTests
 
     private sealed class NotFoundTranslationOperation;
 
+    private sealed class ObjectTranslationOperation;
+
     private sealed class NoResultTranslationOperation;
 
     private sealed class HttpNoContentTranslationOperation;
@@ -503,6 +557,22 @@ public class OperationResultTranslationEndpointTests
     private sealed class UnhandledExceptionTranslationOperation;
 
     private sealed class NullOkResultOperation;
+
+    public sealed class ResultTranslationResponseDto
+    {
+        [JsonPropertyName("displayName")]
+        public required string DisplayName { get; init; }
+
+        [JsonPropertyName("totalCount")]
+        public int TotalCount { get; init; }
+    }
+
+    [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+    [JsonSerializable(typeof(string))]
+    [JsonSerializable(typeof(ResultTranslationResponseDto))]
+    [JsonSerializable(typeof(Microsoft.AspNetCore.Mvc.ProblemDetails))]
+    [JsonSerializable(typeof(Microsoft.AspNetCore.Mvc.ValidationProblemDetails))]
+    public partial class ResultTranslationJsonContext : JsonSerializerContext;
 
     private static OperationFailureOutcomesFeatureData CreateFailureOutcomes(params OperationFailureOutcome[] outcomes)
     {

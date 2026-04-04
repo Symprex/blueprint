@@ -93,6 +93,32 @@ public class AppModelOpenApiSchemaComponentRenderingContextTests
         tagsProperty.IsExtensionData.Should().BeFalse();
     }
 
+    [Fact]
+    public void When_schema_projection_includes_validation_constraints_then_schema_component_rendering_context_renders_openapi_constraint_fields()
+    {
+        var app = new ValidationConstraintBlueprintApp();
+        var documentContext = OpenApiDocumentBuilderContext.Create(app);
+        var schemaContext = OpenApiSchemaProjectionContext.Create(documentContext);
+
+        var componentContext = OpenApiSchemaComponentRenderingContext.Create(schemaContext);
+        var component = componentContext.Components.Single(static component => component.BodyTypeName == typeof(SchemaValidationConstraintsResponse).FullName);
+
+        var codeProperty = component.Properties.Single(static property => property.Name == "Code");
+        codeProperty.MinLength.Should().Be(4);
+        codeProperty.MaxLength.Should().Be(12);
+        codeProperty.Pattern.Should().Be("^[A-Z0-9]+$");
+
+        var positiveCountProperty = component.Properties.Single(static property => property.Name == "PositiveCount");
+        positiveCountProperty.Minimum.Should().Be(0m);
+        positiveCountProperty.ExclusiveMinimum.Should().BeTrue();
+
+        var quantityProperty = component.Properties.Single(static property => property.Name == "Quantity");
+        quantityProperty.Minimum.Should().Be(1m);
+        quantityProperty.Maximum.Should().Be(10m);
+        quantityProperty.ExclusiveMinimum.Should().BeFalse();
+        quantityProperty.ExclusiveMaximum.Should().BeFalse();
+    }
+
     private sealed class NoSerializerContextBlueprintApp : BlueprintApp;
 
     private sealed class PropertyMetadataSchemaComponentBlueprintApp : BlueprintApp

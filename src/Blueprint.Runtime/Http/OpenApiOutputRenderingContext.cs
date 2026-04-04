@@ -342,6 +342,41 @@ public sealed record OpenApiOutputRenderingContext(
             writer.WriteString("type", property.Type);
         }
 
+        if (property.MinLength.HasValue)
+        {
+            writer.WriteNumber("minLength", property.MinLength.Value);
+        }
+
+        if (property.MaxLength.HasValue)
+        {
+            writer.WriteNumber("maxLength", property.MaxLength.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(property.Pattern))
+        {
+            writer.WriteString("pattern", property.Pattern);
+        }
+
+        if (property.Minimum.HasValue)
+        {
+            writer.WriteNumber("minimum", property.Minimum.Value);
+        }
+
+        if (property.ExclusiveMinimum)
+        {
+            writer.WriteBoolean("exclusiveMinimum", true);
+        }
+
+        if (property.Maximum.HasValue)
+        {
+            writer.WriteNumber("maximum", property.Maximum.Value);
+        }
+
+        if (property.ExclusiveMaximum)
+        {
+            writer.WriteBoolean("exclusiveMaximum", true);
+        }
+
         writer.WriteEndObject();
     }
 

@@ -164,6 +164,31 @@ public class AppModelOpenApiOutputRenderingContextTests
         schema.GetProperty("type").GetString().Should().Be("NUMBER");
     }
 
+    [Fact]
+    public void When_schema_component_properties_include_validation_constraints_then_output_emits_openapi_constraint_keywords()
+    {
+        var context = CreateOutputContext(new ValidationConstraintBlueprintApp());
+        var doc = JsonDocument.Parse(context.Json);
+
+        var schema = doc.RootElement
+            .GetProperty("components")
+            .GetProperty("schemas")
+            .GetProperty(typeof(SchemaValidationConstraintsResponse).FullName!.Replace('.', '_'));
+
+        var code = schema.GetProperty("properties").GetProperty("Code");
+        code.GetProperty("minLength").GetInt32().Should().Be(4);
+        code.GetProperty("maxLength").GetInt32().Should().Be(12);
+        code.GetProperty("pattern").GetString().Should().Be("^[A-Z0-9]+$");
+
+        var positiveCount = schema.GetProperty("properties").GetProperty("PositiveCount");
+        positiveCount.GetProperty("minimum").GetDecimal().Should().Be(0m);
+        positiveCount.GetProperty("exclusiveMinimum").GetBoolean().Should().BeTrue();
+
+        var quantity = schema.GetProperty("properties").GetProperty("Quantity");
+        quantity.GetProperty("minimum").GetDecimal().Should().Be(1m);
+        quantity.GetProperty("maximum").GetDecimal().Should().Be(10m);
+    }
+
     private static OpenApiOutputRenderingContext CreateOutputContext(BlueprintApp app)
     {
         var documentBuilderContext = OpenApiDocumentBuilderContext.Create(app);

@@ -1,7 +1,9 @@
 using System.ComponentModel.DataAnnotations;
+using System.Diagnostics.CodeAnalysis;
+using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 using Blueprint.Model;
 using Blueprint.Runtime.Exec;
-using Newtonsoft.Json;
 using MvcProblemDetails = Microsoft.AspNetCore.Mvc.ProblemDetails;
 using MvcValidationProblemDetails = Microsoft.AspNetCore.Mvc.ValidationProblemDetails;
 
@@ -33,22 +35,22 @@ public class HttpOperationResultExecutor
             case CreatedResult createdResult:
                 httpContext.Response.StatusCode = StatusCodes.Status201Created;
                 httpContext.Response.ContentType = "application/json; charset=utf-8";
-                await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(createdResult.Content), httpContext.RequestAborted);
+                await WriteJsonAsync(httpContext, operationContext, createdResult.Content);
                 return true;
             case AcceptedResult acceptedResult:
                 httpContext.Response.StatusCode = StatusCodes.Status202Accepted;
                 httpContext.Response.ContentType = "application/json; charset=utf-8";
-                await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(acceptedResult.Content), httpContext.RequestAborted);
+                await WriteJsonAsync(httpContext, operationContext, acceptedResult.Content);
                 return true;
             case ConflictResult conflictResult:
                 httpContext.Response.StatusCode = StatusCodes.Status409Conflict;
                 httpContext.Response.ContentType = "application/json; charset=utf-8";
-                await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(conflictResult.Content), httpContext.RequestAborted);
+                await WriteJsonAsync(httpContext, operationContext, conflictResult.Content);
                 return true;
             case NotFoundResult notFoundResult:
                 httpContext.Response.StatusCode = StatusCodes.Status404NotFound;
                 httpContext.Response.ContentType = "application/json; charset=utf-8";
-                await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(notFoundResult.Content), httpContext.RequestAborted);
+                await WriteJsonAsync(httpContext, operationContext, notFoundResult.Content);
                 return true;
             case OkResult okResult:
                 if (okResult.Content is null)
@@ -58,13 +60,13 @@ public class HttpOperationResultExecutor
 
                 httpContext.Response.StatusCode = StatusCodes.Status200OK;
                 httpContext.Response.ContentType = "application/json; charset=utf-8";
-                await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(okResult.Content), httpContext.RequestAborted);
+                await WriteJsonAsync(httpContext, operationContext, okResult.Content);
                 return true;
             case ValidationFailedResult validationFailedResult when DescriptorSupportsFailureResult(operationContext.Descriptor, validationFailedResult):
-                await WriteValidationFailureAsync(httpContext, validationFailedResult);
+                await WriteValidationFailureAsync(httpContext, operationContext, validationFailedResult);
                 return true;
             case UnhandledExceptionResult unhandledExceptionResult when DescriptorSupportsFailureResult(operationContext.Descriptor, unhandledExceptionResult):
-                await WriteUnhandledExceptionAsync(httpContext, unhandledExceptionResult, httpOptions);
+                await WriteUnhandledExceptionAsync(httpContext, operationContext, unhandledExceptionResult, httpOptions);
                 return true;
             case NoResultOperationResult:
                 httpContext.Response.StatusCode = StatusCodes.Status200OK;
@@ -78,6 +80,21 @@ public class HttpOperationResultExecutor
             default:
                 return false;
         }
+    }
+
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2026",
+        Justification = "The HTTP executor prefers the app-owned serializer context when available and only falls back to runtime serialization for uncovered response bodies while the broader serializer-coverage migration remains in progress.")]
+    private static async Task WriteJsonAsync(HttpContext httpContext, ApiOperationContext operationContext, object content)
+    {
+        var serializerContext = operationContext.App.AppOwnedSerializerContext;
+        var serializerOptions = serializerContext?.Options ?? new JsonSerializerOptions();
+        var json = serializerContext?.GetTypeInfo(content.GetType()) is JsonTypeInfo jsonTypeInfo
+            ? JsonSerializer.Serialize(content, jsonTypeInfo)
+            : JsonSerializer.Serialize(content, content.GetType(), serializerOptions);
+
+        await httpContext.Response.WriteAsync(json, httpContext.RequestAborted);
     }
 
     private static bool DescriptorSupportsFailureResult(ApiOperationDescriptor descriptor, OperationResult result)
@@ -105,7 +122,7 @@ public class HttpOperationResultExecutor
         return names;
     }
 
-    private static async Task WriteValidationFailureAsync(HttpContext httpContext, ValidationFailedResult validationFailedResult)
+    private static async Task WriteValidationFailureAsync(HttpContext httpContext, ApiOperationContext operationContext, ValidationFailedResult validationFailedResult)
     {
         var validationErrors = validationFailedResult.ValidationResults
             .SelectMany(static validationResult => ExpandValidationErrorEntries(validationResult))
@@ -122,7 +139,7 @@ public class HttpOperationResultExecutor
 
         httpContext.Response.StatusCode = StatusCodes.Status422UnprocessableEntity;
         httpContext.Response.ContentType = "application/problem+json; charset=utf-8";
-        await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(problemDetails), httpContext.RequestAborted);
+        await WriteJsonAsync(httpContext, operationContext, problemDetails);
     }
 
     private static IEnumerable<(string MemberName, string ErrorMessage)> ExpandValidationErrorEntries(ValidationResult validationResult)
@@ -147,7 +164,7 @@ public class HttpOperationResultExecutor
         }
     }
 
-    private static async Task WriteUnhandledExceptionAsync(HttpContext httpContext, UnhandledExceptionResult unhandledExceptionResult, BlueprintHttpOptions httpOptions)
+    private static async Task WriteUnhandledExceptionAsync(HttpContext httpContext, ApiOperationContext operationContext, UnhandledExceptionResult unhandledExceptionResult, BlueprintHttpOptions httpOptions)
     {
         var exposeDetails = httpOptions.ExposeExceptionDetailsInErrorResponses;
         var problemDetails = new MvcProblemDetails
@@ -166,6 +183,6 @@ public class HttpOperationResultExecutor
 
         httpContext.Response.StatusCode = StatusCodes.Status500InternalServerError;
         httpContext.Response.ContentType = "application/problem+json; charset=utf-8";
-        await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(problemDetails), httpContext.RequestAborted);
+        await WriteJsonAsync(httpContext, operationContext, problemDetails);
     }
 }

@@ -57,6 +57,32 @@ public class AppModelOpenApiSchemaProjectionContextPropertyMetadataTests
         tagsProperty.IsExtensionData.Should().BeFalse();
     }
 
+    [Fact]
+    public void When_serializer_metadata_and_validation_attributes_expose_constraints_then_schema_projection_context_projects_supported_constraint_metadata()
+    {
+        var app = new ValidationConstraintBlueprintApp();
+        var documentContext = OpenApiDocumentBuilderContext.Create(app);
+
+        var schemaContext = OpenApiSchemaProjectionContext.Create(documentContext);
+        var schema = schemaContext.Schemas.Single(static schema => schema.BodyTypeName == typeof(SchemaValidationConstraintsResponse).FullName);
+
+        var codeProperty = schema.Properties.Single(static property => property.Name == "Code");
+        codeProperty.MinLength.Should().Be(4);
+        codeProperty.MaxLength.Should().Be(12);
+        codeProperty.Pattern.Should().Be("^[A-Z0-9]+$");
+
+        var positiveCountProperty = schema.Properties.Single(static property => property.Name == "PositiveCount");
+        positiveCountProperty.Minimum.Should().Be(0m);
+        positiveCountProperty.IsMinimumExclusive.Should().BeTrue();
+        positiveCountProperty.Maximum.Should().BeNull();
+
+        var quantityProperty = schema.Properties.Single(static property => property.Name == "Quantity");
+        quantityProperty.Minimum.Should().Be(1m);
+        quantityProperty.Maximum.Should().Be(10m);
+        quantityProperty.IsMinimumExclusive.Should().BeFalse();
+        quantityProperty.IsMaximumExclusive.Should().BeFalse();
+    }
+
     private sealed class PropertyMetadataBlueprintApp : BlueprintApp
     {
         public PropertyMetadataBlueprintApp()

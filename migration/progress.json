@@ -11,17 +11,13 @@
   },
   "current": {
     "activeWorkstream": "openapi",
-    "nextReadySlice": {
-      "id": "openapi/project-validation-and-data-annotation-constraints-into-openapi-schemas",
-      "workstream": "openapi",
-      "title": "Project validation and data-annotation constraints into OpenAPI schemas"
-    },
+    "nextReadySlice": null,
     "lastCompletedSlice": {
-      "id": "openapi/add-schema-processor-hooks-to-openapi-output",
+      "id": "openapi/switch-http-operation-result-executor-to-system-text-json",
       "workstream": "openapi",
-      "title": "Add schema processor hooks to OpenAPI output"
+      "title": "Switch HTTP API serialization to System.Text.Json"
     },
-    "openReviewGate": null
+    "openReviewGate": "human-direction"
   },
   "orchestrationContract": {
     "mustImplementAfterSliceSelection": true,

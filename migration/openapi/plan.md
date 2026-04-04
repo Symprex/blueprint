@@ -561,3 +561,44 @@ Implement after HTTP descriptors, error-model metadata, and resource metadata ar
 - Autonomous next slice:
   - Continue with `openapi/project-validation-and-data-annotation-constraints-into-openapi-schemas`.
   - That is the narrowest safe follow-on because schema processors now cover consumer-owned post-configuration without changing the underlying schema model, leaving validation/data-annotation constraint projection as the next additive schema/output improvement. It stays narrower than a serializer-stack pivot away from `Newtonsoft.Json` because it extends the existing serializer-backed schema projection seam instead of reworking the runtime serialization substrate.
+- Completed `openapi/project-validation-and-data-annotation-constraints-into-openapi-schemas`.
+- Why it was the right follow-on:
+  - the schema-processor slice finished the planned consumer-owned post-configuration hooks in the existing OpenAPI output seam, leaving validation/data-annotation constraints as the next additive schema improvement on the already-landed serializer-backed projection path
+  - the current document, schema-component, and output seams were already isolated, so enriching property-level schema facts stayed narrower than any serializer-stack pivot or grouping-provenance redesign
+- What landed in this slice:
+  - `OpenApiSchemaProjectionContext.Create(document)` now projects supported property-level validation/data-annotation constraints for covered serializer-backed body types: min/max length, regex pattern, inclusive numeric ranges, and Blueprint's exclusive `GreaterThanAttribute` lower bound
+  - source-generated `JsonPropertyInfo.AttributeProvider` is currently null for the covered serializer-context metadata in this repo, so the runtime now falls back deterministically to covered CLR property attributes mapped onto the serializer-exposed JSON property names before projecting validation metadata
+  - `OpenApiSchemaComponentRenderingContext.Create(schemaProjection)` and `OpenApiOutputRenderingContext.Create(...)` now preserve and emit those projected constraints as OpenAPI schema keywords (`minLength`, `maxLength`, `pattern`, `minimum`, `maximum`, `exclusiveMinimum`, `exclusiveMaximum`)
+- Proof closed for this slice:
+  - failing-then-passing integration proofs for projected constraint metadata in `AppModelOpenApiSchemaProjectionContextPropertyMetadataTests`, `AppModelOpenApiSchemaComponentRenderingContextTests`, and `AppModelOpenApiOutputRenderingContextTests`
+  - focused verification plus repo validation: `dotnet format .\Blueprint.sln --no-restore --include ...`, `dotnet test .\src\Blueprint.SourceGenerator.Tests\Blueprint.SourceGenerator.Tests.csproj --filter "FullyQualifiedName~OpenApiDocumentEndpointTests"`, `dotnet test .\src\Blueprint.SourceGenerator.Tests.Integration\Blueprint.SourceGenerator.Tests.Integration.csproj --filter "OpenApi"`, and `dotnet build .\Blueprint.sln --no-restore`
+- Deferred by design:
+  - explicit grouped-handler / `ApiOperations` provenance instead of the current namespace-derived group-name convention
+  - conditional or sibling-property validation attributes that need richer cross-property schema semantics than the current local property-constraint model
+  - runtime serializer switching away from `Newtonsoft.Json`
+- Review gate after this slice:
+  - no narrower dependency-safe follow-on is recorded in the durable OpenAPI plans after this constraint projection slice
+  - the remaining nearby items are either the broader serializer-stack pivot away from `Newtonsoft.Json` or the separate grouped-handler / `ApiOperations` provenance work, so the live tracker should stop with `nextReadySlice = null` and reopen the `human-direction` gate instead of guessing a wider follow-on
+- Cleared the post-constraint review gate by human direction:
+  - the human explicitly chose the serializer direction next: "Serializer for API should be using System.Text.Json. Move to that slice".
+  - the next approved follow-on is therefore `openapi/switch-http-operation-result-executor-to-system-text-json`.
+  - that is the narrowest executable serializer pivot because `HttpOperationResultExecutor` is the concrete runtime seam that still serializes API responses with `JsonConvert`, while the OpenAPI document endpoint already serves pre-rendered JSON text and the grouped-handler / `ApiOperations` provenance work is orthogonal.
+- Completed `openapi/switch-http-operation-result-executor-to-system-text-json`.
+- Why it was the right follow-on:
+  - the human explicitly prioritized the serializer pivot after the constraint slice's review gate reopened
+  - `HttpOperationResultExecutor` was the concrete remaining API-response seam still using `JsonConvert`, so switching that seam to `System.Text.Json` moved the live API contract without widening into grouped-handler provenance or a broader serializer-substrate redesign
+- What landed in this slice:
+  - `HttpOperationResultExecutor` now serializes semantic result bodies and problem responses with `System.Text.Json` instead of `Newtonsoft.Json`
+  - the executor prefers `ApiOperationContext.App.AppOwnedSerializerContext` for generated type metadata when available and otherwise falls back to `System.Text.Json` with the app context's options (or default options when no app-owned context exists)
+  - the mapped endpoint proof now includes an object-result DTO contract that demonstrates `JsonPropertyName`-driven `System.Text.Json` output at the host boundary, alongside updated problem-details expectations on the same endpoint seam
+- Proof closed for this slice:
+  - failing-then-passing endpoint proof in `OperationResultTranslationEndpointTests.When_http_endpoint_pipeline_returns_object_result_and_app_declares_serializer_context_then_host_route_uses_the_app_owned_system_text_json_contract`
+  - focused endpoint regression sweep in `OperationResultTranslationEndpointTests`
+  - slice verification: `dotnet format .\Blueprint.sln --no-restore --include ...`, `dotnet test .\src\Blueprint.SourceGenerator.Tests\Blueprint.SourceGenerator.Tests.csproj --filter "FullyQualifiedName~OperationResultTranslationEndpointTests"`, and `dotnet build .\Blueprint.sln --no-restore`
+- Deferred by design:
+  - explicit grouped-handler / `ApiOperations` provenance instead of the current namespace-derived group-name convention
+  - broader serializer-substrate cleanup outside the HTTP result-execution seam
+  - conditional or sibling-property schema semantics beyond the current local constraint model
+- Review gate after this slice:
+  - no narrower dependency-safe follow-on is recorded in the durable OpenAPI plans after this serializer pivot
+  - the nearby remaining directions are still the separate grouped-handler / `ApiOperations` provenance work or broader serializer-substrate cleanup, so the live tracker should stop with `nextReadySlice = null` and reopen the `human-direction` gate instead of guessing

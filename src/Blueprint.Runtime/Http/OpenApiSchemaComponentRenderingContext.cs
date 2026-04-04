@@ -52,7 +52,14 @@ public sealed record OpenApiSchemaComponentRenderingContext(
         return new OpenApiSchemaComponentPropertyModel(
             property.Name,
             MapType(property.Kind),
-            property.IsExtensionData);
+            property.IsExtensionData,
+            property.MinLength,
+            property.MaxLength,
+            property.Pattern,
+            property.Minimum,
+            property.Maximum,
+            property.IsMinimumExclusive,
+            property.IsMaximumExclusive);
     }
 
     private static string? MapType(OpenApiSchemaKind kind)
@@ -90,7 +97,21 @@ public sealed record OpenApiSchemaComponentModel(
 /// <param name="Name">The JSON-visible property name.</param>
 /// <param name="Type">The OpenAPI-style schema type when the current projection can determine one.</param>
 /// <param name="IsExtensionData">Whether the property acts as serializer extension data.</param>
+/// <param name="MinLength">The inclusive minimum string/collection length when validation attributes expose one.</param>
+/// <param name="MaxLength">The inclusive maximum string/collection length when validation attributes expose one.</param>
+/// <param name="Pattern">The regular-expression pattern when validation attributes expose one.</param>
+/// <param name="Minimum">The numeric lower bound when validation attributes expose one.</param>
+/// <param name="Maximum">The numeric upper bound when validation attributes expose one.</param>
+/// <param name="ExclusiveMinimum">Whether the numeric lower bound is exclusive.</param>
+/// <param name="ExclusiveMaximum">Whether the numeric upper bound is exclusive.</param>
 public sealed record OpenApiSchemaComponentPropertyModel(
     string Name,
     string? Type,
-    bool IsExtensionData);
+    bool IsExtensionData,
+    int? MinLength = null,
+    int? MaxLength = null,
+    string? Pattern = null,
+    decimal? Minimum = null,
+    decimal? Maximum = null,
+    bool ExclusiveMinimum = false,
+    bool ExclusiveMaximum = false);

@@ -1020,6 +1020,24 @@ Run this as a paired design loop with workstream 6. The result contract must be 
   - focused integration and endpoint proofs now cover ordered schema transformation through both the low-level output seam and the hosted OpenAPI document route
 - The next narrow OpenAPI follow-on should therefore be `openapi/project-validation-and-data-annotation-constraints-into-openapi-schemas`.
 - That is the narrowest dependency-safe next slice because the OpenAPI output seam now exposes all planned post-configuration hooks in this family (info, tags, schema processors), leaving validation/data-annotation constraint projection as the next additive schema improvement on the existing serializer-backed projection path. A runtime serializer pivot away from `Newtonsoft.Json` remains a wider substrate change and is therefore not the next safe slice.
+- The OpenAPI validation/data-annotation constraint slice is now complete locally:
+  - `OpenApiSchemaProjectionContext` now projects supported property-level validation constraints (length, pattern, inclusive numeric bounds, and Blueprint's `GreaterThanAttribute` exclusive minimum) for covered serializer-backed body types
+  - because source-generated `JsonPropertyInfo.AttributeProvider` is null in the current serializer metadata path, the runtime now falls back deterministically to covered CLR property attributes mapped onto serializer-exposed JSON property names before rendering OpenAPI schema constraints
+  - `OpenApiSchemaComponentRenderingContext` and `OpenApiOutputRenderingContext` now preserve and emit those constraint keywords into the final OpenAPI schema output
+- No narrower dependency-safe next OpenAPI slice is currently recorded after this constraint work:
+  - the remaining nearby items are the broader runtime serializer pivot away from `Newtonsoft.Json` and the separate grouped-handler / `ApiOperations` provenance direction
+  - the live tracker should therefore stop with `nextReadySlice = null` and reopen a `human-direction` gate instead of fabricating a wider follow-on inside the same autonomous batch
+- Cleared the post-constraint OpenAPI review gate by human direction:
+  - the human explicitly selected the serializer pivot next: "Serializer for API should be using System.Text.Json. Move to that slice".
+  - the approved next slice is `openapi/switch-http-operation-result-executor-to-system-text-json`, targeting the concrete runtime seam that still uses `JsonConvert` for API responses.
+  - this stays narrower than a broader serializer-substrate redesign because it focuses on `HttpOperationResultExecutor`, can be proven at the mapped HTTP endpoint boundary, and reuses the already-landed app-owned serializer context seam instead of inventing new serializer ownership.
+- The HTTP serializer pivot slice is now complete locally:
+  - `HttpOperationResultExecutor` now serializes semantic result bodies and problem responses with `System.Text.Json` instead of `Newtonsoft.Json`
+  - the executor prefers the app-owned `JsonSerializerContext` already carried on `BlueprintApp` and falls back to `System.Text.Json` using the app context's options (or default options when no app-owned context exists) for uncovered response bodies
+  - endpoint translation proof now includes an object-result DTO contract that demonstrates `JsonPropertyName`-driven System.Text.Json output at the mapped HTTP route boundary, and the problem-details assertions were updated to the lowercase JSON shape emitted by the new serializer path
+- No narrower dependency-safe next OpenAPI slice is currently recorded after this serializer pivot:
+  - the nearby remaining directions are still the separate grouped-handler / `ApiOperations` provenance work or broader serializer-substrate cleanup beyond the executor seam
+  - the live tracker should therefore return to `nextReadySlice = null` and reopen a `human-direction` gate instead of guessing another wider follow-on
 
 ## 8. Error model and exception handling
 
