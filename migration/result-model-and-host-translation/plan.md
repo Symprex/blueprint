@@ -451,3 +451,7 @@ Close the result taxonomy and normalization rules together with the pipeline pla
 - Approved handoff after UnhandledExceptionResult canonicalization:
   - Pivot to `migration\error-model-and-exception-handling\plan.md` with a narrow first slice that extracts a shared exception-translator seam around the current executor shell while preserving the existing `ApiException` special handling and generic unhandled fallback.
   - That handoff is now safer than more Workstream 7 taxonomy work because this workstream's canonical result surface is locked enough for failure modeling, while the remaining catch/translation policy belongs to the error-model workstream's explicit sequencing.
+- Later session judgment for OpenAPI completion:
+  - temporarily override the earlier error-model handoff and return to this workstream for `result-model-and-host-translation/introduce-body-bearing-resource-event-results`
+  - this is the narrowest dependency-safe prerequisite because OpenAPI's remaining same-status discriminator carve-out depends on body-bearing resource-event outcomes with a stable serialized `eventId`, and that result contract does not exist yet
+  - keep the slice intentionally narrow: introduce the canonical body-bearing resource-event result shape and defer broader discriminator emission, grouped-event unions, and other OpenAPI rendering work to the follow-on slices that consume it

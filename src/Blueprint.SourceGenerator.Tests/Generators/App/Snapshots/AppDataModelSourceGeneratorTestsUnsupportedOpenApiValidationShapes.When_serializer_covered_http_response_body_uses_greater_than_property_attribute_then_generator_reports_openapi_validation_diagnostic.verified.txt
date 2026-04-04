@@ -1,0 +1,76 @@
+File: Input0.cs
+#nullable enable
+
+using System;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
+using Blueprint.Model;
+using Blueprint.Model.Attributes;
+using Blueprint.Runtime.Exec;
+using Blueprint.Validation;
+using Microsoft.AspNetCore.Mvc;
+
+namespace Microsoft.AspNetCore.Mvc
+{
+    public class ProblemDetails
+    {
+    }
+
+    public sealed class ValidationProblemDetails : ProblemDetails
+    {
+    }
+}
+
+namespace Blueprint.Model.Attributes
+{
+    [AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = true)]
+    internal sealed class RootLinkAttribute : Attribute
+    {
+        public RootLinkAttribute(string url)
+        {
+        }
+    }
+}
+
+namespace TestNamespace
+{
+    public sealed class UnsupportedPayload
+    {
+        public int Minimum { get; init; }
+
+        [GreaterThanProperty(nameof(Minimum))]
+                             ^^^^^^^^^^^^^^^ [Error:BP008] The declared app-owned serializer context 'TestNamespace.TestBlueprintJsonContext' covers HTTP response body type 'TestNamespace.UnsupportedPayload', but property 'Maximum' uses validation attribute 'GreaterThanPropertyAttribute', which the current OpenAPI schema projection cannot represent
+        public int Maximum { get; init; }
+    }
+
+    [JsonSerializable(typeof(UnsupportedPayload))]
+    [JsonSerializable(typeof(ProblemDetails))]
+    [JsonSerializable(typeof(ValidationProblemDetails))]
+    public partial class TestBlueprintJsonContext : JsonSerializerContext
+    {
+        public TestBlueprintJsonContext()
+            : base(new JsonSerializerOptions())
+        {
+        }
+
+        protected override JsonSerializerOptions? GeneratedSerializerOptions => new JsonSerializerOptions();
+
+        public override JsonTypeInfo? GetTypeInfo(Type type)
+        {
+            return null;
+        }
+    }
+
+    [RootLink("/serializer-context-coverage/unsupported-openapi-validation")]
+    public partial class IncludedOperation : IQuery<OkResult<UnsupportedPayload>>
+    {
+        public static ApiOperationDescriptor Configure() => throw new NotImplementedException();
+    }
+
+    [BlueprintAppScan]
+    [BlueprintAppSerializerContext(JsonSerializerContextType = typeof(TestBlueprintJsonContext))]
+    public partial class TestBlueprintApp : BlueprintApp
+    {
+    }
+}

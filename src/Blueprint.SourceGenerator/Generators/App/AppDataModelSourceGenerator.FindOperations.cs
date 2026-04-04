@@ -115,6 +115,18 @@ public sealed partial class AppDataModelSourceGenerator
                     ]));
         }
 
+        if (dataModelClass.SerializerContextTypeName is not null
+            && coveredSerializerContextTypeNames is not null)
+        {
+            foreach (var diagnostic in GetUnsupportedOpenApiValidationDiagnostics(
+                         compilation,
+                         dataModelClass,
+                         requiredSerializerCoverageTypeNames.Where(coveredSerializerContextTypeNames.Contains)))
+            {
+                diagnostics.Add(diagnostic);
+            }
+        }
+
         return Result.Success(new BlueprintAppDataModelCompilationModel(dataModelClass, registrations, diagnostics));
     }
 
@@ -244,6 +256,42 @@ public sealed partial class AppDataModelSourceGenerator
         return requiredBodyTypeNames
             .OrderBy(static typeName => typeName, StringComparer.Ordinal)
             .ToArray();
+    }
+
+    private static IEnumerable<DiagnosticInfo> GetUnsupportedOpenApiValidationDiagnostics(
+        Compilation compilation,
+        ParseOnlyBlueprintAppClassModel dataModelClass,
+        IEnumerable<string> coveredRequiredTypeNames)
+    {
+        foreach (var typeName in coveredRequiredTypeNames.Distinct(StringComparer.Ordinal))
+        {
+            if (compilation.GetTypeByMetadataName(typeName) is not INamedTypeSymbol bodyType)
+            {
+                continue;
+            }
+
+            foreach (var property in bodyType.GetMembers().OfType<IPropertySymbol>())
+            {
+                foreach (var attribute in property.GetAttributes())
+                {
+                    if (ValidationSymbolHelpers.IsCompareAttribute(attribute.AttributeClass) == false
+                        && ValidationSymbolHelpers.IsGreaterThanPropertyAttribute(attribute.AttributeClass) == false)
+                    {
+                        continue;
+                    }
+
+                    yield return new DiagnosticInfo(
+                        _unsupportedOpenApiValidationShapeRule,
+                        ValidationSymbolHelpers.GetReferencedPropertyLocation(attribute, property) ?? dataModelClass.SerializerContextLocation,
+                        [
+                            dataModelClass.SerializerContextTypeName!.Replace("global::", string.Empty, StringComparison.Ordinal),
+                            typeName,
+                            property.Name,
+                            attribute.AttributeClass!.Name,
+                        ]);
+                }
+            }
+        }
     }
 }
 

@@ -643,3 +643,21 @@ Implement after HTTP descriptors, error-model metadata, and resource metadata ar
 - Autonomous next slice:
   - Continue with `openapi/project-cross-property-openapi-validation-failures-to-compile-time-diagnostics`.
   - That is the narrowest dependency-safe follow-on because the runtime now fails fast instead of silently under-documenting those contracts, but Blueprint guidance still prefers compile-time diagnostics whenever the generator can know a contract is unsupported. Projecting the same unsupported cross-property shapes into compile-time diagnostics is narrower than modelling them in OpenAPI or widening into same-status union discrimination.
+- Completed `openapi/project-cross-property-openapi-validation-failures-to-compile-time-diagnostics`.
+- Why it was the right follow-on:
+  - the runtime fail-fast guard had already proven the unsupported cross-property rule, and Blueprint guidance still prefers compile-time diagnostics whenever generation inputs already know a contract is unsupported
+  - moving that feedback earlier stayed narrower than full cross-property schema modelling and still avoided widening into the separate same-status discriminator design
+- What landed in this slice:
+  - `AppDataModelSourceGenerator` now reports `BP008` when an app-owned serializer context covers an HTTP response body type whose properties use unsupported cross-property OpenAPI validation attributes
+  - the first compile-time guarded shapes match the runtime guard: `CompareAttribute` and `GreaterThanPropertyAttribute`
+  - new app-generator diagnostic proofs snapshot both attribute families and point diagnostics at the referenced-property argument site
+- Proof closed for this slice:
+  - failing-then-passing generator diagnostic proofs in `AppDataModelSourceGeneratorTestsUnsupportedOpenApiValidationShapes`
+  - targeted serializer-context validation sweep in `Blueprint.SourceGenerator.Tests` plus `dotnet build .\Blueprint.sln --no-restore`
+- Deferred by design:
+  - full OpenAPI modelling for cross-property validation semantics
+  - richer same-status discriminator shaping for future body-bearing resource-event unions
+- Cross-workstream prerequisite handoff:
+  - shift the live tracker to `migration\result-model-and-host-translation\plan.md`
+  - continue with `result-model-and-host-translation/introduce-body-bearing-resource-event-results`
+  - that is the narrowest dependency-safe next move for OpenAPI completion because the remaining nearby OpenAPI gap is same-status discriminator support, and the approved OpenAPI carve-out depends on body-bearing resource-event outcomes carrying a stable serialized `eventId`. Those result contracts do not exist yet, so the prerequisite belongs in the result-model workstream before OpenAPI can finish that union path honestly.

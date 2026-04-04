@@ -59,6 +59,15 @@ public sealed partial class AppDataModelSourceGenerator : IIncrementalGenerator,
         isEnabledByDefault: true,
         description: "HTTP-visible Blueprint apps must declare an app-owned JsonSerializerContext before OpenAPI/schema generation can trust the compile-time serializer contract.");
 
+    private static readonly DiagnosticDescriptor _unsupportedOpenApiValidationShapeRule = new(
+        id: "BP008",
+        title: "Serializer-covered body type uses unsupported OpenAPI validation shape",
+        messageFormat: "The declared app-owned serializer context '{0}' covers HTTP response body type '{1}', but property '{2}' uses validation attribute '{3}', which the current OpenAPI schema projection cannot represent",
+        category: "AppDataModelSourceGenerator",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "OpenAPI schema projection currently supports local per-property validation constraints only. Covered serializer-backed body types that use cross-property validation must fail during generation instead of silently producing incomplete OpenAPI contracts.");
+
     private readonly BlueprintSourceGenerationConfig _config;
 
     /// <summary>

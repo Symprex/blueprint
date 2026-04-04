@@ -1063,6 +1063,13 @@ Run this as a paired design loop with workstream 6. The result contract must be 
   - the first guarded shapes are `CompareAttribute` and `GreaterThanPropertyAttribute`, both proven through real serializer-backed integration tests
 - The next narrow OpenAPI follow-on should therefore be `openapi/project-cross-property-openapi-validation-failures-to-compile-time-diagnostics`.
   - That is the narrowest dependency-safe next slice because the repo now fails fast at runtime/projection time, but Blueprint guidance still prefers compile-time diagnostics when unsupported contracts are knowable from generation inputs. Surfacing the same unsupported cross-property OpenAPI shapes during generation is narrower than attempting full cross-property schema modelling or same-status discriminator expansion.
+- The compile-time OpenAPI cross-property diagnostic slice is now complete locally:
+  - `AppDataModelSourceGenerator` now reports `BP008` when an app-owned serializer context covers an HTTP response payload type that uses unsupported cross-property OpenAPI validation attributes
+  - the first compile-time guarded shapes match the runtime fail-fast seam: `CompareAttribute` and `GreaterThanPropertyAttribute`
+  - focused generator snapshot proofs plus the nearby serializer-context validation sweep now keep that behavior covered
+- The next dependency-safe move for OpenAPI completion now shifts cross-workstream to `result-model-and-host-translation/introduce-body-bearing-resource-event-results`.
+  - The remaining meaningful nearby OpenAPI gap is richer same-status discriminator support, and the approved OpenAPI exception for same-status unions depends on body-bearing resource-event contracts with a stable serialized `eventId`.
+  - Those result contracts do not exist yet, so the narrowest honest follow-on is to land that prerequisite in the result-model workstream before returning to the remaining OpenAPI discriminator slice.
 
 ## 8. Error model and exception handling
 
