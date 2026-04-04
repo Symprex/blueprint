@@ -221,6 +221,27 @@ Plan the rollout as an analyzer-led major-version change:
 - `src\Blueprint.Codemod\Program.cs`, `src\Blueprint.Codemod.Tests\ProgramCancellationTests.cs`, and `src\Blueprint.Codemod.Tests\DryRunIdempotencyTests.cs` now add the dry-run idempotency proof slice: the CLI exposes a supported writer-injectable orchestration seam for tests, existing cancellation coverage no longer uses reflection, and repeated dry-run executions against the same copied fixture and output directory now prove identical stdout, identical `codemod-report.json` / `codemod-report.md` contents, and unchanged source files.
 - The sample-app migration report review gate is now complete too: the `SimpleBlueprintApp` fixture has a preserved dry-run review package (`codemod-report.json`, `codemod-report.md`, and captured stdout JSON) with the expected 1 auto-fixable, 2 configuration-required, and 2 consumer-extension rewrite findings and no unexpected manual-design-review bucket, so the current `migration-diagnostics` surface now has a representative human-review bundle before broader rollout.
 - Next approved cross-workstream follow-on: shift back to `migration\performance-and-scale\plan.md` and publish the existing benchmark/telemetry outputs in a reviewable format using the approved manifest and scheduled/manual-lane contracts.
+- Cross-workstream handoff after the OpenAPI serializer pivot:
+  - the live tracker now pivots here next with `breaking-changes-and-migration-tooling/introduce-core-apioperations-contract`
+  - this supersedes the earlier performance-and-scale follow-on for the current live sequence because the repo still lacks any core `ApiOperations` / `OperationsHandlerScanner` surface, OpenAPI grouping still relies on namespace-derived fallback metadata until explicit grouped-handler provenance exists, and both `migration\operation-discovery-and-descriptors\plan.md` and `migration\pipeline-composition-and-execution\plan.md` treat grouped-handler discovery moving into core as a prerequisite
+  - keep the first slice intentionally narrow: add the core grouped-handler contract and the first descriptor/group-provenance seam only
+  - defer the wider grouped-handler execution path, transition compatibility wrappers, and analyzer/codemod rewrite support to later follow-on slices in this workstream
+- Completed `breaking-changes-and-migration-tooling/introduce-core-apioperations-contract`.
+- Why it was the right follow-on:
+  - OpenAPI tags still relied on namespace-derived fallback metadata, and the repo still had no core `ApiOperations` / `OperationsHandlerScanner` surface even though breaking-changes, operation-discovery, and pipeline-composition all treat grouped-handler discovery moving into core as prerequisite work
+  - adding the explicit contract plus the first metadata seam stayed narrower than full grouped-handler execution or migration-tooling rewrite work
+- What landed in this slice:
+  - new core `[ApiOperations("...")]` attribute in `Blueprint.Model.Attributes`
+  - `OperationGroupMetadataModule` now prefers the explicit `ApiOperations` group name before falling back to the namespace-derived convention
+  - descriptor and OpenAPI rendering now surface that explicit group through `OperationGroupMetadataFeatureData`, operation tags, and final rendered OpenAPI JSON
+- Proof closed for this slice:
+  - failing-then-passing descriptor proof in `OperationDescriptorSourceGeneratorTestsOperationGroupMetadataTests`
+  - failing-then-passing integration proofs in `AppDataModelSourceGeneratorOperationGroupMetadataTests`, `AppModelOpenApiOperationRenderingContextTagsTests`, and `AppModelOpenApiOutputRenderingContextTagsTests`
+  - slice verification: `dotnet format .\Blueprint.sln --no-restore --include ...`, targeted descriptor/OpenAPI test sweeps, and `dotnet build .\Blueprint.sln --no-restore`
+- Deferred by design:
+  - full grouped-handler discovery and execution activation
+  - compatibility wrappers or forwarding types for legacy consumer-space grouped-handler surfaces
+  - analyzer/codemod rewrites for legacy `OperationsHandlerScanner` usage
 
 ## Observability and debuggability
 

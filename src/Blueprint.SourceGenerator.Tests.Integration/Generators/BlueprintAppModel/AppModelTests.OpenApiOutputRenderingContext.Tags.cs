@@ -26,6 +26,24 @@ public class AppModelOpenApiOutputRenderingContextTagsTests
             .Equal("OperationDescriptors");
     }
 
+    [Fact]
+    public void When_generated_http_operation_declares_apioperations_group_then_openapi_output_uses_explicit_tags()
+    {
+        var context = CreateOutputContext(new IntegrationTestBlueprintApp());
+        var doc = JsonDocument.Parse(context.Json);
+
+        var operation = doc.RootElement
+            .GetProperty("paths")
+            .GetProperty("/openapi/explicit-operation-group")
+            .GetProperty("get");
+
+        operation.GetProperty("tags")
+            .EnumerateArray()
+            .Select(static tag => tag.GetString())
+            .Should()
+            .Equal("Billing");
+    }
+
     private static OpenApiOutputRenderingContext CreateOutputContext(BlueprintApp app)
     {
         var documentBuilderContext = OpenApiDocumentBuilderContext.Create(app);

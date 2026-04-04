@@ -11,13 +11,17 @@
   },
   "current": {
     "activeWorkstream": "openapi",
-    "nextReadySlice": null,
-    "lastCompletedSlice": {
-      "id": "openapi/switch-http-operation-result-executor-to-system-text-json",
+    "nextReadySlice": {
+      "id": "openapi/align-runtime-model-json-contracts-with-system-text-json",
       "workstream": "openapi",
-      "title": "Switch HTTP API serialization to System.Text.Json"
+      "title": "Align ApiResource and Link JSON contracts with System.Text.Json"
     },
-    "openReviewGate": "human-direction"
+    "lastCompletedSlice": {
+      "id": "breaking-changes-and-migration-tooling/introduce-core-apioperations-contract",
+      "workstream": "breaking-changes-and-migration-tooling",
+      "title": "Introduce core ApiOperations grouped-handler contract"
+    },
+    "openReviewGate": null
   },
   "orchestrationContract": {
     "mustImplementAfterSliceSelection": true,

@@ -1038,6 +1038,20 @@ Run this as a paired design loop with workstream 6. The result contract must be 
 - No narrower dependency-safe next OpenAPI slice is currently recorded after this serializer pivot:
   - the nearby remaining directions are still the separate grouped-handler / `ApiOperations` provenance work or broader serializer-substrate cleanup beyond the executor seam
   - the live tracker should therefore return to `nextReadySlice = null` and reopen a `human-direction` gate instead of guessing another wider follow-on
+- Next approved cross-workstream follow-on after the serializer pivot:
+  - shift the live tracker to `migration\breaking-changes-and-migration-tooling\plan.md`
+  - continue with `breaking-changes-and-migration-tooling/introduce-core-apioperations-contract`
+  - this is the narrowest dependency-safe next slice because the repo still has no core `ApiOperations` / `OperationsHandlerScanner` surface, OpenAPI grouping still relies on the namespace-derived fallback until explicit grouped-handler provenance exists, and both the operation-discovery and pipeline-composition plans treat grouped-handler discovery moving into core as a prerequisite rather than optional polish
+  - keep the slice intentionally narrow: introduce the core grouped-handler contract plus the first descriptor/group-provenance seam, and defer broader handler execution activation, compatibility wrappers, and migration-analyzer/codemod rewrites to later follow-ons
+- The grouped-handler provenance prerequisite slice is now complete locally:
+  - `Blueprint.Model.Attributes.ApiOperationsAttribute` now provides the first core grouped-handler contract that consumer operations can declare explicitly
+  - `OperationGroupMetadataModule` now prefers `[ApiOperations("...")]` when present and otherwise falls back to the previous namespace-derived group-name convention, so descriptor feature data and OpenAPI tags can consume explicit group provenance without waiting for the broader grouped-handler execution path
+  - focused descriptor, integration, and OpenAPI tag/output tests now prove the explicit group flows through `OperationGroupMetadataFeatureData`, `OpenApiOperationRenderingContext`, and final rendered OpenAPI JSON
+- Next approved OpenAPI follow-on after the grouped-handler provenance slice:
+  - shift the live tracker back to `migration\openapi\plan.md`
+  - continue with `openapi/align-runtime-model-json-contracts-with-system-text-json`
+  - this is the narrowest dependency-safe next slice because the remaining nearby OpenAPI gaps are either broader discriminator/cross-property-schema work or broader serializer cleanup, and the last serializer-alignment seam still visible to OpenAPI-driven consumer contracts is the runtime-model `ApiResource` / `Link` JSON contract that still carries `Newtonsoft.Json` annotations
+  - keep the slice intentionally narrow: align `ApiResource` and `Link` with `System.Text.Json` contract attributes first, and defer richer same-status discriminator shaping or cross-property schema semantics to later follow-ons
 
 ## 8. Error model and exception handling
 

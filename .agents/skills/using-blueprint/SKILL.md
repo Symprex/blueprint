@@ -28,6 +28,7 @@ Do not use this skill to change Blueprint internals in `blueprint-source-gen`; u
 | Descriptor | Expect `static ApiOperationDescriptor Configure()` to be the contract entry point |
 | Multiple outcomes | Use `Results<T1, T2>` when an operation contract needs to declare one of two host-agnostic semantic result shapes |
 | App root | Create a `partial` `BlueprintApp` with `[BlueprintAppScan]`; use `FromAssemblyOf = typeof(...)` when operations live in another assembly |
+| Operation grouping | Use `[ApiOperations("Billing")]` on an HTTP-exposed operation when the OpenAPI tag/group should come from an explicit grouped-operation name instead of the namespace-derived fallback |
 | Serializer context | If the app maps Blueprint through the HTTP host (`MapBlueprintApi<...>()`) and any scanned operation can produce a body-bearing HTTP response contract, declare `[BlueprintAppSerializerContext(JsonSerializerContextType = typeof(AppJsonContext))]` on the `BlueprintApp` root so the build can prove the app-owned `JsonSerializerContext` covers those generated HTTP contracts; missing declaration now fails with `BP007`, incomplete declared coverage fails with `BP006`, and the generated app now persists both the declared serializer-context type and the declared `JsonSerializable(...)` body-type inventory (`BlueprintApp.AppOwnedSerializerContextType` / `AppOwnedSerializerContextBodyTypeNames`) as the compile-time/OpenAPI ownership seam rather than a runtime serializer switch |
 | Generator wiring | Reference Blueprint's generator as an analyzer so compile-time generation runs; in this repo the sample uses `ProjectReference` with `OutputItemType="Analyzer"` and `ReferenceOutputAssembly="false"` |
 | HTTP host | Map the generated surface with `MapBlueprintApi<TApp, TExec>()` |
@@ -44,6 +45,7 @@ Do not use this skill to change Blueprint internals in `blueprint-source-gen`; u
 - Treat validation attributes as compile-time inputs first and runtime behavior second; if the build can prove the contract is wrong, expect a diagnostic instead of a runtime repair path.
 - `Blueprint.Validation.GreaterThanPropertyAttribute` is now part of the retained Blueprint-specific validation surface for property-to-property greater-than checks.
 - The retained Blueprint-specific conditional validator set now includes `GreaterThan`, `RequiredIf`, `RequiredIfNot`, and `NotAllowedIf` alongside `GreaterThanProperty`; verify the exact fast-path versus fallback shape before relying on a specific constructor or comparison form.
+- If an HTTP-exposed operation needs a consumer-owned OpenAPI tag/group that differs from the namespace-derived fallback, declare `[ApiOperations("...")]` on the operation type; the descriptor and OpenAPI seams now prefer that explicit group name when it is present.
 
 ## Result contract
 

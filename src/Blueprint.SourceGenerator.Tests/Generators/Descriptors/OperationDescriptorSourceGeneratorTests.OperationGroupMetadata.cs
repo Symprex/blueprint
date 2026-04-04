@@ -22,4 +22,24 @@ public class OperationDescriptorSourceGeneratorTestsOperationGroupMetadataTests
         descriptorSource!.Should().Contain(
             "this.SetFeatureData(new global::Blueprint.Model.OperationGroupMetadataFeatureData(\"TestNamespace\"));");
     }
+
+    [Fact]
+    public void When_http_operation_declares_apioperations_group_then_descriptor_sets_operation_group_metadata_from_attribute()
+    {
+        var result = OperationDescriptorSourceGeneratorTests.Compile("""
+            [ApiOperations("Billing")]
+            [RootLink("/operation-group/explicit-query")]
+            public partial class ExplicitGroupQueryOperation : IQuery<string> {}
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var descriptorSource = result.Output
+            .Select(static tree => tree.ToString())
+            .FirstOrDefault(static source => source.Contains("ExplicitGroupQueryOperationDescriptor"));
+
+        descriptorSource.Should().NotBeNull();
+        descriptorSource!.Should().Contain(
+            "this.SetFeatureData(new global::Blueprint.Model.OperationGroupMetadataFeatureData(\"Billing\"));");
+    }
 }

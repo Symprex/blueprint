@@ -602,3 +602,10 @@ Implement after HTTP descriptors, error-model metadata, and resource metadata ar
 - Review gate after this slice:
   - no narrower dependency-safe follow-on is recorded in the durable OpenAPI plans after this serializer pivot
   - the nearby remaining directions are still the separate grouped-handler / `ApiOperations` provenance work or broader serializer-substrate cleanup, so the live tracker should stop with `nextReadySlice = null` and reopen the `human-direction` gate instead of guessing
+- Completed the paired grouped-handler provenance prerequisite in `migration\breaking-changes-and-migration-tooling\plan.md`:
+  - the repo now has a core `[ApiOperations("...")]` contract, and `OperationGroupMetadataModule` prefers that explicit group name before falling back to the namespace-derived convention
+  - descriptor feature data plus `OpenApiOperationRenderingContext` / `OpenApiOutputRenderingContext` now prove that OpenAPI tags can come from explicit grouped-operation provenance instead of depending only on the namespace fallback
+- Next approved OpenAPI follow-on:
+  - continue with `openapi/align-runtime-model-json-contracts-with-system-text-json`
+  - this is the narrowest dependency-safe next slice because the remaining nearby OpenAPI gaps are either broader discriminator/cross-property-schema work or broader serializer cleanup, and the last serializer-alignment seam still visible to OpenAPI-driven consumer contracts is the runtime-model `ApiResource` / `Link` JSON contract that still carries `Newtonsoft.Json` annotations
+  - keep the slice intentionally narrow: align `ApiResource` and `Link` with `System.Text.Json` contract annotations first, and defer richer same-status discriminator shaping or cross-property schema semantics to later follow-ons

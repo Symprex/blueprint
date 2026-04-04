@@ -1,5 +1,6 @@
 using Blueprint.SourceGenerator.CodeWriter;
 using Blueprint.SourceGenerator.Planning;
+using Microsoft.CodeAnalysis;
 using CSharpSymbolDisplay = Microsoft.CodeAnalysis.CSharp.SymbolDisplay;
 
 namespace Blueprint.SourceGenerator.Modules;
@@ -10,6 +11,8 @@ namespace Blueprint.SourceGenerator.Modules;
 /// </summary>
 public sealed class OperationGroupMetadataModule : IBlueprintSourceGeneratorModule, IDescriptorContributor
 {
+    private const string ApiOperationsAttributeMetadataName = "Blueprint.Model.Attributes.ApiOperationsAttribute";
+
     /// <inheritdoc />
     public string ModuleId => nameof(OperationGroupMetadataModule);
 
@@ -57,6 +60,12 @@ public sealed class OperationGroupMetadataModule : IBlueprintSourceGeneratorModu
 
     private static string? TryResolveGroupName(DescriptorContributorContext context)
     {
+        var explicitGroupName = TryResolveExplicitGroupName(context.GetOperationTypeSymbol());
+        if (string.IsNullOrWhiteSpace(explicitGroupName) == false)
+        {
+            return explicitGroupName;
+        }
+
         var discoveryMetadata = context.GetMetadata<OperationDiscoveryManifestModule.DiscoveryPlanData>().FirstOrDefault();
         if (discoveryMetadata is null || string.IsNullOrWhiteSpace(discoveryMetadata.Namespace))
         {
@@ -70,6 +79,14 @@ public sealed class OperationGroupMetadataModule : IBlueprintSourceGeneratorModu
             .ToArray();
 
         return namespaceSegments.Length == 0 ? null : namespaceSegments[^1];
+    }
+
+    private static string? TryResolveExplicitGroupName(INamedTypeSymbol operationType)
+    {
+        return operationType.GetAttributes()
+            .Where(static attribute => attribute.AttributeClass?.ToDisplayString() == ApiOperationsAttributeMetadataName)
+            .Select(static attribute => attribute.ConstructorArguments.Length == 1 ? attribute.ConstructorArguments[0].Value as string : null)
+            .FirstOrDefault(static groupName => string.IsNullOrWhiteSpace(groupName) == false);
     }
 
     private static void RenderDescriptor(ICodeWriter codeWriter, IEnumerable<OperationGroupMetadataRegistration> registrations)
