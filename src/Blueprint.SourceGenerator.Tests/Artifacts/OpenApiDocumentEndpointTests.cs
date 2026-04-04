@@ -177,6 +177,35 @@ public class OpenApiDocumentEndpointTests
             .Be("NUMBER");
     }
 
+    [Fact]
+    public async Task When_openapi_response_represents_same_status_body_bearing_resource_event_union_then_rendered_schema_uses_event_id_discriminator()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<OpenApiResourceEventUnionBlueprintApp, BlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/.blueprint/openapi.json")!;
+        var response = await InvokeEndpointAsync(endpoint);
+
+        var schema = JsonDocument.Parse(response.Body).RootElement
+            .GetProperty("paths")
+            .GetProperty("/resource-event-union")
+            .GetProperty("get")
+            .GetProperty("responses")
+            .GetProperty("201")
+            .GetProperty("content")
+            .GetProperty("application/json")
+            .GetProperty("schema");
+
+        schema.GetProperty("discriminator").GetProperty("propertyName").GetString().Should().Be("eventId");
+        var oneOf = schema.GetProperty("oneOf");
+        oneOf.GetArrayLength().Should().Be(2);
+        oneOf[0].GetProperty("required").EnumerateArray().Select(static item => item.GetString()).Should().Equal("eventId", "resourceId", "content");
+        oneOf[0].GetProperty("properties").GetProperty("eventId").GetProperty("enum")[0].GetString().Should().Be("events.created");
+        oneOf[0].GetProperty("properties").GetProperty("content").GetProperty("$ref").GetString().Should().Be("#/components/schemas/Blueprint_SourceGenerator_Tests_Artifacts_OpenApiCreatedEventPayload");
+        oneOf[1].GetProperty("properties").GetProperty("eventId").GetProperty("enum")[0].GetString().Should().Be("events.updated");
+        oneOf[1].GetProperty("properties").GetProperty("content").GetProperty("$ref").GetString().Should().Be("#/components/schemas/Blueprint_SourceGenerator_Tests_Artifacts_OpenApiUpdatedEventPayload");
+    }
+
     private static async Task<TestEndpointInvocationResult> InvokeEndpointAsync(RouteEndpoint endpoint)
     {
         await using var body = new MemoryStream();
@@ -248,6 +277,50 @@ public class OpenApiDocumentEndpointTests
         }
     }
 
+    private sealed class OpenApiResourceEventUnionBlueprintApp : BlueprintApp
+    {
+        public OpenApiResourceEventUnionBlueprintApp()
+        {
+            var descriptor = new ApiOperationDescriptor(typeof(ResourceEventUnionOperation), "ResourceEventUnionOperation", "OpenApiDocumentEndpointTests");
+            descriptor.AddUrl(new ApiOperationUrl("/resource-event-union"));
+            descriptor.SetFeatureData(new OperationHostExposureFeatureData(["http"]));
+            descriptor.SetFeatureData(new OperationHttpMethodMetadataFeatureData(["GET"]));
+            descriptor.SetFeatureData(new OperationHttpResponseMetadataFeatureData([
+                new OperationHttpResponseMetadata(
+                    201,
+                    true,
+                    [
+                        "Blueprint.Runtime.Exec.ResourceEventResult<Blueprint.SourceGenerator.Tests.Artifacts.OpenApiCreatedEventPayload>",
+                        "Blueprint.Runtime.Exec.ResourceEventResult<Blueprint.SourceGenerator.Tests.Artifacts.OpenApiUpdatedEventPayload>",
+                    ],
+                    [
+                        typeof(OpenApiCreatedEventPayload).FullName!,
+                        typeof(OpenApiUpdatedEventPayload).FullName!,
+                    ]),
+            ]));
+            descriptor.SetFeatureData(new OperationResourceEventMetadataFeatureData([
+                new OperationResourceEventMetadata(
+                    "Blueprint.Runtime.Exec.ResourceEventResult<Blueprint.SourceGenerator.Tests.Artifacts.OpenApiCreatedEventPayload>",
+                    typeof(OpenApiCreatedEventPayload).FullName!,
+                    "events.created"),
+                new OperationResourceEventMetadata(
+                    "Blueprint.Runtime.Exec.ResourceEventResult<Blueprint.SourceGenerator.Tests.Artifacts.OpenApiUpdatedEventPayload>",
+                    typeof(OpenApiUpdatedEventPayload).FullName!,
+                    "events.updated"),
+            ]));
+            descriptor.SetFeatureData(new OperationSerializerContextCoverageFeatureData([
+                typeof(OpenApiCreatedEventPayload).FullName!,
+                typeof(OpenApiUpdatedEventPayload).FullName!,
+            ]));
+
+            this.AppOwnedSerializerContext = new OpenApiResourceEventUnionJsonContext(new JsonSerializerOptions());
+            this.AppOwnedSerializerContextType = typeof(OpenApiResourceEventUnionJsonContext);
+            this.AppOwnedSerializerContextBodyTypes = [typeof(OpenApiCreatedEventPayload), typeof(OpenApiUpdatedEventPayload)];
+            this.AppOwnedSerializerContextBodyTypeNames = [typeof(OpenApiCreatedEventPayload).FullName!, typeof(OpenApiUpdatedEventPayload).FullName!];
+            this.Register(descriptor);
+        }
+    }
+
     private sealed class TestEndpointRouteBuilder(IServiceProvider serviceProvider) : IEndpointRouteBuilder
     {
         public ICollection<EndpointDataSource> DataSources { get; } = [];
@@ -279,6 +352,8 @@ public class OpenApiDocumentEndpointTests
         int StatusCode,
         string? ContentType,
         string Body);
+
+    private sealed class ResourceEventUnionOperation;
 }
 
 public sealed class OpenApiSchemaComponentEndpointResponseDto
@@ -288,3 +363,17 @@ public sealed class OpenApiSchemaComponentEndpointResponseDto
 
 [JsonSerializable(typeof(OpenApiSchemaComponentEndpointResponseDto))]
 public partial class OpenApiSchemaComponentEndpointJsonContext : JsonSerializerContext;
+
+public sealed class OpenApiCreatedEventPayload
+{
+    public string? DisplayName { get; init; }
+}
+
+public sealed class OpenApiUpdatedEventPayload
+{
+    public int Version { get; init; }
+}
+
+[JsonSerializable(typeof(OpenApiCreatedEventPayload))]
+[JsonSerializable(typeof(OpenApiUpdatedEventPayload))]
+public partial class OpenApiResourceEventUnionJsonContext : JsonSerializerContext;

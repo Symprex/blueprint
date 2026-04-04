@@ -67,6 +67,9 @@ union and OpenAPI slices can reason from a stable serialized discriminator inste
 Consumers can now declare `[ResourceEvent("...")]` on the payload type carried by `ResourceEventResult<T>`, and
 descriptor generation projects that compile-time proof into `OperationResourceEventMetadataFeatureData` so later
 discriminator/OpenAPI steps do not need to infer event identities from runtime-only constructor arguments.
+When an HTTP-visible same-status union is made entirely of those proven body-bearing resource-event outcomes, the
+OpenAPI renderer now emits a `oneOf` resource-event envelope with top-level `eventId`, `resourceId`, and `content`
+plus discriminator metadata on `eventId`, while unrelated same-status unions still remain on the diagnostic path.
 
 The runtime model now follows that same serializer contract end to end: `Blueprint.Model.ApiResource` and
 `Blueprint.Model.Link` rely only on `System.Text.Json` attributes, so `$object`, `$links`, `$partial`, and null-link

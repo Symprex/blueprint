@@ -44,18 +44,19 @@ public sealed record OpenApiResponseObjectRenderingContext(
         Dictionary<string, OpenApiSchemaComponentModel> componentsByBodyTypeName)
     {
         var responses = operation.Responses
-            .Select(response => CreateResponseObject(response, componentsByBodyTypeName))
+            .Select(response => CreateResponseObject(operation.Operation, response, componentsByBodyTypeName))
             .ToImmutableArray();
 
         return new OpenApiResponseObjectOperationContext(operation.Operation, responses);
     }
 
     private static OpenApiResponseObjectModel CreateResponseObject(
+        ApiOperationDescriptor operation,
         OpenApiResponseSchemaReferenceResponseContext response,
         Dictionary<string, OpenApiSchemaComponentModel> componentsByBodyTypeName)
     {
         var content = response.Response.HasResponseBody
-            ? CreateContent(response.SchemaReferences, componentsByBodyTypeName)
+            ? CreateContent(operation, response, componentsByBodyTypeName)
             : ImmutableArray<OpenApiResponseContentModel>.Empty;
 
         return new OpenApiResponseObjectModel(
@@ -66,17 +67,52 @@ public sealed record OpenApiResponseObjectRenderingContext(
     }
 
     private static ImmutableArray<OpenApiResponseContentModel> CreateContent(
-        ImmutableArray<OpenApiResponseSchemaReference> schemaReferences,
+        ApiOperationDescriptor operation,
+        OpenApiResponseSchemaReferenceResponseContext response,
         Dictionary<string, OpenApiSchemaComponentModel> componentsByBodyTypeName)
     {
-        var schemaComponents = schemaReferences
+        var schemaComponents = response.SchemaReferences
             .Where(reference => componentsByBodyTypeName.ContainsKey(reference.BodyTypeName))
             .Select(reference => new OpenApiResponseContentSchemaComponent(reference.BodyTypeName, componentsByBodyTypeName[reference.BodyTypeName]))
             .ToImmutableArray();
+        var discriminator = TryCreateResourceEventDiscriminator(operation, response.Response, schemaComponents);
 
         return schemaComponents.IsEmpty
             ? ImmutableArray<OpenApiResponseContentModel>.Empty
-            : [new OpenApiResponseContentModel(JsonMediaType, schemaComponents)];
+            : [new OpenApiResponseContentModel(JsonMediaType, schemaComponents, discriminator)];
+    }
+
+    private static OpenApiResponseDiscriminatorModel? TryCreateResourceEventDiscriminator(
+        ApiOperationDescriptor operation,
+        OperationHttpResponseMetadata response,
+        ImmutableArray<OpenApiResponseContentSchemaComponent> schemaComponents)
+    {
+        if (schemaComponents.Length < 2
+            || operation.TryGetFeatureData<OperationResourceEventMetadataFeatureData>(out var metadata) == false)
+        {
+            return null;
+        }
+
+        var schemaComponentsByBodyTypeName = schemaComponents
+            .ToDictionary(static component => component.BodyTypeName, StringComparer.Ordinal);
+        var distinctEventIds = new HashSet<string>(StringComparer.Ordinal);
+        var cases = new List<OpenApiResponseDiscriminatorCaseModel>(response.ResultTypeNames.Length);
+        foreach (var resultTypeName in response.ResultTypeNames)
+        {
+            var outcome = metadata.Outcomes.FirstOrDefault(candidate => string.Equals(candidate.ResultTypeName, resultTypeName, StringComparison.Ordinal));
+            if (outcome is null
+                || !schemaComponentsByBodyTypeName.TryGetValue(outcome.BodyTypeName, out var schemaComponent)
+                || !distinctEventIds.Add(outcome.EventId))
+            {
+                return null;
+            }
+
+            cases.Add(new OpenApiResponseDiscriminatorCaseModel(outcome.EventId, schemaComponent));
+        }
+
+        return cases.Count != schemaComponents.Length
+            ? null
+            : new OpenApiResponseDiscriminatorModel("eventId", cases.ToImmutableArray());
     }
 }
 
@@ -107,9 +143,30 @@ public sealed record OpenApiResponseObjectModel(
 /// </summary>
 /// <param name="MediaType">The response media type key.</param>
 /// <param name="SchemaComponents">The schema components referenced by this content entry.</param>
+/// <param name="Discriminator">Optional discriminator metadata when the response schema represents a same-status union.</param>
 public sealed record OpenApiResponseContentModel(
     string MediaType,
-    ImmutableArray<OpenApiResponseContentSchemaComponent> SchemaComponents);
+    ImmutableArray<OpenApiResponseContentSchemaComponent> SchemaComponents,
+    OpenApiResponseDiscriminatorModel? Discriminator = null);
+
+/// <summary>
+/// Captures the OpenAPI discriminator metadata for a response content schema when a same-status union can be distinguished
+/// by a stable serialized property.
+/// </summary>
+/// <param name="PropertyName">The JSON property name used as the discriminator.</param>
+/// <param name="Cases">The response-schema variants keyed by discriminator value.</param>
+public sealed record OpenApiResponseDiscriminatorModel(
+    string PropertyName,
+    ImmutableArray<OpenApiResponseDiscriminatorCaseModel> Cases);
+
+/// <summary>
+/// Links one discriminator value to the schema component rendered for that variant's content payload.
+/// </summary>
+/// <param name="Value">The serialized discriminator value.</param>
+/// <param name="SchemaComponent">The schema component that backs this discriminator case.</param>
+public sealed record OpenApiResponseDiscriminatorCaseModel(
+    string Value,
+    OpenApiResponseContentSchemaComponent SchemaComponent);
 
 /// <summary>
 /// Links a rendered response-content entry to the reusable schema component for one covered body type.

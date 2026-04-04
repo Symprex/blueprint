@@ -211,7 +211,7 @@ public sealed record OpenApiOutputRenderingContext(
             writer.WriteStartObject();
             writer.WritePropertyName("schema");
 
-            WriteResponseSchema(writer, mediaEntry.SchemaComponents);
+            WriteResponseSchema(writer, mediaEntry);
 
             writer.WriteEndObject();
         }
@@ -221,8 +221,15 @@ public sealed record OpenApiOutputRenderingContext(
 
     private static void WriteResponseSchema(
         Utf8JsonWriter writer,
-        ImmutableArray<OpenApiResponseContentSchemaComponent> schemaComponents)
+        OpenApiResponseContentModel content)
     {
+        if (content.Discriminator is not null)
+        {
+            WriteResourceEventDiscriminatedResponseSchema(writer, content.Discriminator);
+            return;
+        }
+
+        var schemaComponents = content.SchemaComponents;
         if (schemaComponents.Length == 1)
         {
             writer.WriteStartObject();
@@ -250,6 +257,58 @@ public sealed record OpenApiOutputRenderingContext(
             writer.WriteStartObject();
             writer.WriteEndObject();
         }
+    }
+
+    private static void WriteResourceEventDiscriminatedResponseSchema(
+        Utf8JsonWriter writer,
+        OpenApiResponseDiscriminatorModel discriminator)
+    {
+        writer.WriteStartObject();
+        writer.WritePropertyName("oneOf");
+        writer.WriteStartArray();
+
+        foreach (var discriminatorCase in discriminator.Cases)
+        {
+            writer.WriteStartObject();
+            writer.WriteString("type", "object");
+            writer.WritePropertyName("required");
+            writer.WriteStartArray();
+            writer.WriteStringValue("eventId");
+            writer.WriteStringValue("resourceId");
+            writer.WriteStringValue("content");
+            writer.WriteEndArray();
+            writer.WritePropertyName("properties");
+            writer.WriteStartObject();
+
+            writer.WritePropertyName("eventId");
+            writer.WriteStartObject();
+            writer.WriteString("type", "string");
+            writer.WritePropertyName("enum");
+            writer.WriteStartArray();
+            writer.WriteStringValue(discriminatorCase.Value);
+            writer.WriteEndArray();
+            writer.WriteEndObject();
+
+            writer.WritePropertyName("resourceId");
+            writer.WriteStartObject();
+            writer.WriteString("type", "string");
+            writer.WriteEndObject();
+
+            writer.WritePropertyName("content");
+            writer.WriteStartObject();
+            writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(discriminatorCase.SchemaComponent.BodyTypeName)}");
+            writer.WriteEndObject();
+
+            writer.WriteEndObject();
+            writer.WriteEndObject();
+        }
+
+        writer.WriteEndArray();
+        writer.WritePropertyName("discriminator");
+        writer.WriteStartObject();
+        writer.WriteString("propertyName", discriminator.PropertyName);
+        writer.WriteEndObject();
+        writer.WriteEndObject();
     }
 
     private static void WriteComponents(

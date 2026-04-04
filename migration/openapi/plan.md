@@ -677,3 +677,17 @@ Implement after HTTP descriptors, error-model metadata, and resource metadata ar
 - Autonomous next slice:
   - resume `openapi/allow-same-status-body-bearing-resource-event-unions-with-eventid-discriminator`
   - keep the scope tight: widen same-status handling only for body-bearing `ResourceEventResult<T>` union members whose declared payloads all expose compile-time-proven `eventId` metadata, while leaving key-only event results and unrelated same-status unions on the existing diagnostic path
+- Completed `openapi/allow-same-status-body-bearing-resource-event-unions-with-eventid-discriminator`.
+- Why it was the right final follow-on:
+  - this was the only explicitly deferred nearby OpenAPI gap left after serializer coverage, schema projection, schema processors, compile-time validation, and the two resource-event prerequisites had all landed
+  - the compile-time `[ResourceEvent("...")]` seam now gave the generator exactly enough information to widen the approved carve-out without relaxing unrelated same-status rules
+- What landed in this slice:
+  - `AmbiguousHostTranslationModule` now keeps `BP109` in place by default but skips it for same-status body-bearing `ResourceEventResult<T>` groups when every member exposes a distinct compile-time `eventId`
+  - OpenAPI response rendering now emits a same-status `oneOf` envelope for that proven case, with top-level `eventId`, `resourceId`, and `content` properties plus discriminator metadata on `eventId`
+  - key-only event flows and unrelated same-status unions remain on the existing diagnostic path because they still do not satisfy the approved discriminator rule
+- Proof closed for this slice:
+  - red-to-green descriptor proof that a same-status `Results<ResourceEventResult<T1>, ResourceEventResult<T2>>` union with compile-time `eventId`s no longer reports `BP109`/`BP110`
+  - red-to-green OpenAPI document endpoint proof that the rendered `201` schema now carries `oneOf` envelope variants plus `discriminator.propertyName = "eventId"`
+- OpenAPI workstream status:
+  - the deferred same-status discriminator carve-out is now closed, so the current OpenAPI workstream plan is complete locally
+  - leave `migration\progress.json` with `nextReadySlice = null` for this user request because the session goal was to finish OpenAPI rather than pick a cross-workstream follow-on automatically

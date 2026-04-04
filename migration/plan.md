@@ -1085,6 +1085,13 @@ Run this as a paired design loop with workstream 6. The result contract must be 
 - The next dependency-safe move for OpenAPI completion returns to `openapi/allow-same-status-body-bearing-resource-event-unions-with-eventid-discriminator`.
   - The generator can now prove per-member body-bearing resource-event discriminators from declared contracts.
   - The remaining work should stay tightly focused on letting same-status descriptor/OpenAPI logic consume that metadata without widening unrelated unions or the empty-body `KeyOnlyResourceEventResult` path.
+- The final deferred OpenAPI slice is now complete locally:
+  - same-status body-bearing `ResourceEventResult<T>` unions with distinct compile-time `[ResourceEvent("...")]` metadata now clear the old `BP109` ambiguity guard instead of being treated like ordinary same-shape unions
+  - rendered OpenAPI responses for that approved carve-out now emit `oneOf` resource-event envelopes with top-level `eventId`, `resourceId`, and `content`, plus discriminator metadata on `eventId`
+  - key-only event flows and unrelated same-status unions still remain on the existing diagnostic path, so the carve-out stayed narrow instead of weakening the general contract rules
+- OpenAPI completion status:
+  - the explicitly deferred OpenAPI backlog recorded in `migration\openapi\plan.md` is now closed locally
+  - for this user-directed session, `migration\progress.json` now leaves `nextReadySlice = null` instead of auto-selecting a different workstream because the requested stop condition was “until OpenAPI is fully completed”
 
 ## 8. Error model and exception handling
 

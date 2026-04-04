@@ -11,15 +11,11 @@
   },
   "current": {
     "activeWorkstream": "openapi",
-    "nextReadySlice": {
+    "nextReadySlice": null,
+    "lastCompletedSlice": {
       "id": "openapi/allow-same-status-body-bearing-resource-event-unions-with-eventid-discriminator",
       "workstream": "openapi",
       "title": "Allow same-status body-bearing resource-event unions with eventId discriminator"
-    },
-    "lastCompletedSlice": {
-      "id": "result-model-and-host-translation/expose-compile-time-resource-event-discriminator-metadata",
-      "workstream": "result-model-and-host-translation",
-      "title": "Expose compile-time resource-event discriminator metadata"
     },
     "openReviewGate": null
   },

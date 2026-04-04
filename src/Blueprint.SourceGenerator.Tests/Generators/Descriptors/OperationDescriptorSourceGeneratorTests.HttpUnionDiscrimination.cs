@@ -64,12 +64,10 @@ public class OperationDescriptorSourceGeneratorTestsHttpUnionDiscriminationTests
             public partial class KeyOnlyResourceEventAndNoResultOperation : IQuery<Results<KeyOnlyResourceEventResult, NoResultOperationResult>> {}
             """);
 
-        result.Diagnostics.Where(static diagnostic => diagnostic.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error)
-            .Should()
-            .BeEmpty();
-        result.Diagnostics.Select(static diagnostic => diagnostic.Id)
-            .Should()
-            .NotContain("BP110");
+        var diagnosticIds = result.Diagnostics.Select(static diagnostic => diagnostic.Id).ToArray();
+        diagnosticIds.Should().NotContain("BP109");
+        diagnosticIds.Should().NotContain("BP110");
+        diagnosticIds.Should().NotContain("CS0535");
     }
 
     [Fact]
@@ -104,6 +102,35 @@ public class OperationDescriptorSourceGeneratorTestsHttpUnionDiscriminationTests
         result.Diagnostics.Select(static diagnostic => diagnostic.Id)
             .Should()
             .Contain("BP110");
+    }
+
+    [Fact]
+    public void When_http_exposed_operation_declares_same_status_body_bearing_resource_event_union_with_compile_time_event_ids_then_generator_does_not_report_http_union_discrimination_diagnostic()
+    {
+        var result = OperationDescriptorSourceGeneratorTests.Compile("""
+            using Blueprint.Model.Attributes;
+            using Blueprint.Runtime.Exec;
+
+            [ResourceEvent("events.created")]
+            public sealed class CreatedPayload
+            {
+                public string ResourceId { get; init; } = string.Empty;
+            }
+
+            [ResourceEvent("events.updated")]
+            public sealed class UpdatedPayload
+            {
+                public string ResourceId { get; init; } = string.Empty;
+            }
+
+            [RootLink("/host-aware/body-resource-event-union")]
+            public partial class BodyResourceEventUnionOperation : IQuery<Results<ResourceEventResult<CreatedPayload>, ResourceEventResult<UpdatedPayload>>> {}
+            """);
+
+        var diagnosticIds = result.Diagnostics.Select(static diagnostic => diagnostic.Id).ToArray();
+        diagnosticIds.Should().NotContain("BP109");
+        diagnosticIds.Should().NotContain("BP110");
+        diagnosticIds.Should().NotContain("CS0535");
     }
 
     [Fact]

@@ -76,6 +76,14 @@ public sealed class AmbiguousHostTranslationModule : IBlueprintSourceGeneratorMo
 
         foreach (var ambiguousGroup in ambiguousGroups)
         {
+            if (ambiguousGroup.Key.HasResponseBody
+                && ResourceEventDiscriminationStrategyHelper.HasDistinctCompileTimeEventIds(
+                    context,
+                    ambiguousGroup.Select(static member => member.ResultType)))
+            {
+                continue;
+            }
+
             var responseShape = DescribeResponseShape(ambiguousGroup.Key.StatusCode, ambiguousGroup.Key.HasResponseBody);
             var resultTypes = string.Join(", ", ambiguousGroup.Select(static member => member.ResultType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
             context.AddDiagnostic(
