@@ -613,6 +613,123 @@ public class PropertyOwnershipModuleTests
             .UseDirectory("Generators/Pipelines/Snapshots/Integration/");
     }
 
+    [Fact]
+    public async Task When_operation_has_all_supported_conversion_types_then_pipeline_snapshot_matches()
+    {
+        const string source = """
+            using Blueprint;
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using System;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace
+            {
+                [BlueprintAppScan]
+                public partial class TestApp : BlueprintApp { }
+
+                /// <summary>
+                /// POST with route params of different types and body params of every supported type.
+                /// Exercises route conversion (string, int, Guid) and body Utf8JsonReader paths
+                /// (string, int, long, bool, decimal, Guid, DateTime).
+                /// </summary>
+                [RootLink("/orgs/{OrgSlug}/projects/{ProjectId}/items/{ItemGuid}")]
+                [HttpPost]
+                public partial class AllTypesPostCommand : ICommand<string>
+                {
+                    // Route: string (cast)
+                    public string OrgSlug { get; set; }
+                    // Route: int (Parse)
+                    public int ProjectId { get; set; }
+                    // Route: Guid (Parse)
+                    public System.Guid ItemGuid { get; set; }
+
+                    // Body: every scalar type
+                    public string Title { get; set; }
+                    public int Count { get; set; }
+                    public long BigNumber { get; set; }
+                    public bool IsActive { get; set; }
+                    public decimal Price { get; set; }
+                    public System.Guid CorrelationId { get; set; }
+                    public System.DateTime CreatedAt { get; set; }
+
+                    public static Task<string> HandleAsync(AllTypesPostCommand operation)
+                    {
+                        return Task.FromResult("ok");
+                    }
+                }
+
+                /// <summary>
+                /// GET with route params and query params covering every supported query type:
+                /// scalar string, int, long, bool, decimal, Guid, DateTime, nullable int,
+                /// string array, and int array.
+                /// </summary>
+                [RootLink("/orgs/{OrgSlug}/search/{CategoryId}")]
+                public partial class AllTypesGetQuery : IQuery<string>
+                {
+                    // Route: string
+                    public string OrgSlug { get; set; }
+                    // Route: int
+                    public int CategoryId { get; set; }
+
+                    // Query: string scalar
+                    public string Term { get; set; }
+                    // Query: int scalar
+                    public int PageSize { get; set; }
+                    // Query: long scalar
+                    public long Offset { get; set; }
+                    // Query: bool scalar
+                    public bool IncludeDeleted { get; set; }
+                    // Query: decimal scalar
+                    public decimal MinPrice { get; set; }
+                    // Query: Guid scalar
+                    public System.Guid TenantId { get; set; }
+                    // Query: DateTime scalar
+                    public System.DateTime Since { get; set; }
+                    // Query: nullable int
+                    public int? MaxResults { get; set; }
+                    // Query: string array
+                    public string[] Tags { get; set; }
+                    // Query: int array
+                    public int[] CategoryIds { get; set; }
+
+                    public static Task<string> HandleAsync(AllTypesGetQuery operation)
+                    {
+                        return Task.FromResult("ok");
+                    }
+                }
+            }
+            """;
+
+        var generators = new[]
+        {
+            TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>(),
+            TestHelpers.CreateTrackedGenerator<OperationExecutorPipelineSourceGenerator>(),
+        };
+
+        var result = TestHelpers.CompileWithTrackedGenerators(
+            generators,
+            [source],
+            ["Input0.cs"]);
+
+        result.Diagnostics.Should().BeEmpty("the compilation should have no diagnostics");
+
+        var pipelineSources = result.GetGeneratedSources(nameof(OperationExecutorPipelineSourceGenerator));
+        pipelineSources.Should().HaveCountGreaterOrEqualTo(2, "pipelines for both operations should be generated");
+
+        var outputText = new StringBuilder();
+        foreach (var s in pipelineSources.OrderBy(static s => s.HintName))
+        {
+            outputText.AppendLine(s.HintName + ":");
+            outputText.AppendLine();
+            outputText.AppendLine(s.SourceText);
+            outputText.AppendLine();
+        }
+
+        await Verify(outputText)
+            .UseDirectory("Generators/Pipelines/Snapshots/Integration/");
+    }
+
     private static GenerationResult CompileDescriptor(string source)
     {
         return TestHelpers.Compile<OperationDescriptorSourceGenerator>(
