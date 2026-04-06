@@ -45,10 +45,15 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         var routePlaceholders = ExtractRoutePlaceholders(operationType);
         var httpMethods = ResolveHttpMethods(context, operationType);
 
-        var hasErrors = false;
-        var entries = AnalyzePropertyOwnership(context, operationType, routePlaceholders, httpMethods, ref hasErrors);
+        var diagnostics = new List<DiagnosticInfo>();
+        var entries = AnalyzePropertyOwnership(operationType, routePlaceholders, httpMethods, diagnostics);
 
-        if (hasErrors)
+        foreach (var diagnostic in diagnostics)
+        {
+            context.AddDiagnostic(diagnostic);
+        }
+
+        if (diagnostics.Any(static d => d.Descriptor.DefaultSeverity == DiagnosticSeverity.Error))
         {
             return;
         }
@@ -73,7 +78,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
 
         var routePlaceholders = ExtractRoutePlaceholders(operationType);
         var httpMethods = ResolveHttpMethods(operationType);
-        var entries = AnalyzePropertyOwnership(operationType, routePlaceholders, httpMethods);
+        var entries = AnalyzePropertyOwnership(operationType, routePlaceholders, httpMethods, diagnostics: null);
 
         if (entries.Count == 0)
         {
@@ -81,32 +86,25 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         }
 
         var hasBodyProperties = entries.Any(static e => e.Source == PropertyOwnershipSource.Body);
-        var hasQueryProperties = entries.Any(static e => e.Source == PropertyOwnershipSource.Query);
-        var hasRouteProperties = entries.Any(static e => e.Source == PropertyOwnershipSource.Route);
+        var hasNonStringNonBodyProperties = entries.Any(static e =>
+            e.Source is PropertyOwnershipSource.Query or PropertyOwnershipSource.Header or PropertyOwnershipSource.Cookie
+            && !IsStringType(e.TypeSymbol));
+
+        // Body reading requires async; typed non-body values with TryParse + early return also need async
+        if (hasBodyProperties || hasNonStringNonBodyProperties)
+        {
+            context.RequireAsync();
+        }
+
+        context.AddRenderStep(PipelineStage.Population, renderContext => RenderPopulation(renderContext, entries));
 
         if (hasBodyProperties)
         {
-            context.RequireAsync();
-            context.AddRenderStep(PipelineStage.Population, renderContext => RenderPopulationStage(renderContext, entries, context.Operation));
-
-            // Register the Utf8JsonReader body parser as a deferred class member so it is
-            // added to the pipeline class before Build() materialises the method list.
             var bodyEntries = entries.Where(static e => e.Source == PropertyOwnershipSource.Body).ToArray();
             var operationTypeFull = operationType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
             context.AddDeferredClassMember(pipelineClass =>
                 WritePopulateFromJsonBodyMethod(pipelineClass, operationTypeFull, bodyEntries));
-        }
-        else if (hasRouteProperties || hasQueryProperties)
-        {
-            // Non-string query params generate if/else with a return statement for 400 on bad values.
-            // Ensure the pipeline is async so the return compiles against Task<OperationResult>.
-            if (hasQueryProperties && entries.Any(static e => e.Source == PropertyOwnershipSource.Query && !IsStringType(e.TypeSymbol)))
-            {
-                context.RequireAsync();
-            }
-
-            context.AddRenderStep(PipelineStage.Population, renderContext => RenderNonBodyPopulation(renderContext, entries, context.Operation));
         }
     }
 
@@ -233,14 +231,31 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             || string.Equals(m, "DELETE", StringComparison.OrdinalIgnoreCase));
     }
 
+    /// <summary>
+    /// Returns true when the operation is exclusively GET and/or DELETE — used for BPPO004 validation
+    /// of explicit [FromBody], which is semantically invalid on these methods.
+    /// </summary>
+    private static bool IsGetOrDeleteMethod(string[] httpMethods)
+    {
+        return httpMethods.Length > 0 && httpMethods.All(static m =>
+            string.Equals(m, "GET", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(m, "DELETE", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Analyses property ownership for an operation type, returning entries for each bindable property.
+    /// When <paramref name="diagnostics"/> is non-null (descriptor path), validation errors are collected
+    /// into the list. When null (pipeline path), invalid properties are silently skipped so the generator
+    /// still produces output for the valid subset.
+    /// </summary>
     private static List<PropertyOwnershipEntry> AnalyzePropertyOwnership(
-        DescriptorContributorContext context,
         INamedTypeSymbol operationType,
         List<string> routePlaceholders,
         string[] httpMethods,
-        ref bool hasErrors)
+        List<DiagnosticInfo>? diagnostics)
     {
         var entries = new List<PropertyOwnershipEntry>();
+        var isGetOrDelete = IsGetOrDeleteMethod(httpMethods);
 
         foreach (var member in operationType.GetMembers().OfType<IPropertySymbol>())
         {
@@ -254,16 +269,68 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
                 continue;
             }
 
+            // Step 1 — detect explicit [FromX] attributes (namespace-qualified to avoid MVC collisions)
+            var fromRoute = FindAttribute(member, "FromRouteAttribute", "Blueprint.Model.Attributes");
+            var fromQuery = FindAttribute(member, "FromQueryAttribute", "Blueprint.Model.Attributes");
+            var fromBody = FindAttribute(member, "FromBodyAttribute", "Blueprint.Model.Attributes");
+            var fromHeader = FindAttribute(member, "FromHeaderAttribute", "Blueprint.Model.Attributes");
+            var fromCookie = FindAttribute(member, "FromCookieAttribute", "Blueprint.Model.Attributes");
+
+            var explicitCount = (fromRoute != null ? 1 : 0) + (fromQuery != null ? 1 : 0) + (fromBody != null ? 1 : 0) + (fromHeader != null ? 1 : 0) + (fromCookie != null ? 1 : 0);
+
+            // Step 2 — conflict: more than one [FromX] attribute on the same property
+            if (explicitCount > 1)
+            {
+                if (diagnostics != null)
+                {
+                    var conflicting = BuildConflictingAttributeList(fromRoute, fromQuery, fromBody, fromHeader, fromCookie);
+                    var location = member.Locations.FirstOrDefault(static l => l.IsInSource);
+                    diagnostics.Add(new DiagnosticInfo(
+                        PropertyOwnershipDiagnosticDescriptors.ConflictingFromAttributes,
+                        location is not null ? LocationInfo.CreateFrom(location) : null,
+                        [member.Name, operationType.Name, conflicting]));
+                }
+
+                continue;
+            }
+
+            // Step 3 — exactly one explicit attribute: validate and add entry
+            if (explicitCount == 1)
+            {
+                if (fromRoute != null)
+                {
+                    HandleExplicitFromRoute(member, operationType, routePlaceholders, entries, diagnostics);
+                }
+                else if (fromQuery != null)
+                {
+                    HandleExplicitFromQuery(member, operationType, fromQuery, entries, diagnostics);
+                }
+                else if (fromBody != null)
+                {
+                    HandleExplicitFromBody(member, operationType, httpMethods, isGetOrDelete, entries, diagnostics);
+                }
+                else if (fromHeader != null)
+                {
+                    HandleExplicitFromHeader(member, operationType, fromHeader, entries, diagnostics);
+                }
+                else if (fromCookie != null)
+                {
+                    HandleExplicitFromCookie(member, operationType, fromCookie, entries, diagnostics);
+                }
+
+                continue;
+            }
+
+            // Step 4 — convention fallback (no explicit attribute)
             if (routePlaceholders.Contains(member.Name, StringComparer.Ordinal))
             {
                 if (!IsSupportedRouteType(member.Type))
                 {
-                    var location = member.Locations.FirstOrDefault(static l => l.IsInSource);
-                    context.AddDiagnostic(new DiagnosticInfo(
+                    diagnostics?.Add(CreatePropertyDiagnostic(
                         PropertyOwnershipDiagnosticDescriptors.UnsupportedRoutePropertyType,
-                        location is not null ? LocationInfo.CreateFrom(location) : null,
-                        [member.Name, operationType.Name, member.Type.ToDisplayString()]));
-                    hasErrors = true;
+                        member,
+                        operationType,
+                        member.Type.ToDisplayString()));
                     continue;
                 }
 
@@ -283,12 +350,11 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             {
                 if (!IsSupportedQueryType(member.Type))
                 {
-                    var location = member.Locations.FirstOrDefault(static l => l.IsInSource);
-                    context.AddDiagnostic(new DiagnosticInfo(
+                    diagnostics?.Add(CreatePropertyDiagnostic(
                         PropertyOwnershipDiagnosticDescriptors.UnsupportedQueryPropertyType,
-                        location is not null ? LocationInfo.CreateFrom(location) : null,
-                        [member.Name, operationType.Name, member.Type.ToDisplayString()]));
-                    hasErrors = true;
+                        member,
+                        operationType,
+                        member.Type.ToDisplayString()));
                     continue;
                 }
 
@@ -303,60 +369,217 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         return entries;
     }
 
-    private static List<PropertyOwnershipEntry> AnalyzePropertyOwnership(
+    private static void HandleExplicitFromRoute(
+        IPropertySymbol member,
         INamedTypeSymbol operationType,
         List<string> routePlaceholders,
-        string[] httpMethods)
+        List<PropertyOwnershipEntry> entries,
+        List<DiagnosticInfo>? diagnostics)
     {
-        var entries = new List<PropertyOwnershipEntry>();
-
-        foreach (var member in operationType.GetMembers().OfType<IPropertySymbol>())
+        if (!routePlaceholders.Contains(member.Name, StringComparer.Ordinal))
         {
-            if (member.IsStatic || member.IsReadOnly || member.SetMethod is null || member.SetMethod.IsInitOnly || member.DeclaredAccessibility != Accessibility.Public)
-            {
-                continue;
-            }
-
-            if (IsSystemProperty(member))
-            {
-                continue;
-            }
-
-            if (routePlaceholders.Contains(member.Name, StringComparer.Ordinal))
-            {
-                if (!IsSupportedRouteType(member.Type))
-                {
-                    continue;
-                }
-
-                entries.Add(new PropertyOwnershipEntry(member.Name, member.Type, PropertyOwnershipSource.Route, member.Name));
-                continue;
-            }
-
-            if (IsBodyMethod(httpMethods))
-            {
-                entries.Add(new PropertyOwnershipEntry(
-                    member.Name,
-                    member.Type,
-                    PropertyOwnershipSource.Body,
-                    GetCamelCaseName(member.Name)));
-            }
-            else if (IsQueryMethod(httpMethods))
-            {
-                if (!IsSupportedQueryType(member.Type))
-                {
-                    continue;
-                }
-
-                entries.Add(new PropertyOwnershipEntry(
-                    member.Name,
-                    member.Type,
-                    PropertyOwnershipSource.Query,
-                    GetCamelCaseName(member.Name)));
-            }
+            diagnostics?.Add(CreatePropertyDiagnostic(
+                PropertyOwnershipDiagnosticDescriptors.ExplicitRouteWithoutPlaceholder,
+                member,
+                operationType));
+            return;
         }
 
-        return entries;
+        if (!IsSupportedRouteType(member.Type))
+        {
+            diagnostics?.Add(CreatePropertyDiagnostic(
+                PropertyOwnershipDiagnosticDescriptors.UnsupportedRoutePropertyType,
+                member,
+                operationType,
+                member.Type.ToDisplayString()));
+            return;
+        }
+
+        entries.Add(new PropertyOwnershipEntry(member.Name, member.Type, PropertyOwnershipSource.Route, member.Name));
+    }
+
+    private static void HandleExplicitFromQuery(
+        IPropertySymbol member,
+        INamedTypeSymbol operationType,
+        AttributeData attribute,
+        List<PropertyOwnershipEntry> entries,
+        List<DiagnosticInfo>? diagnostics)
+    {
+        if (!IsSupportedQueryType(member.Type))
+        {
+            diagnostics?.Add(CreatePropertyDiagnostic(
+                PropertyOwnershipDiagnosticDescriptors.UnsupportedQueryPropertyType,
+                member,
+                operationType,
+                member.Type.ToDisplayString()));
+            return;
+        }
+
+        // Named argument Name overrides the default camelCase property name
+        var nameOverride = attribute.NamedArguments
+            .FirstOrDefault(static a => a.Key == "Name").Value.Value as string;
+
+        var bindingName = !string.IsNullOrWhiteSpace(nameOverride) ? nameOverride : GetCamelCaseName(member.Name);
+
+        entries.Add(new PropertyOwnershipEntry(member.Name, member.Type, PropertyOwnershipSource.Query, bindingName));
+    }
+
+    private static void HandleExplicitFromBody(
+        IPropertySymbol member,
+        INamedTypeSymbol operationType,
+        string[] httpMethods,
+        bool isGetOrDelete,
+        List<PropertyOwnershipEntry> entries,
+        List<DiagnosticInfo>? diagnostics)
+    {
+        if (isGetOrDelete)
+        {
+            var methodList = string.Join("/", httpMethods.Distinct(StringComparer.OrdinalIgnoreCase));
+            diagnostics?.Add(CreatePropertyDiagnostic(
+                PropertyOwnershipDiagnosticDescriptors.ExplicitBodyOnGetOrDelete,
+                member,
+                operationType,
+                methodList));
+            return;
+        }
+
+        entries.Add(new PropertyOwnershipEntry(
+            member.Name,
+            member.Type,
+            PropertyOwnershipSource.Body,
+            GetCamelCaseName(member.Name)));
+    }
+
+    private static void HandleExplicitFromHeader(
+        IPropertySymbol member,
+        INamedTypeSymbol operationType,
+        AttributeData attribute,
+        List<PropertyOwnershipEntry> entries,
+        List<DiagnosticInfo>? diagnostics)
+    {
+        if (!IsSupportedHeaderOrCookieType(member.Type))
+        {
+            diagnostics?.Add(CreatePropertyDiagnostic(
+                PropertyOwnershipDiagnosticDescriptors.UnsupportedHeaderOrCookiePropertyType,
+                member,
+                operationType,
+                "FromHeader",
+                member.Type.ToDisplayString()));
+            return;
+        }
+
+        // Header name is a required constructor argument
+        var headerName = attribute.ConstructorArguments.Length > 0
+            ? attribute.ConstructorArguments[0].Value as string
+            : null;
+
+        if (string.IsNullOrWhiteSpace(headerName))
+        {
+            // Defensive: broken or incomplete attribute — skip without crashing the generator
+            return;
+        }
+
+        entries.Add(new PropertyOwnershipEntry(member.Name, member.Type, PropertyOwnershipSource.Header, headerName));
+    }
+
+    private static void HandleExplicitFromCookie(
+        IPropertySymbol member,
+        INamedTypeSymbol operationType,
+        AttributeData attribute,
+        List<PropertyOwnershipEntry> entries,
+        List<DiagnosticInfo>? diagnostics)
+    {
+        if (!IsSupportedHeaderOrCookieType(member.Type))
+        {
+            diagnostics?.Add(CreatePropertyDiagnostic(
+                PropertyOwnershipDiagnosticDescriptors.UnsupportedHeaderOrCookiePropertyType,
+                member,
+                operationType,
+                "FromCookie",
+                member.Type.ToDisplayString()));
+            return;
+        }
+
+        // Cookie name is a required constructor argument
+        var cookieName = attribute.ConstructorArguments.Length > 0
+            ? attribute.ConstructorArguments[0].Value as string
+            : null;
+
+        if (string.IsNullOrWhiteSpace(cookieName))
+        {
+            return;
+        }
+
+        entries.Add(new PropertyOwnershipEntry(member.Name, member.Type, PropertyOwnershipSource.Cookie, cookieName));
+    }
+
+    /// <summary>
+    /// Finds a Blueprint attribute by name and namespace on the given property, returning null if not present.
+    /// Uses full namespace matching to avoid collisions with MVC <c>[FromX]</c> attributes.
+    /// </summary>
+    private static AttributeData? FindAttribute(IPropertySymbol property, string attributeName, string attributeNamespace)
+    {
+        return property.GetAttributes().FirstOrDefault(a =>
+            a.AttributeClass?.Name == attributeName
+            && a.AttributeClass.ContainingNamespace?.ToDisplayString() == attributeNamespace);
+    }
+
+    /// <summary>
+    /// Creates a <see cref="DiagnosticInfo"/> for a property-level diagnostic, extracting the source location
+    /// from the property symbol when available.
+    /// </summary>
+    private static DiagnosticInfo CreatePropertyDiagnostic(
+        DiagnosticDescriptor descriptor,
+        IPropertySymbol member,
+        INamedTypeSymbol operationType,
+        params string[] extraArgs)
+    {
+        var location = member.Locations.FirstOrDefault(static l => l.IsInSource);
+        var args = new List<string> { member.Name, operationType.Name };
+        args.AddRange(extraArgs);
+        return new DiagnosticInfo(
+            descriptor,
+            location is not null ? LocationInfo.CreateFrom(location) : null,
+            new EquatableList<string>(args.ToArray()));
+    }
+
+    /// <summary>
+    /// Builds a human-readable list of conflicting attribute names for the BPPO006 diagnostic message.
+    /// </summary>
+    private static string BuildConflictingAttributeList(
+        AttributeData? fromRoute,
+        AttributeData? fromQuery,
+        AttributeData? fromBody,
+        AttributeData? fromHeader,
+        AttributeData? fromCookie)
+    {
+        var names = new List<string>();
+        if (fromRoute != null)
+        {
+            names.Add("[FromRoute]");
+        }
+
+        if (fromQuery != null)
+        {
+            names.Add("[FromQuery]");
+        }
+
+        if (fromBody != null)
+        {
+            names.Add("[FromBody]");
+        }
+
+        if (fromHeader != null)
+        {
+            names.Add("[FromHeader]");
+        }
+
+        if (fromCookie != null)
+        {
+            names.Add("[FromCookie]");
+        }
+
+        return string.Join(", ", names);
     }
 
     private static bool IsSystemProperty(IPropertySymbol property)
@@ -423,6 +646,20 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             || type.TypeKind == TypeKind.Enum;
     }
 
+    /// <summary>
+    /// Headers and cookies support scalar types and <see cref="Nullable{T}"/> wrapping a scalar,
+    /// but not arrays — multi-value headers need a dedicated pattern and cookies are inherently single-valued.
+    /// </summary>
+    private static bool IsSupportedHeaderOrCookieType(ITypeSymbol type)
+    {
+        if (type.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T && type is INamedTypeSymbol namedType)
+        {
+            return IsSupportedScalarType(namedType.TypeArguments[0]);
+        }
+
+        return IsSupportedScalarType(type);
+    }
+
     private static string GetCamelCaseName(string name)
     {
         if (string.IsNullOrEmpty(name))
@@ -458,17 +695,24 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             + $"global::System.Collections.Immutable.ImmutableArray.Create({string.Join(", ", entryExpressions)})));");
     }
 
-    private static void RenderPopulationStage(PipelineRenderContext context, List<PropertyOwnershipEntry> entries, OperationModel operation)
+    /// <summary>
+    /// Unified population renderer that emits extraction code for all binding sources (body, route, query,
+    /// header, cookie) in a single pipeline stage. Blank lines separate logical sections for readability
+    /// in the generated output.
+    /// </summary>
+    private static void RenderPopulation(PipelineRenderContext context, List<PropertyOwnershipEntry> entries)
     {
         var bodyEntries = entries.Where(static e => e.Source == PropertyOwnershipSource.Body).ToArray();
         var routeEntries = entries.Where(static e => e.Source == PropertyOwnershipSource.Route).ToArray();
+        var queryEntries = entries.Where(static e => e.Source == PropertyOwnershipSource.Query).ToArray();
+        var headerEntries = entries.Where(static e => e.Source == PropertyOwnershipSource.Header).ToArray();
+        var cookieEntries = entries.Where(static e => e.Source == PropertyOwnershipSource.Cookie).ToArray();
         var operationExpr = context.GetOperationExpression();
-        var operationTypeFull = context.GetOperationTypeFullName();
 
         context.WriteStatement("var httpContext = ((Blueprint.Runtime.Http.IHttpOperationContext)context).HttpContext;");
         context.WriteBlankLine();
 
-        // Body binding: buffer stream async, then parse with Utf8JsonReader in a static local function
+        // Body binding: buffer stream async, then parse with Utf8JsonReader
         if (bodyEntries.Length > 0)
         {
             context.If(
@@ -485,7 +729,6 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
 
                     bodyContext.WriteBlankLine();
 
-                    // Buffer the body asynchronously, then hand off to the sync Utf8JsonReader helper
                     bodyContext.WriteStatement("using var bodyStream = httpContext.Request.ContentLength.HasValue");
                     bodyContext.WriteStatement("    ? new System.IO.MemoryStream((int)httpContext.Request.ContentLength.Value)");
                     bodyContext.WriteStatement("    : new System.IO.MemoryStream();");
@@ -514,35 +757,33 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             context.WriteBlankLine();
         }
 
-        // Route binding (after body, so route values take precedence)
-        foreach (var entry in routeEntries)
-        {
-            WriteRouteExtraction(context, operationExpr, entry);
-        }
-    }
-
-    private static void RenderNonBodyPopulation(PipelineRenderContext context, List<PropertyOwnershipEntry> entries, OperationModel operation)
-    {
-        var routeEntries = entries.Where(static e => e.Source == PropertyOwnershipSource.Route).ToArray();
-        var queryEntries = entries.Where(static e => e.Source == PropertyOwnershipSource.Query).ToArray();
-        var operationExpr = context.GetOperationExpression();
-
-        context.WriteStatement("var httpContext = ((Blueprint.Runtime.Http.IHttpOperationContext)context).HttpContext;");
-        context.WriteBlankLine();
-
+        // Route binding
         foreach (var entry in routeEntries)
         {
             WriteRouteExtraction(context, operationExpr, entry);
         }
 
-        if (routeEntries.Length > 0 && queryEntries.Length > 0)
+        if (routeEntries.Length > 0 && (queryEntries.Length > 0 || headerEntries.Length > 0 || cookieEntries.Length > 0))
         {
             context.WriteBlankLine();
         }
 
+        // Query binding
         foreach (var entry in queryEntries)
         {
             WriteQueryExtraction(context, operationExpr, entry);
+        }
+
+        // Header binding
+        foreach (var entry in headerEntries)
+        {
+            WriteHeaderExtraction(context, operationExpr, entry);
+        }
+
+        // Cookie binding
+        foreach (var entry in cookieEntries)
+        {
+            WriteCookieExtraction(context, operationExpr, entry);
         }
     }
 
@@ -732,6 +973,92 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
                 ifCtx.WriteStatement($"{operationExpr}.{entry.PropertyName} = _arr_{entry.PropertyName};");
             }
         });
+    }
+
+    /// <summary>
+    /// Emits extraction code for a header-bound property. Headers use <c>IHeaderDictionary</c> which
+    /// returns <c>StringValues</c> — the same Count-based pattern as query parameters, taking the first value.
+    /// </summary>
+    private static void WriteHeaderExtraction(PipelineRenderContext context, string operationExpr, PropertyOwnershipEntry entry)
+    {
+        var headerName = entry.BindingName!;
+        var headerVar = $"_hv_{entry.PropertyName}";
+
+        context.WriteStatement($"var {headerVar} = httpContext.Request.Headers[\"{headerName}\"];");
+
+        if (IsStringType(entry.TypeSymbol))
+        {
+            context.If($"{headerVar}.Count > 0", ifCtx =>
+            {
+                ifCtx.WriteStatement($"{operationExpr}.{entry.PropertyName} = {headerVar}[0];");
+            });
+        }
+        else
+        {
+            var effectiveType = entry.TypeSymbol;
+            if (effectiveType.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T && effectiveType is INamedTypeSymbol namedType)
+            {
+                effectiveType = namedType.TypeArguments[0];
+            }
+
+            var tryParseExpr = GetScalarTryParseExpression(effectiveType, $"{headerVar}[0]", $"_parsed_{entry.PropertyName}");
+
+            context.If($"{headerVar}.Count > 0", ifCtx =>
+            {
+                ifCtx.If(tryParseExpr, parsedCtx =>
+                {
+                    parsedCtx.WriteStatement($"{operationExpr}.{entry.PropertyName} = _parsed_{entry.PropertyName};");
+                });
+                ifCtx.WriteStatement("else");
+                ifCtx.WriteStatement("{");
+                ifCtx.WriteStatement("    httpContext.Response.StatusCode = 400;");
+                ifCtx.WriteStatement("    return new Blueprint.Runtime.Http.HttpPipelineShortCircuitResult();");
+                ifCtx.WriteStatement("}");
+            });
+        }
+    }
+
+    /// <summary>
+    /// Emits extraction code for a cookie-bound property. Cookies use <c>IRequestCookieCollection</c>
+    /// which returns <c>string?</c> from the indexer — simpler null-check pattern than headers.
+    /// </summary>
+    private static void WriteCookieExtraction(PipelineRenderContext context, string operationExpr, PropertyOwnershipEntry entry)
+    {
+        var cookieName = entry.BindingName!;
+        var cookieVar = $"_cv_{entry.PropertyName}";
+
+        context.WriteStatement($"var {cookieVar} = httpContext.Request.Cookies[\"{cookieName}\"];");
+
+        if (IsStringType(entry.TypeSymbol))
+        {
+            context.If($"{cookieVar} != null", ifCtx =>
+            {
+                ifCtx.WriteStatement($"{operationExpr}.{entry.PropertyName} = {cookieVar};");
+            });
+        }
+        else
+        {
+            var effectiveType = entry.TypeSymbol;
+            if (effectiveType.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T && effectiveType is INamedTypeSymbol namedType)
+            {
+                effectiveType = namedType.TypeArguments[0];
+            }
+
+            var tryParseExpr = GetScalarTryParseExpression(effectiveType, cookieVar, $"_parsed_{entry.PropertyName}");
+
+            context.If($"{cookieVar} != null", ifCtx =>
+            {
+                ifCtx.If(tryParseExpr, parsedCtx =>
+                {
+                    parsedCtx.WriteStatement($"{operationExpr}.{entry.PropertyName} = _parsed_{entry.PropertyName};");
+                });
+                ifCtx.WriteStatement("else");
+                ifCtx.WriteStatement("{");
+                ifCtx.WriteStatement("    httpContext.Response.StatusCode = 400;");
+                ifCtx.WriteStatement("    return new Blueprint.Runtime.Http.HttpPipelineShortCircuitResult();");
+                ifCtx.WriteStatement("}");
+            });
+        }
     }
 
     private static string GetScalarConversionExpression(ITypeSymbol typeSymbol, string stringExpression)

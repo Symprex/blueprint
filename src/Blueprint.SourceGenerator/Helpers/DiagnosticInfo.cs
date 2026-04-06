@@ -15,6 +15,12 @@ public sealed record DiagnosticInfo
     private readonly LocationInfo? _location;
 
     /// <summary>
+    /// Gets the underlying <see cref="DiagnosticDescriptor"/> so callers can inspect severity
+    /// or ID without materialising a full <see cref="Diagnostic"/>.
+    /// </summary>
+    public DiagnosticDescriptor Descriptor => this._descriptor;
+
+    /// <summary>
     /// Initializes a cacheable diagnostic wrapper from an already-normalized <see cref="LocationInfo"/> instance.
     /// </summary>
     /// <param name="descriptor">The diagnostic descriptor to report.</param>
