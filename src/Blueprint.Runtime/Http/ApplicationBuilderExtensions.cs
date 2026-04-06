@@ -100,11 +100,23 @@ public static class EndpointRouteBuilderExtensions
 
         foreach (var operation in runtimeModel.Operations)
         {
+            // Only map operations that are exposed to the HTTP host (have URLs).
+            if (operation.Urls.Count == 0)
+            {
+                continue;
+            }
+
+            // Resolve HTTP methods from compile-time feature data, falling back to GET for safety.
+            var httpMethods = operation.TryGetFeatureData<OperationHttpMethodMetadataFeatureData>(out var methodData)
+                ? methodData.HttpMethods.ToArray()
+                : ["GET"];
+
             foreach (var url in operation.Urls)
             {
                 var builder = endpoints.Map(RoutePatternFactory.Parse(basePath.TrimEnd('/') + url.UrlFormat), requestDelegate);
                 builder.WithMetadata(operation);
-                builder.WithDisplayName($"GET {operation.Name}");
+                builder.WithMetadata(new HttpMethodMetadata(httpMethods));
+                builder.WithDisplayName($"{string.Join("|", httpMethods)} {operation.Name}");
 
                 builders.Add(builder);
             }
@@ -209,6 +221,7 @@ public static class EndpointRouteBuilderExtensions
             //
             //     return;
             // }
+            // Method enforcement is handled by ASP.NET Core routing via HttpMethodMetadata on mapped endpoints.
 
             using var nestedContainer = this._rootServiceProvider.CreateScope();
 
@@ -218,6 +231,8 @@ public static class EndpointRouteBuilderExtensions
                 operation,
                 httpContext.RequestAborted)
             {
+                HttpContext = httpContext,
+
                 // ClaimsIdentity = httpContext.User.Identity as ClaimsIdentity,
             };
 

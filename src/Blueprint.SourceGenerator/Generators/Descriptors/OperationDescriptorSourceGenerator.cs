@@ -227,6 +227,7 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
             new NoResultShapeSeparationModule(),
             new HttpUnionDiscriminationStrategyModule(),
             new OperationHttpMethodMetadataModule(),
+            new PropertyOwnershipModule(),
             new OperationGroupMetadataModule(),
             new HttpResponseMetadataModule(),
             new SerializerContextCoverageModule(),

@@ -33,6 +33,9 @@ public class HttpOperationResultExecutor
 
         switch (result)
         {
+            case HttpPipelineShortCircuitResult:
+                // Response was already written by the generated pipeline (e.g. binding failure).
+                return true;
             case CreatedResult createdResult:
                 httpContext.Response.StatusCode = StatusCodes.Status201Created;
                 httpContext.Response.ContentType = "application/json; charset=utf-8";

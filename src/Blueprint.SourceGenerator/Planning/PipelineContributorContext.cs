@@ -58,6 +58,16 @@ public sealed class PipelineContributorContext
     }
 
     /// <summary>
+    /// Marks the generated pipeline as requiring an async method signature even when
+    /// the handler itself is synchronous. Use when a contributor adds render steps that
+    /// emit <c>await</c> expressions (for example async body reading in the Population stage).
+    /// </summary>
+    public void RequireAsync()
+    {
+        this._plan.RequiresAsync = true;
+    }
+
+    /// <summary>
     /// Registers a variable produced by the active contributor.
     /// </summary>
     /// <param name="key">The variable key.</param>

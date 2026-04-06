@@ -142,6 +142,7 @@ public partial class OperationExecutorPipelineSourceGenerator : IIncrementalGene
     {
         return new BlueprintSourceGenerationConfig(
         [
+            new PropertyOwnershipModule(),
             new ValidationModule(),
             new HandlerExecutionModule(),
             new DefaultExceptionTranslationModule(),

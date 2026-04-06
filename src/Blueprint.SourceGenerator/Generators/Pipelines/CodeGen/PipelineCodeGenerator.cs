@@ -103,6 +103,10 @@ internal static class PipelineCodeGenerator
         {
             executeMethod.MakeAsync();
         }
+        else if (plan.RequiresAsync)
+        {
+            executeMethod.MakeAsync();
+        }
 
         executeMethod.WithBody(
             writer =>

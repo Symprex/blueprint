@@ -17,6 +17,13 @@ public sealed record PipelinePlan(OperationModel Operation, VariableRegistry Var
     private readonly List<PipelineRenderStep> _renderSteps = [];
 
     /// <summary>
+    /// Gets or sets a value indicating whether the generated pipeline must be async
+    /// even when the handler itself is synchronous (for example when the Population stage
+    /// needs to read the request body asynchronously).
+    /// </summary>
+    public bool RequiresAsync { get; set; }
+
+    /// <summary>
     /// Gets the accumulated diagnostics.
     /// </summary>
     public IReadOnlyList<DiagnosticInfo> Diagnostics => this._diagnostics;

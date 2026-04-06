@@ -1,4 +1,4 @@
-File: Input0.cs
+﻿File: Input0.cs
 using Blueprint;
 using Blueprint.Model;
 

@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics;
 using Blueprint.Model;
+using Blueprint.Runtime.Http;
 
 namespace Blueprint.Runtime.Exec;
 
@@ -8,7 +9,7 @@ namespace Blueprint.Runtime.Exec;
 /// to allow sharing of state, for example the operation being executed, or an authentication context that
 /// gets created.
 /// </summary>
-public class ApiOperationContext
+public class ApiOperationContext : IHttpOperationContext
 {
     /// <summary>
     /// Initialises a new instance of the <see cref="ApiOperationContext" /> class, using
@@ -83,4 +84,15 @@ public class ApiOperationContext
     /// to be used throughout the processing pipeline.
     /// </summary>
     public Dictionary<string, object> Data { get; private set; }
+
+    /// <summary>
+    /// Gets or sets the <see cref="Microsoft.AspNetCore.Http.HttpContext"/> associated with this operation
+    /// when the operation is being executed via the HTTP host.
+    /// </summary>
+    public HttpContext? HttpContext { get; set; }
+
+    /// <inheritdoc />
+    HttpContext IHttpOperationContext.HttpContext =>
+        this.HttpContext ?? throw new InvalidOperationException(
+            "HttpContext is not available. This operation is not being executed via the HTTP host.");
 }

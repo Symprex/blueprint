@@ -7,17 +7,17 @@
   },
   "referencePlans": {
     "masterPlan": "migration\\plan.md",
-    "workstreamPlan": "migration\\openapi\\plan.md"
+    "workstreamPlan": "migration\\http-host-and-message-population\\plan.md"
   },
   "current": {
-    "activeWorkstream": "openapi",
-    "nextReadySlice": null,
+    "activeWorkstream": "http-host-and-message-population",
+    "nextReadySlice": "http-host/query-string-binding-for-get-delete-operations",
     "lastCompletedSlice": {
-      "id": "openapi/allow-same-status-body-bearing-resource-event-unions-with-eventid-discriminator",
-      "workstream": "openapi",
-      "title": "Allow same-status body-bearing resource-event unions with eventId discriminator"
+      "id": "http-host/property-ownership-route-body-method-binding",
+      "workstream": "http-host-and-message-population",
+      "title": "Property ownership plan + route binding + body binding + method enforcement + binding failures"
     },
-    "openReviewGate": null
+    "openReviewGate": "human-review-after-slice-1"
   },
   "orchestrationContract": {
     "mustImplementAfterSliceSelection": true,
