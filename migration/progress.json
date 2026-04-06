@@ -11,11 +11,11 @@
   },
   "current": {
     "activeWorkstream": "http-host-and-message-population",
-    "nextReadySlice": "http-host/explicit-fromx-attribute-overrides",
+    "nextReadySlice": "http-host/claims-identity-and-http-feature-context",
     "lastCompletedSlice": {
-      "id": "http-host/query-string-binding-for-get-delete-operations",
+      "id": "http-host/explicit-fromx-attribute-overrides-and-header-cookie-binding",
       "workstream": "http-host-and-message-population",
-      "title": "Query string binding for GET/DELETE operations"
+      "title": "[FromX] attribute overrides + header/cookie extraction (Slices 3+4 merged)"
     },
     "openReviewGate": null
   },
