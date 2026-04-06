@@ -49,7 +49,7 @@ public class PropertyOwnershipModuleTests
     }
 
     [Fact]
-    public void When_get_query_has_route_property_then_remaining_properties_are_not_body_owned()
+    public void When_get_query_has_route_property_then_remaining_properties_are_query_owned()
     {
         var result = CompileDescriptor(
             """
@@ -74,9 +74,9 @@ public class PropertyOwnershipModuleTests
 
         descriptorSource.Should().NotBeNull();
 
-        // GET query: remaining props should NOT be Body-owned (that's for POST/PUT/PATCH).
-        // In Slice 1, GET remaining are left unowned (Query comes in Slice 2).
+        // GET query: remaining props should be Query-owned (not Body)
         descriptorSource!.Should().NotContain("PropertyBindingSource.Body");
+        descriptorSource.Should().Contain("PropertyBindingSource.Query");
     }
 
     [Fact]
@@ -101,7 +101,7 @@ public class PropertyOwnershipModuleTests
     }
 
     [Fact]
-    public void When_get_command_has_explicit_http_get_and_no_route_params_then_no_body_properties_generated()
+    public void When_get_command_has_explicit_http_get_and_no_route_params_then_properties_are_query_owned()
     {
         var result = CompileDescriptor(
             """
@@ -118,14 +118,15 @@ public class PropertyOwnershipModuleTests
             }
             """);
 
-        // GET operation: remaining properties should not be body-owned.
-        // No BPPO002 warning in this slice — query binding comes in Slice 2.
+        result.Diagnostics.Should().BeEmpty();
+
         var descriptorSource = result.Output
             .Select(static t => t.ToString())
             .FirstOrDefault(static s => s.Contains("SearchCommandDescriptor") || s.Contains("OperationPropertyOwnershipFeatureData"));
 
-        // Should not contain body binding for GET
-        descriptorSource?.Should().NotContain("PropertyBindingSource.Body");
+        descriptorSource.Should().NotBeNull();
+        descriptorSource!.Should().NotContain("PropertyBindingSource.Body");
+        descriptorSource.Should().Contain("PropertyBindingSource.Query");
     }
 
     [Fact]
@@ -333,6 +334,271 @@ public class PropertyOwnershipModuleTests
 
         var pipelineSources = result.GetGeneratedSources(nameof(OperationExecutorPipelineSourceGenerator));
         pipelineSources.Should().NotBeEmpty("a pipeline should be generated");
+
+        var outputText = new StringBuilder();
+        foreach (var s in pipelineSources)
+        {
+            outputText.AppendLine(s.HintName + ":");
+            outputText.AppendLine();
+            outputText.AppendLine(s.SourceText);
+            outputText.AppendLine();
+        }
+
+        await Verify(outputText)
+            .UseDirectory("Generators/Pipelines/Snapshots/Integration/");
+    }
+
+    [Fact]
+    public void When_get_query_has_query_properties_then_pipeline_has_population_stage()
+    {
+        var compilation = CreateCompilation(
+            """
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace;
+
+            [RootLink("/search")]
+            public partial class SearchQuery : IQuery<string>
+            {
+                public string Term { get; set; }
+                public int PageSize { get; set; }
+
+                public static Task<string> HandleAsync(SearchQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        var config = new BlueprintSourceGenerationConfig([new PropertyOwnershipModule()]);
+        var result = config.BuildPipelinePlan("TestNamespace.SearchQuery", compilation);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Value.Should().NotBeNull();
+        result.Value!.Contributions.Should().Contain(
+            new PipelineContribution(PipelineStage.Population, nameof(PropertyOwnershipModule)));
+    }
+
+    [Fact]
+    public void When_get_query_has_typed_query_params_then_pipeline_requires_async()
+    {
+        var compilation = CreateCompilation(
+            """
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace;
+
+            [RootLink("/search")]
+            public partial class SearchQuery : IQuery<string>
+            {
+                public string Term { get; set; }
+                public int PageSize { get; set; }
+
+                public static Task<string> HandleAsync(SearchQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        var config = new BlueprintSourceGenerationConfig([new PropertyOwnershipModule()]);
+        var result = config.BuildPipelinePlan("TestNamespace.SearchQuery", compilation);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Value.Should().NotBeNull();
+        result.Value!.RequiresAsync.Should().BeTrue("typed query params need try/catch with early return");
+    }
+
+    [Fact]
+    public void When_get_query_has_only_string_query_params_then_pipeline_does_not_require_async()
+    {
+        var compilation = CreateCompilation(
+            """
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace;
+
+            [RootLink("/search")]
+            public partial class SearchQuery : IQuery<string>
+            {
+                public string Term { get; set; }
+                public string Filter { get; set; }
+
+                public static Task<string> HandleAsync(SearchQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        var config = new BlueprintSourceGenerationConfig([new PropertyOwnershipModule()]);
+        var result = config.BuildPipelinePlan("TestNamespace.SearchQuery", compilation);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Value.Should().NotBeNull();
+        result.Value!.RequiresAsync.Should().BeFalse("string-only query params don't need try/catch with early return");
+    }
+
+    [Fact]
+    public void When_query_property_has_unsupported_type_then_reports_BPPO003()
+    {
+        var result = CompileDescriptor(
+            """
+            [global::Blueprint.Model.Attributes.RootLink("/items")]
+            public partial class SearchItemsQuery : IQuery<string>
+            {
+                public System.Collections.Generic.List<int> Data { get; set; }
+
+                public static Task<string> HandleAsync(SearchItemsQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Select(static d => d.Id)
+            .Should().Contain("BPPO003");
+    }
+
+    [Fact]
+    public void When_delete_command_has_unowned_properties_then_they_are_query_owned()
+    {
+        var result = CompileDescriptor(
+            """
+            [global::Blueprint.Model.Attributes.HttpDelete]
+            [global::Blueprint.Model.Attributes.RootLink("/items/{Id}")]
+            public partial class DeleteItemCommand : ICommand<string>
+            {
+                public string Id { get; set; }
+                public bool Force { get; set; }
+
+                public static Task<string> HandleAsync(DeleteItemCommand operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var descriptorSource = result.Output
+            .Select(static t => t.ToString())
+            .FirstOrDefault(static s => s.Contains("DeleteItemCommandDescriptor") || s.Contains("OperationPropertyOwnershipFeatureData"));
+
+        descriptorSource.Should().NotBeNull();
+        descriptorSource!.Should().Contain("PropertyBindingSource.Route");
+        descriptorSource.Should().Contain("PropertyBindingSource.Query");
+        descriptorSource.Should().NotContain("PropertyBindingSource.Body");
+    }
+
+    [Fact]
+    public async Task When_get_query_with_route_and_query_params_then_pipeline_snapshot_matches()
+    {
+        const string source = """
+            using Blueprint;
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace
+            {
+                [BlueprintAppScan]
+                public partial class TestApp : BlueprintApp { }
+
+                [RootLink("/users/{Id}/items")]
+                public partial class GetUserItemsQuery : IQuery<string>
+                {
+                    public string Id { get; set; }
+                    public string Filter { get; set; }
+                    public int PageSize { get; set; }
+                    public int[] TagIds { get; set; }
+
+                    public static Task<string> HandleAsync(GetUserItemsQuery operation)
+                    {
+                        return Task.FromResult("ok");
+                    }
+                }
+            }
+            """;
+
+        var generators = new[]
+        {
+            TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>(),
+            TestHelpers.CreateTrackedGenerator<OperationExecutorPipelineSourceGenerator>(),
+        };
+
+        var result = TestHelpers.CompileWithTrackedGenerators(
+            generators,
+            [source],
+            ["Input0.cs"]);
+
+        result.Diagnostics.Should().BeEmpty("the compilation should have no diagnostics");
+
+        var pipelineSources = result.GetGeneratedSources(nameof(OperationExecutorPipelineSourceGenerator));
+        pipelineSources.Should().NotBeEmpty("a pipeline should be generated");
+
+        var outputText = new StringBuilder();
+        foreach (var s in pipelineSources)
+        {
+            outputText.AppendLine(s.HintName + ":");
+            outputText.AppendLine();
+            outputText.AppendLine(s.SourceText);
+            outputText.AppendLine();
+        }
+
+        await Verify(outputText)
+            .UseDirectory("Generators/Pipelines/Snapshots/Integration/");
+    }
+
+    [Fact]
+    public async Task When_query_only_get_then_pipeline_snapshot_matches()
+    {
+        const string source = """
+            using Blueprint;
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace
+            {
+                [BlueprintAppScan]
+                public partial class TestApp : BlueprintApp { }
+
+                [RootLink("/search")]
+                public partial class SearchAllQuery : IQuery<string>
+                {
+                    public string Term { get; set; }
+                    public int? Page { get; set; }
+
+                    public static Task<string> HandleAsync(SearchAllQuery operation)
+                    {
+                        return Task.FromResult("ok");
+                    }
+                }
+            }
+            """;
+
+        var generators = new[]
+        {
+            TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>(),
+            TestHelpers.CreateTrackedGenerator<OperationExecutorPipelineSourceGenerator>(),
+        };
+
+        var result = TestHelpers.CompileWithTrackedGenerators(
+            generators,
+            [source],
+            ["Input0.cs"]);
+
+        result.Diagnostics.Should().BeEmpty("the compilation should have no diagnostics");
+
+        var pipelineSources = result.GetGeneratedSources(nameof(OperationExecutorPipelineSourceGenerator));
+        pipelineSources.Should().NotBeEmpty("a pipeline should be generated for query-only GET");
 
         var outputText = new StringBuilder();
         foreach (var s in pipelineSources)

@@ -29,4 +29,15 @@ internal static class PropertyOwnershipDiagnosticDescriptors
         category: "PropertyOwnership",
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
+
+    /// <summary>
+    /// BPPO003: A query-bound property has a type that cannot be converted from a string query value.
+    /// </summary>
+    public static readonly DiagnosticDescriptor UnsupportedQueryPropertyType = new(
+        id: "BPPO003",
+        title: "Unsupported query property type",
+        messageFormat: "Property '{0}' on operation '{1}' would be bound from query string but its type '{2}' cannot be converted from a string value",
+        category: "PropertyOwnership",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
 }

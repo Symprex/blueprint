@@ -11,13 +11,13 @@
   },
   "current": {
     "activeWorkstream": "http-host-and-message-population",
-    "nextReadySlice": "http-host/query-string-binding-for-get-delete-operations",
+    "nextReadySlice": "http-host/explicit-fromx-attribute-overrides",
     "lastCompletedSlice": {
-      "id": "http-host/property-ownership-route-body-method-binding",
+      "id": "http-host/query-string-binding-for-get-delete-operations",
       "workstream": "http-host-and-message-population",
-      "title": "Property ownership plan + route binding + body binding + method enforcement + binding failures"
+      "title": "Query string binding for GET/DELETE operations"
     },
-    "openReviewGate": "human-review-after-slice-1"
+    "openReviewGate": null
   },
   "orchestrationContract": {
     "mustImplementAfterSliceSelection": true,

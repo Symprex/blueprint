@@ -81,14 +81,24 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         }
 
         var hasBodyProperties = entries.Any(static e => e.Source == PropertyOwnershipSource.Body);
+        var hasQueryProperties = entries.Any(static e => e.Source == PropertyOwnershipSource.Query);
+        var hasRouteProperties = entries.Any(static e => e.Source == PropertyOwnershipSource.Route);
+
         if (hasBodyProperties)
         {
             context.RequireAsync();
             context.AddRenderStep(PipelineStage.Population, renderContext => RenderPopulationStage(renderContext, entries, context.Operation));
         }
-        else if (entries.Any(static e => e.Source == PropertyOwnershipSource.Route))
+        else if (hasRouteProperties || hasQueryProperties)
         {
-            context.AddRenderStep(PipelineStage.Population, renderContext => RenderRouteOnlyPopulation(renderContext, entries, context.Operation));
+            // Typed query params can fail parsing (FormatException), requiring a return statement.
+            // Ensure the pipeline is async so early returns compile correctly.
+            if (hasQueryProperties && entries.Any(static e => e.Source == PropertyOwnershipSource.Query && !IsStringType(e.TypeSymbol)))
+            {
+                context.RequireAsync();
+            }
+
+            context.AddRenderStep(PipelineStage.Population, renderContext => RenderNonBodyPopulation(renderContext, entries, context.Operation));
         }
     }
 
@@ -208,6 +218,13 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             || string.Equals(m, "PATCH", StringComparison.OrdinalIgnoreCase));
     }
 
+    private static bool IsQueryMethod(string[] httpMethods)
+    {
+        return httpMethods.Any(static m =>
+            string.Equals(m, "GET", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(m, "DELETE", StringComparison.OrdinalIgnoreCase));
+    }
+
     private static List<PropertyOwnershipEntry> AnalyzePropertyOwnership(
         DescriptorContributorContext context,
         INamedTypeSymbol operationType,
@@ -254,9 +271,25 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
                     PropertyOwnershipSource.Body,
                     GetCamelCaseName(member.Name)));
             }
+            else if (IsQueryMethod(httpMethods))
+            {
+                if (!IsSupportedQueryType(member.Type))
+                {
+                    var location = member.Locations.FirstOrDefault(static l => l.IsInSource);
+                    context.AddDiagnostic(new DiagnosticInfo(
+                        PropertyOwnershipDiagnosticDescriptors.UnsupportedQueryPropertyType,
+                        location is not null ? LocationInfo.CreateFrom(location) : null,
+                        [member.Name, operationType.Name, member.Type.ToDisplayString()]));
+                    hasErrors = true;
+                    continue;
+                }
 
-            // GET/DELETE: remaining unowned properties are left unbound in Slice 1.
-            // Query binding comes in Slice 2.
+                entries.Add(new PropertyOwnershipEntry(
+                    member.Name,
+                    member.Type,
+                    PropertyOwnershipSource.Query,
+                    GetCamelCaseName(member.Name)));
+            }
         }
 
         return entries;
@@ -300,6 +333,19 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
                     PropertyOwnershipSource.Body,
                     GetCamelCaseName(member.Name)));
             }
+            else if (IsQueryMethod(httpMethods))
+            {
+                if (!IsSupportedQueryType(member.Type))
+                {
+                    continue;
+                }
+
+                entries.Add(new PropertyOwnershipEntry(
+                    member.Name,
+                    member.Type,
+                    PropertyOwnershipSource.Query,
+                    GetCamelCaseName(member.Name)));
+            }
         }
 
         return entries;
@@ -312,9 +358,48 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             or "Microsoft.Extensions.Logging.ILogger";
     }
 
+    private static bool IsStringType(ITypeSymbol type)
+    {
+        return type.WithNullableAnnotation(NullableAnnotation.NotAnnotated).ToDisplayString() == "string";
+    }
+
     private static bool IsSupportedRouteType(ITypeSymbol type)
     {
         // Strip nullable annotation for type checking
+        var checkType = type.NullableAnnotation == NullableAnnotation.Annotated && type.OriginalDefinition.SpecialType != SpecialType.System_Nullable_T
+            ? type.WithNullableAnnotation(NullableAnnotation.NotAnnotated)
+            : type;
+
+        var displayName = checkType.ToDisplayString();
+        return displayName is "string"
+            or "int"
+            or "long"
+            or "System.Guid"
+            or "System.DateTime"
+            or "bool"
+            or "decimal"
+            || type.TypeKind == TypeKind.Enum;
+    }
+
+    private static bool IsSupportedQueryType(ITypeSymbol type)
+    {
+        // Arrays of supported scalar types
+        if (type is IArrayTypeSymbol arrayType)
+        {
+            return IsSupportedScalarType(arrayType.ElementType);
+        }
+
+        // Nullable<T> where T is a supported scalar
+        if (type.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T && type is INamedTypeSymbol namedType)
+        {
+            return IsSupportedScalarType(namedType.TypeArguments[0]);
+        }
+
+        return IsSupportedScalarType(type);
+    }
+
+    private static bool IsSupportedScalarType(ITypeSymbol type)
+    {
         var checkType = type.NullableAnnotation == NullableAnnotation.Annotated && type.OriginalDefinition.SpecialType != SpecialType.System_Nullable_T
             ? type.WithNullableAnnotation(NullableAnnotation.NotAnnotated)
             : type;
@@ -436,9 +521,10 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         }
     }
 
-    private static void RenderRouteOnlyPopulation(PipelineRenderContext context, List<PropertyOwnershipEntry> entries, OperationModel operation)
+    private static void RenderNonBodyPopulation(PipelineRenderContext context, List<PropertyOwnershipEntry> entries, OperationModel operation)
     {
         var routeEntries = entries.Where(static e => e.Source == PropertyOwnershipSource.Route).ToArray();
+        var queryEntries = entries.Where(static e => e.Source == PropertyOwnershipSource.Query).ToArray();
         var operationExpr = context.GetOperationExpression();
 
         context.WriteStatement("var httpContext = ((Blueprint.Runtime.Http.IHttpOperationContext)context).HttpContext;");
@@ -447,6 +533,16 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         foreach (var entry in routeEntries)
         {
             WriteRouteExtraction(context, operationExpr, entry);
+        }
+
+        if (routeEntries.Length > 0 && queryEntries.Length > 0)
+        {
+            context.WriteBlankLine();
+        }
+
+        foreach (var entry in queryEntries)
+        {
+            WriteQueryExtraction(context, operationExpr, entry);
         }
     }
 
@@ -537,23 +633,120 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         {
             context.If($"{routeValueExpr} is string routeStr_{entry.PropertyName}", ifCtx =>
             {
-                var convertExpr = GetRouteConversionExpression(typeDisplay, $"routeStr_{entry.PropertyName}");
+                var convertExpr = GetScalarConversionExpression(entry.TypeSymbol, $"routeStr_{entry.PropertyName}");
                 ifCtx.WriteStatement($"{operationExpr}.{entry.PropertyName} = {convertExpr};");
             });
         }
     }
 
-    private static string GetRouteConversionExpression(string typeDisplayName, string stringVariable)
+    private static void WriteQueryExtraction(PipelineRenderContext context, string operationExpr, PropertyOwnershipEntry entry)
     {
-        return typeDisplayName switch
+        var typeSymbol = entry.TypeSymbol;
+        var queryParamName = entry.BindingName!;
+        var queryVar = $"_qv_{entry.PropertyName}";
+
+        if (typeSymbol is IArrayTypeSymbol arrayType)
         {
-            "int" => $"int.Parse({stringVariable}, System.Globalization.CultureInfo.InvariantCulture)",
-            "long" => $"long.Parse({stringVariable}, System.Globalization.CultureInfo.InvariantCulture)",
-            "bool" => $"bool.Parse({stringVariable})",
-            "decimal" => $"decimal.Parse({stringVariable}, System.Globalization.CultureInfo.InvariantCulture)",
-            "System.Guid" => $"System.Guid.Parse({stringVariable})",
-            "System.DateTime" => $"System.DateTime.Parse({stringVariable}, System.Globalization.CultureInfo.InvariantCulture)",
-            _ => $"({typeDisplayName}){stringVariable}", // enums or fallback
+            WriteArrayQueryExtraction(context, operationExpr, entry, arrayType, queryVar, queryParamName);
+            return;
+        }
+
+        // Unwrap Nullable<T> to get the inner scalar type for parsing
+        var effectiveType = typeSymbol;
+        if (typeSymbol.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T && typeSymbol is INamedTypeSymbol namedType)
+        {
+            effectiveType = namedType.TypeArguments[0];
+        }
+
+        var effectiveDisplay = effectiveType.WithNullableAnnotation(NullableAnnotation.NotAnnotated).ToDisplayString();
+
+        context.WriteStatement($"var {queryVar} = httpContext.Request.Query[\"{queryParamName}\"];");
+
+        if (effectiveDisplay == "string")
+        {
+            context.If($"{queryVar}.Count > 0", ifCtx =>
+            {
+                ifCtx.WriteStatement($"{operationExpr}.{entry.PropertyName} = {queryVar}[0];");
+            });
+        }
+        else
+        {
+            context.If($"{queryVar}.Count > 0", ifCtx =>
+            {
+                ifCtx.WriteStatement("try");
+                ifCtx.WriteStatement("{");
+
+                var convertExpr = GetScalarConversionExpression(effectiveType, $"{queryVar}[0]");
+                ifCtx.WriteStatement($"    {operationExpr}.{entry.PropertyName} = {convertExpr};");
+
+                ifCtx.WriteStatement("}");
+                ifCtx.WriteStatement("catch (System.FormatException)");
+                ifCtx.WriteStatement("{");
+                ifCtx.WriteStatement("    httpContext.Response.StatusCode = 400;");
+                ifCtx.WriteStatement("    return new Blueprint.Runtime.Http.HttpPipelineShortCircuitResult();");
+                ifCtx.WriteStatement("}");
+            });
+        }
+    }
+
+    private static void WriteArrayQueryExtraction(
+        PipelineRenderContext context,
+        string operationExpr,
+        PropertyOwnershipEntry entry,
+        IArrayTypeSymbol arrayType,
+        string queryVar,
+        string queryParamName)
+    {
+        var elementType = arrayType.ElementType;
+        var elementDisplay = elementType.WithNullableAnnotation(NullableAnnotation.NotAnnotated).ToDisplayString();
+
+        context.WriteStatement($"var {queryVar} = httpContext.Request.Query[\"{queryParamName}\"];");
+
+        context.If($"{queryVar}.Count > 0", ifCtx =>
+        {
+            if (elementDisplay == "string")
+            {
+                ifCtx.WriteStatement($"{operationExpr}.{entry.PropertyName} = {queryVar}.ToArray();");
+            }
+            else
+            {
+                ifCtx.WriteStatement($"var _arr_{entry.PropertyName} = new {elementDisplay}[{queryVar}.Count];");
+                ifCtx.WriteStatement($"for (var _i = 0; _i < {queryVar}.Count; _i++)");
+                ifCtx.WriteStatement("{");
+                ifCtx.WriteStatement("    try");
+                ifCtx.WriteStatement("    {");
+
+                var convertExpr = GetScalarConversionExpression(elementType, $"{queryVar}[_i]");
+                ifCtx.WriteStatement($"        _arr_{entry.PropertyName}[_i] = {convertExpr};");
+
+                ifCtx.WriteStatement("    }");
+                ifCtx.WriteStatement("    catch (System.FormatException)");
+                ifCtx.WriteStatement("    {");
+                ifCtx.WriteStatement("        httpContext.Response.StatusCode = 400;");
+                ifCtx.WriteStatement("        return new Blueprint.Runtime.Http.HttpPipelineShortCircuitResult();");
+                ifCtx.WriteStatement("    }");
+                ifCtx.WriteStatement("}");
+                ifCtx.WriteStatement($"{operationExpr}.{entry.PropertyName} = _arr_{entry.PropertyName};");
+            }
+        });
+    }
+
+    private static string GetScalarConversionExpression(ITypeSymbol typeSymbol, string stringExpression)
+    {
+        var typeDisplay = typeSymbol.WithNullableAnnotation(NullableAnnotation.NotAnnotated).ToDisplayString();
+
+        return typeDisplay switch
+        {
+            "string" => stringExpression,
+            "int" => $"int.Parse({stringExpression}, System.Globalization.CultureInfo.InvariantCulture)",
+            "long" => $"long.Parse({stringExpression}, System.Globalization.CultureInfo.InvariantCulture)",
+            "bool" => $"bool.Parse({stringExpression})",
+            "decimal" => $"decimal.Parse({stringExpression}, System.Globalization.CultureInfo.InvariantCulture)",
+            "System.Guid" => $"System.Guid.Parse({stringExpression})",
+            "System.DateTime" => $"System.DateTime.Parse({stringExpression}, System.Globalization.CultureInfo.InvariantCulture)",
+            _ when typeSymbol.TypeKind == TypeKind.Enum =>
+                $"System.Enum.Parse<{typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}>({stringExpression})",
+            _ => $"({typeDisplay}){stringExpression}",
         };
     }
 

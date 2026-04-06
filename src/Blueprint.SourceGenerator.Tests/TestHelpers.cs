@@ -337,6 +337,10 @@ public static class TestHelpers
         references.Add(MetadataReference.CreateFromFile(typeof(Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions).Assembly.Location));
         references.Add(MetadataReference.CreateFromFile(typeof(System.Diagnostics.Activity).Assembly.Location));
         references.Add(MetadataReference.CreateFromFile(typeof(System.Text.Json.Serialization.JsonSerializerContext).Assembly.Location));
+        references.Add(MetadataReference.CreateFromFile(typeof(Microsoft.Extensions.Primitives.StringValues).Assembly.Location));
+        references.Add(MetadataReference.CreateFromFile(typeof(Microsoft.AspNetCore.Http.IQueryCollection).Assembly.Location));
+        references.Add(MetadataReference.CreateFromFile(typeof(Microsoft.AspNetCore.Http.HttpContext).Assembly.Location));
+
         return references;
     }
 
