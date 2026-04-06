@@ -370,18 +370,18 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         var bodyEntries = entries.Where(static e => e.Source == PropertyOwnershipSource.Body).ToArray();
         var routeEntries = entries.Where(static e => e.Source == PropertyOwnershipSource.Route).ToArray();
         var operationExpr = context.GetOperationExpression();
+        var operationTypeFull = context.GetOperationTypeFullName();
 
         context.WriteStatement("var httpContext = ((Blueprint.Runtime.Http.IHttpOperationContext)context).HttpContext;");
         context.WriteBlankLine();
 
-        // Body binding via JsonDocument (works in async methods, unlike Utf8JsonReader ref struct)
+        // Body binding: buffer stream async, then parse with Utf8JsonReader in a static local function
         if (bodyEntries.Length > 0)
         {
             context.If(
                 "httpContext.Request.ContentLength > 0 || httpContext.Request.ContentType != null",
                 bodyContext =>
                 {
-                    // Content type check
                     bodyContext.If(
                         "httpContext.Request.ContentType != null && !httpContext.Request.ContentType.Contains(\"json\", System.StringComparison.OrdinalIgnoreCase)",
                         unsupportedCtx =>
@@ -392,27 +392,29 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
 
                     bodyContext.WriteBlankLine();
 
-                    bodyContext.WriteStatement("try");
-                    bodyContext.WriteStatement("{");
-                    bodyContext.WriteStatement("    using var jsonDoc = await System.Text.Json.JsonDocument.ParseAsync(httpContext.Request.Body, cancellationToken: context.OperationCancelled);");
-                    bodyContext.WriteStatement("    var root = jsonDoc.RootElement;");
+                    // Buffer the body asynchronously, then hand off to the sync Utf8JsonReader helper
+                    bodyContext.WriteStatement("using var bodyStream = httpContext.Request.ContentLength.HasValue");
+                    bodyContext.WriteStatement("    ? new System.IO.MemoryStream((int)httpContext.Request.ContentLength.Value)");
+                    bodyContext.WriteStatement("    : new System.IO.MemoryStream();");
+                    bodyContext.WriteStatement("await httpContext.Request.Body.CopyToAsync(bodyStream, context.OperationCancelled);");
                     bodyContext.WriteBlankLine();
 
-                    foreach (var entry in bodyEntries)
-                    {
-                        var utf8Name = CSharpSymbolDisplay.FormatLiteral(entry.BindingName!, quote: true);
-                        bodyContext.WriteStatement($"    if (root.TryGetProperty({utf8Name}, out var prop_{entry.PropertyName}))");
-                        bodyContext.WriteStatement("    {");
-                        WriteJsonElementAssignment(bodyContext, operationExpr, entry, $"prop_{entry.PropertyName}");
-                        bodyContext.WriteStatement("    }");
-                        bodyContext.WriteBlankLine();
-                    }
-
-                    bodyContext.WriteStatement("}");
-                    bodyContext.WriteStatement("catch (System.Text.Json.JsonException)");
+                    bodyContext.WriteStatement("if (bodyStream.Length > 0)");
                     bodyContext.WriteStatement("{");
-                    bodyContext.WriteStatement("    httpContext.Response.StatusCode = 400;");
-                    bodyContext.WriteStatement("    return new Blueprint.Runtime.Http.HttpPipelineShortCircuitResult();");
+                    bodyContext.WriteStatement("    try");
+                    bodyContext.WriteStatement("    {");
+                    bodyContext.WriteStatement($"        PopulateFromJsonBody(new System.ReadOnlySpan<byte>(bodyStream.GetBuffer(), 0, (int)bodyStream.Length), {operationExpr});");
+                    bodyContext.WriteStatement("    }");
+                    bodyContext.WriteStatement("    catch (System.Text.Json.JsonException)");
+                    bodyContext.WriteStatement("    {");
+                    bodyContext.WriteStatement("        httpContext.Response.StatusCode = 400;");
+                    bodyContext.WriteStatement("        return new Blueprint.Runtime.Http.HttpPipelineShortCircuitResult();");
+                    bodyContext.WriteStatement("    }");
+                    bodyContext.WriteStatement("    catch (System.InvalidOperationException)");
+                    bodyContext.WriteStatement("    {");
+                    bodyContext.WriteStatement("        httpContext.Response.StatusCode = 400;");
+                    bodyContext.WriteStatement("        return new Blueprint.Runtime.Http.HttpPipelineShortCircuitResult();");
+                    bodyContext.WriteStatement("    }");
                     bodyContext.WriteStatement("}");
                 });
 
@@ -423,6 +425,14 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         foreach (var entry in routeEntries)
         {
             WriteRouteExtraction(context, operationExpr, entry);
+        }
+
+        // Emit the static local function for Utf8JsonReader-based body parsing after all pipeline statements.
+        // Static local functions avoid ref-struct-in-async (CS4012) while keeping Utf8JsonReader's zero-alloc perf.
+        if (bodyEntries.Length > 0)
+        {
+            context.WriteBlankLine();
+            WritePopulateFromJsonBodyLocalFunction(context, operationExpr, operationTypeFull, bodyEntries);
         }
     }
 
@@ -440,37 +450,76 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         }
     }
 
-    private static void WriteJsonElementAssignment(PipelineRenderContext context, string operationExpr, PropertyOwnershipEntry entry, string elementVar)
+    private static void WritePopulateFromJsonBodyLocalFunction(
+        PipelineRenderContext context,
+        string operationExpr,
+        string operationTypeFull,
+        PropertyOwnershipEntry[] bodyEntries)
+    {
+        context.WriteStatement($"static void PopulateFromJsonBody(System.ReadOnlySpan<byte> bodyBytes, {operationTypeFull} {operationExpr})");
+        context.WriteStatement("{");
+        context.WriteStatement("    var reader = new System.Text.Json.Utf8JsonReader(bodyBytes);");
+        context.WriteStatement("    if (!reader.Read() || reader.TokenType != System.Text.Json.JsonTokenType.StartObject) return;");
+        context.WriteBlankLine();
+        context.WriteStatement("    while (reader.Read())");
+        context.WriteStatement("    {");
+        context.WriteStatement("        if (reader.TokenType == System.Text.Json.JsonTokenType.EndObject) break;");
+        context.WriteStatement("        if (reader.TokenType != System.Text.Json.JsonTokenType.PropertyName) continue;");
+        context.WriteBlankLine();
+
+        var isFirst = true;
+        foreach (var entry in bodyEntries)
+        {
+            var prefix = isFirst ? "        if" : "        else if";
+            isFirst = false;
+
+            var utf8Name = $"\"{entry.BindingName}\"u8";
+            context.WriteStatement($"{prefix} (reader.ValueTextEquals({utf8Name}))");
+            context.WriteStatement("        {");
+            context.WriteStatement("            reader.Read();");
+            WriteUtf8ReaderAssignment(context, operationExpr, entry);
+            context.WriteStatement("        }");
+        }
+
+        context.WriteStatement("        else");
+        context.WriteStatement("        {");
+        context.WriteStatement("            reader.Skip();");
+        context.WriteStatement("        }");
+        context.WriteStatement("    }");
+        context.WriteStatement("}");
+    }
+
+    private static void WriteUtf8ReaderAssignment(PipelineRenderContext context, string operationExpr, PropertyOwnershipEntry entry)
     {
         var typeDisplay = entry.TypeSymbol.WithNullableAnnotation(NullableAnnotation.NotAnnotated).ToDisplayString();
 
         switch (typeDisplay)
         {
             case "string":
-                context.WriteStatement($"        {operationExpr}.{entry.PropertyName} = {elementVar}.GetString();");
+                context.WriteStatement($"            {operationExpr}.{entry.PropertyName} = reader.GetString();");
                 break;
             case "int":
-                context.WriteStatement($"        {operationExpr}.{entry.PropertyName} = {elementVar}.GetInt32();");
+                context.WriteStatement($"            {operationExpr}.{entry.PropertyName} = reader.GetInt32();");
                 break;
             case "long":
-                context.WriteStatement($"        {operationExpr}.{entry.PropertyName} = {elementVar}.GetInt64();");
+                context.WriteStatement($"            {operationExpr}.{entry.PropertyName} = reader.GetInt64();");
                 break;
             case "bool":
-                context.WriteStatement($"        {operationExpr}.{entry.PropertyName} = {elementVar}.GetBoolean();");
+                context.WriteStatement($"            {operationExpr}.{entry.PropertyName} = reader.GetBoolean();");
                 break;
             case "decimal":
-                context.WriteStatement($"        {operationExpr}.{entry.PropertyName} = {elementVar}.GetDecimal();");
+                context.WriteStatement($"            {operationExpr}.{entry.PropertyName} = reader.GetDecimal();");
                 break;
             case "System.Guid":
-                context.WriteStatement($"        {operationExpr}.{entry.PropertyName} = {elementVar}.GetGuid();");
+                context.WriteStatement($"            {operationExpr}.{entry.PropertyName} = reader.GetGuid();");
                 break;
             case "System.DateTime":
-                context.WriteStatement($"        {operationExpr}.{entry.PropertyName} = {elementVar}.GetDateTime();");
+                context.WriteStatement($"            {operationExpr}.{entry.PropertyName} = reader.GetDateTime();");
                 break;
             default:
-                // Delegate to STJ for complex types
+                // Delegate to STJ for complex types via ref reader overload
                 context.WriteStatement(
-                    $"        {operationExpr}.{entry.PropertyName} = {elementVar}.Deserialize<global::{typeDisplay}>();");
+                    $"            {operationExpr}.{entry.PropertyName} = System.Text.Json.JsonSerializer.Deserialize<global::{typeDisplay}>(ref reader);");
                 break;
         }
     }

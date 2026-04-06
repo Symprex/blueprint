@@ -73,30 +73,58 @@ namespace Blueprint.Generated
                         return new Blueprint.Runtime.Http.HttpPipelineShortCircuitResult();
                     }
 
-                    try
+                    using var bodyStream = httpContext.Request.ContentLength.HasValue
+                        ? new System.IO.MemoryStream((int)httpContext.Request.ContentLength.Value)
+                        : new System.IO.MemoryStream();
+                    await httpContext.Request.Body.CopyToAsync(bodyStream, context.OperationCancelled);
+
+                    if (bodyStream.Length > 0)
                     {
-                        using var jsonDoc = await System.Text.Json.JsonDocument.ParseAsync(httpContext.Request.Body, cancellationToken: context.OperationCancelled);
-                        var root = jsonDoc.RootElement;
-
-                        if (root.TryGetProperty("name", out var prop_Name))
+                        try
                         {
-                            operation.Name = prop_Name.GetString();
+                            PopulateFromJsonBody(new System.ReadOnlySpan<byte>(bodyStream.GetBuffer(), 0, (int)bodyStream.Length), operation);
                         }
-
-                        if (root.TryGetProperty("email", out var prop_Email))
+                        catch (System.Text.Json.JsonException)
                         {
-                            operation.Email = prop_Email.GetString();
+                            httpContext.Response.StatusCode = 400;
+                            return new Blueprint.Runtime.Http.HttpPipelineShortCircuitResult();
                         }
-
-                    }
-                    catch (System.Text.Json.JsonException)
-                    {
-                        httpContext.Response.StatusCode = 400;
-                        return new Blueprint.Runtime.Http.HttpPipelineShortCircuitResult();
+                        catch (System.InvalidOperationException)
+                        {
+                            httpContext.Response.StatusCode = 400;
+                            return new Blueprint.Runtime.Http.HttpPipelineShortCircuitResult();
+                        }
                     }
                 }
 
                 operation.Id = (string)httpContext.Request.RouteValues["Id"];
+
+                static void PopulateFromJsonBody(System.ReadOnlySpan<byte> bodyBytes, global::TestNamespace.UpdateUserCommand operation)
+                {
+                    var reader = new System.Text.Json.Utf8JsonReader(bodyBytes);
+                    if (!reader.Read() || reader.TokenType != System.Text.Json.JsonTokenType.StartObject) return;
+
+                    while (reader.Read())
+                    {
+                        if (reader.TokenType == System.Text.Json.JsonTokenType.EndObject) break;
+                        if (reader.TokenType != System.Text.Json.JsonTokenType.PropertyName) continue;
+
+                        if (reader.ValueTextEquals("name"u8))
+                        {
+                            reader.Read();
+                            operation.Name = reader.GetString();
+                        }
+                        else if (reader.ValueTextEquals("email"u8))
+                        {
+                            reader.Read();
+                            operation.Email = reader.GetString();
+                        }
+                        else
+                        {
+                            reader.Skip();
+                        }
+                    }
+                }
                 var handlerResult = await global::TestNamespace.UpdateUserCommand.HandleAsync(operation);
 
                 return new Blueprint.Runtime.Exec.OkResult<string>(handlerResult);

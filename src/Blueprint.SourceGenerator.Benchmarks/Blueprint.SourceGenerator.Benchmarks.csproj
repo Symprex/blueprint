@@ -4,6 +4,7 @@
     <TargetFramework>net8.0</TargetFramework>
     <IsPackable>false</IsPackable>
     <Optimize>true</Optimize>
+    <NoWarn>$(NoWarn);BP007</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
