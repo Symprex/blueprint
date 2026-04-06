@@ -127,6 +127,76 @@ public class PropertyOwnershipModuleIntegrationTests
         ownershipData.Entries.Should().Contain(
             static e => e.PropertyName == "Force" && e.Source == PropertyBindingSource.Query);
     }
+
+    [Fact]
+    public void When_explicit_FromHeader_then_descriptor_has_header_ownership_with_binding_name()
+    {
+        var descriptor = HeaderBoundPopulationQuery.Configure();
+
+        descriptor.TryGetFeatureData<OperationPropertyOwnershipFeatureData>(out var ownershipData)
+            .Should().BeTrue();
+
+        ownershipData!.Entries.Should().Contain(
+            static e => e.PropertyName == "TenantId" && e.Source == PropertyBindingSource.Header && e.BindingName == "X-Tenant-Id");
+    }
+
+    [Fact]
+    public void When_explicit_FromCookie_then_descriptor_has_cookie_ownership_with_binding_name()
+    {
+        var descriptor = CookieBoundPopulationQuery.Configure();
+
+        descriptor.TryGetFeatureData<OperationPropertyOwnershipFeatureData>(out var ownershipData)
+            .Should().BeTrue();
+
+        ownershipData!.Entries.Should().Contain(
+            static e => e.PropertyName == "SessionId" && e.Source == PropertyBindingSource.Cookie && e.BindingName == "session");
+    }
+
+    [Fact]
+    public void When_explicit_FromQuery_with_name_on_post_then_descriptor_has_query_with_custom_binding_name()
+    {
+        var descriptor = ExplicitQueryPopulationCommand.Configure();
+
+        descriptor.TryGetFeatureData<OperationPropertyOwnershipFeatureData>(out var ownershipData)
+            .Should().BeTrue();
+
+        // [FromQuery(Name = "q")] overrides camelCase convention
+        ownershipData!.Entries.Should().Contain(
+            static e => e.PropertyName == "SearchTerm" && e.Source == PropertyBindingSource.Query && e.BindingName == "q");
+
+        // Remaining property on POST should still be Body-owned
+        ownershipData.Entries.Should().Contain(
+            static e => e.PropertyName == "Title" && e.Source == PropertyBindingSource.Body);
+    }
+
+    [Fact]
+    public void When_mixed_explicit_and_convention_then_descriptor_has_all_sources()
+    {
+        var descriptor = MixedBindingPopulationCommand.Configure();
+
+        descriptor.TryGetFeatureData<OperationPropertyOwnershipFeatureData>(out var ownershipData)
+            .Should().BeTrue();
+
+        // Route: convention
+        ownershipData!.Entries.Should().Contain(
+            static e => e.PropertyName == "OrgId" && e.Source == PropertyBindingSource.Route);
+
+        // Query: explicit [FromQuery] on POST
+        ownershipData.Entries.Should().Contain(
+            static e => e.PropertyName == "Filter" && e.Source == PropertyBindingSource.Query && e.BindingName == "filter");
+
+        // Header: explicit
+        ownershipData.Entries.Should().Contain(
+            static e => e.PropertyName == "TenantId" && e.Source == PropertyBindingSource.Header && e.BindingName == "X-Tenant");
+
+        // Cookie: explicit
+        ownershipData.Entries.Should().Contain(
+            static e => e.PropertyName == "Token" && e.Source == PropertyBindingSource.Cookie && e.BindingName == "auth_token");
+
+        // Body: convention (remaining unowned on POST)
+        ownershipData.Entries.Should().Contain(
+            static e => e.PropertyName == "Name" && e.Source == PropertyBindingSource.Body);
+    }
 }
 
 // Test operations — these are discovered by the source generator at compile time.
@@ -230,5 +300,85 @@ public partial class DeleteItemPopulationCommand : ICommand<string>
     public static Task<string> HandleAsync(DeleteItemPopulationCommand operation)
     {
         return Task.FromResult($"{operation.Id}:{operation.Force}");
+    }
+}
+
+/// <summary>
+/// GET query with explicit [FromHeader] for testing header binding in descriptors.
+/// </summary>
+[Blueprint.Model.Attributes.RootLink("/population-test/header-bound")]
+public partial class HeaderBoundPopulationQuery : IQuery<string>
+{
+    [Blueprint.Model.Attributes.FromHeader("X-Tenant-Id")]
+    public string? TenantId { get; set; }
+
+    public static Task<string> HandleAsync(HeaderBoundPopulationQuery operation)
+    {
+        return Task.FromResult($"tenant:{operation.TenantId}");
+    }
+}
+
+/// <summary>
+/// GET query with explicit [FromCookie] for testing cookie binding in descriptors.
+/// </summary>
+[Blueprint.Model.Attributes.RootLink("/population-test/cookie-bound")]
+public partial class CookieBoundPopulationQuery : IQuery<string>
+{
+    [Blueprint.Model.Attributes.FromCookie("session")]
+    public string? SessionId { get; set; }
+
+    public static Task<string> HandleAsync(CookieBoundPopulationQuery operation)
+    {
+        return Task.FromResult($"session:{operation.SessionId}");
+    }
+}
+
+/// <summary>
+/// POST command with explicit [FromQuery(Name = "q")] overriding the convention on a
+/// write-method operation, plus a remaining body-owned property.
+/// </summary>
+[Blueprint.Model.Attributes.RootLink("/population-test/explicit-query")]
+public partial class ExplicitQueryPopulationCommand : ICommand<string>
+{
+    [Blueprint.Model.Attributes.FromQuery(Name = "q")]
+    public string? SearchTerm { get; set; }
+
+    /// <summary>Body-owned by convention.</summary>
+    public string? Title { get; set; }
+
+    public static Task<string> HandleAsync(ExplicitQueryPopulationCommand operation)
+    {
+        return Task.FromResult($"{operation.SearchTerm}:{operation.Title}");
+    }
+}
+
+/// <summary>
+/// POST command combining all binding sources: route (convention), query (explicit),
+/// header (explicit), cookie (explicit), and body (convention remaining).
+/// </summary>
+[Blueprint.Model.Attributes.RootLink("/population-test/mixed/{OrgId}")]
+public partial class MixedBindingPopulationCommand : ICommand<string>
+{
+    /// <summary>Route-owned by convention (placeholder match).</summary>
+    public string? OrgId { get; set; }
+
+    /// <summary>Query-owned via explicit attribute on a POST command.</summary>
+    [Blueprint.Model.Attributes.FromQuery]
+    public string? Filter { get; set; }
+
+    /// <summary>Header-owned with explicit binding name.</summary>
+    [Blueprint.Model.Attributes.FromHeader("X-Tenant")]
+    public string? TenantId { get; set; }
+
+    /// <summary>Cookie-owned with explicit binding name.</summary>
+    [Blueprint.Model.Attributes.FromCookie("auth_token")]
+    public string? Token { get; set; }
+
+    /// <summary>Body-owned by convention (remaining unowned on POST).</summary>
+    public string? Name { get; set; }
+
+    public static Task<string> HandleAsync(MixedBindingPopulationCommand operation)
+    {
+        return Task.FromResult($"{operation.OrgId}:{operation.Filter}:{operation.TenantId}:{operation.Token}:{operation.Name}");
     }
 }

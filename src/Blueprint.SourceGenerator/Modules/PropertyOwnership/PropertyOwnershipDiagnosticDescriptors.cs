@@ -40,4 +40,49 @@ internal static class PropertyOwnershipDiagnosticDescriptors
         category: "PropertyOwnership",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
+
+    /// <summary>
+    /// BPPO004: An explicit [FromBody] attribute is applied to a property on a GET or DELETE operation.
+    /// GET/DELETE operations should not have request bodies.
+    /// </summary>
+    public static readonly DiagnosticDescriptor ExplicitBodyOnGetOrDelete = new(
+        id: "BPPO004",
+        title: "[FromBody] on GET/DELETE operation",
+        messageFormat: "Property '{0}' on operation '{1}' has [FromBody] but the operation uses {2}. GET/DELETE operations should not have a request body.",
+        category: "PropertyOwnership",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    /// <summary>
+    /// BPPO005: An explicit [FromRoute] attribute is applied but there is no matching route placeholder.
+    /// </summary>
+    public static readonly DiagnosticDescriptor ExplicitRouteWithoutPlaceholder = new(
+        id: "BPPO005",
+        title: "[FromRoute] without matching placeholder",
+        messageFormat: "Property '{0}' on operation '{1}' has [FromRoute] but there is no matching '{{{0}}}' placeholder in the URL template",
+        category: "PropertyOwnership",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    /// <summary>
+    /// BPPO006: Multiple conflicting [FromX] attributes on the same property.
+    /// </summary>
+    public static readonly DiagnosticDescriptor ConflictingFromAttributes = new(
+        id: "BPPO006",
+        title: "Conflicting [FromX] attributes",
+        messageFormat: "Property '{0}' on operation '{1}' has multiple conflicting binding attributes: {2}. A property can have at most one [FromX] attribute.",
+        category: "PropertyOwnership",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    /// <summary>
+    /// BPPO007: A header- or cookie-bound property has a type that cannot be converted from a string value.
+    /// </summary>
+    public static readonly DiagnosticDescriptor UnsupportedHeaderOrCookiePropertyType = new(
+        id: "BPPO007",
+        title: "Unsupported header/cookie property type",
+        messageFormat: "Property '{0}' on operation '{1}' has [{2}] but its type '{3}' cannot be converted from a string value",
+        category: "PropertyOwnership",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
 }

@@ -497,6 +497,416 @@ public class PropertyOwnershipModuleTests
         descriptorSource.Should().NotContain("PropertyBindingSource.Body");
     }
 
+    // ===== [FromX] attribute override tests =====
+
+    [Fact]
+    public void When_property_has_explicit_FromQuery_on_post_command_then_query_owned()
+    {
+        var result = CompileDescriptor(
+            """
+            [global::Blueprint.Model.Attributes.RootLink("/items")]
+            public partial class CreateItemCommand : ICommand<string>
+            {
+                [global::Blueprint.Model.Attributes.FromQuery(Name = "q")]
+                public string SearchTerm { get; set; }
+                public string Name { get; set; }
+
+                public static Task<string> HandleAsync(CreateItemCommand operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var descriptorSource = result.Output
+            .Select(static t => t.ToString())
+            .FirstOrDefault(static s => s.Contains("OperationPropertyOwnershipFeatureData"));
+
+        descriptorSource.Should().NotBeNull();
+        descriptorSource!.Should().Contain("PropertyBindingSource.Query");
+        descriptorSource.Should().Contain("PropertyBindingSource.Body");
+
+        // Verify name remapping: SearchTerm binds as "q" not "searchTerm"
+        descriptorSource.Should().Contain("\"q\"");
+    }
+
+    [Fact]
+    public void When_property_has_explicit_FromHeader_then_header_owned()
+    {
+        var result = CompileDescriptor(
+            """
+            [global::Blueprint.Model.Attributes.RootLink("/items")]
+            public partial class CreateItemCommand : ICommand<string>
+            {
+                [global::Blueprint.Model.Attributes.FromHeader("X-Tenant-Id")]
+                public string TenantId { get; set; }
+                public string Name { get; set; }
+
+                public static Task<string> HandleAsync(CreateItemCommand operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var descriptorSource = result.Output
+            .Select(static t => t.ToString())
+            .FirstOrDefault(static s => s.Contains("OperationPropertyOwnershipFeatureData"));
+
+        descriptorSource.Should().NotBeNull();
+        descriptorSource!.Should().Contain("PropertyBindingSource.Header");
+        descriptorSource.Should().Contain("\"X-Tenant-Id\"");
+    }
+
+    [Fact]
+    public void When_property_has_explicit_FromCookie_then_cookie_owned()
+    {
+        var result = CompileDescriptor(
+            """
+            [global::Blueprint.Model.Attributes.RootLink("/items")]
+            public partial class CreateItemCommand : ICommand<string>
+            {
+                [global::Blueprint.Model.Attributes.FromCookie("session_id")]
+                public string SessionId { get; set; }
+                public string Name { get; set; }
+
+                public static Task<string> HandleAsync(CreateItemCommand operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var descriptorSource = result.Output
+            .Select(static t => t.ToString())
+            .FirstOrDefault(static s => s.Contains("OperationPropertyOwnershipFeatureData"));
+
+        descriptorSource.Should().NotBeNull();
+        descriptorSource!.Should().Contain("PropertyBindingSource.Cookie");
+        descriptorSource.Should().Contain("\"session_id\"");
+    }
+
+    [Fact]
+    public void When_property_has_explicit_FromRoute_then_route_owned()
+    {
+        var result = CompileDescriptor(
+            """
+            [global::Blueprint.Model.Attributes.RootLink("/users/{Id}")]
+            public partial class GetUserQuery : IQuery<string>
+            {
+                [global::Blueprint.Model.Attributes.FromRoute]
+                public string Id { get; set; }
+                public string Name { get; set; }
+
+                public static Task<string> HandleAsync(GetUserQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var descriptorSource = result.Output
+            .Select(static t => t.ToString())
+            .FirstOrDefault(static s => s.Contains("OperationPropertyOwnershipFeatureData"));
+
+        descriptorSource.Should().NotBeNull();
+        descriptorSource!.Should().Contain("PropertyBindingSource.Route");
+    }
+
+    [Fact]
+    public void When_property_has_explicit_FromBody_on_post_then_body_owned()
+    {
+        var result = CompileDescriptor(
+            """
+            [global::Blueprint.Model.Attributes.RootLink("/items")]
+            public partial class CreateItemCommand : ICommand<string>
+            {
+                [global::Blueprint.Model.Attributes.FromBody]
+                public string Description { get; set; }
+
+                public static Task<string> HandleAsync(CreateItemCommand operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var descriptorSource = result.Output
+            .Select(static t => t.ToString())
+            .FirstOrDefault(static s => s.Contains("OperationPropertyOwnershipFeatureData"));
+
+        descriptorSource.Should().NotBeNull();
+        descriptorSource!.Should().Contain("PropertyBindingSource.Body");
+    }
+
+    [Fact]
+    public void When_FromBody_on_get_operation_then_reports_BPPO004()
+    {
+        var result = CompileDescriptor(
+            """
+            [global::Blueprint.Model.Attributes.RootLink("/items")]
+            public partial class SearchItemsQuery : IQuery<string>
+            {
+                [global::Blueprint.Model.Attributes.FromBody]
+                public string Data { get; set; }
+
+                public static Task<string> HandleAsync(SearchItemsQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Select(static d => d.Id)
+            .Should().Contain("BPPO004");
+    }
+
+    [Fact]
+    public void When_FromRoute_without_matching_placeholder_then_reports_BPPO005()
+    {
+        var result = CompileDescriptor(
+            """
+            [global::Blueprint.Model.Attributes.RootLink("/items")]
+            public partial class GetItemQuery : IQuery<string>
+            {
+                [global::Blueprint.Model.Attributes.FromRoute]
+                public string Id { get; set; }
+
+                public static Task<string> HandleAsync(GetItemQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Select(static d => d.Id)
+            .Should().Contain("BPPO005");
+    }
+
+    [Fact]
+    public void When_property_has_conflicting_FromX_attributes_then_reports_BPPO006()
+    {
+        var result = CompileDescriptor(
+            """
+            [global::Blueprint.Model.Attributes.RootLink("/items")]
+            public partial class CreateItemCommand : ICommand<string>
+            {
+                [global::Blueprint.Model.Attributes.FromQuery]
+                [global::Blueprint.Model.Attributes.FromHeader("X-Custom")]
+                public string Data { get; set; }
+
+                public static Task<string> HandleAsync(CreateItemCommand operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Select(static d => d.Id)
+            .Should().Contain("BPPO006");
+    }
+
+    [Fact]
+    public void When_FromHeader_on_unsupported_type_then_reports_BPPO007()
+    {
+        var result = CompileDescriptor(
+            """
+            [global::Blueprint.Model.Attributes.RootLink("/items")]
+            public partial class CreateItemCommand : ICommand<string>
+            {
+                [global::Blueprint.Model.Attributes.FromHeader("X-Data")]
+                public System.Collections.Generic.List<int> Data { get; set; }
+
+                public static Task<string> HandleAsync(CreateItemCommand operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Select(static d => d.Id)
+            .Should().Contain("BPPO007");
+    }
+
+    [Fact]
+    public void When_FromCookie_on_unsupported_type_then_reports_BPPO007()
+    {
+        var result = CompileDescriptor(
+            """
+            [global::Blueprint.Model.Attributes.RootLink("/items")]
+            public partial class CreateItemCommand : ICommand<string>
+            {
+                [global::Blueprint.Model.Attributes.FromCookie("session")]
+                public int[] Data { get; set; }
+
+                public static Task<string> HandleAsync(CreateItemCommand operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Select(static d => d.Id)
+            .Should().Contain("BPPO007");
+    }
+
+    [Fact]
+    public void When_typed_header_property_then_pipeline_requires_async()
+    {
+        var compilation = CreateCompilation(
+            """
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace;
+
+            [RootLink("/items")]
+            public partial class GetItemsQuery : IQuery<string>
+            {
+                [FromHeader("X-Page-Size")]
+                public int PageSize { get; set; }
+
+                public static Task<string> HandleAsync(GetItemsQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        var config = new BlueprintSourceGenerationConfig([new PropertyOwnershipModule()]);
+        var result = config.BuildPipelinePlan("TestNamespace.GetItemsQuery", compilation);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Value.Should().NotBeNull();
+        result.Value!.RequiresAsync.Should().BeTrue("typed header values need TryParse with early return");
+    }
+
+    [Fact]
+    public void When_string_header_and_cookie_only_then_pipeline_does_not_require_async()
+    {
+        var compilation = CreateCompilation(
+            """
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace;
+
+            [RootLink("/items")]
+            public partial class GetItemsQuery : IQuery<string>
+            {
+                [FromHeader("X-Tenant")]
+                public string TenantId { get; set; }
+                [FromCookie("session")]
+                public string SessionId { get; set; }
+
+                public static Task<string> HandleAsync(GetItemsQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        var config = new BlueprintSourceGenerationConfig([new PropertyOwnershipModule()]);
+        var result = config.BuildPipelinePlan("TestNamespace.GetItemsQuery", compilation);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Value.Should().NotBeNull();
+        result.Value!.RequiresAsync.Should().BeFalse("string-only header/cookie doesn't need early return");
+    }
+
+    [Fact]
+    public async Task When_post_command_with_mixed_explicit_and_convention_bindings_then_pipeline_snapshot_matches()
+    {
+        const string source = """
+            using Blueprint;
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace
+            {
+                [BlueprintAppScan]
+                public partial class TestApp : BlueprintApp { }
+
+                /// <summary>
+                /// POST command with explicit [FromQuery], [FromHeader], [FromCookie] alongside
+                /// convention-based route and body bindings.
+                /// </summary>
+                [RootLink("/orgs/{OrgSlug}/items")]
+                public partial class CreateItemCommand : ICommand<string>
+                {
+                    // Route: convention (placeholder match)
+                    public string OrgSlug { get; set; }
+
+                    // Query: explicit override on a POST command
+                    [FromQuery(Name = "q")]
+                    public string SearchFilter { get; set; }
+
+                    // Header: explicit
+                    [FromHeader("X-Tenant-Id")]
+                    public string TenantId { get; set; }
+
+                    // Header: explicit typed
+                    [FromHeader("X-Request-Priority")]
+                    public int Priority { get; set; }
+
+                    // Cookie: explicit
+                    [FromCookie("session_token")]
+                    public string SessionToken { get; set; }
+
+                    // Body: convention (remaining unowned on POST)
+                    public string Name { get; set; }
+                    public string Description { get; set; }
+
+                    public static Task<string> HandleAsync(CreateItemCommand operation)
+                    {
+                        return Task.FromResult("ok");
+                    }
+                }
+            }
+            """;
+
+        var generators = new[]
+        {
+            TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>(),
+            TestHelpers.CreateTrackedGenerator<OperationExecutorPipelineSourceGenerator>(),
+        };
+
+        var result = TestHelpers.CompileWithTrackedGenerators(
+            generators,
+            [source],
+            ["Input0.cs"]);
+
+        result.Diagnostics.Should().BeEmpty("the compilation should have no diagnostics");
+
+        var pipelineSources = result.GetGeneratedSources(nameof(OperationExecutorPipelineSourceGenerator));
+        pipelineSources.Should().HaveCountGreaterOrEqualTo(1, "pipeline should be generated");
+
+        var outputText = new StringBuilder();
+        foreach (var s in pipelineSources.OrderBy(static s => s.HintName))
+        {
+            outputText.AppendLine(s.HintName + ":");
+            outputText.AppendLine();
+            outputText.AppendLine(s.SourceText);
+            outputText.AppendLine();
+        }
+
+        await Verify(outputText)
+            .UseDirectory("Generators/Pipelines/Snapshots/Integration/");
+    }
+
     [Fact]
     public async Task When_get_query_with_route_and_query_params_then_pipeline_snapshot_matches()
     {
