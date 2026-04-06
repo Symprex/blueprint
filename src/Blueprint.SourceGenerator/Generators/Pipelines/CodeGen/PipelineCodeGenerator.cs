@@ -29,6 +29,14 @@ internal static class PipelineCodeGenerator
         AddConstructor(pipelineClass, handler);
         AddExecuteAsyncMethod(pipelineClass, handler, plan, exceptionTranslatorPolicy);
 
+        // Modules register class-level helper methods (e.g. PopulateFromJsonBody) during
+        // planning via PipelinePlan.AddDeferredClassMember. Apply them here so they are
+        // present when ClassBuilder materialises its method list during Build().
+        foreach (var member in plan.DeferredClassMembers)
+        {
+            member(pipelineClass);
+        }
+
         return codeBuilder.Build();
     }
 

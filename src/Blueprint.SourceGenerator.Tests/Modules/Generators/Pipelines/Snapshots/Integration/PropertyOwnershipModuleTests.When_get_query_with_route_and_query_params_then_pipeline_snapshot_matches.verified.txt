@@ -49,11 +49,11 @@ namespace Blueprint.Generated
                 var _qv_PageSize = httpContext.Request.Query["pageSize"];
                 if (_qv_PageSize.Count > 0)
                 {
-                    try
+                    if (int.TryParse(_qv_PageSize[0], System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var _parsed_PageSize))
                     {
-                        operation.PageSize = int.Parse(_qv_PageSize[0], System.Globalization.CultureInfo.InvariantCulture);
+                        operation.PageSize = _parsed_PageSize;
                     }
-                    catch (System.FormatException)
+                    else
                     {
                         httpContext.Response.StatusCode = 400;
                         return new Blueprint.Runtime.Http.HttpPipelineShortCircuitResult();
@@ -65,11 +65,11 @@ namespace Blueprint.Generated
                     var _arr_TagIds = new int[_qv_TagIds.Count];
                     for (var _i = 0; _i < _qv_TagIds.Count; _i++)
                     {
-                        try
+                        if (int.TryParse(_qv_TagIds[_i], System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var _parsed_TagIds))
                         {
-                            _arr_TagIds[_i] = int.Parse(_qv_TagIds[_i], System.Globalization.CultureInfo.InvariantCulture);
+                            _arr_TagIds[_i] = _parsed_TagIds;
                         }
-                        catch (System.FormatException)
+                        else
                         {
                             httpContext.Response.StatusCode = 400;
                             return new Blueprint.Runtime.Http.HttpPipelineShortCircuitResult();

@@ -134,4 +134,15 @@ public sealed class PipelineContributorContext
     {
         this._plan.AddDiagnostic(diagnostic);
     }
+
+    /// <summary>
+    /// Registers a class-level helper method (or other member) on the generated pipeline class.
+    /// The callback is deferred until code generation applies it to the <see cref="CodeWriter.ClassBuilder"/>
+    /// before the source is built, so the member is present alongside <c>ExecuteAsync</c>.
+    /// </summary>
+    /// <param name="configure">A callback that receives the pipeline class builder and adds the member.</param>
+    public void AddDeferredClassMember(Action<CodeWriter.ClassBuilder> configure)
+    {
+        this._plan.AddDeferredClassMember(configure);
+    }
 }

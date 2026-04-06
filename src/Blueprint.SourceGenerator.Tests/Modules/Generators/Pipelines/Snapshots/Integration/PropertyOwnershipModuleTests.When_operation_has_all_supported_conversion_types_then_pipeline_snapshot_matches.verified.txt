@@ -53,11 +53,11 @@ namespace Blueprint.Generated
                 var _qv_PageSize = httpContext.Request.Query["pageSize"];
                 if (_qv_PageSize.Count > 0)
                 {
-                    try
+                    if (int.TryParse(_qv_PageSize[0], System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var _parsed_PageSize))
                     {
-                        operation.PageSize = int.Parse(_qv_PageSize[0], System.Globalization.CultureInfo.InvariantCulture);
+                        operation.PageSize = _parsed_PageSize;
                     }
-                    catch (System.FormatException)
+                    else
                     {
                         httpContext.Response.StatusCode = 400;
                         return new Blueprint.Runtime.Http.HttpPipelineShortCircuitResult();
@@ -66,11 +66,11 @@ namespace Blueprint.Generated
                 var _qv_Offset = httpContext.Request.Query["offset"];
                 if (_qv_Offset.Count > 0)
                 {
-                    try
+                    if (long.TryParse(_qv_Offset[0], System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var _parsed_Offset))
                     {
-                        operation.Offset = long.Parse(_qv_Offset[0], System.Globalization.CultureInfo.InvariantCulture);
+                        operation.Offset = _parsed_Offset;
                     }
-                    catch (System.FormatException)
+                    else
                     {
                         httpContext.Response.StatusCode = 400;
                         return new Blueprint.Runtime.Http.HttpPipelineShortCircuitResult();
@@ -79,11 +79,11 @@ namespace Blueprint.Generated
                 var _qv_IncludeDeleted = httpContext.Request.Query["includeDeleted"];
                 if (_qv_IncludeDeleted.Count > 0)
                 {
-                    try
+                    if (bool.TryParse(_qv_IncludeDeleted[0], out var _parsed_IncludeDeleted))
                     {
-                        operation.IncludeDeleted = bool.Parse(_qv_IncludeDeleted[0]);
+                        operation.IncludeDeleted = _parsed_IncludeDeleted;
                     }
-                    catch (System.FormatException)
+                    else
                     {
                         httpContext.Response.StatusCode = 400;
                         return new Blueprint.Runtime.Http.HttpPipelineShortCircuitResult();
@@ -92,11 +92,11 @@ namespace Blueprint.Generated
                 var _qv_MinPrice = httpContext.Request.Query["minPrice"];
                 if (_qv_MinPrice.Count > 0)
                 {
-                    try
+                    if (decimal.TryParse(_qv_MinPrice[0], System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var _parsed_MinPrice))
                     {
-                        operation.MinPrice = decimal.Parse(_qv_MinPrice[0], System.Globalization.CultureInfo.InvariantCulture);
+                        operation.MinPrice = _parsed_MinPrice;
                     }
-                    catch (System.FormatException)
+                    else
                     {
                         httpContext.Response.StatusCode = 400;
                         return new Blueprint.Runtime.Http.HttpPipelineShortCircuitResult();
@@ -105,11 +105,11 @@ namespace Blueprint.Generated
                 var _qv_TenantId = httpContext.Request.Query["tenantId"];
                 if (_qv_TenantId.Count > 0)
                 {
-                    try
+                    if (System.Guid.TryParse(_qv_TenantId[0], out var _parsed_TenantId))
                     {
-                        operation.TenantId = System.Guid.Parse(_qv_TenantId[0]);
+                        operation.TenantId = _parsed_TenantId;
                     }
-                    catch (System.FormatException)
+                    else
                     {
                         httpContext.Response.StatusCode = 400;
                         return new Blueprint.Runtime.Http.HttpPipelineShortCircuitResult();
@@ -118,11 +118,11 @@ namespace Blueprint.Generated
                 var _qv_Since = httpContext.Request.Query["since"];
                 if (_qv_Since.Count > 0)
                 {
-                    try
+                    if (System.DateTime.TryParse(_qv_Since[0], System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var _parsed_Since))
                     {
-                        operation.Since = System.DateTime.Parse(_qv_Since[0], System.Globalization.CultureInfo.InvariantCulture);
+                        operation.Since = _parsed_Since;
                     }
-                    catch (System.FormatException)
+                    else
                     {
                         httpContext.Response.StatusCode = 400;
                         return new Blueprint.Runtime.Http.HttpPipelineShortCircuitResult();
@@ -131,11 +131,11 @@ namespace Blueprint.Generated
                 var _qv_MaxResults = httpContext.Request.Query["maxResults"];
                 if (_qv_MaxResults.Count > 0)
                 {
-                    try
+                    if (int.TryParse(_qv_MaxResults[0], System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var _parsed_MaxResults))
                     {
-                        operation.MaxResults = int.Parse(_qv_MaxResults[0], System.Globalization.CultureInfo.InvariantCulture);
+                        operation.MaxResults = _parsed_MaxResults;
                     }
-                    catch (System.FormatException)
+                    else
                     {
                         httpContext.Response.StatusCode = 400;
                         return new Blueprint.Runtime.Http.HttpPipelineShortCircuitResult();
@@ -152,11 +152,11 @@ namespace Blueprint.Generated
                     var _arr_CategoryIds = new int[_qv_CategoryIds.Count];
                     for (var _i = 0; _i < _qv_CategoryIds.Count; _i++)
                     {
-                        try
+                        if (int.TryParse(_qv_CategoryIds[_i], System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var _parsed_CategoryIds))
                         {
-                            _arr_CategoryIds[_i] = int.Parse(_qv_CategoryIds[_i], System.Globalization.CultureInfo.InvariantCulture);
+                            _arr_CategoryIds[_i] = _parsed_CategoryIds;
                         }
-                        catch (System.FormatException)
+                        else
                         {
                             httpContext.Response.StatusCode = 400;
                             return new Blueprint.Runtime.Http.HttpPipelineShortCircuitResult();
@@ -282,58 +282,6 @@ namespace Blueprint.Generated
                 {
                     operation.ItemGuid = System.Guid.Parse(routeStr_ItemGuid);
                 }
-
-                static void PopulateFromJsonBody(System.ReadOnlySpan<byte> bodyBytes, global::TestNamespace.AllTypesPostCommand operation)
-                {
-                    var reader = new System.Text.Json.Utf8JsonReader(bodyBytes);
-                    if (!reader.Read() || reader.TokenType != System.Text.Json.JsonTokenType.StartObject) return;
-
-                    while (reader.Read())
-                    {
-                        if (reader.TokenType == System.Text.Json.JsonTokenType.EndObject) break;
-                        if (reader.TokenType != System.Text.Json.JsonTokenType.PropertyName) continue;
-
-                        if (reader.ValueTextEquals("title"u8))
-                        {
-                            reader.Read();
-                            operation.Title = reader.GetString();
-                        }
-                        else if (reader.ValueTextEquals("count"u8))
-                        {
-                            reader.Read();
-                            operation.Count = reader.GetInt32();
-                        }
-                        else if (reader.ValueTextEquals("bigNumber"u8))
-                        {
-                            reader.Read();
-                            operation.BigNumber = reader.GetInt64();
-                        }
-                        else if (reader.ValueTextEquals("isActive"u8))
-                        {
-                            reader.Read();
-                            operation.IsActive = reader.GetBoolean();
-                        }
-                        else if (reader.ValueTextEquals("price"u8))
-                        {
-                            reader.Read();
-                            operation.Price = reader.GetDecimal();
-                        }
-                        else if (reader.ValueTextEquals("correlationId"u8))
-                        {
-                            reader.Read();
-                            operation.CorrelationId = reader.GetGuid();
-                        }
-                        else if (reader.ValueTextEquals("createdAt"u8))
-                        {
-                            reader.Read();
-                            operation.CreatedAt = reader.GetDateTime();
-                        }
-                        else
-                        {
-                            reader.Skip();
-                        }
-                    }
-                }
                 var handlerResult = await global::TestNamespace.AllTypesPostCommand.HandleAsync(operation);
 
                 return new Blueprint.Runtime.Exec.OkResult<string>(handlerResult);
@@ -364,6 +312,58 @@ namespace Blueprint.Generated
                 }
 
                 return new Blueprint.Runtime.Exec.UnhandledExceptionResult(e);
+            }
+        }
+
+        private static void PopulateFromJsonBody(System.ReadOnlySpan<byte> bodyBytes, global::TestNamespace.AllTypesPostCommand operation)
+        {
+            var reader = new System.Text.Json.Utf8JsonReader(bodyBytes);
+            if (!reader.Read() || reader.TokenType != System.Text.Json.JsonTokenType.StartObject) return;
+
+            while (reader.Read())
+            {
+                if (reader.TokenType == System.Text.Json.JsonTokenType.EndObject) break;
+                if (reader.TokenType != System.Text.Json.JsonTokenType.PropertyName) continue;
+
+                if (reader.ValueTextEquals("title"u8))
+                {
+                    reader.Read();
+                    operation.Title = reader.GetString();
+                }
+                else if (reader.ValueTextEquals("count"u8))
+                {
+                    reader.Read();
+                    operation.Count = reader.GetInt32();
+                }
+                else if (reader.ValueTextEquals("bigNumber"u8))
+                {
+                    reader.Read();
+                    operation.BigNumber = reader.GetInt64();
+                }
+                else if (reader.ValueTextEquals("isActive"u8))
+                {
+                    reader.Read();
+                    operation.IsActive = reader.GetBoolean();
+                }
+                else if (reader.ValueTextEquals("price"u8))
+                {
+                    reader.Read();
+                    operation.Price = reader.GetDecimal();
+                }
+                else if (reader.ValueTextEquals("correlationId"u8))
+                {
+                    reader.Read();
+                    operation.CorrelationId = reader.GetGuid();
+                }
+                else if (reader.ValueTextEquals("createdAt"u8))
+                {
+                    reader.Read();
+                    operation.CreatedAt = reader.GetDateTime();
+                }
+                else
+                {
+                    reader.Skip();
+                }
             }
         }
     }

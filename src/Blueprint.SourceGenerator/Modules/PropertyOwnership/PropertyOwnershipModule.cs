@@ -88,11 +88,19 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         {
             context.RequireAsync();
             context.AddRenderStep(PipelineStage.Population, renderContext => RenderPopulationStage(renderContext, entries, context.Operation));
+
+            // Register the Utf8JsonReader body parser as a deferred class member so it is
+            // added to the pipeline class before Build() materialises the method list.
+            var bodyEntries = entries.Where(static e => e.Source == PropertyOwnershipSource.Body).ToArray();
+            var operationTypeFull = operationType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+            context.AddDeferredClassMember(pipelineClass =>
+                WritePopulateFromJsonBodyMethod(pipelineClass, operationTypeFull, bodyEntries));
         }
         else if (hasRouteProperties || hasQueryProperties)
         {
-            // Typed query params can fail parsing (FormatException), requiring a return statement.
-            // Ensure the pipeline is async so early returns compile correctly.
+            // Non-string query params generate if/else with a return statement for 400 on bad values.
+            // Ensure the pipeline is async so the return compiles against Task<OperationResult>.
             if (hasQueryProperties && entries.Any(static e => e.Source == PropertyOwnershipSource.Query && !IsStringType(e.TypeSymbol)))
             {
                 context.RequireAsync();
@@ -511,14 +519,6 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         {
             WriteRouteExtraction(context, operationExpr, entry);
         }
-
-        // Emit the static local function for Utf8JsonReader-based body parsing after all pipeline statements.
-        // Static local functions avoid ref-struct-in-async (CS4012) while keeping Utf8JsonReader's zero-alloc perf.
-        if (bodyEntries.Length > 0)
-        {
-            context.WriteBlankLine();
-            WritePopulateFromJsonBodyLocalFunction(context, operationExpr, operationTypeFull, bodyEntries);
-        }
     }
 
     private static void RenderNonBodyPopulation(PipelineRenderContext context, List<PropertyOwnershipEntry> entries, OperationModel operation)
@@ -546,76 +546,81 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         }
     }
 
-    private static void WritePopulateFromJsonBodyLocalFunction(
-        PipelineRenderContext context,
-        string operationExpr,
+    private static void WritePopulateFromJsonBodyMethod(
+        ClassBuilder pipelineClass,
         string operationTypeFull,
         PropertyOwnershipEntry[] bodyEntries)
     {
-        context.WriteStatement($"static void PopulateFromJsonBody(System.ReadOnlySpan<byte> bodyBytes, {operationTypeFull} {operationExpr})");
-        context.WriteStatement("{");
-        context.WriteStatement("    var reader = new System.Text.Json.Utf8JsonReader(bodyBytes);");
-        context.WriteStatement("    if (!reader.Read() || reader.TokenType != System.Text.Json.JsonTokenType.StartObject) return;");
-        context.WriteBlankLine();
-        context.WriteStatement("    while (reader.Read())");
-        context.WriteStatement("    {");
-        context.WriteStatement("        if (reader.TokenType == System.Text.Json.JsonTokenType.EndObject) break;");
-        context.WriteStatement("        if (reader.TokenType != System.Text.Json.JsonTokenType.PropertyName) continue;");
-        context.WriteBlankLine();
+        var method = pipelineClass.AddMethod("PopulateFromJsonBody")
+            .MakePrivateMethod()
+            .MakeStaticMethod()
+            .WithReturnType("void")
+            .AddParameter("System.ReadOnlySpan<byte>", "bodyBytes")
+            .AddParameter(operationTypeFull, "operation");
 
-        var isFirst = true;
-        foreach (var entry in bodyEntries)
+        method.WithBody(writer =>
         {
-            var prefix = isFirst ? "        if" : "        else if";
-            isFirst = false;
+            writer.AppendLine("var reader = new System.Text.Json.Utf8JsonReader(bodyBytes);");
+            writer.AppendLine("if (!reader.Read() || reader.TokenType != System.Text.Json.JsonTokenType.StartObject) return;");
+            writer.NewLine();
+            writer.AppendLine("while (reader.Read())");
+            writer.AppendLine("{");
+            writer.AppendLine("    if (reader.TokenType == System.Text.Json.JsonTokenType.EndObject) break;");
+            writer.AppendLine("    if (reader.TokenType != System.Text.Json.JsonTokenType.PropertyName) continue;");
+            writer.NewLine();
 
-            var utf8Name = $"\"{entry.BindingName}\"u8";
-            context.WriteStatement($"{prefix} (reader.ValueTextEquals({utf8Name}))");
-            context.WriteStatement("        {");
-            context.WriteStatement("            reader.Read();");
-            WriteUtf8ReaderAssignment(context, operationExpr, entry);
-            context.WriteStatement("        }");
-        }
+            var isFirst = true;
+            foreach (var entry in bodyEntries)
+            {
+                var prefix = isFirst ? "    if" : "    else if";
+                isFirst = false;
 
-        context.WriteStatement("        else");
-        context.WriteStatement("        {");
-        context.WriteStatement("            reader.Skip();");
-        context.WriteStatement("        }");
-        context.WriteStatement("    }");
-        context.WriteStatement("}");
+                var utf8Name = $"\"{entry.BindingName}\"u8";
+                writer.AppendLine($"{prefix} (reader.ValueTextEquals({utf8Name}))");
+                writer.AppendLine("    {");
+                writer.AppendLine("        reader.Read();");
+                WriteUtf8ReaderAssignment(writer, entry);
+                writer.AppendLine("    }");
+            }
+
+            writer.AppendLine("    else");
+            writer.AppendLine("    {");
+            writer.AppendLine("        reader.Skip();");
+            writer.AppendLine("    }");
+            writer.AppendLine("}");
+        });
     }
 
-    private static void WriteUtf8ReaderAssignment(PipelineRenderContext context, string operationExpr, PropertyOwnershipEntry entry)
+    private static void WriteUtf8ReaderAssignment(ICodeWriter writer, PropertyOwnershipEntry entry)
     {
         var typeDisplay = entry.TypeSymbol.WithNullableAnnotation(NullableAnnotation.NotAnnotated).ToDisplayString();
 
         switch (typeDisplay)
         {
             case "string":
-                context.WriteStatement($"            {operationExpr}.{entry.PropertyName} = reader.GetString();");
+                writer.AppendLine($"        operation.{entry.PropertyName} = reader.GetString();");
                 break;
             case "int":
-                context.WriteStatement($"            {operationExpr}.{entry.PropertyName} = reader.GetInt32();");
+                writer.AppendLine($"        operation.{entry.PropertyName} = reader.GetInt32();");
                 break;
             case "long":
-                context.WriteStatement($"            {operationExpr}.{entry.PropertyName} = reader.GetInt64();");
+                writer.AppendLine($"        operation.{entry.PropertyName} = reader.GetInt64();");
                 break;
             case "bool":
-                context.WriteStatement($"            {operationExpr}.{entry.PropertyName} = reader.GetBoolean();");
+                writer.AppendLine($"        operation.{entry.PropertyName} = reader.GetBoolean();");
                 break;
             case "decimal":
-                context.WriteStatement($"            {operationExpr}.{entry.PropertyName} = reader.GetDecimal();");
+                writer.AppendLine($"        operation.{entry.PropertyName} = reader.GetDecimal();");
                 break;
             case "System.Guid":
-                context.WriteStatement($"            {operationExpr}.{entry.PropertyName} = reader.GetGuid();");
+                writer.AppendLine($"        operation.{entry.PropertyName} = reader.GetGuid();");
                 break;
             case "System.DateTime":
-                context.WriteStatement($"            {operationExpr}.{entry.PropertyName} = reader.GetDateTime();");
+                writer.AppendLine($"        operation.{entry.PropertyName} = reader.GetDateTime();");
                 break;
             default:
-                // Delegate to STJ for complex types via ref reader overload
-                context.WriteStatement(
-                    $"            {operationExpr}.{entry.PropertyName} = System.Text.Json.JsonSerializer.Deserialize<global::{typeDisplay}>(ref reader);");
+                writer.AppendLine(
+                    $"        operation.{entry.PropertyName} = System.Text.Json.JsonSerializer.Deserialize<global::{typeDisplay}>(ref reader);");
                 break;
         }
     }
@@ -671,16 +676,15 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         }
         else
         {
+            var tryParseExpr = GetScalarTryParseExpression(effectiveType, $"{queryVar}[0]", $"_parsed_{entry.PropertyName}");
+
             context.If($"{queryVar}.Count > 0", ifCtx =>
             {
-                ifCtx.WriteStatement("try");
-                ifCtx.WriteStatement("{");
-
-                var convertExpr = GetScalarConversionExpression(effectiveType, $"{queryVar}[0]");
-                ifCtx.WriteStatement($"    {operationExpr}.{entry.PropertyName} = {convertExpr};");
-
-                ifCtx.WriteStatement("}");
-                ifCtx.WriteStatement("catch (System.FormatException)");
+                ifCtx.If(tryParseExpr, parsedCtx =>
+                {
+                    parsedCtx.WriteStatement($"{operationExpr}.{entry.PropertyName} = _parsed_{entry.PropertyName};");
+                });
+                ifCtx.WriteStatement("else");
                 ifCtx.WriteStatement("{");
                 ifCtx.WriteStatement("    httpContext.Response.StatusCode = 400;");
                 ifCtx.WriteStatement("    return new Blueprint.Runtime.Http.HttpPipelineShortCircuitResult();");
@@ -710,17 +714,16 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             }
             else
             {
+                var tryParseExpr = GetScalarTryParseExpression(elementType, $"{queryVar}[_i]", $"_parsed_{entry.PropertyName}");
+
                 ifCtx.WriteStatement($"var _arr_{entry.PropertyName} = new {elementDisplay}[{queryVar}.Count];");
                 ifCtx.WriteStatement($"for (var _i = 0; _i < {queryVar}.Count; _i++)");
                 ifCtx.WriteStatement("{");
-                ifCtx.WriteStatement("    try");
+                ifCtx.WriteStatement($"    if ({tryParseExpr})");
                 ifCtx.WriteStatement("    {");
-
-                var convertExpr = GetScalarConversionExpression(elementType, $"{queryVar}[_i]");
-                ifCtx.WriteStatement($"        _arr_{entry.PropertyName}[_i] = {convertExpr};");
-
+                ifCtx.WriteStatement($"        _arr_{entry.PropertyName}[_i] = _parsed_{entry.PropertyName};");
                 ifCtx.WriteStatement("    }");
-                ifCtx.WriteStatement("    catch (System.FormatException)");
+                ifCtx.WriteStatement("    else");
                 ifCtx.WriteStatement("    {");
                 ifCtx.WriteStatement("        httpContext.Response.StatusCode = 400;");
                 ifCtx.WriteStatement("        return new Blueprint.Runtime.Http.HttpPipelineShortCircuitResult();");
@@ -747,6 +750,28 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             _ when typeSymbol.TypeKind == TypeKind.Enum =>
                 $"System.Enum.Parse<{typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}>({stringExpression})",
             _ => $"({typeDisplay}){stringExpression}",
+        };
+    }
+
+    /// <summary>
+    /// Returns a TryParse expression that avoids exception-handling overhead for malformed query values.
+    /// The expression evaluates to <c>true</c> when parsing succeeds and writes the result into <paramref name="outVariable"/>.
+    /// </summary>
+    private static string GetScalarTryParseExpression(ITypeSymbol typeSymbol, string stringExpression, string outVariable)
+    {
+        var typeDisplay = typeSymbol.WithNullableAnnotation(NullableAnnotation.NotAnnotated).ToDisplayString();
+
+        return typeDisplay switch
+        {
+            "int" => $"int.TryParse({stringExpression}, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var {outVariable})",
+            "long" => $"long.TryParse({stringExpression}, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var {outVariable})",
+            "bool" => $"bool.TryParse({stringExpression}, out var {outVariable})",
+            "decimal" => $"decimal.TryParse({stringExpression}, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var {outVariable})",
+            "System.Guid" => $"System.Guid.TryParse({stringExpression}, out var {outVariable})",
+            "System.DateTime" => $"System.DateTime.TryParse({stringExpression}, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var {outVariable})",
+            _ when typeSymbol.TypeKind == TypeKind.Enum =>
+                $"System.Enum.TryParse<{typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}>({stringExpression}, out var {outVariable})",
+            _ => $"int.TryParse({stringExpression}, out var {outVariable})", // fallback — should not be reached for supported types
         };
     }
 

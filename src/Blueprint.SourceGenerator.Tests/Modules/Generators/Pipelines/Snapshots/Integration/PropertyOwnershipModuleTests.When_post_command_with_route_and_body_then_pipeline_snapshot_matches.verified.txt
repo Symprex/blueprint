@@ -98,33 +98,6 @@ namespace Blueprint.Generated
                 }
 
                 operation.Id = (string)httpContext.Request.RouteValues["Id"];
-
-                static void PopulateFromJsonBody(System.ReadOnlySpan<byte> bodyBytes, global::TestNamespace.UpdateUserCommand operation)
-                {
-                    var reader = new System.Text.Json.Utf8JsonReader(bodyBytes);
-                    if (!reader.Read() || reader.TokenType != System.Text.Json.JsonTokenType.StartObject) return;
-
-                    while (reader.Read())
-                    {
-                        if (reader.TokenType == System.Text.Json.JsonTokenType.EndObject) break;
-                        if (reader.TokenType != System.Text.Json.JsonTokenType.PropertyName) continue;
-
-                        if (reader.ValueTextEquals("name"u8))
-                        {
-                            reader.Read();
-                            operation.Name = reader.GetString();
-                        }
-                        else if (reader.ValueTextEquals("email"u8))
-                        {
-                            reader.Read();
-                            operation.Email = reader.GetString();
-                        }
-                        else
-                        {
-                            reader.Skip();
-                        }
-                    }
-                }
                 var handlerResult = await global::TestNamespace.UpdateUserCommand.HandleAsync(operation);
 
                 return new Blueprint.Runtime.Exec.OkResult<string>(handlerResult);
@@ -155,6 +128,33 @@ namespace Blueprint.Generated
                 }
 
                 return new Blueprint.Runtime.Exec.UnhandledExceptionResult(e);
+            }
+        }
+
+        private static void PopulateFromJsonBody(System.ReadOnlySpan<byte> bodyBytes, global::TestNamespace.UpdateUserCommand operation)
+        {
+            var reader = new System.Text.Json.Utf8JsonReader(bodyBytes);
+            if (!reader.Read() || reader.TokenType != System.Text.Json.JsonTokenType.StartObject) return;
+
+            while (reader.Read())
+            {
+                if (reader.TokenType == System.Text.Json.JsonTokenType.EndObject) break;
+                if (reader.TokenType != System.Text.Json.JsonTokenType.PropertyName) continue;
+
+                if (reader.ValueTextEquals("name"u8))
+                {
+                    reader.Read();
+                    operation.Name = reader.GetString();
+                }
+                else if (reader.ValueTextEquals("email"u8))
+                {
+                    reader.Read();
+                    operation.Email = reader.GetString();
+                }
+                else
+                {
+                    reader.Skip();
+                }
             }
         }
     }

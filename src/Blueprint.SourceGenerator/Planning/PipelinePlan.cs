@@ -15,6 +15,7 @@ public sealed record PipelinePlan(OperationModel Operation, VariableRegistry Var
     private readonly HashSet<PipelineContribution> _contributionSet = [];
     private readonly List<PipelineContribution> _contributions = [];
     private readonly List<PipelineRenderStep> _renderSteps = [];
+    private readonly List<Action<ClassBuilder>> _deferredClassMembers = [];
 
     /// <summary>
     /// Gets or sets a value indicating whether the generated pipeline must be async
@@ -90,6 +91,23 @@ public sealed record PipelinePlan(OperationModel Operation, VariableRegistry Var
     {
         return this._renderSteps.Where(step => step.Stage == contribution.Stage && step.ContributorId == contribution.ContributorId);
     }
+
+    /// <summary>
+    /// Registers a deferred class member that will be applied to the pipeline class builder
+    /// before the generated source is built. Use this to add helper methods that sit alongside
+    /// <c>ExecuteAsync</c> — methods cannot be added during render-step execution because the
+    /// class builder has already materialised its member list at that point.
+    /// </summary>
+    /// <param name="configure">A callback that receives the pipeline <see cref="ClassBuilder"/> and adds the member.</param>
+    public void AddDeferredClassMember(Action<ClassBuilder> configure)
+    {
+        this._deferredClassMembers.Add(configure);
+    }
+
+    /// <summary>
+    /// Gets the deferred class member registrations.
+    /// </summary>
+    public IReadOnlyList<Action<ClassBuilder>> DeferredClassMembers => this._deferredClassMembers;
 }
 
 /// <summary>

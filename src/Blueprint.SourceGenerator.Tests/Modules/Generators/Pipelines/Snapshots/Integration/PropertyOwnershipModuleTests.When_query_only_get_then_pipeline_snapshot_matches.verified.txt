@@ -47,11 +47,11 @@ namespace Blueprint.Generated
                 var _qv_Page = httpContext.Request.Query["page"];
                 if (_qv_Page.Count > 0)
                 {
-                    try
+                    if (int.TryParse(_qv_Page[0], System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var _parsed_Page))
                     {
-                        operation.Page = int.Parse(_qv_Page[0], System.Globalization.CultureInfo.InvariantCulture);
+                        operation.Page = _parsed_Page;
                     }
-                    catch (System.FormatException)
+                    else
                     {
                         httpContext.Response.StatusCode = 400;
                         return new Blueprint.Runtime.Http.HttpPipelineShortCircuitResult();
