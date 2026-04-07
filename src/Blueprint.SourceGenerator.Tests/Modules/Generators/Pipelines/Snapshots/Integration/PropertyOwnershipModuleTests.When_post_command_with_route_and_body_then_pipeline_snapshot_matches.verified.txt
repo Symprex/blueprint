@@ -39,93 +39,52 @@ using Blueprint;
 
 namespace Blueprint.Generated
 {
-    public partial class UpdateUserCommandExecutorPipeline : Blueprint.IOperationExecutorPipeline
+    public partial class UpdateUserCommandExecutorPipeline : Blueprint.OperationExecutorShell
     {
-        private static readonly System.Action<Microsoft.Extensions.Logging.ILogger, string, System.Exception> _ApiOperationExecuting =
-            Microsoft.Extensions.Logging.LoggerMessage.Define<System.String>(Microsoft.Extensions.Logging.LogLevel.Debug, new Microsoft.Extensions.Logging.EventId(1, "ApiOperationExecuting"), "Executing API operation {OperationType} with handler");
-        private readonly Microsoft.Extensions.Logging.ILogger _logger;
-        private static readonly System.Action<Microsoft.Extensions.Logging.ILogger, string, System.Exception> _NonException =
-            Microsoft.Extensions.Logging.LoggerMessage.Define<System.String>(Microsoft.Extensions.Logging.LogLevel.Information, new Microsoft.Extensions.Logging.EventId(4, "Non500Exception"), "A non-5xx ApiException has occurred with message {ExceptionMessage}");
-        private static readonly System.Action<Microsoft.Extensions.Logging.ILogger, string, System.Exception> _UnhandledException =
-            Microsoft.Extensions.Logging.LoggerMessage.Define<System.String>(Microsoft.Extensions.Logging.LogLevel.Error, new Microsoft.Extensions.Logging.EventId(5, "UnhandledException"), "An unhandled exception has occurred with message {ExceptionMessage}");
-
         public UpdateUserCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory)
+            : base(loggerFactory, "UpdateUserCommand")
         {
-            _logger = loggerFactory.CreateLogger("UpdateUserCommandExecutorPipeline");
         }
 
-        public async System.Threading.Tasks.Task<Blueprint.OperationResult> ExecuteAsync(Blueprint.Runtime.Exec.ApiOperationContext context)
+        protected override async System.Threading.Tasks.Task<Blueprint.OperationResult> ExecuteCoreAsync(Blueprint.Runtime.Exec.ApiOperationContext context)
         {
-            using var activity = Blueprint.Diagnostics.BlueprintActivitySource.ActivitySource.StartActivity("UpdateUserCommandPipeline", System.Diagnostics.ActivityKind.Internal);
             var operation = (global::TestNamespace.UpdateUserCommand)context.Operation;
 
-            try
+            var httpContext = ((Blueprint.Runtime.Http.IHttpOperationContext)context).HttpContext;
+
+            if (httpContext.Request.ContentLength > 0 || httpContext.Request.ContentType != null)
             {
-                _ApiOperationExecuting(_logger, "UpdateUserCommand", null);
-
-                var httpContext = ((Blueprint.Runtime.Http.IHttpOperationContext)context).HttpContext;
-
-                if (httpContext.Request.ContentLength > 0 || httpContext.Request.ContentType != null)
+                if (httpContext.Request.ContentType != null && !httpContext.Request.ContentType.Contains("json", System.StringComparison.OrdinalIgnoreCase))
                 {
-                    if (httpContext.Request.ContentType != null && !httpContext.Request.ContentType.Contains("json", System.StringComparison.OrdinalIgnoreCase))
+                    return new Blueprint.Runtime.Exec.UnsupportedMediaTypeResult();
+                }
+
+                using var bodyStream = httpContext.Request.ContentLength.HasValue
+                    ? new System.IO.MemoryStream((int)httpContext.Request.ContentLength.Value)
+                    : new System.IO.MemoryStream();
+                await httpContext.Request.Body.CopyToAsync(bodyStream, context.OperationCancelled);
+
+                if (bodyStream.Length > 0)
+                {
+                    try
                     {
-                        return new Blueprint.Runtime.Exec.UnsupportedMediaTypeResult();
+                        PopulateFromJsonBody(new System.ReadOnlySpan<byte>(bodyStream.GetBuffer(), 0, (int)bodyStream.Length), operation);
                     }
-
-                    using var bodyStream = httpContext.Request.ContentLength.HasValue
-                        ? new System.IO.MemoryStream((int)httpContext.Request.ContentLength.Value)
-                        : new System.IO.MemoryStream();
-                    await httpContext.Request.Body.CopyToAsync(bodyStream, context.OperationCancelled);
-
-                    if (bodyStream.Length > 0)
+                    catch (System.Text.Json.JsonException)
                     {
-                        try
-                        {
-                            PopulateFromJsonBody(new System.ReadOnlySpan<byte>(bodyStream.GetBuffer(), 0, (int)bodyStream.Length), operation);
-                        }
-                        catch (System.Text.Json.JsonException)
-                        {
-                            return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid JSON body");
-                        }
-                        catch (System.InvalidOperationException)
-                        {
-                            return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid JSON body");
-                        }
+                        return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid JSON body");
+                    }
+                    catch (System.InvalidOperationException)
+                    {
+                        return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid JSON body");
                     }
                 }
+            }
 
-                operation.Id = (string)httpContext.Request.RouteValues["Id"];
-                var handlerResult = await global::TestNamespace.UpdateUserCommand.HandleAsync(operation);
+            operation.Id = (string)httpContext.Request.RouteValues["Id"];
+            var handlerResult = await global::TestNamespace.UpdateUserCommand.HandleAsync(operation);
 
-                return new Blueprint.Runtime.Exec.OkResult<string>(handlerResult);
-            }
-            catch (Blueprint.Validation.ValidationException e)
-            {
-                context.Activity?.SetTag("otel.status_code", "OK");
-                return new Blueprint.Runtime.Exec.ValidationFailedResult(e.ValidationResults);
-            }
-            catch (System.ComponentModel.DataAnnotations.ValidationException e)
-            {
-                context.Activity?.SetTag("otel.status_code", "OK");
-                return Blueprint.Middleware.ValidationMiddlewareBuilder.ToValidationFailedResult(e);
-            }
-            catch (System.Exception e)
-            {
-                if (e is Blueprint.ApiException apiException && apiException.HttpStatus < 500)
-                {
-                    _NonException(_logger, e.Message, e);
-                    context.Activity?.SetTag("otel.status_code", "OK");
-                }
-                else
-                {
-                    Blueprint.Diagnostics.BlueprintActivitySource.RecordException(context.Activity, e, false);
-                    _UnhandledException(_logger, e.Message, e);
-                    context.Activity?.SetTag("otel.status_code", "ERROR");
-                    context.Activity?.SetTag("otel.status_description", e.Message);
-                }
-
-                return new Blueprint.Runtime.Exec.UnhandledExceptionResult(e);
-            }
+            return new Blueprint.Runtime.Exec.OkResult<string>(handlerResult);
         }
 
         private static void PopulateFromJsonBody(System.ReadOnlySpan<byte> bodyBytes, global::TestNamespace.UpdateUserCommand operation)

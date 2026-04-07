@@ -240,12 +240,16 @@ public class OperationExecutorPipelineGeneratorIntegrationTests
         policyResult.Diagnostics.Should().BeEmpty();
         policyResult.Value.Should().NotBeNull();
 
-        var pipelineSource = PipelineCodeGenerator.GeneratePipeline(handlerResult.Value!, plan, policyResult.Value!);
+        // Exception handling now lives in OperationExecutorShell at runtime.
+        // Verify the policy correctly captures a custom translator replacement.
+        var translatorIds = policyResult.Value!.Translators.Select(static t => t.TranslatorId).ToArray();
+        translatorIds.Should().Equal("test-invalid-operation-exception");
 
-        pipelineSource.Should().Contain("catch (System.InvalidOperationException e)");
-        pipelineSource.Should().Contain("return new Blueprint.Runtime.Exec.UnhandledExceptionResult(e);");
-        pipelineSource.Should().NotContain("catch (Blueprint.Validation.ValidationException e)");
-        pipelineSource.Should().NotContain("catch (System.Exception e)");
+        // Generated code should contain the shell-derived pipeline but no catch blocks
+        var pipelineSource = PipelineCodeGenerator.GeneratePipeline(handlerResult.Value!, plan);
+
+        pipelineSource.Should().Contain("ExecuteCoreAsync");
+        pipelineSource.Should().NotContain("catch (");
     }
 
     [Fact]
@@ -287,15 +291,11 @@ public class OperationExecutorPipelineGeneratorIntegrationTests
 
         pipelineSource.Should().NotBeNull();
 
-        var legacyValidationCatch = pipelineSource!.IndexOf("catch (Blueprint.Validation.ValidationException e)", StringComparison.Ordinal);
-        var packageCatch = pipelineSource.IndexOf("catch (System.Security.SecurityException e)", StringComparison.Ordinal);
-        var dataAnnotationsCatch = pipelineSource.IndexOf("catch (System.ComponentModel.DataAnnotations.ValidationException e)", StringComparison.Ordinal);
-        var fallbackCatch = pipelineSource.IndexOf("catch (System.Exception e)", StringComparison.Ordinal);
-
-        legacyValidationCatch.Should().BeGreaterThan(-1);
-        packageCatch.Should().BeGreaterThan(legacyValidationCatch);
-        dataAnnotationsCatch.Should().BeGreaterThan(packageCatch);
-        fallbackCatch.Should().BeGreaterThan(dataAnnotationsCatch);
+        // Exception handling now lives in OperationExecutorShell at runtime.
+        // Generated pipeline should contain ExecuteCoreAsync, not catch blocks.
+        pipelineSource!.Should().Contain("ExecuteCoreAsync");
+        pipelineSource.Should().Contain("OperationExecutorShell");
+        pipelineSource.Should().NotContain("catch (");
     }
 
     [Fact]
@@ -436,7 +436,11 @@ public class OperationExecutorPipelineGeneratorIntegrationTests
             .FirstOrDefault(static sourceText => sourceText.Contains("TestQueryExecutorPipeline"));
 
         pipelineSource.Should().NotBeNull();
-        pipelineSource!.Should().Contain("return new Blueprint.Runtime.Exec.UnhandledExceptionResult(e);");
+
+        // Exception handling now lives in OperationExecutorShell at runtime.
+        // Verify the generated pipeline derives from the shell and uses ExecuteCoreAsync.
+        pipelineSource!.Should().Contain("OperationExecutorShell");
+        pipelineSource.Should().Contain("ExecuteCoreAsync");
     }
 
     [Fact]

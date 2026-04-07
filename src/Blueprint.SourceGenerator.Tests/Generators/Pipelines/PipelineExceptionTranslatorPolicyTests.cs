@@ -100,14 +100,9 @@ public class PipelineExceptionTranslatorPolicyTests
         policyResult.Diagnostics.Should().BeEmpty();
         policyResult.Value.Should().NotBeNull();
 
-        var pipelineSource = PipelineCodeGenerator.GeneratePipeline(handlerResult.Value!, plan, policyResult.Value!);
-        var argumentCatch = pipelineSource.IndexOf("catch (System.ArgumentException e)", StringComparison.Ordinal);
-        var invalidOperationCatch = pipelineSource.IndexOf("catch (System.InvalidOperationException e)", StringComparison.Ordinal);
-        var fallbackCatch = pipelineSource.IndexOf("catch (System.Exception e)", StringComparison.Ordinal);
-
-        argumentCatch.Should().BeGreaterThan(-1);
-        invalidOperationCatch.Should().BeGreaterThan(argumentCatch);
-        fallbackCatch.Should().BeGreaterThan(invalidOperationCatch);
+        // Verify the policy orders translators correctly: specific first (by Order), fallback last
+        var translatorIds = policyResult.Value!.Translators.Select(static t => t.TranslatorId).ToArray();
+        translatorIds.Should().Equal("argument", "invalid-operation", "fallback");
     }
 
     private static (Compilation Compilation, INamedTypeSymbol OperationType) CompileAndGetOperationType(

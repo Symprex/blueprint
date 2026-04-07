@@ -13,180 +13,139 @@ using Blueprint;
 
 namespace Blueprint.Generated
 {
-    public partial class AllTypesGetQueryExecutorPipeline : Blueprint.IOperationExecutorPipeline
+    public partial class AllTypesGetQueryExecutorPipeline : Blueprint.OperationExecutorShell
     {
-        private static readonly System.Action<Microsoft.Extensions.Logging.ILogger, string, System.Exception> _ApiOperationExecuting =
-            Microsoft.Extensions.Logging.LoggerMessage.Define<System.String>(Microsoft.Extensions.Logging.LogLevel.Debug, new Microsoft.Extensions.Logging.EventId(1, "ApiOperationExecuting"), "Executing API operation {OperationType} with handler");
-        private readonly Microsoft.Extensions.Logging.ILogger _logger;
-        private static readonly System.Action<Microsoft.Extensions.Logging.ILogger, string, System.Exception> _NonException =
-            Microsoft.Extensions.Logging.LoggerMessage.Define<System.String>(Microsoft.Extensions.Logging.LogLevel.Information, new Microsoft.Extensions.Logging.EventId(4, "Non500Exception"), "A non-5xx ApiException has occurred with message {ExceptionMessage}");
-        private static readonly System.Action<Microsoft.Extensions.Logging.ILogger, string, System.Exception> _UnhandledException =
-            Microsoft.Extensions.Logging.LoggerMessage.Define<System.String>(Microsoft.Extensions.Logging.LogLevel.Error, new Microsoft.Extensions.Logging.EventId(5, "UnhandledException"), "An unhandled exception has occurred with message {ExceptionMessage}");
-
         public AllTypesGetQueryExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory)
+            : base(loggerFactory, "AllTypesGetQuery")
         {
-            _logger = loggerFactory.CreateLogger("AllTypesGetQueryExecutorPipeline");
         }
 
-        public async System.Threading.Tasks.Task<Blueprint.OperationResult> ExecuteAsync(Blueprint.Runtime.Exec.ApiOperationContext context)
+        protected override async System.Threading.Tasks.Task<Blueprint.OperationResult> ExecuteCoreAsync(Blueprint.Runtime.Exec.ApiOperationContext context)
         {
-            using var activity = Blueprint.Diagnostics.BlueprintActivitySource.ActivitySource.StartActivity("AllTypesGetQueryPipeline", System.Diagnostics.ActivityKind.Internal);
             var operation = (global::TestNamespace.AllTypesGetQuery)context.Operation;
 
-            try
+            var httpContext = ((Blueprint.Runtime.Http.IHttpOperationContext)context).HttpContext;
+
+            operation.OrgSlug = (string)httpContext.Request.RouteValues["OrgSlug"];
+            if (httpContext.Request.RouteValues["CategoryId"] is string routeStr_CategoryId)
             {
-                _ApiOperationExecuting(_logger, "AllTypesGetQuery", null);
-
-                var httpContext = ((Blueprint.Runtime.Http.IHttpOperationContext)context).HttpContext;
-
-                operation.OrgSlug = (string)httpContext.Request.RouteValues["OrgSlug"];
-                if (httpContext.Request.RouteValues["CategoryId"] is string routeStr_CategoryId)
-                {
-                    operation.CategoryId = int.Parse(routeStr_CategoryId, System.Globalization.CultureInfo.InvariantCulture);
-                }
-
-                var _qv_Term = httpContext.Request.Query["term"];
-                if (_qv_Term.Count > 0)
-                {
-                    operation.Term = _qv_Term[0];
-                }
-                var _qv_PageSize = httpContext.Request.Query["pageSize"];
-                if (_qv_PageSize.Count > 0)
-                {
-                    if (int.TryParse(_qv_PageSize[0], System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var _parsed_PageSize))
-                    {
-                        operation.PageSize = _parsed_PageSize;
-                    }
-                    else
-                    {
-                        return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid query parameter 'pageSize'");
-                    }
-                }
-                var _qv_Offset = httpContext.Request.Query["offset"];
-                if (_qv_Offset.Count > 0)
-                {
-                    if (long.TryParse(_qv_Offset[0], System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var _parsed_Offset))
-                    {
-                        operation.Offset = _parsed_Offset;
-                    }
-                    else
-                    {
-                        return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid query parameter 'offset'");
-                    }
-                }
-                var _qv_IncludeDeleted = httpContext.Request.Query["includeDeleted"];
-                if (_qv_IncludeDeleted.Count > 0)
-                {
-                    if (bool.TryParse(_qv_IncludeDeleted[0], out var _parsed_IncludeDeleted))
-                    {
-                        operation.IncludeDeleted = _parsed_IncludeDeleted;
-                    }
-                    else
-                    {
-                        return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid query parameter 'includeDeleted'");
-                    }
-                }
-                var _qv_MinPrice = httpContext.Request.Query["minPrice"];
-                if (_qv_MinPrice.Count > 0)
-                {
-                    if (decimal.TryParse(_qv_MinPrice[0], System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var _parsed_MinPrice))
-                    {
-                        operation.MinPrice = _parsed_MinPrice;
-                    }
-                    else
-                    {
-                        return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid query parameter 'minPrice'");
-                    }
-                }
-                var _qv_TenantId = httpContext.Request.Query["tenantId"];
-                if (_qv_TenantId.Count > 0)
-                {
-                    if (System.Guid.TryParse(_qv_TenantId[0], out var _parsed_TenantId))
-                    {
-                        operation.TenantId = _parsed_TenantId;
-                    }
-                    else
-                    {
-                        return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid query parameter 'tenantId'");
-                    }
-                }
-                var _qv_Since = httpContext.Request.Query["since"];
-                if (_qv_Since.Count > 0)
-                {
-                    if (System.DateTime.TryParse(_qv_Since[0], System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var _parsed_Since))
-                    {
-                        operation.Since = _parsed_Since;
-                    }
-                    else
-                    {
-                        return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid query parameter 'since'");
-                    }
-                }
-                var _qv_MaxResults = httpContext.Request.Query["maxResults"];
-                if (_qv_MaxResults.Count > 0)
-                {
-                    if (int.TryParse(_qv_MaxResults[0], System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var _parsed_MaxResults))
-                    {
-                        operation.MaxResults = _parsed_MaxResults;
-                    }
-                    else
-                    {
-                        return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid query parameter 'maxResults'");
-                    }
-                }
-                var _qv_Tags = httpContext.Request.Query["tags"];
-                if (_qv_Tags.Count > 0)
-                {
-                    operation.Tags = _qv_Tags.ToArray();
-                }
-                var _qv_CategoryIds = httpContext.Request.Query["categoryIds"];
-                if (_qv_CategoryIds.Count > 0)
-                {
-                    var _arr_CategoryIds = new int[_qv_CategoryIds.Count];
-                    for (var _i = 0; _i < _qv_CategoryIds.Count; _i++)
-                    {
-                        if (int.TryParse(_qv_CategoryIds[_i], System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var _parsed_CategoryIds))
-                        {
-                            _arr_CategoryIds[_i] = _parsed_CategoryIds;
-                        }
-                        else
-                        {
-                            return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid query parameter 'categoryIds'");
-                        }
-                    }
-                    operation.CategoryIds = _arr_CategoryIds;
-                }
-                var handlerResult = await global::TestNamespace.AllTypesGetQuery.HandleAsync(operation);
-
-                return new Blueprint.Runtime.Exec.OkResult<string>(handlerResult);
+                operation.CategoryId = int.Parse(routeStr_CategoryId, System.Globalization.CultureInfo.InvariantCulture);
             }
-            catch (Blueprint.Validation.ValidationException e)
+
+            var _qv_Term = httpContext.Request.Query["term"];
+            if (_qv_Term.Count > 0)
             {
-                context.Activity?.SetTag("otel.status_code", "OK");
-                return new Blueprint.Runtime.Exec.ValidationFailedResult(e.ValidationResults);
+                operation.Term = _qv_Term[0];
             }
-            catch (System.ComponentModel.DataAnnotations.ValidationException e)
+            var _qv_PageSize = httpContext.Request.Query["pageSize"];
+            if (_qv_PageSize.Count > 0)
             {
-                context.Activity?.SetTag("otel.status_code", "OK");
-                return Blueprint.Middleware.ValidationMiddlewareBuilder.ToValidationFailedResult(e);
-            }
-            catch (System.Exception e)
-            {
-                if (e is Blueprint.ApiException apiException && apiException.HttpStatus < 500)
+                if (int.TryParse(_qv_PageSize[0], System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var _parsed_PageSize))
                 {
-                    _NonException(_logger, e.Message, e);
-                    context.Activity?.SetTag("otel.status_code", "OK");
+                    operation.PageSize = _parsed_PageSize;
                 }
                 else
                 {
-                    Blueprint.Diagnostics.BlueprintActivitySource.RecordException(context.Activity, e, false);
-                    _UnhandledException(_logger, e.Message, e);
-                    context.Activity?.SetTag("otel.status_code", "ERROR");
-                    context.Activity?.SetTag("otel.status_description", e.Message);
+                    return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid query parameter 'pageSize'");
                 }
-
-                return new Blueprint.Runtime.Exec.UnhandledExceptionResult(e);
             }
+            var _qv_Offset = httpContext.Request.Query["offset"];
+            if (_qv_Offset.Count > 0)
+            {
+                if (long.TryParse(_qv_Offset[0], System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var _parsed_Offset))
+                {
+                    operation.Offset = _parsed_Offset;
+                }
+                else
+                {
+                    return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid query parameter 'offset'");
+                }
+            }
+            var _qv_IncludeDeleted = httpContext.Request.Query["includeDeleted"];
+            if (_qv_IncludeDeleted.Count > 0)
+            {
+                if (bool.TryParse(_qv_IncludeDeleted[0], out var _parsed_IncludeDeleted))
+                {
+                    operation.IncludeDeleted = _parsed_IncludeDeleted;
+                }
+                else
+                {
+                    return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid query parameter 'includeDeleted'");
+                }
+            }
+            var _qv_MinPrice = httpContext.Request.Query["minPrice"];
+            if (_qv_MinPrice.Count > 0)
+            {
+                if (decimal.TryParse(_qv_MinPrice[0], System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var _parsed_MinPrice))
+                {
+                    operation.MinPrice = _parsed_MinPrice;
+                }
+                else
+                {
+                    return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid query parameter 'minPrice'");
+                }
+            }
+            var _qv_TenantId = httpContext.Request.Query["tenantId"];
+            if (_qv_TenantId.Count > 0)
+            {
+                if (System.Guid.TryParse(_qv_TenantId[0], out var _parsed_TenantId))
+                {
+                    operation.TenantId = _parsed_TenantId;
+                }
+                else
+                {
+                    return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid query parameter 'tenantId'");
+                }
+            }
+            var _qv_Since = httpContext.Request.Query["since"];
+            if (_qv_Since.Count > 0)
+            {
+                if (System.DateTime.TryParse(_qv_Since[0], System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var _parsed_Since))
+                {
+                    operation.Since = _parsed_Since;
+                }
+                else
+                {
+                    return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid query parameter 'since'");
+                }
+            }
+            var _qv_MaxResults = httpContext.Request.Query["maxResults"];
+            if (_qv_MaxResults.Count > 0)
+            {
+                if (int.TryParse(_qv_MaxResults[0], System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var _parsed_MaxResults))
+                {
+                    operation.MaxResults = _parsed_MaxResults;
+                }
+                else
+                {
+                    return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid query parameter 'maxResults'");
+                }
+            }
+            var _qv_Tags = httpContext.Request.Query["tags"];
+            if (_qv_Tags.Count > 0)
+            {
+                operation.Tags = _qv_Tags.ToArray();
+            }
+            var _qv_CategoryIds = httpContext.Request.Query["categoryIds"];
+            if (_qv_CategoryIds.Count > 0)
+            {
+                var _arr_CategoryIds = new int[_qv_CategoryIds.Count];
+                for (var _i = 0; _i < _qv_CategoryIds.Count; _i++)
+                {
+                    if (int.TryParse(_qv_CategoryIds[_i], System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var _parsed_CategoryIds))
+                    {
+                        _arr_CategoryIds[_i] = _parsed_CategoryIds;
+                    }
+                    else
+                    {
+                        return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid query parameter 'categoryIds'");
+                    }
+                }
+                operation.CategoryIds = _arr_CategoryIds;
+            }
+            var handlerResult = await global::TestNamespace.AllTypesGetQuery.HandleAsync(operation);
+
+            return new Blueprint.Runtime.Exec.OkResult<string>(handlerResult);
         }
     }
 }
@@ -207,101 +166,60 @@ using Blueprint;
 
 namespace Blueprint.Generated
 {
-    public partial class AllTypesPostCommandExecutorPipeline : Blueprint.IOperationExecutorPipeline
+    public partial class AllTypesPostCommandExecutorPipeline : Blueprint.OperationExecutorShell
     {
-        private static readonly System.Action<Microsoft.Extensions.Logging.ILogger, string, System.Exception> _ApiOperationExecuting =
-            Microsoft.Extensions.Logging.LoggerMessage.Define<System.String>(Microsoft.Extensions.Logging.LogLevel.Debug, new Microsoft.Extensions.Logging.EventId(1, "ApiOperationExecuting"), "Executing API operation {OperationType} with handler");
-        private readonly Microsoft.Extensions.Logging.ILogger _logger;
-        private static readonly System.Action<Microsoft.Extensions.Logging.ILogger, string, System.Exception> _NonException =
-            Microsoft.Extensions.Logging.LoggerMessage.Define<System.String>(Microsoft.Extensions.Logging.LogLevel.Information, new Microsoft.Extensions.Logging.EventId(4, "Non500Exception"), "A non-5xx ApiException has occurred with message {ExceptionMessage}");
-        private static readonly System.Action<Microsoft.Extensions.Logging.ILogger, string, System.Exception> _UnhandledException =
-            Microsoft.Extensions.Logging.LoggerMessage.Define<System.String>(Microsoft.Extensions.Logging.LogLevel.Error, new Microsoft.Extensions.Logging.EventId(5, "UnhandledException"), "An unhandled exception has occurred with message {ExceptionMessage}");
-
         public AllTypesPostCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory)
+            : base(loggerFactory, "AllTypesPostCommand")
         {
-            _logger = loggerFactory.CreateLogger("AllTypesPostCommandExecutorPipeline");
         }
 
-        public async System.Threading.Tasks.Task<Blueprint.OperationResult> ExecuteAsync(Blueprint.Runtime.Exec.ApiOperationContext context)
+        protected override async System.Threading.Tasks.Task<Blueprint.OperationResult> ExecuteCoreAsync(Blueprint.Runtime.Exec.ApiOperationContext context)
         {
-            using var activity = Blueprint.Diagnostics.BlueprintActivitySource.ActivitySource.StartActivity("AllTypesPostCommandPipeline", System.Diagnostics.ActivityKind.Internal);
             var operation = (global::TestNamespace.AllTypesPostCommand)context.Operation;
 
-            try
+            var httpContext = ((Blueprint.Runtime.Http.IHttpOperationContext)context).HttpContext;
+
+            if (httpContext.Request.ContentLength > 0 || httpContext.Request.ContentType != null)
             {
-                _ApiOperationExecuting(_logger, "AllTypesPostCommand", null);
-
-                var httpContext = ((Blueprint.Runtime.Http.IHttpOperationContext)context).HttpContext;
-
-                if (httpContext.Request.ContentLength > 0 || httpContext.Request.ContentType != null)
+                if (httpContext.Request.ContentType != null && !httpContext.Request.ContentType.Contains("json", System.StringComparison.OrdinalIgnoreCase))
                 {
-                    if (httpContext.Request.ContentType != null && !httpContext.Request.ContentType.Contains("json", System.StringComparison.OrdinalIgnoreCase))
+                    return new Blueprint.Runtime.Exec.UnsupportedMediaTypeResult();
+                }
+
+                using var bodyStream = httpContext.Request.ContentLength.HasValue
+                    ? new System.IO.MemoryStream((int)httpContext.Request.ContentLength.Value)
+                    : new System.IO.MemoryStream();
+                await httpContext.Request.Body.CopyToAsync(bodyStream, context.OperationCancelled);
+
+                if (bodyStream.Length > 0)
+                {
+                    try
                     {
-                        return new Blueprint.Runtime.Exec.UnsupportedMediaTypeResult();
+                        PopulateFromJsonBody(new System.ReadOnlySpan<byte>(bodyStream.GetBuffer(), 0, (int)bodyStream.Length), operation);
                     }
-
-                    using var bodyStream = httpContext.Request.ContentLength.HasValue
-                        ? new System.IO.MemoryStream((int)httpContext.Request.ContentLength.Value)
-                        : new System.IO.MemoryStream();
-                    await httpContext.Request.Body.CopyToAsync(bodyStream, context.OperationCancelled);
-
-                    if (bodyStream.Length > 0)
+                    catch (System.Text.Json.JsonException)
                     {
-                        try
-                        {
-                            PopulateFromJsonBody(new System.ReadOnlySpan<byte>(bodyStream.GetBuffer(), 0, (int)bodyStream.Length), operation);
-                        }
-                        catch (System.Text.Json.JsonException)
-                        {
-                            return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid JSON body");
-                        }
-                        catch (System.InvalidOperationException)
-                        {
-                            return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid JSON body");
-                        }
+                        return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid JSON body");
+                    }
+                    catch (System.InvalidOperationException)
+                    {
+                        return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid JSON body");
                     }
                 }
+            }
 
-                operation.OrgSlug = (string)httpContext.Request.RouteValues["OrgSlug"];
-                if (httpContext.Request.RouteValues["ProjectId"] is string routeStr_ProjectId)
-                {
-                    operation.ProjectId = int.Parse(routeStr_ProjectId, System.Globalization.CultureInfo.InvariantCulture);
-                }
-                if (httpContext.Request.RouteValues["ItemGuid"] is string routeStr_ItemGuid)
-                {
-                    operation.ItemGuid = System.Guid.Parse(routeStr_ItemGuid);
-                }
-                var handlerResult = await global::TestNamespace.AllTypesPostCommand.HandleAsync(operation);
+            operation.OrgSlug = (string)httpContext.Request.RouteValues["OrgSlug"];
+            if (httpContext.Request.RouteValues["ProjectId"] is string routeStr_ProjectId)
+            {
+                operation.ProjectId = int.Parse(routeStr_ProjectId, System.Globalization.CultureInfo.InvariantCulture);
+            }
+            if (httpContext.Request.RouteValues["ItemGuid"] is string routeStr_ItemGuid)
+            {
+                operation.ItemGuid = System.Guid.Parse(routeStr_ItemGuid);
+            }
+            var handlerResult = await global::TestNamespace.AllTypesPostCommand.HandleAsync(operation);
 
-                return new Blueprint.Runtime.Exec.OkResult<string>(handlerResult);
-            }
-            catch (Blueprint.Validation.ValidationException e)
-            {
-                context.Activity?.SetTag("otel.status_code", "OK");
-                return new Blueprint.Runtime.Exec.ValidationFailedResult(e.ValidationResults);
-            }
-            catch (System.ComponentModel.DataAnnotations.ValidationException e)
-            {
-                context.Activity?.SetTag("otel.status_code", "OK");
-                return Blueprint.Middleware.ValidationMiddlewareBuilder.ToValidationFailedResult(e);
-            }
-            catch (System.Exception e)
-            {
-                if (e is Blueprint.ApiException apiException && apiException.HttpStatus < 500)
-                {
-                    _NonException(_logger, e.Message, e);
-                    context.Activity?.SetTag("otel.status_code", "OK");
-                }
-                else
-                {
-                    Blueprint.Diagnostics.BlueprintActivitySource.RecordException(context.Activity, e, false);
-                    _UnhandledException(_logger, e.Message, e);
-                    context.Activity?.SetTag("otel.status_code", "ERROR");
-                    context.Activity?.SetTag("otel.status_description", e.Message);
-                }
-
-                return new Blueprint.Runtime.Exec.UnhandledExceptionResult(e);
-            }
+            return new Blueprint.Runtime.Exec.OkResult<string>(handlerResult);
         }
 
         private static void PopulateFromJsonBody(System.ReadOnlySpan<byte> bodyBytes, global::TestNamespace.AllTypesPostCommand operation)

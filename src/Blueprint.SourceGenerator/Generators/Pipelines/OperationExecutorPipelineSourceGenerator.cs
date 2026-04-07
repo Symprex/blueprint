@@ -110,7 +110,7 @@ public partial class OperationExecutorPipelineSourceGenerator : IIncrementalGene
 
                     successfulHandlers.Add(handler);
 
-                    var pipelineSource = PipelineCodeGenerator.GeneratePipeline(handler, pipelinePlanResult.Value, exceptionTranslatorPolicyResult.Value);
+                    var pipelineSource = PipelineCodeGenerator.GeneratePipeline(handler, pipelinePlanResult.Value);
                     spc.AddSource(
                         $"{handler.OperationTypeName}ExecutorPipeline.g.cs",
                         SourceText.From(pipelineSource, Encoding.UTF8));

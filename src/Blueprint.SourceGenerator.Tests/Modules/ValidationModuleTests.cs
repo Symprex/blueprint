@@ -803,10 +803,12 @@ public class ValidationModuleTests
         pipelineSource.Should().Contain("global::System.String.IsNullOrWhiteSpace(operation.Name)");
         pipelineSource.Should().Contain("operation.Name.Length < 3");
         pipelineSource.Should().Contain("new global::System.ComponentModel.DataAnnotations.MinLengthAttribute(3).FormatErrorMessage(\"Name\")");
-        pipelineSource.Should().Contain("context.Activity?.SetTag(\"otel.status_code\", \"OK\");");
         pipelineSource.Should().Contain("return new Blueprint.Runtime.Exec.ValidationFailedResult(validationResults);");
         pipelineSource.Should().NotContain("throw new global::Blueprint.Validation.ValidationException(validationResults);");
-        pipelineSource.Should().Contain("catch (Blueprint.Validation.ValidationException e)");
+
+        // Exception handling (catch blocks, activity tagging) now lives in OperationExecutorShell
+        pipelineSource.Should().NotContain("catch (");
+
         pipelineSource.IndexOf("global::System.String.IsNullOrWhiteSpace(operation.Name)", StringComparison.Ordinal)
             .Should()
             .BeLessThan(pipelineSource.IndexOf("var handlerResult", StringComparison.Ordinal));
@@ -857,8 +859,9 @@ public class ValidationModuleTests
 
         pipelineSource.Should().Contain("return new Blueprint.Runtime.Exec.ValidationFailedResult(validationResults);");
         pipelineSource.Should().NotContain("return new Blueprint.Middleware.ValidationFailedOperationResult(validationResults);");
-        pipelineSource.Should().Contain("return new Blueprint.Runtime.Exec.ValidationFailedResult(e.ValidationResults);");
-        pipelineSource.Should().Contain("return Blueprint.Middleware.ValidationMiddlewareBuilder.ToValidationFailedResult(e);");
+
+        // Exception translation catch blocks are now in OperationExecutorShell at runtime
+        pipelineSource.Should().NotContain("catch (");
     }
 
     [Fact]

@@ -13,67 +13,26 @@ using Blueprint;
 
 namespace Blueprint.Generated
 {
-    public partial class TestCommandExecutorPipeline : Blueprint.IOperationExecutorPipeline
+    public partial class TestCommandExecutorPipeline : Blueprint.OperationExecutorShell
     {
-        private static readonly System.Action<Microsoft.Extensions.Logging.ILogger, string, System.Exception> _ApiOperationExecuting =
-            Microsoft.Extensions.Logging.LoggerMessage.Define<System.String>(Microsoft.Extensions.Logging.LogLevel.Debug, new Microsoft.Extensions.Logging.EventId(1, "ApiOperationExecuting"), "Executing API operation {OperationType} with handler");
-        private readonly Microsoft.Extensions.Logging.ILogger _logger;
-        private static readonly System.Action<Microsoft.Extensions.Logging.ILogger, string, System.Exception> _NonException =
-            Microsoft.Extensions.Logging.LoggerMessage.Define<System.String>(Microsoft.Extensions.Logging.LogLevel.Information, new Microsoft.Extensions.Logging.EventId(4, "Non500Exception"), "A non-5xx ApiException has occurred with message {ExceptionMessage}");
-        private static readonly System.Action<Microsoft.Extensions.Logging.ILogger, string, System.Exception> _UnhandledException =
-            Microsoft.Extensions.Logging.LoggerMessage.Define<System.String>(Microsoft.Extensions.Logging.LogLevel.Error, new Microsoft.Extensions.Logging.EventId(5, "UnhandledException"), "An unhandled exception has occurred with message {ExceptionMessage}");
-
         public TestCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory)
+            : base(loggerFactory, "TestCommand")
         {
-            _logger = loggerFactory.CreateLogger("TestCommandExecutorPipeline");
         }
 
-        public async System.Threading.Tasks.Task<Blueprint.OperationResult> ExecuteAsync(Blueprint.Runtime.Exec.ApiOperationContext context)
+        protected override async System.Threading.Tasks.Task<Blueprint.OperationResult> ExecuteCoreAsync(Blueprint.Runtime.Exec.ApiOperationContext context)
         {
-            using var activity = Blueprint.Diagnostics.BlueprintActivitySource.ActivitySource.StartActivity("TestCommandPipeline", System.Diagnostics.ActivityKind.Internal);
             var operation = (global::TestNamespace.TestCommand)context.Operation;
 
-            try
+            var testCommandHandler = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<global::TestNamespace.TestCommandHandler>(context.ServiceProvider);
+            if (testCommandHandler == null)
             {
-                _ApiOperationExecuting(_logger, "TestCommand", null);
-
-                var testCommandHandler = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<global::TestNamespace.TestCommandHandler>(context.ServiceProvider);
-                if (testCommandHandler == null)
-                {
-                    testCommandHandler = Microsoft.Extensions.DependencyInjection.ActivatorUtilities.CreateInstance<global::TestNamespace.TestCommandHandler>(context.ServiceProvider);
-                }
-
-                var handlerResult = await testCommandHandler.HandleAsync(operation);
-
-                return new Blueprint.Runtime.Exec.OkResult<string>(handlerResult);
+                testCommandHandler = Microsoft.Extensions.DependencyInjection.ActivatorUtilities.CreateInstance<global::TestNamespace.TestCommandHandler>(context.ServiceProvider);
             }
-            catch (Blueprint.Validation.ValidationException e)
-            {
-                context.Activity?.SetTag("otel.status_code", "OK");
-                return new Blueprint.Runtime.Exec.ValidationFailedResult(e.ValidationResults);
-            }
-            catch (System.ComponentModel.DataAnnotations.ValidationException e)
-            {
-                context.Activity?.SetTag("otel.status_code", "OK");
-                return Blueprint.Middleware.ValidationMiddlewareBuilder.ToValidationFailedResult(e);
-            }
-            catch (System.Exception e)
-            {
-                if (e is Blueprint.ApiException apiException && apiException.HttpStatus < 500)
-                {
-                    _NonException(_logger, e.Message, e);
-                    context.Activity?.SetTag("otel.status_code", "OK");
-                }
-                else
-                {
-                    Blueprint.Diagnostics.BlueprintActivitySource.RecordException(context.Activity, e, false);
-                    _UnhandledException(_logger, e.Message, e);
-                    context.Activity?.SetTag("otel.status_code", "ERROR");
-                    context.Activity?.SetTag("otel.status_description", e.Message);
-                }
 
-                return new Blueprint.Runtime.Exec.UnhandledExceptionResult(e);
-            }
+            var handlerResult = await testCommandHandler.HandleAsync(operation);
+
+            return new Blueprint.Runtime.Exec.OkResult<string>(handlerResult);
         }
     }
 }

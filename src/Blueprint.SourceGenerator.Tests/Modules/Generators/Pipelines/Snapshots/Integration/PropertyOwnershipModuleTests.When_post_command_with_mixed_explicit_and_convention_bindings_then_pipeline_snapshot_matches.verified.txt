@@ -13,121 +13,80 @@ using Blueprint;
 
 namespace Blueprint.Generated
 {
-    public partial class CreateItemCommandExecutorPipeline : Blueprint.IOperationExecutorPipeline
+    public partial class CreateItemCommandExecutorPipeline : Blueprint.OperationExecutorShell
     {
-        private static readonly System.Action<Microsoft.Extensions.Logging.ILogger, string, System.Exception> _ApiOperationExecuting =
-            Microsoft.Extensions.Logging.LoggerMessage.Define<System.String>(Microsoft.Extensions.Logging.LogLevel.Debug, new Microsoft.Extensions.Logging.EventId(1, "ApiOperationExecuting"), "Executing API operation {OperationType} with handler");
-        private readonly Microsoft.Extensions.Logging.ILogger _logger;
-        private static readonly System.Action<Microsoft.Extensions.Logging.ILogger, string, System.Exception> _NonException =
-            Microsoft.Extensions.Logging.LoggerMessage.Define<System.String>(Microsoft.Extensions.Logging.LogLevel.Information, new Microsoft.Extensions.Logging.EventId(4, "Non500Exception"), "A non-5xx ApiException has occurred with message {ExceptionMessage}");
-        private static readonly System.Action<Microsoft.Extensions.Logging.ILogger, string, System.Exception> _UnhandledException =
-            Microsoft.Extensions.Logging.LoggerMessage.Define<System.String>(Microsoft.Extensions.Logging.LogLevel.Error, new Microsoft.Extensions.Logging.EventId(5, "UnhandledException"), "An unhandled exception has occurred with message {ExceptionMessage}");
-
         public CreateItemCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory)
+            : base(loggerFactory, "CreateItemCommand")
         {
-            _logger = loggerFactory.CreateLogger("CreateItemCommandExecutorPipeline");
         }
 
-        public async System.Threading.Tasks.Task<Blueprint.OperationResult> ExecuteAsync(Blueprint.Runtime.Exec.ApiOperationContext context)
+        protected override async System.Threading.Tasks.Task<Blueprint.OperationResult> ExecuteCoreAsync(Blueprint.Runtime.Exec.ApiOperationContext context)
         {
-            using var activity = Blueprint.Diagnostics.BlueprintActivitySource.ActivitySource.StartActivity("CreateItemCommandPipeline", System.Diagnostics.ActivityKind.Internal);
             var operation = (global::TestNamespace.CreateItemCommand)context.Operation;
 
-            try
+            var httpContext = ((Blueprint.Runtime.Http.IHttpOperationContext)context).HttpContext;
+
+            if (httpContext.Request.ContentLength > 0 || httpContext.Request.ContentType != null)
             {
-                _ApiOperationExecuting(_logger, "CreateItemCommand", null);
-
-                var httpContext = ((Blueprint.Runtime.Http.IHttpOperationContext)context).HttpContext;
-
-                if (httpContext.Request.ContentLength > 0 || httpContext.Request.ContentType != null)
+                if (httpContext.Request.ContentType != null && !httpContext.Request.ContentType.Contains("json", System.StringComparison.OrdinalIgnoreCase))
                 {
-                    if (httpContext.Request.ContentType != null && !httpContext.Request.ContentType.Contains("json", System.StringComparison.OrdinalIgnoreCase))
+                    return new Blueprint.Runtime.Exec.UnsupportedMediaTypeResult();
+                }
+
+                using var bodyStream = httpContext.Request.ContentLength.HasValue
+                    ? new System.IO.MemoryStream((int)httpContext.Request.ContentLength.Value)
+                    : new System.IO.MemoryStream();
+                await httpContext.Request.Body.CopyToAsync(bodyStream, context.OperationCancelled);
+
+                if (bodyStream.Length > 0)
+                {
+                    try
                     {
-                        return new Blueprint.Runtime.Exec.UnsupportedMediaTypeResult();
+                        PopulateFromJsonBody(new System.ReadOnlySpan<byte>(bodyStream.GetBuffer(), 0, (int)bodyStream.Length), operation);
                     }
-
-                    using var bodyStream = httpContext.Request.ContentLength.HasValue
-                        ? new System.IO.MemoryStream((int)httpContext.Request.ContentLength.Value)
-                        : new System.IO.MemoryStream();
-                    await httpContext.Request.Body.CopyToAsync(bodyStream, context.OperationCancelled);
-
-                    if (bodyStream.Length > 0)
+                    catch (System.Text.Json.JsonException)
                     {
-                        try
-                        {
-                            PopulateFromJsonBody(new System.ReadOnlySpan<byte>(bodyStream.GetBuffer(), 0, (int)bodyStream.Length), operation);
-                        }
-                        catch (System.Text.Json.JsonException)
-                        {
-                            return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid JSON body");
-                        }
-                        catch (System.InvalidOperationException)
-                        {
-                            return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid JSON body");
-                        }
+                        return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid JSON body");
+                    }
+                    catch (System.InvalidOperationException)
+                    {
+                        return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid JSON body");
                     }
                 }
-
-                operation.OrgSlug = (string)httpContext.Request.RouteValues["OrgSlug"];
-
-                var _qv_SearchFilter = httpContext.Request.Query["q"];
-                if (_qv_SearchFilter.Count > 0)
-                {
-                    operation.SearchFilter = _qv_SearchFilter[0];
-                }
-                var _hv_TenantId = httpContext.Request.Headers["X-Tenant-Id"];
-                if (_hv_TenantId.Count > 0)
-                {
-                    operation.TenantId = _hv_TenantId[0];
-                }
-                var _hv_Priority = httpContext.Request.Headers["X-Request-Priority"];
-                if (_hv_Priority.Count > 0)
-                {
-                    if (int.TryParse(_hv_Priority[0], System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var _parsed_Priority))
-                    {
-                        operation.Priority = _parsed_Priority;
-                    }
-                    else
-                    {
-                        return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid header 'X-Request-Priority'");
-                    }
-                }
-                var _cv_SessionToken = httpContext.Request.Cookies["session_token"];
-                if (_cv_SessionToken != null)
-                {
-                    operation.SessionToken = _cv_SessionToken;
-                }
-                var handlerResult = await global::TestNamespace.CreateItemCommand.HandleAsync(operation);
-
-                return new Blueprint.Runtime.Exec.OkResult<string>(handlerResult);
             }
-            catch (Blueprint.Validation.ValidationException e)
+
+            operation.OrgSlug = (string)httpContext.Request.RouteValues["OrgSlug"];
+
+            var _qv_SearchFilter = httpContext.Request.Query["q"];
+            if (_qv_SearchFilter.Count > 0)
             {
-                context.Activity?.SetTag("otel.status_code", "OK");
-                return new Blueprint.Runtime.Exec.ValidationFailedResult(e.ValidationResults);
+                operation.SearchFilter = _qv_SearchFilter[0];
             }
-            catch (System.ComponentModel.DataAnnotations.ValidationException e)
+            var _hv_TenantId = httpContext.Request.Headers["X-Tenant-Id"];
+            if (_hv_TenantId.Count > 0)
             {
-                context.Activity?.SetTag("otel.status_code", "OK");
-                return Blueprint.Middleware.ValidationMiddlewareBuilder.ToValidationFailedResult(e);
+                operation.TenantId = _hv_TenantId[0];
             }
-            catch (System.Exception e)
+            var _hv_Priority = httpContext.Request.Headers["X-Request-Priority"];
+            if (_hv_Priority.Count > 0)
             {
-                if (e is Blueprint.ApiException apiException && apiException.HttpStatus < 500)
+                if (int.TryParse(_hv_Priority[0], System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var _parsed_Priority))
                 {
-                    _NonException(_logger, e.Message, e);
-                    context.Activity?.SetTag("otel.status_code", "OK");
+                    operation.Priority = _parsed_Priority;
                 }
                 else
                 {
-                    Blueprint.Diagnostics.BlueprintActivitySource.RecordException(context.Activity, e, false);
-                    _UnhandledException(_logger, e.Message, e);
-                    context.Activity?.SetTag("otel.status_code", "ERROR");
-                    context.Activity?.SetTag("otel.status_description", e.Message);
+                    return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid header 'X-Request-Priority'");
                 }
-
-                return new Blueprint.Runtime.Exec.UnhandledExceptionResult(e);
             }
+            var _cv_SessionToken = httpContext.Request.Cookies["session_token"];
+            if (_cv_SessionToken != null)
+            {
+                operation.SessionToken = _cv_SessionToken;
+            }
+            var handlerResult = await global::TestNamespace.CreateItemCommand.HandleAsync(operation);
+
+            return new Blueprint.Runtime.Exec.OkResult<string>(handlerResult);
         }
 
         private static void PopulateFromJsonBody(System.ReadOnlySpan<byte> bodyBytes, global::TestNamespace.CreateItemCommand operation)
