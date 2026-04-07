@@ -23,11 +23,8 @@ public class OperationDescriptorSourceGeneratorTestsHttpResponseMetadata
         descriptorSource.Should().NotBeNull();
         descriptorSource!.Should().Contain("new global::Blueprint.Model.OperationHttpResponseMetadataFeatureData(");
         descriptorSource.Should().Contain("new global::Blueprint.Model.OperationHttpResponseMetadata(200");
-        descriptorSource.Should().Contain("new global::Blueprint.Model.OperationHttpResponseMetadata(422");
-        descriptorSource.Should().Contain("new global::Blueprint.Model.OperationHttpResponseMetadata(500");
+        descriptorSource.Should().Contain(".AddRange(global::Blueprint.Model.WellKnownFeatureData.CommonFailureResponses)");
         descriptorSource.Should().Contain("\"Blueprint.Runtime.Exec.OkResult<string>\"");
-        descriptorSource.Should().Contain("\"Blueprint.Runtime.Exec.ValidationFailedResult\"");
-        descriptorSource.Should().Contain("\"Blueprint.Runtime.Exec.UnhandledExceptionResult\"");
     }
 
     [Fact]

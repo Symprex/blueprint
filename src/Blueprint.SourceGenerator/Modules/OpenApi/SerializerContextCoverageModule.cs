@@ -55,15 +55,29 @@ public sealed class SerializerContextCoverageModule : IBlueprintSourceGeneratorM
 
     private static void RenderDescriptor(ICodeWriter codeWriter, IEnumerable<SerializerContextCoverageRegistration> coverage)
     {
-        var bodyTypeNames = coverage
+        var rawTypeNames = coverage
             .Select(static registration => registration.BodyTypeName)
             .Distinct(StringComparer.Ordinal)
-            .Select(static bodyTypeName => CSharpSymbolDisplay.FormatLiteral(bodyTypeName, quote: true))
             .ToArray();
-        if (bodyTypeNames.Length == 0)
+
+        if (rawTypeNames.Length == 0)
         {
             return;
         }
+
+        // Failure-body-types-only: emit the shared well-known instance
+        if (rawTypeNames.Length == 2
+            && rawTypeNames[0] == "Microsoft.AspNetCore.Mvc.ValidationProblemDetails"
+            && rawTypeNames[1] == "Microsoft.AspNetCore.Mvc.ProblemDetails")
+        {
+            codeWriter.AppendLine(
+                "this.SetFeatureData(global::Blueprint.Model.WellKnownFeatureData.DefaultSerializerContextCoverageFeatureData);");
+            return;
+        }
+
+        var bodyTypeNames = rawTypeNames
+            .Select(static bodyTypeName => CSharpSymbolDisplay.FormatLiteral(bodyTypeName, quote: true))
+            .ToArray();
 
         codeWriter.AppendLine(
             "this.SetFeatureData(new global::Blueprint.Model.OperationSerializerContextCoverageFeatureData("

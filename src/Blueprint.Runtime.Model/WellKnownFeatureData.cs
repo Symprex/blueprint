@@ -84,4 +84,20 @@ public static class WellKnownFeatureData
             true,
             ImmutableArray.Create<string>("Blueprint.Runtime.Exec.UnhandledExceptionResult"),
             ImmutableArray.Create<string>("Microsoft.AspNetCore.Mvc.ProblemDetails")));
+
+    /// <summary>
+    /// The pre-built response metadata for operations whose only HTTP responses are the two standard
+    /// failure shapes (422 validation, 500 unhandled exception). Shared by all void commands and
+    /// operations that do not declare an explicit <c>OperationResult</c> contract.
+    /// </summary>
+    public static readonly OperationHttpResponseMetadataFeatureData DefaultFailureResponsesFeatureData =
+        new(CommonFailureResponses);
+
+    /// <summary>
+    /// The pre-built serializer context coverage for operations whose only response body types are the
+    /// two standard problem details shapes. Shared by all operations that have no additional response
+    /// body beyond the standard failure envelopes.
+    /// </summary>
+    public static readonly OperationSerializerContextCoverageFeatureData DefaultSerializerContextCoverageFeatureData =
+        new(CommonFailureBodyTypeNames);
 }

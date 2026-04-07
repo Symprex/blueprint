@@ -29,9 +29,9 @@ namespace TestNamespace
                 this.AddLink(new global::Blueprint.Model.ApiOperationLink(this, "/operations/a/{Id}", "/operations/a/{Id}", "self", typeof(TestNamespace.ApiResourceWithProps)));
                 this.SetFeatureData(global::Blueprint.Model.WellKnownFeatureData.DefaultFailureOutcomes);
                 this.SetFeatureData(global::Blueprint.Model.WellKnownFeatureData.HttpGet);
-                this.SetFeatureData(new global::Blueprint.Model.OperationHttpResponseMetadataFeatureData(global::System.Collections.Immutable.ImmutableArray.Create(new global::Blueprint.Model.OperationHttpResponseMetadata(422, true, global::System.Collections.Immutable.ImmutableArray.Create<string>("Blueprint.Runtime.Exec.ValidationFailedResult"), global::System.Collections.Immutable.ImmutableArray.Create<string>("Microsoft.AspNetCore.Mvc.ValidationProblemDetails")), new global::Blueprint.Model.OperationHttpResponseMetadata(500, true, global::System.Collections.Immutable.ImmutableArray.Create<string>("Blueprint.Runtime.Exec.UnhandledExceptionResult"), global::System.Collections.Immutable.ImmutableArray.Create<string>("Microsoft.AspNetCore.Mvc.ProblemDetails")))));
+                this.SetFeatureData(global::Blueprint.Model.WellKnownFeatureData.DefaultFailureResponsesFeatureData);
                 this.SetFeatureData(new global::Blueprint.Model.OperationPropertyOwnershipFeatureData(global::System.Collections.Immutable.ImmutableArray.Create(new global::Blueprint.Model.OperationPropertyBindingEntry("Id", global::Blueprint.Model.PropertyBindingSource.Query, "id", "string"))));
-                this.SetFeatureData(new global::Blueprint.Model.OperationSerializerContextCoverageFeatureData(global::System.Collections.Immutable.ImmutableArray.Create<string>("Microsoft.AspNetCore.Mvc.ValidationProblemDetails", "Microsoft.AspNetCore.Mvc.ProblemDetails")));
+                this.SetFeatureData(global::Blueprint.Model.WellKnownFeatureData.DefaultSerializerContextCoverageFeatureData);
                 this.SetFeatureData(new global::Blueprint.Model.OperationDiscoveryFeatureData("operation", "TestNamespace", "OperationA"));
                 this.SetFeatureData(global::Blueprint.Model.WellKnownFeatureData.HttpHostExposure);
                 this.SetFeatureData(new global::Blueprint.Model.OperationGroupMetadataFeatureData("TestNamespace"));

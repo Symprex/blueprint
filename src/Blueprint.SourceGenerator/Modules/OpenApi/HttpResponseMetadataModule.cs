@@ -318,20 +318,90 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
 
     private static void RenderDescriptor(ICodeWriter codeWriter, IEnumerable<HttpResponseMetadataRegistration> responses)
     {
-        var renderedResponses = responses
-            .Select(static response =>
-                $"new global::Blueprint.Model.OperationHttpResponseMetadata({response.StatusCode}, {(response.HasResponseBody ? "true" : "false")}, {RenderStringArray(response.ResultTypeNames)}, {RenderStringArray(response.BodyTypeNames)})")
-            .ToArray();
+        var responseList = responses as IReadOnlyList<HttpResponseMetadataRegistration>
+            ?? responses.ToArray();
 
-        if (renderedResponses.Length == 0)
+        if (responseList.Count == 0)
         {
             return;
         }
+
+        // Failures-only: emit the shared well-known instance to avoid per-descriptor allocation
+        if (IsDefaultFailuresOnly(responseList))
+        {
+            codeWriter.AppendLine(
+                "this.SetFeatureData(global::Blueprint.Model.WellKnownFeatureData.DefaultFailureResponsesFeatureData);");
+            return;
+        }
+
+        // Trailing standard failures: compose success entries inline + AddRange the shared failure array
+        if (HasTrailingDefaultFailures(responseList))
+        {
+            var successEntries = responseList
+                .Take(responseList.Count - 2)
+                .Select(static response =>
+                    $"new global::Blueprint.Model.OperationHttpResponseMetadata({response.StatusCode}, {(response.HasResponseBody ? "true" : "false")}, {RenderStringArray(response.ResultTypeNames)}, {RenderStringArray(response.BodyTypeNames)})")
+                .ToArray();
+
+            codeWriter.AppendLine(
+                "this.SetFeatureData(new global::Blueprint.Model.OperationHttpResponseMetadataFeatureData("
+                + $"global::System.Collections.Immutable.ImmutableArray.Create({string.Join(", ", successEntries)})"
+                + ".AddRange(global::Blueprint.Model.WellKnownFeatureData.CommonFailureResponses)));");
+            return;
+        }
+
+        // Fallback: emit all responses inline
+        var renderedResponses = responseList
+            .Select(static response =>
+                $"new global::Blueprint.Model.OperationHttpResponseMetadata({response.StatusCode}, {(response.HasResponseBody ? "true" : "false")}, {RenderStringArray(response.ResultTypeNames)}, {RenderStringArray(response.BodyTypeNames)})")
+            .ToArray();
 
         codeWriter.AppendLine(
             "this.SetFeatureData(new global::Blueprint.Model.OperationHttpResponseMetadataFeatureData(global::System.Collections.Immutable.ImmutableArray.Create("
             + string.Join(", ", renderedResponses)
             + ")));");
+    }
+
+    /// <summary>
+    /// Returns true when the response set is exactly the two default failure responses (422 and 500)
+    /// with no additional entries.
+    /// </summary>
+    private static bool IsDefaultFailuresOnly(IReadOnlyList<HttpResponseMetadataRegistration> responses)
+    {
+        return responses.Count == 2
+            && IsDefaultValidationFailureEntry(responses[0])
+            && IsDefaultUnhandledExceptionEntry(responses[1]);
+    }
+
+    /// <summary>
+    /// Returns true when the response set ends with the two standard failure entries so the
+    /// rendered output can reuse <c>CommonFailureResponses</c> for the trailing portion.
+    /// </summary>
+    private static bool HasTrailingDefaultFailures(IReadOnlyList<HttpResponseMetadataRegistration> responses)
+    {
+        return responses.Count >= 3
+            && IsDefaultValidationFailureEntry(responses[responses.Count - 2])
+            && IsDefaultUnhandledExceptionEntry(responses[responses.Count - 1]);
+    }
+
+    private static bool IsDefaultValidationFailureEntry(HttpResponseMetadataRegistration response)
+    {
+        return response.StatusCode == 422
+            && response.HasResponseBody
+            && response.ResultTypeNames.Length == 1
+            && response.ResultTypeNames[0] == "Blueprint.Runtime.Exec.ValidationFailedResult"
+            && response.BodyTypeNames.Length == 1
+            && response.BodyTypeNames[0] == ValidationProblemDetailsTypeName;
+    }
+
+    private static bool IsDefaultUnhandledExceptionEntry(HttpResponseMetadataRegistration response)
+    {
+        return response.StatusCode == 500
+            && response.HasResponseBody
+            && response.ResultTypeNames.Length == 1
+            && response.ResultTypeNames[0] == "Blueprint.Runtime.Exec.UnhandledExceptionResult"
+            && response.BodyTypeNames.Length == 1
+            && response.BodyTypeNames[0] == ProblemDetailsTypeName;
     }
 
     private static string RenderStringLiteral(string value)
