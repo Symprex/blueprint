@@ -100,4 +100,79 @@ public static class WellKnownFeatureData
     /// </summary>
     public static readonly OperationSerializerContextCoverageFeatureData DefaultSerializerContextCoverageFeatureData =
         new(CommonFailureBodyTypeNames);
+
+    /// <summary>
+    /// The HTTP response metadata entry for a 400 binding-failure response (no body).
+    /// Shared by all operations that project this status via <c>BindingFailureResult</c>.
+    /// </summary>
+    public static readonly OperationHttpResponseMetadata BindingFailureResponse = new(
+        400,
+        false,
+        ImmutableArray.Create<string>("Blueprint.Runtime.Exec.BindingFailureResult"),
+        ImmutableArray<string>.Empty);
+
+    /// <summary>
+    /// The HTTP response metadata entry for a 401 unauthenticated response (no body).
+    /// Shared by all operations that project this status via <c>UnauthenticatedResult</c>.
+    /// </summary>
+    public static readonly OperationHttpResponseMetadata UnauthenticatedResponse = new(
+        401,
+        false,
+        ImmutableArray.Create<string>("Blueprint.Runtime.Exec.UnauthenticatedResult"),
+        ImmutableArray<string>.Empty);
+
+    /// <summary>
+    /// The HTTP response metadata entry for a 415 unsupported-media-type response (no body).
+    /// Shared by all operations that project this status via <c>UnsupportedMediaTypeResult</c>.
+    /// </summary>
+    public static readonly OperationHttpResponseMetadata UnsupportedMediaTypeResponse = new(
+        415,
+        false,
+        ImmutableArray.Create<string>("Blueprint.Runtime.Exec.UnsupportedMediaTypeResult"),
+        ImmutableArray<string>.Empty);
+
+    /// <summary>
+    /// The common HTTP failure responses for operations with body binding but no authentication:
+    /// 400 (binding), 415 (unsupported media type), 422 (validation), 500 (unhandled exception).
+    /// </summary>
+    public static readonly ImmutableArray<OperationHttpResponseMetadata> BodyBindingFailureResponses =
+        ImmutableArray.Create(BindingFailureResponse, UnsupportedMediaTypeResponse)
+            .AddRange(CommonFailureResponses);
+
+    /// <summary>
+    /// The common HTTP failure responses for authenticated operations with no body binding:
+    /// 401 (unauthenticated), 422 (validation), 500 (unhandled exception).
+    /// </summary>
+    public static readonly ImmutableArray<OperationHttpResponseMetadata> AuthenticatedFailureResponses =
+        ImmutableArray.Create(UnauthenticatedResponse)
+            .AddRange(CommonFailureResponses);
+
+    /// <summary>
+    /// The common HTTP failure responses for authenticated operations with body binding:
+    /// 400 (binding), 401 (unauthenticated), 415 (unsupported media type), 422 (validation), 500 (unhandled exception).
+    /// </summary>
+    public static readonly ImmutableArray<OperationHttpResponseMetadata> AuthenticatedBodyBindingFailureResponses =
+        ImmutableArray.Create(BindingFailureResponse, UnauthenticatedResponse, UnsupportedMediaTypeResponse)
+            .AddRange(CommonFailureResponses);
+
+    /// <summary>
+    /// Pre-built response metadata for operations with body binding but no authentication and no declared
+    /// result contract (failures-only): 400, 415, 422, 500.
+    /// </summary>
+    public static readonly OperationHttpResponseMetadataFeatureData BodyBindingFailureResponsesFeatureData =
+        new(BodyBindingFailureResponses);
+
+    /// <summary>
+    /// Pre-built response metadata for authenticated operations with no body binding and no declared
+    /// result contract (failures-only): 401, 422, 500.
+    /// </summary>
+    public static readonly OperationHttpResponseMetadataFeatureData AuthenticatedFailureResponsesFeatureData =
+        new(AuthenticatedFailureResponses);
+
+    /// <summary>
+    /// Pre-built response metadata for authenticated operations with body binding and no declared
+    /// result contract (failures-only): 400, 401, 415, 422, 500.
+    /// </summary>
+    public static readonly OperationHttpResponseMetadataFeatureData AuthenticatedBodyBindingFailureResponsesFeatureData =
+        new(AuthenticatedBodyBindingFailureResponses);
 }

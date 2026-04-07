@@ -61,6 +61,7 @@ public sealed class AuthenticationModule : IBlueprintSourceGeneratorModule, IDes
             return;
         }
 
+        context.AddMetadata(new AuthenticationDescriptorRegistration());
         context.AddRenderStep(RenderDescriptorFeatureData);
     }
 

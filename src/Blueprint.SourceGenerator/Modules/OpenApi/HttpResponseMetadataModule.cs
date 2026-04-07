@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using Blueprint.SourceGenerator.CodeWriter;
 using Blueprint.SourceGenerator.Helpers;
+using Blueprint.SourceGenerator.Modules.Authentication;
 using Blueprint.SourceGenerator.Planning;
 using Microsoft.CodeAnalysis;
 using CSharpSymbolDisplay = Microsoft.CodeAnalysis.CSharp.SymbolDisplay;
@@ -36,6 +37,8 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
     [
         nameof(FlattenedResultOutcomeModule),
         nameof(FailureOutcomesModule),
+        nameof(AuthenticationModule),
+        nameof(PropertyOwnershipModule),
     ];
 
     /// <inheritdoc />
@@ -144,6 +147,7 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
         }
 
         var responses = ImmutableArray.CreateBuilder<HttpResponseMetadataRegistration>();
+
         foreach (var failureOutcome in context.GetMetadata<FailureOutcomeRegistration>())
         {
             if (TryGetFailureResponseShape(
@@ -166,6 +170,29 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
             {
                 responses.Add(CreateResponse(statusCode, hasResponseBody, failureOutcome.ResultTypeName, bodyTypeNames));
             }
+        }
+
+        // Binding-driven pipeline short-circuits: 400 (binding failure) and 415 (unsupported media type).
+        // 400 applies when the operation has body or header/cookie bindings that can fail during population.
+        // 415 applies only when body binding is present (content-type rejection before parsing).
+        var binding = context.GetMetadata<BindingDescriptorRegistration>().FirstOrDefault();
+        if (binding is not null)
+        {
+            if (binding.HasBodyBinding || binding.HasHeaderOrCookieBinding)
+            {
+                responses.Add(CreateResponse(400, false, "Blueprint.Runtime.Exec.BindingFailureResult", []));
+            }
+
+            if (binding.HasBodyBinding)
+            {
+                responses.Add(CreateResponse(415, false, "Blueprint.Runtime.Exec.UnsupportedMediaTypeResult", []));
+            }
+        }
+
+        // Authentication-driven short-circuit: 401 when [MustBeAuthenticated] is declared.
+        if (context.GetMetadata<AuthenticationDescriptorRegistration>().Any())
+        {
+            responses.Add(CreateResponse(401, false, "Blueprint.Runtime.Exec.UnauthenticatedResult", []));
         }
 
         return responses.ToImmutable();
@@ -326,27 +353,27 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
             return;
         }
 
-        // Failures-only: emit the shared well-known instance to avoid per-descriptor allocation
-        if (IsDefaultFailuresOnly(responseList))
+        // Failures-only: emit the matching shared well-known instance to avoid per-descriptor allocation
+        if (TryGetFailuresOnlyConstantName(responseList, out var featureDataConstantName))
         {
             codeWriter.AppendLine(
-                "this.SetFeatureData(global::Blueprint.Model.WellKnownFeatureData.DefaultFailureResponsesFeatureData);");
+                $"this.SetFeatureData(global::Blueprint.Model.WellKnownFeatureData.{featureDataConstantName});");
             return;
         }
 
-        // Trailing standard failures: compose success entries inline + AddRange the shared failure array
-        if (HasTrailingDefaultFailures(responseList))
+        // Trailing pipeline failures: compose success/declared entries inline + AddRange the shared failure array
+        if (TryGetTrailingFailureTailInfo(responseList, out var tailLength, out var tailConstantName))
         {
-            var successEntries = responseList
-                .Take(responseList.Count - 2)
+            var leadEntries = responseList
+                .Take(responseList.Count - tailLength)
                 .Select(static response =>
                     $"new global::Blueprint.Model.OperationHttpResponseMetadata({response.StatusCode}, {(response.HasResponseBody ? "true" : "false")}, {RenderStringArray(response.ResultTypeNames)}, {RenderStringArray(response.BodyTypeNames)})")
                 .ToArray();
 
             codeWriter.AppendLine(
                 "this.SetFeatureData(new global::Blueprint.Model.OperationHttpResponseMetadataFeatureData("
-                + $"global::System.Collections.Immutable.ImmutableArray.Create({string.Join(", ", successEntries)})"
-                + ".AddRange(global::Blueprint.Model.WellKnownFeatureData.CommonFailureResponses)));");
+                + $"global::System.Collections.Immutable.ImmutableArray.Create({string.Join(", ", leadEntries)})"
+                + $".AddRange(global::Blueprint.Model.WellKnownFeatureData.{tailConstantName})));");
             return;
         }
 
@@ -363,25 +390,115 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
     }
 
     /// <summary>
-    /// Returns true when the response set is exactly the two default failure responses (422 and 500)
-    /// with no additional entries.
+    /// Checks if the response set exactly matches one of the known failures-only patterns and returns
+    /// the corresponding <c>WellKnownFeatureData</c> field name when it does.
     /// </summary>
-    private static bool IsDefaultFailuresOnly(IReadOnlyList<HttpResponseMetadataRegistration> responses)
+    private static bool TryGetFailuresOnlyConstantName(IReadOnlyList<HttpResponseMetadataRegistration> responses, out string constantName)
     {
-        return responses.Count == 2
+        // [422, 500] → DefaultFailureResponsesFeatureData
+        if (responses.Count == 2
             && IsDefaultValidationFailureEntry(responses[0])
-            && IsDefaultUnhandledExceptionEntry(responses[1]);
+            && IsDefaultUnhandledExceptionEntry(responses[1]))
+        {
+            constantName = "DefaultFailureResponsesFeatureData";
+            return true;
+        }
+
+        // [400, 415, 422, 500] → BodyBindingFailureResponsesFeatureData
+        if (responses.Count == 4
+            && IsBindingFailureEntry(responses[0])
+            && IsUnsupportedMediaTypeEntry(responses[1])
+            && IsDefaultValidationFailureEntry(responses[2])
+            && IsDefaultUnhandledExceptionEntry(responses[3]))
+        {
+            constantName = "BodyBindingFailureResponsesFeatureData";
+            return true;
+        }
+
+        // [401, 422, 500] → AuthenticatedFailureResponsesFeatureData
+        if (responses.Count == 3
+            && IsUnauthenticatedEntry(responses[0])
+            && IsDefaultValidationFailureEntry(responses[1])
+            && IsDefaultUnhandledExceptionEntry(responses[2]))
+        {
+            constantName = "AuthenticatedFailureResponsesFeatureData";
+            return true;
+        }
+
+        // [400, 401, 415, 422, 500] → AuthenticatedBodyBindingFailureResponsesFeatureData
+        if (responses.Count == 5
+            && IsBindingFailureEntry(responses[0])
+            && IsUnauthenticatedEntry(responses[1])
+            && IsUnsupportedMediaTypeEntry(responses[2])
+            && IsDefaultValidationFailureEntry(responses[3])
+            && IsDefaultUnhandledExceptionEntry(responses[4]))
+        {
+            constantName = "AuthenticatedBodyBindingFailureResponsesFeatureData";
+            return true;
+        }
+
+        constantName = string.Empty;
+        return false;
     }
 
     /// <summary>
-    /// Returns true when the response set ends with the two standard failure entries so the
-    /// rendered output can reuse <c>CommonFailureResponses</c> for the trailing portion.
+    /// Checks if the response set ends with one of the known pipeline-failure tail patterns and returns the
+    /// tail length and the corresponding <c>WellKnownFeatureData</c> array field name when it does.
     /// </summary>
-    private static bool HasTrailingDefaultFailures(IReadOnlyList<HttpResponseMetadataRegistration> responses)
+    private static bool TryGetTrailingFailureTailInfo(
+        IReadOnlyList<HttpResponseMetadataRegistration> responses,
+        out int tailLength,
+        out string tailConstantName)
     {
-        return responses.Count >= 3
+        // Try longest tail first: [400, 401, 415, 422, 500]
+        if (responses.Count >= 6
+            && IsBindingFailureEntry(responses[responses.Count - 5])
+            && IsUnauthenticatedEntry(responses[responses.Count - 4])
+            && IsUnsupportedMediaTypeEntry(responses[responses.Count - 3])
             && IsDefaultValidationFailureEntry(responses[responses.Count - 2])
-            && IsDefaultUnhandledExceptionEntry(responses[responses.Count - 1]);
+            && IsDefaultUnhandledExceptionEntry(responses[responses.Count - 1]))
+        {
+            tailLength = 5;
+            tailConstantName = "AuthenticatedBodyBindingFailureResponses";
+            return true;
+        }
+
+        // Try [400, 415, 422, 500]
+        if (responses.Count >= 5
+            && IsBindingFailureEntry(responses[responses.Count - 4])
+            && IsUnsupportedMediaTypeEntry(responses[responses.Count - 3])
+            && IsDefaultValidationFailureEntry(responses[responses.Count - 2])
+            && IsDefaultUnhandledExceptionEntry(responses[responses.Count - 1]))
+        {
+            tailLength = 4;
+            tailConstantName = "BodyBindingFailureResponses";
+            return true;
+        }
+
+        // Try [401, 422, 500]
+        if (responses.Count >= 4
+            && IsUnauthenticatedEntry(responses[responses.Count - 3])
+            && IsDefaultValidationFailureEntry(responses[responses.Count - 2])
+            && IsDefaultUnhandledExceptionEntry(responses[responses.Count - 1]))
+        {
+            tailLength = 3;
+            tailConstantName = "AuthenticatedFailureResponses";
+            return true;
+        }
+
+        // Try shortest tail: [422, 500]
+        if (responses.Count >= 3
+            && IsDefaultValidationFailureEntry(responses[responses.Count - 2])
+            && IsDefaultUnhandledExceptionEntry(responses[responses.Count - 1]))
+        {
+            tailLength = 2;
+            tailConstantName = "CommonFailureResponses";
+            return true;
+        }
+
+        tailLength = 0;
+        tailConstantName = string.Empty;
+        return false;
     }
 
     private static bool IsDefaultValidationFailureEntry(HttpResponseMetadataRegistration response)
@@ -402,6 +519,33 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
             && response.ResultTypeNames[0] == "Blueprint.Runtime.Exec.UnhandledExceptionResult"
             && response.BodyTypeNames.Length == 1
             && response.BodyTypeNames[0] == ProblemDetailsTypeName;
+    }
+
+    private static bool IsBindingFailureEntry(HttpResponseMetadataRegistration response)
+    {
+        return response.StatusCode == 400
+            && response.HasResponseBody == false
+            && response.ResultTypeNames.Length == 1
+            && response.ResultTypeNames[0] == "Blueprint.Runtime.Exec.BindingFailureResult"
+            && response.BodyTypeNames.IsEmpty;
+    }
+
+    private static bool IsUnauthenticatedEntry(HttpResponseMetadataRegistration response)
+    {
+        return response.StatusCode == 401
+            && response.HasResponseBody == false
+            && response.ResultTypeNames.Length == 1
+            && response.ResultTypeNames[0] == "Blueprint.Runtime.Exec.UnauthenticatedResult"
+            && response.BodyTypeNames.IsEmpty;
+    }
+
+    private static bool IsUnsupportedMediaTypeEntry(HttpResponseMetadataRegistration response)
+    {
+        return response.StatusCode == 415
+            && response.HasResponseBody == false
+            && response.ResultTypeNames.Length == 1
+            && response.ResultTypeNames[0] == "Blueprint.Runtime.Exec.UnsupportedMediaTypeResult"
+            && response.BodyTypeNames.IsEmpty;
     }
 
     private static string RenderStringLiteral(string value)

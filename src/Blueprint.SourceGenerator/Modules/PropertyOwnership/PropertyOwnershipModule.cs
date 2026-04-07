@@ -63,6 +63,11 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             return;
         }
 
+        var hasBodyBinding = entries.Any(static e => e.Source == PropertyOwnershipSource.Body);
+        var hasHeaderOrCookieBinding = entries.Any(static e =>
+            e.Source is PropertyOwnershipSource.Header or PropertyOwnershipSource.Cookie);
+
+        context.AddMetadata(new BindingDescriptorRegistration(hasBodyBinding, hasHeaderOrCookieBinding));
         context.AddRenderStep(writer => RenderDescriptorFeatureData(writer, entries));
     }
 
