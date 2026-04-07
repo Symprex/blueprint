@@ -53,8 +53,7 @@ namespace Blueprint.Generated
                     }
                     else
                     {
-                        httpContext.Response.StatusCode = 400;
-                        return new Blueprint.Runtime.Http.HttpPipelineShortCircuitResult();
+                        return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid query parameter 'page'");
                     }
                 }
                 var handlerResult = await global::TestNamespace.SearchAllQuery.HandleAsync(operation);

@@ -33,6 +33,15 @@ public class HttpOperationResultExecutor
 
         switch (result)
         {
+            case UnauthenticatedResult:
+                httpContext.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                return true;
+            case BindingFailureResult:
+                httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
+                return true;
+            case UnsupportedMediaTypeResult:
+                httpContext.Response.StatusCode = StatusCodes.Status415UnsupportedMediaType;
+                return true;
             case HttpPipelineShortCircuitResult:
                 // Response was already written by the generated pipeline (e.g. binding failure).
                 return true;

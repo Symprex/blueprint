@@ -43,8 +43,7 @@ namespace Blueprint.Generated
                 {
                     if (httpContext.Request.ContentType != null && !httpContext.Request.ContentType.Contains("json", System.StringComparison.OrdinalIgnoreCase))
                     {
-                        httpContext.Response.StatusCode = 415;
-                        return new Blueprint.Runtime.Http.HttpPipelineShortCircuitResult();
+                        return new Blueprint.Runtime.Exec.UnsupportedMediaTypeResult();
                     }
 
                     using var bodyStream = httpContext.Request.ContentLength.HasValue
@@ -60,13 +59,11 @@ namespace Blueprint.Generated
                         }
                         catch (System.Text.Json.JsonException)
                         {
-                            httpContext.Response.StatusCode = 400;
-                            return new Blueprint.Runtime.Http.HttpPipelineShortCircuitResult();
+                            return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid JSON body");
                         }
                         catch (System.InvalidOperationException)
                         {
-                            httpContext.Response.StatusCode = 400;
-                            return new Blueprint.Runtime.Http.HttpPipelineShortCircuitResult();
+                            return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid JSON body");
                         }
                     }
                 }
@@ -92,8 +89,7 @@ namespace Blueprint.Generated
                     }
                     else
                     {
-                        httpContext.Response.StatusCode = 400;
-                        return new Blueprint.Runtime.Http.HttpPipelineShortCircuitResult();
+                        return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid header 'X-Request-Priority'");
                     }
                 }
                 var _cv_SessionToken = httpContext.Request.Cookies["session_token"];

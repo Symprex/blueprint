@@ -59,8 +59,7 @@ namespace Blueprint.Generated
                     }
                     else
                     {
-                        httpContext.Response.StatusCode = 400;
-                        return new Blueprint.Runtime.Http.HttpPipelineShortCircuitResult();
+                        return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid query parameter 'pageSize'");
                     }
                 }
                 var _qv_Offset = httpContext.Request.Query["offset"];
@@ -72,8 +71,7 @@ namespace Blueprint.Generated
                     }
                     else
                     {
-                        httpContext.Response.StatusCode = 400;
-                        return new Blueprint.Runtime.Http.HttpPipelineShortCircuitResult();
+                        return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid query parameter 'offset'");
                     }
                 }
                 var _qv_IncludeDeleted = httpContext.Request.Query["includeDeleted"];
@@ -85,8 +83,7 @@ namespace Blueprint.Generated
                     }
                     else
                     {
-                        httpContext.Response.StatusCode = 400;
-                        return new Blueprint.Runtime.Http.HttpPipelineShortCircuitResult();
+                        return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid query parameter 'includeDeleted'");
                     }
                 }
                 var _qv_MinPrice = httpContext.Request.Query["minPrice"];
@@ -98,8 +95,7 @@ namespace Blueprint.Generated
                     }
                     else
                     {
-                        httpContext.Response.StatusCode = 400;
-                        return new Blueprint.Runtime.Http.HttpPipelineShortCircuitResult();
+                        return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid query parameter 'minPrice'");
                     }
                 }
                 var _qv_TenantId = httpContext.Request.Query["tenantId"];
@@ -111,8 +107,7 @@ namespace Blueprint.Generated
                     }
                     else
                     {
-                        httpContext.Response.StatusCode = 400;
-                        return new Blueprint.Runtime.Http.HttpPipelineShortCircuitResult();
+                        return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid query parameter 'tenantId'");
                     }
                 }
                 var _qv_Since = httpContext.Request.Query["since"];
@@ -124,8 +119,7 @@ namespace Blueprint.Generated
                     }
                     else
                     {
-                        httpContext.Response.StatusCode = 400;
-                        return new Blueprint.Runtime.Http.HttpPipelineShortCircuitResult();
+                        return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid query parameter 'since'");
                     }
                 }
                 var _qv_MaxResults = httpContext.Request.Query["maxResults"];
@@ -137,8 +131,7 @@ namespace Blueprint.Generated
                     }
                     else
                     {
-                        httpContext.Response.StatusCode = 400;
-                        return new Blueprint.Runtime.Http.HttpPipelineShortCircuitResult();
+                        return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid query parameter 'maxResults'");
                     }
                 }
                 var _qv_Tags = httpContext.Request.Query["tags"];
@@ -158,8 +151,7 @@ namespace Blueprint.Generated
                         }
                         else
                         {
-                            httpContext.Response.StatusCode = 400;
-                            return new Blueprint.Runtime.Http.HttpPipelineShortCircuitResult();
+                            return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid query parameter 'categoryIds'");
                         }
                     }
                     operation.CategoryIds = _arr_CategoryIds;
@@ -245,8 +237,7 @@ namespace Blueprint.Generated
                 {
                     if (httpContext.Request.ContentType != null && !httpContext.Request.ContentType.Contains("json", System.StringComparison.OrdinalIgnoreCase))
                     {
-                        httpContext.Response.StatusCode = 415;
-                        return new Blueprint.Runtime.Http.HttpPipelineShortCircuitResult();
+                        return new Blueprint.Runtime.Exec.UnsupportedMediaTypeResult();
                     }
 
                     using var bodyStream = httpContext.Request.ContentLength.HasValue
@@ -262,13 +253,11 @@ namespace Blueprint.Generated
                         }
                         catch (System.Text.Json.JsonException)
                         {
-                            httpContext.Response.StatusCode = 400;
-                            return new Blueprint.Runtime.Http.HttpPipelineShortCircuitResult();
+                            return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid JSON body");
                         }
                         catch (System.InvalidOperationException)
                         {
-                            httpContext.Response.StatusCode = 400;
-                            return new Blueprint.Runtime.Http.HttpPipelineShortCircuitResult();
+                            return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid JSON body");
                         }
                     }
                 }

@@ -726,8 +726,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
                         "httpContext.Request.ContentType != null && !httpContext.Request.ContentType.Contains(\"json\", System.StringComparison.OrdinalIgnoreCase)",
                         unsupportedCtx =>
                         {
-                            unsupportedCtx.WriteStatement("httpContext.Response.StatusCode = 415;");
-                            unsupportedCtx.Return("new Blueprint.Runtime.Http.HttpPipelineShortCircuitResult()");
+                            unsupportedCtx.Return("new Blueprint.Runtime.Exec.UnsupportedMediaTypeResult()");
                         });
 
                     bodyContext.WriteBlankLine();
@@ -746,13 +745,11 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
                     bodyContext.WriteStatement("    }");
                     bodyContext.WriteStatement("    catch (System.Text.Json.JsonException)");
                     bodyContext.WriteStatement("    {");
-                    bodyContext.WriteStatement("        httpContext.Response.StatusCode = 400;");
-                    bodyContext.WriteStatement("        return new Blueprint.Runtime.Http.HttpPipelineShortCircuitResult();");
+                    bodyContext.WriteStatement("        return new Blueprint.Runtime.Exec.BindingFailureResult(\"Invalid JSON body\");");
                     bodyContext.WriteStatement("    }");
                     bodyContext.WriteStatement("    catch (System.InvalidOperationException)");
                     bodyContext.WriteStatement("    {");
-                    bodyContext.WriteStatement("        httpContext.Response.StatusCode = 400;");
-                    bodyContext.WriteStatement("        return new Blueprint.Runtime.Http.HttpPipelineShortCircuitResult();");
+                    bodyContext.WriteStatement("        return new Blueprint.Runtime.Exec.BindingFailureResult(\"Invalid JSON body\");");
                     bodyContext.WriteStatement("    }");
                     bodyContext.WriteStatement("}");
                 });
@@ -930,8 +927,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
                 });
                 ifCtx.WriteStatement("else");
                 ifCtx.WriteStatement("{");
-                ifCtx.WriteStatement("    httpContext.Response.StatusCode = 400;");
-                ifCtx.WriteStatement("    return new Blueprint.Runtime.Http.HttpPipelineShortCircuitResult();");
+                ifCtx.WriteStatement($"    return new Blueprint.Runtime.Exec.BindingFailureResult(\"Invalid query parameter '{entry.BindingName}'\");");
                 ifCtx.WriteStatement("}");
             });
         }
@@ -969,8 +965,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
                 ifCtx.WriteStatement("    }");
                 ifCtx.WriteStatement("    else");
                 ifCtx.WriteStatement("    {");
-                ifCtx.WriteStatement("        httpContext.Response.StatusCode = 400;");
-                ifCtx.WriteStatement("        return new Blueprint.Runtime.Http.HttpPipelineShortCircuitResult();");
+                ifCtx.WriteStatement($"        return new Blueprint.Runtime.Exec.BindingFailureResult(\"Invalid query parameter '{entry.BindingName}'\");");
                 ifCtx.WriteStatement("    }");
                 ifCtx.WriteStatement("}");
                 ifCtx.WriteStatement($"{operationExpr}.{entry.PropertyName} = _arr_{entry.PropertyName};");
@@ -1014,8 +1009,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
                 });
                 ifCtx.WriteStatement("else");
                 ifCtx.WriteStatement("{");
-                ifCtx.WriteStatement("    httpContext.Response.StatusCode = 400;");
-                ifCtx.WriteStatement("    return new Blueprint.Runtime.Http.HttpPipelineShortCircuitResult();");
+                ifCtx.WriteStatement($"    return new Blueprint.Runtime.Exec.BindingFailureResult(\"Invalid header '{entry.BindingName}'\");");
                 ifCtx.WriteStatement("}");
             });
         }
@@ -1057,8 +1051,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
                 });
                 ifCtx.WriteStatement("else");
                 ifCtx.WriteStatement("{");
-                ifCtx.WriteStatement("    httpContext.Response.StatusCode = 400;");
-                ifCtx.WriteStatement("    return new Blueprint.Runtime.Http.HttpPipelineShortCircuitResult();");
+                ifCtx.WriteStatement($"    return new Blueprint.Runtime.Exec.BindingFailureResult(\"Invalid cookie '{entry.BindingName}'\");");
                 ifCtx.WriteStatement("}");
             });
         }

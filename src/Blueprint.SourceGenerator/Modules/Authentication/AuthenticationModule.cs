@@ -116,18 +116,14 @@ public sealed class AuthenticationModule : IBlueprintSourceGeneratorModule, IDes
 
     private static void RenderAuthenticationCheck(PipelineRenderContext context)
     {
-        // Use the context expression directly to access HttpContext, avoiding local variable
-        // collisions with the httpContext local that PropertyOwnershipModule may or may not
-        // have declared in the Population stage.
         context.If(
             "((Blueprint.Runtime.Http.IHttpOperationContext)context).HttpContext.User.Identity?.IsAuthenticated != true",
             branch =>
             {
-                branch.WriteStatement("((Blueprint.Runtime.Http.IHttpOperationContext)context).HttpContext.Response.StatusCode = 401;");
                 branch.Return(
                     context.IsHandlerAsync()
-                        ? "new Blueprint.Runtime.Http.HttpPipelineShortCircuitResult()"
-                        : "System.Threading.Tasks.Task.FromResult<Blueprint.OperationResult>(new Blueprint.Runtime.Http.HttpPipelineShortCircuitResult())");
+                        ? "new Blueprint.Runtime.Exec.UnauthenticatedResult()"
+                        : "System.Threading.Tasks.Task.FromResult<Blueprint.OperationResult>(new Blueprint.Runtime.Exec.UnauthenticatedResult())");
             });
 
         context.WriteBlankLine();
