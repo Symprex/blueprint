@@ -13,9 +13,9 @@
     "activeWorkstream": "http-host-and-message-population",
     "nextReadySlice": null,
     "lastCompletedSlice": {
-      "id": "http-host/shared-executor-shell",
+      "id": "http-host/shared-feature-data-constants-http-response-serializer",
       "workstream": "http-host-and-message-population",
-      "title": "Shared OperationExecutorShell base class (Improvement Slice 9)"
+      "title": "Share HTTP response and serializer context coverage feature data constants (Improvement Slice 10)"
     },
     "openReviewGate": "human-direction"
   },
