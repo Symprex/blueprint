@@ -121,7 +121,9 @@ public class AppModelOpenApiPathItemRenderingContextTests
             [.. httpMethods],
             [.. urlFormats],
             ImmutableArray<string>.Empty,
-            ImmutableArray<OpenApiResponseObjectModel>.Empty);
+            ImmutableArray<OpenApiResponseObjectModel>.Empty,
+            ImmutableArray<OpenApiParameterModel>.Empty,
+            null);
     }
 
     private static ApiOperationDescriptor CreateHttpOperation(

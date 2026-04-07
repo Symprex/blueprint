@@ -46,13 +46,115 @@ public sealed record OpenApiOperationRenderingContext(
             ? ImmutableArray.Create(operationGroupMetadata.GroupName)
             : ImmutableArray<string>.Empty;
 
+        var (parameters, requestBody) = ProjectInputMetadata(operation.Operation);
+
         return new OpenApiOperationModel(
             operation.Operation.Name,
             operation.Operation.OperationType.FullName ?? operation.Operation.OperationType.Name,
             httpMethods,
             urlFormats,
             tags,
-            operation.Responses);
+            operation.Responses,
+            parameters,
+            requestBody);
+    }
+
+    private static (ImmutableArray<OpenApiParameterModel> Parameters, OpenApiRequestBodyModel? RequestBody)
+        ProjectInputMetadata(ApiOperationDescriptor descriptor)
+    {
+        if (!descriptor.TryGetFeatureData<OperationPropertyOwnershipFeatureData>(out var ownershipData))
+        {
+            return (ImmutableArray<OpenApiParameterModel>.Empty, null);
+        }
+
+        var parameters = ImmutableArray.CreateBuilder<OpenApiParameterModel>();
+        var bodyProperties = ImmutableArray.CreateBuilder<OpenApiRequestBodyPropertyModel>();
+
+        foreach (var entry in ownershipData.Entries)
+        {
+            var (schemaType, schemaFormat) = MapClrTypeToOpenApiSchema(entry.PropertyTypeName);
+
+            switch (entry.Source)
+            {
+                case PropertyBindingSource.Route:
+                    parameters.Add(new OpenApiParameterModel(
+                        entry.BindingName ?? entry.PropertyName,
+                        "path",
+                        Required: true,
+                        schemaType,
+                        schemaFormat));
+                    break;
+
+                case PropertyBindingSource.Query:
+                    parameters.Add(new OpenApiParameterModel(
+                        entry.BindingName ?? entry.PropertyName,
+                        "query",
+                        Required: false,
+                        schemaType,
+                        schemaFormat));
+                    break;
+
+                case PropertyBindingSource.Header:
+                    parameters.Add(new OpenApiParameterModel(
+                        entry.BindingName ?? entry.PropertyName,
+                        "header",
+                        Required: false,
+                        schemaType,
+                        schemaFormat));
+                    break;
+
+                case PropertyBindingSource.Cookie:
+                    parameters.Add(new OpenApiParameterModel(
+                        entry.BindingName ?? entry.PropertyName,
+                        "cookie",
+                        Required: false,
+                        schemaType,
+                        schemaFormat));
+                    break;
+
+                case PropertyBindingSource.Body:
+                    bodyProperties.Add(new OpenApiRequestBodyPropertyModel(
+                        entry.BindingName ?? entry.PropertyName,
+                        schemaType,
+                        schemaFormat));
+                    break;
+            }
+        }
+
+        var orderedParameters = parameters
+            .OrderBy(static p => p.In, StringComparer.Ordinal)
+            .ThenBy(static p => p.Name, StringComparer.Ordinal)
+            .ToImmutableArray();
+
+        var requestBody = bodyProperties.Count > 0
+            ? new OpenApiRequestBodyModel(Required: true, bodyProperties.ToImmutableArray())
+            : null;
+
+        return (orderedParameters, requestBody);
+    }
+
+    /// <summary>
+    /// Maps a fully-qualified CLR type name to the corresponding OpenAPI schema type and optional format.
+    /// The supported types match the set validated by <c>PropertyOwnershipModule</c> at compile time.
+    /// </summary>
+    private static (string SchemaType, string? SchemaFormat) MapClrTypeToOpenApiSchema(string? clrTypeName)
+    {
+        return clrTypeName switch
+        {
+            "global::System.String" or "string" => ("string", null),
+            "global::System.Int32" or "int" => ("integer", "int32"),
+            "global::System.Int64" or "long" => ("integer", "int64"),
+            "global::System.Int16" or "short" => ("integer", null),
+            "global::System.Byte" or "byte" => ("integer", null),
+            "global::System.Boolean" or "bool" => ("boolean", null),
+            "global::System.Decimal" or "decimal" => ("number", "double"),
+            "global::System.Double" or "double" => ("number", "double"),
+            "global::System.Single" or "float" => ("number", "float"),
+            "global::System.Guid" => ("string", "uuid"),
+            "global::System.DateTime" => ("string", "date-time"),
+            "global::System.DateTimeOffset" => ("string", "date-time"),
+            _ => ("string", null),
+        };
     }
 }
 
@@ -66,10 +168,14 @@ public sealed record OpenApiOperationRenderingContext(
 /// <param name="UrlFormats">The deterministic route templates published for the operation.</param>
 /// <param name="Tags">The deterministic OpenAPI tag inventory projected from descriptor-published group metadata.</param>
 /// <param name="Responses">The rendered OpenAPI-style response objects for the operation.</param>
+/// <param name="Parameters">The projected OpenAPI-style parameters from the property ownership plan.</param>
+/// <param name="RequestBody">The projected OpenAPI-style request body from body-owned properties, or null when the operation has no body.</param>
 public sealed record OpenApiOperationModel(
     string OperationName,
     string OperationTypeName,
     ImmutableArray<string> HttpMethods,
     ImmutableArray<string> UrlFormats,
     ImmutableArray<string> Tags,
-    ImmutableArray<OpenApiResponseObjectModel> Responses);
+    ImmutableArray<OpenApiResponseObjectModel> Responses,
+    ImmutableArray<OpenApiParameterModel> Parameters,
+    OpenApiRequestBodyModel? RequestBody);

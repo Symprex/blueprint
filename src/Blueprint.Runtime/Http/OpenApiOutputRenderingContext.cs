@@ -144,6 +144,8 @@ public sealed record OpenApiOutputRenderingContext(
         {
             writer.WriteString("operationId", primaryOperation.OperationName);
             WriteTags(writer, primaryOperation.Tags);
+            WriteParameters(writer, primaryOperation.Parameters);
+            WriteRequestBody(writer, primaryOperation.RequestBody);
             WriteResponses(writer, primaryOperation.Responses);
         }
         else
@@ -170,6 +172,87 @@ public sealed record OpenApiOutputRenderingContext(
         }
 
         writer.WriteEndArray();
+    }
+
+    private static void WriteParameters(Utf8JsonWriter writer, ImmutableArray<OpenApiParameterModel> parameters)
+    {
+        if (parameters.IsEmpty)
+        {
+            return;
+        }
+
+        writer.WritePropertyName("parameters");
+        writer.WriteStartArray();
+
+        foreach (var parameter in parameters)
+        {
+            writer.WriteStartObject();
+            writer.WriteString("name", parameter.Name);
+            writer.WriteString("in", parameter.In);
+            writer.WriteBoolean("required", parameter.Required);
+
+            writer.WritePropertyName("schema");
+            writer.WriteStartObject();
+            writer.WriteString("type", parameter.SchemaType);
+
+            if (parameter.SchemaFormat is not null)
+            {
+                writer.WriteString("format", parameter.SchemaFormat);
+            }
+
+            writer.WriteEndObject();
+            writer.WriteEndObject();
+        }
+
+        writer.WriteEndArray();
+    }
+
+    private static void WriteRequestBody(Utf8JsonWriter writer, OpenApiRequestBodyModel? requestBody)
+    {
+        if (requestBody is null)
+        {
+            return;
+        }
+
+        writer.WritePropertyName("requestBody");
+        writer.WriteStartObject();
+        writer.WriteBoolean("required", requestBody.Required);
+
+        writer.WritePropertyName("content");
+        writer.WriteStartObject();
+        writer.WritePropertyName("application/json");
+        writer.WriteStartObject();
+
+        writer.WritePropertyName("schema");
+        writer.WriteStartObject();
+        writer.WriteString("type", "object");
+
+        if (!requestBody.Properties.IsEmpty)
+        {
+            writer.WritePropertyName("properties");
+            writer.WriteStartObject();
+
+            foreach (var property in requestBody.Properties)
+            {
+                writer.WritePropertyName(property.Name);
+                writer.WriteStartObject();
+                writer.WriteString("type", property.SchemaType);
+
+                if (property.SchemaFormat is not null)
+                {
+                    writer.WriteString("format", property.SchemaFormat);
+                }
+
+                writer.WriteEndObject();
+            }
+
+            writer.WriteEndObject();
+        }
+
+        writer.WriteEndObject();
+        writer.WriteEndObject();
+        writer.WriteEndObject();
+        writer.WriteEndObject();
     }
 
     private static void WriteResponses(Utf8JsonWriter writer, ImmutableArray<OpenApiResponseObjectModel> responses)

@@ -127,7 +127,9 @@ public class AppModelOpenApiDocumentRenderingContextTests
                             [httpMethod],
                             [urlFormat],
                             ImmutableArray<string>.Empty,
-                            ImmutableArray<OpenApiResponseObjectModel>.Empty),
+                            ImmutableArray<OpenApiResponseObjectModel>.Empty,
+                            ImmutableArray<OpenApiParameterModel>.Empty,
+                            null),
                     ]),
             ]);
     }

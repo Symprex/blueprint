@@ -685,8 +685,11 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
                     ? CSharpSymbolDisplay.FormatLiteral(e.BindingName, quote: true)
                     : "null";
                 var propertyNameExpr = CSharpSymbolDisplay.FormatLiteral(e.PropertyName, quote: true);
+                var typeNameExpr = e.Source is PropertyOwnershipSource.System or PropertyOwnershipSource.AuthContext
+                    ? "null"
+                    : CSharpSymbolDisplay.FormatLiteral(e.TypeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), quote: true);
 
-                return $"new global::Blueprint.Model.OperationPropertyBindingEntry({propertyNameExpr}, {sourceExpr}, {bindingNameExpr})";
+                return $"new global::Blueprint.Model.OperationPropertyBindingEntry({propertyNameExpr}, {sourceExpr}, {bindingNameExpr}, {typeNameExpr})";
             })
             .ToArray();
 

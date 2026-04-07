@@ -38,10 +38,16 @@ public enum PropertyBindingSource
 /// The external name used for binding (e.g. route placeholder name, camelCase query name, header name).
 /// Null when the CLR name is used directly.
 /// </param>
+/// <param name="PropertyTypeName">
+/// The fully-qualified CLR type name for this property (e.g. <c>string</c>, <c>int</c>, <c>System.Guid</c>).
+/// Used by OpenAPI rendering to project parameter and request body schemas without runtime reflection.
+/// Null for System/AuthContext entries where type projection is not applicable.
+/// </param>
 public sealed record OperationPropertyBindingEntry(
     string PropertyName,
     PropertyBindingSource Source,
-    string? BindingName);
+    string? BindingName,
+    string? PropertyTypeName);
 
 /// <summary>
 /// Feature data populated during descriptor generation with the compile-time property ownership plan
