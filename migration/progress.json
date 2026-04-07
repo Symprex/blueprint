@@ -13,9 +13,9 @@
     "activeWorkstream": "http-host-and-message-population",
     "nextReadySlice": null,
     "lastCompletedSlice": {
-      "id": "http-host/shared-feature-data-constants-http-response-serializer",
+      "id": "http-host/openapi-pipeline-failure-outcomes",
       "workstream": "http-host-and-message-population",
-      "title": "Share HTTP response and serializer context coverage feature data constants (Improvement Slice 10)"
+      "title": "Project 400/401/415 pipeline failure outcomes into OpenAPI response metadata (Slice 11)"
     },
     "openReviewGate": "human-direction"
   },
