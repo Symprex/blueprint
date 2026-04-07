@@ -7,9 +7,17 @@ namespace Blueprint.SourceGenerator.Modules;
 /// <summary>
 /// Projects the ordered default exception-translator policy into additive descriptor feature data so downstream hosts can
 /// inspect stable failure facts without re-discovering catch ownership from generated pipeline code.
+/// When the policy matches the well-known default, emits a shared static reference to avoid per-descriptor allocation.
 /// </summary>
 public sealed class FailureOutcomesModule : IBlueprintSourceGeneratorModule, IDescriptorContributor
 {
+    private static readonly HashSet<string> DefaultTranslatorIds =
+    [
+        "legacy-validation-exception",
+        "data-annotations-validation-exception",
+        "default-unhandled-exception",
+    ];
+
     /// <inheritdoc />
     public string ModuleId => nameof(FailureOutcomesModule);
 
@@ -51,11 +59,20 @@ public sealed class FailureOutcomesModule : IBlueprintSourceGeneratorModule, IDe
             context.AddMetadata(outcome);
         }
 
-        context.AddRenderStep(writer => RenderDescriptor(writer, context.GetMetadata<FailureOutcomeRegistration>()));
+        var isDefaultPolicy = policy.Translators.Count == DefaultTranslatorIds.Count
+            && policy.Translators.All(static t => DefaultTranslatorIds.Contains(t.TranslatorId));
+
+        context.AddRenderStep(writer => RenderDescriptor(writer, context.GetMetadata<FailureOutcomeRegistration>(), isDefaultPolicy));
     }
 
-    private static void RenderDescriptor(ICodeWriter codeWriter, IEnumerable<FailureOutcomeRegistration> registrations)
+    private static void RenderDescriptor(ICodeWriter codeWriter, IEnumerable<FailureOutcomeRegistration> registrations, bool useWellKnown)
     {
+        if (useWellKnown)
+        {
+            codeWriter.AppendLine("this.SetFeatureData(global::Blueprint.Model.WellKnownFeatureData.DefaultFailureOutcomes);");
+            return;
+        }
+
         var renderedRegistrations = registrations
             .Select(static registration =>
                 $"new global::Blueprint.Model.OperationFailureOutcome({RenderStringLiteral(registration.TranslatorId)}, {RenderStringLiteral(registration.HandledExceptionTypeName)}, {RenderStringLiteral(registration.ResultTypeName)})")

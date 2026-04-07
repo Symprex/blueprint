@@ -1,0 +1,87 @@
+using System.Collections.Immutable;
+
+namespace Blueprint.Model;
+
+/// <summary>
+/// Pre-built feature data instances for values that are identical across most or all operation descriptors.
+/// Generator modules emit references to these shared instances instead of allocating fresh <see cref="ImmutableArray"/>
+/// and string instances per descriptor, reducing code size and runtime memory for large API surfaces.
+/// </summary>
+public static class WellKnownFeatureData
+{
+    /// <summary>
+    /// The default failure outcomes produced by the standard exception translator policy. Every operation
+    /// using the default policy shares this exact triple: legacy validation, data-annotations validation,
+    /// and unhandled exception.
+    /// </summary>
+    public static readonly OperationFailureOutcomesFeatureData DefaultFailureOutcomes = new(
+        ImmutableArray.Create(
+            new OperationFailureOutcome(
+                "legacy-validation-exception",
+                "Blueprint.Validation.ValidationException",
+                "Blueprint.Runtime.Exec.ValidationFailedResult"),
+            new OperationFailureOutcome(
+                "data-annotations-validation-exception",
+                "System.ComponentModel.DataAnnotations.ValidationException",
+                "Blueprint.Runtime.Exec.ValidationFailedResult"),
+            new OperationFailureOutcome(
+                "default-unhandled-exception",
+                "System.Exception",
+                "Blueprint.Runtime.Exec.UnhandledExceptionResult")));
+
+    /// <summary>
+    /// Host exposure metadata for the single-host HTTP case, shared by the vast majority of operations.
+    /// </summary>
+    public static readonly OperationHostExposureFeatureData HttpHostExposure = new(
+        ImmutableArray.Create("http"));
+
+    /// <summary>HTTP GET method metadata.</summary>
+    public static readonly OperationHttpMethodMetadataFeatureData HttpGet = new(
+        ImmutableArray.Create("GET"));
+
+    /// <summary>HTTP POST method metadata.</summary>
+    public static readonly OperationHttpMethodMetadataFeatureData HttpPost = new(
+        ImmutableArray.Create("POST"));
+
+    /// <summary>HTTP PUT method metadata.</summary>
+    public static readonly OperationHttpMethodMetadataFeatureData HttpPut = new(
+        ImmutableArray.Create("PUT"));
+
+    /// <summary>HTTP DELETE method metadata.</summary>
+    public static readonly OperationHttpMethodMetadataFeatureData HttpDelete = new(
+        ImmutableArray.Create("DELETE"));
+
+    /// <summary>HTTP PATCH method metadata.</summary>
+    public static readonly OperationHttpMethodMetadataFeatureData HttpPatch = new(
+        ImmutableArray.Create("PATCH"));
+
+    /// <summary>
+    /// Authentication feature data for operations that require an authenticated caller.
+    /// </summary>
+    public static readonly OperationAuthenticationFeatureData RequiresAuthentication = new(
+        AuthenticationRequirement.Authenticated);
+
+    /// <summary>
+    /// The common serializer context coverage base for failure body types that most HTTP-exposed
+    /// operations share: <c>ValidationProblemDetails</c> and <c>ProblemDetails</c>.
+    /// </summary>
+    public static readonly ImmutableArray<string> CommonFailureBodyTypeNames = ImmutableArray.Create(
+        "Microsoft.AspNetCore.Mvc.ProblemDetails",
+        "Microsoft.AspNetCore.Mvc.ValidationProblemDetails");
+
+    /// <summary>
+    /// The common HTTP response metadata base shared by most HTTP-exposed operations: 422 (validation)
+    /// and 500 (unhandled exception) with their standard body type names.
+    /// </summary>
+    public static readonly ImmutableArray<OperationHttpResponseMetadata> CommonFailureResponses = ImmutableArray.Create(
+        new OperationHttpResponseMetadata(
+            422,
+            true,
+            ImmutableArray.Create<string>("Blueprint.Runtime.Exec.ValidationFailedResult"),
+            ImmutableArray.Create<string>("Microsoft.AspNetCore.Mvc.ValidationProblemDetails")),
+        new OperationHttpResponseMetadata(
+            500,
+            true,
+            ImmutableArray.Create<string>("Blueprint.Runtime.Exec.UnhandledExceptionResult"),
+            ImmutableArray.Create<string>("Microsoft.AspNetCore.Mvc.ProblemDetails")));
+}

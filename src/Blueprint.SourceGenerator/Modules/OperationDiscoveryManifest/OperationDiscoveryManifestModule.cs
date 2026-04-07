@@ -50,9 +50,17 @@ public sealed class OperationDiscoveryManifestModule : IBlueprintSourceGenerator
             return;
         }
 
-        var renderedHostNames = string.Join(", ", hostNames.Select(RenderStringLiteral));
-        context.AddRenderStep(w =>
-            w.AppendLine($"this.SetFeatureData(new global::Blueprint.Model.OperationHostExposureFeatureData(global::System.Collections.Immutable.ImmutableArray.Create({renderedHostNames})));"));
+        if (hostNames.Length == 1 && string.Equals(hostNames[0], "http", StringComparison.Ordinal))
+        {
+            context.AddRenderStep(static w =>
+                w.AppendLine("this.SetFeatureData(global::Blueprint.Model.WellKnownFeatureData.HttpHostExposure);"));
+        }
+        else
+        {
+            var renderedHostNames = string.Join(", ", hostNames.Select(RenderStringLiteral));
+            context.AddRenderStep(w =>
+                w.AppendLine($"this.SetFeatureData(new global::Blueprint.Model.OperationHostExposureFeatureData(global::System.Collections.Immutable.ImmutableArray.Create({renderedHostNames})));"));
+        }
     }
 
     /// <inheritdoc />

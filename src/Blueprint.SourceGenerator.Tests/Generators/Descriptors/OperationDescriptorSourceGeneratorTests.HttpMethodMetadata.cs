@@ -32,7 +32,7 @@ public class OperationDescriptorSourceGeneratorTestsHttpMethodMetadataTests
 
         descriptorSource.Should().NotBeNull();
         descriptorSource!.Should().Contain(
-            "this.SetFeatureData(new global::Blueprint.Model.OperationHttpMethodMetadataFeatureData(global::System.Collections.Immutable.ImmutableArray.Create(\"GET\")));");
+            "this.SetFeatureData(global::Blueprint.Model.WellKnownFeatureData.HttpGet);");
     }
 
     [Fact]
@@ -51,7 +51,7 @@ public class OperationDescriptorSourceGeneratorTestsHttpMethodMetadataTests
 
         descriptorSource.Should().NotBeNull();
         descriptorSource!.Should().Contain(
-            "this.SetFeatureData(new global::Blueprint.Model.OperationHttpMethodMetadataFeatureData(global::System.Collections.Immutable.ImmutableArray.Create(\"POST\")));");
+            "this.SetFeatureData(global::Blueprint.Model.WellKnownFeatureData.HttpPost);");
     }
 
     [Fact]
@@ -71,7 +71,7 @@ public class OperationDescriptorSourceGeneratorTestsHttpMethodMetadataTests
 
         descriptorSource.Should().NotBeNull();
         descriptorSource!.Should().Contain(
-            "this.SetFeatureData(new global::Blueprint.Model.OperationHttpMethodMetadataFeatureData(global::System.Collections.Immutable.ImmutableArray.Create(\"GET\")));");
+            "this.SetFeatureData(global::Blueprint.Model.WellKnownFeatureData.HttpGet);");
     }
 
     [Fact]

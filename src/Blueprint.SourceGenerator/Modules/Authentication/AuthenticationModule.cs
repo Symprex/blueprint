@@ -111,7 +111,7 @@ public sealed class AuthenticationModule : IBlueprintSourceGeneratorModule, IDes
     private static void RenderDescriptorFeatureData(CodeWriter.ICodeWriter writer)
     {
         writer.AppendLine(
-            "this.SetFeatureData(new global::Blueprint.Model.OperationAuthenticationFeatureData(global::Blueprint.Model.AuthenticationRequirement.Authenticated));");
+            "this.SetFeatureData(global::Blueprint.Model.WellKnownFeatureData.RequiresAuthentication);");
     }
 
     private static void RenderAuthenticationCheck(PipelineRenderContext context)

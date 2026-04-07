@@ -23,10 +23,7 @@ public class OperationDescriptorSourceGeneratorTestsFailureOutcomesTests
             .FirstOrDefault(static source => source.Contains("IncludedOperationDescriptor"));
 
         descriptorSource.Should().NotBeNull();
-        descriptorSource!.Should().Contain("this.SetFeatureData(new global::Blueprint.Model.OperationFailureOutcomesFeatureData(");
-        descriptorSource.Should().Contain("new global::Blueprint.Model.OperationFailureOutcome(\"legacy-validation-exception\", \"Blueprint.Validation.ValidationException\", \"Blueprint.Runtime.Exec.ValidationFailedResult\")");
-        descriptorSource.Should().Contain("new global::Blueprint.Model.OperationFailureOutcome(\"data-annotations-validation-exception\", \"System.ComponentModel.DataAnnotations.ValidationException\", \"Blueprint.Runtime.Exec.ValidationFailedResult\")");
-        descriptorSource.Should().Contain("new global::Blueprint.Model.OperationFailureOutcome(\"default-unhandled-exception\", \"System.Exception\", \"Blueprint.Runtime.Exec.UnhandledExceptionResult\")");
+        descriptorSource!.Should().Contain("this.SetFeatureData(global::Blueprint.Model.WellKnownFeatureData.DefaultFailureOutcomes);");
     }
 
     [Fact]

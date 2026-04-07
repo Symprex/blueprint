@@ -166,19 +166,37 @@ public sealed class OperationHttpMethodMetadataModule : IBlueprintSourceGenerato
         return location is null ? null : LocationInfo.CreateFrom(location);
     }
 
+    private static readonly Dictionary<string, string> WellKnownSingleMethodReferences = new(StringComparer.Ordinal)
+    {
+        ["DELETE"] = "global::Blueprint.Model.WellKnownFeatureData.HttpDelete",
+        ["GET"] = "global::Blueprint.Model.WellKnownFeatureData.HttpGet",
+        ["PATCH"] = "global::Blueprint.Model.WellKnownFeatureData.HttpPatch",
+        ["POST"] = "global::Blueprint.Model.WellKnownFeatureData.HttpPost",
+        ["PUT"] = "global::Blueprint.Model.WellKnownFeatureData.HttpPut",
+    };
+
     private static void RenderDescriptor(ICodeWriter codeWriter, IEnumerable<OperationHttpMethodMetadataRegistration> registrations)
     {
-        var renderedMethods = registrations
+        var distinctMethods = registrations
             .Select(static registration => registration.HttpMethod)
             .Distinct(StringComparer.Ordinal)
             .OrderBy(static httpMethod => httpMethod, StringComparer.Ordinal)
-            .Select(static httpMethod => CSharpSymbolDisplay.FormatLiteral(httpMethod, quote: true))
             .ToArray();
 
-        if (renderedMethods.Length == 0)
+        if (distinctMethods.Length == 0)
         {
             return;
         }
+
+        if (distinctMethods.Length == 1 && WellKnownSingleMethodReferences.TryGetValue(distinctMethods[0], out var wellKnownRef))
+        {
+            codeWriter.AppendLine($"this.SetFeatureData({wellKnownRef});");
+            return;
+        }
+
+        var renderedMethods = distinctMethods
+            .Select(static httpMethod => CSharpSymbolDisplay.FormatLiteral(httpMethod, quote: true))
+            .ToArray();
 
         codeWriter.AppendLine(
             "this.SetFeatureData(new global::Blueprint.Model.OperationHttpMethodMetadataFeatureData("

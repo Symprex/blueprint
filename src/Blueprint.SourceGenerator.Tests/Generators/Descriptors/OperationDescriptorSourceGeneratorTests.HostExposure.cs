@@ -20,7 +20,7 @@ public class OperationDescriptorSourceGeneratorTestsHostExposureTests
 
         descriptorSource.Should().NotBeNull();
         descriptorSource!.Should().Contain(
-            "this.SetFeatureData(new global::Blueprint.Model.OperationHostExposureFeatureData(global::System.Collections.Immutable.ImmutableArray.Create(\"http\")));");
+            "this.SetFeatureData(global::Blueprint.Model.WellKnownFeatureData.HttpHostExposure);");
     }
 
     [Fact]

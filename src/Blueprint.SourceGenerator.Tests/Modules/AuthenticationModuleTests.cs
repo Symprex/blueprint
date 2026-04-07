@@ -37,10 +37,9 @@ public class AuthenticationModuleTests
 
         var descriptorSource = result.Output
             .Select(static t => t.ToString())
-            .FirstOrDefault(static s => s.Contains("OperationAuthenticationFeatureData"));
+            .FirstOrDefault(static s => s.Contains("WellKnownFeatureData.RequiresAuthentication"));
 
         descriptorSource.Should().NotBeNull("descriptor should contain auth feature data");
-        descriptorSource!.Should().Contain("AuthenticationRequirement.Authenticated");
     }
 
     [Fact]
@@ -65,7 +64,7 @@ public class AuthenticationModuleTests
             .FirstOrDefault(static s => s.Contains("GetItemsQueryDescriptor"));
 
         descriptorSource.Should().NotBeNull();
-        descriptorSource!.Should().NotContain("OperationAuthenticationFeatureData");
+        descriptorSource!.Should().NotContain("WellKnownFeatureData.RequiresAuthentication");
     }
 
     [Fact]
@@ -87,7 +86,7 @@ public class AuthenticationModuleTests
 
         // Non-HTTP operations still get a descriptor, but it should not have auth feature data
         var allOutput = string.Join("\n", result.Output.Select(static t => t.ToString()));
-        allOutput.Should().NotContain("OperationAuthenticationFeatureData");
+        allOutput.Should().NotContain("WellKnownFeatureData.RequiresAuthentication");
     }
 
     // ── Pipeline plan tests ───────────────────────────────────────────
