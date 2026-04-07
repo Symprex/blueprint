@@ -4,6 +4,7 @@ using Blueprint.SourceGenerator.Generators.ApiResources;
 using Blueprint.SourceGenerator.Generators.Pipelines;
 using Blueprint.SourceGenerator.Helpers;
 using Blueprint.SourceGenerator.Modules;
+using Blueprint.SourceGenerator.Modules.Authentication;
 using Blueprint.SourceGenerator.Planning;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -217,6 +218,7 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
         [
             new LinkGenerationModule(),
             new TasksHostModule(),
+            new AuthenticationModule(),
             new ValidationModule(),
             new DefaultExceptionTranslationModule(),
             new FlattenedResultOutcomeModule(),

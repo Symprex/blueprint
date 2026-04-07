@@ -232,20 +232,14 @@ public static class EndpointRouteBuilderExtensions
                 httpContext.RequestAborted)
             {
                 HttpContext = httpContext,
-
-                // ClaimsIdentity = httpContext.User.Identity as ClaimsIdentity,
+                UserPrincipal = httpContext.User,
             };
 
-            // apiContext.SetHttpFeatureContext(new HttpFeatureContext
-            // {
-            //     HttpContext = httpContext,
-            //     RouteData = routeData,
-            // });
-
-            // var request = httpContext.Request;
-            // var baseUri = $"{request.Scheme}://{this._httpOptions.Value.PublicHost ?? request.Host.Value}{request.PathBase}/{this._basePath}";
-            //
-            // httpContext.SetBaseUri(baseUri);
+            // Compute a stable base URI for link generation and redirect targets.
+            // PathString concatenation handles slash normalization correctly.
+            var host = this._httpOptions.PublicHost ?? httpRequest.Host.Value;
+            var basePath = httpRequest.PathBase.Add(new PathString("/" + this._basePath.TrimStart('/')));
+            apiContext.Data["blueprint:base-uri"] = $"{httpRequest.Scheme}://{host}{basePath}";
 
             var result = await nestedContainer.ServiceProvider.GetRequiredService<TExec>().GetPipeline(operation.OperationType).ExecuteAsync(apiContext);
 

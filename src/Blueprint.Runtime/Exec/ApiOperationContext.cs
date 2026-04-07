@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using System.Security.Claims;
 using Blueprint.Model;
 using Blueprint.Runtime.Http;
 
@@ -90,6 +91,19 @@ public class ApiOperationContext : IHttpOperationContext
     /// when the operation is being executed via the HTTP host.
     /// </summary>
     public HttpContext? HttpContext { get; set; }
+
+    /// <summary>
+    /// Gets or sets the <see cref="ClaimsPrincipal"/> representing the authenticated user for this operation.
+    /// Set by the HTTP host from <see cref="Microsoft.AspNetCore.Http.HttpContext.User"/>.
+    /// </summary>
+    public ClaimsPrincipal? UserPrincipal { get; set; }
+
+    /// <summary>
+    /// Gets the primary <see cref="ClaimsIdentity"/> of the current user, or <c>null</c> when no
+    /// authenticated identity is available. Derived from <see cref="UserPrincipal"/> so the two
+    /// cannot diverge.
+    /// </summary>
+    public ClaimsIdentity? UserIdentity => this.UserPrincipal?.Identity as ClaimsIdentity;
 
     /// <inheritdoc />
     HttpContext IHttpOperationContext.HttpContext =>
