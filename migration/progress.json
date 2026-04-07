@@ -11,7 +11,7 @@
   },
   "current": {
     "activeWorkstream": "http-host-and-message-population",
-    "nextReadySlice": "http-host/content-negotiation-and-output-formatting",
+    "nextReadySlice": "http-host/shared-feature-data-constants",
     "lastCompletedSlice": {
       "id": "http-host/openapi-parameter-and-request-body-projection",
       "workstream": "http-host-and-message-population",

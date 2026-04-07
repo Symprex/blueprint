@@ -92,3 +92,22 @@ Generate or expose:
 ## Sequencing
 
 Implement early because many other modules depend on HTTP feature data, request context, and result handling behavior.
+
+### Completed slices
+
+- **Slice 1**: Route/body property ownership and Population pipeline stage
+- **Slice 2**: Query string binding with camelCase and type conversions
+- **Slices 3+4**: [FromX] attribute overrides + header/cookie extraction
+- **Slice 5**: Claims identity, base URI, [MustBeAuthenticated] pipeline enforcement
+- **Slice 6**: OpenAPI parameter and request body projection from property ownership
+
+### Next slices (improvement pass)
+
+- **Slice 7**: Shared feature data constants — `WellKnownFeatureData` static class to eliminate per-descriptor allocation of identical ImmutableArrays (failure outcomes, host exposure, HTTP methods, auth requirement)
+- **Slice 8**: Semantic pipeline result types — replace `HttpPipelineShortCircuitResult` + direct status code writes with `UnauthenticatedResult` (401), `BindingFailureResult` (400), `UnsupportedMediaTypeResult` (415)
+- **Slice 9**: Shared host executor shell — `OperationExecutorShell` base class owning activity/logging/exception-handling boilerplate, shrinking every generated pipeline by ~50–80 lines
+
+### Future slices
+
+- Content negotiation and output formatting
+- OpenAPI projection of pipeline failure outcomes (400/401/415 in spec)
