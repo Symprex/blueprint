@@ -11,11 +11,11 @@
   },
   "current": {
     "activeWorkstream": "http-host-and-message-population",
-    "nextReadySlice": "http-host/openapi-parameter-and-request-body-projection",
+    "nextReadySlice": "http-host/content-negotiation-and-output-formatting",
     "lastCompletedSlice": {
-      "id": "http-host/claims-identity-and-http-feature-context",
+      "id": "http-host/openapi-parameter-and-request-body-projection",
       "workstream": "http-host-and-message-population",
-      "title": "Claims identity, base URI, and [MustBeAuthenticated] pipeline enforcement (Slice 5)"
+      "title": "OpenAPI parameter and request body projection from property ownership (Slice 6)"
     },
     "openReviewGate": null
   },
