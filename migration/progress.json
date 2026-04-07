@@ -11,13 +11,13 @@
   },
   "current": {
     "activeWorkstream": "http-host-and-message-population",
-    "nextReadySlice": "http-host/shared-feature-data-constants",
+    "nextReadySlice": null,
     "lastCompletedSlice": {
-      "id": "http-host/openapi-parameter-and-request-body-projection",
+      "id": "http-host/shared-executor-shell",
       "workstream": "http-host-and-message-population",
-      "title": "OpenAPI parameter and request body projection from property ownership (Slice 6)"
+      "title": "Shared OperationExecutorShell base class (Improvement Slice 9)"
     },
-    "openReviewGate": null
+    "openReviewGate": "human-direction"
   },
   "orchestrationContract": {
     "mustImplementAfterSliceSelection": true,
