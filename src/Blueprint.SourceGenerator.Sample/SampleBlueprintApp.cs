@@ -6,9 +6,8 @@ using Microsoft.AspNetCore.Mvc;
 namespace Blueprint.SourceGenerator.Sample;
 
 /// <summary>
-/// Sample Blueprint app used to demonstrate scan-based registration against both local and contract-assembly operations.
+/// Sample Blueprint app used to demonstrate scan-based registration against contract-assembly operations.
 /// </summary>
-[BlueprintAppScan]
 [BlueprintAppScan(FromAssemblyOf = typeof(GetTemplatesQuery))]
 [BlueprintAppSerializerContext(JsonSerializerContextType = typeof(SampleBlueprintAppJsonContext))]
 public partial class SampleBlueprintApp : BlueprintApp;

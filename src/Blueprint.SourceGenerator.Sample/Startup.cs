@@ -1,3 +1,5 @@
+using Blueprint.SourceGenerator.Sample.Api;
+
 namespace Blueprint.SourceGenerator.Sample;
 
 /// <summary>
@@ -12,6 +14,7 @@ public class Startup
     public void ConfigureServices(IServiceCollection services)
     {
         services.AddLogging();
+        services.AddSingleton<TemplateStore>();
         services.AddSingleton<SampleBlueprintApp>();
         services.AddSingleton<SampleBlueprintAppExecutor>();
     }

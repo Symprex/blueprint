@@ -12,14 +12,14 @@
   "current": {
     "activeWorkstream": "reference-app-and-end-to-end-example",
     "nextReadySlice": {
-      "id": "reference-app/layer-2-validation-example",
+      "id": "reference-app/layer-2-links-and-result-shapes",
       "workstream": "reference-app-and-end-to-end-example",
-      "title": "reference-app/layer-2-validation-example"
+      "title": "Add richer links and result shapes to the reference app with GetTemplate query and resource links"
     },
     "lastCompletedSlice": {
-      "id": "reference-app/layer-1-runnable-generated-http-sample",
+      "id": "reference-app/layer-2-validation-example",
       "workstream": "reference-app-and-end-to-end-example",
-      "title": "Complete Layer 1 of the reference app with deterministic handlers, generated HTTP wiring, and end-to-end sample tests"
+      "title": "Add validation-focused command with async pipeline fix and same-URL-different-method support"
     },
     "openReviewGate": null
   },

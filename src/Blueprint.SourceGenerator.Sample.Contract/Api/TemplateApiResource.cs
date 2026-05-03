@@ -16,19 +16,26 @@ public partial class TemplateApiResource : ApiResource
     /// Initializes a new instance of the <see cref="TemplateApiResource"/> class.
     /// </summary>
     /// <param name="id">The id of this template.</param>
+    /// <param name="name">The display name of this template.</param>
     /// <param name="htmlSource">The HTML source of this template</param>
     /// <param name="plainTextSource">The plain text source of this template.</param>
-    public TemplateApiResource(string id, string htmlSource, string plainTextSource)
+    public TemplateApiResource(string id, string name, string htmlSource, string plainTextSource)
     {
         this.Id = id;
+        this.Name = name;
         this.HtmlSource = htmlSource;
         this.PlainTextSource = plainTextSource;
     }
 
     /// <summary>
-    /// The id of this template
+    /// The id of this template.
     /// </summary>
     public string Id { get; private set; } = null!;
+
+    /// <summary>
+    /// The display name of this template.
+    /// </summary>
+    public string Name { get; private set; } = null!;
 
     /// <summary>
     /// The HTML source of this template.
