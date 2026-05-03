@@ -14,7 +14,7 @@ public class BlueprintApp
     private static readonly List<ApiOperationDescriptor> _emptyOperationList = new(0);
 
     private readonly Dictionary<Type, ApiOperationDescriptor> _allOperations = new();
-    private readonly Dictionary<string, ApiOperationDescriptor> _urlToOperation = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, List<(ApiOperationDescriptor Descriptor, IReadOnlyList<string> Methods)>> _urlToOperations = new(StringComparer.Ordinal);
     private readonly Dictionary<string, List<ApiOperationDescriptor>> _hostToOperations = new(StringComparer.Ordinal);
 
     private readonly List<ApiOperationLink> _allLinks = new();
@@ -70,12 +70,22 @@ public class BlueprintApp
                 $"Cannot register operation '{descriptor.Name}' as an operation with type '{descriptor.OperationType.Name}' is already registered.");
         }
 
+        var newMethods = GetHttpMethods(descriptor);
+
         foreach (var url in descriptor.Urls)
         {
-            if (this._urlToOperation.TryGetValue(url.UrlFormat, out var existingDescriptor))
+            if (this._urlToOperations.TryGetValue(url.UrlFormat, out var existing))
             {
-                throw new InvalidOperationException(
-                    $"Cannot register URL '{url.UrlFormat}' for operation '{descriptor.Name}' as it is already registered by operation '{existingDescriptor.Name}'.");
+                foreach (var (existingDescriptor, existingMethods) in existing)
+                {
+                    var overlap = newMethods.Intersect(existingMethods, StringComparer.OrdinalIgnoreCase).ToList();
+                    if (overlap.Count > 0)
+                    {
+                        throw new InvalidOperationException(
+                            $"Cannot register URL '{url.UrlFormat}' for operation '{descriptor.Name}' as HTTP method(s) {string.Join(", ", overlap)} " +
+                            $"at that path are already registered by operation '{existingDescriptor.Name}'.");
+                    }
+                }
             }
         }
 
@@ -84,13 +94,29 @@ public class BlueprintApp
 
         foreach (var url in descriptor.Urls)
         {
-            this._urlToOperation[url.UrlFormat] = descriptor;
+            if (!this._urlToOperations.TryGetValue(url.UrlFormat, out var entries))
+            {
+                entries = [];
+                this._urlToOperations[url.UrlFormat] = entries;
+            }
+
+            entries.Add((descriptor, newMethods));
         }
 
         foreach (var link in descriptor.Links)
         {
             this.RegisterLink(link);
         }
+    }
+
+    private static IReadOnlyList<string> GetHttpMethods(ApiOperationDescriptor descriptor)
+    {
+        if (descriptor.TryGetFeatureData<OperationHttpMethodMetadataFeatureData>(out var methodData))
+        {
+            return methodData.HttpMethods;
+        }
+
+        return ["GET"];
     }
 
     /// <summary>

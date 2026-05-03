@@ -134,7 +134,7 @@ public class BlueprintAppTests
     }
 
     [Fact]
-    public void Register_Should_Throw_Exception_When_Duplicate_Url_Across_Descriptors()
+    public void Register_Should_Throw_Exception_When_Duplicate_Url_With_Same_Http_Method()
     {
         // Arrange
         var model = new BlueprintApp();
@@ -148,9 +148,32 @@ public class BlueprintAppTests
         // Act
         var act = () => model.Register(descriptor2);
 
-        // Assert
+        // Assert — both default to GET so the duplicate should be rejected
         act.Should().Throw<InvalidOperationException>()
-            .WithMessage("Cannot register URL '/test' for operation 'TestOperation2' as it is already registered by operation 'TestOperation1'.");
+            .WithMessage("Cannot register URL '/test' for operation 'TestOperation2' as HTTP method(s) GET at that path are already registered by operation 'TestOperation1'.");
+    }
+
+    [Fact]
+    public void Register_Should_Allow_Same_Url_When_Http_Methods_Differ()
+    {
+        // Arrange
+        var model = new BlueprintApp();
+        var descriptor1 = new ApiOperationDescriptor(typeof(TestOperation), "TestOperation1", "TestSource1");
+        var descriptor2 = new ApiOperationDescriptor(typeof(TestOperation2), "TestOperation2", "TestSource2");
+
+        descriptor1.SetFeatureData(WellKnownFeatureData.HttpGet);
+        descriptor2.SetFeatureData(WellKnownFeatureData.HttpPost);
+
+        var url = new ApiOperationUrl("/test");
+        descriptor1.AddUrl(url);
+        descriptor2.AddUrl(url);
+        model.Register(descriptor1);
+
+        // Act
+        model.Register(descriptor2);
+
+        // Assert — both should be registered successfully
+        model.Operations.Should().HaveCount(2);
     }
 
     [Fact]

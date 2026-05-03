@@ -64,12 +64,12 @@ internal sealed record PipelineExceptionTranslatorPolicy(IReadOnlyList<IPipeline
     /// Writes the catch shell owned by this policy to the generated pipeline method.
     /// </summary>
     /// <param name="writer">The writer receiving the ordered catch blocks.</param>
-    /// <param name="isHandlerAsync">Whether the generated execute method already returns asynchronously.</param>
-    public void WriteExceptionHandling(ICodeWriter writer, bool isHandlerAsync)
+    /// <param name="isPipelineAsync">Whether the generated pipeline method is async.</param>
+    public void WriteExceptionHandling(ICodeWriter writer, bool isPipelineAsync)
     {
         foreach (var translator in this.Translators)
         {
-            translator.WriteCatchBlock(writer, isHandlerAsync);
+            translator.WriteCatchBlock(writer, isPipelineAsync);
         }
     }
 

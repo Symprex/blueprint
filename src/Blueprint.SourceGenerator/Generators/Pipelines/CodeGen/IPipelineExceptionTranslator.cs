@@ -49,8 +49,8 @@ public interface IPipelineExceptionTranslator
     /// Writes the catch block owned by this translator for a generated pipeline execute method.
     /// </summary>
     /// <param name="writer">The writer receiving the generated catch blocks.</param>
-    /// <param name="isHandlerAsync">Whether the generated execute method returns directly or must wrap synchronous results.</param>
-    void WriteCatchBlock(ICodeWriter writer, bool isHandlerAsync);
+    /// <param name="isPipelineAsync">Whether the generated pipeline method is async (no Task.FromResult wrapping needed).</param>
+    void WriteCatchBlock(ICodeWriter writer, bool isPipelineAsync);
 }
 
 /// <summary>
@@ -86,14 +86,14 @@ internal sealed class LegacyValidationExceptionTranslator : IPipelineExceptionTr
     public bool IsFallback => false;
 
     /// <inheritdoc />
-    public void WriteCatchBlock(ICodeWriter writer, bool isHandlerAsync)
+    public void WriteCatchBlock(ICodeWriter writer, bool isPipelineAsync)
     {
         writer.Catch(
             "Blueprint.Validation.ValidationException e",
             catchWriter =>
             {
                 catchWriter.AppendLine("context.Activity?.SetTag(\"otel.status_code\", \"OK\");");
-                catchWriter.Return(PipelineCodeGenerator.WrapOperationResult("new Blueprint.Runtime.Exec.ValidationFailedResult(e.ValidationResults)", isHandlerAsync));
+                catchWriter.Return(PipelineCodeGenerator.WrapOperationResult("new Blueprint.Runtime.Exec.ValidationFailedResult(e.ValidationResults)", isPipelineAsync));
             });
     }
 }
@@ -132,14 +132,14 @@ internal sealed class DataAnnotationsValidationExceptionTranslator : IPipelineEx
     public bool IsFallback => false;
 
     /// <inheritdoc />
-    public void WriteCatchBlock(ICodeWriter writer, bool isHandlerAsync)
+    public void WriteCatchBlock(ICodeWriter writer, bool isPipelineAsync)
     {
         writer.Catch(
             "System.ComponentModel.DataAnnotations.ValidationException e",
             catchWriter =>
             {
                 catchWriter.AppendLine("context.Activity?.SetTag(\"otel.status_code\", \"OK\");");
-                catchWriter.Return(PipelineCodeGenerator.WrapOperationResult("Blueprint.Middleware.ValidationMiddlewareBuilder.ToValidationFailedResult(e)", isHandlerAsync));
+                catchWriter.Return(PipelineCodeGenerator.WrapOperationResult("Blueprint.Middleware.ValidationMiddlewareBuilder.ToValidationFailedResult(e)", isPipelineAsync));
             });
     }
 }
@@ -178,7 +178,7 @@ internal sealed class DefaultPipelineExceptionTranslator : IPipelineExceptionTra
     public bool IsFallback => true;
 
     /// <inheritdoc />
-    public void WriteCatchBlock(ICodeWriter writer, bool isHandlerAsync)
+    public void WriteCatchBlock(ICodeWriter writer, bool isPipelineAsync)
     {
         writer.Catch(
             "System.Exception e",
@@ -202,7 +202,7 @@ internal sealed class DefaultPipelineExceptionTranslator : IPipelineExceptionTra
                     });
 
                 catchWriter.NewLine();
-                catchWriter.Return(PipelineCodeGenerator.WrapOperationResult("new Blueprint.Runtime.Exec.UnhandledExceptionResult(e)", isHandlerAsync));
+                catchWriter.Return(PipelineCodeGenerator.WrapOperationResult("new Blueprint.Runtime.Exec.UnhandledExceptionResult(e)", isPipelineAsync));
             });
     }
 }

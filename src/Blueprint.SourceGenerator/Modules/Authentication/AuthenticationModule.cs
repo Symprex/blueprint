@@ -122,7 +122,7 @@ public sealed class AuthenticationModule : IBlueprintSourceGeneratorModule, IDes
             branch =>
             {
                 branch.Return(
-                    context.IsHandlerAsync()
+                    context.IsPipelineAsync()
                         ? "new Blueprint.Runtime.Exec.UnauthenticatedResult()"
                         : "System.Threading.Tasks.Task.FromResult<Blueprint.OperationResult>(new Blueprint.Runtime.Exec.UnauthenticatedResult())");
             });

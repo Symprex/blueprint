@@ -62,6 +62,117 @@ public class ReferenceAppHttpEndToEndIntegrationTests
         response.Body.Should().Contain("Template template-002");
     }
 
+    [Fact]
+    public async Task When_create_template_without_auth_then_returns_401()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/templates");
+        endpoint.Should().NotBeNull("the create template route should be registered");
+
+        var bodyJson = """{"name":"Test Template","htmlSource":"<p>Hello</p>","plainTextSource":"Hello"}"""u8.ToArray();
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Post;
+            context.Request.ContentType = "application/json; charset=utf-8";
+            context.Request.ContentLength = bodyJson.Length;
+            context.Request.Body = new MemoryStream(bodyJson);
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status401Unauthorized);
+    }
+
+    [Fact]
+    public async Task When_create_template_with_valid_body_then_returns_200_with_template_resource()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/templates");
+        endpoint.Should().NotBeNull("the create template route should be registered");
+
+        var bodyJson = """{"name":"My Template","htmlSource":"<p>{{Name}}</p>","plainTextSource":"Hello {{Name}}"}"""u8.ToArray();
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Post;
+            context.Request.ContentType = "application/json; charset=utf-8";
+            context.Request.ContentLength = bodyJson.Length;
+            context.Request.Body = new MemoryStream(bodyJson);
+            context.User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "user-1"),
+                ],
+                authenticationType: "test"));
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        response.ContentType.Should().Be("application/json; charset=utf-8");
+        response.Body.Should().Contain("template-");
+        response.Body.Should().Contain("{{Name}}");
+    }
+
+    [Fact]
+    public async Task When_create_template_with_missing_required_name_then_returns_422_with_validation_errors()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/templates");
+        endpoint.Should().NotBeNull("the create template route should be registered");
+
+        var bodyJson = """{"htmlSource":"<p>No name</p>"}"""u8.ToArray();
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Post;
+            context.Request.ContentType = "application/json; charset=utf-8";
+            context.Request.ContentLength = bodyJson.Length;
+            context.Request.Body = new MemoryStream(bodyJson);
+            context.User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "user-1"),
+                ],
+                authenticationType: "test"));
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status422UnprocessableEntity);
+        response.ContentType.Should().StartWith("application/problem+json");
+        response.Body.Should().Contain("Name");
+    }
+
+    [Fact]
+    public async Task When_create_template_with_name_exceeding_max_length_then_returns_422_with_validation_errors()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/templates");
+        endpoint.Should().NotBeNull("the create template route should be registered");
+
+        var tooLongName = new string('x', 201);
+        var bodyJson = System.Text.Encoding.UTF8.GetBytes($$$"""{"name":"{{{tooLongName}}}","htmlSource":"<p>test</p>"}""");
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Post;
+            context.Request.ContentType = "application/json; charset=utf-8";
+            context.Request.ContentLength = bodyJson.Length;
+            context.Request.Body = new MemoryStream(bodyJson);
+            context.User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "user-1"),
+                ],
+                authenticationType: "test"));
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status422UnprocessableEntity);
+        response.ContentType.Should().StartWith("application/problem+json");
+        response.Body.Should().Contain("Name");
+        response.Body.Should().Contain("200");
+    }
+
     private static async Task<TestHttpResponse> InvokeEndpointAsync(
         RouteEndpoint endpoint,
         IServiceProvider serviceProvider,

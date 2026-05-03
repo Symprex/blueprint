@@ -81,14 +81,14 @@ internal static class PipelineCodeGenerator
     }
 
     /// <summary>
-    /// Wraps a generated result expression for synchronous handlers so the surrounding execute method still returns a task.
+    /// Wraps a generated result expression so the surrounding execute method still returns a task when the pipeline is not async.
     /// </summary>
     /// <param name="operationResultExpression">The generated operation-result expression.</param>
-    /// <param name="isHandlerAsync">Whether the enclosing handler already returns asynchronously.</param>
+    /// <param name="isPipelineAsync">Whether the generated pipeline method is async.</param>
     /// <returns>The expression to emit from the generated catch or handler-return path.</returns>
-    internal static string WrapOperationResult(string operationResultExpression, bool isHandlerAsync)
+    internal static string WrapOperationResult(string operationResultExpression, bool isPipelineAsync)
     {
-        return isHandlerAsync
+        return isPipelineAsync
             ? operationResultExpression
             : $"System.Threading.Tasks.Task.FromResult<Blueprint.OperationResult>({operationResultExpression})";
     }

@@ -143,19 +143,19 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
         {
             case HandlerReturnNormalizationKind.NoResult:
             case HandlerReturnNormalizationKind.OperationResult:
-                context.Return(WrapOperationResult("handlerResult", context.IsHandlerAsync()));
+                context.Return(WrapOperationResult("handlerResult", context.IsPipelineAsync()));
                 break;
             case HandlerReturnNormalizationKind.PlainValue:
-                context.Return(WrapOperationResult($"new Blueprint.Runtime.Exec.OkResult<{normalization.PlainValueTypeName}>(handlerResult)", context.IsHandlerAsync()));
+                context.Return(WrapOperationResult($"new Blueprint.Runtime.Exec.OkResult<{normalization.PlainValueTypeName}>(handlerResult)", context.IsPipelineAsync()));
                 break;
             case HandlerReturnNormalizationKind.ResultsUnion:
                 context.If(
                     "handlerResult.IsT1",
                     branch =>
                     {
-                        branch.Return(WrapOperationResult("handlerResult.AsT1", context.IsHandlerAsync()));
+                        branch.Return(WrapOperationResult("handlerResult.AsT1", context.IsPipelineAsync()));
                     });
-                context.Return(WrapOperationResult("handlerResult.AsT2", context.IsHandlerAsync()));
+                context.Return(WrapOperationResult("handlerResult.AsT2", context.IsPipelineAsync()));
                 break;
             default:
                 throw new InvalidOperationException($"Unsupported handler normalization kind '{normalization.Kind}'.");
@@ -423,11 +423,11 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
     /// <see cref="Task{TResult}" /> of <c>Blueprint.OperationResult</c>.
     /// </summary>
     /// <param name="operationResultExpression">The operation-result expression to return.</param>
-    /// <param name="isHandlerAsync">Whether the handler already returns an asynchronous result.</param>
+    /// <param name="isPipelineAsync">Whether the generated pipeline method is async (handler or plan requires await).</param>
     /// <returns>A return expression compatible with the generated pipeline signature.</returns>
-    private static string WrapOperationResult(string operationResultExpression, bool isHandlerAsync)
+    private static string WrapOperationResult(string operationResultExpression, bool isPipelineAsync)
     {
-        return isHandlerAsync
+        return isPipelineAsync
             ? operationResultExpression
             : $"System.Threading.Tasks.Task.FromResult<Blueprint.OperationResult>({operationResultExpression})";
     }

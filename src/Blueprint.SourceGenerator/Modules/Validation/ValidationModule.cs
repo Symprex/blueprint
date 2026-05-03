@@ -244,7 +244,7 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
     {
         context.WriteStatement($"{context.GetContextPropertyExpression("Activity")}?.SetTag(\"otel.status_code\", \"OK\");");
         context.Return(
-            context.IsHandlerAsync()
+            context.IsPipelineAsync()
                 ? operationResultExpression
                 : $"System.Threading.Tasks.Task.FromResult<Blueprint.OperationResult>({operationResultExpression})");
     }

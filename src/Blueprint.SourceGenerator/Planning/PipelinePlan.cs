@@ -172,6 +172,16 @@ public sealed class PipelineRenderContext
     }
 
     /// <summary>
+    /// Gets a value indicating whether the generated pipeline method is async, either because the handler itself
+    /// is async or because a contributor (such as body binding) introduced an await expression.
+    /// </summary>
+    /// <returns><c>true</c> if the pipeline method will be emitted with the <c>async</c> modifier; otherwise <c>false</c>.</returns>
+    public bool IsPipelineAsync()
+    {
+        return this._handler.IsHandlerAsync || this._plan.RequiresAsync;
+    }
+
+    /// <summary>
     /// Gets the fully qualified operation type name used by the handler.
     /// </summary>
     /// <returns>The operation type name.</returns>
