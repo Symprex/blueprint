@@ -212,15 +212,7 @@ public class BlueprintApp
             return null;
         }
 
-        // foreach (var link in links)
-        // {
-        //     if (link.Rel == rel)
-        //     {
-        //         return link;
-        //     }
-        // }
-
-        return null;
+        return links.FirstOrDefault(link => link.Rel == rel);
     }
 
     /// <summary>
