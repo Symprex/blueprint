@@ -17,6 +17,10 @@ public class GetTemplatesQueryHandler
     [SuppressMessage("Usage", "CA1801", Justification = "First parameter used to indicate type we are handling")]
     public TemplateApiResource[] HandleAsync(GetTemplatesQuery query)
     {
-        throw new NotImplementedException("Cannot get templates");
+        return
+        [
+            new TemplateApiResource("template-001", "<p>Hello, {{Name}}!</p>", "Hello, {{Name}}!"),
+            new TemplateApiResource("template-002", "<p>Dear {{Name}},</p>", "Dear {{Name}},"),
+        ];
     }
 }

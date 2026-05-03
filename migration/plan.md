@@ -248,7 +248,7 @@ This phase ends when the repository can prove a coherent source-generated HTTP e
 **Phase 1 exit gate**
 
 - [ ] Operation discovery, pipeline composition, result model, error model, HTTP host, validation, auth, and observability all work together.
-- [ ] The reference app is runnable with real handlers and deterministic seeded behavior.
+- [x] The reference app is runnable with real handlers and deterministic seeded behavior.
 - [ ] At least one end-to-end reference-app test exercises discovery -> pipeline -> result -> error -> HTTP host -> validation/auth/observability together.
 - [ ] The re-query decision gate is explicitly closed.
 - [ ] Generated inspection surfaces are good enough for humans and AI agents to inspect the app surface.
@@ -1300,9 +1300,9 @@ Run this as a paired design loop with workstream 6. The result contract must be 
 
 ### Checklist
 
-- [ ] Write and run a failing proof for the current slice before implementation.
-- [ ] Replace `NotImplementedException` handlers with deterministic in-memory behavior.
-- [ ] Make the sample runnable end to end with the generated HTTP path.
+- [x] Write and run a failing proof for the current slice before implementation.
+- [x] Replace `NotImplementedException` handlers with deterministic in-memory behavior.
+- [x] Make the sample runnable end to end with the generated HTTP path.
 - [ ] Grow the sample into a curated 10-20 operation app in the templates domain.
 - [ ] Add validation, auth, link, result, and OpenAPI examples in deliberate layers.
 - [ ] Add snapshot-tested manifests and integration tests.
@@ -1317,7 +1317,7 @@ Run this as a paired design loop with workstream 6. The result contract must be 
 
 ### Tests and benchmarks
 
-- [ ] End-to-end integration tests for happy and key failure paths.
+- [x] End-to-end integration tests for happy and key failure paths.
 - [ ] Snapshot tests for routes, links, manifests, and OpenAPI as those land.
 - [ ] Smoke tests for preferred host wiring and app startup.
 

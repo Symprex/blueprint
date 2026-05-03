@@ -1,0 +1,51 @@
+{
+  "SchemaVersion": 1,
+  "ReportType": "migration-diagnostics",
+  "Findings": [
+    {
+      "DiagnosticId": "BPMIG001",
+      "Title": "Remove redundant AddOpenApi activation",
+      "Severity": "Info",
+      "Message": "Remove \u0027AddOpenApi()\u0027 because Blueprint HTTP hosts now expose OpenAPI by default.",
+      "Description": "Legacy Blueprint migrations should remove parameterless AddOpenApi() activation calls because the source-generated HTTP host already implies the OpenAPI surface.",
+      "Category": "auto-fixable",
+      "DocumentationPath": "migration\\openapi\\plan.md"
+    },
+    {
+      "DiagnosticId": "BPMIG100",
+      "Title": "Migrate configured AddOpenApi activation",
+      "Severity": "Warning",
+      "Message": "Migrate configured \u0027AddOpenApi(...)\u0027 usage to the future \u0027ConfigureOpenApi(...)\u0027 host-level seam because OpenAPI is no longer activated through BlueprintApiBuilder.",
+      "Description": "Legacy Blueprint migrations should treat configured AddOpenApi(...) calls as configuration-required work rather than a safe auto-fix because the customization must move to the future host-level ConfigureOpenApi seam.",
+      "Category": "configuration required",
+      "DocumentationPath": "migration\\openapi\\plan.md"
+    },
+    {
+      "DiagnosticId": "BPMIG101",
+      "Title": "Migrate configured AddAuthentication activation",
+      "Severity": "Warning",
+      "Message": "Migrate configured \u0027AddAuthentication(...)\u0027 usage through the new authentication configuration path because auth stages are no longer activated through BlueprintApiBuilder feature toggles.",
+      "Description": "Legacy Blueprint migrations should treat configured AddAuthentication(...) calls as configuration-required work because context loading and consumer-owned authentication registration still need an explicit migration seam.",
+      "Category": "configuration required",
+      "DocumentationPath": "migration\\authentication-and-authorisation\\plan.md"
+    },
+    {
+      "DiagnosticId": "BPMIG200",
+      "Title": "Migrate FromResource usage",
+      "Severity": "Warning",
+      "Message": "Migrate \u0027FromResource(...)\u0027 usage because auth/resource inheritance must move into Blueprint\u0027s source-generated metadata model.",
+      "Description": "Legacy Blueprint migrations should treat FromResource(...) usage as consumer-extension rewrite work because the replacement auth/resource model needs explicit source-generated metadata instead of runtime attribute discovery.",
+      "Category": "consumer-extension rewrite required",
+      "DocumentationPath": "migration\\authentication-and-authorisation\\plan.md"
+    },
+    {
+      "DiagnosticId": "BPMIG201",
+      "Title": "Migrate auth placeholder usage",
+      "Severity": "Warning",
+      "Message": "Migrate \u0027{Auth:...}\u0027 placeholder usage because auth-template expansion must move into Blueprint\u0027s source-generated metadata model.",
+      "Description": "Legacy Blueprint migrations should treat raw {Auth:...} placeholder templates as consumer-extension rewrite work because the replacement auth/resource model needs explicit generated placeholder bindings instead of runtime string expansion.",
+      "Category": "consumer-extension rewrite required",
+      "DocumentationPath": "migration\\authentication-and-authorisation\\plan.md"
+    }
+  ]
+}

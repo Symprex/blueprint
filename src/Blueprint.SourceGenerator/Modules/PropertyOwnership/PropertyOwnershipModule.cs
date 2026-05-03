@@ -133,20 +133,24 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
 
         foreach (var attribute in operationType.GetAttributes())
         {
-            if (attribute.AttributeClass?.Name is not ("RootLinkAttribute" or "SelfLinkAttribute"))
+            var url = attribute.AttributeClass?.Name switch
+            {
+                "RootLinkAttribute" when attribute.ConstructorArguments.Length > 0 => attribute.ConstructorArguments[0].Value as string,
+                "SelfLinkAttribute" when attribute.ConstructorArguments.Length > 1 => attribute.ConstructorArguments[1].Value as string,
+                _ => null,
+            };
+
+            if (url is null)
             {
                 continue;
             }
 
-            if (attribute.ConstructorArguments.Length > 0 && attribute.ConstructorArguments[0].Value is string url)
+            foreach (Match match in PlaceholderRegex.Matches(url))
             {
-                foreach (Match match in PlaceholderRegex.Matches(url))
+                var name = match.Groups[1].Value;
+                if (!placeholders.Contains(name, StringComparer.Ordinal))
                 {
-                    var name = match.Groups[1].Value;
-                    if (!placeholders.Contains(name, StringComparer.Ordinal))
-                    {
-                        placeholders.Add(name);
-                    }
+                    placeholders.Add(name);
                 }
             }
         }

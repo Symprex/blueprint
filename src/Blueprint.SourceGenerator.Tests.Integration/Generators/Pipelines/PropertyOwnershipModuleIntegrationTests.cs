@@ -57,6 +57,18 @@ public class PropertyOwnershipModuleIntegrationTests
     }
 
     [Fact]
+    public void When_self_link_route_parameter_exists_then_descriptor_shows_route_ownership()
+    {
+        var descriptor = SelfLinkRoutePopulationQuery.Configure();
+
+        descriptor.TryGetFeatureData<OperationPropertyOwnershipFeatureData>(out var ownershipData)
+            .Should().BeTrue();
+
+        ownershipData!.Entries.Should().Contain(
+            static e => e.PropertyName == "Id" && e.Source == PropertyBindingSource.Route);
+    }
+
+    [Fact]
     public void When_http_method_metadata_set_then_descriptor_reports_correct_methods()
     {
         var descriptor = UpdateUserPopulationCommand.Configure();
@@ -246,6 +258,22 @@ public partial class GetUserByIntIdQuery : IQuery<string>
     {
         return Task.FromResult($"user-{operation.Id}");
     }
+}
+
+[Blueprint.Model.Attributes.SelfLink(typeof(SelfLinkRoutePopulationApiResource), "/population-test/self/{Id}")]
+public partial class SelfLinkRoutePopulationQuery : IQuery<string>
+{
+    public string? Id { get; set; }
+
+    public static Task<string> HandleAsync(SelfLinkRoutePopulationQuery operation)
+    {
+        return Task.FromResult(operation.Id ?? string.Empty);
+    }
+}
+
+public partial class SelfLinkRoutePopulationApiResource : ApiResource
+{
+    public string Id { get; init; } = null!;
 }
 
 /// <summary>

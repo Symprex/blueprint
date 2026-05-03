@@ -16,7 +16,7 @@ public partial class GetTemplateInlineQuery : IQuery<TemplateApiResource>
     /// <summary>
     /// Gets the template identifier that the sample inline handler should resolve.
     /// </summary>
-    public required string Id { get; init; }
+    public required string Id { get; set; }
 
     /// <summary>
     /// Handles the <see cref="GetTemplateInlineQuery" /> operation.
@@ -24,6 +24,6 @@ public partial class GetTemplateInlineQuery : IQuery<TemplateApiResource>
     /// <returns>All available templates.</returns>
     public TemplateApiResource Handle()
     {
-        throw new NotImplementedException($"Cannot get template with id {this.Id}");
+        return new TemplateApiResource(this.Id, $"<p>Template {this.Id}</p>", $"Template {this.Id}");
     }
 }

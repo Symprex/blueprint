@@ -7,17 +7,21 @@
   },
   "referencePlans": {
     "masterPlan": "migration\\plan.md",
-    "workstreamPlan": "migration\\http-host-and-message-population\\plan.md"
+    "workstreamPlan": "migration\\reference-app-and-end-to-end-example\\plan.md"
   },
   "current": {
-    "activeWorkstream": "http-host-and-message-population",
-    "nextReadySlice": null,
-    "lastCompletedSlice": {
-      "id": "http-host/openapi-pipeline-failure-outcomes",
-      "workstream": "http-host-and-message-population",
-      "title": "Project 400/401/415 pipeline failure outcomes into OpenAPI response metadata (Slice 11)"
+    "activeWorkstream": "reference-app-and-end-to-end-example",
+    "nextReadySlice": {
+      "id": "reference-app/layer-2-validation-example",
+      "workstream": "reference-app-and-end-to-end-example",
+      "title": "reference-app/layer-2-validation-example"
     },
-    "openReviewGate": "human-direction"
+    "lastCompletedSlice": {
+      "id": "reference-app/layer-1-runnable-generated-http-sample",
+      "workstream": "reference-app-and-end-to-end-example",
+      "title": "Complete Layer 1 of the reference app with deterministic handlers, generated HTTP wiring, and end-to-end sample tests"
+    },
+    "openReviewGate": null
   },
   "orchestrationContract": {
     "mustImplementAfterSliceSelection": true,

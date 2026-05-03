@@ -11,35 +11,9 @@ public class Startup
     /// <param name="services">The application service collection.</param>
     public void ConfigureServices(IServiceCollection services)
     {
-        services.AddSingleton<SampleBlueprintAppExecutor, SampleBlueprintAppExecutor>();
-
-        // services.AddControllers();
-        //
-        // services.AddSingleton<IWeatherDataSource, WeatherDataSource>();
-        //
-        // services.AddHangfire(h =>
-        // {
-        //     h
-        //         .UseStorage(new SqlServerStorage("Server=(localdb)\\MSSQLLocalDB;Integrated Security=true;Initial Catalog=blueprint-examples"))
-        //         .UseRecommendedSerializerSettings();
-        // });
-        //
-        // services.AddOpenTelemetryTracing(
-        //     builder => builder
-        //         .SetResourceBuilder(ResourceBuilder.CreateEmpty().AddService("web-api"))
-        //         .AddAspNetCoreInstrumentation()
-        //         .AddBlueprintInstrumentation()
-        //         .AddJaegerExporter()
-        //         .AddConsoleExporter()
-        // );
-
-        // services.AddBlueprintApi(b => b
-        //     .Http()
-        //     .Operations(o => o.Scan(typeof(WebApi.Startup).Assembly))
-        //     .AddTasksClient(t => t.UseHangfire())
-        //     .AddOpenApi()
-        //     .AddAuthentication(a => a.UseContextLoader<AnonymousUserAuthorisationContextFactory>())
-        //     .AddResourceEvents<NullResourceEventRepository>());
+        services.AddLogging();
+        services.AddSingleton<SampleBlueprintApp>();
+        services.AddSingleton<SampleBlueprintAppExecutor>();
     }
 
     /// <summary>

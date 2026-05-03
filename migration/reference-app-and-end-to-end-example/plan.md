@@ -1,6 +1,6 @@
 # Reference app and end-to-end example
 
-- Status: Planned
+- Status: In Progress — Layer 1 complete
 - Priority: P1
 - Classification: Cross-cutting reference surface
 - Depends on: Layer 1 depends on `../pipeline-composition-and-execution/plan.md` and `../http-host-and-message-population/plan.md`; the full target then evolves alongside `../performance-and-scale/plan.md`, `../operation-discovery-and-descriptors/plan.md`, `../result-model-and-host-translation/plan.md`, `../validation/plan.md`, `../authentication-and-authorisation/plan.md`, `../auditing-and-observability/plan.md`, `../resource-model-links-and-post-processing/plan.md`, and `../openapi/plan.md`
@@ -9,13 +9,13 @@
 
 The repository needs a realistic, runnable, inspectable Blueprint app that proves the system can be used end to end by both humans and AI agents.
 
-The current sample is enough to exercise pieces of generator behavior, but it is not yet a strong adoption surface, debugging aid, or migration target:
+The current sample now proves the Layer 1 baseline, but it is not yet a complete adoption surface, debugging aid, or migration target:
 
-- `src\Blueprint.SourceGenerator.Sample\SampleBlueprintApp.cs` only establishes the app scan root
-- `src\Blueprint.SourceGenerator.Sample\SampleBlueprintAppExecutor.cs` is currently commented out
-- `src\Blueprint.SourceGenerator.Sample\Startup.cs` still contains a large archival block from the legacy runtime story
-- `src\Blueprint.SourceGenerator.Sample\Api\GetTemplatesQueryHandler.cs` and `GetTemplateInlineQueryHandler.cs` currently throw `NotImplementedException`
-- `src\Blueprint.SourceGenerator.Sample.Contract\Api\GetTemplatesQuery.cs` and the template resources show the beginning of a useful contract surface, but only at toy size
+- `src\Blueprint.SourceGenerator.Sample\SampleBlueprintApp.cs` now scans both local operations and the contract assembly, but the app still needs Layer 2 breadth.
+- `src\Blueprint.SourceGenerator.Sample\Startup.cs` now wires logging plus the generated executor into `MapBlueprintApi(...)`, but the sample still lacks richer validation/link/result demonstrations.
+- `src\Blueprint.SourceGenerator.Sample\Api\GetTemplatesQueryHandler.cs` and `GetTemplateInlineQueryHandler.cs` now return deterministic in-memory template data.
+- `src\Blueprint.SourceGenerator.Tests.Integration\Http\ReferenceAppHttpEndToEndIntegrationTests.cs` now proves the sample routes execute through the generated HTTP host, but manifests and inspection artifacts are still missing.
+- `src\Blueprint.SourceGenerator.Sample.Contract\Api\GetTemplatesQuery.cs` and the template resources still represent only the opening slice of the desired templates-domain story.
 
 If we leave the sample in that state, future work will keep arguing in the abstract about API ergonomics, generated manifests, auth, validation, resource links, and OpenAPI without a single concrete app that demonstrates the intended experience.
 
@@ -160,6 +160,8 @@ Do not wait until every module is finished before improving the sample, but do e
 - replace `NotImplementedException` handlers with deterministic in-memory behavior
 - prove end-to-end HTTP execution for the current template queries
 
+Layer 1 is now complete and is the baseline for future reference-app work.
+
 ### Layer 2 - Demonstrate the core parity path
 
 - add command + query coverage
@@ -167,6 +169,9 @@ Do not wait until every module is finished before improving the sample, but do e
 - add richer links and result shapes
 - fix or replace any current runtime helper gaps that would make link-based demonstrations misleading, including the current `GetLinkFor(...)` stub in `BlueprintApp`
 - add generated inspection artifacts
+
+Start Layer 2 with a validation-focused command and end-to-end proof, then grow the inspection artifacts from that
+coherent failure path.
 
 ### Layer 3 - Demonstrate the richer API surface
 

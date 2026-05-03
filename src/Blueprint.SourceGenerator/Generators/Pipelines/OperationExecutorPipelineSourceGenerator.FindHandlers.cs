@@ -1,3 +1,4 @@
+using Blueprint.SourceGenerator.Generators.App.Model;
 using Blueprint.SourceGenerator.Generators.Pipelines.Model;
 using Blueprint.SourceGenerator.Helpers;
 using Microsoft.CodeAnalysis;
@@ -26,7 +27,6 @@ public partial class OperationExecutorPipelineSourceGenerator
         var diagnostics = new List<DiagnosticInfo>();
         var handlers = new List<OperationHandlerModel>();
 
-        // Get all operation types by scanning the assembly
         var operationTypes = ScanForOperationTypes(compilation, appInfo.AppType);
 
         foreach (var operationType in operationTypes)
@@ -63,13 +63,12 @@ public partial class OperationExecutorPipelineSourceGenerator
     }
 
     /// <summary>
-    /// Scans for all operation types in the same assembly as the app.
+    /// Scans for all operation types selected by the app's <c>[BlueprintAppScan]</c> declarations.
     /// </summary>
     private static IEnumerable<INamedTypeSymbol> ScanForOperationTypes(
         Compilation compilation,
         INamedTypeSymbol appType)
     {
-        var assembly = appType.ContainingAssembly;
         var operationInterface = compilation.GetTypeByMetadataName("Blueprint.Model.IOperation");
 
         if (operationInterface == null)
@@ -77,20 +76,35 @@ public partial class OperationExecutorPipelineSourceGenerator
             yield break;
         }
 
-        foreach (var type in GetTypesFromAssembly(assembly))
+        var discoveredTypes = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+        var scanAttributes = appType.GetAttributes()
+            .Where(static attribute => attribute.AttributeClass?.ToDisplayString() == "Blueprint.Model.BlueprintAppScanAttribute")
+            .Select(ParseOnlyOperationScanAttributeModel.Create);
+
+        foreach (var scanAttribute in scanAttributes)
         {
-            if (type.IsAbstract || type.IsStatic || !type.CanBeReferencedByName ||
-                type.TypeKind != TypeKind.Class || type.IsGenericType)
-            {
-                continue;
-            }
+            var assembly = (scanAttribute.AssemblyOfTypeName is null
+                ? appType
+                : compilation.GetTypeByMetadataName(scanAttribute.AssemblyOfTypeName))?.ContainingAssembly;
 
-            if (!IsAssignableTo(type, operationInterface))
+            foreach (var type in GetTypesFromAssembly(assembly))
             {
-                continue;
-            }
+                if (type.IsAbstract || type.IsStatic || !type.CanBeReferencedByName ||
+                    type.TypeKind != TypeKind.Class || type.IsGenericType)
+                {
+                    continue;
+                }
 
-            yield return type;
+                if (!IsAssignableTo(type, operationInterface))
+                {
+                    continue;
+                }
+
+                if (discoveredTypes.Add(type))
+                {
+                    yield return type;
+                }
+            }
         }
     }
 
@@ -120,8 +134,13 @@ public partial class OperationExecutorPipelineSourceGenerator
         return false;
     }
 
-    private static IEnumerable<INamedTypeSymbol> GetTypesFromAssembly(IAssemblySymbol assemblySymbol)
+    private static IEnumerable<INamedTypeSymbol> GetTypesFromAssembly(IAssemblySymbol? assemblySymbol)
     {
+        if (assemblySymbol == null)
+        {
+            return [];
+        }
+
         var @namespace = assemblySymbol.GlobalNamespace;
         return GetTypesFromNamespaceOrType(@namespace);
 
