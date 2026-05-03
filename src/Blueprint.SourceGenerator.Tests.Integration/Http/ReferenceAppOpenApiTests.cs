@@ -16,6 +16,8 @@ namespace Blueprint.SourceGenerator.Tests.Integration.Http;
 /// </summary>
 public class ReferenceAppOpenApiTests
 {
+    private const string SnapshotsFolder = "Snapshots/";
+
     [Fact]
     public async Task When_openapi_endpoint_invoked_then_returns_valid_openapi_json()
     {
@@ -73,6 +75,19 @@ public class ReferenceAppOpenApiTests
         var info = doc.RootElement.GetProperty("info");
         info.TryGetProperty("title", out _).Should().BeTrue();
         info.TryGetProperty("version", out _).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task When_openapi_endpoint_invoked_then_full_document_matches_reviewed_snapshot_Async()
+    {
+        var (json, _) = await InvokeOpenApiEndpointAsync();
+
+        // Parse and re-serialize with indentation for stable, readable snapshot baselines.
+        using var doc = JsonDocument.Parse(json);
+        var indented = JsonSerializer.Serialize(doc, new JsonSerializerOptions { WriteIndented = true });
+
+        await Verify(indented)
+            .UseDirectory(SnapshotsFolder);
     }
 
     private static async Task<(string Json, int StatusCode)> InvokeOpenApiEndpointAsync()

@@ -74,6 +74,15 @@ public sealed class TemplateStore
         return updated;
     }
 
+    /// <summary>
+    /// Deletes a template by identifier. This is idempotent — deleting a non-existent template is a no-op.
+    /// </summary>
+    /// <param name="id">The identifier of the template to delete.</param>
+    public void Delete(string id)
+    {
+        this._templates.TryRemove(id, out _);
+    }
+
     private void Seed()
     {
         this.Create("Welcome Email", "<p>Hello, {{Name}}!</p>", "Hello, {{Name}}!");

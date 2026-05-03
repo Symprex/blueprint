@@ -287,6 +287,50 @@ public class ReferenceAppHttpEndToEndIntegrationTests
         response.Body.Should().Contain("Name");
     }
 
+    [Fact]
+    public async Task When_archive_template_without_auth_then_returns_401()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/templates/{Id}", "DELETE");
+        endpoint.Should().NotBeNull("the DELETE template route should be registered");
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Delete;
+            context.Request.Path = "/api/templates/template-001";
+            context.Request.RouteValues = new RouteValueDictionary { ["Id"] = "template-001" };
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status401Unauthorized);
+    }
+
+    [Fact]
+    public async Task When_archive_template_with_auth_then_returns_200()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/templates/{Id}", "DELETE");
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Delete;
+            context.Request.Path = "/api/templates/template-001";
+            context.Request.RouteValues = new RouteValueDictionary { ["Id"] = "template-001" };
+            context.User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "user-1"),
+                ],
+                authenticationType: "test"));
+        });
+
+        // Void commands produce 200 OK with empty body (NoResultOperationResult semantics).
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+    }
+
     private static async Task<TestHttpResponse> InvokeEndpointAsync(
         RouteEndpoint endpoint,
         IServiceProvider serviceProvider,

@@ -12,14 +12,14 @@
   "current": {
     "activeWorkstream": "reference-app-and-end-to-end-example",
     "nextReadySlice": {
-      "id": "reference-app/layer-2-links-and-result-shapes",
+      "id": "reference-app/layer-3-openapi-artifact",
       "workstream": "reference-app-and-end-to-end-example",
-      "title": "Add richer links and result shapes to the reference app with GetTemplate query and resource links"
+      "title": "Add OpenAPI as a reviewable artifact with snapshot tests for the reference app"
     },
     "lastCompletedSlice": {
-      "id": "reference-app/layer-2-validation-example",
+      "id": "reference-app/layer-2-inspection-artifacts",
       "workstream": "reference-app-and-end-to-end-example",
-      "title": "Add validation-focused command with async pipeline fix and same-URL-different-method support"
+      "title": "Layer 2 complete: CRUD lifecycle, links, GetLinkFor fix, and programmatic inspection tests"
     },
     "openReviewGate": null
   },

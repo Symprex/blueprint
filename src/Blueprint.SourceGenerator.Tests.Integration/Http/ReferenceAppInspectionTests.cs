@@ -23,6 +23,7 @@ public class ReferenceAppInspectionTests
         operationTypes.Should().Contain(typeof(GetTemplateQuery));
         operationTypes.Should().Contain(typeof(CreateTemplateCommand));
         operationTypes.Should().Contain(typeof(UpdateTemplateCommand));
+        operationTypes.Should().Contain(typeof(ArchiveTemplateCommand));
     }
 
     [Fact]
@@ -89,13 +90,14 @@ public class ReferenceAppInspectionTests
 
         var httpOperations = app.GetOperationsForHost("http");
 
-        httpOperations.Should().HaveCount(4, "all four sample operations should be exposed on the HTTP host");
+        httpOperations.Should().HaveCount(5, "all five sample operations should be exposed on the HTTP host");
         httpOperations.Select(static op => op.OperationType).Should().BeEquivalentTo(
         [
             typeof(GetTemplatesQuery),
             typeof(GetTemplateQuery),
             typeof(CreateTemplateCommand),
             typeof(UpdateTemplateCommand),
+            typeof(ArchiveTemplateCommand),
         ]);
     }
 

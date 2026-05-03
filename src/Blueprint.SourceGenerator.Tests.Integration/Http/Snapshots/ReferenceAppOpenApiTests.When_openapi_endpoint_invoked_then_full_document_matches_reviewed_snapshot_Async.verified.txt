@@ -1,0 +1,120 @@
+﻿{
+  "openapi": "3.0.4",
+  "info": {
+    "title": "Blueprint API",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/templates": {
+      "get": {
+        "operationId": "GetTemplatesQuery",
+        "tags": [
+          "Api"
+        ],
+        "responses": {}
+      },
+      "post": {
+        "operationId": "CreateTemplateCommand",
+        "tags": [
+          "Api"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "htmlSource": {
+                    "type": "string"
+                  },
+                  "plainTextSource": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {}
+      }
+    },
+    "/templates/{Id}": {
+      "delete": {
+        "operationId": "ArchiveTemplateCommand",
+        "tags": [
+          "Api"
+        ],
+        "parameters": [
+          {
+            "name": "Id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {}
+      },
+      "get": {
+        "operationId": "GetTemplateQuery",
+        "tags": [
+          "Api"
+        ],
+        "parameters": [
+          {
+            "name": "Id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {}
+      },
+      "put": {
+        "operationId": "UpdateTemplateCommand",
+        "tags": [
+          "Api"
+        ],
+        "parameters": [
+          {
+            "name": "Id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "htmlSource": {
+                    "type": "string"
+                  },
+                  "plainTextSource": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {}
+      }
+    }
+  }
+}
