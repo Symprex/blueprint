@@ -104,6 +104,25 @@ Current validation contributor IDs in active use:
 - `BPV004`: `RequiredIfNotAttribute` references a property that does not exist on the operation type.
 - `BPV005`: `NotAllowedIfAttribute` references a property that does not exist on the operation type.
 
+### Resource event family diagnostics
+
+Resource-event family declarations (the `[ResourceEventFamily]` authoring surface) have their own stable range for compile-time shape and contract validation.
+
+Reserved direction:
+
+| Range | Meaning |
+| --- | --- |
+| `BPRE001`-`BPRE099` | resource event family diagnostics for invalid event declarations that the generator can prove at build time |
+
+Current resource event family IDs in active use:
+
+- `BPRE001`: the resource event family class is not declared as `partial`.
+- `BPRE002`: a nested event record within the family is not declared as `partial`.
+- `BPRE003`: ambiguous constructor shape — cannot infer body vs key without explicit `[ResourceEventKey]`/`[ResourceEventBody]` attributes.
+- `BPRE004`: duplicate reason string within the same family.
+- `BPRE005`: `ResourceObject` property is not set on the `[ResourceEventFamily]` attribute.
+- `BPRE006`: the family resource type does not have a public `Id` property required for body-bearing events.
+
 ## Diagnostic design rules
 
 When adding new diagnostics:

@@ -22,9 +22,6 @@ public class CreateTemplateCommandHandler(TemplateStore store)
             command.HtmlSource ?? string.Empty,
             command.PlainTextSource ?? string.Empty);
 
-        return new ResourceEventResult<TemplateApiResource>(
-            eventId: "template.created",
-            resourceId: template.Id.ToString(),
-            content: template);
+        return new TemplateResourceEvents.Created(template);
     }
 }

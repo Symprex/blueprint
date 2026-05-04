@@ -18,8 +18,6 @@ public class ArchiveTemplateCommandHandler(TemplateStore store)
     {
         store.Delete(command.Id);
 
-        return new KeyOnlyResourceEventResult(
-            eventId: "template.archived",
-            resourceId: command.Id.ToString());
+        return new TemplateResourceEvents.Archived(command.Id);
     }
 }

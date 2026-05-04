@@ -19,9 +19,6 @@ public class UpdateTemplateCommandHandler(TemplateStore store)
         var updated = store.Update(command.Id, command.Name!, command.HtmlSource ?? string.Empty, command.PlainTextSource ?? string.Empty)
             ?? new TemplateApiResource(command.Id, command.Name!, command.HtmlSource ?? string.Empty, command.PlainTextSource ?? string.Empty);
 
-        return new ResourceEventResult<TemplateApiResource>(
-            eventId: "template.updated",
-            resourceId: command.Id,
-            content: updated);
+        return new TemplateResourceEvents.Updated(updated);
     }
 }
