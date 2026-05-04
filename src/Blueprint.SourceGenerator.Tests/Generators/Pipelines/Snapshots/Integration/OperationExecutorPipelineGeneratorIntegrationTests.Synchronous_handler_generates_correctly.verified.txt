@@ -20,13 +20,22 @@ namespace Blueprint.Generated
         {
         }
 
-        protected override System.Threading.Tasks.Task<Blueprint.OperationResult> ExecuteCoreAsync(Blueprint.Runtime.Exec.ApiOperationContext context)
+        protected override async System.Threading.Tasks.Task<Blueprint.OperationResult> ExecuteCoreAsync(Blueprint.Runtime.Exec.ApiOperationContext context)
         {
             var operation = (global::TestNamespace.TestQuery)context.Operation;
 
             var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<int>(global::TestNamespace.TestQuery.Invoke());
 
-            return System.Threading.Tasks.Task.FromResult<Blueprint.OperationResult>(handlerResult);
+            if ((object)handlerResult is not Blueprint.Runtime.Exec.ValidationFailedResult && (object)handlerResult is not Blueprint.Runtime.Exec.UnhandledExceptionResult)
+            {
+                var backgroundTaskScheduler = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Tasks.IBackgroundTaskScheduler>(context.ServiceProvider);
+                if (backgroundTaskScheduler != null)
+                {
+                    await backgroundTaskScheduler.FlushAsync(context.OperationCancelled);
+                }
+            }
+
+            return handlerResult;
         }
     }
 }
