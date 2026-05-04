@@ -12,14 +12,14 @@
   "current": {
     "activeWorkstream": "messaging-and-integration-hosts",
     "nextReadySlice": {
+      "id": "messaging/dual-companion-generator-integration-proof",
+      "workstream": "messaging-and-integration-hosts",
+      "title": "Prove dual companion generators (descriptor + pipeline) compose for consumer host with runtime partitioning"
+    },
+    "lastCompletedSlice": {
       "id": "messaging/consumer-host-contributor-proof",
       "workstream": "messaging-and-integration-hosts",
       "title": "Prove consumer IHostContributor can register alternate host exposure via companion generator"
-    },
-    "lastCompletedSlice": {
-      "id": "messaging/descriptor-contributor-composition-proof",
-      "workstream": "messaging-and-integration-hosts",
-      "title": "Prove consumer IDescriptorContributor can extend descriptor metadata via companion generator"
     },
     "openReviewGate": null,
     "openReviewGateRationale": null,
@@ -60,6 +60,12 @@
       "workstream": "messaging-and-integration-hosts",
       "title": "Prove consumer IDescriptorContributor can extend descriptor metadata via companion generator",
       "commit": "a0ed4a7"
+    },
+    {
+      "id": "messaging/consumer-host-contributor-proof",
+      "workstream": "messaging-and-integration-hosts",
+      "title": "Prove consumer IHostContributor can register alternate host exposure via companion generator",
+      "commit": "fe3444d"
     }
   ],
   "decisions": [
