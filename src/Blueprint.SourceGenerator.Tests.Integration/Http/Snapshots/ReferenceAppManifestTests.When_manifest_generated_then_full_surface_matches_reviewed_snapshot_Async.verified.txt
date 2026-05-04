@@ -1,0 +1,85 @@
+﻿# Blueprint Reference App — Phase 1 Manifest
+
+## Operations
+
+### ArchiveTemplateCommand
+  Type: ArchiveTemplateCommand
+  Source: Source Generated
+  HTTP Methods: DELETE
+  URL: /templates/{Id}
+  Hosts: http
+  Auth: Authenticated
+  Discovery: command (Blueprint.SourceGenerator.Sample.Contract.Api.ArchiveTemplateCommand)
+  Group: Api
+  Failure Outcomes:
+    - legacy-validation-exception: Blueprint.Validation.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
+    - data-annotations-validation-exception: System.ComponentModel.DataAnnotations.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
+    - default-unhandled-exception: System.Exception -> Blueprint.Runtime.Exec.UnhandledExceptionResult
+
+### CreateTemplateCommand
+  Type: CreateTemplateCommand
+  Source: Source Generated
+  HTTP Methods: POST
+  URL: /templates
+  Hosts: http
+  Auth: Authenticated
+  Discovery: command (Blueprint.SourceGenerator.Sample.Contract.Api.CreateTemplateCommand)
+  Group: Api
+  Failure Outcomes:
+    - legacy-validation-exception: Blueprint.Validation.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
+    - data-annotations-validation-exception: System.ComponentModel.DataAnnotations.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
+    - default-unhandled-exception: System.Exception -> Blueprint.Runtime.Exec.UnhandledExceptionResult
+
+### GetTemplateQuery
+  Type: GetTemplateQuery
+  Source: Source Generated
+  HTTP Methods: GET
+  URL: /templates/{Id}
+  Hosts: http
+  Auth: Authenticated
+  Discovery: query (Blueprint.SourceGenerator.Sample.Contract.Api.GetTemplateQuery)
+  Group: Api
+  Failure Outcomes:
+    - legacy-validation-exception: Blueprint.Validation.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
+    - data-annotations-validation-exception: System.ComponentModel.DataAnnotations.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
+    - default-unhandled-exception: System.Exception -> Blueprint.Runtime.Exec.UnhandledExceptionResult
+  Links:
+    - rel=self url=/templates/{Id} resource=TemplateApiResource
+
+### GetTemplatesQuery
+  Type: GetTemplatesQuery
+  Source: Source Generated
+  HTTP Methods: GET
+  URL: /templates
+  Hosts: http
+  Auth: Authenticated
+  Discovery: query (Blueprint.SourceGenerator.Sample.Contract.Api.GetTemplatesQuery)
+  Group: Api
+  Failure Outcomes:
+    - legacy-validation-exception: Blueprint.Validation.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
+    - data-annotations-validation-exception: System.ComponentModel.DataAnnotations.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
+    - default-unhandled-exception: System.Exception -> Blueprint.Runtime.Exec.UnhandledExceptionResult
+  Links:
+    - rel=self url=/templates resource=TemplateListApiResource
+
+### UpdateTemplateCommand
+  Type: UpdateTemplateCommand
+  Source: Source Generated
+  HTTP Methods: PUT
+  URL: /templates/{Id}
+  Hosts: http
+  Auth: Authenticated
+  Discovery: command (Blueprint.SourceGenerator.Sample.Contract.Api.UpdateTemplateCommand)
+  Group: Api
+  Failure Outcomes:
+    - legacy-validation-exception: Blueprint.Validation.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
+    - data-annotations-validation-exception: System.ComponentModel.DataAnnotations.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
+    - default-unhandled-exception: System.Exception -> Blueprint.Runtime.Exec.UnhandledExceptionResult
+
+## Resource Links
+
+  TemplateApiResource [self] -> /templates/{Id} (GetTemplateQuery)
+  TemplateListApiResource [self] -> /templates (GetTemplatesQuery)
+
+## Serializer Context
+  Type: SampleBlueprintAppJsonContext

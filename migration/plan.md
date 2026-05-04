@@ -252,7 +252,7 @@ This phase ends when the repository can prove a coherent source-generated HTTP e
 - [x] At least one end-to-end reference-app test exercises discovery -> pipeline -> result -> error -> HTTP host -> validation/auth/observability together.
 - [x] The re-query decision gate is explicitly closed (`migration/decisions/001-no-general-nested-execution.md`).
 - [x] Generated inspection surfaces are good enough for humans and AI agents to inspect the app surface.
-- [ ] The Phase 1 review artifact set exists: route/host manifest, auth/result manifest, generated diff review, and end-to-end test evidence.
+- [x] The Phase 1 review artifact set exists: route/host manifest, auth/result manifest, generated diff review, and end-to-end test evidence.
 
 ### Phase 2 - Resource/API shape parity
 
