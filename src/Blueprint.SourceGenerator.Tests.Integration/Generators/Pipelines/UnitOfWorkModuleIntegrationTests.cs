@@ -83,6 +83,24 @@ public class UnitOfWorkModuleIntegrationTests
         unitOfWork.SaveChangesCallCount.Should().Be(0, "unit-of-work should NOT participate in query pipelines");
     }
 
+    [Fact]
+    public async Task When_command_has_DoNotSaveChanges_then_unit_of_work_is_not_invoked()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var unitOfWork = new TestUnitOfWork();
+        var serviceProvider = new PersistenceTestServiceProvider(unitOfWork);
+
+        var pipeline = executor.GetPipeline(typeof(DoNotSaveChangesCommand));
+        var context = new ApiOperationContext(serviceProvider, app, DoNotSaveChangesCommand.Configure(), CancellationToken.None);
+        ((DoNotSaveChangesCommand)context.Operation).Name = "should-not-save";
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().NotBeOfType<ValidationFailedResult>();
+        unitOfWork.SaveChangesCallCount.Should().Be(0, "save-changes should NOT be called when [DoNotSaveChanges] is applied");
+    }
+
     private sealed class PersistenceTestServiceProvider : IServiceProvider
     {
         private readonly IUnitOfWork? _unitOfWork;
@@ -150,5 +168,24 @@ public partial class PersistenceQueryProof : IQuery<string>
     public static Task<string> HandleAsync(PersistenceQueryProof operation)
     {
         return Task.FromResult("query-result");
+    }
+}
+
+/// <summary>
+/// A command with <c>[DoNotSaveChanges]</c> that proves the opt-out marker
+/// prevents <c>UnitOfWorkModule</c> from contributing to the pipeline.
+/// </summary>
+[Blueprint.Persistence.DoNotSaveChanges]
+public partial class DoNotSaveChangesCommand : ICommand
+{
+    /// <summary>Gets or sets the name field.</summary>
+    public string? Name { get; set; }
+
+    /// <summary>Handles the command.</summary>
+    /// <param name="operation">The command instance.</param>
+    /// <returns>A completed task.</returns>
+    public static Task HandleAsync(DoNotSaveChangesCommand operation)
+    {
+        return Task.CompletedTask;
     }
 }

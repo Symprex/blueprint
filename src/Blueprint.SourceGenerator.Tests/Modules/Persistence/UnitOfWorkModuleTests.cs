@@ -116,6 +116,41 @@ public class UnitOfWorkModuleTests
             static c => c.ContributorId == nameof(UnitOfWorkModule));
     }
 
+    [Fact]
+    public void When_command_has_DoNotSaveChanges_then_pipeline_has_no_unit_of_work_contribution()
+    {
+        var compilation = CreateCompilation(
+            """
+            using Blueprint.Model;
+            using Blueprint.Persistence;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace;
+
+            [DoNotSaveChanges]
+            public partial class DryRunCommand : ICommand<string>
+            {
+                public static Task<string> HandleAsync(DryRunCommand operation)
+                {
+                    return Task.FromResult("preview-only");
+                }
+            }
+            """);
+
+        var config = new BlueprintSourceGenerationConfig(
+        [
+            new HandlerExecutionModule(),
+            new UnitOfWorkModule(),
+            new PipelineReturnModule(),
+        ]);
+        var result = config.BuildPipelinePlan("TestNamespace.DryRunCommand", compilation);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Value.Should().NotBeNull();
+        result.Value!.Contributions.Should().NotContain(
+            static c => c.ContributorId == nameof(UnitOfWorkModule));
+    }
+
     // ── Pipeline snapshot test ────────────────────────────────────────
 
     [Fact]

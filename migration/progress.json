@@ -12,14 +12,14 @@
   "current": {
     "activeWorkstream": "persistence-and-transaction-coordination",
     "nextReadySlice": {
-      "id": "persistence/cross-module-variable-sharing-proof",
+      "id": "persistence/opt-out-save-changes-marker",
       "workstream": "persistence-and-transaction-coordination",
-      "title": "Prove cross-module pipeline variable sharing for around-execution persistence coordination"
+      "title": "Add [DoNotSaveChanges] opt-out attribute and compile-time diagnostic for UnitOfWorkModule"
     },
     "lastCompletedSlice": {
-      "id": "background-tasks/task-return-type-diagnostic",
-      "workstream": "background-tasks",
-      "title": "BPT001 compile-time diagnostic for background task handlers returning discarded values"
+      "id": "persistence/cross-module-variable-sharing-proof",
+      "workstream": "persistence-and-transaction-coordination",
+      "title": "UnitOfWorkModule with WasSuccessful success-guard property on OperationResult"
     },
     "openReviewGate": null,
     "openReviewGateRationale": null,
