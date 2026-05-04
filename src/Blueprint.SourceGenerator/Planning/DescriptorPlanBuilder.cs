@@ -65,11 +65,19 @@ internal static class DescriptorPlanBuilder
         HostExposureDiagnostics.AddConflictingHostDiagnostics(descriptorPlan, executionPlanResult.Value.HostContributors);
 
         var pipelinePlanResult = PipelinePlanBuilder.Build(operationFullClassName, compilation, executionPlanResult);
-        var failures = descriptorPlan.Diagnostics
+        var allDiagnostics = descriptorPlan.Diagnostics
             .Concat(pipelinePlanResult.Diagnostics)
             .ToArray();
 
-        return failures.Length > 0 ? Result<DescriptorPlan>.Failure(failures) : Result.Success(descriptorPlan);
+        var hasErrors = allDiagnostics.Any(static d => d.Descriptor.DefaultSeverity == DiagnosticSeverity.Error);
+        if (hasErrors)
+        {
+            return Result<DescriptorPlan>.Failure(allDiagnostics);
+        }
+
+        return allDiagnostics.Length > 0
+            ? new Result<DescriptorPlan>(descriptorPlan, new EquatableList<DiagnosticInfo>(allDiagnostics))
+            : Result.Success(descriptorPlan);
     }
 
     /// <summary>

@@ -143,4 +143,78 @@ public class SensitivePropertyMetadataModuleTests
         phoneIdx.Should().BeGreaterThan(-1);
         ssnIdx.Should().BeGreaterThan(phoneIdx, "properties should appear in declaration order");
     }
+
+    [Fact]
+    public void When_sensitive_on_non_public_property_then_reports_BPA001_diagnostic()
+    {
+        const string source = """
+                             using Blueprint;
+                             using Blueprint.Auditing;
+                             using Blueprint.Model;
+                             using System.Threading.Tasks;
+
+                             namespace TestNamespace;
+
+                             [BlueprintAppScan]
+                             public partial class TestApp : BlueprintApp
+                             {
+                             }
+
+                             public partial class SecretCommand : ICommand<string>
+                             {
+                                 public string? Name { get; set; }
+
+                                 [Sensitive]
+                                 private string? InternalToken { get; set; }
+
+                                 public static Task<string> HandleAsync(SecretCommand command)
+                                 {
+                                     return Task.FromResult("ok");
+                                 }
+                             }
+                             """;
+
+        var result = TestHelpers.Compile<OperationDescriptorSourceGenerator>(source);
+
+        result.Diagnostics.Should().ContainSingle()
+            .Which.Id.Should().Be("BPA001");
+    }
+
+    [Fact]
+    public void When_sensitive_on_non_public_property_then_BPA001_includes_type_and_property_name()
+    {
+        const string source = """
+                             using Blueprint;
+                             using Blueprint.Auditing;
+                             using Blueprint.Model;
+                             using System.Threading.Tasks;
+
+                             namespace TestNamespace;
+
+                             [BlueprintAppScan]
+                             public partial class TestApp : BlueprintApp
+                             {
+                             }
+
+                             public partial class TokenCommand : ICommand<string>
+                             {
+                                 [Sensitive]
+                                 internal string? ApiKey { get; set; }
+
+                                 public static Task<string> HandleAsync(TokenCommand command)
+                                 {
+                                     return Task.FromResult("ok");
+                                 }
+                             }
+                             """;
+
+        var result = TestHelpers.Compile<OperationDescriptorSourceGenerator>(source);
+
+        var diagnostic = result.Diagnostics.Should().ContainSingle().Subject;
+        diagnostic.Id.Should().Be("BPA001");
+
+        var formatted = diagnostic.GetMessage();
+        formatted.Should().Contain("TokenCommand");
+        formatted.Should().Contain("ApiKey");
+    }
 }

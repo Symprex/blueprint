@@ -1,3 +1,4 @@
+using Blueprint.SourceGenerator.Helpers;
 using Blueprint.SourceGenerator.Planning;
 using Microsoft.CodeAnalysis;
 
@@ -35,7 +36,7 @@ public sealed class SensitivePropertyMetadataModule : IBlueprintSourceGeneratorM
     public void ContributeToDescriptor(DescriptorContributorContext context)
     {
         var operationSymbol = context.GetOperationTypeSymbol();
-        var sensitiveProperties = FindSensitiveProperties(operationSymbol);
+        var sensitiveProperties = FindSensitiveProperties(operationSymbol, context);
 
         if (sensitiveProperties.Count == 0)
         {
@@ -51,7 +52,7 @@ public sealed class SensitivePropertyMetadataModule : IBlueprintSourceGeneratorM
         });
     }
 
-    private static List<string> FindSensitiveProperties(INamedTypeSymbol operationSymbol)
+    private static List<string> FindSensitiveProperties(INamedTypeSymbol operationSymbol, DescriptorContributorContext context)
     {
         var result = new List<string>();
 
@@ -62,18 +63,26 @@ public sealed class SensitivePropertyMetadataModule : IBlueprintSourceGeneratorM
                 continue;
             }
 
-            if (property.DeclaredAccessibility != Accessibility.Public)
+            var hasSensitive = property.GetAttributes()
+                .Any(static attr => attr.AttributeClass?.ToDisplayString() == SensitiveAttributeMetadataName);
+
+            if (!hasSensitive)
             {
                 continue;
             }
 
-            var hasSensitive = property.GetAttributes()
-                .Any(static attr => attr.AttributeClass?.ToDisplayString() == SensitiveAttributeMetadataName);
-
-            if (hasSensitive)
+            if (property.DeclaredAccessibility != Accessibility.Public)
             {
-                result.Add(property.Name);
+                context.AddDiagnostic(
+                    new DiagnosticInfo(
+                        AuditingDiagnosticDescriptors.SensitiveOnNonPublicProperty,
+                        property.Locations.FirstOrDefault(),
+                        [operationSymbol.Name, property.Name]));
+
+                continue;
             }
+
+            result.Add(property.Name);
         }
 
         return result;
