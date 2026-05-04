@@ -309,7 +309,7 @@ public class ReferenceAppHttpEndToEndIntegrationTests
     }
 
     [Fact]
-    public async Task When_archive_template_with_auth_then_returns_200()
+    public async Task When_archive_template_with_auth_then_returns_201_key_only()
     {
         var endpoints = CreateEndpoints();
         endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
@@ -329,8 +329,9 @@ public class ReferenceAppHttpEndToEndIntegrationTests
                 authenticationType: "test"));
         });
 
-        // Void commands produce 200 OK with empty body (NoResultOperationResult semantics).
-        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        // KeyOnlyResourceEventResult produces 201 Created with no body.
+        response.StatusCode.Should().Be(StatusCodes.Status201Created);
+        response.Body.Should().BeEmpty();
     }
 
     private static async Task<TestHttpResponse> InvokeEndpointAsync(
