@@ -7,19 +7,19 @@
   },
   "referencePlans": {
     "masterPlan": "migration\\plan.md",
-    "workstreamPlan": "migration\\persistence-and-transaction-coordination\\plan.md"
+    "workstreamPlan": "migration\\messaging-and-integration-hosts\\plan.md"
   },
   "current": {
-    "activeWorkstream": "persistence-and-transaction-coordination",
+    "activeWorkstream": "messaging-and-integration-hosts",
     "nextReadySlice": {
-      "id": "persistence/opt-out-save-changes-marker",
-      "workstream": "persistence-and-transaction-coordination",
-      "title": "Add [DoNotSaveChanges] opt-out attribute and compile-time diagnostic for UnitOfWorkModule"
+      "id": "messaging/consumer-host-contributor-proof",
+      "workstream": "messaging-and-integration-hosts",
+      "title": "Prove consumer IHostContributor can register alternate host exposure via companion generator"
     },
     "lastCompletedSlice": {
-      "id": "persistence/cross-module-variable-sharing-proof",
-      "workstream": "persistence-and-transaction-coordination",
-      "title": "UnitOfWorkModule with WasSuccessful success-guard property on OperationResult"
+      "id": "messaging/descriptor-contributor-composition-proof",
+      "workstream": "messaging-and-integration-hosts",
+      "title": "Prove consumer IDescriptorContributor can extend descriptor metadata via companion generator"
     },
     "openReviewGate": null,
     "openReviewGateRationale": null,
@@ -30,6 +30,38 @@
       "reviewArtifact": "SATISFIED — phase3-non-http-host-review.html at ~/.agent/diagrams/"
     }
   },
+  "completedSlices": [
+    {
+      "id": "persistence/cross-module-variable-sharing-proof",
+      "workstream": "persistence-and-transaction-coordination",
+      "title": "UnitOfWorkModule with WasSuccessful success-guard property on OperationResult",
+      "commit": "4784653"
+    },
+    {
+      "id": "persistence/opt-out-save-changes-marker",
+      "workstream": "persistence-and-transaction-coordination",
+      "title": "Add [DoNotSaveChanges] opt-out attribute for UnitOfWorkModule",
+      "commit": "a224eed"
+    },
+    {
+      "id": "persistence/bpp001-diagnostic",
+      "workstream": "persistence-and-transaction-coordination",
+      "title": "BPP001 diagnostic for [DoNotSaveChanges] on non-command operations",
+      "commit": "5dbeea8"
+    },
+    {
+      "id": "messaging/consumer-pipeline-composition-proof",
+      "workstream": "messaging-and-integration-hosts",
+      "title": "Prove companion generator packages can compose BlueprintSourceGenerationConfig with custom pipeline modules",
+      "commit": "14e09c3"
+    },
+    {
+      "id": "messaging/descriptor-contributor-composition-proof",
+      "workstream": "messaging-and-integration-hosts",
+      "title": "Prove consumer IDescriptorContributor can extend descriptor metadata via companion generator",
+      "commit": "a0ed4a7"
+    }
+  ],
   "decisions": [
     {
       "id": "001",

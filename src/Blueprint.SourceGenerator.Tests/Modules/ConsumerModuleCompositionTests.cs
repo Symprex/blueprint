@@ -174,6 +174,57 @@ public class ConsumerModuleCompositionTests
             .UseDirectory("Snapshots");
     }
 
+    [Fact]
+    public async Task When_custom_descriptor_contributor_then_generated_descriptor_includes_custom_code()
+    {
+        const string source = """
+            using Blueprint;
+            using Blueprint.Model;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace
+            {
+                [BlueprintAppScan]
+                public partial class TestApp : BlueprintApp { }
+
+                public partial class TaggedQuery : IQuery<string>
+                {
+                    public static Task<string> HandleAsync(TaggedQuery operation)
+                    {
+                        return Task.FromResult("tagged");
+                    }
+                }
+            }
+            """;
+
+        var generators = new[]
+        {
+            TestHelpers.CreateTrackedGenerator<TestCompanionDescriptorSourceGenerator>(),
+        };
+
+        var result = TestHelpers.CompileWithTrackedGenerators(
+            generators,
+            [source],
+            ["Input0.cs"]);
+
+        result.Diagnostics.Should().BeEmpty("the compilation should have no diagnostics");
+
+        var descriptorSources = result.GetGeneratedSources(nameof(TestCompanionDescriptorSourceGenerator));
+        descriptorSources.Should().HaveCountGreaterOrEqualTo(1, "descriptor should be generated with custom contributor");
+
+        var outputText = new StringBuilder();
+        foreach (var s in descriptorSources.OrderBy(static s => s.HintName))
+        {
+            outputText.AppendLine(s.HintName + ":");
+            outputText.AppendLine();
+            outputText.AppendLine(s.SourceText);
+            outputText.AppendLine();
+        }
+
+        await Verify(outputText)
+            .UseDirectory("Snapshots");
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────
 
     private static CSharpCompilation CreateCompilation(string source)
@@ -289,6 +340,52 @@ internal sealed class TestCompanionPipelineSourceGenerator : OperationExecutorPi
 {
     public TestCompanionPipelineSourceGenerator()
         : base(CreateDefaultConfig(new TestTenantEnrichmentModule()))
+    {
+    }
+}
+
+/// <summary>
+/// A custom module that simulates a consumer-space descriptor contributor adding custom feature-data
+/// to the generated operation descriptor. Proves that companion generators can extend descriptor metadata.
+/// </summary>
+internal sealed class TestCustomDescriptorModule : IBlueprintSourceGeneratorModule, IDescriptorContributor
+{
+    /// <inheritdoc />
+    public string ModuleId => nameof(TestCustomDescriptorModule);
+
+    /// <inheritdoc />
+    public BlueprintModuleCategory Category => BlueprintModuleCategory.Consumer;
+
+    /// <inheritdoc />
+    public string ContributorId => nameof(TestCustomDescriptorModule);
+
+    /// <inheritdoc />
+    public int Order => 200;
+
+    /// <inheritdoc />
+    public bool IsUnique => true;
+
+    /// <inheritdoc />
+    public IReadOnlyList<string> DependsOn { get; } = [];
+
+    /// <inheritdoc />
+    public void ContributeToDescriptor(DescriptorContributorContext context)
+    {
+        // Add custom feature-data that a consumer companion package would emit
+        context.AddRenderStep(static w =>
+            w.AppendLine("this.SetFeatureData(new global::Blueprint.Model.OperationDiscoveryFeatureData(\"consumer-tagged\", \"TestNamespace\", \"TaggedQuery\"));"));
+    }
+}
+
+/// <summary>
+/// A derived descriptor source generator that proves the companion-package extensibility pattern:
+/// a consumer-owned generator package can inherit from <see cref="OperationDescriptorSourceGenerator"/>
+/// and compose additional descriptor modules without copying descriptor-generation logic.
+/// </summary>
+internal sealed class TestCompanionDescriptorSourceGenerator : OperationDescriptorSourceGenerator
+{
+    public TestCompanionDescriptorSourceGenerator()
+        : base(CreateDefaultConfig(new TestCustomDescriptorModule()))
     {
     }
 }
