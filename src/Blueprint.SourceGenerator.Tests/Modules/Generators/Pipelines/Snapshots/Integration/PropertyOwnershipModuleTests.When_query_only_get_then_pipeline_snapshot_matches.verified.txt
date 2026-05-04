@@ -43,9 +43,9 @@ namespace Blueprint.Generated
                     return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid query parameter 'page'");
                 }
             }
-            var handlerResult = await global::TestNamespace.SearchAllQuery.HandleAsync(operation);
+            var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<string>(await global::TestNamespace.SearchAllQuery.HandleAsync(operation));
 
-            return new Blueprint.Runtime.Exec.OkResult<string>(handlerResult);
+            return handlerResult;
         }
     }
 }

@@ -24,13 +24,10 @@ namespace Blueprint.Generated
         {
             var operation = (global::TestNamespace.TestQuery)context.Operation;
 
-            var handlerResult = await global::TestNamespace.TestQuery.HandleAsync();
+            var handlerUnionResult = await global::TestNamespace.TestQuery.HandleAsync();
+            var handlerResult = handlerUnionResult.IsT1 ? (Blueprint.OperationResult)handlerUnionResult.AsT1 : (Blueprint.OperationResult)handlerUnionResult.AsT2;
 
-            if (handlerResult.IsT1)
-            {
-                return handlerResult.AsT1;
-            }
-            return handlerResult.AsT2;
+            return handlerResult;
         }
     }
 }

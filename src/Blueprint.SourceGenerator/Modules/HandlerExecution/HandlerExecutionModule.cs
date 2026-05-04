@@ -19,6 +19,12 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
     /// </summary>
     public const string HandlerResultPurpose = "handler-result";
 
+    /// <summary>
+    /// The normalized type name that all handler results are assigned as after the execution stage,
+    /// allowing PostExecution contributors to consume the result without knowing the specific result subtype.
+    /// </summary>
+    public const string HandlerResultTypeName = "Blueprint.OperationResult";
+
     /// <inheritdoc />
     public string ModuleId => nameof(HandlerExecutionModule);
 
@@ -50,7 +56,7 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
 
         context.AddRenderStep(PipelineStage.Execution, renderContext => RenderHandlerInvocation(renderContext, normalization));
         context.RegisterVariable(
-            new VariableKey(normalization.ProducedTypeName, HandlerResultPurpose),
+            new VariableKey(HandlerResultTypeName, HandlerResultPurpose),
             availableFrom: PipelineStage.Execution,
             sourceKind: VariableSourceKind.ProducedValue,
             lifetime: VariableLifetime.Local);
@@ -127,35 +133,21 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
             invocationExpression = $"{handlerVarName}.{context.GetHandlerMethodName()}({string.Join(", ", allParams)})";
         }
 
-        if (normalization.Kind == HandlerReturnNormalizationKind.NoResult)
-        {
-            context.WriteStatement($"{(context.IsHandlerAsync() ? "await " : string.Empty)}{invocationExpression};");
-            context.DeclareVariable("handlerResult", "new Blueprint.Runtime.Exec.NoResultOperationResult()");
-        }
-        else
-        {
-            context.DeclareVariable("handlerResult", $"{(context.IsHandlerAsync() ? "await " : string.Empty)}{invocationExpression}");
-        }
-
-        context.WriteBlankLine();
-
         switch (normalization.Kind)
         {
             case HandlerReturnNormalizationKind.NoResult:
+                context.WriteStatement($"{(context.IsHandlerAsync() ? "await " : string.Empty)}{invocationExpression};");
+                context.DeclareVariable("handlerResult", "(Blueprint.OperationResult)new Blueprint.Runtime.Exec.NoResultOperationResult()");
+                break;
             case HandlerReturnNormalizationKind.OperationResult:
-                context.Return(WrapOperationResult("handlerResult", context.IsPipelineAsync()));
+                context.DeclareVariable("handlerResult", $"{(context.IsHandlerAsync() ? "await " : string.Empty)}{invocationExpression}");
                 break;
             case HandlerReturnNormalizationKind.PlainValue:
-                context.Return(WrapOperationResult($"new Blueprint.Runtime.Exec.OkResult<{normalization.PlainValueTypeName}>(handlerResult)", context.IsPipelineAsync()));
+                context.DeclareVariable("handlerResult", $"(Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<{normalization.PlainValueTypeName}>({(context.IsHandlerAsync() ? "await " : string.Empty)}{invocationExpression})");
                 break;
             case HandlerReturnNormalizationKind.ResultsUnion:
-                context.If(
-                    "handlerResult.IsT1",
-                    branch =>
-                    {
-                        branch.Return(WrapOperationResult("handlerResult.AsT1", context.IsPipelineAsync()));
-                    });
-                context.Return(WrapOperationResult("handlerResult.AsT2", context.IsPipelineAsync()));
+                context.DeclareVariable("handlerUnionResult", $"{(context.IsHandlerAsync() ? "await " : string.Empty)}{invocationExpression}");
+                context.DeclareVariable("handlerResult", "handlerUnionResult.IsT1 ? (Blueprint.OperationResult)handlerUnionResult.AsT1 : (Blueprint.OperationResult)handlerUnionResult.AsT2");
                 break;
             default:
                 throw new InvalidOperationException($"Unsupported handler normalization kind '{normalization.Kind}'.");
@@ -416,20 +408,6 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
             _ when handlerMethod.Locations.Length > 0 => LocationInfo.CreateFrom(handlerMethod.Locations[0]),
             _ => null,
         };
-    }
-
-    /// <summary>
-    /// Normalises synchronous and asynchronous handler paths so generated pipelines always return a
-    /// <see cref="Task{TResult}" /> of <c>Blueprint.OperationResult</c>.
-    /// </summary>
-    /// <param name="operationResultExpression">The operation-result expression to return.</param>
-    /// <param name="isPipelineAsync">Whether the generated pipeline method is async (handler or plan requires await).</param>
-    /// <returns>A return expression compatible with the generated pipeline signature.</returns>
-    private static string WrapOperationResult(string operationResultExpression, bool isPipelineAsync)
-    {
-        return isPipelineAsync
-            ? operationResultExpression
-            : $"System.Threading.Tasks.Task.FromResult<Blueprint.OperationResult>({operationResultExpression})";
     }
 
     private sealed record HandlerReturnNormalization(

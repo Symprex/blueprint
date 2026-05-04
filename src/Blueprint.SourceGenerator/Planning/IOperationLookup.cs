@@ -29,7 +29,23 @@ public interface IOperationLookup
     /// <param name="metadataName">The fully-qualified metadata name.</param>
     /// <returns>The resolved type symbol, if found.</returns>
     INamedTypeSymbol? FindTypeByMetadataName(string metadataName);
+
+    /// <summary>
+    /// Finds all self-link URL templates declared for the given resource type across the compilation.
+    /// Returns URL templates from <c>[SelfLink(typeof(resourceType), url)]</c> attributes on operations.
+    /// </summary>
+    /// <param name="resourceType">The resource type symbol to look up self-link templates for.</param>
+    /// <returns>The self-link bindings found, which may be empty if no self-links target this resource type.</returns>
+    IReadOnlyList<SelfLinkBindingInfo> FindSelfLinksForResourceType(INamedTypeSymbol resourceType);
 }
+
+/// <summary>
+/// Captures a resolved self-link URL template targeting a specific resource type.
+/// </summary>
+/// <param name="UrlTemplate">The URL template (e.g., "/templates/{Id}").</param>
+/// <param name="ResourceType">The resource type this self-link targets.</param>
+/// <param name="DeclaringOperationType">The operation type that declares the self-link.</param>
+public sealed record SelfLinkBindingInfo(string UrlTemplate, INamedTypeSymbol ResourceType, INamedTypeSymbol DeclaringOperationType);
 
 /// <summary>
 /// Compilation-backed operation lookup used by the initial foundation seam.
@@ -38,7 +54,9 @@ public interface IOperationLookup
 public sealed class CompilationOperationLookup(Compilation compilation) : IOperationLookup
 {
     private const string OperationMetadataName = "Blueprint.Model.IOperation";
+    private const string SelfLinkAttributeMetadataName = "Blueprint.Model.Attributes.SelfLinkAttribute";
     private readonly INamedTypeSymbol? _operationInterface = compilation.GetTypeByMetadataName(OperationMetadataName);
+    private Dictionary<INamedTypeSymbol, List<SelfLinkBindingInfo>>? _selfLinkCache;
 
     /// <inheritdoc />
     public OperationModel? FindByMetadataName(string metadataName)
@@ -56,6 +74,99 @@ public sealed class CompilationOperationLookup(Compilation compilation) : IOpera
     public INamedTypeSymbol? FindTypeByMetadataName(string metadataName)
     {
         return compilation.GetTypeByMetadataName(NormalizeMetadataName(metadataName));
+    }
+
+    /// <inheritdoc />
+    public IReadOnlyList<SelfLinkBindingInfo> FindSelfLinksForResourceType(INamedTypeSymbol resourceType)
+    {
+        this.EnsureSelfLinkCache();
+
+        return this._selfLinkCache!.TryGetValue(resourceType, out var bindings)
+            ? bindings
+            : [];
+    }
+
+    private void EnsureSelfLinkCache()
+    {
+        if (this._selfLinkCache is not null)
+        {
+            return;
+        }
+
+        this._selfLinkCache = new Dictionary<INamedTypeSymbol, List<SelfLinkBindingInfo>>(SymbolEqualityComparer.Default);
+
+        var selfLinkAttributeType = compilation.GetTypeByMetadataName(SelfLinkAttributeMetadataName);
+        if (selfLinkAttributeType is null || this._operationInterface is null)
+        {
+            return;
+        }
+
+        foreach (var type in this.GetAllTypesFromCompilation())
+        {
+            if (type.TypeKind != TypeKind.Class || type.IsAbstract || type.IsStatic || type.IsGenericType)
+            {
+                continue;
+            }
+
+            if (!type.AllInterfaces.Contains(this._operationInterface, SymbolEqualityComparer.Default))
+            {
+                continue;
+            }
+
+            foreach (var attribute in type.GetAttributes())
+            {
+                if (!SymbolEqualityComparer.Default.Equals(attribute.AttributeClass, selfLinkAttributeType))
+                {
+                    continue;
+                }
+
+                if (attribute.ConstructorArguments.Length < 2)
+                {
+                    continue;
+                }
+
+                var resourceTypeArg = attribute.ConstructorArguments[0];
+                var urlArg = attribute.ConstructorArguments[1];
+
+                if (resourceTypeArg.Value is not INamedTypeSymbol targetResourceType || urlArg.Value is not string url)
+                {
+                    continue;
+                }
+
+                if (!this._selfLinkCache.TryGetValue(targetResourceType, out var list))
+                {
+                    list = [];
+                    this._selfLinkCache[targetResourceType] = list;
+                }
+
+                list.Add(new SelfLinkBindingInfo(url, targetResourceType, type));
+            }
+        }
+    }
+
+    private IEnumerable<INamedTypeSymbol> GetAllTypesFromCompilation()
+    {
+        return GetTypesFromNamespace(compilation.Assembly.GlobalNamespace)
+            .Concat(compilation.References
+                .Select(compilation.GetAssemblyOrModuleSymbol)
+                .OfType<IAssemblySymbol>()
+                .SelectMany(static a => GetTypesFromNamespace(a.GlobalNamespace)));
+    }
+
+    private static IEnumerable<INamedTypeSymbol> GetTypesFromNamespace(INamespaceSymbol ns)
+    {
+        foreach (var type in ns.GetTypeMembers())
+        {
+            yield return type;
+        }
+
+        foreach (var childNs in ns.GetNamespaceMembers())
+        {
+            foreach (var type in GetTypesFromNamespace(childNs))
+            {
+                yield return type;
+            }
+        }
     }
 
     private OperationModel? TryCreate(INamedTypeSymbol? typeSymbol)

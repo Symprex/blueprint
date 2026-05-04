@@ -82,9 +82,9 @@ namespace Blueprint.Generated
             }
 
             operation.Id = (string)httpContext.Request.RouteValues["Id"];
-            var handlerResult = await global::TestNamespace.UpdateUserCommand.HandleAsync(operation);
+            var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<string>(await global::TestNamespace.UpdateUserCommand.HandleAsync(operation));
 
-            return new Blueprint.Runtime.Exec.OkResult<string>(handlerResult);
+            return handlerResult;
         }
 
         private static void PopulateFromJsonBody(System.ReadOnlySpan<byte> bodyBytes, global::TestNamespace.UpdateUserCommand operation)

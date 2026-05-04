@@ -24,9 +24,9 @@ namespace Blueprint.Generated
         {
             var operation = (global::TestNamespace.GetUserQuery)context.Operation;
 
-            var handlerResult = await global::TestNamespace.GetUserQuery.InvokeAsync();
+            var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<string>(await global::TestNamespace.GetUserQuery.InvokeAsync());
 
-            return new Blueprint.Runtime.Exec.OkResult<string>(handlerResult);
+            return handlerResult;
         }
     }
 }
@@ -58,9 +58,9 @@ namespace Blueprint.Generated
         {
             var operation = (global::TestNamespace.CreateUserCommand)context.Operation;
 
-            var handlerResult = await global::TestNamespace.CreateUserCommand.HandleAsync();
+            var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<bool>(await global::TestNamespace.CreateUserCommand.HandleAsync());
 
-            return new Blueprint.Runtime.Exec.OkResult<bool>(handlerResult);
+            return handlerResult;
         }
     }
 }

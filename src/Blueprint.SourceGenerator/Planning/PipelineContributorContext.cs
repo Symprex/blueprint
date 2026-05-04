@@ -145,4 +145,14 @@ public sealed class PipelineContributorContext
     {
         this._plan.AddDeferredClassMember(configure);
     }
+
+    /// <summary>
+    /// Finds all self-link URL templates declared for the given resource type across the compilation.
+    /// </summary>
+    /// <param name="resourceType">The resource type symbol to look up self-link templates for.</param>
+    /// <returns>Self-link binding information, which may be empty when no self-links target this resource type.</returns>
+    public IReadOnlyList<SelfLinkBindingInfo> FindSelfLinksForResourceType(INamedTypeSymbol resourceType)
+    {
+        return this._operationLookup.FindSelfLinksForResourceType(resourceType);
+    }
 }

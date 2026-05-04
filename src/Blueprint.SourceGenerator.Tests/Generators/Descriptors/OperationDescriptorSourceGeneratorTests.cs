@@ -117,7 +117,7 @@ public class OperationDescriptorSourceGeneratorTests
             new PipelineContribution(PipelineStage.Execution, nameof(HandlerExecutionModule)));
         result.Value.VariableRegistry.Registrations.Should().ContainSingle().Which.Should().BeEquivalentTo(
             new VariableRegistration(
-                new VariableKey("global::Blueprint.Runtime.Exec.OkResult<string>", HandlerExecutionModule.HandlerResultPurpose),
+                new VariableKey(HandlerExecutionModule.HandlerResultTypeName, HandlerExecutionModule.HandlerResultPurpose),
                 nameof(HandlerExecutionModule),
                 PipelineStage.Execution,
                 VariableSourceKind.ProducedValue,

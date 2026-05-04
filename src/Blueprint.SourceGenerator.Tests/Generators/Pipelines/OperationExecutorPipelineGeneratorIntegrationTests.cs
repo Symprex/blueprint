@@ -88,7 +88,7 @@ public class OperationExecutorPipelineGeneratorIntegrationTests
         renderStep.ContributorId.Should().Be(module.ContributorId);
         plan.VariableRegistry.Registrations.Should().ContainSingle().Which.Should().BeEquivalentTo(
             new VariableRegistration(
-                new VariableKey("global::Blueprint.Runtime.Exec.OkResult<string>", HandlerExecutionModule.HandlerResultPurpose),
+                new VariableKey(HandlerExecutionModule.HandlerResultTypeName, HandlerExecutionModule.HandlerResultPurpose),
                 module.ContributorId,
                 PipelineStage.Execution,
                 VariableSourceKind.ProducedValue,
@@ -129,8 +129,7 @@ public class OperationExecutorPipelineGeneratorIntegrationTests
 
         renderStep.Render(new PipelineRenderContext(writer, handlerResult.Value!, plan));
 
-        writer.Rendered.Should().Contain("var handlerResult = await global::TestNamespace.TestQuery.InvokeAsync();");
-        writer.Rendered.Should().Contain("return new Blueprint.Runtime.Exec.OkResult<string>(handlerResult);");
+        writer.Rendered.Should().Contain("var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<string>(await global::TestNamespace.TestQuery.InvokeAsync());");
     }
 
     [Fact]
@@ -168,8 +167,7 @@ public class OperationExecutorPipelineGeneratorIntegrationTests
         renderStep.Render(new PipelineRenderContext(writer, handlerResult.Value!, plan));
 
         writer.Rendered.Should().Contain("await global::TestNamespace.TestCommand.HandleAsync();");
-        writer.Rendered.Should().Contain("var handlerResult = new Blueprint.Runtime.Exec.NoResultOperationResult();");
-        writer.Rendered.Should().Contain("return handlerResult;");
+        writer.Rendered.Should().Contain("var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.NoResultOperationResult();");
     }
 
     [Fact]

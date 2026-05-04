@@ -42,9 +42,9 @@ namespace Blueprint.Generated
                 return new Blueprint.Runtime.Exec.ValidationFailedResult(validationResults);
             }
 
-            var handlerResult = await global::TestNamespace.CreateUserCommand.HandleAsync(operation);
+            var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<string>(await global::TestNamespace.CreateUserCommand.HandleAsync(operation));
 
-            return new Blueprint.Runtime.Exec.OkResult<string>(handlerResult);
+            return handlerResult;
         }
     }
 }

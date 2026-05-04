@@ -1,4 +1,5 @@
 using Blueprint.SourceGenerator.Tests.Integration.Generators.OperationDescriptors;
+using Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines;
 using FluentAssertions;
 
 namespace Blueprint.SourceGenerator.Tests.Integration.Generators.BlueprintAppModel;
@@ -21,7 +22,10 @@ public class AppModelSerializerContextTests
         app.AppOwnedSerializerContextBodyTypeNames.Should().Equal(
             "string",
             "Microsoft.AspNetCore.Mvc.ProblemDetails",
-            "Microsoft.AspNetCore.Mvc.ValidationProblemDetails");
+            "Microsoft.AspNetCore.Mvc.ValidationProblemDetails",
+            "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.LinkTestApiResource",
+            "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.MappedLinkApiResource",
+            "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.ResourceWithoutSelfLink");
     }
 
     [Fact]
@@ -41,6 +45,9 @@ public class AppModelSerializerContextTests
         app.AppOwnedSerializerContextBodyTypes.Should().Equal(
             typeof(string),
             typeof(Microsoft.AspNetCore.Mvc.ProblemDetails),
-            typeof(Microsoft.AspNetCore.Mvc.ValidationProblemDetails));
+            typeof(Microsoft.AspNetCore.Mvc.ValidationProblemDetails),
+            typeof(LinkTestApiResource),
+            typeof(MappedLinkApiResource),
+            typeof(ResourceWithoutSelfLink));
     }
 }

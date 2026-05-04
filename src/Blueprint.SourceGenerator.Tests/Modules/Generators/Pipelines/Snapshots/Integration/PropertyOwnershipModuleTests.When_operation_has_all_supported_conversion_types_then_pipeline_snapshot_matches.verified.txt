@@ -143,9 +143,9 @@ namespace Blueprint.Generated
                 }
                 operation.CategoryIds = _arr_CategoryIds;
             }
-            var handlerResult = await global::TestNamespace.AllTypesGetQuery.HandleAsync(operation);
+            var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<string>(await global::TestNamespace.AllTypesGetQuery.HandleAsync(operation));
 
-            return new Blueprint.Runtime.Exec.OkResult<string>(handlerResult);
+            return handlerResult;
         }
     }
 }
@@ -217,9 +217,9 @@ namespace Blueprint.Generated
             {
                 operation.ItemGuid = System.Guid.Parse(routeStr_ItemGuid);
             }
-            var handlerResult = await global::TestNamespace.AllTypesPostCommand.HandleAsync(operation);
+            var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<string>(await global::TestNamespace.AllTypesPostCommand.HandleAsync(operation));
 
-            return new Blueprint.Runtime.Exec.OkResult<string>(handlerResult);
+            return handlerResult;
         }
 
         private static void PopulateFromJsonBody(System.ReadOnlySpan<byte> bodyBytes, global::TestNamespace.AllTypesPostCommand operation)

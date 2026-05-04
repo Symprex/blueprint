@@ -18,7 +18,10 @@ public class AppModelOpenApiDocumentBuilderContextTests
         context.DeclaredSerializerContextBodyTypeNames.Should().Equal(
             "string",
             "Microsoft.AspNetCore.Mvc.ProblemDetails",
-            "Microsoft.AspNetCore.Mvc.ValidationProblemDetails");
+            "Microsoft.AspNetCore.Mvc.ValidationProblemDetails",
+            "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.LinkTestApiResource",
+            "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.MappedLinkApiResource",
+            "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.ResourceWithoutSelfLink");
         context.Operations.Select(static operation => operation.Operation.OperationType)
             .Should()
             .NotContain(typeof(InternalOnlyOperationToScan))

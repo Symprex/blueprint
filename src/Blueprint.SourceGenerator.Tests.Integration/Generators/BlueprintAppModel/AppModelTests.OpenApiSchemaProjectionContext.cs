@@ -18,6 +18,7 @@ public class AppModelOpenApiSchemaProjectionContextTests
         var problemDetailsSchema = schemaContext.Schemas.Single(static schema => schema.BodyTypeName == "Microsoft.AspNetCore.Mvc.ProblemDetails");
 
         schemaContext.Schemas.Select(static schema => schema.BodyTypeName).Should().Equal(
+            "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.LinkTestApiResource",
             "Microsoft.AspNetCore.Mvc.ProblemDetails",
             "Microsoft.AspNetCore.Mvc.ValidationProblemDetails",
             "string");

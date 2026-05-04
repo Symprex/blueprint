@@ -30,9 +30,9 @@ namespace Blueprint.Generated
                 testCommandHandler = Microsoft.Extensions.DependencyInjection.ActivatorUtilities.CreateInstance<global::TestNamespace.TestCommandHandler>(context.ServiceProvider);
             }
 
-            var handlerResult = await testCommandHandler.HandleAsync(operation);
+            var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<string>(await testCommandHandler.HandleAsync(operation));
 
-            return new Blueprint.Runtime.Exec.OkResult<string>(handlerResult);
+            return handlerResult;
         }
     }
 }

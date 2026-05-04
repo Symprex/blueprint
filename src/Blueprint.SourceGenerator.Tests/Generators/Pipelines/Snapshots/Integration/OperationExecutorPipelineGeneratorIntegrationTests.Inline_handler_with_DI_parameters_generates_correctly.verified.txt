@@ -27,9 +27,9 @@ namespace Blueprint.Generated
             var service = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::TestNamespace.IMyService>(context.ServiceProvider);
             var logger = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::Microsoft.Extensions.Logging.ILogger<global::TestNamespace.TestQuery>>(context.ServiceProvider);
 
-            var handlerResult = await global::TestNamespace.TestQuery.InvokeAsync(service, logger);
+            var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<string>(await global::TestNamespace.TestQuery.InvokeAsync(service, logger));
 
-            return new Blueprint.Runtime.Exec.OkResult<string>(handlerResult);
+            return handlerResult;
         }
     }
 }

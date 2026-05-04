@@ -24,9 +24,9 @@ namespace Blueprint.Generated
         {
             var operation = (global::TestNamespace.TestQuery)context.Operation;
 
-            var handlerResult = await global::TestNamespace.TestQuery.InvokeAsync();
+            var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<string>(await global::TestNamespace.TestQuery.InvokeAsync());
 
-            return new Blueprint.Runtime.Exec.OkResult<string>(handlerResult);
+            return handlerResult;
         }
     }
 }

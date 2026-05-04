@@ -62,9 +62,9 @@ namespace Blueprint.Generated
                 }
                 operation.TagIds = _arr_TagIds;
             }
-            var handlerResult = await global::TestNamespace.GetUserItemsQuery.HandleAsync(operation);
+            var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<string>(await global::TestNamespace.GetUserItemsQuery.HandleAsync(operation));
 
-            return new Blueprint.Runtime.Exec.OkResult<string>(handlerResult);
+            return handlerResult;
         }
     }
 }
