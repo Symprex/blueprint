@@ -12,14 +12,14 @@
   "current": {
     "activeWorkstream": "resource-model-links-and-post-processing",
     "nextReadySlice": {
+      "id": "resource-model/resource-event-family-authoring",
+      "workstream": "resource-model-links-and-post-processing",
+      "title": "Resource-event family authoring surface: [ResourceEventFamily], [ResourceEventReason], concrete event result types"
+    },
+    "lastCompletedSlice": {
       "id": "resource-model/ambiguous-self-link-diagnostic",
       "workstream": "resource-model-links-and-post-processing",
       "title": "BPLG004 diagnostic for ambiguous self-link declarations (same resource type, multiple URLs)"
-    },
-    "lastCompletedSlice": {
-      "id": "resource-model/generated-link-href-binding",
-      "workstream": "resource-model-links-and-post-processing",
-      "title": "Compile-time link Href binding for resource PostExecution with cross-assembly support"
     },
     "openReviewGate": null
   },
