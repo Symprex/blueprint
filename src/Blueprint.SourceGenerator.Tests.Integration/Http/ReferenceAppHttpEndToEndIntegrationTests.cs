@@ -253,8 +253,10 @@ public class ReferenceAppHttpEndToEndIntegrationTests
                 authenticationType: "test"));
         });
 
-        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        response.StatusCode.Should().Be(StatusCodes.Status201Created);
         response.ContentType.Should().Be("application/json; charset=utf-8");
+        response.Body.Should().Contain("\"eventId\":\"template.updated\"");
+        response.Body.Should().Contain("\"resourceId\":\"template-001\"");
         response.Body.Should().Contain("Renamed Template");
         response.Body.Should().Contain("New content");
     }

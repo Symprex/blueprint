@@ -7,11 +7,12 @@ namespace Blueprint.SourceGenerator.Sample.Contract.Api;
 /// <summary>
 /// Updates an existing template's metadata and content. Demonstrates a URL-parameterized command
 /// with body binding at the same route pattern as the GET query but with a different HTTP method.
+/// Returns a resource-event result (template.updated).
 /// </summary>
 [RootLink("/templates/{Id}")]
 [HttpPut]
 [MustBeAuthenticated]
-public partial class UpdateTemplateCommand : ICommand<TemplateApiResource>
+public partial class UpdateTemplateCommand : ICommand
 {
     /// <summary>
     /// The identifier of the template to update (bound from the route).
