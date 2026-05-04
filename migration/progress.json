@@ -7,21 +7,22 @@
   },
   "referencePlans": {
     "masterPlan": "migration\\plan.md",
-    "workstreamPlan": "migration\\resource-model-links-and-post-processing\\plan.md"
+    "workstreamPlan": "migration\\background-tasks\\plan.md"
   },
   "current": {
-    "activeWorkstream": "resource-model-links-and-post-processing",
+    "activeWorkstream": "background-tasks",
     "nextReadySlice": {
-      "id": "resource-model/resource-event-metadata-module-update",
-      "workstream": "resource-model-links-and-post-processing",
-      "title": "Update ResourceEventMetadataModule to read event IDs from generated event record types"
+      "id": "background-tasks/post-execution-task-flush",
+      "workstream": "background-tasks",
+      "title": "Background task post-execution flush stage and task-host pipeline execution proof"
     },
     "lastCompletedSlice": {
       "id": "resource-model/resource-event-family-authoring",
       "workstream": "resource-model-links-and-post-processing",
       "title": "Resource-event family authoring surface with [ResourceEventFamily], [ResourceEventReason], concrete event result types, sample app adoption"
     },
-    "openReviewGate": null
+    "openReviewGate": "phase2-closure",
+    "openReviewGateRationale": "Phase 2 exit gate is fully satisfied (all 4 criteria met, 32 reference app tests pass). Gate opened for human acknowledgement of phase transition before Phase 3 implementation begins. Deferred items (ResourceEventMetadataModule update, Results<> union) are Phase 3+ refinements, not Phase 2 blockers."
   },
   "decisions": [
     {
@@ -33,8 +34,8 @@
   ],
   "phaseStatus": {
     "phase1": "closed",
-    "phase2": "in-progress",
-    "phase3": "not-started"
+    "phase2": "closed",
+    "phase3": "in-progress"
   },
   "orchestrationContract": {
     "mustImplementAfterSliceSelection": true,
