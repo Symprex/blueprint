@@ -123,6 +123,20 @@ Current resource event family IDs in active use:
 - `BPRE005`: `ResourceObject` property is not set on the `[ResourceEventFamily]` attribute.
 - `BPRE006`: the family resource type does not have a public `Id` property required for body-bearing events.
 
+### Persistence diagnostics
+
+Persistence and unit-of-work coordination diagnostics detect misapplied attributes and configuration that the generator can prove ineffective at build time.
+
+Reserved direction:
+
+| Range | Meaning |
+| --- | --- |
+| `BPP001`-`BPP099` | persistence diagnostics for invalid or no-effect declarative contracts that the generator can prove at build time |
+
+Current persistence IDs in active use:
+
+- `BPP001`: `[DoNotSaveChanges]` applied to a non-command operation where it has no effect (only `ICommand` operations trigger the `UnitOfWorkModule`).
+
 ## Diagnostic design rules
 
 When adding new diagnostics:

@@ -151,6 +151,72 @@ public class UnitOfWorkModuleTests
             static c => c.ContributorId == nameof(UnitOfWorkModule));
     }
 
+    [Fact]
+    public void When_query_has_DoNotSaveChanges_then_reports_BPP001_diagnostic()
+    {
+        var compilation = CreateCompilation(
+            """
+            using Blueprint.Model;
+            using Blueprint.Persistence;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace;
+
+            [DoNotSaveChanges]
+            public partial class GetOrdersQuery : IQuery<string>
+            {
+                public static Task<string> HandleAsync(GetOrdersQuery operation)
+                {
+                    return Task.FromResult("result");
+                }
+            }
+            """);
+
+        var config = new BlueprintSourceGenerationConfig(
+        [
+            new HandlerExecutionModule(),
+            new UnitOfWorkModule(),
+            new PipelineReturnModule(),
+        ]);
+        var result = config.BuildPipelinePlan("TestNamespace.GetOrdersQuery", compilation);
+
+        result.Diagnostics.Should().ContainSingle()
+            .Which.Descriptor.Id.Should().Be("BPP001");
+    }
+
+    [Fact]
+    public void When_background_task_has_DoNotSaveChanges_then_reports_BPP001_diagnostic()
+    {
+        var compilation = CreateCompilation(
+            """
+            using Blueprint.Model;
+            using Blueprint.Persistence;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace;
+
+            [DoNotSaveChanges]
+            public partial class ProcessOrderTask : IBackgroundTask
+            {
+                public static Task HandleAsync(ProcessOrderTask operation)
+                {
+                    return Task.CompletedTask;
+                }
+            }
+            """);
+
+        var config = new BlueprintSourceGenerationConfig(
+        [
+            new HandlerExecutionModule(),
+            new UnitOfWorkModule(),
+            new PipelineReturnModule(),
+        ]);
+        var result = config.BuildPipelinePlan("TestNamespace.ProcessOrderTask", compilation);
+
+        result.Diagnostics.Should().ContainSingle()
+            .Which.Descriptor.Id.Should().Be("BPP001");
+    }
+
     // ── Pipeline snapshot test ────────────────────────────────────────
 
     [Fact]

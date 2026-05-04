@@ -1,3 +1,4 @@
+using Blueprint.SourceGenerator.Helpers;
 using Blueprint.SourceGenerator.Planning;
 using Microsoft.CodeAnalysis;
 
@@ -43,14 +44,29 @@ public sealed class UnitOfWorkModule : IBlueprintSourceGeneratorModule, IPipelin
     /// <inheritdoc />
     public void ContributeToPipeline(PipelineContributorContext context)
     {
+        var operationType = context.Operation.TypeSymbol;
+        var isCommand = IsCommand(operationType);
+
+        // Emit BPP001 when [DoNotSaveChanges] is applied to a non-command where it has no effect
+        if (!isCommand && HasDoNotSaveChangesAttribute(operationType))
+        {
+            context.AddDiagnostic(
+                new DiagnosticInfo(
+                    PersistenceDiagnosticDescriptors.DoNotSaveChangesOnNonCommand,
+                    operationType.Locations.FirstOrDefault(),
+                    [operationType.Name]));
+
+            return;
+        }
+
         // Only participate for command operations — queries should not trigger persistence saves
-        if (!IsCommand(context.Operation.TypeSymbol))
+        if (!isCommand)
         {
             return;
         }
 
         // Respect explicit opt-out via [DoNotSaveChanges]
-        if (HasDoNotSaveChangesAttribute(context.Operation.TypeSymbol))
+        if (HasDoNotSaveChangesAttribute(operationType))
         {
             return;
         }
