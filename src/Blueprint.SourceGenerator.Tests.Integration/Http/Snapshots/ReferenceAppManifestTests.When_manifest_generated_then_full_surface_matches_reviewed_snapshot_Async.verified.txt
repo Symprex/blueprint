@@ -11,10 +11,17 @@
   Auth: Authenticated
   Discovery: command (Blueprint.SourceGenerator.Sample.Contract.Api.ArchiveTemplateCommand)
   Group: Api
+  Result Outcomes:
+    - KeyOnlyResourceEventResult
   Failure Outcomes:
     - legacy-validation-exception: Blueprint.Validation.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
     - data-annotations-validation-exception: System.ComponentModel.DataAnnotations.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
     - default-unhandled-exception: System.Exception -> Blueprint.Runtime.Exec.UnhandledExceptionResult
+  HTTP Responses:
+    - 201: hasBody=False types=[]
+    - 401: hasBody=False types=[]
+    - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
+    - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
 
 ### CreateTemplateCommand
   Type: CreateTemplateCommand
@@ -25,10 +32,19 @@
   Auth: Authenticated
   Discovery: command (Blueprint.SourceGenerator.Sample.Contract.Api.CreateTemplateCommand)
   Group: Api
+  Result Outcomes:
+    - ResourceEventResult`1
   Failure Outcomes:
     - legacy-validation-exception: Blueprint.Validation.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
     - data-annotations-validation-exception: System.ComponentModel.DataAnnotations.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
     - default-unhandled-exception: System.Exception -> Blueprint.Runtime.Exec.UnhandledExceptionResult
+  HTTP Responses:
+    - 201: hasBody=True types=[Blueprint.SourceGenerator.Sample.Contract.Api.TemplateApiResource]
+    - 400: hasBody=False types=[]
+    - 401: hasBody=False types=[]
+    - 415: hasBody=False types=[]
+    - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
+    - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
 
 ### GetTemplateQuery
   Type: GetTemplateQuery
@@ -43,6 +59,10 @@
     - legacy-validation-exception: Blueprint.Validation.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
     - data-annotations-validation-exception: System.ComponentModel.DataAnnotations.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
     - default-unhandled-exception: System.Exception -> Blueprint.Runtime.Exec.UnhandledExceptionResult
+  HTTP Responses:
+    - 401: hasBody=False types=[]
+    - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
+    - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
   Links:
     - rel=self url=/templates/{Id} resource=TemplateApiResource
 
@@ -59,6 +79,10 @@
     - legacy-validation-exception: Blueprint.Validation.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
     - data-annotations-validation-exception: System.ComponentModel.DataAnnotations.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
     - default-unhandled-exception: System.Exception -> Blueprint.Runtime.Exec.UnhandledExceptionResult
+  HTTP Responses:
+    - 401: hasBody=False types=[]
+    - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
+    - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
   Links:
     - rel=self url=/templates resource=TemplateListApiResource
 
@@ -71,10 +95,19 @@
   Auth: Authenticated
   Discovery: command (Blueprint.SourceGenerator.Sample.Contract.Api.UpdateTemplateCommand)
   Group: Api
+  Result Outcomes:
+    - ResourceEventResult`1
   Failure Outcomes:
     - legacy-validation-exception: Blueprint.Validation.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
     - data-annotations-validation-exception: System.ComponentModel.DataAnnotations.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
     - default-unhandled-exception: System.Exception -> Blueprint.Runtime.Exec.UnhandledExceptionResult
+  HTTP Responses:
+    - 201: hasBody=True types=[Blueprint.SourceGenerator.Sample.Contract.Api.TemplateApiResource]
+    - 400: hasBody=False types=[]
+    - 401: hasBody=False types=[]
+    - 415: hasBody=False types=[]
+    - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
+    - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
 
 ## Resource Links
 

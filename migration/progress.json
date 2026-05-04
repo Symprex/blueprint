@@ -12,14 +12,14 @@
   "current": {
     "activeWorkstream": "resource-model-links-and-post-processing",
     "nextReadySlice": {
-      "id": "resource-model/generated-link-href-binding",
+      "id": "resource-model/ambiguous-self-link-diagnostic",
       "workstream": "resource-model-links-and-post-processing",
-      "title": "Implement compile-time link Href binding for resource-event results (replacing SelfQuery)"
+      "title": "BPLG004 diagnostic for ambiguous self-link declarations (same resource type, multiple URLs)"
     },
     "lastCompletedSlice": {
-      "id": "resource-model/resource-event-results-in-reference-app",
+      "id": "resource-model/generated-link-href-binding",
       "workstream": "resource-model-links-and-post-processing",
-      "title": "All mutation commands demonstrate resource-event results (body-bearing + key-only)"
+      "title": "Compile-time link Href binding for resource PostExecution with cross-assembly support"
     },
     "openReviewGate": null
   },

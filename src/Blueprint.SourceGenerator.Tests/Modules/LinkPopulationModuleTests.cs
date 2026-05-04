@@ -149,4 +149,58 @@ public class LinkPopulationModuleTests
         await Verify(outputText)
             .UseDirectory("Generators/Pipelines/Snapshots/LinkPopulation/");
     }
+
+    [Fact]
+    public void When_multiple_distinct_self_link_urls_target_same_resource_then_BPLG004_is_emitted()
+    {
+        const string source = """
+            using Blueprint;
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using Blueprint.Runtime.Exec;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace
+            {
+                [BlueprintAppScan]
+                public partial class TestApp : BlueprintApp { }
+
+                public partial class SharedResource : ApiResource
+                {
+                    public override string Object => "shared_resource";
+                    public string Id { get; set; }
+                    public string Slug { get; set; }
+                }
+
+                [SelfLink(typeof(SharedResource), "/resources/{Id}")]
+                public partial class GetResourceByIdQuery : IQuery<SharedResource>
+                {
+                    public string Id { get; set; }
+                    public static Task<SharedResource> HandleAsync(GetResourceByIdQuery op) => throw new System.NotImplementedException();
+                }
+
+                [SelfLink(typeof(SharedResource), "/resources/by-slug/{Slug}")]
+                public partial class GetResourceBySlugQuery : IQuery<SharedResource>
+                {
+                    public string Slug { get; set; }
+                    public static Task<SharedResource> HandleAsync(GetResourceBySlugQuery op) => throw new System.NotImplementedException();
+                }
+            }
+            """;
+
+        var generators = new[]
+        {
+            TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>(),
+            TestHelpers.CreateTrackedGenerator<OperationExecutorPipelineSourceGenerator>(),
+        };
+
+        var result = TestHelpers.CompileWithTrackedGenerators(
+            generators,
+            [source],
+            ["Input0.cs"]);
+
+        result.Diagnostics.Should().Contain(
+            d => d.Descriptor.Id == "BPLG004",
+            "ambiguous self-link warning should be emitted when multiple URLs target same resource type");
+    }
 }

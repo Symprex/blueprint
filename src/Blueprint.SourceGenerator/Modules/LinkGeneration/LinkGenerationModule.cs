@@ -58,6 +58,14 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
+    private static readonly DiagnosticDescriptor _ambiguousSelfLinkError = new(
+        id: "BPLG004",
+        title: "Ambiguous self-link declarations",
+        messageFormat: "Multiple self-link URL templates target resource type '{0}': {1}. Only the first will be used for link population.",
+        category: "OperationLinks",
+        DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
+
     private static readonly Regex _placeholderRegex = new(@"\{[A-Za-z0-9]+\}", RegexOptions.Compiled);
     private static readonly Regex _mappedPlaceholderRegex = new(@"{(?<routeName>.*?)(:(?<resourcePropName>.*?))?(\((?<format>.*)\))?}", RegexOptions.Compiled);
 
@@ -96,6 +104,16 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
         if (selfLinks.Count == 0)
         {
             return;
+        }
+
+        // Warn when multiple distinct URL templates target the same resource type
+        var distinctUrls = selfLinks.Select(static l => l.UrlTemplate).Distinct().ToList();
+        if (distinctUrls.Count > 1)
+        {
+            context.AddDiagnostic(new DiagnosticInfo(
+                _ambiguousSelfLinkError,
+                context.Operation.TypeSymbol.Locations.FirstOrDefault(),
+                new EquatableList<string>([resourceBinding.ResourceType.Name, string.Join(", ", distinctUrls.Select(static u => $"'{u}'"))])));
         }
 
         // Require the handler result variable from Execution stage

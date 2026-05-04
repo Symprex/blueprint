@@ -65,8 +65,16 @@ internal static class PipelinePlanBuilder
                     ]));
         }
 
-        var failures = pipelinePlan.Diagnostics.ToArray();
-        return failures.Length > 0 ? Result<PipelinePlan>.Failure(failures) : Result.Success(pipelinePlan);
+        var diagnostics = pipelinePlan.Diagnostics.ToArray();
+        var hasErrors = diagnostics.Any(static d => d.Descriptor.DefaultSeverity == DiagnosticSeverity.Error);
+        if (hasErrors)
+        {
+            return Result<PipelinePlan>.Failure(diagnostics);
+        }
+
+        return diagnostics.Length > 0
+            ? new Result<PipelinePlan>(pipelinePlan, new EquatableList<DiagnosticInfo>(diagnostics))
+            : Result.Success(pipelinePlan);
     }
 
     private static string NormalizeMetadataName(string metadataName)
