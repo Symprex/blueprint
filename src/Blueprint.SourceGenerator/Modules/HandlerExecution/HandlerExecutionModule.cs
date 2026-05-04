@@ -232,6 +232,22 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
             return null;
         }
 
+        // Background tasks do not return meaningful values to callers; treat a plain value return
+        // as NoResult and warn that the value will be discarded rather than failing the pipeline.
+        if (IsBackgroundTask(context.Operation.TypeSymbol))
+        {
+            context.AddDiagnostic(
+                new DiagnosticInfo(
+                    BackgroundTaskDiagnosticDescriptors.TaskHandlerReturnsDiscardedValue,
+                    GetReturnTypeLocation(handlerMethod),
+                    [context.Operation.TypeSymbol.Name, effectiveHandlerReturnType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)]));
+
+            return new HandlerReturnNormalization(
+                HandlerReturnNormalizationKind.NoResult,
+                noResultType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                null);
+        }
+
         var typedOkResult = okResultGenericType.Construct(effectiveHandlerReturnType);
         if (IsCompatibleWithDeclaredContract(handlerMethod, typedOkResult, declaredContractType, noResultType, operationResultType, context, allowMissingContract: false, plainValueType: effectiveHandlerReturnType) == false)
         {
@@ -408,6 +424,13 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
             _ when handlerMethod.Locations.Length > 0 => LocationInfo.CreateFrom(handlerMethod.Locations[0]),
             _ => null,
         };
+    }
+
+    private static bool IsBackgroundTask(INamedTypeSymbol operationType)
+    {
+        return operationType.AllInterfaces.Any(static candidate =>
+            candidate.Name == "IBackgroundTask"
+            && candidate.ContainingNamespace.ToDisplayString() == "Blueprint.Tasks");
     }
 
     private sealed record HandlerReturnNormalization(

@@ -12,14 +12,14 @@
   "current": {
     "activeWorkstream": "background-tasks",
     "nextReadySlice": {
-      "id": "background-tasks/post-execution-task-flush",
+      "id": "background-tasks/task-return-type-diagnostic",
       "workstream": "background-tasks",
-      "title": "PostExecution stage reachability and background task flush proof"
+      "title": "Compile-time diagnostic for task operations with unsupported return types"
     },
     "lastCompletedSlice": {
-      "id": "phase3/review-artifact-and-closure",
-      "workstream": "cross-cutting",
-      "title": "Phase 3 exit gate fully satisfied — non-HTTP host, consumer seam, migration tooling, review artifact"
+      "id": "background-tasks/post-execution-task-flush",
+      "workstream": "background-tasks",
+      "title": "PostExecution background task flush module with success guard and optional scheduler resolution"
     },
     "openReviewGate": null,
     "openReviewGateRationale": null,
