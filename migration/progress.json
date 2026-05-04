@@ -12,14 +12,14 @@
   "current": {
     "activeWorkstream": "auditing-and-observability",
     "nextReadySlice": {
-      "id": "auditing/bpa001-diagnostic-audit-attributes-without-module",
+      "id": "auditing/structured-audit-event-correlation",
       "workstream": "auditing-and-observability",
-      "title": "BPA001 compile-time diagnostic when [DoNotAudit] or [Sensitive] used but AuditingModule not in pipeline config"
+      "title": "Correlate audit events with OpenTelemetry trace IDs and add audit event naming"
     },
     "lastCompletedSlice": {
-      "id": "auditing/sensitive-property-metadata",
+      "id": "auditing/bpa001-diagnostic-sensitive-on-non-public",
       "workstream": "auditing-and-observability",
-      "title": "Add [Sensitive] attribute and expose sensitive property metadata in generated descriptors"
+      "title": "BPA001 compile-time diagnostic when [Sensitive] applied to non-public property"
     },
     "openReviewGate": null,
     "openReviewGateRationale": null,
@@ -96,6 +96,12 @@
       "workstream": "auditing-and-observability",
       "title": "Add [Sensitive] attribute and expose sensitive property metadata in generated descriptors",
       "commit": "496aba1"
+    },
+    {
+      "id": "auditing/bpa001-diagnostic-sensitive-on-non-public",
+      "workstream": "auditing-and-observability",
+      "title": "BPA001 compile-time diagnostic when [Sensitive] applied to non-public property",
+      "commit": "cc6afad"
     }
   ],
   "decisions": [
