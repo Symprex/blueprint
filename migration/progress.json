@@ -14,15 +14,21 @@
     "nextReadySlice": {
       "id": "background-tasks/post-execution-task-flush",
       "workstream": "background-tasks",
-      "title": "Background task post-execution flush stage and task-host pipeline execution proof"
+      "title": "PostExecution stage reachability and background task flush proof"
     },
     "lastCompletedSlice": {
-      "id": "resource-model/resource-event-family-authoring",
-      "workstream": "resource-model-links-and-post-processing",
-      "title": "Resource-event family authoring surface with [ResourceEventFamily], [ResourceEventReason], concrete event result types, sample app adoption"
+      "id": "phase3/review-artifact-and-closure",
+      "workstream": "cross-cutting",
+      "title": "Phase 3 exit gate fully satisfied — non-HTTP host, consumer seam, migration tooling, review artifact"
     },
-    "openReviewGate": "phase2-closure",
-    "openReviewGateRationale": "Phase 2 exit gate is fully satisfied (all 4 criteria met, 32 reference app tests pass). Gate opened for human acknowledgement of phase transition before Phase 3 implementation begins. Deferred items (ResourceEventMetadataModule update, Results<> union) are Phase 3+ refinements, not Phase 2 blockers."
+    "openReviewGate": null,
+    "openReviewGateRationale": null,
+    "phase3Criteria": {
+      "nonHttpHost": "SATISFIED — BackgroundTaskHostDispatchIntegrationTests prove task pipeline dispatch, validation, and host partitioning (commit 8931b64)",
+      "consumerIntegrationSeam": "SATISFIED — SendTemplateSharedNotificationTask in Sample.Contract with handler in Sample app, manifest updated (commit d627e8d)",
+      "migrationTooling": "SATISFIED — Blueprint.Codemod (14 tests) + Blueprint.Migration.Analyzers (24 tests) with BPMIG100-201 diagnostics, SARIF output, dry-run mode",
+      "reviewArtifact": "SATISFIED — phase3-non-http-host-review.html at ~/.agent/diagrams/"
+    }
   },
   "decisions": [
     {
@@ -35,7 +41,7 @@
   "phaseStatus": {
     "phase1": "closed",
     "phase2": "closed",
-    "phase3": "in-progress"
+    "phase3": "closed"
   },
   "orchestrationContract": {
     "mustImplementAfterSliceSelection": true,
