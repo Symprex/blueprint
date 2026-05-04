@@ -118,6 +118,11 @@ namespace Blueprint.Generated
             return handlerResult;
         }
 
+        public static System.Collections.Generic.IReadOnlyList<string> GetAppliedModules()
+        {
+            return new string[] { "PropertyOwnershipModule", "HandlerExecutionModule", "UnitOfWorkModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
+        }
+
         private static void PopulateFromJsonBody(System.ReadOnlySpan<byte> bodyBytes, global::TestNamespace.UpdateUserCommand operation)
         {
             var reader = new System.Text.Json.Utf8JsonReader(bodyBytes);

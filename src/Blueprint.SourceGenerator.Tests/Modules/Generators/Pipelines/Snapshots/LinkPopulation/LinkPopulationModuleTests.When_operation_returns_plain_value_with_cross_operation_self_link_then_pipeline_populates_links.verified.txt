@@ -63,6 +63,11 @@ namespace Blueprint.Generated
 
             return handlerResult;
         }
+
+        public static System.Collections.Generic.IReadOnlyList<string> GetAppliedModules()
+        {
+            return new string[] { "PropertyOwnershipModule", "HandlerExecutionModule", "LinkGenerationModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
+        }
     }
 }
 
@@ -193,6 +198,11 @@ namespace Blueprint.Generated
             }
 
             return handlerResult;
+        }
+
+        public static System.Collections.Generic.IReadOnlyList<string> GetAppliedModules()
+        {
+            return new string[] { "PropertyOwnershipModule", "HandlerExecutionModule", "LinkGenerationModule", "UnitOfWorkModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
         }
 
         private static void PopulateFromJsonBody(System.ReadOnlySpan<byte> bodyBytes, global::TestNamespace.UpdateWidgetCommand operation)

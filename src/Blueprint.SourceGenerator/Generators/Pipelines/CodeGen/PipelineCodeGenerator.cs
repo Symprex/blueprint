@@ -28,6 +28,7 @@ internal static class PipelineCodeGenerator
 
         AddConstructor(pipelineClass, handler);
         AddExecuteCoreAsyncMethod(pipelineClass, handler, plan);
+        AddGetAppliedModulesMethod(pipelineClass, plan);
 
         foreach (var member in plan.DeferredClassMembers)
         {
@@ -91,5 +92,26 @@ internal static class PipelineCodeGenerator
         return isPipelineAsync
             ? operationResultExpression
             : $"System.Threading.Tasks.Task.FromResult<Blueprint.OperationResult>({operationResultExpression})";
+    }
+
+    /// <summary>
+    /// Adds a static <c>GetAppliedModules()</c> method that returns the ordered, distinct
+    /// contributor IDs from the pipeline plan. This provides a compile-time inspection
+    /// surface for debugging, diagnostics, and AI-friendly manifest generation.
+    /// </summary>
+    private static void AddGetAppliedModulesMethod(ClassBuilder pipelineClass, PipelinePlan plan)
+    {
+        var contributorIds = plan.Contributions
+            .Select(static c => c.ContributorId)
+            .Distinct()
+            .ToArray();
+
+        var arrayElements = string.Join(", ", contributorIds.Select(static id => $"\"{id}\""));
+
+        pipelineClass.AddMethod("GetAppliedModules")
+            .MakePublicMethod()
+            .MakeStaticMethod()
+            .WithReturnType("System.Collections.Generic.IReadOnlyList<string>")
+            .WithBody(writer => writer.Return($"new string[] {{ {arrayElements} }}"));
     }
 }

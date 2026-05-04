@@ -76,6 +76,11 @@ namespace Blueprint.Generated
 
             return handlerResult;
         }
+
+        public static System.Collections.Generic.IReadOnlyList<string> GetAppliedModules()
+        {
+            return new string[] { "ValidationModule", "HandlerExecutionModule", "UnitOfWorkModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
+        }
     }
 }
 
