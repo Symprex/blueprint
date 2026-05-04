@@ -7,19 +7,19 @@
   },
   "referencePlans": {
     "masterPlan": "migration\\plan.md",
-    "workstreamPlan": "migration\\auditing-and-observability\\plan.md"
+    "workstreamPlan": "migration\\resource-model-links-and-post-processing\\plan.md"
   },
   "current": {
-    "activeWorkstream": "auditing-and-observability",
+    "activeWorkstream": "resource-model-links-and-post-processing",
     "nextReadySlice": {
-      "id": "phase-1-closure/review-artifact-set",
-      "workstream": "reference-app-and-end-to-end-example",
-      "title": "Generate Phase 1 review artifact set and close Phase 1 exit gate"
+      "id": "resource-model/generated-link-href-binding",
+      "workstream": "resource-model-links-and-post-processing",
+      "title": "Implement compile-time link Href binding for resource-event results (replacing SelfQuery)"
     },
     "lastCompletedSlice": {
-      "id": "pipeline/re-query-decision-gate",
-      "workstream": "pipeline-composition-and-execution",
-      "title": "Close re-query decision gate: no general nested execution (Decision 001)"
+      "id": "resource-model/resource-event-results-in-reference-app",
+      "workstream": "resource-model-links-and-post-processing",
+      "title": "All mutation commands demonstrate resource-event results (body-bearing + key-only)"
     },
     "openReviewGate": null
   },
@@ -31,6 +31,11 @@
       "document": "migration/decisions/001-no-general-nested-execution.md"
     }
   ],
+  "phaseStatus": {
+    "phase1": "closed",
+    "phase2": "in-progress",
+    "phase3": "not-started"
+  },
   "orchestrationContract": {
     "mustImplementAfterSliceSelection": true,
     "mustCreateSessionPlanAndSqlTodos": true,
