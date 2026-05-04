@@ -30,7 +30,7 @@ public class ReferenceAppManifestTests
     {
         var app = new SampleBlueprintApp();
 
-        foreach (var descriptor in app.Operations)
+        foreach (var descriptor in app.GetOperationsForHost("http"))
         {
             descriptor.TryGetFeatureData<OperationHttpMethodMetadataFeatureData>(out var methods)
                 .Should().BeTrue($"operation {descriptor.Name} should have HTTP method metadata");
@@ -43,7 +43,7 @@ public class ReferenceAppManifestTests
     {
         var app = new SampleBlueprintApp();
 
-        foreach (var descriptor in app.Operations)
+        foreach (var descriptor in app.GetOperationsForHost("http"))
         {
             descriptor.TryGetFeatureData<OperationHostExposureFeatureData>(out var hosts)
                 .Should().BeTrue($"operation {descriptor.Name} should have host exposure metadata");
@@ -52,14 +52,31 @@ public class ReferenceAppManifestTests
     }
 
     [Fact]
-    public void When_manifest_generated_then_every_operation_has_auth_metadata()
+    public void When_manifest_generated_then_every_http_operation_has_auth_metadata()
     {
         var app = new SampleBlueprintApp();
 
-        foreach (var descriptor in app.Operations)
+        foreach (var descriptor in app.GetOperationsForHost("http"))
         {
             descriptor.TryGetFeatureData<OperationAuthenticationFeatureData>(out _)
                 .Should().BeTrue($"operation {descriptor.Name} should have authentication metadata");
+        }
+    }
+
+    [Fact]
+    public void When_manifest_generated_then_task_operations_have_tasks_host_exposure()
+    {
+        var app = new SampleBlueprintApp();
+
+        var taskOperations = app.GetOperationsForHost("tasks");
+        taskOperations.Should().NotBeEmpty("sample app has at least one background task operation");
+
+        foreach (var descriptor in taskOperations)
+        {
+            descriptor.TryGetFeatureData<OperationHostExposureFeatureData>(out var hosts)
+                .Should().BeTrue($"operation {descriptor.Name} should have host exposure metadata");
+            hosts!.HostNames.Should().Contain("tasks");
+            hosts.HostNames.Should().NotContain("http", $"task operation {descriptor.Name} should not be on the HTTP host");
         }
     }
 

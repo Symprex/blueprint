@@ -86,6 +86,16 @@
   Links:
     - rel=self url=/templates resource=TemplateListApiResource
 
+### SendTemplateSharedNotificationTask
+  Type: SendTemplateSharedNotificationTask
+  Source: Source Generated
+  Hosts: tasks
+  Discovery: operation (Blueprint.SourceGenerator.Sample.Contract.Api.SendTemplateSharedNotificationTask)
+  Failure Outcomes:
+    - legacy-validation-exception: Blueprint.Validation.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
+    - data-annotations-validation-exception: System.ComponentModel.DataAnnotations.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
+    - default-unhandled-exception: System.Exception -> Blueprint.Runtime.Exec.UnhandledExceptionResult
+
 ### UpdateTemplateCommand
   Type: UpdateTemplateCommand
   Source: Source Generated
