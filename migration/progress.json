@@ -12,14 +12,14 @@
   "current": {
     "activeWorkstream": "auditing-and-observability",
     "nextReadySlice": {
-      "id": "auditing/pipeline-applied-modules-manifest",
+      "id": "auditing/bpa001-diagnostic-audit-attributes-without-module",
       "workstream": "auditing-and-observability",
-      "title": "Generate applied-modules manifest method on each executor pipeline class"
+      "title": "BPA001 compile-time diagnostic when [DoNotAudit] or [Sensitive] used but AuditingModule not in pipeline config"
     },
     "lastCompletedSlice": {
-      "id": "auditing/audit-module-pipeline-contribution-proof",
+      "id": "auditing/sensitive-property-metadata",
       "workstream": "auditing-and-observability",
-      "title": "Prove AuditingModule contributes PostExecution audit sink call with DoNotAudit opt-out"
+      "title": "Add [Sensitive] attribute and expose sensitive property metadata in generated descriptors"
     },
     "openReviewGate": null,
     "openReviewGateRationale": null,
@@ -84,6 +84,18 @@
       "workstream": "auditing-and-observability",
       "title": "Prove AuditingModule contributes PostExecution audit sink call with DoNotAudit opt-out",
       "commit": "ef991cb"
+    },
+    {
+      "id": "auditing/pipeline-applied-modules-manifest",
+      "workstream": "auditing-and-observability",
+      "title": "Generate applied-modules manifest method on each executor pipeline class",
+      "commit": "fae9128"
+    },
+    {
+      "id": "auditing/sensitive-property-metadata",
+      "workstream": "auditing-and-observability",
+      "title": "Add [Sensitive] attribute and expose sensitive property metadata in generated descriptors",
+      "commit": "496aba1"
     }
   ],
   "decisions": [

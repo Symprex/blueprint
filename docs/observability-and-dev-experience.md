@@ -89,6 +89,45 @@ When adding or changing runtime behavior, ask:
 - what metadata or inspection surface would help on-call developers or AI agents understand the shape of the system?
 - is the output compatible with the repo's AOT-friendly, low-reflection goals?
 
+## Audit and sensitive-data observability surfaces
+
+The auditing module contributes compile-time and runtime observability hooks:
+
+### AuditingModule (pipeline contributor)
+
+`src\Blueprint.SourceGenerator\Modules\Auditing\AuditingModule.cs` generates a PostExecution audit-sink call in every pipeline where auditing is not suppressed. Generated code:
+
+- Checks `handlerResult.WasSuccessful` before auditing (only successful operations are audited)
+- Resolves `IAuditSink` from DI at runtime (no-op if not registered)
+- Respects `[DoNotAudit]` on the operation class to opt out entirely
+- Best-effort: failures in the sink do not break the pipeline
+
+Key files:
+
+- `src\Blueprint.Runtime\Auditing\IAuditSink.cs`
+- `src\Blueprint.Runtime\Auditing\DoNotAuditAttribute.cs`
+- `src\Blueprint.SourceGenerator\Modules\Auditing\AuditingModule.cs`
+
+### SensitivePropertyMetadataModule (descriptor contributor)
+
+`src\Blueprint.SourceGenerator\Modules\Auditing\SensitivePropertyMetadataModule.cs` scans operation properties for `[Sensitive]` at compile time and emits `SetFeatureData<SensitivePropertyMetadata>(...)` in the generated descriptor constructor. This gives audit sinks and logging pipelines a reflection-free way to discover which properties need redaction.
+
+Key files:
+
+- `src\Blueprint.Runtime\Auditing\SensitiveAttribute.cs`
+- `src\Blueprint.Runtime\Auditing\SensitivePropertyMetadata.cs`
+- `src\Blueprint.SourceGenerator\Modules\Auditing\SensitivePropertyMetadataModule.cs`
+
+### Pipeline applied-modules manifest
+
+`PipelineCodeGenerator.AddGetAppliedModulesMethod(...)` generates a `GetAppliedModules()` static method on each pipeline class. It returns the ordered set of contributor IDs that participated in the plan for that operation, making it inspectable without runtime reflection or logs.
+
+This supports:
+
+- dev-time inspection of which modules are active per operation
+- AI-agent-friendly introspection of generated pipeline composition
+- compliance tooling that needs to verify module participation
+
 ## Do not hide complexity
 
 Large API surfaces become dangerous when the only way to understand them is to read source and mentally simulate multiple generators.
