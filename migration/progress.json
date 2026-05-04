@@ -7,19 +7,19 @@
   },
   "referencePlans": {
     "masterPlan": "migration\\plan.md",
-    "workstreamPlan": "migration\\background-tasks\\plan.md"
+    "workstreamPlan": "migration\\persistence-and-transaction-coordination\\plan.md"
   },
   "current": {
-    "activeWorkstream": "background-tasks",
+    "activeWorkstream": "persistence-and-transaction-coordination",
     "nextReadySlice": {
-      "id": "background-tasks/task-return-type-diagnostic",
-      "workstream": "background-tasks",
-      "title": "Compile-time diagnostic for task operations with unsupported return types"
+      "id": "persistence/cross-module-variable-sharing-proof",
+      "workstream": "persistence-and-transaction-coordination",
+      "title": "Prove cross-module pipeline variable sharing for around-execution persistence coordination"
     },
     "lastCompletedSlice": {
-      "id": "background-tasks/post-execution-task-flush",
+      "id": "background-tasks/task-return-type-diagnostic",
       "workstream": "background-tasks",
-      "title": "PostExecution background task flush module with success guard and optional scheduler resolution"
+      "title": "BPT001 compile-time diagnostic for background task handlers returning discarded values"
     },
     "openReviewGate": null,
     "openReviewGateRationale": null,

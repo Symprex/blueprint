@@ -17,6 +17,9 @@ public class UnhandledExceptionResult : OperationResult
         this.Exception = exception;
     }
 
+    /// <inheritdoc />
+    public override bool WasSuccessful => false;
+
     /// <summary>
     /// Gets the unhandled exception captured by the pipeline shell.
     /// </summary>

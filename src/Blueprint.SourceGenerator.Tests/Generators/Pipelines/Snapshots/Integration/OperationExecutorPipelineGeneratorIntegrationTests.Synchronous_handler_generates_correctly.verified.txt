@@ -26,7 +26,7 @@ namespace Blueprint.Generated
 
             var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<int>(global::TestNamespace.TestQuery.Invoke());
 
-            if ((object)handlerResult is not Blueprint.Runtime.Exec.ValidationFailedResult && (object)handlerResult is not Blueprint.Runtime.Exec.UnhandledExceptionResult)
+            if (handlerResult.WasSuccessful)
             {
                 var backgroundTaskScheduler = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Tasks.IBackgroundTaskScheduler>(context.ServiceProvider);
                 if (backgroundTaskScheduler != null)

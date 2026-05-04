@@ -19,6 +19,9 @@ public class ValidationFailedResult : OperationResult
         this.ValidationResults = validationResults.ToList();
     }
 
+    /// <inheritdoc />
+    public override bool WasSuccessful => false;
+
     /// <summary>
     /// Gets the validation results that explain the failure.
     /// </summary>

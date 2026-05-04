@@ -8,6 +8,9 @@ namespace Blueprint.Runtime.Exec;
 public sealed class UnsupportedMediaTypeResult : OperationResult
 {
     /// <inheritdoc />
+    public override bool WasSuccessful => false;
+
+    /// <inheritdoc />
     public override Task ExecuteAsync(ApiOperationContext context)
     {
         return Task.CompletedTask;

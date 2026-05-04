@@ -10,6 +10,19 @@ namespace Blueprint;
 public abstract class OperationResult
 {
     /// <summary>
+    /// Indicates whether this result represents a successful pipeline outcome that should allow
+    /// post-execution side effects (persistence saves, background-task flushes, link population, etc.)
+    /// to proceed. Failure results override this to return <see langword="false"/>, which prevents
+    /// downstream modules from acting on an already-failed pipeline.
+    /// </summary>
+    /// <remarks>
+    /// Semantic non-2xx responses like <c>NotFoundResult</c> or <c>ConflictResult</c> are still considered
+    /// successful because they carry a valid response payload. Only pipeline-level failures (validation,
+    /// authentication, binding, unhandled exceptions) are excluded.
+    /// </remarks>
+    public virtual bool WasSuccessful => true;
+
+    /// <summary>
     /// Executes this result.
     /// </summary>
     /// <param name="context">The context representing the current Blueprint operation execution.</param>

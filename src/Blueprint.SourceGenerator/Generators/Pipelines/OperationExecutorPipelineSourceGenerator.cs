@@ -147,6 +147,7 @@ public partial class OperationExecutorPipelineSourceGenerator : IIncrementalGene
             new AuthenticationModule(),
             new ValidationModule(),
             new HandlerExecutionModule(),
+            new UnitOfWorkModule(),
             new BackgroundTaskFlushModule(),
             new LinkGenerationModule(),
             new PipelineReturnModule(),

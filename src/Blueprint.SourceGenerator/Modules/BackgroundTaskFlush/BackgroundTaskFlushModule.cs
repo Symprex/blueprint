@@ -42,9 +42,8 @@ public sealed class BackgroundTaskFlushModule : IBlueprintSourceGeneratorModule,
     {
         context.WriteBlankLine();
 
-        // Cast to object to allow pattern matching regardless of the handler result's static type
         context.If(
-            "(object)handlerResult is not Blueprint.Runtime.Exec.ValidationFailedResult && (object)handlerResult is not Blueprint.Runtime.Exec.UnhandledExceptionResult",
+            "handlerResult.WasSuccessful",
             branch =>
             {
                 branch.DeclareVariable(

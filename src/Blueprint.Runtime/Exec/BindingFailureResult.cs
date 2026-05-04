@@ -16,6 +16,9 @@ public sealed class BindingFailureResult : OperationResult
         this.Reason = reason ?? throw new ArgumentNullException(nameof(reason));
     }
 
+    /// <inheritdoc />
+    public override bool WasSuccessful => false;
+
     /// <summary>
     /// A short, human-readable description of the binding failure.
     /// </summary>

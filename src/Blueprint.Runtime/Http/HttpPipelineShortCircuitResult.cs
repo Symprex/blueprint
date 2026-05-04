@@ -10,6 +10,9 @@ namespace Blueprint.Runtime.Http;
 public sealed class HttpPipelineShortCircuitResult : OperationResult
 {
     /// <inheritdoc />
+    public override bool WasSuccessful => false;
+
+    /// <inheritdoc />
     public override Task ExecuteAsync(ApiOperationContext context)
     {
         return Task.CompletedTask;
