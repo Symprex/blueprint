@@ -34,6 +34,22 @@ namespace Blueprint.Generated
 
             if (handlerResult.WasSuccessful)
             {
+                var auditSink = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Auditing.IAuditSink>(context.ServiceProvider);
+                if (auditSink != null)
+                {
+                    try
+                    {
+                        await auditSink.RecordAsync(context, handlerResult, System.Threading.CancellationToken.None);
+                    }
+                    catch (System.Exception auditException)
+                    {
+                        context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent("audit.sink.failed", default, new System.Diagnostics.ActivityTagsCollection { { "exception.message", auditException.Message } }));
+                    }
+                }
+            }
+
+            if (handlerResult.WasSuccessful)
+            {
                 var backgroundTaskScheduler = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Tasks.IBackgroundTaskScheduler>(context.ServiceProvider);
                 if (backgroundTaskScheduler != null)
                 {

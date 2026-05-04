@@ -806,8 +806,9 @@ public class ValidationModuleTests
         pipelineSource.Should().Contain("return new Blueprint.Runtime.Exec.ValidationFailedResult(validationResults);");
         pipelineSource.Should().NotContain("throw new global::Blueprint.Validation.ValidationException(validationResults);");
 
-        // Exception handling (catch blocks, activity tagging) now lives in OperationExecutorShell
-        pipelineSource.Should().NotContain("catch (");
+        // Validation exception handling now lives in OperationExecutorShell, not in generated validation code
+        pipelineSource.Should().NotContain("catch (Blueprint.Validation.ValidationException");
+        pipelineSource.Should().NotContain("catch (System.ComponentModel.DataAnnotations.ValidationException");
 
         pipelineSource.IndexOf("global::System.String.IsNullOrWhiteSpace(operation.Name)", StringComparison.Ordinal)
             .Should()
@@ -860,8 +861,9 @@ public class ValidationModuleTests
         pipelineSource.Should().Contain("return new Blueprint.Runtime.Exec.ValidationFailedResult(validationResults);");
         pipelineSource.Should().NotContain("return new Blueprint.Middleware.ValidationFailedOperationResult(validationResults);");
 
-        // Exception translation catch blocks are now in OperationExecutorShell at runtime
-        pipelineSource.Should().NotContain("catch (");
+        // Validation exception translation catch blocks are now in OperationExecutorShell at runtime
+        pipelineSource.Should().NotContain("catch (Blueprint.Validation.ValidationException");
+        pipelineSource.Should().NotContain("catch (System.ComponentModel.DataAnnotations.ValidationException");
     }
 
     [Fact]

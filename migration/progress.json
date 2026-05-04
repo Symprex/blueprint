@@ -7,19 +7,19 @@
   },
   "referencePlans": {
     "masterPlan": "migration\\plan.md",
-    "workstreamPlan": "migration\\messaging-and-integration-hosts\\plan.md"
+    "workstreamPlan": "migration\\auditing-and-observability\\plan.md"
   },
   "current": {
-    "activeWorkstream": "messaging-and-integration-hosts",
+    "activeWorkstream": "auditing-and-observability",
     "nextReadySlice": {
+      "id": "auditing/audit-module-pipeline-contribution-proof",
+      "workstream": "auditing-and-observability",
+      "title": "Prove AuditingModule contributes PostExecution audit sink call with DoNotAudit opt-out"
+    },
+    "lastCompletedSlice": {
       "id": "messaging/document-consumer-extensibility-contract",
       "workstream": "messaging-and-integration-hosts",
       "title": "Document proven consumer-package extensibility contract in skills and docs"
-    },
-    "lastCompletedSlice": {
-      "id": "messaging/dual-companion-generator-integration-proof",
-      "workstream": "messaging-and-integration-hosts",
-      "title": "Prove dual companion generators (descriptor + pipeline) compose for consumer host with runtime partitioning"
     },
     "openReviewGate": null,
     "openReviewGateRationale": null,
@@ -72,6 +72,12 @@
       "workstream": "messaging-and-integration-hosts",
       "title": "Prove dual companion generators (descriptor + pipeline) compose for consumer host with runtime partitioning",
       "commit": "1d47a1e"
+    },
+    {
+      "id": "messaging/document-consumer-extensibility-contract",
+      "workstream": "messaging-and-integration-hosts",
+      "title": "Document proven consumer-package extensibility contract in skills and docs",
+      "commit": "7b2d676"
     }
   ],
   "decisions": [

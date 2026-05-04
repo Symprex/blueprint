@@ -290,10 +290,11 @@ public class OperationExecutorPipelineGeneratorIntegrationTests
         pipelineSource.Should().NotBeNull();
 
         // Exception handling now lives in OperationExecutorShell at runtime.
-        // Generated pipeline should contain ExecuteCoreAsync, not catch blocks.
+        // Generated pipeline should contain ExecuteCoreAsync, not validation/exception-translation catch blocks.
         pipelineSource!.Should().Contain("ExecuteCoreAsync");
         pipelineSource.Should().Contain("OperationExecutorShell");
-        pipelineSource.Should().NotContain("catch (");
+        pipelineSource.Should().NotContain("catch (Blueprint.Validation.ValidationException");
+        pipelineSource.Should().NotContain("catch (System.ComponentModel.DataAnnotations.ValidationException");
     }
 
     [Fact]
