@@ -114,7 +114,7 @@ public class ReferenceAppHttpEndToEndIntegrationTests
     }
 
     [Fact]
-    public async Task When_create_template_with_valid_body_then_returns_200_with_template_resource()
+    public async Task When_create_template_with_valid_body_then_returns_201_with_resource_event_envelope()
     {
         var endpoints = CreateEndpoints();
         endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
@@ -137,9 +137,11 @@ public class ReferenceAppHttpEndToEndIntegrationTests
                 authenticationType: "test"));
         });
 
-        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        response.StatusCode.Should().Be(StatusCodes.Status201Created);
         response.ContentType.Should().Be("application/json; charset=utf-8");
-        response.Body.Should().Contain("template-");
+        response.Body.Should().Contain("\"eventId\":\"template.created\"");
+        response.Body.Should().Contain("\"resourceId\":\"template-");
+        response.Body.Should().Contain("\"content\":");
         response.Body.Should().Contain("My Template");
     }
 
