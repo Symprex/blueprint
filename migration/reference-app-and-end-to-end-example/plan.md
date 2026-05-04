@@ -173,6 +173,10 @@ Layer 1 is now complete and is the baseline for future reference-app work.
 Start Layer 2 with a validation-focused command and end-to-end proof, then grow the inspection artifacts from that
 coherent failure path.
 
+Layer 2 is now complete: `CreateTemplateCommand` (POST with validation), `GetTemplateQuery` (GET with SelfLink),
+`UpdateTemplateCommand` (PUT with body binding), `GetLinkFor` fix, programmatic inspection tests proving the full
+registered surface (operations, URLs, methods, links, host exposure, serializer context).
+
 ### Layer 3 - Demonstrate the richer API surface
 
 - add OpenAPI as a reviewable artifact
@@ -180,6 +184,10 @@ coherent failure path.
 - add any carefully-chosen grouped-handler or package-extension examples that are part of the preferred future authoring story
 
 Each layer should leave the sample runnable and comprehensible.
+
+Layer 3 OpenAPI and void-command items are now complete: OpenAPI snapshot test locks the full document shape,
+`ArchiveTemplateCommand` (DELETE, void handler) demonstrates no-content operations. Resource-event and
+grouped-handler examples remain deferred until their respective workstream designs are settled.
 
 ## Testing role
 

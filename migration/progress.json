@@ -7,22 +7,30 @@
   },
   "referencePlans": {
     "masterPlan": "migration\\plan.md",
-    "workstreamPlan": "migration\\reference-app-and-end-to-end-example\\plan.md"
+    "workstreamPlan": "migration\\auditing-and-observability\\plan.md"
   },
   "current": {
-    "activeWorkstream": "reference-app-and-end-to-end-example",
+    "activeWorkstream": "auditing-and-observability",
     "nextReadySlice": {
-      "id": "reference-app/layer-3-openapi-artifact",
+      "id": "phase-1-closure/review-artifact-set",
       "workstream": "reference-app-and-end-to-end-example",
-      "title": "Add OpenAPI as a reviewable artifact with snapshot tests for the reference app"
+      "title": "Generate Phase 1 review artifact set and close Phase 1 exit gate"
     },
     "lastCompletedSlice": {
-      "id": "reference-app/layer-2-inspection-artifacts",
-      "workstream": "reference-app-and-end-to-end-example",
-      "title": "Layer 2 complete: CRUD lifecycle, links, GetLinkFor fix, and programmatic inspection tests"
+      "id": "pipeline/re-query-decision-gate",
+      "workstream": "pipeline-composition-and-execution",
+      "title": "Close re-query decision gate: no general nested execution (Decision 001)"
     },
     "openReviewGate": null
   },
+  "decisions": [
+    {
+      "id": "001",
+      "title": "No general nested operation execution",
+      "date": "2025-07-18",
+      "document": "migration/decisions/001-no-general-nested-execution.md"
+    }
+  ],
   "orchestrationContract": {
     "mustImplementAfterSliceSelection": true,
     "mustCreateSessionPlanAndSqlTodos": true,

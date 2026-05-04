@@ -247,11 +247,11 @@ This phase ends when the repository can prove a coherent source-generated HTTP e
 
 **Phase 1 exit gate**
 
-- [ ] Operation discovery, pipeline composition, result model, error model, HTTP host, validation, auth, and observability all work together.
+- [x] Operation discovery, pipeline composition, result model, error model, HTTP host, validation, auth, and observability all work together.
 - [x] The reference app is runnable with real handlers and deterministic seeded behavior.
-- [ ] At least one end-to-end reference-app test exercises discovery -> pipeline -> result -> error -> HTTP host -> validation/auth/observability together.
-- [ ] The re-query decision gate is explicitly closed.
-- [ ] Generated inspection surfaces are good enough for humans and AI agents to inspect the app surface.
+- [x] At least one end-to-end reference-app test exercises discovery -> pipeline -> result -> error -> HTTP host -> validation/auth/observability together.
+- [x] The re-query decision gate is explicitly closed (`migration/decisions/001-no-general-nested-execution.md`).
+- [x] Generated inspection surfaces are good enough for humans and AI agents to inspect the app surface.
 - [ ] The Phase 1 review artifact set exists: route/host manifest, auth/result manifest, generated diff review, and end-to-end test evidence.
 
 ### Phase 2 - Resource/API shape parity
@@ -681,14 +681,14 @@ Run this as a paired design loop with workstream 7. Do not freeze pipeline, HTTP
 - [ ] Implement the shared executor shell for activity, logging, exception handling, and cleanup.
 - [ ] Support handler discovery for inline handlers, external handlers, and grouped handlers.
 - [ ] Define result normalization and post-execution contribution points.
-- [ ] Close the re-query decision gate explicitly before resource work starts.
+- [x] Close the re-query decision gate explicitly before resource work starts (`migration/decisions/001-no-general-nested-execution.md`).
 
 ### Acceptance criteria
 
 - [ ] A pipeline can be composed from ordered contributors without hard-coded feature interleaving.
 - [ ] The shared shell owns the cross-cutting behavior consistently.
 - [ ] At least one middleware-style module plugs into the new pipeline path cleanly.
-- [ ] The re-query/nested-execution decision is documented and testable.
+- [x] The re-query/nested-execution decision is documented and testable.
 
 ### Tests and benchmarks
 
