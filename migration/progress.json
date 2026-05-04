@@ -12,14 +12,14 @@
   "current": {
     "activeWorkstream": "resource-model-links-and-post-processing",
     "nextReadySlice": {
-      "id": "resource-model/resource-event-family-authoring",
+      "id": "resource-model/resource-event-metadata-module-update",
       "workstream": "resource-model-links-and-post-processing",
-      "title": "Resource-event family authoring surface: [ResourceEventFamily], [ResourceEventReason], concrete event result types"
+      "title": "Update ResourceEventMetadataModule to read event IDs from generated event record types"
     },
     "lastCompletedSlice": {
-      "id": "resource-model/ambiguous-self-link-diagnostic",
+      "id": "resource-model/resource-event-family-authoring",
       "workstream": "resource-model-links-and-post-processing",
-      "title": "BPLG004 diagnostic for ambiguous self-link declarations (same resource type, multiple URLs)"
+      "title": "Resource-event family authoring surface with [ResourceEventFamily], [ResourceEventReason], concrete event result types, sample app adoption"
     },
     "openReviewGate": null
   },
