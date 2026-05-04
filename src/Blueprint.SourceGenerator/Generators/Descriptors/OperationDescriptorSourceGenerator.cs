@@ -4,6 +4,7 @@ using Blueprint.SourceGenerator.Generators.ApiResources;
 using Blueprint.SourceGenerator.Generators.Pipelines;
 using Blueprint.SourceGenerator.Helpers;
 using Blueprint.SourceGenerator.Modules;
+using Blueprint.SourceGenerator.Modules.Auditing;
 using Blueprint.SourceGenerator.Modules.Authentication;
 using Blueprint.SourceGenerator.Planning;
 using Microsoft.CodeAnalysis;
@@ -233,6 +234,7 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
             new OperationGroupMetadataModule(),
             new HttpResponseMetadataModule(),
             new SerializerContextCoverageModule(),
+            new SensitivePropertyMetadataModule(),
             new OperationDiscoveryManifestModule(),
             .. additionalModules,
         ]);
