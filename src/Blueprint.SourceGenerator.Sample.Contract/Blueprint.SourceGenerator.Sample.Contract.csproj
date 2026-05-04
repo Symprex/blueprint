@@ -10,6 +10,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Blueprint.Runtime.Model\Blueprint.Runtime.Model.csproj" />
+    <ProjectReference Include="..\Blueprint.Runtime\Blueprint.Runtime.csproj" />
     <ProjectReference Include="..\Blueprint.SourceGenerator\Blueprint.SourceGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
   </ItemGroup>
 

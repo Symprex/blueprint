@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using Blueprint.Model;
 using Blueprint.Model.Attributes;
+using Blueprint.Runtime.Exec;
 
 namespace Blueprint.SourceGenerator.Sample.Contract.Api;
 
@@ -12,7 +13,7 @@ namespace Blueprint.SourceGenerator.Sample.Contract.Api;
 [RootLink("/templates/{Id}")]
 [HttpPut]
 [MustBeAuthenticated]
-public partial class UpdateTemplateCommand : ICommand
+public partial class UpdateTemplateCommand : ICommand<ResourceEventResult<TemplateApiResource>>
 {
     /// <summary>
     /// The identifier of the template to update (bound from the route).

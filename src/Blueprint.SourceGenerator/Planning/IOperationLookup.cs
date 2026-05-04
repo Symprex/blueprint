@@ -54,7 +54,6 @@ public sealed record SelfLinkBindingInfo(string UrlTemplate, INamedTypeSymbol Re
 public sealed class CompilationOperationLookup(Compilation compilation) : IOperationLookup
 {
     private const string OperationMetadataName = "Blueprint.Model.IOperation";
-    private const string SelfLinkAttributeMetadataName = "Blueprint.Model.Attributes.SelfLinkAttribute";
     private readonly INamedTypeSymbol? _operationInterface = compilation.GetTypeByMetadataName(OperationMetadataName);
     private Dictionary<INamedTypeSymbol, List<SelfLinkBindingInfo>>? _selfLinkCache;
 
@@ -95,8 +94,7 @@ public sealed class CompilationOperationLookup(Compilation compilation) : IOpera
 
         this._selfLinkCache = new Dictionary<INamedTypeSymbol, List<SelfLinkBindingInfo>>(SymbolEqualityComparer.Default);
 
-        var selfLinkAttributeType = compilation.GetTypeByMetadataName(SelfLinkAttributeMetadataName);
-        if (selfLinkAttributeType is null || this._operationInterface is null)
+        if (this._operationInterface is null)
         {
             return;
         }
@@ -115,7 +113,9 @@ public sealed class CompilationOperationLookup(Compilation compilation) : IOpera
 
             foreach (var attribute in type.GetAttributes())
             {
-                if (!SymbolEqualityComparer.Default.Equals(attribute.AttributeClass, selfLinkAttributeType))
+                // Match by class name rather than symbol equality because each assembly
+                // gets its own internal copy of the source-generated marker attribute.
+                if (attribute.AttributeClass?.Name != "SelfLinkAttribute")
                 {
                     continue;
                 }

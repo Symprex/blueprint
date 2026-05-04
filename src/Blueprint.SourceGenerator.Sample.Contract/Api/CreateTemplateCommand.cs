@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using Blueprint.Model;
 using Blueprint.Model.Attributes;
+using Blueprint.Runtime.Exec;
 
 namespace Blueprint.SourceGenerator.Sample.Contract.Api;
 
@@ -12,7 +13,7 @@ namespace Blueprint.SourceGenerator.Sample.Contract.Api;
 [RootLink("/templates")]
 [HttpPost]
 [MustBeAuthenticated]
-public partial class CreateTemplateCommand : ICommand
+public partial class CreateTemplateCommand : ICommand<ResourceEventResult<TemplateApiResource>>
 {
     /// <summary>
     /// The name of the template to create. Required and limited to 200 characters.
