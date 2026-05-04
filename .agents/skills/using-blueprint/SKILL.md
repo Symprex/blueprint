@@ -41,6 +41,30 @@ Do not use this skill to change Blueprint internals in `blueprint-source-gen`; u
 - Companion analyzer packages should derive from Blueprint's default descriptor/pipeline generator composition instead of replacing the built-in module set wholesale.
 - Package-owned exception translators belong in generator modules that contribute through `IExceptionTranslationContributor`; that keeps ordering/conflict diagnostics and descriptor failure metadata aligned with Blueprint's built-in translators.
 
+## Consumer companion generator packages
+
+A consumer package can ship companion generators that extend Blueprint's compile-time behavior for custom hosts:
+
+1. **Companion descriptor generator** — derives from `OperationDescriptorSourceGenerator`, calls `CreateDefaultConfig(new CustomHostModule())` in the constructor. Adds host exposure and custom descriptor metadata for operations matching a consumer-defined marker interface.
+2. **Companion pipeline generator** — derives from `OperationExecutorPipelineSourceGenerator`, calls `CreateDefaultConfig(new CustomPipelineModule())` in the constructor. Adds host-specific pipeline steps conditionally for marked operations.
+3. Both generators can run in the same compilation without conflicts (descriptor files use `*_Descriptor.g.cs` hint names, pipeline files use `*ExecutorPipeline.g.cs`).
+
+### Custom host registration pattern
+
+- Implement `IBlueprintSourceGeneratorModule`, `IDescriptorContributor`, and `IEnabledHostContributor` on a single module
+- Set `Category = BlueprintModuleCategory.Core` and `Order = 0` (host modules MUST be Core to run before projection modules)
+- Return the custom host name from `IEnabledHostContributor.HostNames` (e.g., `["messaging"]`)
+- In `ContributeToDescriptor`, check `context.GetOperationTypeSymbol().AllInterfaces` for the consumer marker interface, then call `context.AddMetadata(new HostExposureRegistration("messaging", locationInfo))`
+
+### Conditional pipeline module pattern
+
+- Implement `IBlueprintSourceGeneratorModule` and `IPipelineContributor`
+- In `ContributeToPipeline`, check `context.Operation.TypeSymbol.AllInterfaces` for the consumer marker
+- Early-return if not matched — this ensures non-matching operations get the standard pipeline
+- Use `BlueprintModuleCategory.Consumer` for pipeline-only modules (ordering relative to Core modules is fine here since pipeline modules don't need to run before projection)
+
+At runtime, `BlueprintApp.GetOperationsForHost("custom-host")` returns operations whose generated descriptors carry `OperationHostExposureFeatureData(["custom-host"])` — the runtime mechanism is completely host-name-agnostic.
+
 ## Validation contract
 
 - Treat validation attributes as compile-time inputs first and runtime behavior second; if the build can prove the contract is wrong, expect a diagnostic instead of a runtime repair path.

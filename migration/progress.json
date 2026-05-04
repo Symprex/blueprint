@@ -12,14 +12,14 @@
   "current": {
     "activeWorkstream": "messaging-and-integration-hosts",
     "nextReadySlice": {
+      "id": "messaging/document-consumer-extensibility-contract",
+      "workstream": "messaging-and-integration-hosts",
+      "title": "Document proven consumer-package extensibility contract in skills and docs"
+    },
+    "lastCompletedSlice": {
       "id": "messaging/dual-companion-generator-integration-proof",
       "workstream": "messaging-and-integration-hosts",
       "title": "Prove dual companion generators (descriptor + pipeline) compose for consumer host with runtime partitioning"
-    },
-    "lastCompletedSlice": {
-      "id": "messaging/consumer-host-contributor-proof",
-      "workstream": "messaging-and-integration-hosts",
-      "title": "Prove consumer IHostContributor can register alternate host exposure via companion generator"
     },
     "openReviewGate": null,
     "openReviewGateRationale": null,
@@ -66,6 +66,12 @@
       "workstream": "messaging-and-integration-hosts",
       "title": "Prove consumer IHostContributor can register alternate host exposure via companion generator",
       "commit": "fe3444d"
+    },
+    {
+      "id": "messaging/dual-companion-generator-integration-proof",
+      "workstream": "messaging-and-integration-hosts",
+      "title": "Prove dual companion generators (descriptor + pipeline) compose for consumer host with runtime partitioning",
+      "commit": "1d47a1e"
     }
   ],
   "decisions": [

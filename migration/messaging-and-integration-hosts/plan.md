@@ -91,3 +91,30 @@ The preferred path should be able to express examples such as:
 ## Sequencing
 
 Implement after the core host and pipeline model exists; package-specific integrations can then build on stable seams.
+
+## Durable progress
+
+### Completed proof slices
+
+1. **consumer-pipeline-composition-proof** (commit 14e09c3) — proved companion generator packages can compose `BlueprintSourceGenerationConfig` with custom pipeline modules via `OperationExecutorPipelineSourceGenerator` inheritance
+2. **descriptor-contributor-composition-proof** (commit a0ed4a7) — proved consumer `IDescriptorContributor` can extend descriptor metadata via companion `OperationDescriptorSourceGenerator` inheritance
+3. **consumer-host-contributor-proof** (commit fe3444d) — proved consumer `IEnabledHostContributor` can register alternate host exposure via companion generator, including diagnostic validation (BPOD001/BPOD002)
+4. **dual-companion-generator-integration-proof** (commit 1d47a1e) — proved both companion generators (descriptor + pipeline) compose in same compilation without conflicts, with conditional pipeline contribution based on marker interface
+
+### Key findings from proofs
+
+- Host-contributing modules MUST use `BlueprintModuleCategory.Core` (not Consumer) because `OperationDiscoveryManifestModule` (Core, Order=100) reads host-exposure metadata during descriptor contribution
+- `ContributorRegistrationComparer` sorts by Category first (Core=0, Consumer=1), then Order, then ContributorId — Consumer modules ALWAYS run after ALL Core modules
+- Pipeline modules can conditionally contribute by checking `context.Operation.TypeSymbol.AllInterfaces` for marker interfaces
+- `HostExposureRegistration` accepts arbitrary string host names — no factory method needed
+- Runtime `BlueprintApp.GetOperationsForHost()` is completely host-name-agnostic (reads `OperationHostExposureFeatureData`)
+- `AppDataModelSourceGenerator` is sealed with internal config constructor — consumer companion packages cannot extend app-model generation; the pipeline is: companion descriptor generator adds host exposure → default app generator registers all operations → runtime partitions by feature data
+
+### Remaining production features (not yet started)
+
+- Pluggable handler discovery for alternative handler patterns (e.g., Rebus `IHandleMessages<T>`)
+- Constrained runtime middleware fallback escape hatch
+- Compile-time diagnostic: consumer package uses module attributes without including matching generator module
+- Active modules/packages manifest section
+- Handler-source provenance per operation in debug manifest
+- NuGet packaging guidance for shipping companion generators
