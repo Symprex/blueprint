@@ -10,17 +10,17 @@
     "workstreamPlan": "migration\\auditing-and-observability\\plan.md"
   },
   "current": {
-    "activeWorkstream": "authentication-and-authorisation",
+    "activeWorkstream": "resource-model-links-and-post-processing",
     "nextReadySlice": {
-      "id": "auth/operations-auth-manifest",
-      "workstream": "authentication-and-authorisation",
-      "title": "Generate operations.auth build manifest summarising per-operation access mode and scope requirements"
+      "id": "resource/link-manifest-module",
+      "workstream": "resource-model-links-and-post-processing",
+      "title": "Add LinkManifestModule projecting URL and self-link metadata into the debug manifest"
     },
     "lastCompletedSlice": {
-      "id": "auth/from-resource-scope-pair-inheritance",
+      "id": "auth/operations-auth-manifest",
       "workstream": "authentication-and-authorisation",
-      "title": "Introduce [FromResource] for compile-time scope-pair inheritance from a referenced operation",
-      "commit": "767f28d"
+      "title": "Add AuthorizationManifestModule for per-operation auth build manifest",
+      "commit": "3418fd7"
     },
     "openReviewGate": null,
     "openReviewGateRationale": null,
@@ -151,6 +151,12 @@
       "workstream": "authentication-and-authorisation",
       "title": "Introduce [FromResource] for compile-time scope-pair inheritance from a referenced operation",
       "commit": "767f28d"
+    },
+    {
+      "id": "auth/operations-auth-manifest",
+      "workstream": "authentication-and-authorisation",
+      "title": "Add AuthorizationManifestModule for per-operation auth build manifest",
+      "commit": "3418fd7"
     }
   ],
   "decisions": [

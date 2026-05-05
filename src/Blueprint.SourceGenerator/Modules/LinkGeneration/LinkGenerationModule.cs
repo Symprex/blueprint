@@ -2,6 +2,7 @@ using System.Text.RegularExpressions;
 using Blueprint.SourceGenerator.CodeWriter;
 using Blueprint.SourceGenerator.Generators.Pipelines.Model;
 using Blueprint.SourceGenerator.Helpers;
+using Blueprint.SourceGenerator.Modules.LinkGeneration;
 using Blueprint.SourceGenerator.Planning;
 using Microsoft.CodeAnalysis;
 
@@ -486,10 +487,6 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
 
         return $"$\"{interpolated}\"";
     }
-
-    private sealed record UrlRegistration(string Url, LocationInfo? LocationInfo);
-
-    private sealed record LinkRegistration(string Url, string Rel, INamedTypeSymbol ResourceType, LocationInfo LocationInfo);
 
     private sealed record LinkableResourceBinding(INamedTypeSymbol ResourceType, string ContentAccessExpression, string GuardTypeName);
 }

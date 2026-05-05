@@ -7,6 +7,7 @@ using Blueprint.SourceGenerator.Modules;
 using Blueprint.SourceGenerator.Modules.Auditing;
 using Blueprint.SourceGenerator.Modules.Authentication;
 using Blueprint.SourceGenerator.Modules.Authorization;
+using Blueprint.SourceGenerator.Modules.LinkGeneration;
 using Blueprint.SourceGenerator.Planning;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -239,6 +240,7 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
             new SensitivePropertyMetadataModule(),
             new OperationDiscoveryManifestModule(),
             new AuthorizationManifestModule(),
+            new LinkManifestModule(),
             .. additionalModules,
         ]);
     }
