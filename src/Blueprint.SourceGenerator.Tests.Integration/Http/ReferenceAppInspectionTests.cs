@@ -216,4 +216,29 @@ public class ReferenceAppInspectionTests
         deleteDescriptor.GetFeatureData<OperationHttpMethodMetadataFeatureData>()!
             .HttpMethods.Should().ContainSingle(m => m == "DELETE");
     }
+
+    [Fact]
+    public void When_app_registered_then_operation_group_metadata_is_projected()
+    {
+        var app = CreateRegisteredApp();
+
+        var descriptor = app.FindOperation(typeof(GetTemplatesQuery));
+        var groupData = descriptor.GetFeatureData<OperationGroupMetadataFeatureData>();
+
+        groupData.Should().NotBeNull("GetTemplatesQuery has [ApiOperations(\"Templates\")]");
+        groupData!.GroupName.Should().Be("Templates");
+    }
+
+    [Fact]
+    public void When_app_registered_then_sensitive_property_metadata_is_projected()
+    {
+        var app = CreateRegisteredApp();
+
+        var descriptor = app.FindOperation(typeof(CreateTemplateCommand));
+        var sensitiveData = descriptor.GetFeatureData<Blueprint.Auditing.SensitivePropertyMetadata>();
+
+        sensitiveData.Should().NotBeNull("CreateTemplateCommand has [Sensitive] properties");
+        sensitiveData!.PropertyNames.Should().Contain("HtmlSource");
+        sensitiveData.PropertyNames.Should().Contain("PlainTextSource");
+    }
 }
