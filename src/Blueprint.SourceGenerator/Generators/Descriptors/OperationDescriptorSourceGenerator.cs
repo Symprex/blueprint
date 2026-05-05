@@ -7,7 +7,9 @@ using Blueprint.SourceGenerator.Modules;
 using Blueprint.SourceGenerator.Modules.Auditing;
 using Blueprint.SourceGenerator.Modules.Authentication;
 using Blueprint.SourceGenerator.Modules.Authorization;
+using Blueprint.SourceGenerator.Modules.BackgroundTaskFlush;
 using Blueprint.SourceGenerator.Modules.LinkGeneration;
+using Blueprint.SourceGenerator.Modules.Persistence;
 using Blueprint.SourceGenerator.Modules.Validation;
 using Blueprint.SourceGenerator.Planning;
 using Microsoft.CodeAnalysis;
@@ -243,6 +245,8 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
             new AuthorizationManifestModule(),
             new LinkManifestModule(),
             new ValidationManifestModule(),
+            new PersistenceManifestModule(),
+            new BackgroundTaskFlushManifestModule(),
             .. additionalModules,
         ]);
     }
