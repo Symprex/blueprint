@@ -128,6 +128,25 @@ This supports:
 - AI-agent-friendly introspection of generated pipeline composition
 - compliance tooling that needs to verify module participation
 
+### PerformanceMetricsModule (pipeline opt-out)
+
+`src\Blueprint.SourceGenerator\Modules\Observability\PerformanceMetricsModule.cs` detects `[DoNotRecordPerformanceMetrics]` on operation types and sets `PipelinePlan.SuppressActivity` so the generated pipeline omits the `Activity`/trace span for that operation. This is useful for high-frequency, low-value operations (e.g., health checks, search endpoints) that would overwhelm trace collectors without providing diagnostic value.
+
+Key files:
+
+- `src\Blueprint.Runtime\Auditing\DoNotRecordPerformanceMetricsAttribute.cs`
+- `src\Blueprint.SourceGenerator\Modules\Observability\PerformanceMetricsModule.cs`
+
+### Structured audit events with trace correlation
+
+The generated audit pipeline emits `System.Diagnostics.Activity` events with `blueprint.audit.*` semantic names:
+
+- `blueprint.audit.record` — emitted before calling `IAuditSink` with `blueprint.operation.type`, `blueprint.audit.trace_id`, and `blueprint.audit.span_id` tags
+- `blueprint.audit.completed` — emitted after successful audit recording
+- `blueprint.audit.failed` — emitted on audit sink failure with exception info and trace context
+
+These events enable cross-system correlation: `IAuditSink` implementations can read trace/span IDs from the enclosing `Activity` to persist alongside the audit record, linking audit entries to distributed traces without runtime coupling.
+
 ## Do not hide complexity
 
 Large API surfaces become dangerous when the only way to understand them is to read source and mentally simulate multiple generators.
