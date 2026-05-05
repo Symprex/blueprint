@@ -24,6 +24,19 @@ If the compiler or generator can detect a bad configuration, it should do so wit
 | `BP200`-`BP299` | warnings or info around performance and ergonomics, such as async usage or static handlers |
 | `BP300`-`BP399` | informational diagnostics that can help inspect generator behavior |
 
+Current pipeline IDs in the `BP100`-`BP104` handler-validation range:
+
+- `BP100`: no handler found for operation.
+- `BP101`: multiple handlers found for operation (each operation can have only one handler).
+- `BP102`: invalid handler signature (parameters or return type not resolvable).
+- `BP103`: handler parameter cannot be resolved from context, operation, or DI (warning).
+- `BP104`: operation class must be partial to support generated pipelines.
+
+Current pipeline IDs in the `BP200`-`BP202` performance/ergonomics range:
+
+- `BP201`: inline handler doesn't use instance state — consider making it static (info).
+- `BP202`: handler class not found or not accessible in current compilation (error).
+
 These diagnostics should stay stable and descriptive because they are part of the repo's human and AI feedback loop.
 
 Recent pipeline-contract coverage in that range includes `BP105` for nullable plain-value handler returns, `BP106` for unsupported `Results<T1, T2>` member types, `BP107` for handler returns that do not match the declared operation result contract, `BP108` for host-exposed semantic result contracts that the current enabled host executor set cannot translate, `BP109` for host-exposed semantic result unions whose supported members still collapse to the same current host response shape, `BP110` for host-exposed semantic result unions that still share the same HTTP status code without an explicit host/client discrimination strategy, `BP111` for `Results<T1, T2>` contracts whose flattened descriptor outcomes would drift away from the declared semantic member set, `BP112` for HTTP-visible unions that try to mix host-neutral `NoResultOperationResult` with host-owned no-content/status-only result families such as `HttpNoContentResult`, and `BP113` for ordered pipeline exception-translator policies whose non-fallback translators claim overlapping exception families. The current HTTP executor surface now also includes the host-neutral `CreatedResult<T>` semantic shape, which maps to body-bearing `201 Created` responses, the host-neutral `AcceptedResult<T>` semantic shape, which maps to body-bearing `202 Accepted` responses, the host-neutral `NotFoundResult<T>` semantic shape, which maps to body-bearing `404 Not Found` responses, the host-neutral `ConflictResult<T>` semantic shape, which maps to body-bearing `409 Conflict` responses, the canonical `ValidationFailedResult` semantic shape, which maps to body-bearing `422 Unprocessable Entity` problem responses, and the host-neutral `KeyOnlyResourceEventResult` semantic shape, which maps to empty `201 Created` responses by convention. `ValidationFailedResult` is now both the canonical validation-failure name and part of the supported HTTP executor surface, so host-exposed operations that declare it no longer trigger `BP108` simply for using the canonical validation-failure contract. `Blueprint.Runtime.Exec.UnhandledExceptionResult` is now the canonical internal unhandled-exception fallback name, with `Blueprint.UnhandledExceptionOperationResult` retained as a compatibility alias, and both names should continue to fail with `BP111` when a declared public result contract tries to surface them as semantic outcomes. `BP113` keeps the exception shell deterministic too: only the single catch-all fallback translator may overlap a more specific translator family, the validated ordering policy still emits that fallback last, and package-provided translators now enter that same overlap check through `IExceptionTranslationContributor` instead of bypassing it through ad-hoc generator wiring. Keep those rules compile-time-first: the generator should reject unsupported or ambiguous result shapes before runtime execution needs to guess how to normalize them, and the compile-time response-shape rules should preserve the deliberate distinction between `CreatedResult<T>` (`201` with body), `AcceptedResult<T>` (`202` with body), `NotFoundResult<T>` (`404` with body), `ConflictResult<T>` (`409` with body), `ValidationFailedResult` (`422` with body), `KeyOnlyResourceEventResult` (`201` empty), `NoResultOperationResult` (`200` empty), and `HttpNoContentResult` (`204` empty).
@@ -159,6 +172,34 @@ Current persistence IDs in active use:
 
 - `BPP001`: `[DoNotSaveChanges]` applied to a non-command operation where it has no effect (only `ICommand` operations trigger the `UnitOfWorkModule`).
 
+### Auditing diagnostics
+
+Auditing diagnostics detect misapplied audit-related attributes that have no observable effect at runtime.
+
+Reserved direction:
+
+| Range | Meaning |
+| --- | --- |
+| `BPA001`-`BPA099` | auditing diagnostics for invalid or no-effect declarative contracts that the generator can prove at build time |
+
+Current auditing IDs in active use:
+
+- `BPA001`: `[Sensitive]` applied to a non-public property where it has no effect (warning — only public properties appear in the audit metadata surface).
+
+### Background task diagnostics
+
+Background task diagnostics detect handler signatures that produce values which will be silently discarded during background execution.
+
+Reserved direction:
+
+| Range | Meaning |
+| --- | --- |
+| `BPT001`-`BPT099` | background task diagnostics for configurations that the generator can prove problematic at build time |
+
+Current background task IDs in active use:
+
+- `BPT001`: background task handler returns a value that will be discarded (warning — background tasks run without a consumer for the returned value; prefer `void`/`Task` or `OperationResult`).
+
 ### Authentication and authorisation diagnostics
 
 Authentication and access-mode diagnostics detect conflicting or misapplied auth attributes and project explicit access-mode metadata into descriptors.
@@ -243,12 +284,14 @@ The preferred targets for future validation include:
 
 If a feature depends on a string, type name, metadata shape, or serializer contract that is knowable during generation, the long-term goal is to validate it before the app runs.
 
-The foundation module system now reserves `BPMOD001`-`BPMOD004` for contributor-composition and pipeline-planning diagnostics:
+The foundation module system now reserves `BPMOD001`-`BPMOD006` for contributor-composition and pipeline-planning diagnostics:
 
-- duplicate unique contributors
-- missing contributor dependencies
-- cyclic contributor dependency graphs
-- missing required pipeline variables discovered during pipeline-plan validation, including values that only become available after the consuming contributor stage
+- `BPMOD001`: duplicate unique contributors (a contributor marked `IsUnique` appears more than once for the same capability).
+- `BPMOD002`: missing contributor dependency (a contributor declares a dependency that no configured contributor can satisfy).
+- `BPMOD003`: cyclic contributor dependency graphs (contributor dependencies form a cycle preventing deterministic ordering).
+- `BPMOD004`: missing required pipeline variables discovered during pipeline-plan validation (a required variable is not provided or only becomes available after the consuming contributor's declared stage).
+- `BPMOD005`: operation type does not exist in current compilation (a public planning seam was asked to build data for a missing type).
+- `BPMOD006`: duplicate debug-manifest entry key (multiple contributors claim the same manifest section key).
 
 These are compile-time failures because non-deterministic module composition or unresolved required pipeline variables would make generated output unstable and hard to inspect. `BPMOD004` is stage-aware: a matching provision must exist and be available no later than the consuming contributor's declared required stage. `BPMOD005` fails when a public planning seam is asked to build data for an operation type that does not exist in the current compilation. `BPMOD006` prevents multiple debug-manifest contributors from claiming the same entry key so inspection artifacts stay deterministic. Recent pipeline-contract cleanup intentionally removed the separate orphan-render-step diagnostic by making stage participation implicit in the planning helpers instead of leaving it as caller-managed bookkeeping.
 
