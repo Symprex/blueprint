@@ -11,16 +11,12 @@
   },
   "current": {
     "activeWorkstream": "resource-model-links-and-post-processing",
-    "nextReadySlice": {
+    "nextReadySlice": null,
+    "lastCompletedSlice": {
       "id": "resource/resource-event-audit-module",
       "workstream": "resource-model-links-and-post-processing",
-      "title": "Add ResourceEventAuditModule for post-execution resource event audit recording"
-    },
-    "lastCompletedSlice": {
-      "id": "manifest/operations-manifest-hosted-enrichment",
-      "workstream": "generated-manifests-and-inspection-surfaces",
-      "title": "Enrich hosted operations manifest diagnostics page with per-operation manifest columns",
-      "commit": "084f7bc"
+      "title": "Add ResourceEventAuditModule with KeyOnly type discrimination and sample app enrichment",
+      "commit": "d11d873"
     },
     "openReviewGate": null,
     "openReviewGateRationale": null,

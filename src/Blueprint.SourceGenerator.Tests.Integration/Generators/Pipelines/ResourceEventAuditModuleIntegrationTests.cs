@@ -119,6 +119,25 @@ public class ResourceEventAuditModuleIntegrationTests
         auditSink.RecordCallCount.Should().Be(0, "resource event audit sink should NOT be called for non-resource-event operations");
     }
 
+    [Fact]
+    public async Task When_handler_returns_key_only_resource_event_result_then_audit_sink_is_called()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var auditSink = new TestResourceEventAuditSink();
+        var serviceProvider = new ResourceEventAuditTestServiceProvider(auditSink);
+
+        var pipeline = executor.GetPipeline(typeof(KeyOnlyResourceEventAuditTestCommand));
+        var context = new ApiOperationContext(serviceProvider, app, KeyOnlyResourceEventAuditTestCommand.Configure(), CancellationToken.None);
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<KeyOnlyResourceEventResult>();
+        auditSink.RecordCallCount.Should().Be(1, "resource event audit sink should be called for key-only resource events");
+        auditSink.LastEventId.Should().Be("test-resource.deleted");
+        auditSink.LastResourceId.Should().Be("res-99");
+    }
+
     private sealed class ResourceEventAuditTestServiceProvider : IServiceProvider
     {
         private readonly IResourceEventAuditSink? _resourceEventAuditSink;
@@ -204,5 +223,19 @@ public partial class ResourceEventAuditTestCommand : ICommand<ResourceEventResul
     {
         var resource = new ResourceEventAuditTestResource();
         return Task.FromResult(new ResourceEventResult<ResourceEventAuditTestResource>("test-resource.created", "res-42", resource));
+    }
+}
+
+/// <summary>
+/// A command that returns a KeyOnlyResourceEventResult to test compile-time type discrimination.
+/// </summary>
+public partial class KeyOnlyResourceEventAuditTestCommand : ICommand<KeyOnlyResourceEventResult>
+{
+    /// <summary>Handles the command by returning a key-only resource event result.</summary>
+    /// <param name="operation">The command instance.</param>
+    /// <returns>A key-only resource event result with event and resource IDs.</returns>
+    public static Task<KeyOnlyResourceEventResult> HandleAsync(KeyOnlyResourceEventAuditTestCommand operation)
+    {
+        return Task.FromResult(new KeyOnlyResourceEventResult("test-resource.deleted", "res-99"));
     }
 }
