@@ -568,6 +568,66 @@ public class ReferenceAppHttpEndToEndIntegrationTests
         response.Body.Should().Contain("PageSize");
     }
 
+    [Fact]
+    public async Task When_concurrent_requests_dispatched_to_multiple_endpoints_then_all_succeed()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var searchEndpoint = FindEndpoint(endpoints, "api/templates/search", "GET");
+        var listEndpoint = FindEndpoint(endpoints, "api/templates", "GET");
+        var versionsEndpoint = FindEndpoint(endpoints, "api/templates/{Id}/versions", "GET");
+
+        searchEndpoint.Should().NotBeNull();
+        listEndpoint.Should().NotBeNull();
+        versionsEndpoint.Should().NotBeNull();
+
+        const int concurrency = 32;
+        var tasks = new Task<TestHttpResponse>[concurrency];
+
+        for (var i = 0; i < concurrency; i++)
+        {
+            var index = i;
+            tasks[i] = Task.Run(async () =>
+            {
+                var (endpoint, configure) = (index % 3) switch
+                {
+                    0 => (searchEndpoint!, (Action<DefaultHttpContext>)(ctx =>
+                    {
+                        ctx.Request.Method = HttpMethods.Get;
+                        ctx.Request.Path = "/api/templates/search";
+                        ctx.Request.QueryString = new QueryString("?Q=Welcome&Page=1&PageSize=10");
+                    })),
+                    1 => (listEndpoint!, (Action<DefaultHttpContext>)(ctx =>
+                    {
+                        ctx.Request.Method = HttpMethods.Get;
+                        ctx.Request.Path = "/api/templates";
+                        ctx.User = new ClaimsPrincipal(
+                            new ClaimsIdentity(
+                            [new Claim(ClaimTypes.NameIdentifier, "user-1")],
+                            authenticationType: "test"));
+                    })),
+                    _ => (versionsEndpoint!, (Action<DefaultHttpContext>)(ctx =>
+                    {
+                        ctx.Request.Method = HttpMethods.Get;
+                        ctx.Request.Path = "/api/templates/template-001/versions";
+                        ctx.Request.RouteValues = new RouteValueDictionary { ["Id"] = "template-001" };
+                        ctx.User = new ClaimsPrincipal(
+                            new ClaimsIdentity(
+                            [new Claim(ClaimTypes.NameIdentifier, "user-1")],
+                            authenticationType: "test"));
+                    })),
+                };
+
+                return await InvokeEndpointAsync(endpoint, endpoints.ServiceProvider, configure);
+            });
+        }
+
+        var responses = await Task.WhenAll(tasks);
+
+        responses.Should().OnlyContain(static r => r.StatusCode == StatusCodes.Status200OK);
+    }
+
     private static async Task<TestHttpResponse> InvokeEndpointAsync(
         RouteEndpoint endpoint,
         IServiceProvider serviceProvider,
