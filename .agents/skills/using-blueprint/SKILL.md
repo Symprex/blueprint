@@ -90,7 +90,7 @@ At runtime, `BlueprintApp.GetOperationsForHost("custom-host")` returns operation
 - **Audit opt-out:** `[DoNotAudit]` (from `Blueprint.Auditing`) on an operation class suppresses the PostExecution audit sink call.
 - **Sensitive properties:** `[Sensitive]` (from `Blueprint.Auditing`) on a public property signals audit sinks and logging pipelines to redact or mask that value. Does not affect HTTP/OpenAPI contracts.
 - **Trace suppression:** `[DoNotRecordPerformanceMetrics]` (from `Blueprint.Auditing`) on an operation class suppresses Activity/trace span creation for noisy or polling endpoints.
-- **Generated audit events:** The generated pipeline emits structured `blueprint.audit.record`, `blueprint.audit.completed`, and `blueprint.audit.failed` activity events with OpenTelemetry trace correlation tags when an `IAuditSink` is registered.
+- **Generated audit events:** The generated pipeline emits structured `blueprint.audit.started`, `blueprint.audit.succeeded`, and `blueprint.audit.failed` activity events with `blueprint.operation.type` tags when an `IAuditSink` is registered. Trace correlation is inherent via the enclosing Activity.
 
 ## Result contract
 
