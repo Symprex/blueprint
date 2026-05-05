@@ -159,6 +159,11 @@ public sealed record OpenApiOutputRenderingContext(
             WriteParameters(writer, primaryOperation.Parameters);
             WriteRequestBody(writer, primaryOperation.RequestBody);
             WriteResponses(writer, primaryOperation.Responses);
+
+            if (primaryOperation.Deprecated)
+            {
+                writer.WriteBoolean("deprecated", true);
+            }
         }
         else
         {

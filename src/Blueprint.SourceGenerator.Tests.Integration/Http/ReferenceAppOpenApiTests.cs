@@ -205,6 +205,24 @@ public class ReferenceAppOpenApiTests
             .Should().Be("The HTML source content of the template.");
     }
 
+    [Fact]
+    public async Task When_operation_marked_obsolete_then_openapi_shows_deprecated()
+    {
+        var (json, _) = await InvokeOpenApiEndpointAsync();
+        using var doc = JsonDocument.Parse(json);
+
+        // GetTemplateVersionsQuery is marked [Obsolete] and should render deprecated: true
+        var versionsPath = doc.RootElement.GetProperty("paths").GetProperty("/templates/{Id}/versions");
+        var getOperation = versionsPath.GetProperty("get");
+        getOperation.GetProperty("deprecated").GetBoolean().Should().BeTrue();
+
+        // GetTemplateQuery is NOT obsolete — deprecated should be absent
+        var templatePath = doc.RootElement.GetProperty("paths").GetProperty("/templates/{Id}");
+        var getTemplateOp = templatePath.GetProperty("get");
+        getTemplateOp.TryGetProperty("deprecated", out _).Should().BeFalse(
+            "non-obsolete operations should not emit the deprecated field");
+    }
+
     private static async Task<(string Json, int StatusCode)> InvokeOpenApiEndpointAsync()
     {
         var endpoints = CreateEndpoints();

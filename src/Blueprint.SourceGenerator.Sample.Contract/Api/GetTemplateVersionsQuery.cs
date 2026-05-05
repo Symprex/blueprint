@@ -8,6 +8,7 @@ namespace Blueprint.SourceGenerator.Sample.Contract.Api;
 /// <summary>
 /// Gets the version history for a specific template. Demonstrates nested routes,
 /// sub-resource relationships, and performance-metrics opt-out for frequently-polled endpoints.
+/// Marked obsolete to demonstrate OpenAPI <c>deprecated</c> rendering.
 /// </summary>
 [ApiOperations("Templates")]
 [RootLink("/templates/{Id}/versions")]
@@ -15,6 +16,7 @@ namespace Blueprint.SourceGenerator.Sample.Contract.Api;
 [FromResource(typeof(GetTemplatesQuery))]
 [DoNotRecordPerformanceMetrics]
 [Description("Get the version history for a template.")]
+[Obsolete("Use the new paginated template history endpoint instead.")]
 public partial class GetTemplateVersionsQuery : IQuery<TemplateVersionApiResource[]>
 {
     /// <summary>

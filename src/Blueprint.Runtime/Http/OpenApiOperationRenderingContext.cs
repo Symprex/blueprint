@@ -55,6 +55,8 @@ public sealed record OpenApiOperationRenderingContext(
             .OfType<DescriptionAttribute>()
             .FirstOrDefault()?.Description;
 
+        var isDeprecated = operation.Operation.OperationType.IsDefined(typeof(ObsoleteAttribute), inherit: false);
+
         return new OpenApiOperationModel(
             operation.Operation.Name,
             operation.Operation.OperationType.FullName ?? operation.Operation.OperationType.Name,
@@ -66,6 +68,7 @@ public sealed record OpenApiOperationRenderingContext(
             requestBody)
         {
             Summary = operationDescription,
+            Deprecated = isDeprecated,
         };
     }
 
@@ -265,4 +268,7 @@ public sealed record OpenApiOperationModel(
 
     /// <summary>Gets the longer description for this operation in the OpenAPI output, or null when not specified.</summary>
     public string? Description { get; init; }
+
+    /// <summary>Gets whether this operation is deprecated in the OpenAPI output (maps from <see cref="ObsoleteAttribute"/>).</summary>
+    public bool Deprecated { get; init; }
 }

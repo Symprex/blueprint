@@ -3,6 +3,8 @@
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <!-- The sample deliberately consumes [Obsolete] operations to demonstrate deprecated rendering. -->
+    <NoWarn>$(NoWarn);CS0618</NoWarn>
 <!--    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>-->
 <!--    <CompilerGeneratedFilesOutputPath>Generated</CompilerGeneratedFilesOutputPath>-->
   </PropertyGroup>
