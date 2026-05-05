@@ -151,8 +151,10 @@ Current authentication IDs in active use:
 
 - `BPAU001`: `[MustBeAuthenticated]` applied to an operation that is not exposed via an HTTP host (warning — the authentication pipeline check cannot be generated without HTTP context).
 - `BPAU002`: Both `[AllowAnonymous]` and `[MustBeAuthenticated]` applied to the same operation (error — the access mode must be unambiguous).
-- `BPAU003`: `[Resource]` combined with `[AllowAnonymous]` on the same operation (error — permissioned operations cannot simultaneously allow anonymous access).
+- `BPAU003`: `[Resource]` or `[FromResource]` combined with `[AllowAnonymous]` on the same operation (error — permissioned operations cannot simultaneously allow anonymous access).
 - `BPAU004`: `[Resource]` attribute with an empty or whitespace-only noun or verb value (error — scope pairs must be meaningful).
+- `BPAU005`: Both `[FromResource]` and `[Resource]` applied to the same operation (error — use one mechanism to declare scope pairs, not both).
+- `BPAU006`: `[FromResource(typeof(X))]` referencing a type that has no `[Resource]` attributes (error — the target must declare at least one scope pair to inherit).
 
 ## Diagnostic design rules
 

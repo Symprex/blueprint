@@ -66,6 +66,34 @@ public class AuthorizationMetadataIntegrationTests
         var hasMeta = descriptor!.TryGetFeatureData<OperationAuthorizationFeatureData>(out _);
         hasMeta.Should().BeFalse("operation has no [Resource] attributes");
     }
+
+    [Fact]
+    public void Descriptor_inherits_scope_pairs_from_FromResource_target()
+    {
+        var app = new IntegrationTestBlueprintApp();
+
+        var descriptor = app.Operations.FirstOrDefault(static d => d.OperationType == typeof(InheritedResourceQuery));
+        descriptor.Should().NotBeNull();
+
+        var hasMeta = descriptor!.TryGetFeatureData<OperationAuthorizationFeatureData>(out var meta);
+        hasMeta.Should().BeTrue("[FromResource] should produce authorization metadata");
+        meta!.ScopePairs.Should().HaveCount(1);
+        meta.ScopePairs[0].Noun.Should().Be("account");
+        meta.ScopePairs[0].Verb.Should().Be("read");
+    }
+
+    [Fact]
+    public void Descriptor_inheriting_FromResource_also_requires_authentication()
+    {
+        var app = new IntegrationTestBlueprintApp();
+
+        var descriptor = app.Operations.FirstOrDefault(static d => d.OperationType == typeof(InheritedResourceQuery));
+        descriptor.Should().NotBeNull();
+
+        var hasAuth = descriptor!.TryGetFeatureData<OperationAuthenticationFeatureData>(out var auth);
+        hasAuth.Should().BeTrue("[FromResource] operations implicitly require authentication");
+        auth!.Requirement.Should().Be(AuthenticationRequirement.Authenticated);
+    }
 }
 
 /// <summary>
@@ -119,5 +147,25 @@ public partial class NoResourceQuery : IQuery<string>
     public static Task<string> HandleAsync(NoResourceQuery query)
     {
         return Task.FromResult("no-resource");
+    }
+}
+
+/// <summary>
+/// Operation that inherits scope pairs from <see cref="SingleResourceQuery"/> via
+/// <c>[FromResource]</c> for integration testing of compile-time resource inheritance.
+/// </summary>
+[RootLink("/authz-test/accounts/{Id}/inherited")]
+[FromResource(typeof(SingleResourceQuery))]
+public partial class InheritedResourceQuery : IQuery<string>
+{
+    /// <summary>Gets or sets the account ID.</summary>
+    public string Id { get; set; } = string.Empty;
+
+    /// <summary>Handles the query.</summary>
+    /// <param name="query">The query instance.</param>
+    /// <returns>A test result.</returns>
+    public static Task<string> HandleAsync(InheritedResourceQuery query)
+    {
+        return Task.FromResult("inherited-resource");
     }
 }

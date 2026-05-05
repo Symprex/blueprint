@@ -129,7 +129,8 @@ public sealed class LegacyActivationAnalyzer : DiagnosticAnalyzer
             return;
         }
 
-        if (attributeType.Name == "FromResourceAttribute")
+        if (attributeType.Name == "FromResourceAttribute"
+            && !IsNewBlueprintFrameworkAttribute(attributeType))
         {
             // Migration analyzers intentionally key off the stable legacy attribute type name so app-local wrappers
             // and namespace moves still surface upgrade work while consumers migrate toward the source-generated model.
@@ -151,7 +152,16 @@ public sealed class LegacyActivationAnalyzer : DiagnosticAnalyzer
 
     private static bool IsLegacyResourceTemplateAttribute(INamedTypeSymbol attributeType)
     {
-        return attributeType.Name is "FromResourceAttribute" or "ResourceAttribute";
+        return attributeType.Name is "FromResourceAttribute" or "ResourceAttribute"
+               && !IsNewBlueprintFrameworkAttribute(attributeType);
+    }
+
+    private static bool IsNewBlueprintFrameworkAttribute(INamedTypeSymbol attributeType)
+    {
+        return string.Equals(
+            attributeType.ContainingNamespace?.ToDisplayString(),
+            "Blueprint.Model.Attributes",
+            StringComparison.Ordinal);
     }
 
     private static bool TryGetAuthPlaceholderLocation(

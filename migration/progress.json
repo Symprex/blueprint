@@ -12,15 +12,15 @@
   "current": {
     "activeWorkstream": "authentication-and-authorisation",
     "nextReadySlice": {
-      "id": "auth/resource-pipeline-identity-check",
+      "id": "auth/operations-auth-manifest",
       "workstream": "authentication-and-authorisation",
-      "title": "Generate authentication pipeline check for [Resource] operations (permissioned implies identity gate)"
+      "title": "Generate operations.auth build manifest summarising per-operation access mode and scope requirements"
     },
     "lastCompletedSlice": {
-      "id": "auth/resource-attribute-and-scope-pair",
+      "id": "auth/from-resource-scope-pair-inheritance",
       "workstream": "authentication-and-authorisation",
-      "title": "Introduce [Resource] attribute with ScopePair noun+verb model and project into descriptor metadata",
-      "commit": "18ce4f7"
+      "title": "Introduce [FromResource] for compile-time scope-pair inheritance from a referenced operation",
+      "commit": "767f28d"
     },
     "openReviewGate": null,
     "openReviewGateRationale": null,
@@ -139,6 +139,18 @@
       "workstream": "authentication-and-authorisation",
       "title": "Introduce [Resource] attribute with ScopePair noun+verb model and project into descriptor metadata",
       "commit": "18ce4f7"
+    },
+    {
+      "id": "auth/resource-pipeline-identity-check",
+      "workstream": "authentication-and-authorisation",
+      "title": "Generate authentication pipeline check for [Resource] operations (permissioned implies identity gate)",
+      "commit": "dafcfec"
+    },
+    {
+      "id": "auth/from-resource-scope-pair-inheritance",
+      "workstream": "authentication-and-authorisation",
+      "title": "Introduce [FromResource] for compile-time scope-pair inheritance from a referenced operation",
+      "commit": "767f28d"
     }
   ],
   "decisions": [

@@ -6,12 +6,16 @@ using Microsoft.CodeAnalysis;
 namespace Blueprint.SourceGenerator.Modules.Authorization;
 
 /// <summary>
-/// Detects <c>[Resource("noun", "verb")]</c> attributes on operations and projects
-/// authorization scope-pair metadata into descriptors. Multiple <c>[Resource]</c> attributes
-/// on a single operation use any-of semantics.
+/// Detects <c>[Resource("noun", "verb")]</c> and <c>[FromResource(typeof(X))]</c> attributes on
+/// operations and projects authorization scope-pair metadata into descriptors.
+/// Multiple <c>[Resource]</c> attributes on a single operation use any-of semantics.
+/// <c>[FromResource]</c> inherits scope pairs from the referenced operation's direct
+/// <c>[Resource]</c> declarations (not transitive).
 /// <para>
-/// Reports BPAU003 when <c>[Resource]</c> is combined with <c>[AllowAnonymous]</c>
-/// and BPAU004 when noun or verb values are empty or whitespace.
+/// Reports BPAU003 when resource authorization is combined with <c>[AllowAnonymous]</c>,
+/// BPAU004 when noun or verb values are empty or whitespace,
+/// BPAU005 when both <c>[FromResource]</c> and <c>[Resource]</c> are used on the same operation,
+/// and BPAU006 when <c>[FromResource]</c> references a type that has no <c>[Resource]</c> attributes.
 /// </para>
 /// <para>
 /// Permissioned operations implicitly require authentication; this module coordinates
@@ -22,6 +26,7 @@ namespace Blueprint.SourceGenerator.Modules.Authorization;
 public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDescriptorContributor, IPipelineContributor
 {
     private const string ResourceAttributeName = "ResourceAttribute";
+    private const string FromResourceAttributeName = "FromResourceAttribute";
     private const string AllowAnonymousAttributeName = "AllowAnonymousAttribute";
     private const string MustBeAuthenticatedAttributeName = "MustBeAuthenticatedAttribute";
     private const string AttributeNamespace = "Blueprint.Model.Attributes";
@@ -52,44 +57,85 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
     public void ContributeToDescriptor(DescriptorContributorContext context)
     {
         var operationType = context.GetOperationTypeSymbol();
-        var resourceAttributes = GetResourceAttributes(operationType);
+        var directResourceAttributes = GetResourceAttributes(operationType);
+        var fromResourceTarget = GetFromResourceTarget(operationType);
 
-        if (resourceAttributes.Count == 0)
+        // BPAU005: Both [FromResource] and [Resource] on the same operation
+        if (fromResourceTarget is not null && directResourceAttributes.Count > 0)
+        {
+            context.AddDiagnostic(
+                new DiagnosticInfo(
+                    AuthorizationDiagnosticDescriptors.FromResourceWithDirectResource,
+                    operationType.Locations.FirstOrDefault(),
+                    [operationType.Name]));
+
+            return;
+        }
+
+        // Resolve the effective scope pairs — either direct or inherited
+        List<(string Noun, string Verb)> effectiveScopePairs;
+
+        if (fromResourceTarget is not null)
+        {
+            // [FromResource(typeof(X))] — inherit from the referenced type's direct [Resource] attrs
+            var targetResourceAttributes = GetResourceAttributes(fromResourceTarget);
+
+            if (targetResourceAttributes.Count == 0)
+            {
+                context.AddDiagnostic(
+                    new DiagnosticInfo(
+                        AuthorizationDiagnosticDescriptors.FromResourceTargetHasNoResource,
+                        operationType.Locations.FirstOrDefault(),
+                        [operationType.Name, fromResourceTarget.Name]));
+
+                return;
+            }
+
+            effectiveScopePairs = targetResourceAttributes;
+        }
+        else if (directResourceAttributes.Count > 0)
+        {
+            effectiveScopePairs = directResourceAttributes;
+        }
+        else
         {
             return;
         }
 
-        // Validate noun/verb values
-        var hasValidationErrors = false;
-
-        foreach (var (noun, verb) in resourceAttributes)
+        // Validate noun/verb values (only for direct [Resource]; inherited values were validated on the source)
+        if (fromResourceTarget is null)
         {
-            if (string.IsNullOrWhiteSpace(noun))
-            {
-                context.AddDiagnostic(
-                    new DiagnosticInfo(
-                        AuthorizationDiagnosticDescriptors.EmptyResourceScopePairValue,
-                        operationType.Locations.FirstOrDefault(),
-                        [operationType.Name, "noun"]));
+            var hasValidationErrors = false;
 
-                hasValidationErrors = true;
+            foreach (var (noun, verb) in effectiveScopePairs)
+            {
+                if (string.IsNullOrWhiteSpace(noun))
+                {
+                    context.AddDiagnostic(
+                        new DiagnosticInfo(
+                            AuthorizationDiagnosticDescriptors.EmptyResourceScopePairValue,
+                            operationType.Locations.FirstOrDefault(),
+                            [operationType.Name, "noun"]));
+
+                    hasValidationErrors = true;
+                }
+
+                if (string.IsNullOrWhiteSpace(verb))
+                {
+                    context.AddDiagnostic(
+                        new DiagnosticInfo(
+                            AuthorizationDiagnosticDescriptors.EmptyResourceScopePairValue,
+                            operationType.Locations.FirstOrDefault(),
+                            [operationType.Name, "verb"]));
+
+                    hasValidationErrors = true;
+                }
             }
 
-            if (string.IsNullOrWhiteSpace(verb))
+            if (hasValidationErrors)
             {
-                context.AddDiagnostic(
-                    new DiagnosticInfo(
-                        AuthorizationDiagnosticDescriptors.EmptyResourceScopePairValue,
-                        operationType.Locations.FirstOrDefault(),
-                        [operationType.Name, "verb"]));
-
-                hasValidationErrors = true;
+                return;
             }
-        }
-
-        if (hasValidationErrors)
-        {
-            return;
         }
 
         // Check for conflict with [AllowAnonymous]
@@ -122,7 +168,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
         // Project scope pairs and authentication feature data
         var scopePairEntries = string.Join(
             ", ",
-            resourceAttributes.Select(static sp => $"new global::Blueprint.Model.ScopePair(\"{sp.Noun}\", \"{sp.Verb}\")"));
+            effectiveScopePairs.Select(static sp => $"new global::Blueprint.Model.ScopePair(\"{sp.Noun}\", \"{sp.Verb}\")"));
 
         context.AddRenderStep(writer =>
         {
@@ -141,15 +187,31 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
     public void ContributeToPipeline(PipelineContributorContext context)
     {
         var operationType = context.Operation.TypeSymbol;
-        var resourceAttributes = GetResourceAttributes(operationType);
+        var directResourceAttributes = GetResourceAttributes(operationType);
+        var fromResourceTarget = GetFromResourceTarget(operationType);
 
-        if (resourceAttributes.Count == 0)
+        // Determine if this operation has effective resource authorization
+        var hasResourceAuthorization = directResourceAttributes.Count > 0 || fromResourceTarget is not null;
+
+        if (!hasResourceAuthorization)
+        {
+            return;
+        }
+
+        // BPAU005 conflict → no pipeline contribution
+        if (fromResourceTarget is not null && directResourceAttributes.Count > 0)
         {
             return;
         }
 
         // Conflicting or invalid attributes → no pipeline contribution
         if (HasAttribute(operationType, AllowAnonymousAttributeName))
+        {
+            return;
+        }
+
+        // For [FromResource], verify the target has [Resource] (BPAU006 handled in descriptor)
+        if (fromResourceTarget is not null && GetResourceAttributes(fromResourceTarget).Count == 0)
         {
             return;
         }
@@ -220,6 +282,53 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Resolves the <c>[FromResource(typeof(X))]</c> attribute on the operation, returning the
+    /// referenced <see cref="INamedTypeSymbol"/> or <c>null</c> if the attribute is not present
+    /// or the type argument cannot be resolved.
+    /// </summary>
+    private static INamedTypeSymbol? GetFromResourceTarget(INamedTypeSymbol operationType)
+    {
+        foreach (var attribute in operationType.GetAttributes())
+        {
+            var attrClass = attribute.AttributeClass;
+
+            if (attrClass is null)
+            {
+                continue;
+            }
+
+            if (attrClass.Name != FromResourceAttributeName ||
+                !string.Equals(attrClass.ContainingNamespace?.ToDisplayString(), AttributeNamespace, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (attribute.ConstructorArguments.Length < 1)
+            {
+                continue;
+            }
+
+            var typeArg = attribute.ConstructorArguments[0];
+
+            // typeof(X) in attribute arguments: Kind == TypedConstantKind.Type, Value is ITypeSymbol
+            if (typeArg.Kind != TypedConstantKind.Type || typeArg.Value is not INamedTypeSymbol targetType)
+            {
+                continue;
+            }
+
+            // Reject error types (unresolved references)
+            if (targetType.TypeKind == TypeKind.Error)
+            {
+                continue;
+            }
+
+            return targetType;
+        }
+
+        return null;
     }
 
     private static bool HasAttribute(INamedTypeSymbol operationType, string attributeName)

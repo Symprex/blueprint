@@ -393,6 +393,298 @@ public class AuthorizationModuleTests
             new PipelineContribution(PipelineStage.Authentication, nameof(AuthenticationModule)));
     }
 
+    // ── [FromResource] inheritance tests ────────────────────────────────
+
+    [Fact]
+    public void When_FromResource_references_operation_with_Resource_then_descriptor_inherits_scope_pairs()
+    {
+        var result = CompileDescriptor(
+            """
+            [RootLink("/accounts/{Id}")]
+            [Resource("account", "read")]
+            public partial class GetAccountQuery : IQuery<string>
+            {
+                public string Id { get; set; }
+
+                public static Task<string> HandleAsync(GetAccountQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+
+            [RootLink("/accounts/{Id}/details")]
+            [FromResource(typeof(GetAccountQuery))]
+            public partial class GetAccountDetailsQuery : IQuery<string>
+            {
+                public string Id { get; set; }
+
+                public static Task<string> HandleAsync(GetAccountDetailsQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var descriptorSource = result.Output
+            .Select(static t => t.ToString())
+            .FirstOrDefault(static s => s.Contains("GetAccountDetailsQueryDescriptor"));
+
+        descriptorSource.Should().NotBeNull();
+        descriptorSource!.Should().Contain("ScopePair");
+        descriptorSource.Should().Contain("\"account\"");
+        descriptorSource.Should().Contain("\"read\"");
+    }
+
+    [Fact]
+    public void When_FromResource_references_operation_with_multiple_Resources_then_descriptor_inherits_all()
+    {
+        var result = CompileDescriptor(
+            """
+            [RootLink("/accounts/{Id}")]
+            [Resource("account", "read")]
+            [Resource("tenant", "manage")]
+            public partial class GetAccountQuery : IQuery<string>
+            {
+                public string Id { get; set; }
+
+                public static Task<string> HandleAsync(GetAccountQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+
+            [RootLink("/accounts/{Id}/details")]
+            [FromResource(typeof(GetAccountQuery))]
+            public partial class GetAccountDetailsQuery : IQuery<string>
+            {
+                public string Id { get; set; }
+
+                public static Task<string> HandleAsync(GetAccountDetailsQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var descriptorSource = result.Output
+            .Select(static t => t.ToString())
+            .FirstOrDefault(static s => s.Contains("GetAccountDetailsQueryDescriptor"));
+
+        descriptorSource.Should().NotBeNull();
+        descriptorSource!.Should().Contain("\"account\"");
+        descriptorSource.Should().Contain("\"read\"");
+        descriptorSource.Should().Contain("\"tenant\"");
+        descriptorSource.Should().Contain("\"manage\"");
+    }
+
+    [Fact]
+    public void When_FromResource_with_AllowAnonymous_then_reports_BPAU003()
+    {
+        var result = CompileDescriptor(
+            """
+            [RootLink("/accounts/{Id}")]
+            [Resource("account", "read")]
+            public partial class GetAccountQuery : IQuery<string>
+            {
+                public string Id { get; set; }
+
+                public static Task<string> HandleAsync(GetAccountQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+
+            [RootLink("/accounts/{Id}/details")]
+            [AllowAnonymous]
+            [FromResource(typeof(GetAccountQuery))]
+            public partial class GetAccountDetailsQuery : IQuery<string>
+            {
+                public string Id { get; set; }
+
+                public static Task<string> HandleAsync(GetAccountDetailsQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().Contain(
+            static d => d.Id == "BPAU003",
+            "[FromResource] combined with [AllowAnonymous] should report BPAU003");
+    }
+
+    [Fact]
+    public void When_FromResource_combined_with_Resource_then_reports_BPAU005()
+    {
+        var result = CompileDescriptor(
+            """
+            [RootLink("/accounts/{Id}")]
+            [Resource("account", "read")]
+            public partial class GetAccountQuery : IQuery<string>
+            {
+                public string Id { get; set; }
+
+                public static Task<string> HandleAsync(GetAccountQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+
+            [RootLink("/accounts/{Id}/details")]
+            [Resource("account", "write")]
+            [FromResource(typeof(GetAccountQuery))]
+            public partial class UpdateAccountCommand : ICommand<string>
+            {
+                public string Id { get; set; }
+
+                public static Task<string> HandleAsync(UpdateAccountCommand operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().Contain(
+            static d => d.Id == "BPAU005",
+            "combining [FromResource] with [Resource] should report BPAU005");
+    }
+
+    [Fact]
+    public void When_FromResource_target_has_no_Resource_then_reports_BPAU006()
+    {
+        var result = CompileDescriptor(
+            """
+            [RootLink("/accounts/{Id}")]
+            public partial class GetAccountQuery : IQuery<string>
+            {
+                public string Id { get; set; }
+
+                public static Task<string> HandleAsync(GetAccountQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+
+            [RootLink("/accounts/{Id}/details")]
+            [FromResource(typeof(GetAccountQuery))]
+            public partial class GetAccountDetailsQuery : IQuery<string>
+            {
+                public string Id { get; set; }
+
+                public static Task<string> HandleAsync(GetAccountDetailsQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().Contain(
+            static d => d.Id == "BPAU006",
+            "[FromResource] referencing a type with no [Resource] should report BPAU006");
+    }
+
+    [Fact]
+    public void When_FromResource_on_http_operation_then_pipeline_has_authentication_stage()
+    {
+        var compilation = CreateCompilation(
+            """
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace;
+
+            [RootLink("/accounts/{Id}")]
+            [Resource("account", "read")]
+            public partial class GetAccountQuery : IQuery<string>
+            {
+                public string Id { get; set; }
+
+                public static Task<string> HandleAsync(GetAccountQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+
+            [RootLink("/accounts/{Id}/details")]
+            [FromResource(typeof(GetAccountQuery))]
+            public partial class GetAccountDetailsQuery : IQuery<string>
+            {
+                public string Id { get; set; }
+
+                public static Task<string> HandleAsync(GetAccountDetailsQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        var config = new BlueprintSourceGenerationConfig([new AuthenticationModule(), new AuthorizationModule()]);
+        var result = config.BuildPipelinePlan("TestNamespace.GetAccountDetailsQuery", compilation);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Value.Should().NotBeNull();
+
+        result.Value!.Contributions.Should().Contain(
+            new PipelineContribution(PipelineStage.Authentication, nameof(AuthorizationModule)),
+            "[FromResource] operations require identity check in the pipeline");
+    }
+
+    [Fact]
+    public void When_FromResource_is_not_transitive_then_only_direct_Resource_attributes_are_inherited()
+    {
+        // GetAccountQuery has [Resource], GetAccountDetailsQuery has [FromResource(GetAccountQuery)],
+        // GetAccountSubDetailsQuery has [FromResource(GetAccountDetailsQuery)] — should get BPAU006
+        // because GetAccountDetailsQuery does NOT have [Resource] (only [FromResource])
+        var result = CompileDescriptor(
+            """
+            [RootLink("/accounts/{Id}")]
+            [Resource("account", "read")]
+            public partial class GetAccountQuery : IQuery<string>
+            {
+                public string Id { get; set; }
+
+                public static Task<string> HandleAsync(GetAccountQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+
+            [RootLink("/accounts/{Id}/details")]
+            [FromResource(typeof(GetAccountQuery))]
+            public partial class GetAccountDetailsQuery : IQuery<string>
+            {
+                public string Id { get; set; }
+
+                public static Task<string> HandleAsync(GetAccountDetailsQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+
+            [RootLink("/accounts/{Id}/sub-details")]
+            [FromResource(typeof(GetAccountDetailsQuery))]
+            public partial class GetAccountSubDetailsQuery : IQuery<string>
+            {
+                public string Id { get; set; }
+
+                public static Task<string> HandleAsync(GetAccountSubDetailsQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        // Transitive inheritance is NOT supported — GetAccountDetailsQuery has no [Resource] directly
+        result.Diagnostics.Should().Contain(
+            static d => d.Id == "BPAU006",
+            "[FromResource] should not follow transitive chains");
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────
 
     private static GenerationResult CompileDescriptor(string source)

@@ -64,6 +64,20 @@ public class HttpEndToEndIntegrationTests
     }
 
     [Fact]
+    public async Task When_GET_from_resource_inherited_operation_without_user_then_returns_401()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/e2e/from-resource-inherited");
+        endpoint.Should().NotBeNull("the FromResource-inherited query route should be registered");
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider);
+
+        response.StatusCode.Should().Be(StatusCodes.Status401Unauthorized);
+    }
+
+    [Fact]
     public async Task When_POST_with_json_body_then_returns_200_with_bound_value_in_body()
     {
         var endpoints = CreateEndpoints();
@@ -228,6 +242,20 @@ public partial class E2EResourceProtectedQuery : IQuery<string>
     public static Task<string> HandleAsync(E2EResourceProtectedQuery query)
     {
         return Task.FromResult("resource-protected-data");
+    }
+}
+
+/// <summary>
+/// [FromResource]-inherited permission GET — proves the pipeline generates a 401 identity check for
+/// operations that inherit scope pairs from another operation via <c>[FromResource(typeof(...))]</c>.
+/// </summary>
+[Blueprint.Model.Attributes.FromResource(typeof(E2EResourceProtectedQuery))]
+[Blueprint.Model.Attributes.RootLink("/e2e/from-resource-inherited")]
+public partial class E2EFromResourceInheritedQuery : IQuery<string>
+{
+    public static Task<string> HandleAsync(E2EFromResourceInheritedQuery query)
+    {
+        return Task.FromResult("from-resource-inherited-data");
     }
 }
 
