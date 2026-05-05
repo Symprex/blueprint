@@ -22,6 +22,12 @@ namespace Blueprint.SourceGenerator.Modules;
 /// Operations decorated with <c>[DoNotAudit]</c> are excluded from audit recording regardless
 /// of whether a sink is registered.
 /// </para>
+/// <para>
+/// Generated audit events follow OpenTelemetry semantic conventions with the <c>blueprint.audit.*</c>
+/// naming prefix. Events carry the operation type name and, on failure, standard exception tags
+/// (<c>exception.type</c>, <c>exception.message</c>, <c>exception.stacktrace</c>) matching the
+/// pattern established by <c>BlueprintActivitySource.RecordException</c>.
+/// </para>
 /// </remarks>
 public sealed class AuditingModule : IBlueprintSourceGeneratorModule, IPipelineContributor
 {
@@ -54,15 +60,17 @@ public sealed class AuditingModule : IBlueprintSourceGeneratorModule, IPipelineC
             return;
         }
 
+        var operationTypeName = context.Operation.TypeName;
+
         context.RequireVariable(
             new VariableKey(HandlerExecutionModule.HandlerResultTypeName, HandlerExecutionModule.HandlerResultPurpose),
             requiredBy: PipelineStage.PostExecution);
 
         context.RequireAsync();
-        context.AddRenderStep(PipelineStage.PostExecution, RenderAuditSink);
+        context.AddRenderStep(PipelineStage.PostExecution, ctx => RenderAuditSink(ctx, operationTypeName));
     }
 
-    private static void RenderAuditSink(PipelineRenderContext context)
+    private static void RenderAuditSink(PipelineRenderContext context, string operationTypeName)
     {
         context.WriteBlankLine();
 
@@ -78,15 +86,27 @@ public sealed class AuditingModule : IBlueprintSourceGeneratorModule, IPipelineC
                     "auditSink != null",
                     innerBranch =>
                     {
+                        // Emit structured audit started event with operation type tag
+                        innerBranch.WriteStatement(
+                            $"context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent(\"blueprint.audit.started\", default, new System.Diagnostics.ActivityTagsCollection {{ {{ \"blueprint.operation.type\", \"{operationTypeName}\" }} }}));");
+
                         innerBranch.WriteStatement("try");
                         innerBranch.WriteStatement("{");
                         innerBranch.WriteStatement(
                             "    await auditSink.RecordAsync(context, handlerResult, System.Threading.CancellationToken.None);");
+
+                        // Emit structured audit succeeded event with operation type tag
+                        innerBranch.WriteStatement(
+                            $"    context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent(\"blueprint.audit.succeeded\", default, new System.Diagnostics.ActivityTagsCollection {{ {{ \"blueprint.operation.type\", \"{operationTypeName}\" }} }}));");
+
                         innerBranch.WriteStatement("}");
                         innerBranch.WriteStatement("catch (System.Exception auditException)");
                         innerBranch.WriteStatement("{");
+
+                        // Emit structured audit failed event with exception details matching BlueprintActivitySource.RecordException schema
                         innerBranch.WriteStatement(
-                            "    context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent(\"audit.sink.failed\", default, new System.Diagnostics.ActivityTagsCollection { { \"exception.message\", auditException.Message } }));");
+                            $"    context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent(\"blueprint.audit.failed\", default, new System.Diagnostics.ActivityTagsCollection {{ {{ \"blueprint.operation.type\", \"{operationTypeName}\" }}, {{ \"exception.type\", auditException.GetType().FullName }}, {{ \"exception.message\", auditException.Message }}, {{ \"exception.stacktrace\", auditException.StackTrace }} }}));");
+
                         innerBranch.WriteStatement("}");
                     });
             });

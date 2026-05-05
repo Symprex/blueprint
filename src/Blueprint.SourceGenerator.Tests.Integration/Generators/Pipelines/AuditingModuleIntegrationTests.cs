@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Blueprint.Auditing;
 using Blueprint.Model;
 using Blueprint.Runtime.Exec;
@@ -98,6 +99,86 @@ public class AuditingModuleIntegrationTests
 
         result.Should().NotBeNull();
         auditSink.RecordCallCount.Should().Be(0, "audit sink should NOT be called for [DoNotAudit] operations");
+    }
+
+    [Fact]
+    public async Task When_handler_succeeds_with_activity_then_audit_events_include_operation_type_and_trace_context()
+    {
+        using var activity = new Activity("audit-correlation-test");
+        activity.Start();
+
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var auditSink = new TestAuditSink();
+        var serviceProvider = new AuditTestServiceProvider(auditSink);
+
+        var pipeline = executor.GetPipeline(typeof(AuditableQuery));
+        var context = new ApiOperationContext(serviceProvider, app, AuditableQuery.Configure(), CancellationToken.None)
+        {
+            Activity = activity,
+        };
+
+        await pipeline.ExecuteAsync(context);
+
+        // The pipeline should emit blueprint.audit.started and blueprint.audit.succeeded events
+        var events = activity.Events.ToList();
+        events.Should().Contain(
+            static e => e.Name == "blueprint.audit.started",
+            "audit started event should be emitted before calling the sink");
+        events.Should().Contain(
+            static e => e.Name == "blueprint.audit.succeeded",
+            "audit succeeded event should be emitted after successful sink call");
+
+        // The started event should include the operation type tag
+        var startedEvent = events.First(static e => e.Name == "blueprint.audit.started");
+        startedEvent.Tags.Should().Contain(
+            tag => tag.Key == "blueprint.operation.type" && (string)tag.Value! == "AuditableQuery",
+            "audit started event should include the operation type name");
+    }
+
+    [Fact]
+    public async Task When_audit_sink_throws_with_activity_then_failed_event_includes_exception_and_operation_type()
+    {
+        using var activity = new Activity("audit-failure-correlation-test");
+        activity.Start();
+
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var auditSink = new ThrowingAuditSink();
+        var serviceProvider = new AuditTestServiceProvider(auditSink);
+
+        var pipeline = executor.GetPipeline(typeof(AuditableQuery));
+        var context = new ApiOperationContext(serviceProvider, app, AuditableQuery.Configure(), CancellationToken.None)
+        {
+            Activity = activity,
+        };
+
+        await pipeline.ExecuteAsync(context);
+
+        var events = activity.Events.ToList();
+
+        // Should have started event and failed event (no succeeded)
+        events.Should().Contain(
+            static e => e.Name == "blueprint.audit.started",
+            "audit started event should still be emitted even when the sink will fail");
+        events.Should().NotContain(
+            static e => e.Name == "blueprint.audit.succeeded",
+            "audit succeeded event should NOT be emitted when the sink throws");
+        events.Should().Contain(
+            static e => e.Name == "blueprint.audit.failed",
+            "audit failed event should be emitted when the sink throws");
+
+        // The failed event should include exception details and operation type
+        var failedEvent = events.First(static e => e.Name == "blueprint.audit.failed");
+        failedEvent.Tags.Should().Contain(
+            tag => tag.Key == "blueprint.operation.type" && (string)tag.Value! == "AuditableQuery",
+            "audit failed event should include the operation type name");
+        failedEvent.Tags.Should().Contain(
+            tag => tag.Key == "exception.type" && ((string)tag.Value!).Contains("InvalidOperationException"),
+            "audit failed event should include the exception type");
+        failedEvent.Tags.Should().Contain(
+            tag => tag.Key == "exception.message" && (string)tag.Value! == "Simulated audit sink failure",
+            "audit failed event should include the exception message");
     }
 
     private sealed class AuditTestServiceProvider : IServiceProvider
