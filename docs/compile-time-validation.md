@@ -55,6 +55,28 @@ Migration diagnostics should be paired with machine-readable reporting such as S
 
 This is the clearest current example of the repository principle that string literals should be validated against symbols when possible.
 
+`BPLG004` additionally warns when multiple self-link URL templates target the same resource type, creating ambiguity in link population.
+
+### Property ownership and binding diagnostics
+
+Property ownership and binding diagnostics detect misapplied binding attributes, unsupported conversion types, and body semantics that conflict with the HTTP method.
+
+Reserved direction:
+
+| Range | Meaning |
+| --- | --- |
+| `BPPO001`-`BPPO099` | property ownership and binding diagnostics for invalid declarative contracts that the generator can prove at build time |
+
+Current property ownership IDs in active use:
+
+- `BPPO001`: route-bound property has a type that cannot be converted from a string route value.
+- `BPPO002`: operation uses GET/DELETE but has properties that would be body-owned by convention (warning).
+- `BPPO003`: query-bound property has a type that cannot be converted from a string query value.
+- `BPPO004`: explicit `[FromBody]` on a GET/DELETE operation (error — these methods should not have request bodies).
+- `BPPO005`: explicit `[FromRoute]` without a matching route placeholder in the URL template.
+- `BPPO006`: multiple conflicting `[FromX]` binding attributes on the same property.
+- `BPPO007`: header- or cookie-bound property has a type that cannot be converted from a string value.
+
 ### Operation discovery and host diagnostics
 
 Operation-discovery and host-exposure checks should use their own stable range instead of borrowing link or validation IDs.
@@ -228,7 +250,7 @@ The foundation module system now reserves `BPMOD001`-`BPMOD004` for contributor-
 - cyclic contributor dependency graphs
 - missing required pipeline variables discovered during pipeline-plan validation, including values that only become available after the consuming contributor stage
 
-These are compile-time failures because non-deterministic module composition or unresolved required pipeline variables would make generated output unstable and hard to inspect. `BPMOD004` is stage-aware: a matching provision must exist and be available no later than the consuming contributor's declared required stage. Recent pipeline-contract cleanup intentionally removed the separate orphan-render-step diagnostic by making stage participation implicit in the planning helpers instead of leaving it as caller-managed bookkeeping.
+These are compile-time failures because non-deterministic module composition or unresolved required pipeline variables would make generated output unstable and hard to inspect. `BPMOD004` is stage-aware: a matching provision must exist and be available no later than the consuming contributor's declared required stage. `BPMOD005` fails when a public planning seam is asked to build data for an operation type that does not exist in the current compilation. `BPMOD006` prevents multiple debug-manifest contributors from claiming the same entry key so inspection artifacts stay deterministic. Recent pipeline-contract cleanup intentionally removed the separate orphan-render-step diagnostic by making stage participation implicit in the planning helpers instead of leaving it as caller-managed bookkeeping.
 
 ## Human- and AI-friendly diagnostics
 

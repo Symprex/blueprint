@@ -492,7 +492,7 @@ When delegating a workstream, include:
 - [x] Add build/design-time telemetry capture and reporting.
 - [x] Benchmark known runtime hotspots such as `BlueprintApp` registration and operation lookup.
 - [x] Define PR-lane versus scheduled/manual benchmark lanes.
-- [ ] Add stress/soak tests for concurrent dispatch, startup, and manifest/OpenAPI generation.
+- [x] Add stress/soak tests for concurrent dispatch, startup, and manifest/OpenAPI generation.
 
 ### Acceptance criteria
 
@@ -505,10 +505,10 @@ When delegating a workstream, include:
 
 ### Tests and benchmarks
 
-- [ ] Cacheability and invalidation-locality tests.
+- [x] Cacheability and invalidation-locality tests.
 - [x] Build telemetry capture with `.binlog` and timing summaries.
 - [x] BenchmarkDotNet or equivalent runtime benchmarks for startup, dispatch, and shell overhead.
-- [ ] Stress tests for concurrent and high-volume paths.
+- [x] Stress tests for concurrent and high-volume paths.
 
 ### Docs and artifacts
 
