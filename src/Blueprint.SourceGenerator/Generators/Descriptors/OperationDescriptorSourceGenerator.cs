@@ -250,6 +250,7 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
             new BackgroundTaskFlushManifestModule(),
             new ResourceEventManifestModule(),
             new HttpMethodManifestModule(),
+            new SensitivePropertyManifestModule(),
             .. additionalModules,
         ]);
     }
