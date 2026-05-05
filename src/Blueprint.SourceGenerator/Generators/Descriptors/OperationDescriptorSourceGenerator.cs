@@ -9,6 +9,7 @@ using Blueprint.SourceGenerator.Modules.Authentication;
 using Blueprint.SourceGenerator.Modules.Authorization;
 using Blueprint.SourceGenerator.Modules.BackgroundTaskFlush;
 using Blueprint.SourceGenerator.Modules.LinkGeneration;
+using Blueprint.SourceGenerator.Modules.OpenApi;
 using Blueprint.SourceGenerator.Modules.Persistence;
 using Blueprint.SourceGenerator.Modules.Validation;
 using Blueprint.SourceGenerator.Planning;
@@ -248,6 +249,7 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
             new PersistenceManifestModule(),
             new BackgroundTaskFlushManifestModule(),
             new ResourceEventManifestModule(),
+            new HttpMethodManifestModule(),
             .. additionalModules,
         ]);
     }
