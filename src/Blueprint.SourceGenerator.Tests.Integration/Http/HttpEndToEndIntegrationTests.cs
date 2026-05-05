@@ -50,6 +50,20 @@ public class HttpEndToEndIntegrationTests
     }
 
     [Fact]
+    public async Task When_GET_resource_protected_operation_without_user_then_returns_401()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/e2e/resource-protected");
+        endpoint.Should().NotBeNull("the resource-protected query route should be registered");
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider);
+
+        response.StatusCode.Should().Be(StatusCodes.Status401Unauthorized);
+    }
+
+    [Fact]
     public async Task When_POST_with_json_body_then_returns_200_with_bound_value_in_body()
     {
         var endpoints = CreateEndpoints();
@@ -200,6 +214,20 @@ public partial class E2EProtectedQuery : IQuery<string>
     public static Task<string> HandleAsync(E2EProtectedQuery query)
     {
         return Task.FromResult("protected-data");
+    }
+}
+
+/// <summary>
+/// Resource-permissioned GET — exercises the authorization-implied identity check path (401) end-to-end.
+/// Operations with <c>[Resource]</c> implicitly require authentication even without <c>[MustBeAuthenticated]</c>.
+/// </summary>
+[Blueprint.Model.Attributes.Resource("account", "read")]
+[Blueprint.Model.Attributes.RootLink("/e2e/resource-protected")]
+public partial class E2EResourceProtectedQuery : IQuery<string>
+{
+    public static Task<string> HandleAsync(E2EResourceProtectedQuery query)
+    {
+        return Task.FromResult("resource-protected-data");
     }
 }
 

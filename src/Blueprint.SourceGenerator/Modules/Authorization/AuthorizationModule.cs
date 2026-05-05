@@ -23,6 +23,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
 {
     private const string ResourceAttributeName = "ResourceAttribute";
     private const string AllowAnonymousAttributeName = "AllowAnonymousAttribute";
+    private const string MustBeAuthenticatedAttributeName = "MustBeAuthenticatedAttribute";
     private const string AttributeNamespace = "Blueprint.Model.Attributes";
 
     /// <inheritdoc />
@@ -139,8 +140,53 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
     /// <inheritdoc />
     public void ContributeToPipeline(PipelineContributorContext context)
     {
-        // Authorization pipeline stage is not yet implemented in this slice.
-        // Future work will add permission checks here.
+        var operationType = context.Operation.TypeSymbol;
+        var resourceAttributes = GetResourceAttributes(operationType);
+
+        if (resourceAttributes.Count == 0)
+        {
+            return;
+        }
+
+        // Conflicting or invalid attributes → no pipeline contribution
+        if (HasAttribute(operationType, AllowAnonymousAttributeName))
+        {
+            return;
+        }
+
+        if (!HasHttpHostExposure(operationType))
+        {
+            return;
+        }
+
+        // Only add our own identity check if AuthenticationModule isn't already doing it
+        if (!HasAttribute(operationType, MustBeAuthenticatedAttributeName))
+        {
+            context.AddRenderStep(
+                PipelineStage.Authentication,
+                RenderAuthenticationCheck);
+        }
+    }
+
+    private static bool HasHttpHostExposure(INamedTypeSymbol operationType)
+    {
+        return operationType.GetAttributes()
+            .Any(static a => a.AttributeClass?.Name is "RootLinkAttribute" or "SelfLinkAttribute");
+    }
+
+    private static void RenderAuthenticationCheck(PipelineRenderContext context)
+    {
+        context.If(
+            "((Blueprint.Runtime.Http.IHttpOperationContext)context).HttpContext.User.Identity?.IsAuthenticated != true",
+            branch =>
+            {
+                branch.Return(
+                    context.IsPipelineAsync()
+                        ? "new Blueprint.Runtime.Exec.UnauthenticatedResult()"
+                        : "System.Threading.Tasks.Task.FromResult<Blueprint.OperationResult>(new Blueprint.Runtime.Exec.UnauthenticatedResult())");
+            });
+
+        context.WriteBlankLine();
     }
 
     private static List<(string Noun, string Verb)> GetResourceAttributes(INamedTypeSymbol operationType)

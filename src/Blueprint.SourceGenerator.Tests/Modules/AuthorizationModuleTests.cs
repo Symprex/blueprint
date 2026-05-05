@@ -281,10 +281,10 @@ public class AuthorizationModuleTests
         descriptorSource!.Should().Contain("AuthenticatedFailureResponsesFeatureData");
     }
 
-    // ── Pipeline plan tests (authorization module has no pipeline contribution yet) ──
+    // ── Pipeline plan tests ──────────────────────────────────────────
 
     [Fact]
-    public void When_Resource_attribute_present_then_no_authorisation_pipeline_stage_yet()
+    public void When_Resource_on_http_operation_then_pipeline_has_authentication_stage()
     {
         var compilation = CreateCompilation(
             """
@@ -313,10 +313,84 @@ public class AuthorizationModuleTests
         result.Diagnostics.Should().BeEmpty();
         result.Value.Should().NotBeNull();
 
-        // Authorization module does not yet contribute pipeline stages
+        // Permissioned operations implicitly require identity → authentication stage
+        result.Value!.Contributions.Should().Contain(
+            new PipelineContribution(PipelineStage.Authentication, nameof(AuthorizationModule)),
+            "[Resource] operations require identity check in the pipeline");
+    }
+
+    [Fact]
+    public void When_Resource_on_non_http_operation_then_no_authentication_stage()
+    {
+        var compilation = CreateCompilation(
+            """
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace;
+
+            [Resource("account", "read")]
+            public partial class ProcessAccountCommand : ICommand<string>
+            {
+                public static Task<string> HandleAsync(ProcessAccountCommand operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        var config = new BlueprintSourceGenerationConfig([new AuthenticationModule(), new AuthorizationModule()]);
+        var result = config.BuildPipelinePlan("TestNamespace.ProcessAccountCommand", compilation);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Value.Should().NotBeNull();
+
+        // Non-HTTP operations don't get pipeline checks
         result.Value!.Contributions.Should().NotContain(
-            static c => c.Stage == PipelineStage.Authorisation,
-            "AuthorizationModule does not yet contribute pipeline stages in this slice");
+            static c => c.Stage == PipelineStage.Authentication,
+            "non-HTTP [Resource] operations should not have authentication pipeline checks");
+    }
+
+    [Fact]
+    public void When_Resource_with_MustBeAuthenticated_then_only_AuthenticationModule_adds_pipeline_check()
+    {
+        var compilation = CreateCompilation(
+            """
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace;
+
+            [RootLink("/accounts/{Id}")]
+            [MustBeAuthenticated]
+            [Resource("account", "read")]
+            public partial class GetAccountQuery : IQuery<string>
+            {
+                public string Id { get; set; }
+
+                public static Task<string> HandleAsync(GetAccountQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        var config = new BlueprintSourceGenerationConfig([new AuthenticationModule(), new AuthorizationModule()]);
+        var result = config.BuildPipelinePlan("TestNamespace.GetAccountQuery", compilation);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Value.Should().NotBeNull();
+
+        // AuthenticationModule handles the identity check; AuthorizationModule defers
+        var authContributions = result.Value!.Contributions
+            .Where(static c => c.Stage == PipelineStage.Authentication)
+            .ToList();
+
+        authContributions.Should().HaveCount(1, "only AuthenticationModule should contribute when [MustBeAuthenticated] is present");
+        authContributions.Should().Contain(
+            new PipelineContribution(PipelineStage.Authentication, nameof(AuthenticationModule)));
     }
 
     // ── Helpers ───────────────────────────────────────────────────────
