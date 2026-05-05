@@ -341,4 +341,29 @@ public class ReferenceAppInspectionTests
         var entries = ownershipData!.Entries;
         entries.Should().Contain(e => e.PropertyName == "Q" && e.Source == PropertyBindingSource.Query);
     }
+
+    [Fact]
+    public void When_app_registered_then_union_result_operation_carries_http_response_metadata()
+    {
+        var app = CreateRegisteredApp();
+
+        var descriptor = app.FindOperation(typeof(GetTemplateQuery));
+        var responseData = descriptor.GetFeatureData<OperationHttpResponseMetadataFeatureData>();
+
+        responseData.Should().NotBeNull("GetTemplateQuery declares Results<OkResult, NotFoundResult>");
+        responseData!.Responses.Should().Contain(r => r.StatusCode == 200 && r.HasResponseBody);
+        responseData.Responses.Should().Contain(r => r.StatusCode == 404 && r.HasResponseBody);
+    }
+
+    [Fact]
+    public void When_app_registered_then_http_operations_carry_serializer_context_coverage()
+    {
+        var app = CreateRegisteredApp();
+
+        var descriptor = app.FindOperation(typeof(CreateTemplateCommand));
+        var serializerData = descriptor.GetFeatureData<OperationSerializerContextCoverageFeatureData>();
+
+        serializerData.Should().NotBeNull("CreateTemplateCommand returns ResourceEventResult<TemplateApiResource> which needs serialization");
+        serializerData!.BodyTypeNames.Should().NotBeEmpty();
+    }
 }
