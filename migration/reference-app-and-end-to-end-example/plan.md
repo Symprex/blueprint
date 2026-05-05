@@ -186,8 +186,11 @@ registered surface (operations, URLs, methods, links, host exposure, serializer 
 Each layer should leave the sample runnable and comprehensible.
 
 Layer 3 OpenAPI and void-command items are now complete: OpenAPI snapshot test locks the full document shape,
-`ArchiveTemplateCommand` (DELETE, void handler) demonstrates no-content operations. Resource-event and
-grouped-handler examples remain deferred until their respective workstream designs are settled.
+`ArchiveTemplateCommand` (DELETE, void handler) demonstrates no-content operations. Resource-event examples are
+now fully demonstrated: `TemplateResourceEvents` exposes Created, Updated, Archived, Published, and Cloned events,
+and `[ApiOperations("Templates")]` grouping is applied across all operations. The sample app now has 9 operations
+covering queries (list, get, search, versions), commands (create, update, archive, publish, clone), and the
+`TemplateVersionApiResource` sub-resource type.
 
 ## Testing role
 

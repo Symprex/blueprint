@@ -20,8 +20,13 @@ All operations belong to the `Templates` group (via `[ApiOperations("Templates")
 |-----------|------|-------|--------|
 | `GetTemplatesQuery` | GET | `/templates` | `TemplateApiResource[]` |
 | `GetTemplateQuery` | GET | `/templates/{Id}` | `TemplateApiResource` |
+| `SearchTemplatesQuery` | GET | `/templates/search` | `TemplateApiResource[]` |
+| `GetTemplateVersionsQuery` | GET | `/templates/{Id}/versions` | `TemplateVersionApiResource[]` |
 | `CreateTemplateCommand` | POST | `/templates` | `ResourceEventResult<TemplateApiResource>` |
 | `UpdateTemplateCommand` | PUT | `/templates/{Id}` | `ResourceEventResult<TemplateApiResource>` |
+| `PublishTemplateCommand` | POST | `/templates/{Id}/publish` | `ResourceEventResult<TemplateApiResource>` |
+| `CloneTemplateCommand` | POST | `/templates/{Id}/clone` | `ResourceEventResult<TemplateApiResource>` |
+| `PreviewTemplateCommand` | POST | `/templates/{Id}/preview` | `TemplatePreviewApiResource` |
 | `ArchiveTemplateCommand` | DELETE | `/templates/{Id}` | `KeyOnlyResourceEventResult` |
 
 A background task (`SendTemplateSharedNotificationTask`) demonstrates non-HTTP execution.

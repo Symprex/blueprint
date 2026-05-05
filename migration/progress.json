@@ -11,12 +11,12 @@
   },
   "current": {
     "activeWorkstream": "reference-app-and-end-to-end-example",
-    "nextReadySlice": "reference-app/expand-operations-to-tier-1-minimum",
+    "nextReadySlice": "reference-app/phase-2-review-artifact",
     "lastCompletedSlice": {
-      "id": "performance/tier-2-scale-stress-tests",
-      "workstream": "performance-and-scale",
-      "title": "Add Tier 2 scale stress tests for OpenAPI, registration, and concurrent dispatch",
-      "commit": "148f979"
+      "id": "reference-app/expand-operations-to-tier-1-minimum",
+      "workstream": "reference-app-and-end-to-end-example",
+      "title": "Expand reference app to 9 operations with search, versions, publish, and clone",
+      "commit": "c76b9b0"
     },
     "openReviewGate": null,
     "openReviewGateRationale": null,
