@@ -10,13 +10,13 @@
     "workstreamPlan": "migration\\auditing-and-observability\\plan.md"
   },
   "current": {
-    "activeWorkstream": "reference-app-and-end-to-end-example",
-    "nextReadySlice": "reference-app/documentation-and-progress-sync",
+    "activeWorkstream": "documentation-and-final-alignment",
+    "nextReadySlice": "documentation/comprehensive-migration-status-review",
     "lastCompletedSlice": {
-      "id": "reference-app/discriminated-union-results",
+      "id": "reference-app/do-not-save-changes-demo",
       "workstream": "reference-app-and-end-to-end-example",
-      "title": "Demonstrate Results<T1, T2> with NotFoundResult and ConflictResult on reference app operations",
-      "commit": "92a5f35"
+      "title": "Demonstrate [DoNotSaveChanges] on PreviewTemplateCommand and document all diagnostic IDs",
+      "commit": "97d0e53"
     },
     "openReviewGate": null,
     "openReviewGateRationale": null,
