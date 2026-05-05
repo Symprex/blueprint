@@ -1,11 +1,13 @@
 using Blueprint.SourceGenerator.Planning;
 using Microsoft.CodeAnalysis;
+using Newtonsoft.Json.Linq;
 
 namespace Blueprint.SourceGenerator.Modules.Auditing;
 
 /// <summary>
-/// Contributes <c>auditing.enabled</c> to the per-operation debug manifest, reflecting whether
-/// the operation has opted out of audit recording via <c>[DoNotAudit]</c>.
+/// Contributes <c>auditing.enabled</c> and <c>trace.events</c> to the per-operation debug manifest,
+/// reflecting whether the operation has opted out of audit recording via <c>[DoNotAudit]</c> and
+/// documenting the Activity events that auditing will emit at runtime.
 /// </summary>
 /// <remarks>
 /// This is a manifest-only module separated from <see cref="AuditingModule"/> because the pipeline
@@ -37,6 +39,33 @@ internal sealed class AuditingManifestModule : IBlueprintSourceGeneratorModule, 
     {
         var hasDoNotAudit = HasDoNotAuditAttribute(context.GetOperationTypeSymbol());
         context.AddEntry("auditing.enabled", (!hasDoNotAudit).ToString());
+
+        if (!hasDoNotAudit)
+        {
+            context.AddEntry("trace.events", BuildAuditEventCatalog());
+        }
+    }
+
+    private static JArray BuildAuditEventCatalog()
+    {
+        return new JArray
+        {
+            new JObject
+            {
+                ["name"] = "blueprint.audit.started",
+                ["tags"] = new JArray { "blueprint.operation.type" },
+            },
+            new JObject
+            {
+                ["name"] = "blueprint.audit.succeeded",
+                ["tags"] = new JArray { "blueprint.operation.type" },
+            },
+            new JObject
+            {
+                ["name"] = "blueprint.audit.failed",
+                ["tags"] = new JArray { "blueprint.operation.type", "exception.type", "exception.message", "exception.stacktrace" },
+            },
+        };
     }
 
     private static bool HasDoNotAuditAttribute(INamedTypeSymbol operationType)

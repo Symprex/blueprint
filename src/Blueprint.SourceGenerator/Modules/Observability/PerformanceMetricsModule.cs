@@ -1,5 +1,6 @@
 using Blueprint.SourceGenerator.Planning;
 using Microsoft.CodeAnalysis;
+using Newtonsoft.Json.Linq;
 
 namespace Blueprint.SourceGenerator.Modules.Observability;
 
@@ -13,7 +14,8 @@ namespace Blueprint.SourceGenerator.Modules.Observability;
 /// activity is an observability concern that must be decided before any stage emits
 /// trace data. The module has no render steps and does not participate in code generation
 /// directly; it only sets a plan flag that <c>PipelineCodeGenerator</c> reads.
-/// It also contributes <c>observability.activityEnabled</c> to the per-operation debug manifest.
+/// It also contributes <c>observability.activityEnabled</c> and <c>trace.tags</c> to the
+/// per-operation debug manifest.
 /// </remarks>
 internal sealed class PerformanceMetricsModule : IBlueprintSourceGeneratorModule, IPipelineContributor, IDebugManifestContributor
 {
@@ -49,6 +51,20 @@ internal sealed class PerformanceMetricsModule : IBlueprintSourceGeneratorModule
     {
         var suppressed = HasDoNotRecordPerformanceMetricsAttribute(context.GetOperationTypeSymbol());
         context.AddEntry("observability.activityEnabled", (!suppressed).ToString());
+
+        if (!suppressed)
+        {
+            context.AddEntry("trace.tags", BuildShellTraceTags());
+        }
+    }
+
+    private static JArray BuildShellTraceTags()
+    {
+        return new JArray
+        {
+            "otel.status_code",
+            "otel.status_description",
+        };
     }
 
     private static bool HasDoNotRecordPerformanceMetricsAttribute(INamedTypeSymbol operationType)
