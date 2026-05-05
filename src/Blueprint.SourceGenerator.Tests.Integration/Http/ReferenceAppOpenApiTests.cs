@@ -158,6 +158,53 @@ public class ReferenceAppOpenApiTests
         htmlSourceProperty.GetProperty("maxLength").GetInt32().Should().Be(50000);
     }
 
+    [Fact]
+    public async Task When_openapi_endpoint_invoked_then_operation_summary_is_rendered_from_description_attribute()
+    {
+        var (json, _) = await InvokeOpenApiEndpointAsync();
+        using var doc = JsonDocument.Parse(json);
+
+        var searchPath = doc.RootElement.GetProperty("paths").GetProperty("/templates/search");
+        var getOperation = searchPath.GetProperty("get");
+
+        getOperation.GetProperty("summary").GetString()
+            .Should().Be("Search templates by name with pagination support.");
+    }
+
+    [Fact]
+    public async Task When_openapi_endpoint_invoked_then_parameter_descriptions_are_rendered()
+    {
+        var (json, _) = await InvokeOpenApiEndpointAsync();
+        using var doc = JsonDocument.Parse(json);
+
+        var searchPath = doc.RootElement.GetProperty("paths").GetProperty("/templates/search");
+        var parameters = searchPath.GetProperty("get").GetProperty("parameters");
+        var qParam = parameters.EnumerateArray()
+            .Single(static p => p.GetProperty("name").GetString() == "q");
+
+        qParam.GetProperty("description").GetString()
+            .Should().Be("The search term to filter templates by name.");
+    }
+
+    [Fact]
+    public async Task When_openapi_endpoint_invoked_then_request_body_property_descriptions_are_rendered()
+    {
+        var (json, _) = await InvokeOpenApiEndpointAsync();
+        using var doc = JsonDocument.Parse(json);
+
+        var templatesPath = doc.RootElement.GetProperty("paths").GetProperty("/templates");
+        var requestBody = templatesPath.GetProperty("post").GetProperty("requestBody");
+        var schema = requestBody.GetProperty("content").GetProperty("application/json").GetProperty("schema");
+
+        var nameProperty = schema.GetProperty("properties").GetProperty("name");
+        nameProperty.GetProperty("description").GetString()
+            .Should().Be("The display name for the template.");
+
+        var htmlSourceProperty = schema.GetProperty("properties").GetProperty("htmlSource");
+        htmlSourceProperty.GetProperty("description").GetString()
+            .Should().Be("The HTML source content of the template.");
+    }
+
     private static async Task<(string Json, int StatusCode)> InvokeOpenApiEndpointAsync()
     {
         var endpoints = CreateEndpoints();

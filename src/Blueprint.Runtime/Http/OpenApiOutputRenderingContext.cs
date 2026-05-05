@@ -143,6 +143,17 @@ public sealed record OpenApiOutputRenderingContext(
         if (primaryOperation is not null)
         {
             writer.WriteString("operationId", primaryOperation.OperationName);
+
+            if (primaryOperation.Summary is not null)
+            {
+                writer.WriteString("summary", primaryOperation.Summary);
+            }
+
+            if (primaryOperation.Description is not null)
+            {
+                writer.WriteString("description", primaryOperation.Description);
+            }
+
             WriteTags(writer, primaryOperation.Tags);
             WriteParameters(writer, primaryOperation.Parameters);
             WriteRequestBody(writer, primaryOperation.RequestBody);
@@ -190,6 +201,11 @@ public sealed record OpenApiOutputRenderingContext(
             writer.WriteString("name", parameter.Name);
             writer.WriteString("in", parameter.In);
             writer.WriteBoolean("required", parameter.Required);
+
+            if (parameter.Description is not null)
+            {
+                writer.WriteString("description", parameter.Description);
+            }
 
             writer.WritePropertyName("schema");
             writer.WriteStartObject();
@@ -244,6 +260,11 @@ public sealed record OpenApiOutputRenderingContext(
                 if (property.SchemaFormat is not null)
                 {
                     writer.WriteString("format", property.SchemaFormat);
+                }
+
+                if (property.Description is not null)
+                {
+                    writer.WriteString("description", property.Description);
                 }
 
                 WriteNumericConstraints(writer, property.Minimum, property.Maximum, property.ExclusiveMinimum, property.ExclusiveMaximum);

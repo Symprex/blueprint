@@ -22,6 +22,9 @@ public sealed record OpenApiParameterModel(
     string SchemaType,
     string? SchemaFormat)
 {
+    /// <summary>Gets the human-readable description for this parameter, sourced from <c>[Description]</c> attribute or null.</summary>
+    public string? Description { get; init; }
+
     /// <summary>Gets the minimum length constraint for string-typed parameters, or null when unconstrained.</summary>
     public int? MinLength { get; init; }
 
@@ -67,6 +70,9 @@ public sealed record OpenApiRequestBodyPropertyModel(
     string SchemaType,
     string? SchemaFormat)
 {
+    /// <summary>Gets the human-readable description for this body property, sourced from <c>[Description]</c> attribute or null.</summary>
+    public string? Description { get; init; }
+
     /// <summary>Gets whether this property is required (has <c>[Required]</c>).</summary>
     public bool IsRequired { get; init; }
 

@@ -13,10 +13,10 @@
     "activeWorkstream": "documentation-and-final-alignment",
     "nextReadySlice": null,
     "lastCompletedSlice": {
-      "id": "documentation/inspection-test-coverage-and-skill-alignment",
+      "id": "openapi/validation-constraint-projection",
       "workstream": "documentation-and-final-alignment",
-      "title": "Comprehensive inspection test coverage (26 tests) and skill/docs alignment fixes",
-      "commit": "f037d1e"
+      "title": "Project validation constraints into OpenAPI parameter and request body schemas",
+      "commit": "b9004b6"
     },
     "openReviewGate": null,
     "openReviewGateRationale": null,
@@ -225,6 +225,12 @@
       "workstream": "documentation-and-final-alignment",
       "title": "Comprehensive inspection test coverage (26 tests) covering all feature data types, skill alignment fixes",
       "commit": "f037d1e"
+    },
+    {
+      "id": "openapi/validation-constraint-projection",
+      "workstream": "documentation-and-final-alignment",
+      "title": "Project validation constraints into OpenAPI parameter and request body schemas",
+      "commit": "b9004b6"
     }
   ],
   "decisions": [

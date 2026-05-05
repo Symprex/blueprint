@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.ComponentModel;
 using Blueprint.Model;
 
 namespace Blueprint.Runtime.Http;
@@ -48,6 +49,12 @@ public sealed record OpenApiOperationRenderingContext(
 
         var (parameters, requestBody) = ProjectInputMetadata(operation.Operation);
 
+        // Extract [Description] from the operation type for the operation-level summary
+        var operationDescription = operation.Operation.OperationType
+            .GetCustomAttributes(typeof(DescriptionAttribute), inherit: false)
+            .OfType<DescriptionAttribute>()
+            .FirstOrDefault()?.Description;
+
         return new OpenApiOperationModel(
             operation.Operation.Name,
             operation.Operation.OperationType.FullName ?? operation.Operation.OperationType.Name,
@@ -56,7 +63,10 @@ public sealed record OpenApiOperationRenderingContext(
             tags,
             operation.Responses,
             parameters,
-            requestBody);
+            requestBody)
+        {
+            Summary = operationDescription,
+        };
     }
 
     private static (ImmutableArray<OpenApiParameterModel> Parameters, OpenApiRequestBodyModel? RequestBody)
@@ -74,6 +84,7 @@ public sealed record OpenApiOperationRenderingContext(
         {
             var (schemaType, schemaFormat) = MapClrTypeToOpenApiSchema(entry.PropertyTypeName);
             var constraints = OpenApiValidationConstraints.Extract(descriptor.OperationType, entry.PropertyName);
+            var description = GetPropertyDescription(descriptor.OperationType, entry.PropertyName);
 
             switch (entry.Source)
             {
@@ -85,6 +96,7 @@ public sealed record OpenApiOperationRenderingContext(
                         schemaType,
                         schemaFormat)
                     {
+                        Description = description,
                         MinLength = constraints.MinLength,
                         MaxLength = constraints.MaxLength,
                         Pattern = constraints.Pattern,
@@ -103,6 +115,7 @@ public sealed record OpenApiOperationRenderingContext(
                         schemaType,
                         schemaFormat)
                     {
+                        Description = description,
                         MinLength = constraints.MinLength,
                         MaxLength = constraints.MaxLength,
                         Pattern = constraints.Pattern,
@@ -121,6 +134,7 @@ public sealed record OpenApiOperationRenderingContext(
                         schemaType,
                         schemaFormat)
                     {
+                        Description = description,
                         MinLength = constraints.MinLength,
                         MaxLength = constraints.MaxLength,
                         Pattern = constraints.Pattern,
@@ -139,6 +153,7 @@ public sealed record OpenApiOperationRenderingContext(
                         schemaType,
                         schemaFormat)
                     {
+                        Description = description,
                         MinLength = constraints.MinLength,
                         MaxLength = constraints.MaxLength,
                         Pattern = constraints.Pattern,
@@ -155,6 +170,7 @@ public sealed record OpenApiOperationRenderingContext(
                         schemaType,
                         schemaFormat)
                     {
+                        Description = description,
                         IsRequired = constraints.IsRequired,
                         MinLength = constraints.MinLength,
                         MaxLength = constraints.MaxLength,
@@ -203,6 +219,23 @@ public sealed record OpenApiOperationRenderingContext(
             _ => ("string", null),
         };
     }
+
+    /// <summary>
+    /// Extracts the <see cref="DescriptionAttribute"/> value from a property on the operation type,
+    /// returning null when no description is specified.
+    /// </summary>
+    [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2070",
+        Justification = "OpenAPI description projection reflects over operation type properties that are preserved by the source generator's generated pipeline code.")]
+    private static string? GetPropertyDescription(Type operationType, string propertyName)
+    {
+        var property = operationType.GetProperty(propertyName, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+        return property?
+            .GetCustomAttributes(typeof(DescriptionAttribute), inherit: true)
+            .OfType<DescriptionAttribute>()
+            .FirstOrDefault()?.Description;
+    }
 }
 
 /// <summary>
@@ -225,4 +258,11 @@ public sealed record OpenApiOperationModel(
     ImmutableArray<string> Tags,
     ImmutableArray<OpenApiResponseObjectModel> Responses,
     ImmutableArray<OpenApiParameterModel> Parameters,
-    OpenApiRequestBodyModel? RequestBody);
+    OpenApiRequestBodyModel? RequestBody)
+{
+    /// <summary>Gets the short summary for this operation in the OpenAPI output, or null when not specified.</summary>
+    public string? Summary { get; init; }
+
+    /// <summary>Gets the longer description for this operation in the OpenAPI output, or null when not specified.</summary>
+    public string? Description { get; init; }
+}

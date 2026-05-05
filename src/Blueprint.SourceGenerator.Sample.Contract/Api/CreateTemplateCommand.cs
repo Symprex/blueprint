@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using Blueprint.Auditing;
 using Blueprint.Model;
@@ -15,6 +16,7 @@ namespace Blueprint.SourceGenerator.Sample.Contract.Api;
 [RootLink("/templates")]
 [HttpPost]
 [Resource("template", "write")]
+[Description("Create a new template with name and optional content.")]
 public partial class CreateTemplateCommand : ICommand<ResourceEventResult<TemplateApiResource>>
 {
     /// <summary>
@@ -22,6 +24,7 @@ public partial class CreateTemplateCommand : ICommand<ResourceEventResult<Templa
     /// </summary>
     [Required]
     [MaxLength(200)]
+    [Description("The display name for the template.")]
     public string? Name { get; set; }
 
     /// <summary>
@@ -30,6 +33,7 @@ public partial class CreateTemplateCommand : ICommand<ResourceEventResult<Templa
     /// </summary>
     [MaxLength(50000)]
     [Sensitive]
+    [Description("The HTML source content of the template.")]
     public string? HtmlSource { get; set; }
 
     /// <summary>
@@ -38,5 +42,6 @@ public partial class CreateTemplateCommand : ICommand<ResourceEventResult<Templa
     /// </summary>
     [MaxLength(10000)]
     [Sensitive]
+    [Description("The plain text fallback content of the template.")]
     public string? PlainTextSource { get; set; }
 }
