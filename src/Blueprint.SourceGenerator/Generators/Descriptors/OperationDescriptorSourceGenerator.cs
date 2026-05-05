@@ -249,6 +249,7 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
             new PersistenceManifestModule(),
             new BackgroundTaskFlushManifestModule(),
             new ResourceEventManifestModule(),
+            new ResultContractManifestModule(),
             new HttpMethodManifestModule(),
             new SensitivePropertyManifestModule(),
             new OperationGroupManifestModule(),
