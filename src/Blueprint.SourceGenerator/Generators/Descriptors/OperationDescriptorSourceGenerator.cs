@@ -238,6 +238,7 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
             new SerializerContextCoverageModule(),
             new SensitivePropertyMetadataModule(),
             new OperationDiscoveryManifestModule(),
+            new AuthorizationManifestModule(),
             .. additionalModules,
         ]);
     }
