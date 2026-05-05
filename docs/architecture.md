@@ -132,18 +132,27 @@ The important architectural rule is that runtime code consumes generated knowled
 
 `IBlueprintSourceGeneratorModule` is the main extension point for new compile-time features (`src\Blueprint.SourceGenerator\Modules\IBlueprintSourceGeneratorModule.cs`).
 
-Each module can:
+Modules participate in the build through typed contributor interfaces, each with its own lifecycle stage:
 
-- register marker attributes
-- inspect and validate discovered models
-- emit descriptor code
+| Interface | Stage | Responsibility |
+| --- | --- | --- |
+| `IPostInitializationContributor` | Source injection | Inject marker attributes and shared types into the compilation. |
+| `IDescriptorContributor` | Descriptor planning | Validate contracts, project metadata into descriptors, emit feature-data code. |
+| `IPipelineContributor` | Pipeline planning | Register variables, render pipeline stages (pre/post execution, exception handling). |
+| `IHostContributor` | Host exposure | Declare HTTP, background-task, or custom host exposure per operation. |
+| `IExceptionTranslationContributor` | Exception shell | Contribute catch blocks to the generated executor's outer exception handler. |
+| `IDebugManifestContributor` | Manifest emission | Project structured diagnostic data into the generated debug manifest. |
+| `IAppRegistrationContributor` | App registration | Contribute to the generated app registration code. |
 
-`LinkGenerationModule` is the model example:
+A module typically implements one or two contributors. For example:
 
-- it injects root/self link marker attributes
-- parses those attributes during configuration
-- validates placeholder and resource-type usage
-- emits descriptor code that adds links and URLs
+- `LinkGenerationModule` implements `IPostInitializationContributor` (injects link attributes) and `IDescriptorContributor` (validates and emits link metadata)
+- `ValidationModule` implements `IPipelineContributor` (renders validation checks before handler execution)
+- `AuditingModule` implements `IPipelineContributor` (renders post-execution audit sink calls)
+- `AuthenticationModule` implements `IDescriptorContributor` (projects auth metadata) and `IPipelineContributor` (renders identity checks)
+- `OperationDiscoveryManifestModule` implements `IDebugManifestContributor` (emits per-operation discovery entries)
+
+The repository currently has ~39 modules covering validation, persistence, auditing, authentication, authorization, performance metrics, link generation, resource events, property ownership, OpenAPI metadata, debug manifests, and host dispatch.
 
 If a new feature needs compile-time metadata or diagnostics, adding or extending a module is usually the right place to start.
 
