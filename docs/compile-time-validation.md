@@ -137,6 +137,21 @@ Current persistence IDs in active use:
 
 - `BPP001`: `[DoNotSaveChanges]` applied to a non-command operation where it has no effect (only `ICommand` operations trigger the `UnitOfWorkModule`).
 
+### Authentication and authorisation diagnostics
+
+Authentication and access-mode diagnostics detect conflicting or misapplied auth attributes and project explicit access-mode metadata into descriptors.
+
+Reserved direction:
+
+| Range | Meaning |
+| --- | --- |
+| `BPAU001`-`BPAU099` | authentication and authorisation diagnostics for invalid or conflicting declarative contracts that the generator can prove at build time |
+
+Current authentication IDs in active use:
+
+- `BPAU001`: `[MustBeAuthenticated]` applied to an operation that is not exposed via an HTTP host (warning — the authentication pipeline check cannot be generated without HTTP context).
+- `BPAU002`: Both `[AllowAnonymous]` and `[MustBeAuthenticated]` applied to the same operation (error — the access mode must be unambiguous).
+
 ## Diagnostic design rules
 
 When adding new diagnostics:

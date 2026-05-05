@@ -89,6 +89,114 @@ public class AuthenticationModuleTests
         allOutput.Should().NotContain("WellKnownFeatureData.RequiresAuthentication");
     }
 
+    // ── AllowAnonymous descriptor tests ──────────────────────────────
+
+    [Fact]
+    public void When_operation_has_AllowAnonymous_and_http_exposure_then_descriptor_has_anonymous_feature_data()
+    {
+        var result = CompileDescriptor(
+            """
+            [RootLink("/items")]
+            [AllowAnonymous]
+            public partial class GetItemsQuery : IQuery<string>
+            {
+                public static Task<string> HandleAsync(GetItemsQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var descriptorSource = result.Output
+            .Select(static t => t.ToString())
+            .FirstOrDefault(static s => s.Contains("GetItemsQueryDescriptor"));
+
+        descriptorSource.Should().NotBeNull("descriptor should be generated");
+        descriptorSource!.Should().Contain("AuthenticationRequirement.Anonymous",
+            "descriptor should project anonymous access mode");
+    }
+
+    [Fact]
+    public void When_operation_has_AllowAnonymous_on_non_http_then_still_projects_anonymous_feature_data()
+    {
+        var result = CompileDescriptor(
+            """
+            [AllowAnonymous]
+            public partial class ProcessItemCommand : ICommand<string>
+            {
+                public static Task<string> HandleAsync(ProcessItemCommand operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().BeEmpty("no warning for [AllowAnonymous] on non-HTTP — it is metadata only");
+
+        var descriptorSource = result.Output
+            .Select(static t => t.ToString())
+            .FirstOrDefault(static s => s.Contains("ProcessItemCommandDescriptor"));
+
+        descriptorSource.Should().NotBeNull("descriptor should be generated");
+        descriptorSource!.Should().Contain("AuthenticationRequirement.Anonymous",
+            "anonymous access mode should be projected regardless of host");
+    }
+
+    [Fact]
+    public void When_operation_has_both_AllowAnonymous_and_MustBeAuthenticated_then_BPAU002_diagnostic()
+    {
+        var result = CompileDescriptor(
+            """
+            [RootLink("/items")]
+            [AllowAnonymous]
+            [MustBeAuthenticated]
+            public partial class GetItemsQuery : IQuery<string>
+            {
+                public static Task<string> HandleAsync(GetItemsQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().Contain(static d => d.Id == "BPAU002",
+            "conflicting [AllowAnonymous] and [MustBeAuthenticated] should report BPAU002");
+    }
+
+    [Fact]
+    public void When_operation_has_AllowAnonymous_then_no_authentication_pipeline_stage()
+    {
+        var compilation = CreateCompilation(
+            """
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace;
+
+            [RootLink("/items")]
+            [AllowAnonymous]
+            public partial class GetItemsQuery : IQuery<string>
+            {
+                public static Task<string> HandleAsync(GetItemsQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        var config = new BlueprintSourceGenerationConfig([new AuthenticationModule()]);
+        var result = config.BuildPipelinePlan("TestNamespace.GetItemsQuery", compilation);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Value.Should().NotBeNull();
+        result.Value!.Contributions.Should().NotContain(
+            static c => c.Stage == PipelineStage.Authentication,
+            "[AllowAnonymous] operations should not have authentication pipeline checks");
+    }
+
     // ── Pipeline plan tests ───────────────────────────────────────────
 
     [Fact]

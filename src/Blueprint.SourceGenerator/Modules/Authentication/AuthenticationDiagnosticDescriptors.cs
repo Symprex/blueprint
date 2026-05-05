@@ -18,4 +18,16 @@ internal static class AuthenticationDiagnosticDescriptors
         category: "Blueprint.Authentication",
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
+
+    /// <summary>
+    /// BPAU002: Both <c>[AllowAnonymous]</c> and <c>[MustBeAuthenticated]</c> applied to the same operation.
+    /// The access mode must be unambiguous: pick one.
+    /// </summary>
+    public static readonly DiagnosticDescriptor ConflictingAccessModeAttributes = new(
+        id: "BPAU002",
+        title: "Conflicting access mode attributes",
+        messageFormat: "Operation '{0}' has both [AllowAnonymous] and [MustBeAuthenticated]. Remove one to make the access mode unambiguous.",
+        category: "Blueprint.Authentication",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
 }

@@ -10,16 +10,16 @@
     "workstreamPlan": "migration\\auditing-and-observability\\plan.md"
   },
   "current": {
-    "activeWorkstream": "auditing-and-observability",
+    "activeWorkstream": "authentication-and-authorisation",
     "nextReadySlice": {
+      "id": "auth/access-mode-descriptor-projection",
+      "workstream": "authentication-and-authorisation",
+      "title": "Introduce [AllowAnonymous] and project operation access-mode metadata into descriptors with conflict diagnostic"
+    },
+    "lastCompletedSlice": {
       "id": "auditing/trace-event-catalog-manifest",
       "workstream": "auditing-and-observability",
       "title": "Emit trace event catalog entries in the debug manifest documenting Activity events and tags per operation"
-    },
-    "lastCompletedSlice": {
-      "id": "auditing/manifest-observability-entries",
-      "workstream": "auditing-and-observability",
-      "title": "Enrich debug manifest with auditing and observability opt-out entries"
     },
     "openReviewGate": null,
     "openReviewGateRationale": null,
@@ -120,6 +120,12 @@
       "workstream": "auditing-and-observability",
       "title": "Enrich debug manifest with auditing and observability opt-out entries",
       "commit": "df4a873"
+    },
+    {
+      "id": "auditing/trace-event-catalog-manifest",
+      "workstream": "auditing-and-observability",
+      "title": "Emit trace event catalog entries in the debug manifest documenting Activity events and tags per operation",
+      "commit": "0a88983"
     }
   ],
   "decisions": [

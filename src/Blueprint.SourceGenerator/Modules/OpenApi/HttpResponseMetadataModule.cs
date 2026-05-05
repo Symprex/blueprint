@@ -190,7 +190,7 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
         }
 
         // Authentication-driven short-circuit: 401 when [MustBeAuthenticated] is declared.
-        if (context.GetMetadata<AuthenticationDescriptorRegistration>().Any())
+        if (context.GetMetadata<AuthenticationDescriptorRegistration>().Any(static r => r.RequiresIdentityCheck))
         {
             responses.Add(CreateResponse(401, false, "Blueprint.Runtime.Exec.UnauthenticatedResult", []));
         }

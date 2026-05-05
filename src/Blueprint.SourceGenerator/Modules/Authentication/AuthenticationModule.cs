@@ -5,13 +5,15 @@ using Microsoft.CodeAnalysis;
 namespace Blueprint.SourceGenerator.Modules.Authentication;
 
 /// <summary>
-/// Detects <c>[MustBeAuthenticated]</c> on operations and emits both descriptor feature data
-/// and a pipeline identity check in the <see cref="PipelineStage.Authentication"/> stage.
+/// Detects <c>[MustBeAuthenticated]</c> and <c>[AllowAnonymous]</c> on operations and emits both descriptor
+/// feature data and a pipeline identity check in the <see cref="PipelineStage.Authentication"/> stage.
 /// Unauthenticated HTTP requests are short-circuited with a <c>401 Unauthorized</c> response.
+/// <c>[AllowAnonymous]</c> operations project <c>AuthenticationRequirement.Anonymous</c> metadata and skip checks.
 /// </summary>
 public sealed class AuthenticationModule : IBlueprintSourceGeneratorModule, IDescriptorContributor, IPipelineContributor
 {
     private const string MustBeAuthenticatedAttributeName = "MustBeAuthenticatedAttribute";
+    private const string AllowAnonymousAttributeName = "AllowAnonymousAttribute";
     private const string AttributeNamespace = "Blueprint.Model.Attributes";
 
     /// <inheritdoc />
@@ -41,28 +43,49 @@ public sealed class AuthenticationModule : IBlueprintSourceGeneratorModule, IDes
     public void ContributeToDescriptor(DescriptorContributorContext context)
     {
         var operationType = context.GetOperationTypeSymbol();
+        var hasMustBeAuthenticated = HasAttribute(operationType, MustBeAuthenticatedAttributeName);
+        var hasAllowAnonymous = HasAttribute(operationType, AllowAnonymousAttributeName);
 
-        if (!HasMustBeAuthenticated(operationType))
-        {
-            return;
-        }
-
-        var isHttpExposed = context.GetMetadata<HostExposureRegistration>()
-            .Any(static r => string.Equals(r.HostName, HostExposureRegistration.Http.HostName, StringComparison.Ordinal));
-
-        if (!isHttpExposed)
+        // Conflicting markers: report error and bail
+        if (hasMustBeAuthenticated && hasAllowAnonymous)
         {
             context.AddDiagnostic(
                 new DiagnosticInfo(
-                    AuthenticationDiagnosticDescriptors.AuthAttributeOnNonHttpOperation,
+                    AuthenticationDiagnosticDescriptors.ConflictingAccessModeAttributes,
                     operationType.Locations.FirstOrDefault(),
                     [operationType.Name]));
 
             return;
         }
 
-        context.AddMetadata(new AuthenticationDescriptorRegistration());
-        context.AddRenderStep(RenderDescriptorFeatureData);
+        // [AllowAnonymous]: project anonymous access mode metadata (host-agnostic)
+        if (hasAllowAnonymous)
+        {
+            context.AddMetadata(new AuthenticationDescriptorRegistration(RequiresIdentityCheck: false));
+            context.AddRenderStep(RenderAnonymousFeatureData);
+            return;
+        }
+
+        // [MustBeAuthenticated]: requires HTTP host for enforcement
+        if (hasMustBeAuthenticated)
+        {
+            var isHttpExposed = context.GetMetadata<HostExposureRegistration>()
+                .Any(static r => string.Equals(r.HostName, HostExposureRegistration.Http.HostName, StringComparison.Ordinal));
+
+            if (!isHttpExposed)
+            {
+                context.AddDiagnostic(
+                    new DiagnosticInfo(
+                        AuthenticationDiagnosticDescriptors.AuthAttributeOnNonHttpOperation,
+                        operationType.Locations.FirstOrDefault(),
+                        [operationType.Name]));
+
+                return;
+            }
+
+            context.AddMetadata(new AuthenticationDescriptorRegistration(RequiresIdentityCheck: true));
+            context.AddRenderStep(RenderAuthenticatedFeatureData);
+        }
     }
 
     /// <inheritdoc />
@@ -70,7 +93,13 @@ public sealed class AuthenticationModule : IBlueprintSourceGeneratorModule, IDes
     {
         var operationType = context.Operation.TypeSymbol;
 
-        if (!HasMustBeAuthenticated(operationType))
+        // [AllowAnonymous] → no pipeline check needed
+        if (HasAttribute(operationType, AllowAnonymousAttributeName))
+        {
+            return;
+        }
+
+        if (!HasAttribute(operationType, MustBeAuthenticatedAttributeName))
         {
             return;
         }
@@ -85,9 +114,9 @@ public sealed class AuthenticationModule : IBlueprintSourceGeneratorModule, IDes
             RenderAuthenticationCheck);
     }
 
-    private static bool HasMustBeAuthenticated(INamedTypeSymbol operationType)
+    private static bool HasAttribute(INamedTypeSymbol operationType, string attributeName)
     {
-        return operationType.GetAttributes().Any(static a =>
+        return operationType.GetAttributes().Any(a =>
         {
             var attrClass = a.AttributeClass;
             if (attrClass is null)
@@ -95,7 +124,7 @@ public sealed class AuthenticationModule : IBlueprintSourceGeneratorModule, IDes
                 return false;
             }
 
-            return attrClass.Name == MustBeAuthenticatedAttributeName
+            return attrClass.Name == attributeName
                    && string.Equals(
                        attrClass.ContainingNamespace?.ToDisplayString(),
                        AttributeNamespace,
@@ -109,7 +138,13 @@ public sealed class AuthenticationModule : IBlueprintSourceGeneratorModule, IDes
             .Any(static a => a.AttributeClass?.Name is "RootLinkAttribute" or "SelfLinkAttribute");
     }
 
-    private static void RenderDescriptorFeatureData(CodeWriter.ICodeWriter writer)
+    private static void RenderAnonymousFeatureData(CodeWriter.ICodeWriter writer)
+    {
+        writer.AppendLine(
+            "this.SetFeatureData(new global::Blueprint.Model.OperationAuthenticationFeatureData(global::Blueprint.Model.AuthenticationRequirement.Anonymous));");
+    }
+
+    private static void RenderAuthenticatedFeatureData(CodeWriter.ICodeWriter writer)
     {
         writer.AppendLine(
             "this.SetFeatureData(global::Blueprint.Model.WellKnownFeatureData.RequiresAuthentication);");

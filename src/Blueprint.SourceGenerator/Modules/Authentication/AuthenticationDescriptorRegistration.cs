@@ -2,7 +2,12 @@ namespace Blueprint.SourceGenerator.Modules.Authentication;
 
 /// <summary>
 /// Descriptor planning metadata emitted by <see cref="AuthenticationModule"/> when an operation
-/// carries <c>[MustBeAuthenticated]</c>. Consumed by <c>HttpResponseMetadataModule</c> to project
-/// the 401 response into the operation's HTTP response metadata.
+/// carries an access-mode attribute. The <see cref="RequiresIdentityCheck"/> flag distinguishes
+/// operations that enforce an identity gate (producing a 401 short-circuit) from those marked
+/// <c>[AllowAnonymous]</c> which carry explicit access-mode metadata without runtime enforcement.
 /// </summary>
-internal sealed record AuthenticationDescriptorRegistration;
+/// <param name="RequiresIdentityCheck">
+/// <c>true</c> when the operation requires an authenticated identity (e.g. <c>[MustBeAuthenticated]</c>);
+/// <c>false</c> when the operation explicitly allows anonymous access.
+/// </param>
+internal sealed record AuthenticationDescriptorRegistration(bool RequiresIdentityCheck);
