@@ -62,7 +62,8 @@ Observability is part of the feature, not cleanup work for later.
 Current signals:
 
 - Generated pipelines create activities through `BlueprintActivitySource` and record exceptions on them (`src\Blueprint.Runtime\Diagnostics\BlueprintActivitySource.cs`, `src\Blueprint.SourceGenerator\Generators\Pipelines\CodeGen\PipelineCodeGenerator.cs`).
-- The sample startup shows the intended OpenTelemetry direction, even though it is currently commented out (`src\Blueprint.SourceGenerator.Sample\Startup.cs`).
+- Generated audit pipelines emit structured `blueprint.audit.*` events with `blueprint.operation.type` tags, providing OpenTelemetry-compatible audit correlation via the enclosing Activity.
+- `[DoNotRecordPerformanceMetrics]` allows suppression of Activity creation for noisy operations without removing them from the pipeline.
 
 Future work should assume:
 

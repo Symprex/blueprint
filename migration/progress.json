@@ -11,12 +11,12 @@
   },
   "current": {
     "activeWorkstream": "documentation-and-final-alignment",
-    "nextReadySlice": "documentation/comprehensive-migration-status-review",
+    "nextReadySlice": null,
     "lastCompletedSlice": {
-      "id": "reference-app/do-not-save-changes-demo",
-      "workstream": "reference-app-and-end-to-end-example",
-      "title": "Demonstrate [DoNotSaveChanges] on PreviewTemplateCommand and document all diagnostic IDs",
-      "commit": "97d0e53"
+      "id": "documentation/inspection-test-coverage-and-skill-alignment",
+      "workstream": "documentation-and-final-alignment",
+      "title": "Comprehensive inspection test coverage (26 tests) and skill/docs alignment fixes",
+      "commit": "f037d1e"
     },
     "openReviewGate": null,
     "openReviewGateRationale": null,
@@ -207,6 +207,24 @@
       "workstream": "generated-manifests-and-inspection-surfaces",
       "title": "Add ResultContractManifestModule for result type debug manifest",
       "commit": "019e3e2"
+    },
+    {
+      "id": "documentation/diagnostic-docs-and-observability-fixes",
+      "workstream": "documentation-and-final-alignment",
+      "title": "Document BP101-104, BP201-202, BPA001, BPT001 diagnostics and fix audit event names in docs",
+      "commit": "b4dc095"
+    },
+    {
+      "id": "documentation/architecture-module-section-update",
+      "workstream": "documentation-and-final-alignment",
+      "title": "Update architecture.md module section with contributor interface table and examples",
+      "commit": "8570acc"
+    },
+    {
+      "id": "documentation/inspection-test-coverage-and-skill-alignment",
+      "workstream": "documentation-and-final-alignment",
+      "title": "Comprehensive inspection test coverage (26 tests) covering all feature data types, skill alignment fixes",
+      "commit": "f037d1e"
     }
   ],
   "decisions": [
