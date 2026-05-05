@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using Blueprint.Model;
 using Blueprint.Model.Attributes;
 
@@ -10,4 +11,5 @@ namespace Blueprint.SourceGenerator.Sample.Contract.Api;
 [Resource("template", "read")]
 [SelfLink(typeof(TemplateListApiResource), "/templates")]
 [HttpGet]
+[Description("List all available templates.")]
 public partial class GetTemplatesQuery : IQuery<TemplateApiResource[]>;

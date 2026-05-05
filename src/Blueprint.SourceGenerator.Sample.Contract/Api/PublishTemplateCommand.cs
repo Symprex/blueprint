@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using Blueprint.Model;
 using Blueprint.Model.Attributes;
 using Blueprint.Runtime.Exec;
@@ -13,10 +14,12 @@ namespace Blueprint.SourceGenerator.Sample.Contract.Api;
 [RootLink("/templates/{Id}/publish")]
 [HttpPost]
 [FromResource(typeof(CreateTemplateCommand))]
+[Description("Publish a template, making it available for use.")]
 public partial class PublishTemplateCommand : ICommand<Results<ResourceEventResult<TemplateApiResource>, ConflictResult<TemplateApiResource>>>
 {
     /// <summary>
     /// The identifier of the template to publish.
     /// </summary>
+    [Description("The unique identifier of the template to publish.")]
     public required string Id { get; set; }
 }

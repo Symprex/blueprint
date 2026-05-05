@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using Blueprint.Model;
 using Blueprint.Model.Attributes;
 using Blueprint.Runtime.Exec;
@@ -12,10 +13,12 @@ namespace Blueprint.SourceGenerator.Sample.Contract.Api;
 [RootLink("/templates/{Id}")]
 [HttpDelete]
 [Resource("template", "write")]
+[Description("Archive (soft-delete) a template.")]
 public partial class ArchiveTemplateCommand : ICommand<KeyOnlyResourceEventResult>
 {
     /// <summary>
     /// The identifier of the template to archive (bound from the route).
     /// </summary>
+    [Description("The unique identifier of the template to archive.")]
     public required string Id { get; set; }
 }

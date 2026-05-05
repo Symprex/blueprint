@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using Blueprint.Model;
 using Blueprint.Model.Attributes;
 using Blueprint.Runtime.Exec;
@@ -14,10 +15,12 @@ namespace Blueprint.SourceGenerator.Sample.Contract.Api;
 [FromResource(typeof(GetTemplatesQuery))]
 [SelfLink(typeof(TemplateApiResource), "/templates/{Id}")]
 [HttpGet]
+[Description("Retrieve a single template by identifier.")]
 public partial class GetTemplateQuery : IQuery<Results<OkResult<TemplateApiResource>, NotFoundResult<TemplateApiResource>>>
 {
     /// <summary>
     /// The identifier of the template to retrieve.
     /// </summary>
+    [Description("The unique identifier of the template.")]
     public required string Id { get; set; }
 }

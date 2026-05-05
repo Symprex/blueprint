@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using Blueprint.Model;
 using Blueprint.Model.Attributes;
@@ -14,17 +15,20 @@ namespace Blueprint.SourceGenerator.Sample.Contract.Api;
 [ApiOperations("Templates")]
 [Resource("template", "read")]
 [DoNotSaveChanges]
+[Description("Preview a rendered template with sample merge data.")]
 public partial class PreviewTemplateCommand : ICommand<TemplatePreviewApiResource>
 {
     /// <summary>
     /// The template identifier to render.
     /// </summary>
     [Required]
+    [Description("The unique identifier of the template to preview.")]
     public string Id { get; set; } = null!;
 
     /// <summary>
     /// A dictionary of merge-field names to values for the template rendering.
     /// </summary>
     [Required]
+    [Description("Merge-field name/value pairs for template rendering.")]
     public Dictionary<string, string> MergeFields { get; set; } = new();
 }

@@ -8,6 +8,7 @@
     "/templates": {
       "get": {
         "operationId": "GetTemplatesQuery",
+        "summary": "List all available templates.",
         "tags": [
           "Templates"
         ],
@@ -186,6 +187,7 @@
     "/templates/{Id}": {
       "delete": {
         "operationId": "ArchiveTemplateCommand",
+        "summary": "Archive (soft-delete) a template.",
         "tags": [
           "Templates"
         ],
@@ -194,6 +196,7 @@
             "name": "Id",
             "in": "path",
             "required": true,
+            "description": "The unique identifier of the template to archive.",
             "schema": {
               "type": "string"
             }
@@ -230,6 +233,7 @@
       },
       "get": {
         "operationId": "GetTemplateQuery",
+        "summary": "Retrieve a single template by identifier.",
         "tags": [
           "Templates"
         ],
@@ -238,6 +242,7 @@
             "name": "Id",
             "in": "path",
             "required": true,
+            "description": "The unique identifier of the template.",
             "schema": {
               "type": "string"
             }
@@ -291,6 +296,7 @@
       },
       "put": {
         "operationId": "UpdateTemplateCommand",
+        "summary": "Update an existing template\u0027s name and content.",
         "tags": [
           "Templates"
         ],
@@ -299,6 +305,7 @@
             "name": "Id",
             "in": "path",
             "required": true,
+            "description": "The unique identifier of the template to update.",
             "schema": {
               "type": "string"
             }
@@ -313,14 +320,17 @@
                 "properties": {
                   "name": {
                     "type": "string",
+                    "description": "The new display name for the template.",
                     "maxLength": 200
                   },
                   "htmlSource": {
                     "type": "string",
+                    "description": "The updated HTML source content.",
                     "maxLength": 50000
                   },
                   "plainTextSource": {
                     "type": "string",
+                    "description": "The updated plain text content.",
                     "maxLength": 10000
                   }
                 },
@@ -377,6 +387,7 @@
     "/templates/{Id}/clone": {
       "post": {
         "operationId": "CloneTemplateCommand",
+        "summary": "Clone a template with a new name.",
         "tags": [
           "Templates"
         ],
@@ -385,6 +396,7 @@
             "name": "Id",
             "in": "path",
             "required": true,
+            "description": "The unique identifier of the template to clone.",
             "schema": {
               "type": "string"
             }
@@ -399,6 +411,7 @@
                 "properties": {
                   "newName": {
                     "type": "string",
+                    "description": "The display name for the new cloned template.",
                     "maxLength": 200
                   }
                 },
@@ -455,6 +468,7 @@
     "/templates/{Id}/preview": {
       "post": {
         "operationId": "PreviewTemplateCommand",
+        "summary": "Preview a rendered template with sample merge data.",
         "tags": [
           "Templates"
         ],
@@ -463,6 +477,7 @@
             "name": "Id",
             "in": "path",
             "required": true,
+            "description": "The unique identifier of the template to preview.",
             "schema": {
               "type": "string"
             }
@@ -476,7 +491,8 @@
                 "type": "object",
                 "properties": {
                   "mergeFields": {
-                    "type": "string"
+                    "type": "string",
+                    "description": "Merge-field name/value pairs for template rendering."
                   }
                 },
                 "required": [
@@ -522,6 +538,7 @@
     "/templates/{Id}/publish": {
       "post": {
         "operationId": "PublishTemplateCommand",
+        "summary": "Publish a template, making it available for use.",
         "tags": [
           "Templates"
         ],
@@ -530,6 +547,7 @@
             "name": "Id",
             "in": "path",
             "required": true,
+            "description": "The unique identifier of the template to publish.",
             "schema": {
               "type": "string"
             }
@@ -585,6 +603,7 @@
     "/templates/{Id}/versions": {
       "get": {
         "operationId": "GetTemplateVersionsQuery",
+        "summary": "Get the version history for a template.",
         "tags": [
           "Templates"
         ],
@@ -593,6 +612,7 @@
             "name": "Id",
             "in": "path",
             "required": true,
+            "description": "The unique identifier of the template.",
             "schema": {
               "type": "string"
             }
