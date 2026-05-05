@@ -310,4 +310,35 @@ public class ReferenceAppInspectionTests
         commandDiscovery!.Kind.Should().Be("command");
         commandDiscovery.TypeName.Should().Be("CreateTemplateCommand");
     }
+
+    [Fact]
+    public void When_app_registered_then_property_ownership_is_projected_for_mixed_route_and_body_operations()
+    {
+        var app = CreateRegisteredApp();
+
+        var descriptor = app.FindOperation(typeof(UpdateTemplateCommand));
+        var ownershipData = descriptor.GetFeatureData<OperationPropertyOwnershipFeatureData>();
+
+        ownershipData.Should().NotBeNull("UpdateTemplateCommand has route ({Id}) and body properties");
+
+        var entries = ownershipData!.Entries;
+        entries.Should().Contain(e => e.PropertyName == "Id" && e.Source == PropertyBindingSource.Route);
+        entries.Should().Contain(e => e.PropertyName == "Name" && e.Source == PropertyBindingSource.Body);
+        entries.Should().Contain(e => e.PropertyName == "HtmlSource" && e.Source == PropertyBindingSource.Body);
+        entries.Should().Contain(e => e.PropertyName == "PlainTextSource" && e.Source == PropertyBindingSource.Body);
+    }
+
+    [Fact]
+    public void When_app_registered_then_query_operation_carries_query_string_property_ownership()
+    {
+        var app = CreateRegisteredApp();
+
+        var descriptor = app.FindOperation(typeof(SearchTemplatesQuery));
+        var ownershipData = descriptor.GetFeatureData<OperationPropertyOwnershipFeatureData>();
+
+        ownershipData.Should().NotBeNull("SearchTemplatesQuery is a GET with query-bound properties");
+
+        var entries = ownershipData!.Entries;
+        entries.Should().Contain(e => e.PropertyName == "Q" && e.Source == PropertyBindingSource.Query);
+    }
 }
