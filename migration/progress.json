@@ -20,6 +20,12 @@
     },
     "openReviewGate": null,
     "openReviewGateRationale": null,
+    "phase2Criteria": {
+      "resourceAndLinks": "SATISFIED — LinkGenerationModule, ResourceEventAuditModule, 5 resource events, SelfLink/RootLink proven in 10-operation reference app",
+      "openApi": "SATISFIED — OpenAPI rendered from source-generated descriptors, snapshot-tested in ReferenceAppOpenApiTests",
+      "referenceApp": "SATISFIED — 10 HTTP operations + 1 background task demonstrating all Phase 2 capabilities end to end",
+      "reviewArtifact": "SATISFIED — phase2-resource-api-shape-review.html at ~/.agent/diagrams/"
+    },
     "phase3Criteria": {
       "nonHttpHost": "SATISFIED — BackgroundTaskHostDispatchIntegrationTests prove task pipeline dispatch, validation, and host partitioning (commit 8931b64)",
       "consumerIntegrationSeam": "SATISFIED — SendTemplateSharedNotificationTask in Sample.Contract with handler in Sample app, manifest updated (commit d627e8d)",
