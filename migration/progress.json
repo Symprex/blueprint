@@ -12,15 +12,15 @@
   "current": {
     "activeWorkstream": "resource-model-links-and-post-processing",
     "nextReadySlice": {
-      "id": "resource/link-manifest-module",
+      "id": "resource/resource-event-audit-module",
       "workstream": "resource-model-links-and-post-processing",
-      "title": "Add LinkManifestModule projecting URL and self-link metadata into the debug manifest"
+      "title": "Add ResourceEventAuditModule for post-execution resource event audit recording"
     },
     "lastCompletedSlice": {
-      "id": "auth/operations-auth-manifest",
-      "workstream": "authentication-and-authorisation",
-      "title": "Add AuthorizationManifestModule for per-operation auth build manifest",
-      "commit": "3418fd7"
+      "id": "manifest/operations-manifest-hosted-enrichment",
+      "workstream": "generated-manifests-and-inspection-surfaces",
+      "title": "Enrich hosted operations manifest diagnostics page with per-operation manifest columns",
+      "commit": "084f7bc"
     },
     "openReviewGate": null,
     "openReviewGateRationale": null,
@@ -157,6 +157,54 @@
       "workstream": "authentication-and-authorisation",
       "title": "Add AuthorizationManifestModule for per-operation auth build manifest",
       "commit": "3418fd7"
+    },
+    {
+      "id": "manifest/link-manifest-module",
+      "workstream": "generated-manifests-and-inspection-surfaces",
+      "title": "Add LinkManifestModule projecting URL and self-link metadata into debug manifest",
+      "commit": "158858a"
+    },
+    {
+      "id": "manifest/validation-manifest-module",
+      "workstream": "generated-manifests-and-inspection-surfaces",
+      "title": "Add ValidationManifestModule projecting validation plan into debug manifest",
+      "commit": "1ad3b8b"
+    },
+    {
+      "id": "manifest/persistence-and-background-task-manifest-modules",
+      "workstream": "generated-manifests-and-inspection-surfaces",
+      "title": "Add PersistenceManifestModule and BackgroundTaskFlushManifestModule",
+      "commit": "3e98875"
+    },
+    {
+      "id": "manifest/resource-event-manifest-module",
+      "workstream": "generated-manifests-and-inspection-surfaces",
+      "title": "Add ResourceEventManifestModule for resource-event debug manifest",
+      "commit": "d620d3d"
+    },
+    {
+      "id": "manifest/http-method-manifest-module",
+      "workstream": "generated-manifests-and-inspection-surfaces",
+      "title": "Add HttpMethodManifestModule for HTTP method debug manifest",
+      "commit": "ed6997d"
+    },
+    {
+      "id": "manifest/sensitive-property-manifest-module",
+      "workstream": "generated-manifests-and-inspection-surfaces",
+      "title": "Add SensitivePropertyManifestModule for sensitive property debug manifest",
+      "commit": "8d8b3b4"
+    },
+    {
+      "id": "manifest/operation-group-manifest-module",
+      "workstream": "generated-manifests-and-inspection-surfaces",
+      "title": "Add OperationGroupManifestModule for OpenAPI group/tag debug manifest",
+      "commit": "6fcf229"
+    },
+    {
+      "id": "manifest/result-contract-manifest-module",
+      "workstream": "generated-manifests-and-inspection-surfaces",
+      "title": "Add ResultContractManifestModule for result type debug manifest",
+      "commit": "019e3e2"
     }
   ],
   "decisions": [

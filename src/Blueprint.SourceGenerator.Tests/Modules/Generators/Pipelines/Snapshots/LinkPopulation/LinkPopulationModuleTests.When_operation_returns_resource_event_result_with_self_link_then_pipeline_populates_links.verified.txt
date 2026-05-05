@@ -89,6 +89,24 @@ namespace Blueprint.Generated
                 }
             }
 
+            if (handlerResult.WasSuccessful && handlerResult is Blueprint.Runtime.Exec.ResourceEventResult _reAuditResult)
+            {
+                var resourceEventAuditSink = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Auditing.IResourceEventAuditSink>(context.ServiceProvider);
+                if (resourceEventAuditSink != null)
+                {
+                    context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent("blueprint.resource_event_audit.started", default, new System.Diagnostics.ActivityTagsCollection { { "blueprint.operation.type", "CreateResourceCommand" }, { "blueprint.resource_event.id", _reAuditResult.EventId }, { "blueprint.resource_event.resource_id", _reAuditResult.ResourceId } }));
+                    try
+                    {
+                        await resourceEventAuditSink.RecordAsync(_reAuditResult.EventId, _reAuditResult.ResourceId, context, System.Threading.CancellationToken.None);
+                        context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent("blueprint.resource_event_audit.succeeded", default, new System.Diagnostics.ActivityTagsCollection { { "blueprint.operation.type", "CreateResourceCommand" }, { "blueprint.resource_event.id", _reAuditResult.EventId } }));
+                    }
+                    catch (System.Exception resourceEventAuditException)
+                    {
+                        context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent("blueprint.resource_event_audit.failed", default, new System.Diagnostics.ActivityTagsCollection { { "blueprint.operation.type", "CreateResourceCommand" }, { "blueprint.resource_event.id", _reAuditResult.EventId }, { "exception.type", resourceEventAuditException.GetType().FullName }, { "exception.message", resourceEventAuditException.Message }, { "exception.stacktrace", resourceEventAuditException.StackTrace } }));
+                    }
+                }
+            }
+
             if (handlerResult.WasSuccessful)
             {
                 var backgroundTaskScheduler = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Tasks.IBackgroundTaskScheduler>(context.ServiceProvider);
@@ -103,7 +121,7 @@ namespace Blueprint.Generated
 
         public static System.Collections.Generic.IReadOnlyList<string> GetAppliedModules()
         {
-            return new string[] { "PropertyOwnershipModule", "HandlerExecutionModule", "LinkGenerationModule", "UnitOfWorkModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
+            return new string[] { "PropertyOwnershipModule", "HandlerExecutionModule", "LinkGenerationModule", "UnitOfWorkModule", "AuditingModule", "ResourceEventAuditModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
         }
 
         private static void PopulateFromJsonBody(System.ReadOnlySpan<byte> bodyBytes, global::TestNamespace.CreateResourceCommand operation)
