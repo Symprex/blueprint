@@ -11,12 +11,12 @@
   },
   "current": {
     "activeWorkstream": "reference-app-and-end-to-end-example",
-    "nextReadySlice": "reference-app/update-using-blueprint-skill",
+    "nextReadySlice": "reference-app/documentation-and-progress-sync",
     "lastCompletedSlice": {
-      "id": "reference-app/security-and-observability-attributes",
+      "id": "reference-app/discriminated-union-results",
       "workstream": "reference-app-and-end-to-end-example",
-      "title": "Add [Resource], [FromResource], [AllowAnonymous], [Sensitive], [DoNotAudit], [DoNotRecordPerformanceMetrics] to reference app",
-      "commit": "ab68624"
+      "title": "Demonstrate Results<T1, T2> with NotFoundResult and ConflictResult on reference app operations",
+      "commit": "92a5f35"
     },
     "openReviewGate": null,
     "openReviewGateRationale": null,
