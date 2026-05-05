@@ -251,6 +251,7 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
             new ResourceEventManifestModule(),
             new HttpMethodManifestModule(),
             new SensitivePropertyManifestModule(),
+            new OperationGroupManifestModule(),
             .. additionalModules,
         ]);
     }
