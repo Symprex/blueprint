@@ -247,6 +247,7 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
             new ValidationManifestModule(),
             new PersistenceManifestModule(),
             new BackgroundTaskFlushManifestModule(),
+            new ResourceEventManifestModule(),
             .. additionalModules,
         ]);
     }
