@@ -11,7 +11,7 @@ namespace Blueprint.SourceGenerator.Sample.Contract.Api;
 [ApiOperations("Templates")]
 [RootLink("/templates/{Id}/publish")]
 [HttpPost]
-[MustBeAuthenticated]
+[FromResource(typeof(CreateTemplateCommand))]
 public partial class PublishTemplateCommand : ICommand<ResourceEventResult<TemplateApiResource>>
 {
     /// <summary>

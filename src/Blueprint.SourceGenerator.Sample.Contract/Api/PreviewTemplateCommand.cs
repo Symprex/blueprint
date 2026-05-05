@@ -11,7 +11,7 @@ namespace Blueprint.SourceGenerator.Sample.Contract.Api;
 [HttpMethod("POST")]
 [RootLink("/templates/{Id}/preview")]
 [ApiOperations("Templates")]
-[MustBeAuthenticated]
+[Resource("template", "read")]
 public partial class PreviewTemplateCommand : ICommand<TemplatePreviewApiResource>
 {
     /// <summary>

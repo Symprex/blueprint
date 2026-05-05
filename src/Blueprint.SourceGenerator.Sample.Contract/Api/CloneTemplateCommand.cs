@@ -12,7 +12,7 @@ namespace Blueprint.SourceGenerator.Sample.Contract.Api;
 [ApiOperations("Templates")]
 [RootLink("/templates/{Id}/clone")]
 [HttpPost]
-[MustBeAuthenticated]
+[FromResource(typeof(CreateTemplateCommand))]
 public partial class CloneTemplateCommand : ICommand<ResourceEventResult<TemplateApiResource>>
 {
     /// <summary>

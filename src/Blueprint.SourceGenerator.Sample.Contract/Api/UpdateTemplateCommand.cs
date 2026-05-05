@@ -13,7 +13,7 @@ namespace Blueprint.SourceGenerator.Sample.Contract.Api;
 [ApiOperations("Templates")]
 [RootLink("/templates/{Id}")]
 [HttpPut]
-[MustBeAuthenticated]
+[FromResource(typeof(CreateTemplateCommand))]
 public partial class UpdateTemplateCommand : ICommand<ResourceEventResult<TemplateApiResource>>
 {
     /// <summary>

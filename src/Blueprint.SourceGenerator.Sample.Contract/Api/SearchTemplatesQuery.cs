@@ -11,7 +11,7 @@ namespace Blueprint.SourceGenerator.Sample.Contract.Api;
 [ApiOperations("Templates")]
 [RootLink("/templates/search")]
 [HttpGet]
-[MustBeAuthenticated]
+[Resource("template", "read")]
 public partial class SearchTemplatesQuery : IQuery<TemplateApiResource[]>
 {
     /// <summary>

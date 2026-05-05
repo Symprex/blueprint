@@ -11,7 +11,7 @@ namespace Blueprint.SourceGenerator.Sample.Contract.Api;
 [ApiOperations("Templates")]
 [RootLink("/templates/{Id}")]
 [HttpDelete]
-[MustBeAuthenticated]
+[Resource("template", "write")]
 public partial class ArchiveTemplateCommand : ICommand<KeyOnlyResourceEventResult>
 {
     /// <summary>

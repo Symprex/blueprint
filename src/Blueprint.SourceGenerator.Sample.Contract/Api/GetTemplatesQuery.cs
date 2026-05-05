@@ -7,7 +7,7 @@ namespace Blueprint.SourceGenerator.Sample.Contract.Api;
 /// Gets templates that can be presented to user's for quickly creating signatures.
 /// </summary>
 [ApiOperations("Templates")]
-[MustBeAuthenticated]
+[Resource("template", "read")]
 [SelfLink(typeof(TemplateListApiResource), "/templates")]
 [HttpGet]
 public partial class GetTemplatesQuery : IQuery<TemplateApiResource[]>;

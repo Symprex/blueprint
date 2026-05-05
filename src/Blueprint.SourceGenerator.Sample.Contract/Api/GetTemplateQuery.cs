@@ -8,7 +8,7 @@ namespace Blueprint.SourceGenerator.Sample.Contract.Api;
 /// route that targets the same resource as the list query.
 /// </summary>
 [ApiOperations("Templates")]
-[MustBeAuthenticated]
+[FromResource(typeof(GetTemplatesQuery))]
 [SelfLink(typeof(TemplateApiResource), "/templates/{Id}")]
 [HttpGet]
 public partial class GetTemplateQuery : IQuery<TemplateApiResource>

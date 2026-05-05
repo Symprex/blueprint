@@ -10,7 +10,7 @@ namespace Blueprint.SourceGenerator.Sample.Contract.Api;
 [ApiOperations("Templates")]
 [RootLink("/templates/{Id}/versions")]
 [HttpGet]
-[MustBeAuthenticated]
+[FromResource(typeof(GetTemplatesQuery))]
 public partial class GetTemplateVersionsQuery : IQuery<TemplateVersionApiResource[]>
 {
     /// <summary>

@@ -35,8 +35,9 @@ A background task (`SendTemplateSharedNotificationTask`) demonstrates non-HTTP e
 
 - **Cross-assembly scanning** — `[BlueprintAppScan(FromAssemblyOf = typeof(GetTemplatesQuery))]`
 - **Self and root links** — `[SelfLink]` / `[RootLink]` for HATEOAS-style URL generation
-- **Validation** — `[Required]`, `[MaxLength]` with generated fast-path validation
-- **Authentication** — `[MustBeAuthenticated]` on all operations
+- **Validation** — `[Required]`, `[MaxLength]`, `[Range]` with generated fast-path validation
+- **Resource authorization** — `[Resource("template", "read/write")]` scope-pair model (implies authentication)
+- **Scope inheritance** — `[FromResource(typeof(X))]` inherits scope pairs from another operation
 - **Resource events** — `ResourceEventResult<T>` and `KeyOnlyResourceEventResult` for event-sourced commands
 - **Resource event auditing** — `IResourceEventAuditSink` for post-execution audit recording
 - **Operation grouping** — `[ApiOperations("Templates")]` for explicit OpenAPI tag provenance
