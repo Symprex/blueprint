@@ -141,9 +141,6 @@
           }
         ],
         "responses": {
-          "401": {
-            "description": "Unauthorized"
-          },
           "422": {
             "description": "Unprocessable Entity",
             "content": {

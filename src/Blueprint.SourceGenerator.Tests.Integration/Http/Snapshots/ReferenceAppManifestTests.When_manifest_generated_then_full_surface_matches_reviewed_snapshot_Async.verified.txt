@@ -174,7 +174,7 @@
   HTTP Methods: GET
   URL: /templates/search
   Hosts: http
-  Auth: Authenticated
+  Auth: Anonymous
   Discovery: query (Blueprint.SourceGenerator.Sample.Contract.Api.SearchTemplatesQuery)
   Group: Templates
   Failure Outcomes:
@@ -182,7 +182,6 @@
     - data-annotations-validation-exception: System.ComponentModel.DataAnnotations.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
     - default-unhandled-exception: System.Exception -> Blueprint.Runtime.Exec.UnhandledExceptionResult
   HTTP Responses:
-    - 401: hasBody=False types=[]
     - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
     - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
 

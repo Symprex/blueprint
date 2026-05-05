@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using Blueprint.Auditing;
 using Blueprint.Model;
 using Blueprint.Model.Attributes;
 using Blueprint.Runtime.Exec;
@@ -25,13 +26,17 @@ public partial class CreateTemplateCommand : ICommand<ResourceEventResult<Templa
 
     /// <summary>
     /// The HTML source content of the template. Limited to 50000 characters.
+    /// Marked [Sensitive] to signal audit sinks that template content may contain embedded PII.
     /// </summary>
     [MaxLength(50000)]
+    [Sensitive]
     public string? HtmlSource { get; set; }
 
     /// <summary>
     /// The plain text source content of the template. Limited to 10000 characters.
+    /// Marked [Sensitive] to signal audit sinks that template content may contain embedded PII.
     /// </summary>
     [MaxLength(10000)]
+    [Sensitive]
     public string? PlainTextSource { get; set; }
 }

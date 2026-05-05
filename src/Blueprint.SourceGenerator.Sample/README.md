@@ -38,6 +38,10 @@ A background task (`SendTemplateSharedNotificationTask`) demonstrates non-HTTP e
 - **Validation** — `[Required]`, `[MaxLength]`, `[Range]` with generated fast-path validation
 - **Resource authorization** — `[Resource("template", "read/write")]` scope-pair model (implies authentication)
 - **Scope inheritance** — `[FromResource(typeof(X))]` inherits scope pairs from another operation
+- **Anonymous access** — `[AllowAnonymous]` on `SearchTemplatesQuery` for public endpoints
+- **Sensitive properties** — `[Sensitive]` on `CreateTemplateCommand.HtmlSource/PlainTextSource` for audit redaction hints
+- **Audit opt-out** — `[DoNotAudit]` on `SearchTemplatesQuery` to suppress noisy read auditing
+- **Performance metrics opt-out** — `[DoNotRecordPerformanceMetrics]` on `GetTemplateVersionsQuery` for trace suppression
 - **Resource events** — `ResourceEventResult<T>` and `KeyOnlyResourceEventResult` for event-sourced commands
 - **Resource event auditing** — `IResourceEventAuditSink` for post-execution audit recording
 - **Operation grouping** — `[ApiOperations("Templates")]` for explicit OpenAPI tag provenance

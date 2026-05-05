@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using Blueprint.Auditing;
 using Blueprint.Model;
 using Blueprint.Model.Attributes;
 
@@ -6,12 +7,13 @@ namespace Blueprint.SourceGenerator.Sample.Contract.Api;
 
 /// <summary>
 /// Searches templates by name with pagination. Demonstrates query-string binding
-/// for non-route parameters and optional pagination defaults.
+/// for non-route parameters, optional pagination defaults, and public access via [AllowAnonymous].
 /// </summary>
 [ApiOperations("Templates")]
 [RootLink("/templates/search")]
 [HttpGet]
-[Resource("template", "read")]
+[AllowAnonymous]
+[DoNotAudit]
 public partial class SearchTemplatesQuery : IQuery<TemplateApiResource[]>
 {
     /// <summary>
