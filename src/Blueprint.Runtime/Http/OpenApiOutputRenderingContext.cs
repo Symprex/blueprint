@@ -88,6 +88,7 @@ public sealed record OpenApiOutputRenderingContext(
         WriteInfo(writer, infoOptions);
         WritePaths(writer, document.Paths);
         WriteComponents(writer, document.SchemaComponents, schemaProcessorOptions);
+        WriteDocumentTags(writer, document.Paths);
 
         writer.WriteEndObject();
     }
@@ -625,5 +626,38 @@ public sealed record OpenApiOutputRenderingContext(
             500 => "Internal Server Error",
             _ => statusCode.ToString(),
         };
+    }
+
+    /// <summary>
+    /// Renders the top-level <c>tags</c> array by collecting all unique tag names used across operations.
+    /// Per the OpenAPI 3.0 specification, declaring tags at the document level provides a canonical ordering
+    /// and a place to attach descriptions for documentation tooling.
+    /// </summary>
+    private static void WriteDocumentTags(Utf8JsonWriter writer, ImmutableArray<OpenApiPathItemModel> paths)
+    {
+        var allTags = paths
+            .SelectMany(static path => path.Methods)
+            .SelectMany(static method => method.Operations)
+            .SelectMany(static operation => operation.Tags)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(static tag => tag, StringComparer.Ordinal)
+            .ToArray();
+
+        if (allTags.Length == 0)
+        {
+            return;
+        }
+
+        writer.WritePropertyName("tags");
+        writer.WriteStartArray();
+
+        foreach (var tag in allTags)
+        {
+            writer.WriteStartObject();
+            writer.WriteString("name", tag);
+            writer.WriteEndObject();
+        }
+
+        writer.WriteEndArray();
     }
 }
