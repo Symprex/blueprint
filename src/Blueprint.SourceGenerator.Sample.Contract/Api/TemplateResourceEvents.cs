@@ -27,4 +27,16 @@ public static partial class TemplateResourceEvents
     /// </summary>
     [ResourceEventReason(ChangeType.Deleted, "archived")]
     public sealed partial record Archived([ResourceEventKey] string Key);
+
+    /// <summary>
+    /// Signals that an existing template was published (made available for use).
+    /// </summary>
+    [ResourceEventReason(ChangeType.Updated, "published")]
+    public sealed partial record Published(TemplateApiResource Resource);
+
+    /// <summary>
+    /// Signals that a template was cloned from an existing one.
+    /// </summary>
+    [ResourceEventReason(ChangeType.Created, "cloned")]
+    public sealed partial record Cloned(TemplateApiResource Resource);
 }

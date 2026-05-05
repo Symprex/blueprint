@@ -19,6 +19,8 @@ public partial class SampleBlueprintApp : BlueprintApp;
 [JsonSerializable(typeof(TemplateApiResource))]
 [JsonSerializable(typeof(TemplateApiResource[]))]
 [JsonSerializable(typeof(TemplateListApiResource))]
+[JsonSerializable(typeof(TemplateVersionApiResource))]
+[JsonSerializable(typeof(TemplateVersionApiResource[]))]
 [JsonSerializable(typeof(ProblemDetails))]
 [JsonSerializable(typeof(ValidationProblemDetails))]
 public partial class SampleBlueprintAppJsonContext : JsonSerializerContext;

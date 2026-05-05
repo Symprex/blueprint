@@ -10,13 +10,13 @@
     "workstreamPlan": "migration\\auditing-and-observability\\plan.md"
   },
   "current": {
-    "activeWorkstream": "resource-model-links-and-post-processing",
-    "nextReadySlice": null,
+    "activeWorkstream": "reference-app-and-end-to-end-example",
+    "nextReadySlice": "reference-app/expand-operations-to-tier-1-minimum",
     "lastCompletedSlice": {
-      "id": "resource/resource-event-audit-module",
-      "workstream": "resource-model-links-and-post-processing",
-      "title": "Add ResourceEventAuditModule with KeyOnly type discrimination and sample app enrichment",
-      "commit": "d11d873"
+      "id": "performance/tier-2-scale-stress-tests",
+      "workstream": "performance-and-scale",
+      "title": "Add Tier 2 scale stress tests for OpenAPI, registration, and concurrent dispatch",
+      "commit": "148f979"
     },
     "openReviewGate": null,
     "openReviewGateRationale": null,
