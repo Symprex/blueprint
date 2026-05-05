@@ -29,7 +29,7 @@ internal static class ManifestDiagnosticsPageEndpoint
             }
 
             main {
-              max-width: 1100px;
+              max-width: 1400px;
               margin: 0 auto;
               padding: 2rem 1.5rem 3rem;
             }
@@ -60,7 +60,7 @@ internal static class ManifestDiagnosticsPageEndpoint
             .summary-grid {
               display: grid;
               gap: 0.75rem;
-              grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+              grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
               margin: 1.5rem 0;
             }
 
@@ -87,18 +87,87 @@ internal static class ManifestDiagnosticsPageEndpoint
               width: 100%;
               border-collapse: collapse;
               margin-top: 1rem;
+              font-size: 0.9rem;
             }
 
             th,
             td {
-              padding: 0.75rem;
+              padding: 0.6rem 0.75rem;
               text-align: left;
               border-bottom: 1px solid color-mix(in srgb, CanvasText 12%, Canvas 88%);
               vertical-align: top;
             }
 
+            th {
+              font-size: 0.8rem;
+              text-transform: uppercase;
+              letter-spacing: 0.03em;
+              color: GrayText;
+            }
+
             code {
               font-family: Consolas, "Courier New", monospace;
+              font-size: 0.85em;
+            }
+
+            .badge {
+              display: inline-block;
+              padding: 0.15rem 0.45rem;
+              border-radius: 0.3rem;
+              font-size: 0.75rem;
+              font-weight: 600;
+              letter-spacing: 0.02em;
+            }
+
+            .badge-method {
+              background: color-mix(in srgb, #0969da 15%, Canvas 85%);
+              color: #0969da;
+            }
+
+            .badge-auth {
+              background: color-mix(in srgb, #8250df 15%, Canvas 85%);
+              color: #8250df;
+            }
+
+            .badge-anon {
+              background: color-mix(in srgb, #1a7f37 15%, Canvas 85%);
+              color: #1a7f37;
+            }
+
+            .badge-validation {
+              background: color-mix(in srgb, #bf8700 15%, Canvas 85%);
+              color: #bf8700;
+            }
+
+            .detail-row td {
+              padding: 0.5rem 0.75rem 1rem;
+              background: color-mix(in srgb, CanvasText 3%, Canvas 97%);
+              border-bottom: 2px solid color-mix(in srgb, CanvasText 8%, Canvas 92%);
+            }
+
+            .detail-grid {
+              display: grid;
+              gap: 0.5rem 2rem;
+              grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            }
+
+            .detail-grid dt {
+              font-size: 0.75rem;
+              color: GrayText;
+              margin-bottom: 0.15rem;
+            }
+
+            .detail-grid dd {
+              margin: 0 0 0.5rem;
+              font-size: 0.85rem;
+            }
+
+            .clickable {
+              cursor: pointer;
+            }
+
+            .clickable:hover td {
+              background: color-mix(in srgb, CanvasText 5%, Canvas 95%);
             }
           </style>
         </head>
@@ -131,23 +200,35 @@ internal static class ManifestDiagnosticsPageEndpoint
                   <dt>Operations</dt>
                   <dd id="operation-count">-</dd>
                 </div>
+                <div class="summary-card">
+                  <dt>Authenticated</dt>
+                  <dd id="auth-count">-</dd>
+                </div>
+                <div class="summary-card">
+                  <dt>With validation</dt>
+                  <dd id="validation-count">-</dd>
+                </div>
               </dl>
             </section>
 
             <section aria-labelledby="operations-heading">
               <h2 id="operations-heading">Operations</h2>
+              <p class="muted" style="margin-top:0;font-size:0.85rem;">Click a row to expand per-operation manifest details.</p>
               <table>
                 <thead>
                   <tr>
                     <th scope="col">Operation</th>
                     <th scope="col">Kind</th>
-                    <th scope="col">Namespace</th>
-                    <th scope="col">Type name</th>
+                    <th scope="col">HTTP</th>
+                    <th scope="col">Auth</th>
+                    <th scope="col">Validation</th>
+                    <th scope="col">Result</th>
+                    <th scope="col">Group</th>
                   </tr>
                 </thead>
                 <tbody id="operations-body">
                   <tr>
-                    <td colspan="4" class="muted">Waiting for manifest data...</td>
+                    <td colspan="7" class="muted">Waiting for manifest data...</td>
                   </tr>
                 </tbody>
               </table>
@@ -162,19 +243,106 @@ internal static class ManifestDiagnosticsPageEndpoint
               document.getElementById(id).textContent = value ?? "-";
             }
 
-            function appendCell(row, value) {
-              const cell = document.createElement("td");
-              cell.textContent = value ?? "-";
-              row.appendChild(cell);
+            function badge(text, className) {
+              return `<span class="badge ${className}">${text}</span>`;
+            }
+
+            function getHttpMethods(op) {
+              const routing = op.httpRouting;
+              if (!routing) return "-";
+              const methods = routing.methods;
+              if (!methods) return "-";
+              return (Array.isArray(methods) ? methods : [methods])
+                .map(m => badge(m, "badge-method"))
+                .join(" ");
+            }
+
+            function getAuth(op) {
+              const auth = op.authorization;
+              if (!auth) return "-";
+              if (auth.accessMode === "Anonymous") return badge("anon", "badge-anon");
+              if (auth.accessMode === "Authenticated") return badge("auth", "badge-auth");
+              if (auth.policy) return badge(auth.policy, "badge-auth");
+              return auth.accessMode ?? "-";
+            }
+
+            function getValidation(op) {
+              const v = op.validation;
+              if (!v) return "-";
+              if (v.hasValidation === true || v.enabled === true) return badge("yes", "badge-validation");
+              return "-";
+            }
+
+            function getResult(op) {
+              const rc = op.resultContract;
+              if (!rc) return "-";
+              if (rc.isUnion) return `<code>${rc.members?.join(" | ") ?? rc.type ?? "union"}</code>`;
+              return rc.type ? `<code>${rc.type}</code>` : "-";
+            }
+
+            function getGroup(op) {
+              const g = op["openApi.group"] ?? op.openApi?.group;
+              return g ?? "-";
+            }
+
+            function renderDetailRow(op, colspan) {
+              const parts = [];
+
+              if (op.links) {
+                const linkEntries = [];
+                if (op.links.rootUrl) linkEntries.push(`Root: <code>${op.links.rootUrl}</code>`);
+                if (op.links.selfUrl) linkEntries.push(`Self: <code>${op.links.selfUrl}</code>`);
+                if (linkEntries.length > 0) parts.push(`<dt>Links</dt><dd>${linkEntries.join("<br>")}</dd>`);
+              }
+
+              if (op.sensitiveProperties?.enabled) {
+                const names = op.sensitiveProperties.names;
+                parts.push(`<dt>Sensitive</dt><dd>${Array.isArray(names) ? names.join(", ") : names ?? "yes"}</dd>`);
+              }
+
+              if (op.persistence?.enabled) {
+                parts.push(`<dt>Persistence</dt><dd>${op.persistence.doNotSaveChanges ? "opt-out" : "enabled"}</dd>`);
+              }
+
+              if (op.backgroundTasks?.enabled) {
+                parts.push(`<dt>Background tasks</dt><dd>enabled</dd>`);
+              }
+
+              if (op.resourceEvents?.hasResourceEventResult) {
+                const re = op.resourceEvents;
+                const info = [re.eventFamily, re.resourceObject].filter(Boolean).join(" / ");
+                parts.push(`<dt>Resource events</dt><dd>${info || "yes"}</dd>`);
+              }
+
+              if (op.resultContract) {
+                const rc = op.resultContract;
+                const info = rc.isUnion
+                  ? `Union: ${rc.members?.join(", ") ?? "?"}`
+                  : rc.type ?? "-";
+                parts.push(`<dt>Result contract</dt><dd><code>${info}</code></dd>`);
+              }
+
+              if (op.authorization) {
+                const a = op.authorization;
+                const info = [];
+                if (a.accessMode) info.push(`Mode: ${a.accessMode}`);
+                if (a.resource) info.push(`Resource: ${a.resource}`);
+                if (a.scopePairs) info.push(`Scopes: ${JSON.stringify(a.scopePairs)}`);
+                if (info.length > 0) parts.push(`<dt>Authorization detail</dt><dd>${info.join("<br>")}</dd>`);
+              }
+
+              if (parts.length === 0) return "";
+              return `<tr class="detail-row" style="display:none;"><td colspan="${colspan}"><dl class="detail-grid">${parts.join("")}</dl></td></tr>`;
             }
 
             function renderOperations(operations) {
               operationsBody.replaceChildren();
+              const colspan = 7;
 
               if (operations.length === 0) {
                 const row = document.createElement("tr");
                 const cell = document.createElement("td");
-                cell.colSpan = 4;
+                cell.colSpan = colspan;
                 cell.className = "muted";
                 cell.textContent = "No operations were published in the manifest.";
                 row.appendChild(cell);
@@ -182,14 +350,37 @@ internal static class ManifestDiagnosticsPageEndpoint
                 return;
               }
 
+              let authCount = 0;
+              let validationCount = 0;
+
               for (const [operationName, operation] of operations) {
-                const row = document.createElement("tr");
-                appendCell(row, operationName);
-                appendCell(row, operation.kind);
-                appendCell(row, operation.namespace);
-                appendCell(row, operation.typeName);
-                operationsBody.appendChild(row);
+                if (operation.authorization?.accessMode === "Authenticated") authCount++;
+                if (operation.validation?.hasValidation === true || operation.validation?.enabled === true) validationCount++;
+
+                const rowHtml = `<tr class="clickable">` +
+                  `<td><code>${operation.typeName ?? operationName}</code></td>` +
+                  `<td>${operation.kind ?? "-"}</td>` +
+                  `<td>${getHttpMethods(operation)}</td>` +
+                  `<td>${getAuth(operation)}</td>` +
+                  `<td>${getValidation(operation)}</td>` +
+                  `<td>${getResult(operation)}</td>` +
+                  `<td>${getGroup(operation)}</td>` +
+                  `</tr>`;
+                const detailHtml = renderDetailRow(operation, colspan);
+                operationsBody.insertAdjacentHTML("beforeend", rowHtml + detailHtml);
               }
+
+              setText("auth-count", String(authCount));
+              setText("validation-count", String(validationCount));
+
+              operationsBody.addEventListener("click", function(e) {
+                const row = e.target.closest("tr.clickable");
+                if (!row) return;
+                const detail = row.nextElementSibling;
+                if (detail?.classList.contains("detail-row")) {
+                  detail.style.display = detail.style.display === "none" ? "" : "none";
+                }
+              });
             }
 
             async function loadManifest() {

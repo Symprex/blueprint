@@ -127,6 +127,28 @@ public class ManifestInspectionEndpointTests
     }
 
     [Fact]
+    public async Task When_mapped_in_development_then_manifest_diagnostics_page_renders_enriched_per_operation_manifest_columns()
+    {
+        var developmentEndpoints = CreateEndpoints(Environments.Development);
+        developmentEndpoints.MapBlueprintApi<ManifestInspectionBlueprintApp, BlueprintAppExecutor>("api/");
+
+        var htmlEndpoint = FindEndpoint(developmentEndpoints, "api/.blueprint/manifests/operations.html");
+        var response = await InvokeEndpointAsync(htmlEndpoint!);
+
+        // The enriched page should render columns for the key manifest module entries
+        response.Body.Should().Contain("HTTP", "page should have an HTTP method column header");
+        response.Body.Should().Contain("Auth", "page should have an Auth column header");
+        response.Body.Should().Contain("Validation", "page should have a Validation column header");
+        response.Body.Should().Contain("Result", "page should have a Result column header");
+
+        // The JavaScript should read the per-operation manifest keys from the modules
+        response.Body.Should().Contain("httpRouting", "page JS should read httpRouting manifest entries");
+        response.Body.Should().Contain("authorization", "page JS should read authorization manifest entries");
+        response.Body.Should().Contain("validation", "page JS should read validation manifest entries");
+        response.Body.Should().Contain("resultContract", "page JS should read resultContract manifest entries");
+    }
+
+    [Fact]
     public async Task When_mapped_in_development_then_manifest_diagnostics_page_avoids_echoing_raw_fetch_errors()
     {
         var endpoints = CreateEndpoints(Environments.Development);
