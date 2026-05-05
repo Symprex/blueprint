@@ -13,8 +13,9 @@ namespace Blueprint.SourceGenerator.Modules.Observability;
 /// activity is an observability concern that must be decided before any stage emits
 /// trace data. The module has no render steps and does not participate in code generation
 /// directly; it only sets a plan flag that <c>PipelineCodeGenerator</c> reads.
+/// It also contributes <c>observability.activityEnabled</c> to the per-operation debug manifest.
 /// </remarks>
-internal sealed class PerformanceMetricsModule : IBlueprintSourceGeneratorModule, IPipelineContributor
+internal sealed class PerformanceMetricsModule : IBlueprintSourceGeneratorModule, IPipelineContributor, IDebugManifestContributor
 {
     /// <inheritdoc />
     public string ModuleId => nameof(PerformanceMetricsModule);
@@ -41,6 +42,13 @@ internal sealed class PerformanceMetricsModule : IBlueprintSourceGeneratorModule
         {
             context.SuppressActivity();
         }
+    }
+
+    /// <inheritdoc />
+    public void ContributeToManifest(DebugManifestContributorContext context)
+    {
+        var suppressed = HasDoNotRecordPerformanceMetricsAttribute(context.GetOperationTypeSymbol());
+        context.AddEntry("observability.activityEnabled", (!suppressed).ToString());
     }
 
     private static bool HasDoNotRecordPerformanceMetricsAttribute(INamedTypeSymbol operationType)

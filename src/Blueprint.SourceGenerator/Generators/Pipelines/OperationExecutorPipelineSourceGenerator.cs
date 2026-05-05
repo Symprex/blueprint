@@ -2,6 +2,7 @@ using System.Text;
 using Blueprint.SourceGenerator.Generators.Pipelines.Model;
 using Blueprint.SourceGenerator.Helpers;
 using Blueprint.SourceGenerator.Modules;
+using Blueprint.SourceGenerator.Modules.Auditing;
 using Blueprint.SourceGenerator.Modules.Authentication;
 using Blueprint.SourceGenerator.Modules.Observability;
 using Blueprint.SourceGenerator.Planning;
@@ -151,6 +152,7 @@ public partial class OperationExecutorPipelineSourceGenerator : IIncrementalGene
             new HandlerExecutionModule(),
             new UnitOfWorkModule(),
             new AuditingModule(),
+            new AuditingManifestModule(),
             new BackgroundTaskFlushModule(),
             new LinkGenerationModule(),
             new PipelineReturnModule(),

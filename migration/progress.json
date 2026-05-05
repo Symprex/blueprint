@@ -12,14 +12,14 @@
   "current": {
     "activeWorkstream": "auditing-and-observability",
     "nextReadySlice": {
+      "id": "auditing/manifest-observability-entries",
+      "workstream": "auditing-and-observability",
+      "title": "Enrich debug manifest with auditing and observability opt-out entries"
+    },
+    "lastCompletedSlice": {
       "id": "auditing/do-not-record-performance-metrics",
       "workstream": "auditing-and-observability",
       "title": "Add [DoNotRecordPerformanceMetrics] attribute to suppress Activity creation for noisy operations"
-    },
-    "lastCompletedSlice": {
-      "id": "auditing/structured-audit-event-correlation",
-      "workstream": "auditing-and-observability",
-      "title": "Correlate audit events with OpenTelemetry trace IDs and add audit event naming"
     },
     "openReviewGate": null,
     "openReviewGateRationale": null,
@@ -108,6 +108,12 @@
       "workstream": "auditing-and-observability",
       "title": "Correlate audit events with OpenTelemetry trace IDs and add audit event naming",
       "commit": "f3213d2"
+    },
+    {
+      "id": "auditing/do-not-record-performance-metrics",
+      "workstream": "auditing-and-observability",
+      "title": "Add [DoNotRecordPerformanceMetrics] attribute to suppress Activity creation for noisy operations",
+      "commit": "0b4e251"
     }
   ],
   "decisions": [
