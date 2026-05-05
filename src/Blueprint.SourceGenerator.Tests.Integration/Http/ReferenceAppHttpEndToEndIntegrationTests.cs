@@ -415,6 +415,49 @@ public class ReferenceAppHttpEndToEndIntegrationTests
     }
 
     [Fact]
+    public async Task When_publish_template_already_published_then_returns_409_conflict()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/templates/{Id}/publish", "POST");
+
+        // First publish succeeds (201 Created)
+        var firstResponse = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Post;
+            context.Request.Path = "/api/templates/template-002/publish";
+            context.Request.RouteValues = new RouteValueDictionary { ["Id"] = "template-002" };
+            context.User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "user-1"),
+                ],
+                authenticationType: "test"));
+        });
+
+        firstResponse.StatusCode.Should().Be(StatusCodes.Status201Created);
+
+        // Second publish of the same template returns conflict (409)
+        var secondResponse = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Post;
+            context.Request.Path = "/api/templates/template-002/publish";
+            context.Request.RouteValues = new RouteValueDictionary { ["Id"] = "template-002" };
+            context.User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "user-1"),
+                ],
+                authenticationType: "test"));
+        });
+
+        secondResponse.StatusCode.Should().Be(StatusCodes.Status409Conflict);
+        secondResponse.ContentType.Should().Be("application/json; charset=utf-8");
+        secondResponse.Body.Should().Contain("template-002");
+    }
+
+    [Fact]
     public async Task When_clone_template_with_auth_and_body_then_returns_resource_event()
     {
         var endpoints = CreateEndpoints();

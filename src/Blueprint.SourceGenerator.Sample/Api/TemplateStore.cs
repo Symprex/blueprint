@@ -10,6 +10,7 @@ namespace Blueprint.SourceGenerator.Sample.Api;
 public sealed class TemplateStore
 {
     private readonly ConcurrentDictionary<string, TemplateApiResource> _templates = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, byte> _publishedIds = new(StringComparer.Ordinal);
     private int _nextId;
 
     /// <summary>
@@ -37,6 +38,26 @@ public sealed class TemplateStore
     public TemplateApiResource? GetById(string id)
     {
         return this._templates.TryGetValue(id, out var template) ? template : null;
+    }
+
+    /// <summary>
+    /// Returns whether the specified template has already been published.
+    /// </summary>
+    /// <param name="id">The template identifier to check.</param>
+    /// <returns>True when the template has been marked as published; otherwise false.</returns>
+    public bool IsPublished(string id)
+    {
+        return this._publishedIds.ContainsKey(id);
+    }
+
+    /// <summary>
+    /// Marks a template as published. Subsequent calls for the same identifier are idempotent
+    /// but callers should check <see cref="IsPublished"/> first to detect conflicts.
+    /// </summary>
+    /// <param name="id">The template identifier to mark as published.</param>
+    public void MarkPublished(string id)
+    {
+        this._publishedIds.TryAdd(id, 0);
     }
 
     /// <summary>

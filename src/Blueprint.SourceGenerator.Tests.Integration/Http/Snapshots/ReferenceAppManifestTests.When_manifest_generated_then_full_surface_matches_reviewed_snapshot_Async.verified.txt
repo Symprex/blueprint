@@ -78,12 +78,17 @@
   Auth: Authenticated
   Discovery: query (Blueprint.SourceGenerator.Sample.Contract.Api.GetTemplateQuery)
   Group: Templates
+  Result Outcomes:
+    - OkResult`1
+    - NotFoundResult`1
   Failure Outcomes:
     - legacy-validation-exception: Blueprint.Validation.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
     - data-annotations-validation-exception: System.ComponentModel.DataAnnotations.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
     - default-unhandled-exception: System.Exception -> Blueprint.Runtime.Exec.UnhandledExceptionResult
   HTTP Responses:
+    - 200: hasBody=True types=[Blueprint.SourceGenerator.Sample.Contract.Api.TemplateApiResource]
     - 401: hasBody=False types=[]
+    - 404: hasBody=True types=[Blueprint.SourceGenerator.Sample.Contract.Api.TemplateApiResource]
     - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
     - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
   Links:
@@ -158,6 +163,7 @@
   Group: Templates
   Result Outcomes:
     - ResourceEventResult`1
+    - ConflictResult`1
   Failure Outcomes:
     - legacy-validation-exception: Blueprint.Validation.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
     - data-annotations-validation-exception: System.ComponentModel.DataAnnotations.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
@@ -165,6 +171,7 @@
   HTTP Responses:
     - 201: hasBody=True types=[Blueprint.SourceGenerator.Sample.Contract.Api.TemplateApiResource]
     - 401: hasBody=False types=[]
+    - 409: hasBody=True types=[Blueprint.SourceGenerator.Sample.Contract.Api.TemplateApiResource]
     - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
     - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
 

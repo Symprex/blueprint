@@ -24,7 +24,7 @@ All operations belong to the `Templates` group (via `[ApiOperations("Templates")
 | `GetTemplateVersionsQuery` | GET | `/templates/{Id}/versions` | `TemplateVersionApiResource[]` |
 | `CreateTemplateCommand` | POST | `/templates` | `ResourceEventResult<TemplateApiResource>` |
 | `UpdateTemplateCommand` | PUT | `/templates/{Id}` | `ResourceEventResult<TemplateApiResource>` |
-| `PublishTemplateCommand` | POST | `/templates/{Id}/publish` | `ResourceEventResult<TemplateApiResource>` |
+| `PublishTemplateCommand` | POST | `/templates/{Id}/publish` | `Results<ResourceEventResult<TemplateApiResource>, ConflictResult<TemplateApiResource>>` |
 | `CloneTemplateCommand` | POST | `/templates/{Id}/clone` | `ResourceEventResult<TemplateApiResource>` |
 | `PreviewTemplateCommand` | POST | `/templates/{Id}/preview` | `TemplatePreviewApiResource` |
 | `ArchiveTemplateCommand` | DELETE | `/templates/{Id}` | `KeyOnlyResourceEventResult` |
