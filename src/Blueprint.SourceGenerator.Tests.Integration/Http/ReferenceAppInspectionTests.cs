@@ -1,4 +1,5 @@
 using Blueprint.Model;
+using Blueprint.Runtime.Exec;
 using Blueprint.SourceGenerator.Sample;
 using Blueprint.SourceGenerator.Sample.Contract.Api;
 using FluentAssertions;
@@ -132,5 +133,87 @@ public class ReferenceAppInspectionTests
         // The generated partial Register() method is called by the runtime during MapBlueprintApi,
         // but we can also invoke it directly to test registration logic in isolation.
         return app;
+    }
+
+    [Fact]
+    public void When_app_registered_then_resource_operations_carry_scope_pair_metadata()
+    {
+        var app = CreateRegisteredApp();
+
+        var descriptor = app.FindOperation(typeof(GetTemplatesQuery));
+        var authData = descriptor.GetFeatureData<OperationAuthorizationFeatureData>();
+
+        authData.Should().NotBeNull("GetTemplatesQuery has [Resource(\"template\", \"read\")]");
+        authData!.ScopePairs.Should().ContainSingle(sp => sp.Noun == "template" && sp.Verb == "read");
+    }
+
+    [Fact]
+    public void When_app_registered_then_from_resource_operations_inherit_scope_pairs()
+    {
+        var app = CreateRegisteredApp();
+
+        var descriptor = app.FindOperation(typeof(UpdateTemplateCommand));
+        var authData = descriptor.GetFeatureData<OperationAuthorizationFeatureData>();
+
+        authData.Should().NotBeNull("UpdateTemplateCommand has [FromResource(typeof(CreateTemplateCommand))]");
+        authData!.ScopePairs.Should().ContainSingle(sp => sp.Noun == "template" && sp.Verb == "write");
+    }
+
+    [Fact]
+    public void When_app_registered_then_anonymous_operations_have_no_auth_requirement()
+    {
+        var app = CreateRegisteredApp();
+
+        var descriptor = app.FindOperation(typeof(SearchTemplatesQuery));
+        var authenticationData = descriptor.GetFeatureData<OperationAuthenticationFeatureData>();
+
+        authenticationData.Should().NotBeNull();
+        authenticationData!.Requirement.Should().Be(AuthenticationRequirement.Anonymous);
+    }
+
+    [Fact]
+    public void When_app_registered_then_authenticated_operations_require_identity()
+    {
+        var app = CreateRegisteredApp();
+
+        var descriptor = app.FindOperation(typeof(CreateTemplateCommand));
+        var authenticationData = descriptor.GetFeatureData<OperationAuthenticationFeatureData>();
+
+        authenticationData.Should().NotBeNull("CreateTemplateCommand has [Resource] which implies authentication");
+        authenticationData!.Requirement.Should().Be(AuthenticationRequirement.Authenticated);
+    }
+
+    [Fact]
+    public void When_app_registered_then_union_results_project_outcome_metadata()
+    {
+        var app = CreateRegisteredApp();
+
+        var descriptor = app.FindOperation(typeof(GetTemplateQuery));
+        var outcomes = descriptor.GetFeatureData<OperationResultOutcomesFeatureData>();
+
+        outcomes.Should().NotBeNull("GetTemplateQuery declares Results<OkResult, NotFoundResult>");
+        outcomes!.Outcomes.Should().HaveCount(2);
+        outcomes.Outcomes.Should().Contain(o => o.ResultType == typeof(OkResult<TemplateApiResource>));
+        outcomes.Outcomes.Should().Contain(o => o.ResultType == typeof(NotFoundResult<TemplateApiResource>));
+    }
+
+    [Fact]
+    public void When_app_registered_then_http_method_metadata_is_correct()
+    {
+        var app = CreateRegisteredApp();
+
+        var getDescriptor = app.FindOperation(typeof(GetTemplatesQuery));
+        var postDescriptor = app.FindOperation(typeof(CreateTemplateCommand));
+        var putDescriptor = app.FindOperation(typeof(UpdateTemplateCommand));
+        var deleteDescriptor = app.FindOperation(typeof(ArchiveTemplateCommand));
+
+        getDescriptor.GetFeatureData<OperationHttpMethodMetadataFeatureData>()!
+            .HttpMethods.Should().ContainSingle(m => m == "GET");
+        postDescriptor.GetFeatureData<OperationHttpMethodMetadataFeatureData>()!
+            .HttpMethods.Should().ContainSingle(m => m == "POST");
+        putDescriptor.GetFeatureData<OperationHttpMethodMetadataFeatureData>()!
+            .HttpMethods.Should().ContainSingle(m => m == "PUT");
+        deleteDescriptor.GetFeatureData<OperationHttpMethodMetadataFeatureData>()!
+            .HttpMethods.Should().ContainSingle(m => m == "DELETE");
     }
 }
