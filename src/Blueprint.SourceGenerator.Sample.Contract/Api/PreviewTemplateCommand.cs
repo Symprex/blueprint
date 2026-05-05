@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using Blueprint.Model;
 using Blueprint.Model.Attributes;
+using Blueprint.Persistence;
 
 namespace Blueprint.SourceGenerator.Sample.Contract.Api;
 
@@ -12,6 +13,7 @@ namespace Blueprint.SourceGenerator.Sample.Contract.Api;
 [RootLink("/templates/{Id}/preview")]
 [ApiOperations("Templates")]
 [Resource("template", "read")]
+[DoNotSaveChanges]
 public partial class PreviewTemplateCommand : ICommand<TemplatePreviewApiResource>
 {
     /// <summary>

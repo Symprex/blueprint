@@ -41,6 +41,7 @@ A background task (`SendTemplateSharedNotificationTask`) demonstrates non-HTTP e
 - **Anonymous access** — `[AllowAnonymous]` on `SearchTemplatesQuery` for public endpoints
 - **Sensitive properties** — `[Sensitive]` on `CreateTemplateCommand.HtmlSource/PlainTextSource` for audit redaction hints
 - **Audit opt-out** — `[DoNotAudit]` on `SearchTemplatesQuery` to suppress noisy read auditing
+- **Persistence opt-out** — `[DoNotSaveChanges]` on `PreviewTemplateCommand` to suppress UoW commit for read-only commands
 - **Performance metrics opt-out** — `[DoNotRecordPerformanceMetrics]` on `GetTemplateVersionsQuery` for trace suppression
 - **Discriminated union results** — `Results<OkResult<T>, NotFoundResult<T>>` on `GetTemplateQuery` maps to 200/404 via generated pipeline
 - **Resource events** — `ResourceEventResult<T>` and `KeyOnlyResourceEventResult` for event-sourced commands
