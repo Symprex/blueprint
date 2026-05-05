@@ -141,11 +141,11 @@ Key files:
 
 The generated audit pipeline emits `System.Diagnostics.Activity` events with `blueprint.audit.*` semantic names:
 
-- `blueprint.audit.record` — emitted before calling `IAuditSink` with `blueprint.operation.type`, `blueprint.audit.trace_id`, and `blueprint.audit.span_id` tags
-- `blueprint.audit.completed` — emitted after successful audit recording
-- `blueprint.audit.failed` — emitted on audit sink failure with exception info and trace context
+- `blueprint.audit.started` — emitted before calling `IAuditSink` with a `blueprint.operation.type` tag
+- `blueprint.audit.succeeded` — emitted after successful audit recording with a `blueprint.operation.type` tag
+- `blueprint.audit.failed` — emitted on audit sink failure with `blueprint.operation.type`, `exception.type`, `exception.message`, and `exception.stacktrace` tags
 
-These events enable cross-system correlation: `IAuditSink` implementations can read trace/span IDs from the enclosing `Activity` to persist alongside the audit record, linking audit entries to distributed traces without runtime coupling.
+Trace correlation is inherent: events are emitted on the enclosing `Activity`, so they carry the parent trace ID and span ID automatically. `IAuditSink` implementations can read `context.Activity?.TraceId` and `context.Activity?.SpanId` to persist alongside the audit record for cross-system correlation.
 
 ## Do not hide complexity
 
