@@ -10,6 +10,7 @@ namespace Blueprint.SourceGenerator.Sample.Contract.Api;
 /// by requiring a name and enforcing length constraints on content fields.
 /// Returns a resource-event result (201 Created with event envelope).
 /// </summary>
+[ApiOperations("Templates")]
 [RootLink("/templates")]
 [HttpPost]
 [MustBeAuthenticated]

@@ -10,7 +10,7 @@
   Hosts: http
   Auth: Authenticated
   Discovery: command (Blueprint.SourceGenerator.Sample.Contract.Api.ArchiveTemplateCommand)
-  Group: Api
+  Group: Templates
   Result Outcomes:
     - KeyOnlyResourceEventResult
   Failure Outcomes:
@@ -31,7 +31,7 @@
   Hosts: http
   Auth: Authenticated
   Discovery: command (Blueprint.SourceGenerator.Sample.Contract.Api.CreateTemplateCommand)
-  Group: Api
+  Group: Templates
   Result Outcomes:
     - ResourceEventResult`1
   Failure Outcomes:
@@ -54,7 +54,7 @@
   Hosts: http
   Auth: Authenticated
   Discovery: query (Blueprint.SourceGenerator.Sample.Contract.Api.GetTemplateQuery)
-  Group: Api
+  Group: Templates
   Failure Outcomes:
     - legacy-validation-exception: Blueprint.Validation.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
     - data-annotations-validation-exception: System.ComponentModel.DataAnnotations.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
@@ -74,7 +74,7 @@
   Hosts: http
   Auth: Authenticated
   Discovery: query (Blueprint.SourceGenerator.Sample.Contract.Api.GetTemplatesQuery)
-  Group: Api
+  Group: Templates
   Failure Outcomes:
     - legacy-validation-exception: Blueprint.Validation.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
     - data-annotations-validation-exception: System.ComponentModel.DataAnnotations.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
@@ -104,7 +104,7 @@
   Hosts: http
   Auth: Authenticated
   Discovery: command (Blueprint.SourceGenerator.Sample.Contract.Api.UpdateTemplateCommand)
-  Group: Api
+  Group: Templates
   Result Outcomes:
     - ResourceEventResult`1
   Failure Outcomes:

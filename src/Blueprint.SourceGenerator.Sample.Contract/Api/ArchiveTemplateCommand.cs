@@ -8,6 +8,7 @@ namespace Blueprint.SourceGenerator.Sample.Contract.Api;
 /// Archives a template by its identifier. Demonstrates a key-only resource-event command
 /// that produces an HTTP 201 Created with no body (identity-only event).
 /// </summary>
+[ApiOperations("Templates")]
 [RootLink("/templates/{Id}")]
 [HttpDelete]
 [MustBeAuthenticated]

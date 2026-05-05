@@ -10,6 +10,7 @@ namespace Blueprint.SourceGenerator.Sample.Contract.Api;
 /// with body binding at the same route pattern as the GET query but with a different HTTP method.
 /// Returns a resource-event result (template.updated).
 /// </summary>
+[ApiOperations("Templates")]
 [RootLink("/templates/{Id}")]
 [HttpPut]
 [MustBeAuthenticated]

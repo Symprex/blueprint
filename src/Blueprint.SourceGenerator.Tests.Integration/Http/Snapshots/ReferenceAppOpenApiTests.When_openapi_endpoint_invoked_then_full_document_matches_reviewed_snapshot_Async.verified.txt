@@ -9,7 +9,7 @@
       "get": {
         "operationId": "GetTemplatesQuery",
         "tags": [
-          "Api"
+          "Templates"
         ],
         "responses": {
           "401": {
@@ -40,7 +40,7 @@
       "post": {
         "operationId": "CreateTemplateCommand",
         "tags": [
-          "Api"
+          "Templates"
         ],
         "requestBody": {
           "required": true,
@@ -110,7 +110,7 @@
       "delete": {
         "operationId": "ArchiveTemplateCommand",
         "tags": [
-          "Api"
+          "Templates"
         ],
         "parameters": [
           {
@@ -154,7 +154,7 @@
       "get": {
         "operationId": "GetTemplateQuery",
         "tags": [
-          "Api"
+          "Templates"
         ],
         "parameters": [
           {
@@ -195,7 +195,7 @@
       "put": {
         "operationId": "UpdateTemplateCommand",
         "tags": [
-          "Api"
+          "Templates"
         ],
         "parameters": [
           {
