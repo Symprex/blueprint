@@ -20,7 +20,29 @@ public sealed record OpenApiParameterModel(
     string In,
     bool Required,
     string SchemaType,
-    string? SchemaFormat);
+    string? SchemaFormat)
+{
+    /// <summary>Gets the minimum length constraint for string-typed parameters, or null when unconstrained.</summary>
+    public int? MinLength { get; init; }
+
+    /// <summary>Gets the maximum length constraint for string-typed parameters, or null when unconstrained.</summary>
+    public int? MaxLength { get; init; }
+
+    /// <summary>Gets the regex pattern constraint for string-typed parameters, or null when unconstrained.</summary>
+    public string? Pattern { get; init; }
+
+    /// <summary>Gets the minimum (or exclusive minimum) value for numeric parameters, or null when unconstrained.</summary>
+    public decimal? Minimum { get; init; }
+
+    /// <summary>Gets the maximum (or exclusive maximum) value for numeric parameters, or null when unconstrained.</summary>
+    public decimal? Maximum { get; init; }
+
+    /// <summary>Gets whether <see cref="Minimum"/> is exclusive (OpenAPI 3.0 <c>exclusiveMinimum: true</c>).</summary>
+    public bool ExclusiveMinimum { get; init; }
+
+    /// <summary>Gets whether <see cref="Maximum"/> is exclusive (OpenAPI 3.0 <c>exclusiveMaximum: true</c>).</summary>
+    public bool ExclusiveMaximum { get; init; }
+}
 
 /// <summary>
 /// Captures the projected OpenAPI-style request body for an HTTP operation. The body schema is rendered inline
@@ -43,4 +65,29 @@ public sealed record OpenApiRequestBodyModel(
 public sealed record OpenApiRequestBodyPropertyModel(
     string Name,
     string SchemaType,
-    string? SchemaFormat);
+    string? SchemaFormat)
+{
+    /// <summary>Gets whether this property is required (has <c>[Required]</c>).</summary>
+    public bool IsRequired { get; init; }
+
+    /// <summary>Gets the minimum length constraint for string-typed properties, or null when unconstrained.</summary>
+    public int? MinLength { get; init; }
+
+    /// <summary>Gets the maximum length constraint for string-typed properties, or null when unconstrained.</summary>
+    public int? MaxLength { get; init; }
+
+    /// <summary>Gets the regex pattern constraint for string-typed properties, or null when unconstrained.</summary>
+    public string? Pattern { get; init; }
+
+    /// <summary>Gets the minimum (or exclusive minimum) value for numeric properties, or null when unconstrained.</summary>
+    public decimal? Minimum { get; init; }
+
+    /// <summary>Gets the maximum (or exclusive maximum) value for numeric properties, or null when unconstrained.</summary>
+    public decimal? Maximum { get; init; }
+
+    /// <summary>Gets whether <see cref="Minimum"/> is exclusive.</summary>
+    public bool ExclusiveMinimum { get; init; }
+
+    /// <summary>Gets whether <see cref="Maximum"/> is exclusive.</summary>
+    public bool ExclusiveMaximum { get; init; }
+}

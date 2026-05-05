@@ -73,6 +73,7 @@ public sealed record OpenApiOperationRenderingContext(
         foreach (var entry in ownershipData.Entries)
         {
             var (schemaType, schemaFormat) = MapClrTypeToOpenApiSchema(entry.PropertyTypeName);
+            var constraints = OpenApiValidationConstraints.Extract(descriptor.OperationType, entry.PropertyName);
 
             switch (entry.Source)
             {
@@ -82,41 +83,87 @@ public sealed record OpenApiOperationRenderingContext(
                         "path",
                         Required: true,
                         schemaType,
-                        schemaFormat));
+                        schemaFormat)
+                    {
+                        MinLength = constraints.MinLength,
+                        MaxLength = constraints.MaxLength,
+                        Pattern = constraints.Pattern,
+                        Minimum = constraints.Minimum,
+                        Maximum = constraints.Maximum,
+                        ExclusiveMinimum = constraints.ExclusiveMinimum,
+                        ExclusiveMaximum = constraints.ExclusiveMaximum,
+                    });
                     break;
 
                 case PropertyBindingSource.Query:
                     parameters.Add(new OpenApiParameterModel(
                         entry.BindingName ?? entry.PropertyName,
                         "query",
-                        Required: false,
+                        Required: constraints.IsRequired,
                         schemaType,
-                        schemaFormat));
+                        schemaFormat)
+                    {
+                        MinLength = constraints.MinLength,
+                        MaxLength = constraints.MaxLength,
+                        Pattern = constraints.Pattern,
+                        Minimum = constraints.Minimum,
+                        Maximum = constraints.Maximum,
+                        ExclusiveMinimum = constraints.ExclusiveMinimum,
+                        ExclusiveMaximum = constraints.ExclusiveMaximum,
+                    });
                     break;
 
                 case PropertyBindingSource.Header:
                     parameters.Add(new OpenApiParameterModel(
                         entry.BindingName ?? entry.PropertyName,
                         "header",
-                        Required: false,
+                        Required: constraints.IsRequired,
                         schemaType,
-                        schemaFormat));
+                        schemaFormat)
+                    {
+                        MinLength = constraints.MinLength,
+                        MaxLength = constraints.MaxLength,
+                        Pattern = constraints.Pattern,
+                        Minimum = constraints.Minimum,
+                        Maximum = constraints.Maximum,
+                        ExclusiveMinimum = constraints.ExclusiveMinimum,
+                        ExclusiveMaximum = constraints.ExclusiveMaximum,
+                    });
                     break;
 
                 case PropertyBindingSource.Cookie:
                     parameters.Add(new OpenApiParameterModel(
                         entry.BindingName ?? entry.PropertyName,
                         "cookie",
-                        Required: false,
+                        Required: constraints.IsRequired,
                         schemaType,
-                        schemaFormat));
+                        schemaFormat)
+                    {
+                        MinLength = constraints.MinLength,
+                        MaxLength = constraints.MaxLength,
+                        Pattern = constraints.Pattern,
+                        Minimum = constraints.Minimum,
+                        Maximum = constraints.Maximum,
+                        ExclusiveMinimum = constraints.ExclusiveMinimum,
+                        ExclusiveMaximum = constraints.ExclusiveMaximum,
+                    });
                     break;
 
                 case PropertyBindingSource.Body:
                     bodyProperties.Add(new OpenApiRequestBodyPropertyModel(
                         entry.BindingName ?? entry.PropertyName,
                         schemaType,
-                        schemaFormat));
+                        schemaFormat)
+                    {
+                        IsRequired = constraints.IsRequired,
+                        MinLength = constraints.MinLength,
+                        MaxLength = constraints.MaxLength,
+                        Pattern = constraints.Pattern,
+                        Minimum = constraints.Minimum,
+                        Maximum = constraints.Maximum,
+                        ExclusiveMinimum = constraints.ExclusiveMinimum,
+                        ExclusiveMaximum = constraints.ExclusiveMaximum,
+                    });
                     break;
             }
         }

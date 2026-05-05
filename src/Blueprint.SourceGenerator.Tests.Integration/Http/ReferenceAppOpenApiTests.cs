@@ -90,6 +90,74 @@ public class ReferenceAppOpenApiTests
             .UseDirectory(SnapshotsFolder);
     }
 
+    [Fact]
+    public async Task When_openapi_endpoint_invoked_then_search_query_parameter_has_required_and_minlength()
+    {
+        var (json, _) = await InvokeOpenApiEndpointAsync();
+        using var doc = JsonDocument.Parse(json);
+
+        var searchPath = doc.RootElement.GetProperty("paths").GetProperty("/templates/search");
+        var parameters = searchPath.GetProperty("get").GetProperty("parameters");
+        var qParam = parameters.EnumerateArray()
+            .Single(static p => p.GetProperty("name").GetString() == "q");
+
+        qParam.GetProperty("required").GetBoolean().Should().BeTrue("Q has [Required]");
+        qParam.GetProperty("schema").GetProperty("minLength").GetInt32().Should().Be(1);
+    }
+
+    [Fact]
+    public async Task When_openapi_endpoint_invoked_then_page_parameter_has_exclusive_minimum()
+    {
+        var (json, _) = await InvokeOpenApiEndpointAsync();
+        using var doc = JsonDocument.Parse(json);
+
+        var searchPath = doc.RootElement.GetProperty("paths").GetProperty("/templates/search");
+        var parameters = searchPath.GetProperty("get").GetProperty("parameters");
+        var pageParam = parameters.EnumerateArray()
+            .Single(static p => p.GetProperty("name").GetString() == "page");
+
+        var schema = pageParam.GetProperty("schema");
+        schema.GetProperty("minimum").GetDecimal().Should().Be(0);
+        schema.GetProperty("exclusiveMinimum").GetBoolean().Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task When_openapi_endpoint_invoked_then_page_size_parameter_has_range_constraints()
+    {
+        var (json, _) = await InvokeOpenApiEndpointAsync();
+        using var doc = JsonDocument.Parse(json);
+
+        var searchPath = doc.RootElement.GetProperty("paths").GetProperty("/templates/search");
+        var parameters = searchPath.GetProperty("get").GetProperty("parameters");
+        var pageSizeParam = parameters.EnumerateArray()
+            .Single(static p => p.GetProperty("name").GetString() == "pageSize");
+
+        var schema = pageSizeParam.GetProperty("schema");
+        schema.GetProperty("minimum").GetDecimal().Should().Be(1);
+        schema.GetProperty("maximum").GetDecimal().Should().Be(100);
+    }
+
+    [Fact]
+    public async Task When_openapi_endpoint_invoked_then_create_request_body_has_required_array_and_max_length()
+    {
+        var (json, _) = await InvokeOpenApiEndpointAsync();
+        using var doc = JsonDocument.Parse(json);
+
+        var templatesPath = doc.RootElement.GetProperty("paths").GetProperty("/templates");
+        var requestBody = templatesPath.GetProperty("post").GetProperty("requestBody");
+        var schema = requestBody.GetProperty("content").GetProperty("application/json").GetProperty("schema");
+
+        schema.GetProperty("required").EnumerateArray()
+            .Select(static e => e.GetString())
+            .Should().Contain("name");
+
+        var nameProperty = schema.GetProperty("properties").GetProperty("name");
+        nameProperty.GetProperty("maxLength").GetInt32().Should().Be(200);
+
+        var htmlSourceProperty = schema.GetProperty("properties").GetProperty("htmlSource");
+        htmlSourceProperty.GetProperty("maxLength").GetInt32().Should().Be(50000);
+    }
+
     private static async Task<(string Json, int StatusCode)> InvokeOpenApiEndpointAsync()
     {
         var endpoints = CreateEndpoints();

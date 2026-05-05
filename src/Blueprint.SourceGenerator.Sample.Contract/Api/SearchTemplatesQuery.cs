@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using Blueprint.Auditing;
 using Blueprint.Model;
 using Blueprint.Model.Attributes;
+using Blueprint.Validation;
 
 namespace Blueprint.SourceGenerator.Sample.Contract.Api;
 
@@ -26,6 +27,7 @@ public partial class SearchTemplatesQuery : IQuery<TemplateApiResource[]>
     /// <summary>
     /// The page number for pagination (1-based). Defaults to 1.
     /// </summary>
+    [GreaterThan(0)]
     public int Page { get; set; } = 1;
 
     /// <summary>

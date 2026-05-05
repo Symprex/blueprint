@@ -200,6 +200,9 @@ public sealed record OpenApiOutputRenderingContext(
                 writer.WriteString("format", parameter.SchemaFormat);
             }
 
+            WriteNumericConstraints(writer, parameter.Minimum, parameter.Maximum, parameter.ExclusiveMinimum, parameter.ExclusiveMaximum);
+            WriteStringConstraints(writer, parameter.MinLength, parameter.MaxLength, parameter.Pattern);
+
             writer.WriteEndObject();
             writer.WriteEndObject();
         }
@@ -243,16 +246,78 @@ public sealed record OpenApiOutputRenderingContext(
                     writer.WriteString("format", property.SchemaFormat);
                 }
 
+                WriteNumericConstraints(writer, property.Minimum, property.Maximum, property.ExclusiveMinimum, property.ExclusiveMaximum);
+                WriteStringConstraints(writer, property.MinLength, property.MaxLength, property.Pattern);
+
                 writer.WriteEndObject();
             }
 
             writer.WriteEndObject();
+
+            var requiredProperties = requestBody.Properties
+                .Where(static p => p.IsRequired)
+                .Select(static p => p.Name)
+                .ToArray();
+
+            if (requiredProperties.Length > 0)
+            {
+                writer.WritePropertyName("required");
+                writer.WriteStartArray();
+
+                foreach (var name in requiredProperties)
+                {
+                    writer.WriteStringValue(name);
+                }
+
+                writer.WriteEndArray();
+            }
         }
 
         writer.WriteEndObject();
         writer.WriteEndObject();
         writer.WriteEndObject();
         writer.WriteEndObject();
+    }
+
+    private static void WriteNumericConstraints(Utf8JsonWriter writer, decimal? minimum, decimal? maximum, bool exclusiveMinimum, bool exclusiveMaximum)
+    {
+        if (minimum.HasValue)
+        {
+            writer.WriteNumber("minimum", minimum.Value);
+        }
+
+        if (exclusiveMinimum)
+        {
+            writer.WriteBoolean("exclusiveMinimum", true);
+        }
+
+        if (maximum.HasValue)
+        {
+            writer.WriteNumber("maximum", maximum.Value);
+        }
+
+        if (exclusiveMaximum)
+        {
+            writer.WriteBoolean("exclusiveMaximum", true);
+        }
+    }
+
+    private static void WriteStringConstraints(Utf8JsonWriter writer, int? minLength, int? maxLength, string? pattern)
+    {
+        if (minLength.HasValue)
+        {
+            writer.WriteNumber("minLength", minLength.Value);
+        }
+
+        if (maxLength.HasValue)
+        {
+            writer.WriteNumber("maxLength", maxLength.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(pattern))
+        {
+            writer.WriteString("pattern", pattern);
+        }
     }
 
     private static void WriteResponses(Utf8JsonWriter writer, ImmutableArray<OpenApiResponseObjectModel> responses)
