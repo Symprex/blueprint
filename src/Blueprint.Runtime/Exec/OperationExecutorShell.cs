@@ -31,6 +31,7 @@ public abstract class OperationExecutorShell : IOperationExecutorPipeline
 
     private readonly ILogger _logger;
     private readonly string _operationTypeName;
+    private readonly bool _suppressActivity;
 
     /// <summary>
     /// Initialises a new instance of <see cref="OperationExecutorShell"/> with the supplied logger factory and
@@ -38,18 +39,25 @@ public abstract class OperationExecutorShell : IOperationExecutorPipeline
     /// </summary>
     /// <param name="loggerFactory">The logger factory that creates the pipeline-scoped logger instance.</param>
     /// <param name="operationTypeName">The short operation type name used in activity names and log messages.</param>
-    protected OperationExecutorShell(ILoggerFactory loggerFactory, string operationTypeName)
+    /// <param name="suppressActivity">
+    /// When <c>true</c>, the pipeline will not create a trace <see cref="Activity"/> for this operation.
+    /// Logging, audit sinks, and exception handling remain active.
+    /// </param>
+    protected OperationExecutorShell(ILoggerFactory loggerFactory, string operationTypeName, bool suppressActivity = false)
     {
         this._logger = loggerFactory.CreateLogger(operationTypeName + "ExecutorPipeline");
         this._operationTypeName = operationTypeName;
+        this._suppressActivity = suppressActivity;
     }
 
     /// <inheritdoc />
     public async Task<OperationResult> ExecuteAsync(ApiOperationContext context)
     {
-        using var activity = BlueprintActivitySource.ActivitySource.StartActivity(
-            this._operationTypeName + "Pipeline",
-            ActivityKind.Internal);
+        using var activity = this._suppressActivity
+            ? null
+            : BlueprintActivitySource.ActivitySource.StartActivity(
+                this._operationTypeName + "Pipeline",
+                ActivityKind.Internal);
 
         try
         {

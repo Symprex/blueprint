@@ -3,6 +3,7 @@ using Blueprint.SourceGenerator.Generators.Pipelines.Model;
 using Blueprint.SourceGenerator.Helpers;
 using Blueprint.SourceGenerator.Modules;
 using Blueprint.SourceGenerator.Modules.Authentication;
+using Blueprint.SourceGenerator.Modules.Observability;
 using Blueprint.SourceGenerator.Planning;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -143,6 +144,7 @@ public partial class OperationExecutorPipelineSourceGenerator : IIncrementalGene
     {
         return new BlueprintSourceGenerationConfig(
         [
+            new PerformanceMetricsModule(),
             new PropertyOwnershipModule(),
             new AuthenticationModule(),
             new ValidationModule(),

@@ -181,6 +181,31 @@ public class AuditingModuleIntegrationTests
             "audit failed event should include the exception message");
     }
 
+    [Fact]
+    public async Task When_operation_has_DoNotRecordPerformanceMetrics_then_no_activity_is_created()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var serviceProvider = new AuditTestServiceProvider(null);
+
+        var pipeline = executor.GetPipeline(typeof(NoMetricsQuery));
+        var context = new ApiOperationContext(serviceProvider, app, NoMetricsQuery.Configure(), CancellationToken.None);
+
+        // Capture the current activity before pipeline execution
+        var activityBefore = Activity.Current;
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<OkResult<string>>();
+        ((OkResult<string>)result).Content.Should().Be("no-metrics");
+
+        // The pipeline should NOT have started its own pipeline activity
+        // (Activity.Current should either be null or whatever it was before,
+        // not a new "NoMetricsQueryPipeline" activity)
+        Activity.Current.Should().Be(activityBefore,
+            "pipeline should not create a trace activity for [DoNotRecordPerformanceMetrics] operations");
+    }
+
     private sealed class AuditTestServiceProvider : IServiceProvider
     {
         private readonly IAuditSink? _auditSink;
@@ -282,5 +307,20 @@ public partial class NonAuditableQuery : IQuery<string>
     public static Task<string> HandleAsync(NonAuditableQuery operation)
     {
         return Task.FromResult("not-audited");
+    }
+}
+
+/// <summary>
+/// A query operation decorated with <c>[DoNotRecordPerformanceMetrics]</c> that should suppress Activity creation.
+/// </summary>
+[DoNotRecordPerformanceMetrics]
+public partial class NoMetricsQuery : IQuery<string>
+{
+    /// <summary>Handles the query.</summary>
+    /// <param name="operation">The query instance.</param>
+    /// <returns>A result without tracing overhead.</returns>
+    public static Task<string> HandleAsync(NoMetricsQuery operation)
+    {
+        return Task.FromResult("no-metrics");
     }
 }

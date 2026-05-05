@@ -68,6 +68,15 @@ public sealed class PipelineContributorContext
     }
 
     /// <summary>
+    /// Suppresses the Activity/trace span normally created by <c>OperationExecutorShell</c>.
+    /// Use for operations where per-invocation tracing would create excessive noise.
+    /// </summary>
+    public void SuppressActivity()
+    {
+        this._plan.SuppressActivity = true;
+    }
+
+    /// <summary>
     /// Registers a variable produced by the active contributor.
     /// </summary>
     /// <param name="key">The variable key.</param>

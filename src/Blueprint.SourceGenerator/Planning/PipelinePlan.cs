@@ -25,6 +25,14 @@ public sealed record PipelinePlan(OperationModel Operation, VariableRegistry Var
     public bool RequiresAsync { get; set; }
 
     /// <summary>
+    /// Gets or sets a value indicating whether the generated pipeline should suppress Activity
+    /// creation in <c>OperationExecutorShell</c>. When <c>true</c>, the operation will not
+    /// produce a trace span — useful for noisy or high-frequency operations where per-invocation
+    /// tracing would create excessive telemetry noise without diagnostic value.
+    /// </summary>
+    public bool SuppressActivity { get; set; }
+
+    /// <summary>
     /// Gets the accumulated diagnostics.
     /// </summary>
     public IReadOnlyList<DiagnosticInfo> Diagnostics => this._diagnostics;

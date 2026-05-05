@@ -12,14 +12,14 @@
   "current": {
     "activeWorkstream": "auditing-and-observability",
     "nextReadySlice": {
+      "id": "auditing/do-not-record-performance-metrics",
+      "workstream": "auditing-and-observability",
+      "title": "Add [DoNotRecordPerformanceMetrics] attribute to suppress Activity creation for noisy operations"
+    },
+    "lastCompletedSlice": {
       "id": "auditing/structured-audit-event-correlation",
       "workstream": "auditing-and-observability",
       "title": "Correlate audit events with OpenTelemetry trace IDs and add audit event naming"
-    },
-    "lastCompletedSlice": {
-      "id": "auditing/bpa001-diagnostic-sensitive-on-non-public",
-      "workstream": "auditing-and-observability",
-      "title": "BPA001 compile-time diagnostic when [Sensitive] applied to non-public property"
     },
     "openReviewGate": null,
     "openReviewGateRationale": null,
@@ -102,6 +102,12 @@
       "workstream": "auditing-and-observability",
       "title": "BPA001 compile-time diagnostic when [Sensitive] applied to non-public property",
       "commit": "cc6afad"
+    },
+    {
+      "id": "auditing/structured-audit-event-correlation",
+      "workstream": "auditing-and-observability",
+      "title": "Correlate audit events with OpenTelemetry trace IDs and add audit event naming",
+      "commit": "f3213d2"
     }
   ],
   "decisions": [

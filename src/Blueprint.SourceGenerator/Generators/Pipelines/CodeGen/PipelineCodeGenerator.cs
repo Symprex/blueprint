@@ -26,7 +26,7 @@ internal static class PipelineCodeGenerator
             .MakePublicClass()
             .SetBaseClass("Blueprint.OperationExecutorShell");
 
-        AddConstructor(pipelineClass, handler);
+        AddConstructor(pipelineClass, handler, plan);
         AddExecuteCoreAsyncMethod(pipelineClass, handler, plan);
         AddGetAppliedModulesMethod(pipelineClass, plan);
 
@@ -38,11 +38,15 @@ internal static class PipelineCodeGenerator
         return codeBuilder.Build();
     }
 
-    private static void AddConstructor(ClassBuilder pipelineClass, OperationHandlerModel handler)
+    private static void AddConstructor(ClassBuilder pipelineClass, OperationHandlerModel handler, PipelinePlan plan)
     {
+        var baseCallArgs = plan.SuppressActivity
+            ? new[] { "loggerFactory", $"\"{handler.OperationTypeName}\"", "suppressActivity: true" }
+            : new[] { "loggerFactory", $"\"{handler.OperationTypeName}\"" };
+
         pipelineClass.AddConstructor()
             .AddParameter("Microsoft.Extensions.Logging.ILoggerFactory", "loggerFactory")
-            .WithBaseCallArguments("loggerFactory", $"\"{handler.OperationTypeName}\"");
+            .WithBaseCallArguments(baseCallArgs);
     }
 
     private static void AddExecuteCoreAsyncMethod(
