@@ -12,14 +12,15 @@
   "current": {
     "activeWorkstream": "authentication-and-authorisation",
     "nextReadySlice": {
-      "id": "auth/access-mode-descriptor-projection",
+      "id": "auth/resource-attribute-and-scope-pair",
       "workstream": "authentication-and-authorisation",
-      "title": "Introduce [AllowAnonymous] and project operation access-mode metadata into descriptors with conflict diagnostic"
+      "title": "Introduce [Resource] attribute with ScopePair noun+verb model and project into descriptor metadata"
     },
     "lastCompletedSlice": {
-      "id": "auditing/trace-event-catalog-manifest",
-      "workstream": "auditing-and-observability",
-      "title": "Emit trace event catalog entries in the debug manifest documenting Activity events and tags per operation"
+      "id": "auth/access-mode-descriptor-projection",
+      "workstream": "authentication-and-authorisation",
+      "title": "Introduce [AllowAnonymous] attribute and project operation access-mode metadata into descriptors with conflict diagnostic",
+      "commit": "e7675c5"
     },
     "openReviewGate": null,
     "openReviewGateRationale": null,
@@ -126,6 +127,12 @@
       "workstream": "auditing-and-observability",
       "title": "Emit trace event catalog entries in the debug manifest documenting Activity events and tags per operation",
       "commit": "0a88983"
+    },
+    {
+      "id": "auth/access-mode-descriptor-projection",
+      "workstream": "authentication-and-authorisation",
+      "title": "Introduce [AllowAnonymous] attribute and project operation access-mode metadata into descriptors with conflict diagnostic",
+      "commit": "e7675c5"
     }
   ],
   "decisions": [

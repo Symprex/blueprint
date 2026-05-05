@@ -1,0 +1,348 @@
+using Blueprint.SourceGenerator.Generators.Descriptors;
+using Blueprint.SourceGenerator.Modules.Authentication;
+using Blueprint.SourceGenerator.Modules.Authorization;
+using Blueprint.SourceGenerator.Planning;
+using FluentAssertions;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+
+namespace Blueprint.SourceGenerator.Tests.Modules;
+
+/// <summary>
+/// Tests the compile-time authorization analysis and descriptor contributions
+/// produced by <see cref="AuthorizationModule"/>.
+/// </summary>
+public class AuthorizationModuleTests
+{
+    // ── Descriptor projection tests ──────────────────────────────────
+
+    [Fact]
+    public void When_operation_has_single_Resource_attribute_then_descriptor_projects_scope_pair()
+    {
+        var result = CompileDescriptor(
+            """
+            [RootLink("/accounts/{Id}")]
+            [Resource("account", "read")]
+            public partial class GetAccountQuery : IQuery<string>
+            {
+                public string Id { get; set; }
+
+                public static Task<string> HandleAsync(GetAccountQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var descriptorSource = result.Output
+            .Select(static t => t.ToString())
+            .FirstOrDefault(static s => s.Contains("GetAccountQueryDescriptor"));
+
+        descriptorSource.Should().NotBeNull();
+        descriptorSource!.Should().Contain("ScopePair");
+        descriptorSource.Should().Contain("\"account\"");
+        descriptorSource.Should().Contain("\"read\"");
+    }
+
+    [Fact]
+    public void When_operation_has_multiple_Resource_attributes_then_descriptor_projects_all_scope_pairs()
+    {
+        var result = CompileDescriptor(
+            """
+            [RootLink("/accounts/{Id}")]
+            [Resource("account", "read")]
+            [Resource("tenant", "manage")]
+            public partial class GetAccountQuery : IQuery<string>
+            {
+                public string Id { get; set; }
+
+                public static Task<string> HandleAsync(GetAccountQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var descriptorSource = result.Output
+            .Select(static t => t.ToString())
+            .FirstOrDefault(static s => s.Contains("GetAccountQueryDescriptor"));
+
+        descriptorSource.Should().NotBeNull();
+        descriptorSource!.Should().Contain("\"account\"");
+        descriptorSource.Should().Contain("\"read\"");
+        descriptorSource.Should().Contain("\"tenant\"");
+        descriptorSource.Should().Contain("\"manage\"");
+    }
+
+    [Fact]
+    public void When_Resource_with_AllowAnonymous_then_reports_BPAU003_diagnostic()
+    {
+        var result = CompileDescriptor(
+            """
+            [RootLink("/items")]
+            [AllowAnonymous]
+            [Resource("item", "read")]
+            public partial class GetItemsQuery : IQuery<string>
+            {
+                public static Task<string> HandleAsync(GetItemsQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().Contain(
+            static d => d.Id == "BPAU003",
+            "[Resource] combined with [AllowAnonymous] should report BPAU003");
+    }
+
+    [Fact]
+    public void When_Resource_without_explicit_access_mode_then_descriptor_implies_permissioned_access()
+    {
+        var result = CompileDescriptor(
+            """
+            [RootLink("/accounts/{Id}")]
+            [Resource("account", "read")]
+            public partial class GetAccountQuery : IQuery<string>
+            {
+                public string Id { get; set; }
+
+                public static Task<string> HandleAsync(GetAccountQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        // Permissioned access means RequiresAuthentication feature data should be set
+        // (permissioned implies authenticated)
+        var descriptorSource = result.Output
+            .Select(static t => t.ToString())
+            .FirstOrDefault(static s => s.Contains("GetAccountQueryDescriptor"));
+
+        descriptorSource.Should().NotBeNull();
+        descriptorSource!.Should().Contain("WellKnownFeatureData.RequiresAuthentication");
+    }
+
+    [Fact]
+    public void When_Resource_with_MustBeAuthenticated_then_both_are_valid_and_permissioned()
+    {
+        var result = CompileDescriptor(
+            """
+            [RootLink("/accounts/{Id}")]
+            [MustBeAuthenticated]
+            [Resource("account", "read")]
+            public partial class GetAccountQuery : IQuery<string>
+            {
+                public string Id { get; set; }
+
+                public static Task<string> HandleAsync(GetAccountQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        // [MustBeAuthenticated] + [Resource] is redundant but valid (both require auth)
+        result.Diagnostics.Should().BeEmpty();
+
+        var descriptorSource = result.Output
+            .Select(static t => t.ToString())
+            .FirstOrDefault(static s => s.Contains("GetAccountQueryDescriptor"));
+
+        descriptorSource.Should().NotBeNull();
+        descriptorSource!.Should().Contain("ScopePair");
+    }
+
+    [Fact]
+    public void When_Resource_has_empty_noun_then_reports_BPAU004_diagnostic()
+    {
+        var result = CompileDescriptor(
+            """
+            [RootLink("/items")]
+            [Resource("", "read")]
+            public partial class GetItemsQuery : IQuery<string>
+            {
+                public static Task<string> HandleAsync(GetItemsQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().Contain(
+            static d => d.Id == "BPAU004",
+            "empty noun in [Resource] should report BPAU004");
+    }
+
+    [Fact]
+    public void When_Resource_has_empty_verb_then_reports_BPAU004_diagnostic()
+    {
+        var result = CompileDescriptor(
+            """
+            [RootLink("/items")]
+            [Resource("item", "")]
+            public partial class GetItemsQuery : IQuery<string>
+            {
+                public static Task<string> HandleAsync(GetItemsQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().Contain(
+            static d => d.Id == "BPAU004",
+            "empty verb in [Resource] should report BPAU004");
+    }
+
+    [Fact]
+    public void When_Resource_has_whitespace_noun_then_reports_BPAU004_diagnostic()
+    {
+        var result = CompileDescriptor(
+            """
+            [RootLink("/items")]
+            [Resource("  ", "read")]
+            public partial class GetItemsQuery : IQuery<string>
+            {
+                public static Task<string> HandleAsync(GetItemsQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().Contain(
+            static d => d.Id == "BPAU004",
+            "whitespace-only noun in [Resource] should report BPAU004");
+    }
+
+    [Fact]
+    public void When_no_Resource_attribute_then_no_authorization_metadata()
+    {
+        var result = CompileDescriptor(
+            """
+            [RootLink("/items")]
+            public partial class GetItemsQuery : IQuery<string>
+            {
+                public static Task<string> HandleAsync(GetItemsQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var descriptorSource = result.Output
+            .Select(static t => t.ToString())
+            .FirstOrDefault(static s => s.Contains("GetItemsQueryDescriptor"));
+
+        descriptorSource.Should().NotBeNull();
+        descriptorSource!.Should().NotContain("ScopePair");
+    }
+
+    [Fact]
+    public void When_Resource_on_http_operation_then_401_response_is_generated()
+    {
+        // When an operation has [Resource], it implicitly requires auth,
+        // so the 401 response metadata should be projected
+        var result = CompileDescriptor(
+            """
+            [RootLink("/accounts/{Id}")]
+            [Resource("account", "read")]
+            public partial class GetAccountQuery : IQuery<string>
+            {
+                public string Id { get; set; }
+
+                public static Task<string> HandleAsync(GetAccountQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var descriptorSource = result.Output
+            .Select(static t => t.ToString())
+            .FirstOrDefault(static s => s.Contains("GetAccountQueryDescriptor"));
+
+        descriptorSource.Should().NotBeNull();
+
+        // AuthenticationDescriptorRegistration(RequiresIdentityCheck: true) triggers the 401 response
+        // metadata via HttpResponseMetadataModule, expressed as AuthenticatedFailureResponsesFeatureData
+        descriptorSource!.Should().Contain("AuthenticatedFailureResponsesFeatureData");
+    }
+
+    // ── Pipeline plan tests (authorization module has no pipeline contribution yet) ──
+
+    [Fact]
+    public void When_Resource_attribute_present_then_no_authorisation_pipeline_stage_yet()
+    {
+        var compilation = CreateCompilation(
+            """
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace;
+
+            [RootLink("/accounts/{Id}")]
+            [Resource("account", "read")]
+            public partial class GetAccountQuery : IQuery<string>
+            {
+                public string Id { get; set; }
+
+                public static Task<string> HandleAsync(GetAccountQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        var config = new BlueprintSourceGenerationConfig([new AuthenticationModule(), new AuthorizationModule()]);
+        var result = config.BuildPipelinePlan("TestNamespace.GetAccountQuery", compilation);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Value.Should().NotBeNull();
+
+        // Authorization module does not yet contribute pipeline stages
+        result.Value!.Contributions.Should().NotContain(
+            static c => c.Stage == PipelineStage.Authorisation,
+            "AuthorizationModule does not yet contribute pipeline stages in this slice");
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────
+
+    private static GenerationResult CompileDescriptor(string source)
+    {
+        return TestHelpers.Compile<OperationDescriptorSourceGenerator>(
+            "using Blueprint.Model;\nusing Blueprint.Model.Attributes;\nusing System.Threading.Tasks;\n\n"
+            + "namespace TestNamespace;\n\n" + source);
+    }
+
+    private static CSharpCompilation CreateCompilation(string source)
+    {
+        var syntaxTree = CSharpSyntaxTree.ParseText(source, new CSharpParseOptions(LanguageVersion.Preview));
+
+        var references = AppDomain.CurrentDomain.GetAssemblies()
+            .Where(static assembly => !assembly.IsDynamic && !string.IsNullOrWhiteSpace(assembly.Location))
+            .Select(static assembly => (MetadataReference)MetadataReference.CreateFromFile(assembly.Location))
+            .ToList();
+
+        references.Add(MetadataReference.CreateFromFile(typeof(Blueprint.Model.IOperation).Assembly.Location));
+
+        return CSharpCompilation.Create(
+            assemblyName: "AuthorizationModuleTests",
+            syntaxTrees: [syntaxTree],
+            references: references,
+            options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+    }
+}

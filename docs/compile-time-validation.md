@@ -151,6 +151,8 @@ Current authentication IDs in active use:
 
 - `BPAU001`: `[MustBeAuthenticated]` applied to an operation that is not exposed via an HTTP host (warning — the authentication pipeline check cannot be generated without HTTP context).
 - `BPAU002`: Both `[AllowAnonymous]` and `[MustBeAuthenticated]` applied to the same operation (error — the access mode must be unambiguous).
+- `BPAU003`: `[Resource]` combined with `[AllowAnonymous]` on the same operation (error — permissioned operations cannot simultaneously allow anonymous access).
+- `BPAU004`: `[Resource]` attribute with an empty or whitespace-only noun or verb value (error — scope pairs must be meaningful).
 
 ## Diagnostic design rules
 
