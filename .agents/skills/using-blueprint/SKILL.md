@@ -33,6 +33,10 @@ Do not use this skill to change Blueprint internals in `blueprint-source-gen`; u
 | Serializer context | If the app maps Blueprint through the HTTP host (`MapBlueprintApi<...>()`) and any scanned operation can produce a body-bearing HTTP response contract, declare `[BlueprintAppSerializerContext(JsonSerializerContextType = typeof(AppJsonContext))]` on the `BlueprintApp` root so the build can prove the app-owned `JsonSerializerContext` covers those generated HTTP contracts; missing declaration now fails with `BP007`, incomplete declared coverage fails with `BP006`, and the generated app now persists both the declared serializer-context type and the declared `JsonSerializable(...)` body-type inventory (`BlueprintApp.AppOwnedSerializerContextType` / `AppOwnedSerializerContextBodyTypeNames`) as the compile-time/OpenAPI ownership seam rather than a runtime serializer switch |
 | Generator wiring | Reference Blueprint's generator as an analyzer so compile-time generation runs; in this repo the sample uses `ProjectReference` with `OutputItemType="Analyzer"` and `ReferenceOutputAssembly="false"` |
 | HTTP host | Map the generated surface with `MapBlueprintApi<TApp, TExec>()` |
+| Authorization | `[Resource("noun", "verb")]` for scope-pair auth; `[FromResource(typeof(X))]` for scope inheritance; `[AllowAnonymous]` for public access; `[MustBeAuthenticated]` for identity-only checks without scopes |
+| Sensitive data | `[Sensitive]` on properties signals audit sinks to redact/mask that data |
+| Audit opt-out | `[DoNotAudit]` on a class opts out of automatic audit recording |
+| Trace opt-out | `[DoNotRecordPerformanceMetrics]` on a class suppresses Activity/trace span creation |
 | Validation | Prefer declarative `ValidationAttribute` usage; Blueprint generates validation from those contracts, and the current retained Blueprint-specific set now includes `Blueprint.Validation.GreaterThanPropertyAttribute` |
 | Debugging | Prefer build diagnostics, generated output, manifests, and sample patterns over runtime guesswork |
 
@@ -71,6 +75,22 @@ At runtime, `BlueprintApp.GetOperationsForHost("custom-host")` returns operation
 - `Blueprint.Validation.GreaterThanPropertyAttribute` is now part of the retained Blueprint-specific validation surface for property-to-property greater-than checks.
 - The retained Blueprint-specific conditional validator set now includes `GreaterThan`, `RequiredIf`, `RequiredIfNot`, and `NotAllowedIf` alongside `GreaterThanProperty`; verify the exact fast-path versus fallback shape before relying on a specific constructor or comparison form.
 - If an HTTP-exposed operation needs a consumer-owned OpenAPI tag/group that differs from the namespace-derived fallback, declare `[ApiOperations("...")]` on the operation type; the descriptor and OpenAPI seams now prefer that explicit group name when it is present.
+
+## Authorization contract
+
+- **Scope-pair model:** `[Resource("noun", "verb")]` declares that an operation requires a specific scope pair. Multiple `[Resource]` attributes on one operation use any-of semantics (the caller needs at least one).
+- **Scope inheritance:** `[FromResource(typeof(X))]` inherits scope pairs from another operation's direct `[Resource]` declarations (not transitive). Cannot be combined with `[Resource]` on the same operation (BPAU005).
+- **Implicit authentication:** Operations with `[Resource]` or `[FromResource]` automatically require an authenticated identity; you do NOT also need `[MustBeAuthenticated]`.
+- **Identity-only checks:** Use `[MustBeAuthenticated]` when the operation needs an authenticated caller but has no specific scope requirements.
+- **Anonymous access:** Use `[AllowAnonymous]` for public endpoints. Cannot be combined with `[Resource]` or `[MustBeAuthenticated]` (BPAU002/BPAU003).
+- **Compile-time diagnostics:** BPAU001 (auth on non-HTTP op), BPAU002 (conflicting AllowAnonymous + MustBeAuthenticated), BPAU003 (Resource + AllowAnonymous), BPAU004 (empty noun/verb), BPAU005 (FromResource + Resource on same op), BPAU006 (FromResource target has no Resource attrs).
+
+## Auditing and observability contract
+
+- **Audit opt-out:** `[DoNotAudit]` (from `Blueprint.Auditing`) on an operation class suppresses the PostExecution audit sink call.
+- **Sensitive properties:** `[Sensitive]` (from `Blueprint.Auditing`) on a public property signals audit sinks and logging pipelines to redact or mask that value. Does not affect HTTP/OpenAPI contracts.
+- **Trace suppression:** `[DoNotRecordPerformanceMetrics]` (from `Blueprint.Auditing`) on an operation class suppresses Activity/trace span creation for noisy or polling endpoints.
+- **Generated audit events:** The generated pipeline emits structured `blueprint.audit.record`, `blueprint.audit.completed`, and `blueprint.audit.failed` activity events with OpenTelemetry trace correlation tags when an `IAuditSink` is registered.
 
 ## Result contract
 

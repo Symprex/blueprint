@@ -11,12 +11,12 @@
   },
   "current": {
     "activeWorkstream": "reference-app-and-end-to-end-example",
-    "nextReadySlice": "reference-app/phase-2-review-artifact",
+    "nextReadySlice": "reference-app/update-using-blueprint-skill",
     "lastCompletedSlice": {
-      "id": "reference-app/expand-operations-to-tier-1-minimum",
+      "id": "reference-app/security-and-observability-attributes",
       "workstream": "reference-app-and-end-to-end-example",
-      "title": "Expand reference app to 9 operations with search, versions, publish, and clone",
-      "commit": "c76b9b0"
+      "title": "Add [Resource], [FromResource], [AllowAnonymous], [Sensitive], [DoNotAudit], [DoNotRecordPerformanceMetrics] to reference app",
+      "commit": "ab68624"
     },
     "openReviewGate": null,
     "openReviewGateRationale": null,
