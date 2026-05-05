@@ -64,7 +64,7 @@ public class ReferenceAppHttpEndToEndIntegrationTests
     }
 
     [Fact]
-    public async Task When_get_template_with_unknown_id_then_returns_200_with_placeholder()
+    public async Task When_get_template_with_unknown_id_then_returns_404_not_found()
     {
         var endpoints = CreateEndpoints();
         endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
@@ -87,9 +87,9 @@ public class ReferenceAppHttpEndToEndIntegrationTests
                 authenticationType: "test"));
         });
 
-        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        response.StatusCode.Should().Be(StatusCodes.Status404NotFound);
+        response.ContentType.Should().Be("application/json; charset=utf-8");
         response.Body.Should().Contain("unknown-999");
-        response.Body.Should().Contain("Template unknown-999");
     }
 
     [Fact]

@@ -19,7 +19,7 @@ All operations belong to the `Templates` group (via `[ApiOperations("Templates")
 | Operation | HTTP | Route | Result |
 |-----------|------|-------|--------|
 | `GetTemplatesQuery` | GET | `/templates` | `TemplateApiResource[]` |
-| `GetTemplateQuery` | GET | `/templates/{Id}` | `TemplateApiResource` |
+| `GetTemplateQuery` | GET | `/templates/{Id}` | `Results<OkResult<TemplateApiResource>, NotFoundResult<TemplateApiResource>>` |
 | `SearchTemplatesQuery` | GET | `/templates/search` | `TemplateApiResource[]` |
 | `GetTemplateVersionsQuery` | GET | `/templates/{Id}/versions` | `TemplateVersionApiResource[]` |
 | `CreateTemplateCommand` | POST | `/templates` | `ResourceEventResult<TemplateApiResource>` |
@@ -42,6 +42,7 @@ A background task (`SendTemplateSharedNotificationTask`) demonstrates non-HTTP e
 - **Sensitive properties** — `[Sensitive]` on `CreateTemplateCommand.HtmlSource/PlainTextSource` for audit redaction hints
 - **Audit opt-out** — `[DoNotAudit]` on `SearchTemplatesQuery` to suppress noisy read auditing
 - **Performance metrics opt-out** — `[DoNotRecordPerformanceMetrics]` on `GetTemplateVersionsQuery` for trace suppression
+- **Discriminated union results** — `Results<OkResult<T>, NotFoundResult<T>>` on `GetTemplateQuery` maps to 200/404 via generated pipeline
 - **Resource events** — `ResourceEventResult<T>` and `KeyOnlyResourceEventResult` for event-sourced commands
 - **Resource event auditing** — `IResourceEventAuditSink` for post-execution audit recording
 - **Operation grouping** — `[ApiOperations("Templates")]` for explicit OpenAPI tag provenance
