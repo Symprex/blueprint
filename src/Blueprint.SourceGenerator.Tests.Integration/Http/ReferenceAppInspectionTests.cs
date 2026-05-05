@@ -241,4 +241,73 @@ public class ReferenceAppInspectionTests
         sensitiveData!.PropertyNames.Should().Contain("HtmlSource");
         sensitiveData.PropertyNames.Should().Contain("PlainTextSource");
     }
+
+    [Fact]
+    public void When_app_registered_then_background_task_is_exposed_on_tasks_host()
+    {
+        var app = CreateRegisteredApp();
+
+        var taskOperations = app.GetOperationsForHost("tasks");
+
+        taskOperations.Should().ContainSingle()
+            .Which.OperationType.Should().Be(typeof(SendTemplateSharedNotificationTask));
+    }
+
+    [Fact]
+    public void When_app_registered_then_http_operation_carries_host_exposure_feature_data()
+    {
+        var app = CreateRegisteredApp();
+
+        var descriptor = app.FindOperation(typeof(GetTemplatesQuery));
+        var hostData = descriptor.GetFeatureData<OperationHostExposureFeatureData>();
+
+        hostData.Should().NotBeNull("GetTemplatesQuery is HTTP-exposed");
+        hostData!.HostNames.Should().ContainSingle(h => h == "http");
+    }
+
+    [Fact]
+    public void When_app_registered_then_background_task_carries_tasks_host_exposure_feature_data()
+    {
+        var app = CreateRegisteredApp();
+
+        var descriptor = app.FindOperation(typeof(SendTemplateSharedNotificationTask));
+        var hostData = descriptor.GetFeatureData<OperationHostExposureFeatureData>();
+
+        hostData.Should().NotBeNull("SendTemplateSharedNotificationTask is tasks-hosted");
+        hostData!.HostNames.Should().ContainSingle(h => h == "tasks");
+    }
+
+    [Fact]
+    public void When_app_registered_then_operations_carry_failure_outcomes_feature_data()
+    {
+        var app = CreateRegisteredApp();
+
+        var descriptor = app.FindOperation(typeof(GetTemplatesQuery));
+        var failureData = descriptor.GetFeatureData<OperationFailureOutcomesFeatureData>();
+
+        failureData.Should().NotBeNull("all operations get the default exception translator failure outcomes");
+        failureData!.Outcomes.Should().Contain(o => o.HandledExceptionTypeName == "Blueprint.Validation.ValidationException");
+        failureData.Outcomes.Should().Contain(o => o.HandledExceptionTypeName == "System.Exception");
+    }
+
+    [Fact]
+    public void When_app_registered_then_operations_carry_discovery_feature_data()
+    {
+        var app = CreateRegisteredApp();
+
+        var queryDescriptor = app.FindOperation(typeof(GetTemplatesQuery));
+        var commandDescriptor = app.FindOperation(typeof(CreateTemplateCommand));
+
+        var queryDiscovery = queryDescriptor.GetFeatureData<OperationDiscoveryFeatureData>();
+        var commandDiscovery = commandDescriptor.GetFeatureData<OperationDiscoveryFeatureData>();
+
+        queryDiscovery.Should().NotBeNull();
+        queryDiscovery!.Kind.Should().Be("query");
+        queryDiscovery.TypeName.Should().Be("GetTemplatesQuery");
+        queryDiscovery.Namespace.Should().Be("Blueprint.SourceGenerator.Sample.Contract.Api");
+
+        commandDiscovery.Should().NotBeNull();
+        commandDiscovery!.Kind.Should().Be("command");
+        commandDiscovery.TypeName.Should().Be("CreateTemplateCommand");
+    }
 }

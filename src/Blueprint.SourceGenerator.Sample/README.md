@@ -74,4 +74,4 @@ The sample app is exercised by:
 - `ReferenceAppHttpEndToEndIntegrationTests` — proves HTTP execution through the generated pipeline
 - `ReferenceAppOpenApiTests` — locks the full OpenAPI document shape as a reviewed snapshot
 - `ReferenceAppManifestTests` — locks the debug manifest surface
-- `ReferenceAppProgrammaticInspectionTests` — verifies registered operations, URLs, methods, links, and serializer coverage
+- `ReferenceAppInspectionTests` — verifies registered operations, URLs, methods, links, authorization, sensitive properties, and serializer coverage
