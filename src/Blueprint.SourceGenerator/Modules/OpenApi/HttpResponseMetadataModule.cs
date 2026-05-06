@@ -453,6 +453,30 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
             return true;
         }
 
+        // [401, 403, 422, 500] → AuthorizedFailureResponsesFeatureData
+        if (responses.Count == 4
+            && IsUnauthenticatedEntry(responses[0])
+            && IsForbiddenEntry(responses[1])
+            && IsDefaultValidationFailureEntry(responses[2])
+            && IsDefaultUnhandledExceptionEntry(responses[3]))
+        {
+            constantName = "AuthorizedFailureResponsesFeatureData";
+            return true;
+        }
+
+        // [400, 401, 403, 415, 422, 500] → AuthorizedBodyBindingFailureResponsesFeatureData
+        if (responses.Count == 6
+            && IsBindingFailureEntry(responses[0])
+            && IsUnauthenticatedEntry(responses[1])
+            && IsForbiddenEntry(responses[2])
+            && IsUnsupportedMediaTypeEntry(responses[3])
+            && IsDefaultValidationFailureEntry(responses[4])
+            && IsDefaultUnhandledExceptionEntry(responses[5]))
+        {
+            constantName = "AuthorizedBodyBindingFailureResponsesFeatureData";
+            return true;
+        }
+
         constantName = string.Empty;
         return false;
     }
@@ -466,7 +490,21 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
         out int tailLength,
         out string tailConstantName)
     {
-        // Try longest tail first: [400, 401, 415, 422, 500]
+        // Try longest tail first: [400, 401, 403, 415, 422, 500]
+        if (responses.Count >= 7
+            && IsBindingFailureEntry(responses[responses.Count - 6])
+            && IsUnauthenticatedEntry(responses[responses.Count - 5])
+            && IsForbiddenEntry(responses[responses.Count - 4])
+            && IsUnsupportedMediaTypeEntry(responses[responses.Count - 3])
+            && IsDefaultValidationFailureEntry(responses[responses.Count - 2])
+            && IsDefaultUnhandledExceptionEntry(responses[responses.Count - 1]))
+        {
+            tailLength = 6;
+            tailConstantName = "AuthorizedBodyBindingFailureResponses";
+            return true;
+        }
+
+        // Try [400, 401, 415, 422, 500]
         if (responses.Count >= 6
             && IsBindingFailureEntry(responses[responses.Count - 5])
             && IsUnauthenticatedEntry(responses[responses.Count - 4])
@@ -476,6 +514,18 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
         {
             tailLength = 5;
             tailConstantName = "AuthenticatedBodyBindingFailureResponses";
+            return true;
+        }
+
+        // Try [401, 403, 422, 500]
+        if (responses.Count >= 5
+            && IsUnauthenticatedEntry(responses[responses.Count - 4])
+            && IsForbiddenEntry(responses[responses.Count - 3])
+            && IsDefaultValidationFailureEntry(responses[responses.Count - 2])
+            && IsDefaultUnhandledExceptionEntry(responses[responses.Count - 1]))
+        {
+            tailLength = 4;
+            tailConstantName = "AuthorizedFailureResponses";
             return true;
         }
 
@@ -561,6 +611,15 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
             && response.HasResponseBody == false
             && response.ResultTypeNames.Length == 1
             && response.ResultTypeNames[0] == "Blueprint.Runtime.Exec.UnsupportedMediaTypeResult"
+            && response.BodyTypeNames.IsEmpty;
+    }
+
+    private static bool IsForbiddenEntry(HttpResponseMetadataRegistration response)
+    {
+        return response.StatusCode == 403
+            && response.HasResponseBody == false
+            && response.ResultTypeNames.Length == 1
+            && response.ResultTypeNames[0] == "Blueprint.Runtime.Exec.ForbiddenResult"
             && response.BodyTypeNames.IsEmpty;
     }
 

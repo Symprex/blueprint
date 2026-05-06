@@ -132,6 +132,16 @@ public static class WellKnownFeatureData
         ImmutableArray<string>.Empty);
 
     /// <summary>
+    /// The HTTP response metadata entry for a 403 forbidden response (no body).
+    /// Shared by all operations that project this status via <c>ForbiddenResult</c>.
+    /// </summary>
+    public static readonly OperationHttpResponseMetadata ForbiddenResponse = new(
+        403,
+        false,
+        ImmutableArray.Create<string>("Blueprint.Runtime.Exec.ForbiddenResult"),
+        ImmutableArray<string>.Empty);
+
+    /// <summary>
     /// The common HTTP failure responses for operations with body binding but no authentication:
     /// 400 (binding), 415 (unsupported media type), 422 (validation), 500 (unhandled exception).
     /// </summary>
@@ -156,6 +166,22 @@ public static class WellKnownFeatureData
             .AddRange(CommonFailureResponses);
 
     /// <summary>
+    /// The common HTTP failure responses for authorized operations (with resource permissions) and no body binding:
+    /// 401 (unauthenticated), 403 (forbidden), 422 (validation), 500 (unhandled exception).
+    /// </summary>
+    public static readonly ImmutableArray<OperationHttpResponseMetadata> AuthorizedFailureResponses =
+        ImmutableArray.Create(UnauthenticatedResponse, ForbiddenResponse)
+            .AddRange(CommonFailureResponses);
+
+    /// <summary>
+    /// The common HTTP failure responses for authorized operations with body binding:
+    /// 400 (binding), 401 (unauthenticated), 403 (forbidden), 415 (unsupported media type), 422 (validation), 500 (unhandled exception).
+    /// </summary>
+    public static readonly ImmutableArray<OperationHttpResponseMetadata> AuthorizedBodyBindingFailureResponses =
+        ImmutableArray.Create(BindingFailureResponse, UnauthenticatedResponse, ForbiddenResponse, UnsupportedMediaTypeResponse)
+            .AddRange(CommonFailureResponses);
+
+    /// <summary>
     /// Pre-built response metadata for operations with body binding but no authentication and no declared
     /// result contract (failures-only): 400, 415, 422, 500.
     /// </summary>
@@ -175,4 +201,18 @@ public static class WellKnownFeatureData
     /// </summary>
     public static readonly OperationHttpResponseMetadataFeatureData AuthenticatedBodyBindingFailureResponsesFeatureData =
         new(AuthenticatedBodyBindingFailureResponses);
+
+    /// <summary>
+    /// Pre-built response metadata for authorized operations (with resource permissions) with no body
+    /// binding and no declared result contract (failures-only): 401, 403, 422, 500.
+    /// </summary>
+    public static readonly OperationHttpResponseMetadataFeatureData AuthorizedFailureResponsesFeatureData =
+        new(AuthorizedFailureResponses);
+
+    /// <summary>
+    /// Pre-built response metadata for authorized operations with body binding and no declared
+    /// result contract (failures-only): 400, 401, 403, 415, 422, 500.
+    /// </summary>
+    public static readonly OperationHttpResponseMetadataFeatureData AuthorizedBodyBindingFailureResponsesFeatureData =
+        new(AuthorizedBodyBindingFailureResponses);
 }

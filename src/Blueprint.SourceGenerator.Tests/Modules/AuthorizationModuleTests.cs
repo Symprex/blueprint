@@ -276,10 +276,8 @@ public class AuthorizationModuleTests
 
         descriptorSource.Should().NotBeNull();
 
-        // AuthenticationDescriptorRegistration triggers the 401 response,
-        // AuthorizationDescriptorRegistration triggers the 403 response
-        descriptorSource!.Should().Contain("UnauthenticatedResult");
-        descriptorSource!.Should().Contain("ForbiddenResult");
+        // With [Resource], both 401 and 403 are projected via the authorized failure tail constant
+        descriptorSource!.Should().Contain("AuthorizedFailureResponses");
     }
 
     // ── Pipeline plan tests ──────────────────────────────────────────
