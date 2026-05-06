@@ -131,4 +131,16 @@ public sealed class BlueprintServiceBuilder
         this.Services.AddScoped<Blueprint.Persistence.IUnitOfWork, T>();
         return this;
     }
+
+    /// <summary>
+    /// Configures Blueprint HTTP options such as the public host for link generation,
+    /// exception detail exposure, and content negotiation behaviour.
+    /// </summary>
+    /// <param name="configure">A delegate to configure <see cref="HttpOperationResultExecutor"/>-level options.</param>
+    /// <returns>This builder for chaining.</returns>
+    public BlueprintServiceBuilder ConfigureHttp(Action<BlueprintHttpOptions> configure)
+    {
+        this.Services.Configure(configure);
+        return this;
+    }
 }

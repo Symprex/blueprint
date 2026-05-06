@@ -120,6 +120,28 @@ At runtime, `BlueprintApp.GetOperationsForHost("custom-host")` returns operation
 - Host-exposed `Results<T1, T2>` contracts now also fail build-time validation with `BP112` when they try to mix host-neutral `NoResultOperationResult` with host-owned no-content/status-only result families such as `Blueprint.Runtime.Http.HttpNoContentResult`; that semantic split is deliberate, so use one shape or the other instead of combining them.
 - Nullable plain-value handler returns are a build-time error, and broader host translation remains follow-on work.
 
+## Service registration (DX)
+
+Blueprint provides `ServiceCollectionExtensions` for discoverable fluent registration:
+
+```csharp
+services.AddBlueprintApi<MyApp, MyAppExecutor>(blueprint =>
+{
+    blueprint.AddAuditSink<MyAuditSink>();
+    blueprint.AddResourceEventAuditSink<MyResourceEventAuditSink>();
+    blueprint.AddResourceAuthorizationProvider<MyAuthProvider>();
+    blueprint.AddBackgroundTaskScheduler<MyTaskScheduler>();
+    blueprint.AddUnitOfWork<MyUnitOfWork>();
+    blueprint.AddHttpResultExecutor<MyCustomExecutor>();
+    blueprint.ConfigureHttp(options => options.PublicHost = "https://api.example.com");
+});
+```
+
+- `AddBlueprintApi<TApp, TExec>()` registers the app and executor singletons
+- `BlueprintServiceBuilder` exposes typed methods for all Blueprint infrastructure contracts
+- Scoped services (UoW, task scheduler) are registered scoped; singletons (audit, auth) as singletons
+- `ConfigureHttp` binds `BlueprintHttpOptions` for link generation base URI and error detail exposure
+
 ## Working loop
 
 1. Start from the consumer contract: operation -> app root -> host wiring.
