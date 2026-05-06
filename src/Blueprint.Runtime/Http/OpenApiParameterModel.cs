@@ -45,6 +45,9 @@ public sealed record OpenApiParameterModel(
 
     /// <summary>Gets whether <see cref="Maximum"/> is exclusive (OpenAPI 3.0 <c>exclusiveMaximum: true</c>).</summary>
     public bool ExclusiveMaximum { get; init; }
+
+    /// <summary>Gets the enum string values when this parameter's CLR type is an enum, or empty when not an enum.</summary>
+    public ImmutableArray<string> EnumValues { get; init; } = ImmutableArray<string>.Empty;
 }
 
 /// <summary>
@@ -96,4 +99,7 @@ public sealed record OpenApiRequestBodyPropertyModel(
 
     /// <summary>Gets whether <see cref="Maximum"/> is exclusive.</summary>
     public bool ExclusiveMaximum { get; init; }
+
+    /// <summary>Gets the enum string values when this property's CLR type is an enum, or empty when not an enum.</summary>
+    public ImmutableArray<string> EnumValues { get; init; } = ImmutableArray<string>.Empty;
 }

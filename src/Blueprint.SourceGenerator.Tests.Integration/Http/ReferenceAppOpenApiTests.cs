@@ -223,6 +223,28 @@ public class ReferenceAppOpenApiTests
             "non-obsolete operations should not emit the deprecated field");
     }
 
+    [Fact]
+    public async Task When_property_is_enum_then_openapi_renders_enum_values()
+    {
+        var (json, _) = await InvokeOpenApiEndpointAsync();
+        using var doc = JsonDocument.Parse(json);
+
+        // SearchTemplatesQuery has a SortBy property of type TemplateSortOrder enum
+        var searchPath = doc.RootElement.GetProperty("paths").GetProperty("/templates/search");
+        var parameters = searchPath.GetProperty("get").GetProperty("parameters");
+
+        var sortByParam = parameters.EnumerateArray()
+            .First(p => p.GetProperty("name").GetString() == "sortBy");
+
+        var schema = sortByParam.GetProperty("schema");
+        schema.GetProperty("type").GetString().Should().Be("string");
+
+        var enumArray = schema.GetProperty("enum").EnumerateArray()
+            .Select(static e => e.GetString())
+            .ToArray();
+        enumArray.Should().BeEquivalentTo(["Name", "CreatedDate", "LastModified"]);
+    }
+
     private static async Task<(string Json, int StatusCode)> InvokeOpenApiEndpointAsync()
     {
         var endpoints = CreateEndpoints();

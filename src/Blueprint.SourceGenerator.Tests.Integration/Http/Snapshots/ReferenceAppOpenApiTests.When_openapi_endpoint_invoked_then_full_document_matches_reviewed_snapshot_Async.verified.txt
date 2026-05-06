@@ -158,6 +158,20 @@
               "type": "string",
               "minLength": 1
             }
+          },
+          {
+            "name": "sortBy",
+            "in": "query",
+            "required": false,
+            "description": "The sort order for search results.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "Name",
+                "CreatedDate",
+                "LastModified"
+              ]
+            }
           }
         ],
         "responses": {

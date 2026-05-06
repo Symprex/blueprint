@@ -222,6 +222,7 @@ public sealed record OpenApiOutputRenderingContext(
                 writer.WriteString("format", parameter.SchemaFormat);
             }
 
+            WriteEnumValues(writer, parameter.EnumValues);
             WriteNumericConstraints(writer, parameter.Minimum, parameter.Maximum, parameter.ExclusiveMinimum, parameter.ExclusiveMaximum);
             WriteStringConstraints(writer, parameter.MinLength, parameter.MaxLength, parameter.Pattern);
 
@@ -273,6 +274,7 @@ public sealed record OpenApiOutputRenderingContext(
                     writer.WriteString("description", property.Description);
                 }
 
+                WriteEnumValues(writer, property.EnumValues);
                 WriteNumericConstraints(writer, property.Minimum, property.Maximum, property.ExclusiveMinimum, property.ExclusiveMaximum);
                 WriteStringConstraints(writer, property.MinLength, property.MaxLength, property.Pattern);
 
@@ -304,6 +306,24 @@ public sealed record OpenApiOutputRenderingContext(
         writer.WriteEndObject();
         writer.WriteEndObject();
         writer.WriteEndObject();
+    }
+
+    private static void WriteEnumValues(Utf8JsonWriter writer, ImmutableArray<string> enumValues)
+    {
+        if (enumValues.IsDefaultOrEmpty)
+        {
+            return;
+        }
+
+        writer.WritePropertyName("enum");
+        writer.WriteStartArray();
+
+        foreach (var value in enumValues)
+        {
+            writer.WriteStringValue(value);
+        }
+
+        writer.WriteEndArray();
     }
 
     private static void WriteNumericConstraints(Utf8JsonWriter writer, decimal? minimum, decimal? maximum, bool exclusiveMinimum, bool exclusiveMaximum)

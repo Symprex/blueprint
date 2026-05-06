@@ -40,4 +40,11 @@ public partial class SearchTemplatesQuery : IQuery<TemplateApiResource[]>
     [Range(1, 100)]
     [Description("Number of results per page (1-100).")]
     public int PageSize { get; set; } = 20;
+
+    /// <summary>
+    /// The sort order for search results. Defaults to <see cref="TemplateSortOrder.Name"/>.
+    /// Demonstrates enum property rendering as an OpenAPI <c>enum</c> array.
+    /// </summary>
+    [Description("The sort order for search results.")]
+    public TemplateSortOrder SortBy { get; set; } = TemplateSortOrder.Name;
 }

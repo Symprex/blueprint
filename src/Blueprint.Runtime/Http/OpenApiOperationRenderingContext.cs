@@ -88,6 +88,7 @@ public sealed record OpenApiOperationRenderingContext(
             var (schemaType, schemaFormat) = MapClrTypeToOpenApiSchema(entry.PropertyTypeName);
             var constraints = OpenApiValidationConstraints.Extract(descriptor.OperationType, entry.PropertyName);
             var description = GetPropertyDescription(descriptor.OperationType, entry.PropertyName);
+            var enumValues = GetEnumValues(descriptor.OperationType, entry.PropertyName);
 
             switch (entry.Source)
             {
@@ -107,6 +108,7 @@ public sealed record OpenApiOperationRenderingContext(
                         Maximum = constraints.Maximum,
                         ExclusiveMinimum = constraints.ExclusiveMinimum,
                         ExclusiveMaximum = constraints.ExclusiveMaximum,
+                        EnumValues = enumValues,
                     });
                     break;
 
@@ -126,6 +128,7 @@ public sealed record OpenApiOperationRenderingContext(
                         Maximum = constraints.Maximum,
                         ExclusiveMinimum = constraints.ExclusiveMinimum,
                         ExclusiveMaximum = constraints.ExclusiveMaximum,
+                        EnumValues = enumValues,
                     });
                     break;
 
@@ -145,6 +148,7 @@ public sealed record OpenApiOperationRenderingContext(
                         Maximum = constraints.Maximum,
                         ExclusiveMinimum = constraints.ExclusiveMinimum,
                         ExclusiveMaximum = constraints.ExclusiveMaximum,
+                        EnumValues = enumValues,
                     });
                     break;
 
@@ -164,6 +168,7 @@ public sealed record OpenApiOperationRenderingContext(
                         Maximum = constraints.Maximum,
                         ExclusiveMinimum = constraints.ExclusiveMinimum,
                         ExclusiveMaximum = constraints.ExclusiveMaximum,
+                        EnumValues = enumValues,
                     });
                     break;
 
@@ -182,6 +187,7 @@ public sealed record OpenApiOperationRenderingContext(
                         Maximum = constraints.Maximum,
                         ExclusiveMinimum = constraints.ExclusiveMinimum,
                         ExclusiveMaximum = constraints.ExclusiveMaximum,
+                        EnumValues = enumValues,
                     });
                     break;
             }
@@ -238,6 +244,31 @@ public sealed record OpenApiOperationRenderingContext(
             .GetCustomAttributes(typeof(DescriptionAttribute), inherit: true)
             .OfType<DescriptionAttribute>()
             .FirstOrDefault()?.Description;
+    }
+
+    /// <summary>
+    /// Extracts enum values when a property's CLR type is an enum, returning the defined names
+    /// as an immutable array for OpenAPI <c>enum</c> rendering.
+    /// </summary>
+    [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2070",
+        Justification = "OpenAPI enum projection reflects over operation type properties that are preserved by the source generator's generated pipeline code.")]
+    private static ImmutableArray<string> GetEnumValues(Type operationType, string propertyName)
+    {
+        var property = operationType.GetProperty(propertyName, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+        if (property is null)
+        {
+            return ImmutableArray<string>.Empty;
+        }
+
+        var propertyType = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
+        if (!propertyType.IsEnum)
+        {
+            return ImmutableArray<string>.Empty;
+        }
+
+        return Enum.GetNames(propertyType).ToImmutableArray();
     }
 }
 
