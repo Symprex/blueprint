@@ -11,7 +11,8 @@ public class Startup
     /// Registers the sample Blueprint services needed to execute the sample operations.
     /// </summary>
     /// <param name="services">The application service collection.</param>
-    public void ConfigureServices(IServiceCollection services)
+    /// <param name="environment">The hosting environment for conditional configuration.</param>
+    public void ConfigureServices(IServiceCollection services, IWebHostEnvironment environment)
     {
         services.AddLogging();
         services.AddSingleton<TemplateStore>();
@@ -22,6 +23,12 @@ public class Startup
             blueprint.AddResourceEventAuditSink<LoggingResourceEventAuditSink>();
             blueprint.AddResourceAuthorizationProvider<SampleResourceAuthorizationProvider>();
             blueprint.AddBackgroundTaskScheduler<InProcessBackgroundTaskScheduler>();
+
+            blueprint.ConfigureHttp(http =>
+            {
+                // Expose full exception details in non-production environments for easier debugging.
+                http.ExposeExceptionDetailsInErrorResponses = environment.IsDevelopment();
+            });
         });
     }
 

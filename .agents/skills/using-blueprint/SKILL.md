@@ -187,4 +187,50 @@ Blueprint emits:
 - Expecting runtime fallbacks to repair a missing compile-time contract
 - Ignoring generator diagnostics or generated output diffs
 
+## Error handling patterns
+
+### Discriminated union results (preferred)
+
+Handlers should declare error outcomes in their return type for compile-time safety and OpenAPI projection:
+
+```csharp
+public Results<OkResult<Item>, NotFoundResult<Item>> Handle(GetItemQuery query)
+{
+    var item = db.Find(query.Id);
+    return item is null
+        ? new NotFoundResult<Item>(new Item { Id = query.Id })
+        : new OkResult<Item>(item);
+}
+```
+
+Available result types: `OkResult<T>`, `CreatedResult<T>`, `AcceptedResult<T>`, `NotFoundResult<T>`, `ConflictResult<T>`, `HttpNoContentResult`, `NoResultOperationResult`.
+
+### Typed exceptions (escape hatch)
+
+For cases where structured results are impractical (deeply nested code, cross-cutting concerns), throw typed exceptions:
+
+```csharp
+throw new NotFoundException("Template 123 not found");   // → HTTP 404
+throw new ConflictException("Version conflict");          // → HTTP 409
+throw new BadRequestException("Invalid date range");      // → HTTP 400
+throw new ForbiddenException("Insufficient permissions"); // → HTTP 403
+throw new ApiException("Custom error", 422);              // → HTTP 422
+```
+
+- Exceptions with `HttpStatus < 500` are logged at `Information` level (non-fatal)
+- Exceptions with `HttpStatus >= 500` are logged at `Error` level with OTel ERROR status
+- In development (`ExposeExceptionDetailsInErrorResponses = true`), all exceptions expose message and stack trace
+- In production, 5xx errors return a generic message; 4xx errors expose the exception message
+
+### ExposeExceptionDetailsInErrorResponses
+
+Configure in startup for environment-appropriate behavior:
+
+```csharp
+blueprint.ConfigureHttp(http =>
+{
+    http.ExposeExceptionDetailsInErrorResponses = env.IsDevelopment();
+});
+```
+
 This is the canonical consumer-installable Blueprint skill. If Blueprint changes the consumer contract, update this skill in the same change as the code and docs.
