@@ -15,11 +15,13 @@ public class Startup
     {
         services.AddLogging();
         services.AddSingleton<TemplateStore>();
-        services.AddSingleton<SampleBlueprintApp>();
-        services.AddSingleton<SampleBlueprintAppExecutor>();
-        services.AddSingleton<Blueprint.Auditing.IAuditSink, LoggingAuditSink>();
-        services.AddSingleton<Blueprint.Auditing.IResourceEventAuditSink, LoggingResourceEventAuditSink>();
-        services.AddSingleton<Blueprint.Authorization.IResourceAuthorizationProvider, SampleResourceAuthorizationProvider>();
+
+        services.AddBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>(blueprint =>
+        {
+            blueprint.AddAuditSink<LoggingAuditSink>();
+            blueprint.AddResourceEventAuditSink<LoggingResourceEventAuditSink>();
+            blueprint.AddResourceAuthorizationProvider<SampleResourceAuthorizationProvider>();
+        });
     }
 
     /// <summary>
