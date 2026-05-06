@@ -203,21 +203,29 @@ public class HttpOperationResultExecutor
     private static async Task WriteUnhandledExceptionAsync(HttpContext httpContext, ApiOperationContext operationContext, UnhandledExceptionResult unhandledExceptionResult, BlueprintHttpOptions httpOptions)
     {
         var exposeDetails = httpOptions.ExposeExceptionDetailsInErrorResponses;
+
+        // Respect ApiException.HttpStatus when the exception carries a specific HTTP status code.
+        var statusCode = unhandledExceptionResult.Exception is ApiException apiEx
+            ? apiEx.HttpStatus
+            : StatusCodes.Status500InternalServerError;
+
         var problemDetails = new MvcProblemDetails
         {
-            Status = StatusCodes.Status500InternalServerError,
-            Title = "Server error",
+            Status = statusCode,
+            Title = statusCode >= 500 ? "Server error" : "Request error",
             Detail = exposeDetails
                 ? unhandledExceptionResult.Exception.Message
-                : "An unexpected error occurred.",
+                : statusCode >= 500
+                    ? "An unexpected error occurred."
+                    : unhandledExceptionResult.Exception.Message,
         };
 
-        if (exposeDetails)
+        if (exposeDetails && statusCode >= 500)
         {
             problemDetails.Extensions["stackTrace"] = unhandledExceptionResult.Exception.ToString();
         }
 
-        httpContext.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        httpContext.Response.StatusCode = statusCode;
         httpContext.Response.ContentType = "application/problem+json; charset=utf-8";
         await WriteJsonAsync(httpContext, operationContext, problemDetails);
     }

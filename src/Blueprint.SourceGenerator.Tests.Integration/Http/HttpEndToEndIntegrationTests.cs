@@ -195,6 +195,39 @@ public class HttpEndToEndIntegrationTests
         response.StatusCode.Should().Be(StatusCodes.Status200OK);
     }
 
+    [Fact]
+    public async Task When_handler_throws_ApiException_with_404_then_returns_404_with_problem_details()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/e2e/not-found-exception");
+        endpoint.Should().NotBeNull();
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider);
+
+        response.StatusCode.Should().Be(StatusCodes.Status404NotFound);
+        response.ContentType.Should().Contain("application/problem+json");
+        response.Body.Should().Contain("\"status\":404");
+        response.Body.Should().Contain("Resource not found");
+    }
+
+    [Fact]
+    public async Task When_handler_throws_unhandled_exception_then_returns_500_with_problem_details()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/e2e/unhandled-exception");
+        endpoint.Should().NotBeNull();
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider);
+
+        response.StatusCode.Should().Be(StatusCodes.Status500InternalServerError);
+        response.ContentType.Should().Contain("application/problem+json");
+        response.Body.Should().Contain("\"status\":500");
+    }
+
     private static async Task<TestHttpResponse> InvokeEndpointAsync(
         RouteEndpoint endpoint,
         IServiceProvider serviceProvider,
@@ -369,5 +402,35 @@ internal sealed class TestResourceAuthorizationProvider(bool authorized) : Bluep
         CancellationToken cancellationToken)
     {
         return Task.FromResult(authorized);
+    }
+}
+
+/// <summary>
+/// Query that throws an <see cref="ApiException"/> with HTTP 404 to verify non-500 exception translation.
+/// </summary>
+[Blueprint.Model.Attributes.RootLink("/e2e/not-found-exception")]
+public partial class E2ENotFoundExceptionQuery : IQuery<string>
+{
+    /// <summary>Throws ApiException(404) to test HTTP status translation.</summary>
+    /// <param name="query">The query operation instance (unused).</param>
+    /// <returns>Never returns — always throws.</returns>
+    public static Task<string> HandleAsync(E2ENotFoundExceptionQuery query)
+    {
+        throw new ApiException("Resource not found", 404);
+    }
+}
+
+/// <summary>
+/// Query that throws a plain <see cref="InvalidOperationException"/> to verify 500 fallback.
+/// </summary>
+[Blueprint.Model.Attributes.RootLink("/e2e/unhandled-exception")]
+public partial class E2EUnhandledExceptionQuery : IQuery<string>
+{
+    /// <summary>Throws InvalidOperationException to test 500 fallback path.</summary>
+    /// <param name="query">The query operation instance (unused).</param>
+    /// <returns>Never returns — always throws.</returns>
+    public static Task<string> HandleAsync(E2EUnhandledExceptionQuery query)
+    {
+        throw new InvalidOperationException("Something went wrong");
     }
 }
