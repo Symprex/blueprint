@@ -277,6 +277,33 @@ public class ReferenceAppOpenApiTests
         bearerAuth.GetProperty("bearerFormat").GetString().Should().Be("JWT");
     }
 
+    [Fact]
+    public async Task When_body_property_is_nullable_and_not_required_then_openapi_renders_nullable()
+    {
+        var (json, _) = await InvokeOpenApiEndpointAsync();
+        using var doc = JsonDocument.Parse(json);
+
+        // CreateTemplateCommand has HtmlSource as string? without [Required]
+        var createPath = doc.RootElement.GetProperty("paths").GetProperty("/templates");
+        var postOp = createPath.GetProperty("post");
+        var bodySchema = postOp.GetProperty("requestBody")
+            .GetProperty("content")
+            .GetProperty("application/json")
+            .GetProperty("schema")
+            .GetProperty("properties");
+
+        // HtmlSource is nullable and not required → should have nullable: true
+        var htmlSource = bodySchema.GetProperty("htmlSource");
+        htmlSource.TryGetProperty("nullable", out var nullableVal).Should().BeTrue(
+            "nullable string? properties without [Required] should emit nullable: true");
+        nullableVal.GetBoolean().Should().BeTrue();
+
+        // Name is nullable (string?) but has [Required] → should NOT have nullable
+        var name = bodySchema.GetProperty("name");
+        name.TryGetProperty("nullable", out _).Should().BeFalse(
+            "properties with [Required] should not emit nullable even if CLR type is nullable");
+    }
+
     private static async Task<(string Json, int StatusCode)> InvokeOpenApiEndpointAsync()
     {
         var endpoints = CreateEndpoints();

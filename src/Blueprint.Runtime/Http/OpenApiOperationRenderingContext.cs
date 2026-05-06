@@ -113,6 +113,7 @@ public sealed record OpenApiOperationRenderingContext(
                         ExclusiveMinimum = constraints.ExclusiveMinimum,
                         ExclusiveMaximum = constraints.ExclusiveMaximum,
                         EnumValues = enumValues,
+                        IsNullable = entry.IsNullable,
                     });
                     break;
 
@@ -133,6 +134,7 @@ public sealed record OpenApiOperationRenderingContext(
                         ExclusiveMinimum = constraints.ExclusiveMinimum,
                         ExclusiveMaximum = constraints.ExclusiveMaximum,
                         EnumValues = enumValues,
+                        IsNullable = entry.IsNullable,
                     });
                     break;
 
@@ -153,6 +155,7 @@ public sealed record OpenApiOperationRenderingContext(
                         ExclusiveMinimum = constraints.ExclusiveMinimum,
                         ExclusiveMaximum = constraints.ExclusiveMaximum,
                         EnumValues = enumValues,
+                        IsNullable = entry.IsNullable,
                     });
                     break;
 
@@ -173,6 +176,7 @@ public sealed record OpenApiOperationRenderingContext(
                         ExclusiveMinimum = constraints.ExclusiveMinimum,
                         ExclusiveMaximum = constraints.ExclusiveMaximum,
                         EnumValues = enumValues,
+                        IsNullable = entry.IsNullable,
                     });
                     break;
 
@@ -192,6 +196,7 @@ public sealed record OpenApiOperationRenderingContext(
                         ExclusiveMinimum = constraints.ExclusiveMinimum,
                         ExclusiveMaximum = constraints.ExclusiveMaximum,
                         EnumValues = enumValues,
+                        IsNullable = entry.IsNullable,
                     });
                     break;
             }

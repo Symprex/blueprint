@@ -43,11 +43,16 @@ public enum PropertyBindingSource
 /// Used by OpenAPI rendering to project parameter and request body schemas without runtime reflection.
 /// Null for System/AuthContext entries where type projection is not applicable.
 /// </param>
+/// <param name="IsNullable">
+/// Whether the property accepts null values (either a nullable reference type or <c>Nullable&lt;T&gt;</c>).
+/// Used by OpenAPI rendering to emit the <c>nullable: true</c> annotation.
+/// </param>
 public sealed record OperationPropertyBindingEntry(
     string PropertyName,
     PropertyBindingSource Source,
     string? BindingName,
-    string? PropertyTypeName);
+    string? PropertyTypeName,
+    bool IsNullable = false);
 
 /// <summary>
 /// Feature data populated during descriptor generation with the compile-time property ownership plan

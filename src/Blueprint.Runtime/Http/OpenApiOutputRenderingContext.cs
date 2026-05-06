@@ -234,6 +234,11 @@ public sealed record OpenApiOutputRenderingContext(
                 writer.WriteString("format", parameter.SchemaFormat);
             }
 
+            if (parameter.IsNullable && !parameter.Required)
+            {
+                writer.WriteBoolean("nullable", true);
+            }
+
             WriteEnumValues(writer, parameter.EnumValues);
             WriteNumericConstraints(writer, parameter.Minimum, parameter.Maximum, parameter.ExclusiveMinimum, parameter.ExclusiveMaximum);
             WriteStringConstraints(writer, parameter.MinLength, parameter.MaxLength, parameter.Pattern);
@@ -279,6 +284,11 @@ public sealed record OpenApiOutputRenderingContext(
                 if (property.SchemaFormat is not null)
                 {
                     writer.WriteString("format", property.SchemaFormat);
+                }
+
+                if (property.IsNullable && !property.IsRequired)
+                {
+                    writer.WriteBoolean("nullable", true);
                 }
 
                 if (property.Description is not null)

@@ -697,8 +697,9 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
                 var typeNameExpr = e.Source is PropertyOwnershipSource.System or PropertyOwnershipSource.AuthContext
                     ? "null"
                     : CSharpSymbolDisplay.FormatLiteral(e.TypeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), quote: true);
+                var isNullable = IsNullableType(e.TypeSymbol);
 
-                return $"new global::Blueprint.Model.OperationPropertyBindingEntry({propertyNameExpr}, {sourceExpr}, {bindingNameExpr}, {typeNameExpr})";
+                return $"new global::Blueprint.Model.OperationPropertyBindingEntry({propertyNameExpr}, {sourceExpr}, {bindingNameExpr}, {typeNameExpr}, {(isNullable ? "true" : "false")})";
             })
             .ToArray();
 
@@ -1105,6 +1106,26 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
                 $"System.Enum.TryParse<{typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}>({stringExpression}, out var {outVariable})",
             _ => $"int.TryParse({stringExpression}, out var {outVariable})", // fallback — should not be reached for supported types
         };
+    }
+
+    /// <summary>
+    /// Determines whether a type symbol represents a nullable type (either a <c>Nullable&lt;T&gt;</c>
+    /// value type or a reference type annotated with <c>?</c>).
+    /// </summary>
+    private static bool IsNullableType(ITypeSymbol typeSymbol)
+    {
+        if (typeSymbol.NullableAnnotation == NullableAnnotation.Annotated)
+        {
+            return true;
+        }
+
+        if (typeSymbol is INamedTypeSymbol { IsGenericType: true } namedType
+            && namedType.ConstructedFrom.SpecialType == SpecialType.System_Nullable_T)
+        {
+            return true;
+        }
+
+        return false;
     }
 
     /// <summary>

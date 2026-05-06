@@ -48,6 +48,9 @@ public sealed record OpenApiParameterModel(
 
     /// <summary>Gets the enum string values when this parameter's CLR type is an enum, or empty when not an enum.</summary>
     public ImmutableArray<string> EnumValues { get; init; } = ImmutableArray<string>.Empty;
+
+    /// <summary>Gets whether this parameter is nullable (reference type with <c>?</c> or <c>Nullable&lt;T&gt;</c>).</summary>
+    public bool IsNullable { get; init; }
 }
 
 /// <summary>
@@ -102,4 +105,7 @@ public sealed record OpenApiRequestBodyPropertyModel(
 
     /// <summary>Gets the enum string values when this property's CLR type is an enum, or empty when not an enum.</summary>
     public ImmutableArray<string> EnumValues { get; init; } = ImmutableArray<string>.Empty;
+
+    /// <summary>Gets whether this property is nullable (reference type with <c>?</c> or <c>Nullable&lt;T&gt;</c>).</summary>
+    public bool IsNullable { get; init; }
 }

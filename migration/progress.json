@@ -13,10 +13,10 @@
     "activeWorkstream": "documentation-and-final-alignment",
     "nextReadySlice": null,
     "lastCompletedSlice": {
-      "id": "openapi/validation-constraint-projection",
+      "id": "openapi/security-scheme-projection",
       "workstream": "documentation-and-final-alignment",
-      "title": "Project validation constraints into OpenAPI parameter and request body schemas",
-      "commit": "b9004b6"
+      "title": "Project per-operation security requirements and securitySchemes into OpenAPI",
+      "commit": "ca1f47c"
     },
     "openReviewGate": null,
     "openReviewGateRationale": null,
@@ -231,6 +231,30 @@
       "workstream": "documentation-and-final-alignment",
       "title": "Project validation constraints into OpenAPI parameter and request body schemas",
       "commit": "b9004b6"
+    },
+    {
+      "id": "openapi/document-level-tags",
+      "workstream": "documentation-and-final-alignment",
+      "title": "Emit top-level tags section in OpenAPI document from operation group metadata",
+      "commit": "d5a2efc"
+    },
+    {
+      "id": "openapi/deprecated-operations",
+      "workstream": "documentation-and-final-alignment",
+      "title": "Render deprecated flag in OpenAPI for [Obsolete] operations",
+      "commit": "3eaa218"
+    },
+    {
+      "id": "openapi/enum-value-projection",
+      "workstream": "documentation-and-final-alignment",
+      "title": "Project enum values into OpenAPI parameter and body schemas",
+      "commit": "e313588"
+    },
+    {
+      "id": "openapi/security-scheme-projection",
+      "workstream": "documentation-and-final-alignment",
+      "title": "Project per-operation security requirements and securitySchemes into OpenAPI",
+      "commit": "ca1f47c"
     }
   ],
   "decisions": [

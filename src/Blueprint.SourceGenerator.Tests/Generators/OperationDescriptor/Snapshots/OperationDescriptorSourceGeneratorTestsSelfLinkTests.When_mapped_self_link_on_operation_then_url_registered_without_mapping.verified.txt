@@ -29,7 +29,7 @@ namespace TestNamespace
                 this.AddLink(new global::Blueprint.Model.ApiOperationLink(this, "/operations/a/{Id}", "/operations/a/{Id}", "self", typeof(TestNamespace.ApiResourceWithProps)));
                 this.SetFeatureData(global::Blueprint.Model.WellKnownFeatureData.DefaultFailureOutcomes);
                 this.SetFeatureData(global::Blueprint.Model.WellKnownFeatureData.HttpGet);
-                this.SetFeatureData(new global::Blueprint.Model.OperationPropertyOwnershipFeatureData(global::System.Collections.Immutable.ImmutableArray.Create(new global::Blueprint.Model.OperationPropertyBindingEntry("Id", global::Blueprint.Model.PropertyBindingSource.Query, "id", "string"))));
+                this.SetFeatureData(new global::Blueprint.Model.OperationPropertyOwnershipFeatureData(global::System.Collections.Immutable.ImmutableArray.Create(new global::Blueprint.Model.OperationPropertyBindingEntry("Id", global::Blueprint.Model.PropertyBindingSource.Query, "id", "string", false))));
                 this.SetFeatureData(global::Blueprint.Model.WellKnownFeatureData.DefaultFailureResponsesFeatureData);
                 this.SetFeatureData(global::Blueprint.Model.WellKnownFeatureData.DefaultSerializerContextCoverageFeatureData);
                 this.SetFeatureData(new global::Blueprint.Model.OperationDiscoveryFeatureData("operation", "TestNamespace", "OperationA"));

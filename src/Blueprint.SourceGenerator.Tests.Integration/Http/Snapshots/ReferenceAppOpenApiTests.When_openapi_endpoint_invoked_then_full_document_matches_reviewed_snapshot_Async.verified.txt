@@ -63,11 +63,13 @@
                   },
                   "htmlSource": {
                     "type": "string",
+                    "nullable": true,
                     "description": "The HTML source content of the template.",
                     "maxLength": 50000
                   },
                   "plainTextSource": {
                     "type": "string",
+                    "nullable": true,
                     "description": "The plain text fallback content of the template.",
                     "maxLength": 10000
                   }
@@ -359,11 +361,13 @@
                   },
                   "htmlSource": {
                     "type": "string",
+                    "nullable": true,
                     "description": "The updated HTML source content.",
                     "maxLength": 50000
                   },
                   "plainTextSource": {
                     "type": "string",
+                    "nullable": true,
                     "description": "The updated plain text content.",
                     "maxLength": 10000
                   }
