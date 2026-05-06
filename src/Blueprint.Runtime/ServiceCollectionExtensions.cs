@@ -105,4 +105,30 @@ public sealed class BlueprintServiceBuilder
         this.Services.AddSingleton<HttpOperationResultExecutor, T>();
         return this;
     }
+
+    /// <summary>
+    /// Registers a background task scheduler that holds enqueued tasks until pipeline flush.
+    /// The scheduler is registered as scoped so each operation gets its own task queue.
+    /// </summary>
+    /// <typeparam name="T">The <see cref="Blueprint.Tasks.IBackgroundTaskScheduler"/> implementation type.</typeparam>
+    /// <returns>This builder for chaining.</returns>
+    public BlueprintServiceBuilder AddBackgroundTaskScheduler<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] T>()
+        where T : class, Blueprint.Tasks.IBackgroundTaskScheduler
+    {
+        this.Services.AddScoped<Blueprint.Tasks.IBackgroundTaskScheduler, T>();
+        return this;
+    }
+
+    /// <summary>
+    /// Registers a unit-of-work implementation for persistence coordination.
+    /// The UoW is registered as scoped so each operation tracks its own changes.
+    /// </summary>
+    /// <typeparam name="T">The <see cref="Blueprint.Persistence.IUnitOfWork"/> implementation type.</typeparam>
+    /// <returns>This builder for chaining.</returns>
+    public BlueprintServiceBuilder AddUnitOfWork<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] T>()
+        where T : class, Blueprint.Persistence.IUnitOfWork
+    {
+        this.Services.AddScoped<Blueprint.Persistence.IUnitOfWork, T>();
+        return this;
+    }
 }

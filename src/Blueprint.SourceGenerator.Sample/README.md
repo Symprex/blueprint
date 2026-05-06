@@ -43,6 +43,7 @@ A background task (`SendTemplateSharedNotificationTask`) demonstrates non-HTTP e
 - **Sensitive properties** — `[Sensitive]` on `CreateTemplateCommand.HtmlSource/PlainTextSource` for audit redaction hints
 - **General auditing** — `IAuditSink` for cross-operation audit recording with structured activity events
 - **Audit opt-out** — `[DoNotAudit]` on `SearchTemplatesQuery` to suppress noisy read auditing
+- **Background task scheduling** — `IBackgroundTaskScheduler` with `Enqueue()` in handler and pipeline-managed flush
 - **Persistence opt-out** — `[DoNotSaveChanges]` on `PreviewTemplateCommand` to suppress UoW commit for read-only commands
 - **Performance metrics opt-out** — `[DoNotRecordPerformanceMetrics]` on `GetTemplateVersionsQuery` for trace suppression
 - **Discriminated union results** — `Results<OkResult<T>, NotFoundResult<T>>` on `GetTemplateQuery` maps to 200/404 via generated pipeline

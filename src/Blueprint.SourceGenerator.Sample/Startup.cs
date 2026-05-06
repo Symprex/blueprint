@@ -21,6 +21,7 @@ public class Startup
             blueprint.AddAuditSink<LoggingAuditSink>();
             blueprint.AddResourceEventAuditSink<LoggingResourceEventAuditSink>();
             blueprint.AddResourceAuthorizationProvider<SampleResourceAuthorizationProvider>();
+            blueprint.AddBackgroundTaskScheduler<InProcessBackgroundTaskScheduler>();
         });
     }
 

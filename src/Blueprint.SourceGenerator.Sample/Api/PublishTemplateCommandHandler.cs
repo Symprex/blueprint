@@ -1,6 +1,7 @@
 using Blueprint.Model;
 using Blueprint.Runtime.Exec;
 using Blueprint.SourceGenerator.Sample.Contract.Api;
+using Blueprint.Tasks;
 
 namespace Blueprint.SourceGenerator.Sample.Api;
 
@@ -8,8 +9,9 @@ namespace Blueprint.SourceGenerator.Sample.Api;
 /// Handles template publish commands. Returns <see cref="ConflictResult{T}"/> (409) when the
 /// template is already published, or a <c>template.published</c> resource-event result (201)
 /// on first publish — demonstrating the conflict/success discriminated union pattern.
+/// Also demonstrates enqueueing a background task via <see cref="IBackgroundTaskScheduler"/>.
 /// </summary>
-public sealed class PublishTemplateCommandHandler(TemplateStore store)
+public sealed class PublishTemplateCommandHandler(TemplateStore store, IBackgroundTaskScheduler taskScheduler)
 {
     /// <summary>
     /// Publishes the specified template, or signals a conflict when already published.
@@ -27,6 +29,9 @@ public sealed class PublishTemplateCommandHandler(TemplateStore store)
         }
 
         store.MarkPublished(command.Id);
+
+        // Enqueue a notification task — dispatched by the pipeline after successful execution
+        taskScheduler.Enqueue(new SendTemplateSharedNotificationTask { TemplateId = command.Id });
 
         return (ResourceEventResult<TemplateApiResource>)new TemplateResourceEvents.Published(template);
     }
