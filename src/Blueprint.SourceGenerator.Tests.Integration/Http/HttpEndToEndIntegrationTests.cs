@@ -228,6 +228,42 @@ public class HttpEndToEndIntegrationTests
         response.Body.Should().Contain("\"status\":500");
     }
 
+    [Fact]
+    public async Task When_GET_with_FromHeader_property_then_header_value_is_bound()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/e2e/header-binding");
+        endpoint.Should().NotBeNull();
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Headers["X-Tenant-Id"] = "acme-corp";
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        response.Body.Should().Contain("tenant:acme-corp");
+    }
+
+    [Fact]
+    public async Task When_GET_with_FromCookie_property_then_cookie_value_is_bound()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/e2e/cookie-binding");
+        endpoint.Should().NotBeNull();
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Headers["Cookie"] = "session_token=abc123xyz";
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        response.Body.Should().Contain("session:abc123xyz");
+    }
+
     private static async Task<TestHttpResponse> InvokeEndpointAsync(
         RouteEndpoint endpoint,
         IServiceProvider serviceProvider,
@@ -432,5 +468,43 @@ public partial class E2EUnhandledExceptionQuery : IQuery<string>
     public static Task<string> HandleAsync(E2EUnhandledExceptionQuery query)
     {
         throw new InvalidOperationException("Something went wrong");
+    }
+}
+
+/// <summary>
+/// Query with a <see cref="Blueprint.Model.Attributes.FromHeaderAttribute"/> property to verify HTTP header binding.
+/// </summary>
+[Blueprint.Model.Attributes.RootLink("/e2e/header-binding")]
+public partial class E2EHeaderBindingQuery : IQuery<string>
+{
+    /// <summary>Bound from X-Tenant-Id request header.</summary>
+    [Blueprint.Model.Attributes.FromHeader("X-Tenant-Id")]
+    public string? TenantId { get; set; }
+
+    /// <summary>Echoes the header-bound TenantId value.</summary>
+    /// <param name="query">The query with the header-bound property.</param>
+    /// <returns>The TenantId value read from the header.</returns>
+    public static Task<string> HandleAsync(E2EHeaderBindingQuery query)
+    {
+        return Task.FromResult($"tenant:{query.TenantId}");
+    }
+}
+
+/// <summary>
+/// Query with a <see cref="Blueprint.Model.Attributes.FromCookieAttribute"/> property to verify HTTP cookie binding.
+/// </summary>
+[Blueprint.Model.Attributes.RootLink("/e2e/cookie-binding")]
+public partial class E2ECookieBindingQuery : IQuery<string>
+{
+    /// <summary>Bound from session_token cookie.</summary>
+    [Blueprint.Model.Attributes.FromCookie("session_token")]
+    public string? SessionToken { get; set; }
+
+    /// <summary>Echoes the cookie-bound session token value.</summary>
+    /// <param name="query">The query with the cookie-bound property.</param>
+    /// <returns>The SessionToken value read from the cookie.</returns>
+    public static Task<string> HandleAsync(E2ECookieBindingQuery query)
+    {
+        return Task.FromResult($"session:{query.SessionToken}");
     }
 }
