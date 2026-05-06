@@ -92,6 +92,60 @@ At runtime, `BlueprintApp.GetOperationsForHost("custom-host")` returns operation
 - **Trace suppression:** `[DoNotRecordPerformanceMetrics]` (from `Blueprint.Auditing`) on an operation class suppresses Activity/trace span creation for noisy or polling endpoints.
 - **Generated audit events:** The generated pipeline emits structured `blueprint.audit.started`, `blueprint.audit.succeeded`, and `blueprint.audit.failed` activity events with `blueprint.operation.type` tags when an `IAuditSink` is registered. Trace correlation is inherent via the enclosing Activity.
 
+## Background tasks contract
+
+Blueprint supports deferred task execution through `IBackgroundTaskScheduler`:
+
+1. **Declare a task operation:** Implement `ICommand<T>` (or `ICommand<NoResultOperationResult>`) and also implement `IBackgroundTask` from `Blueprint.Tasks`. Mark with `[TaskHost]` to exclude from HTTP mapping and include in the task host.
+2. **Enqueue from a handler:** Inject `IBackgroundTaskScheduler` as a handler DI parameter, call `scheduler.Enqueue(new MyTask { ... })`.
+3. **Generated flush:** The `BackgroundTaskFlushModule` runs at Order=1000 in PostExecution — after UoW save and audit. It calls `scheduler.FlushAsync()` only on handler success.
+4. **Task host dispatch:** `BlueprintApp.GetOperationsForHost("tasks")` returns all task-marked operations. The executor finds and runs the matching pipeline when a scheduled task arrives.
+
+### Implementation pattern
+
+```csharp
+// In startup
+blueprint.AddBackgroundTaskScheduler<InProcessBackgroundTaskScheduler>();
+// Or for production: blueprint.AddBackgroundTaskScheduler<HangfireTaskScheduler>();
+
+// In a handler that triggers async work
+public static async Task<ResourceEventResult<Template>> HandleAsync(
+    PublishTemplateCommand command,
+    IBackgroundTaskScheduler scheduler)
+{
+    var result = /* do work */;
+    scheduler.Enqueue(new SendTemplateSharedNotificationTask { TemplateId = command.Id });
+    return result;
+}
+```
+
+The flush-on-success semantic guarantees tasks are only dispatched when the command succeeds and after the unit-of-work is committed.
+
+## Persistence contract (Unit of Work)
+
+Blueprint's `UnitOfWorkModule` generates a `SaveChangesAsync` call for ICommand operations at Order=900 in PostExecution:
+
+- **Only commands:** Queries never trigger save. `[DoNotSaveChanges]` on a non-command triggers diagnostic `BPP001`.
+- **Only on success:** Save only runs when `handlerResult.WasSuccessful` is true.
+- **Optional DI:** If no `IUnitOfWork` is registered, the step is skipped gracefully.
+- **DI scope owns disposal:** The unit-of-work instance is disposed by the DI container scope, not by Blueprint. Register as scoped.
+- **Opt-out:** `[DoNotSaveChanges]` on a command suppresses the generated save call.
+
+### Implementation pattern
+
+```csharp
+// In startup — EF Core example
+blueprint.AddUnitOfWork<EfCoreUnitOfWork>();
+
+// IUnitOfWork implementation
+public sealed class EfCoreUnitOfWork(AppDbContext db) : IUnitOfWork
+{
+    public Task SaveChangesAsync(CancellationToken ct) => db.SaveChangesAsync(ct);
+}
+```
+
+Pipeline order: Handler → UoW Save (900) → Audit (950) → Background Task Flush (1000). This ensures committed state is audited and tasks reference committed data.
+
 ## Result contract
 
 - The first public semantic-union surface is `Results<T1, T2>` in `Blueprint.Model`.
