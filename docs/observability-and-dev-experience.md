@@ -147,6 +147,16 @@ The generated audit pipeline emits `System.Diagnostics.Activity` events with `bl
 
 Trace correlation is inherent: events are emitted on the enclosing `Activity`, so they carry the parent trace ID and span ID automatically. `IAuditSink` implementations can read `context.Activity?.TraceId` and `context.Activity?.SpanId` to persist alongside the audit record for cross-system correlation.
 
+### Exception handling and HTTP status translation
+
+The exception handling pipeline has two observable layers:
+
+1. **`OperationExecutorShell`** (`src\Blueprint.Runtime\Exec\OperationExecutorShell.cs`) catches unhandled exceptions from the generated pipeline and wraps them in `UnhandledExceptionResult`. For `ApiException` subclasses with `HttpStatus < 500`, the shell logs at `Information` level (client errors) and does not set `ActivityStatusCode.Error` on the span. For server errors (>= 500) or non-`ApiException` exceptions, it logs at `Error` level, records the exception on the activity, and sets the span status to `Error`.
+
+2. **`HttpOperationResultExecutor`** (`src\Blueprint.Runtime\Http\HttpOperationResultExecutor.cs`) translates `UnhandledExceptionResult` to an HTTP response. It checks whether the underlying exception is `ApiException` and respects its `HttpStatus`. Client errors (< 500) expose the exception message in the problem detail response; server errors (>= 500) hide the message unless `BlueprintHttpOptions.ExposeExceptionDetailsInErrorResponses` is true.
+
+This two-layer design means trace spans naturally carry the exception info (with correct severity) while the HTTP response controls what the client sees. OTel spans show the full picture; client responses show only safe details.
+
 ## Do not hide complexity
 
 Large API surfaces become dangerous when the only way to understand them is to read source and mentally simulate multiple generators.
