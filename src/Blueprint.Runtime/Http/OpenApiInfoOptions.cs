@@ -18,4 +18,23 @@ public sealed class OpenApiInfoOptions
     /// When <see langword="null"/> or empty the <c>description</c> property is omitted from the rendered output.
     /// </summary>
     public string? Description { get; set; }
+
+    /// <summary>
+    /// Gets the list of server objects to include in the OpenAPI <c>servers</c> array.
+    /// When empty, the <c>servers</c> section is omitted. Servers are rendered in list order.
+    /// </summary>
+    public List<OpenApiServerEntry> Servers { get; } = [];
+}
+
+/// <summary>
+/// Represents a single entry in the OpenAPI <c>servers</c> array, providing a base URL
+/// and optional description for client code generation and API exploration.
+/// </summary>
+public sealed class OpenApiServerEntry
+{
+    /// <summary>Gets or sets the server URL (e.g. <c>"https://api.example.com/v1"</c>).</summary>
+    public required string Url { get; set; }
+
+    /// <summary>Gets or sets an optional human-readable description for this server.</summary>
+    public string? Description { get; set; }
 }

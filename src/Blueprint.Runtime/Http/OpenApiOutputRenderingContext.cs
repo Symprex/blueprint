@@ -86,6 +86,7 @@ public sealed record OpenApiOutputRenderingContext(
 
         writer.WriteString("openapi", OpenApiVersion);
         WriteInfo(writer, infoOptions);
+        WriteServers(writer, infoOptions.Servers);
         WritePaths(writer, document.Paths);
         WriteComponents(writer, document.SchemaComponents, schemaProcessorOptions, document.Paths);
         WriteDocumentTags(writer, document.Paths);
@@ -106,6 +107,32 @@ public sealed record OpenApiOutputRenderingContext(
         }
 
         writer.WriteEndObject();
+    }
+
+    private static void WriteServers(Utf8JsonWriter writer, List<OpenApiServerEntry> servers)
+    {
+        if (servers.Count == 0)
+        {
+            return;
+        }
+
+        writer.WritePropertyName("servers");
+        writer.WriteStartArray();
+
+        foreach (var server in servers)
+        {
+            writer.WriteStartObject();
+            writer.WriteString("url", server.Url);
+
+            if (!string.IsNullOrEmpty(server.Description))
+            {
+                writer.WriteString("description", server.Description);
+            }
+
+            writer.WriteEndObject();
+        }
+
+        writer.WriteEndArray();
     }
 
     private static void WritePaths(Utf8JsonWriter writer, ImmutableArray<OpenApiPathItemModel> paths)

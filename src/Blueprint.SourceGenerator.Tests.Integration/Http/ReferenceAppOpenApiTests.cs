@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Blueprint.Runtime.Http;
 using Blueprint.SourceGenerator.Sample;
 using Blueprint.SourceGenerator.Sample.Api;
 using FluentAssertions;
@@ -304,10 +305,43 @@ public class ReferenceAppOpenApiTests
             "properties with [Required] should not emit nullable even if CLR type is nullable");
     }
 
-    private static async Task<(string Json, int StatusCode)> InvokeOpenApiEndpointAsync()
+    [Fact]
+    public async Task When_servers_configured_then_openapi_renders_servers_array()
+    {
+        var (json, _) = await InvokeOpenApiEndpointAsync(options =>
+        {
+            options.Servers.Add(new OpenApiServerEntry { Url = "https://api.example.com/v1", Description = "Production" });
+            options.Servers.Add(new OpenApiServerEntry { Url = "https://staging.example.com/v1" });
+        });
+
+        using var doc = JsonDocument.Parse(json);
+
+        doc.RootElement.TryGetProperty("servers", out var servers).Should().BeTrue(
+            "servers section should be present when servers are configured");
+
+        var serverArray = servers.EnumerateArray().ToArray();
+        serverArray.Should().HaveCount(2);
+        serverArray[0].GetProperty("url").GetString().Should().Be("https://api.example.com/v1");
+        serverArray[0].GetProperty("description").GetString().Should().Be("Production");
+        serverArray[1].GetProperty("url").GetString().Should().Be("https://staging.example.com/v1");
+        serverArray[1].TryGetProperty("description", out _).Should().BeFalse(
+            "description should be omitted when not set");
+    }
+
+    [Fact]
+    public async Task When_no_servers_configured_then_openapi_omits_servers_section()
+    {
+        var (json, _) = await InvokeOpenApiEndpointAsync();
+        using var doc = JsonDocument.Parse(json);
+
+        doc.RootElement.TryGetProperty("servers", out _).Should().BeFalse(
+            "servers section should be absent when no servers are configured");
+    }
+
+    private static async Task<(string Json, int StatusCode)> InvokeOpenApiEndpointAsync(Action<OpenApiInfoOptions>? configureOpenApi = null)
     {
         var endpoints = CreateEndpoints();
-        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/", configureOpenApi: configureOpenApi);
 
         var endpoint = FindEndpoint(endpoints, "api/.blueprint/openapi.json", "GET");
         endpoint.Should().NotBeNull("the OpenAPI endpoint should be registered");
