@@ -338,6 +338,27 @@ public class ReferenceAppOpenApiTests
             "servers section should be absent when no servers are configured");
     }
 
+    [Fact]
+    public async Task When_operation_returns_array_type_then_openapi_renders_array_schema_with_items_ref()
+    {
+        var (json, _) = await InvokeOpenApiEndpointAsync();
+        using var doc = JsonDocument.Parse(json);
+
+        // GetTemplatesQuery returns IQuery<TemplateApiResource[]> via GET /templates
+        var paths = doc.RootElement.GetProperty("paths");
+        var templatesGet = paths.GetProperty("/templates").GetProperty("get");
+        var responses = templatesGet.GetProperty("responses");
+
+        responses.TryGetProperty("200", out var okResponse).Should().BeTrue(
+            "array return types should produce a 200 response");
+        var schema = okResponse.GetProperty("content").GetProperty("application/json").GetProperty("schema");
+        schema.GetProperty("type").GetString().Should().Be("array");
+        schema.TryGetProperty("items", out var items).Should().BeTrue(
+            "array schema should have an items property with a $ref to the element type");
+        items.GetProperty("$ref").GetString().Should().Contain("TemplateApiResource",
+            "items $ref should reference the element type schema component");
+    }
+
     private static async Task<(string Json, int StatusCode)> InvokeOpenApiEndpointAsync(Action<OpenApiInfoOptions>? configureOpenApi = null)
     {
         var endpoints = CreateEndpoints();

@@ -72,14 +72,32 @@ public sealed record OpenApiResponseObjectRenderingContext(
         Dictionary<string, OpenApiSchemaComponentModel> componentsByBodyTypeName)
     {
         var schemaComponents = response.SchemaReferences
-            .Where(reference => componentsByBodyTypeName.ContainsKey(reference.BodyTypeName))
-            .Select(reference => new OpenApiResponseContentSchemaComponent(reference.BodyTypeName, componentsByBodyTypeName[reference.BodyTypeName]))
+            .Select(reference => TryCreateContentSchemaComponent(reference, componentsByBodyTypeName))
+            .OfType<OpenApiResponseContentSchemaComponent>()
             .ToImmutableArray();
         var discriminator = TryCreateResourceEventDiscriminator(operation, response.Response, schemaComponents);
 
         return schemaComponents.IsEmpty
             ? ImmutableArray<OpenApiResponseContentModel>.Empty
             : [new OpenApiResponseContentModel(JsonMediaType, schemaComponents, discriminator)];
+    }
+
+    private static OpenApiResponseContentSchemaComponent? TryCreateContentSchemaComponent(
+        OpenApiResponseSchemaReference reference,
+        Dictionary<string, OpenApiSchemaComponentModel> componentsByBodyTypeName)
+    {
+        if (reference.IsArrayWrapper)
+        {
+            // Array wrappers resolve via the element type's component.
+            var elementTypeName = reference.Schema.BodyTypeName;
+            return componentsByBodyTypeName.TryGetValue(elementTypeName, out var elementComponent)
+                ? new OpenApiResponseContentSchemaComponent(reference.BodyTypeName, elementComponent, IsArrayWrapper: true)
+                : null;
+        }
+
+        return componentsByBodyTypeName.TryGetValue(reference.BodyTypeName, out var component)
+            ? new OpenApiResponseContentSchemaComponent(reference.BodyTypeName, component)
+            : null;
     }
 
     private static OpenApiResponseDiscriminatorModel? TryCreateResourceEventDiscriminator(
@@ -170,9 +188,13 @@ public sealed record OpenApiResponseDiscriminatorCaseModel(
 
 /// <summary>
 /// Links a rendered response-content entry to the reusable schema component for one covered body type.
+/// When the body type is an array wrapper, the component references the element type and the rendering
+/// layer emits <c>type: array, items: { $ref: ... }</c> instead of a direct <c>$ref</c>.
 /// </summary>
 /// <param name="BodyTypeName">The stable CLR body-type name from the response metadata.</param>
-/// <param name="Component">The reusable rendered schema component for the body payload.</param>
+/// <param name="Component">The reusable rendered schema component for the body payload (element type for arrays).</param>
+/// <param name="IsArrayWrapper">Whether this content entry wraps the element schema in an array.</param>
 public sealed record OpenApiResponseContentSchemaComponent(
     string BodyTypeName,
-    OpenApiSchemaComponentModel Component);
+    OpenApiSchemaComponentModel Component,
+    bool IsArrayWrapper = false);

@@ -16,6 +16,7 @@ public class AppModelOpenApiDocumentRenderingContextTests
         context.Paths.Select(static path => path.UrlFormat).Should().Contain("/openapi/http-response-metadata");
         context.SchemaComponents.Select(static component => component.BodyTypeName).Should().Equal(
             "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.LinkTestApiResource",
+            "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.MappedLinkApiResource",
             "Microsoft.AspNetCore.Mvc.ProblemDetails",
             "Microsoft.AspNetCore.Mvc.ValidationProblemDetails",
             "string");

@@ -51,11 +51,35 @@ public sealed record OpenApiResponseSchemaReferenceProjectionContext(
     {
         var schemaReferences = response.BodyTypeNames
             .Distinct(StringComparer.Ordinal)
-            .Where(schemasByBodyTypeName.ContainsKey)
-            .Select(bodyTypeName => new OpenApiResponseSchemaReference(bodyTypeName, schemasByBodyTypeName[bodyTypeName]))
+            .Select(bodyTypeName => TryCreateSchemaReference(bodyTypeName, schemasByBodyTypeName))
+            .OfType<OpenApiResponseSchemaReference>()
             .ToImmutableArray();
 
         return new OpenApiResponseSchemaReferenceResponseContext(response, schemaReferences);
+    }
+
+    private static OpenApiResponseSchemaReference? TryCreateSchemaReference(
+        string bodyTypeName,
+        Dictionary<string, OpenApiSchemaModel> schemasByBodyTypeName)
+    {
+        // Array body types (e.g. "Namespace.Type[]") resolve to the element type's schema with array wrapping.
+        // Check this first so array types render as inline "type: array, items: { $ref: ... }" rather than
+        // referencing an empty array schema component.
+        if (bodyTypeName.EndsWith("[]", StringComparison.Ordinal))
+        {
+            var elementTypeName = bodyTypeName[..^2];
+            if (schemasByBodyTypeName.TryGetValue(elementTypeName, out var elementSchema))
+            {
+                return new OpenApiResponseSchemaReference(bodyTypeName, elementSchema, IsArrayWrapper: true);
+            }
+        }
+
+        if (schemasByBodyTypeName.TryGetValue(bodyTypeName, out var schema))
+        {
+            return new OpenApiResponseSchemaReference(bodyTypeName, schema);
+        }
+
+        return null;
     }
 }
 
@@ -79,9 +103,13 @@ public sealed record OpenApiResponseSchemaReferenceResponseContext(
 
 /// <summary>
 /// Links one response body payload name to the covered schema model that was projected for it.
+/// When the body type is an array (e.g. <c>Namespace.Type[]</c>), the reference wraps the element type's schema
+/// and signals array-wrapping so the rendering layer emits <c>type: array, items: { $ref: ... }</c>.
 /// </summary>
 /// <param name="BodyTypeName">The stable CLR body-type name from the response metadata.</param>
-/// <param name="Schema">The covered schema model resolved for the body payload.</param>
+/// <param name="Schema">The covered schema model resolved for the body payload (element type for arrays).</param>
+/// <param name="IsArrayWrapper">Whether this reference represents an array wrapping the element schema.</param>
 public sealed record OpenApiResponseSchemaReference(
     string BodyTypeName,
-    OpenApiSchemaModel Schema);
+    OpenApiSchemaModel Schema,
+    bool IsArrayWrapper = false);

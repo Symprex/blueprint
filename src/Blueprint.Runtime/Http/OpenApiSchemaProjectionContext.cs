@@ -39,9 +39,21 @@ public sealed record OpenApiSchemaProjectionContext(
             .Select(static bodyType => new KeyValuePair<string, Type>(FormatTypeName(bodyType), bodyType))
             .ToDictionary(static pair => pair.Key, static pair => pair.Value, StringComparer.Ordinal);
 
-        var coveredBodyTypeNames = document.Operations
+        var rawBodyTypeNames = document.Operations
             .Where(static operation => operation.IsSerializerContextCoverageSatisfied)
             .SelectMany(static operation => operation.RequiredSerializerContextBodyTypeNames)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        // For array body types (e.g. "Namespace.Type[]"), also include the element type so it can be rendered
+        // as a reusable schema component referenced by "type: array, items: { $ref: ... }".
+        var elementTypeNames = rawBodyTypeNames
+            .Where(static name => name.EndsWith("[]", StringComparison.Ordinal))
+            .Select(static name => name[..^2])
+            .Where(elementName => !rawBodyTypeNames.Contains(elementName, StringComparer.Ordinal));
+
+        var coveredBodyTypeNames = rawBodyTypeNames
+            .Concat(elementTypeNames)
             .Distinct(StringComparer.Ordinal)
             .OrderBy(static bodyTypeName => bodyTypeName, StringComparer.Ordinal);
 

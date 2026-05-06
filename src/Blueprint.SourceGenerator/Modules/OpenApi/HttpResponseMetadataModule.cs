@@ -105,6 +105,15 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
         }
 
         var flattenedResults = OperationResultContractHelper.GetFlattenedSemanticResultTypes(declaredContractType, operationResultType);
+
+        // When the declared contract type is a plain CLR payload (not a semantic result type and not a Results union),
+        // treat it as an implicit OkResult<T> — a 200 response with the payload type as the body.
+        if (flattenedResults.Length == 0 && !OperationResultContractHelper.TryGetResultsUnionMembers(declaredContractType, out _))
+        {
+            var bodyTypeName = GetTypeName(declaredContractType);
+            return [CreateResponse(200, true, bodyTypeName, ImmutableArray.Create(bodyTypeName))];
+        }
+
         if (flattenedResults.Length == 0)
         {
             return [];

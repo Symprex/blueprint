@@ -476,8 +476,22 @@ public sealed record OpenApiOutputRenderingContext(
         var schemaComponents = content.SchemaComponents;
         if (schemaComponents.Length == 1)
         {
+            var component = schemaComponents[0];
             writer.WriteStartObject();
-            writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(schemaComponents[0].BodyTypeName)}");
+
+            if (component.IsArrayWrapper)
+            {
+                writer.WriteString("type", "array");
+                writer.WritePropertyName("items");
+                writer.WriteStartObject();
+                writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(component.Component.BodyTypeName)}");
+                writer.WriteEndObject();
+            }
+            else
+            {
+                writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(component.BodyTypeName)}");
+            }
+
             writer.WriteEndObject();
         }
         else if (schemaComponents.Length > 1)
@@ -489,7 +503,20 @@ public sealed record OpenApiOutputRenderingContext(
             foreach (var component in schemaComponents)
             {
                 writer.WriteStartObject();
-                writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(component.BodyTypeName)}");
+
+                if (component.IsArrayWrapper)
+                {
+                    writer.WriteString("type", "array");
+                    writer.WritePropertyName("items");
+                    writer.WriteStartObject();
+                    writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(component.Component.BodyTypeName)}");
+                    writer.WriteEndObject();
+                }
+                else
+                {
+                    writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(component.BodyTypeName)}");
+                }
+
                 writer.WriteEndObject();
             }
 
@@ -576,10 +603,15 @@ public sealed record OpenApiOutputRenderingContext(
 
         if (!schemaComponents.IsEmpty)
         {
+            // Array-typed schemas are rendered inline at the response level as "type: array, items: { $ref: ... }"
+            // rather than as standalone schema components.
+            var objectSchemaComponents = schemaComponents
+                .Where(static c => !string.Equals(c.Type, "array", StringComparison.Ordinal) || !c.Properties.IsEmpty);
+
             writer.WritePropertyName("schemas");
             writer.WriteStartObject();
 
-            foreach (var component in schemaComponents)
+            foreach (var component in objectSchemaComponents)
             {
                 WriteSchemaComponent(writer, ProcessSchemaComponent(component, schemaProcessorOptions));
             }
@@ -719,8 +751,11 @@ public sealed record OpenApiOutputRenderingContext(
             403 => "Forbidden",
             404 => "Not Found",
             409 => "Conflict",
+            415 => "Unsupported Media Type",
             422 => "Unprocessable Entity",
+            429 => "Too Many Requests",
             500 => "Internal Server Error",
+            503 => "Service Unavailable",
             _ => statusCode.ToString(),
         };
     }
