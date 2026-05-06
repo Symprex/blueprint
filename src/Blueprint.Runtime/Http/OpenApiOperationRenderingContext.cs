@@ -57,6 +57,9 @@ public sealed record OpenApiOperationRenderingContext(
 
         var isDeprecated = operation.Operation.OperationType.IsDefined(typeof(ObsoleteAttribute), inherit: false);
 
+        var requiresAuthentication = operation.Operation.TryGetFeatureData<OperationAuthenticationFeatureData>(out var authData)
+            && authData.Requirement == AuthenticationRequirement.Authenticated;
+
         return new OpenApiOperationModel(
             operation.Operation.Name,
             operation.Operation.OperationType.FullName ?? operation.Operation.OperationType.Name,
@@ -69,6 +72,7 @@ public sealed record OpenApiOperationRenderingContext(
         {
             Summary = operationDescription,
             Deprecated = isDeprecated,
+            RequiresAuthentication = requiresAuthentication,
         };
     }
 
@@ -302,4 +306,7 @@ public sealed record OpenApiOperationModel(
 
     /// <summary>Gets whether this operation is deprecated in the OpenAPI output (maps from <see cref="ObsoleteAttribute"/>).</summary>
     public bool Deprecated { get; init; }
+
+    /// <summary>Gets whether this operation requires authentication (maps from <see cref="AuthenticationRequirement.Authenticated"/>).</summary>
+    public bool RequiresAuthentication { get; init; }
 }

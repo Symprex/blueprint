@@ -87,7 +87,7 @@ public sealed record OpenApiOutputRenderingContext(
         writer.WriteString("openapi", OpenApiVersion);
         WriteInfo(writer, infoOptions);
         WritePaths(writer, document.Paths);
-        WriteComponents(writer, document.SchemaComponents, schemaProcessorOptions);
+        WriteComponents(writer, document.SchemaComponents, schemaProcessorOptions, document.Paths);
         WriteDocumentTags(writer, document.Paths);
 
         writer.WriteEndObject();
@@ -163,6 +163,18 @@ public sealed record OpenApiOutputRenderingContext(
             if (primaryOperation.Deprecated)
             {
                 writer.WriteBoolean("deprecated", true);
+            }
+
+            if (primaryOperation.RequiresAuthentication)
+            {
+                writer.WritePropertyName("security");
+                writer.WriteStartArray();
+                writer.WriteStartObject();
+                writer.WritePropertyName("bearerAuth");
+                writer.WriteStartArray();
+                writer.WriteEndArray();
+                writer.WriteEndObject();
+                writer.WriteEndArray();
             }
         }
         else
@@ -509,9 +521,15 @@ public sealed record OpenApiOutputRenderingContext(
     private static void WriteComponents(
         Utf8JsonWriter writer,
         ImmutableArray<OpenApiSchemaComponentModel> schemaComponents,
-        OpenApiSchemaProcessorOptions schemaProcessorOptions)
+        OpenApiSchemaProcessorOptions schemaProcessorOptions,
+        ImmutableArray<OpenApiPathItemModel> paths)
     {
-        if (schemaComponents.IsEmpty)
+        var hasAuthenticatedOperations = paths
+            .SelectMany(static p => p.Methods)
+            .SelectMany(static m => m.Operations)
+            .Any(static op => op.RequiresAuthentication);
+
+        if (schemaComponents.IsEmpty && !hasAuthenticatedOperations)
         {
             return;
         }
@@ -519,15 +537,32 @@ public sealed record OpenApiOutputRenderingContext(
         writer.WritePropertyName("components");
         writer.WriteStartObject();
 
-        writer.WritePropertyName("schemas");
-        writer.WriteStartObject();
-
-        foreach (var component in schemaComponents)
+        if (!schemaComponents.IsEmpty)
         {
-            WriteSchemaComponent(writer, ProcessSchemaComponent(component, schemaProcessorOptions));
+            writer.WritePropertyName("schemas");
+            writer.WriteStartObject();
+
+            foreach (var component in schemaComponents)
+            {
+                WriteSchemaComponent(writer, ProcessSchemaComponent(component, schemaProcessorOptions));
+            }
+
+            writer.WriteEndObject();
         }
 
-        writer.WriteEndObject();
+        if (hasAuthenticatedOperations)
+        {
+            writer.WritePropertyName("securitySchemes");
+            writer.WriteStartObject();
+            writer.WritePropertyName("bearerAuth");
+            writer.WriteStartObject();
+            writer.WriteString("type", "http");
+            writer.WriteString("scheme", "bearer");
+            writer.WriteString("bearerFormat", "JWT");
+            writer.WriteEndObject();
+            writer.WriteEndObject();
+        }
+
         writer.WriteEndObject();
     }
 

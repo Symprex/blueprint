@@ -245,6 +245,38 @@ public class ReferenceAppOpenApiTests
         enumArray.Should().BeEquivalentTo(["Name", "CreatedDate", "LastModified"]);
     }
 
+    [Fact]
+    public async Task When_operation_requires_authentication_then_openapi_renders_security_requirement()
+    {
+        var (json, _) = await InvokeOpenApiEndpointAsync();
+        using var doc = JsonDocument.Parse(json);
+
+        // CreateTemplateCommand requires authentication (MustBeAuthenticated)
+        var createPath = doc.RootElement.GetProperty("paths").GetProperty("/templates");
+        var postOp = createPath.GetProperty("post");
+
+        postOp.TryGetProperty("security", out var security).Should().BeTrue(
+            "authenticated operations should emit a security requirement");
+        var scheme = security.EnumerateArray().First();
+        scheme.TryGetProperty("bearerAuth", out _).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task When_operations_require_authentication_then_components_include_security_scheme()
+    {
+        var (json, _) = await InvokeOpenApiEndpointAsync();
+        using var doc = JsonDocument.Parse(json);
+
+        var components = doc.RootElement.GetProperty("components");
+        components.TryGetProperty("securitySchemes", out var schemes).Should().BeTrue(
+            "components should include securitySchemes when authenticated operations exist");
+
+        var bearerAuth = schemes.GetProperty("bearerAuth");
+        bearerAuth.GetProperty("type").GetString().Should().Be("http");
+        bearerAuth.GetProperty("scheme").GetString().Should().Be("bearer");
+        bearerAuth.GetProperty("bearerFormat").GetString().Should().Be("JWT");
+    }
+
     private static async Task<(string Json, int StatusCode)> InvokeOpenApiEndpointAsync()
     {
         var endpoints = CreateEndpoints();
