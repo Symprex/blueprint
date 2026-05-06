@@ -17,7 +17,9 @@ public class Startup
         services.AddSingleton<TemplateStore>();
         services.AddSingleton<SampleBlueprintApp>();
         services.AddSingleton<SampleBlueprintAppExecutor>();
+        services.AddSingleton<Blueprint.Auditing.IAuditSink, LoggingAuditSink>();
         services.AddSingleton<Blueprint.Auditing.IResourceEventAuditSink, LoggingResourceEventAuditSink>();
+        services.AddSingleton<Blueprint.Authorization.IResourceAuthorizationProvider, SampleResourceAuthorizationProvider>();
     }
 
     /// <summary>
