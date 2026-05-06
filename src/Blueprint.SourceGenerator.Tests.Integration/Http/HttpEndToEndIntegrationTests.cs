@@ -140,6 +140,61 @@ public class HttpEndToEndIntegrationTests
         response.Body.Should().Contain("Name");
     }
 
+    [Fact]
+    public async Task When_GET_resource_protected_with_authenticated_user_and_no_provider_then_returns_200()
+    {
+        // No IResourceAuthorizationProvider registered → permissive (authorization check skipped)
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/e2e/resource-protected");
+        endpoint.Should().NotBeNull();
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.User = new System.Security.Claims.ClaimsPrincipal(
+                new System.Security.Claims.ClaimsIdentity("TestAuth"));
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+    }
+
+    [Fact]
+    public async Task When_GET_resource_protected_with_authenticated_user_and_provider_denies_then_returns_403()
+    {
+        var endpoints = CreateEndpointsWithAuthorization(authorized: false);
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/e2e/resource-protected");
+        endpoint.Should().NotBeNull();
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.User = new System.Security.Claims.ClaimsPrincipal(
+                new System.Security.Claims.ClaimsIdentity("TestAuth"));
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status403Forbidden);
+    }
+
+    [Fact]
+    public async Task When_GET_resource_protected_with_authenticated_user_and_provider_allows_then_returns_200()
+    {
+        var endpoints = CreateEndpointsWithAuthorization(authorized: true);
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/e2e/resource-protected");
+        endpoint.Should().NotBeNull();
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.User = new System.Security.Claims.ClaimsPrincipal(
+                new System.Security.Claims.ClaimsIdentity("TestAuth"));
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+    }
+
     private static async Task<TestHttpResponse> InvokeEndpointAsync(
         RouteEndpoint endpoint,
         IServiceProvider serviceProvider,
@@ -181,6 +236,18 @@ public class HttpEndToEndIntegrationTests
             .AddLogging()
             .AddSingleton<IntegrationTestBlueprintApp>()
             .AddSingleton<IntegrationTestBlueprintAppExecutor>();
+
+        return new TestEndpointRouteBuilder(services.BuildServiceProvider());
+    }
+
+    private static TestEndpointRouteBuilder CreateEndpointsWithAuthorization(bool authorized)
+    {
+        var services = new ServiceCollection()
+            .AddLogging()
+            .AddSingleton<IntegrationTestBlueprintApp>()
+            .AddSingleton<IntegrationTestBlueprintAppExecutor>()
+            .AddSingleton<Blueprint.Authorization.IResourceAuthorizationProvider>(
+                new TestResourceAuthorizationProvider(authorized));
 
         return new TestEndpointRouteBuilder(services.BuildServiceProvider());
     }
@@ -287,5 +354,20 @@ public partial class E2EValidatedCommand : ICommand<string>
     public static Task<string> HandleAsync(E2EValidatedCommand command)
     {
         return Task.FromResult($"valid:{command.Name}");
+    }
+}
+
+/// <summary>
+/// Test implementation of <see cref="Blueprint.Authorization.IResourceAuthorizationProvider"/>
+/// that returns a fixed authorization result for integration testing.
+/// </summary>
+internal sealed class TestResourceAuthorizationProvider(bool authorized) : Blueprint.Authorization.IResourceAuthorizationProvider
+{
+    public Task<bool> IsAuthorizedAsync(
+        System.Security.Claims.ClaimsPrincipal principal,
+        IReadOnlyList<Blueprint.Model.ScopePair> requiredScopePairs,
+        CancellationToken cancellationToken)
+    {
+        return Task.FromResult(authorized);
     }
 }

@@ -36,6 +36,9 @@ public class HttpOperationResultExecutor
             case UnauthenticatedResult:
                 httpContext.Response.StatusCode = StatusCodes.Status401Unauthorized;
                 return true;
+            case ForbiddenResult:
+                httpContext.Response.StatusCode = StatusCodes.Status403Forbidden;
+                return true;
             case BindingFailureResult:
                 httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
                 return true;

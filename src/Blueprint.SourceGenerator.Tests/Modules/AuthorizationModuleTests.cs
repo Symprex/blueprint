@@ -276,9 +276,10 @@ public class AuthorizationModuleTests
 
         descriptorSource.Should().NotBeNull();
 
-        // AuthenticationDescriptorRegistration(RequiresIdentityCheck: true) triggers the 401 response
-        // metadata via HttpResponseMetadataModule, expressed as AuthenticatedFailureResponses
-        descriptorSource!.Should().Contain("AuthenticatedFailureResponses");
+        // AuthenticationDescriptorRegistration triggers the 401 response,
+        // AuthorizationDescriptorRegistration triggers the 403 response
+        descriptorSource!.Should().Contain("UnauthenticatedResult");
+        descriptorSource!.Should().Contain("ForbiddenResult");
     }
 
     // ── Pipeline plan tests ──────────────────────────────────────────

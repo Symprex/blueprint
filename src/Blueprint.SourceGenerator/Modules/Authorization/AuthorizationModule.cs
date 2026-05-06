@@ -210,10 +210,23 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
             return;
         }
 
-        // For [FromResource], verify the target has [Resource] (BPAU006 handled in descriptor)
-        if (fromResourceTarget is not null && GetResourceAttributes(fromResourceTarget).Count == 0)
+        // Resolve effective scope pairs for the pipeline authorization check
+        List<(string Noun, string Verb)> effectiveScopePairs;
+
+        if (fromResourceTarget is not null)
         {
-            return;
+            var targetResourceAttributes = GetResourceAttributes(fromResourceTarget);
+
+            if (targetResourceAttributes.Count == 0)
+            {
+                return;
+            }
+
+            effectiveScopePairs = targetResourceAttributes;
+        }
+        else
+        {
+            effectiveScopePairs = directResourceAttributes;
         }
 
         if (!HasHttpHostExposure(operationType))
@@ -228,6 +241,12 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
                 PipelineStage.Authentication,
                 RenderAuthenticationCheck);
         }
+
+        // Add authorization check after authentication
+        context.RequireAsync();
+        context.AddRenderStep(
+            PipelineStage.Authorisation,
+            ctx => RenderAuthorizationCheck(ctx, effectiveScopePairs));
     }
 
     private static bool HasHttpHostExposure(INamedTypeSymbol operationType)
@@ -246,6 +265,40 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
                     context.IsPipelineAsync()
                         ? "new Blueprint.Runtime.Exec.UnauthenticatedResult()"
                         : "System.Threading.Tasks.Task.FromResult<Blueprint.OperationResult>(new Blueprint.Runtime.Exec.UnauthenticatedResult())");
+            });
+
+        context.WriteBlankLine();
+    }
+
+    private static void RenderAuthorizationCheck(PipelineRenderContext context, List<(string Noun, string Verb)> scopePairs)
+    {
+        // Resolve optional IResourceAuthorizationProvider — permissive when not registered
+        context.DeclareVariable(
+            "authorizationProvider",
+            context.GetOptionalServiceExpression("Blueprint.Authorization.IResourceAuthorizationProvider"));
+
+        context.If(
+            "authorizationProvider != null",
+            branch =>
+            {
+                // Build the scope pairs array expression
+                var scopePairElements = string.Join(
+                    ", ",
+                    scopePairs.Select(static sp => $"new Blueprint.Model.ScopePair(\"{sp.Noun}\", \"{sp.Verb}\")"));
+
+                branch.DeclareVariable(
+                    "isAuthorized",
+                    $"await authorizationProvider.IsAuthorizedAsync(((Blueprint.Runtime.Http.IHttpOperationContext)context).HttpContext.User, new Blueprint.Model.ScopePair[] {{ {scopePairElements} }}, ((Blueprint.Runtime.Http.IHttpOperationContext)context).HttpContext.RequestAborted)");
+
+                branch.If(
+                    "!isAuthorized",
+                    innerBranch =>
+                    {
+                        innerBranch.Return(
+                            context.IsPipelineAsync()
+                                ? "new Blueprint.Runtime.Exec.ForbiddenResult()"
+                                : "System.Threading.Tasks.Task.FromResult<Blueprint.OperationResult>(new Blueprint.Runtime.Exec.ForbiddenResult())");
+                    });
             });
 
         context.WriteBlankLine();

@@ -20,6 +20,7 @@
   HTTP Responses:
     - 201: hasBody=False types=[]
     - 401: hasBody=False types=[]
+    - 403: hasBody=False types=[]
     - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
     - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
 
@@ -42,6 +43,7 @@
     - 201: hasBody=True types=[Blueprint.SourceGenerator.Sample.Contract.Api.TemplateApiResource]
     - 400: hasBody=False types=[]
     - 401: hasBody=False types=[]
+    - 403: hasBody=False types=[]
     - 415: hasBody=False types=[]
     - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
     - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
@@ -65,6 +67,7 @@
     - 201: hasBody=True types=[Blueprint.SourceGenerator.Sample.Contract.Api.TemplateApiResource]
     - 400: hasBody=False types=[]
     - 401: hasBody=False types=[]
+    - 403: hasBody=False types=[]
     - 415: hasBody=False types=[]
     - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
     - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
@@ -88,6 +91,7 @@
   HTTP Responses:
     - 200: hasBody=True types=[Blueprint.SourceGenerator.Sample.Contract.Api.TemplateApiResource]
     - 401: hasBody=False types=[]
+    - 403: hasBody=False types=[]
     - 404: hasBody=True types=[Blueprint.SourceGenerator.Sample.Contract.Api.TemplateApiResource]
     - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
     - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
@@ -110,6 +114,7 @@
   HTTP Responses:
     - 200: hasBody=True types=[Blueprint.SourceGenerator.Sample.Contract.Api.TemplateApiResource[]]
     - 401: hasBody=False types=[]
+    - 403: hasBody=False types=[]
     - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
     - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
   Links:
@@ -131,6 +136,7 @@
   HTTP Responses:
     - 200: hasBody=True types=[Blueprint.SourceGenerator.Sample.Contract.Api.TemplateVersionApiResource[]]
     - 401: hasBody=False types=[]
+    - 403: hasBody=False types=[]
     - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
     - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
 
@@ -151,6 +157,7 @@
     - 200: hasBody=True types=[Blueprint.SourceGenerator.Sample.Contract.Api.TemplatePreviewApiResource]
     - 400: hasBody=False types=[]
     - 401: hasBody=False types=[]
+    - 403: hasBody=False types=[]
     - 415: hasBody=False types=[]
     - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
     - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
@@ -174,6 +181,7 @@
   HTTP Responses:
     - 201: hasBody=True types=[Blueprint.SourceGenerator.Sample.Contract.Api.TemplateApiResource]
     - 401: hasBody=False types=[]
+    - 403: hasBody=False types=[]
     - 409: hasBody=True types=[Blueprint.SourceGenerator.Sample.Contract.Api.TemplateApiResource]
     - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
     - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
@@ -225,6 +233,7 @@
     - 201: hasBody=True types=[Blueprint.SourceGenerator.Sample.Contract.Api.TemplateApiResource]
     - 400: hasBody=False types=[]
     - 401: hasBody=False types=[]
+    - 403: hasBody=False types=[]
     - 415: hasBody=False types=[]
     - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
     - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]

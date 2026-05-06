@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using Blueprint.SourceGenerator.CodeWriter;
 using Blueprint.SourceGenerator.Helpers;
 using Blueprint.SourceGenerator.Modules.Authentication;
+using Blueprint.SourceGenerator.Modules.Authorization;
 using Blueprint.SourceGenerator.Planning;
 using Microsoft.CodeAnalysis;
 using CSharpSymbolDisplay = Microsoft.CodeAnalysis.CSharp.SymbolDisplay;
@@ -202,6 +203,12 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
         if (context.GetMetadata<AuthenticationDescriptorRegistration>().Any(static r => r.RequiresIdentityCheck))
         {
             responses.Add(CreateResponse(401, false, "Blueprint.Runtime.Exec.UnauthenticatedResult", []));
+        }
+
+        // Authorization-driven short-circuit: 403 when [Resource] scopes are declared.
+        if (context.GetMetadata<AuthorizationDescriptorRegistration>().Any(static r => r.RequiresPermissionCheck))
+        {
+            responses.Add(CreateResponse(403, false, "Blueprint.Runtime.Exec.ForbiddenResult", []));
         }
 
         return responses.ToImmutable();
