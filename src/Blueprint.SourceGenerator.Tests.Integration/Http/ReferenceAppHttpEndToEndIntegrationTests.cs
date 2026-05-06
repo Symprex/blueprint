@@ -671,6 +671,73 @@ public class ReferenceAppHttpEndToEndIntegrationTests
         responses.Should().OnlyContain(static r => r.StatusCode == StatusCodes.Status200OK);
     }
 
+    [Fact]
+    public async Task When_authenticated_user_lacks_scope_claims_and_provider_registered_then_returns_403()
+    {
+        var endpoints = CreateEndpointsWithAuthorizationProvider();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/templates", "GET");
+        endpoint.Should().NotBeNull();
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Get;
+            context.User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "user-1"),
+                ],
+                authenticationType: "test"));
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status403Forbidden);
+    }
+
+    [Fact]
+    public async Task When_authenticated_user_has_matching_scope_claim_and_provider_registered_then_returns_200()
+    {
+        var endpoints = CreateEndpointsWithAuthorizationProvider();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/templates", "GET");
+        endpoint.Should().NotBeNull();
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Get;
+            context.User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "user-1"),
+                    new Claim("scope", "template:read"),
+                ],
+                authenticationType: "test"));
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+    }
+
+    [Fact]
+    public async Task When_anonymous_endpoint_with_authorization_provider_registered_then_returns_200_without_claims()
+    {
+        var endpoints = CreateEndpointsWithAuthorizationProvider();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        // SearchTemplatesQuery has [AllowAnonymous] — should bypass auth entirely
+        var endpoint = FindEndpoint(endpoints, "api/templates/search", "GET");
+        endpoint.Should().NotBeNull();
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Get;
+            context.Request.Path = "/api/templates/search";
+            context.Request.QueryString = new QueryString("?Q=test&Page=1&PageSize=10");
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+    }
+
     private static async Task<TestHttpResponse> InvokeEndpointAsync(
         RouteEndpoint endpoint,
         IServiceProvider serviceProvider,
@@ -715,6 +782,18 @@ public class ReferenceAppHttpEndToEndIntegrationTests
             .AddSingleton<TemplateStore>()
             .AddSingleton<SampleBlueprintApp>()
             .AddSingleton<SampleBlueprintAppExecutor>();
+
+        return new TestEndpointRouteBuilder(services.BuildServiceProvider());
+    }
+
+    private static TestEndpointRouteBuilder CreateEndpointsWithAuthorizationProvider()
+    {
+        var services = new ServiceCollection()
+            .AddLogging()
+            .AddSingleton<TemplateStore>()
+            .AddSingleton<SampleBlueprintApp>()
+            .AddSingleton<SampleBlueprintAppExecutor>()
+            .AddSingleton<Blueprint.Authorization.IResourceAuthorizationProvider, SampleResourceAuthorizationProvider>();
 
         return new TestEndpointRouteBuilder(services.BuildServiceProvider());
     }
