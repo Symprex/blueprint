@@ -142,6 +142,34 @@ services.AddBlueprintApi<MyApp, MyAppExecutor>(blueprint =>
 - Scoped services (UoW, task scheduler) are registered scoped; singletons (audit, auth) as singletons
 - `ConfigureHttp` binds `BlueprintHttpOptions` for link generation base URI and error detail exposure
 
+## ASP.NET Core infrastructure (consumer responsibility)
+
+Blueprint intentionally delegates standard ASP.NET Core concerns to the consumer rather than wrapping them:
+
+| Concern | Consumer action | Blueprint interaction |
+| --- | --- | --- |
+| **CORS** | `services.AddCors()` + `app.UseCors()` | None — Blueprint endpoints are just route endpoints |
+| **Health checks** | `app.MapHealthChecks("/health")` | None — add alongside `MapBlueprintApi` |
+| **Rate limiting** | `services.AddRateLimiter()` + `app.UseRateLimiter()` | None — standard middleware order applies |
+| **Request size limits** | Kestrel `MaxRequestBodySize` or `[RequestSizeLimit]` | None |
+| **OpenTelemetry** | `services.AddOpenTelemetry().WithTracing(b => b.AddSource("Blueprint"))` | Blueprint emits all spans on `BlueprintActivitySource.ActivitySourceName` |
+| **JSON naming policy** | `[JsonSourceGenerationOptions(PropertyNamingPolicy = ...)]` on your `JsonSerializerContext` | The app-owned serializer context controls all serialization behavior |
+
+### OpenTelemetry integration example
+
+```csharp
+services.AddOpenTelemetry()
+    .WithTracing(tracing => tracing
+        .AddSource(Blueprint.Diagnostics.BlueprintActivitySource.ActivitySourceName)
+        .AddAspNetCoreInstrumentation());
+```
+
+Blueprint emits:
+- A span per operation execution (named by operation type)
+- `blueprint.audit.started/succeeded/failed` events with `blueprint.operation.type` tags
+- Exception events following OTel `exception.*` semantic conventions
+- `blueprint.operation.validated`, `blueprint.operation.authorized` status events
+
 ## Working loop
 
 1. Start from the consumer contract: operation -> app root -> host wiring.

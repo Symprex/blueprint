@@ -78,3 +78,40 @@ The sample app is exercised by:
 - `ReferenceAppOpenApiTests` — locks the full OpenAPI document shape as a reviewed snapshot
 - `ReferenceAppManifestTests` — locks the debug manifest surface
 - `ReferenceAppInspectionTests` — verifies registered operations, URLs, methods, links, authorization, sensitive properties, and serializer coverage
+
+## Service registration
+
+The recommended startup pattern uses `AddBlueprintApi<TApp, TExec>()`:
+
+```csharp
+services.AddBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>(blueprint =>
+{
+    blueprint.AddAuditSink<SampleAuditSink>();
+    blueprint.AddResourceEventAuditSink<SampleResourceEventAuditSink>();
+    blueprint.AddResourceAuthorizationProvider<SampleResourceAuthorizationProvider>();
+    blueprint.AddBackgroundTaskScheduler<InProcessBackgroundTaskScheduler>();
+    blueprint.ConfigureHttp(options => options.PublicHost = "https://api.example.com");
+});
+```
+
+## OpenTelemetry integration
+
+Blueprint emits all activity spans on `Blueprint.Diagnostics.BlueprintActivitySource.ActivitySourceName`.
+Register it with your OpenTelemetry tracing pipeline:
+
+```csharp
+services.AddOpenTelemetry()
+    .WithTracing(tracing => tracing
+        .AddSource(Blueprint.Diagnostics.BlueprintActivitySource.ActivitySourceName)
+        .AddAspNetCoreInstrumentation());
+```
+
+## ASP.NET Core infrastructure
+
+Blueprint delegates standard ASP.NET Core concerns to the consumer:
+
+- **CORS** — `services.AddCors()` + `app.UseCors()` before routing
+- **Health checks** — `app.MapHealthChecks("/health")` alongside `MapBlueprintApi`
+- **Rate limiting** — `services.AddRateLimiter()` + `app.UseRateLimiter()`
+- **Authentication** — `services.AddAuthentication()` + `app.UseAuthentication()` before `UseAuthorization()`
+- **JSON naming** — Control via `[JsonSourceGenerationOptions]` on your `JsonSerializerContext`
