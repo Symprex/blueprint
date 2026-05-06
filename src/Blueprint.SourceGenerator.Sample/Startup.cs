@@ -45,7 +45,14 @@ public class Startup
 
         app.UseEndpoints(endpoints =>
         {
-            endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+            endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>(
+                "api/",
+                configureOpenApi: info =>
+                {
+                    info.Title = "Template Management API";
+                    info.Version = "1.0.0";
+                    info.Description = "Blueprint sample API demonstrating template lifecycle operations.";
+                });
         });
     }
 }
