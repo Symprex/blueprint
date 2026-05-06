@@ -1,6 +1,8 @@
 using System.ComponentModel.DataAnnotations;
 using System.Text;
 using Blueprint.Model;
+using Blueprint.Runtime.Exec;
+using Blueprint.Runtime.Http;
 using Blueprint.SourceGenerator.Tests.Integration.Generators.OperationDescriptors;
 using FluentAssertions;
 using Microsoft.AspNetCore.Builder;
@@ -264,6 +266,36 @@ public class HttpEndToEndIntegrationTests
         response.Body.Should().Contain("session:abc123xyz");
     }
 
+    [Fact]
+    public async Task When_void_command_then_returns_200_with_empty_body()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/e2e/void-command");
+        endpoint.Should().NotBeNull();
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider);
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        response.Body.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task When_no_content_command_then_returns_204()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/e2e/no-content-command");
+        endpoint.Should().NotBeNull();
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider);
+
+        response.StatusCode.Should().Be(StatusCodes.Status204NoContent);
+        response.Body.Should().BeEmpty();
+    }
+
     private static async Task<TestHttpResponse> InvokeEndpointAsync(
         RouteEndpoint endpoint,
         IServiceProvider serviceProvider,
@@ -506,5 +538,35 @@ public partial class E2ECookieBindingQuery : IQuery<string>
     public static Task<string> HandleAsync(E2ECookieBindingQuery query)
     {
         return Task.FromResult($"session:{query.SessionToken}");
+    }
+}
+
+/// <summary>
+/// POST command that returns void (NoResultOperationResult) — verifies 200 OK with empty body.
+/// </summary>
+[Blueprint.Model.Attributes.RootLink("/e2e/void-command")]
+[Blueprint.Model.Attributes.AllowAnonymous]
+public partial class E2EVoidCommand : ICommand<NoResultOperationResult>
+{
+    /// <summary>Does nothing — fire-and-forget style command.</summary>
+    /// <returns>NoResultOperationResult to signal void success.</returns>
+    public static Task<NoResultOperationResult> HandleAsync()
+    {
+        return Task.FromResult(new NoResultOperationResult());
+    }
+}
+
+/// <summary>
+/// Command that returns HttpNoContentResult — verifies 204 No Content.
+/// </summary>
+[Blueprint.Model.Attributes.RootLink("/e2e/no-content-command")]
+[Blueprint.Model.Attributes.AllowAnonymous]
+public partial class E2ENoContentCommand : ICommand<HttpNoContentResult>
+{
+    /// <summary>Returns 204 No Content — typical DELETE response.</summary>
+    /// <returns>HttpNoContentResult indicating successful deletion.</returns>
+    public static Task<HttpNoContentResult> HandleAsync()
+    {
+        return Task.FromResult(new HttpNoContentResult());
     }
 }
