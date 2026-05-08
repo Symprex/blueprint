@@ -151,6 +151,9 @@ public class HttpOperationResultExecutor
 
                 await fileStreamResult.Stream.CopyToAsync(httpContext.Response.Body, httpContext.RequestAborted);
                 return true;
+            case StatusCodeResult statusCodeResult:
+                httpContext.Response.StatusCode = statusCodeResult.StatusCode;
+                return true;
             default:
                 return false;
         }

@@ -363,6 +363,7 @@
   Type: SendTemplateSharedNotificationTask
   Source: Source Generated
   Hosts: tasks
+  Auth: Anonymous
   Discovery: operation (Blueprint.SourceGenerator.Sample.Contract.Api.SendTemplateSharedNotificationTask)
   Failure Outcomes:
     - legacy-validation-exception: Blueprint.Validation.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult

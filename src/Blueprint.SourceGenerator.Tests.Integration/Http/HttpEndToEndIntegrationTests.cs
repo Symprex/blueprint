@@ -916,6 +916,44 @@ public class HttpEndToEndIntegrationTests
     }
 
     [Fact]
+    public async Task When_command_returns_bodyless_StatusCodeResult_Accepted_then_returns_202_with_no_body()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+        var endpoint = FindEndpoint(endpoints, "api/e2e/bodyless-accepted")!;
+
+        var bodyJson = """{"reason":"background-sync"}"""u8.ToArray();
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, ctx =>
+        {
+            ctx.Request.ContentType = "application/json; charset=utf-8";
+            ctx.Request.ContentLength = bodyJson.Length;
+            ctx.Request.Body = new MemoryStream(bodyJson);
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status202Accepted);
+        response.Body.Should().BeNullOrEmpty();
+    }
+
+    [Fact]
+    public async Task When_command_returns_bodyless_StatusCodeResult_NoContent_then_returns_204_with_no_body()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+        var endpoint = FindEndpoint(endpoints, "api/e2e/bodyless-nocontent")!;
+
+        var bodyJson = """{"reason":"cleanup"}"""u8.ToArray();
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, ctx =>
+        {
+            ctx.Request.ContentType = "application/json; charset=utf-8";
+            ctx.Request.ContentLength = bodyJson.Length;
+            ctx.Request.Body = new MemoryStream(bodyJson);
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status204NoContent);
+        response.Body.Should().BeNullOrEmpty();
+    }
+
+    [Fact]
     public async Task When_command_returns_ConflictResult_then_returns_409_with_json_body()
     {
         var endpoints = CreateEndpoints();
@@ -2080,6 +2118,47 @@ public class E2EJobAcceptedPayload
 
     /// <summary>The assigned job ID.</summary>
     public string JobId { get; set; } = default!;
+}
+
+/// <summary>
+/// POST returning bodyless StatusCodeResult.Accepted (202) for fire-and-forget patterns.
+/// Mirrors the legacy <c>ICommand&lt;StatusCodeResult.Accepted&gt;</c> pattern used in Signature365.
+/// </summary>
+[Blueprint.Model.Attributes.RootLink("/e2e/bodyless-accepted")]
+[Blueprint.Model.Attributes.HttpPost]
+[Blueprint.Model.Attributes.AllowAnonymous]
+[Blueprint.Auditing.DoNotAudit]
+public partial class E2EBodylessAcceptedCommand : ICommand<StatusCodeResult.Accepted>
+{
+    /// <summary>Optional reason for the async operation.</summary>
+    public string? Reason { get; set; }
+
+    /// <summary>Handles the command and returns a bodyless 202.</summary>
+    /// <returns>A bodyless 202 Accepted status code result.</returns>
+    public StatusCodeResult.Accepted Handle()
+    {
+        return StatusCodeResult.Accepted.Instance;
+    }
+}
+
+/// <summary>
+/// POST returning bodyless StatusCodeResult.NoContent (204) for side-effect-only operations.
+/// </summary>
+[Blueprint.Model.Attributes.RootLink("/e2e/bodyless-nocontent")]
+[Blueprint.Model.Attributes.HttpPost]
+[Blueprint.Model.Attributes.AllowAnonymous]
+[Blueprint.Auditing.DoNotAudit]
+public partial class E2EBodylessNoContentCommand : ICommand<StatusCodeResult.NoContent>
+{
+    /// <summary>Optional reason for the operation.</summary>
+    public string? Reason { get; set; }
+
+    /// <summary>Handles the command and returns a bodyless 204.</summary>
+    /// <returns>A bodyless 204 No Content status code result.</returns>
+    public StatusCodeResult.NoContent Handle()
+    {
+        return StatusCodeResult.NoContent.Instance;
+    }
 }
 
 /// <summary>

@@ -117,6 +117,7 @@ public static class OperationResultContractHelper
     /// <param name="plainTextResultType">The resolved <c>Blueprint.Runtime.Exec.PlainTextResult</c> type when available.</param>
     /// <param name="redirectResultType">The resolved <c>Blueprint.Runtime.Http.RedirectResult</c> type when available.</param>
     /// <param name="fileStreamResultType">The resolved <c>Blueprint.Runtime.Exec.FileStreamResult</c> type when available.</param>
+    /// <param name="statusCodeResultType">The resolved <c>Blueprint.Runtime.Exec.StatusCodeResult</c> base type when available.</param>
     /// <returns>Whether the current HTTP executor can translate the result type.</returns>
     public static bool IsSupportedByHttpOperationResultExecutor(
         ITypeSymbol resultType,
@@ -132,7 +133,8 @@ public static class OperationResultContractHelper
         INamedTypeSymbol? httpNoContentResultType,
         INamedTypeSymbol? plainTextResultType = null,
         INamedTypeSymbol? redirectResultType = null,
-        INamedTypeSymbol? fileStreamResultType = null)
+        INamedTypeSymbol? fileStreamResultType = null,
+        INamedTypeSymbol? statusCodeResultType = null)
     {
         return IsTypeOrDerivedFrom(resultType, okResultType)
             || IsTypeOrDerivedFromOptional(resultType, acceptedResultType)
@@ -146,7 +148,8 @@ public static class OperationResultContractHelper
             || SymbolEqualityComparer.Default.Equals(resultType, httpNoContentResultType)
             || SymbolEqualityComparer.Default.Equals(resultType, plainTextResultType)
             || SymbolEqualityComparer.Default.Equals(resultType, redirectResultType)
-            || SymbolEqualityComparer.Default.Equals(resultType, fileStreamResultType);
+            || SymbolEqualityComparer.Default.Equals(resultType, fileStreamResultType)
+            || IsTypeOrDerivedFromOptional(resultType, statusCodeResultType);
     }
 
     /// <summary>
@@ -168,6 +171,7 @@ public static class OperationResultContractHelper
     /// <param name="plainTextResultType">The resolved <c>Blueprint.Runtime.Exec.PlainTextResult</c> type when available.</param>
     /// <param name="redirectResultType">The resolved <c>Blueprint.Runtime.Http.RedirectResult</c> type when available.</param>
     /// <param name="fileStreamResultType">The resolved <c>Blueprint.Runtime.Exec.FileStreamResult</c> type when available.</param>
+    /// <param name="statusCodeResultType">The resolved <c>Blueprint.Runtime.Exec.StatusCodeResult</c> base type when available.</param>
     /// <returns>Whether the current executor path has a deterministic response shape for the semantic result type.</returns>
     public static bool TryGetHttpOperationResultResponseShape(
         ITypeSymbol resultType,
@@ -185,7 +189,8 @@ public static class OperationResultContractHelper
         out bool hasResponseBody,
         INamedTypeSymbol? plainTextResultType = null,
         INamedTypeSymbol? redirectResultType = null,
-        INamedTypeSymbol? fileStreamResultType = null)
+        INamedTypeSymbol? fileStreamResultType = null,
+        INamedTypeSymbol? statusCodeResultType = null)
     {
         if (IsTypeOrDerivedFrom(resultType, okResultType))
         {
@@ -275,6 +280,16 @@ public static class OperationResultContractHelper
         {
             statusCode = 200;
             hasResponseBody = true;
+            return true;
+        }
+
+        if (IsTypeOrDerivedFromOptional(resultType, statusCodeResultType))
+        {
+            // StatusCodeResult subclasses are bodyless status-code-only results; the exact code
+            // is determined at runtime from the StatusCode property, so we use 200 as the default
+            // for OpenAPI purposes while flagging no body.
+            statusCode = 200;
+            hasResponseBody = false;
             return true;
         }
 
