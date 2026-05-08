@@ -91,10 +91,11 @@ public class ReferenceAppInspectionTests
 
         var httpOperations = app.GetOperationsForHost("http");
 
-        httpOperations.Should().HaveCount(18, "all eighteen sample operations should be exposed on the HTTP host");
+        httpOperations.Should().HaveCount(19, "all nineteen sample operations should be exposed on the HTTP host");
         httpOperations.Select(static op => op.OperationType).Should().BeEquivalentTo(
         [
             typeof(GetTemplatesQuery),
+            typeof(GetPagedTemplatesQuery),
             typeof(GetTemplateQuery),
             typeof(SearchTemplatesQuery),
             typeof(GetTemplateVersionsQuery),
