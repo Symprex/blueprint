@@ -15,9 +15,9 @@
     "frameworkStatusDetail": "Core Blueprint source-generator framework is at full feature parity with legacy Blueprint for Signature365 migration. All consumer-space companion packages (Rebus, Marten, Hangfire, tenant context) are by-design extensions that consumers build in their own repositories.",
     "nextReadySlice": null,
     "lastCompletedSlice": {
-      "id": "fix/route-parameter-tryparse",
+      "id": "feat/rfc7807-error-responses",
       "workstream": "documentation-and-final-alignment",
-      "title": "Fix route parameter binding to use TryParse (400) instead of Parse (500) for invalid values"
+      "title": "Add RFC 7807 ProblemDetails bodies to all error responses (400/401/403/415)"
     },
     "openReviewGate": null,
     "openReviewGateRationale": null,
@@ -400,6 +400,12 @@
       "workstream": "documentation-and-final-alignment",
       "title": "Fix route parameter binding to use TryParse (400) instead of Parse (500) for invalid values",
       "commit": "23cff7a"
+    },
+    {
+      "id": "feat/rfc7807-error-responses",
+      "workstream": "documentation-and-final-alignment",
+      "title": "Add RFC 7807 ProblemDetails bodies to all error responses (400/401/403/415)",
+      "commit": "0df5948"
     }
   ],
   "decisions": [
