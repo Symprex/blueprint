@@ -14,6 +14,8 @@ public class RedirectResult : OperationResult
     /// <param name="url">The target URL to redirect to.</param>
     public RedirectResult(string url)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(url);
+
         this.Url = url;
     }
 

@@ -12,6 +12,8 @@ public class OkResult : OperationResult
     /// <param name="content">The content to write to the body of the output.</param>
     public OkResult(object content)
     {
+        ArgumentNullException.ThrowIfNull(content);
+
         this.Content = content;
     }
 

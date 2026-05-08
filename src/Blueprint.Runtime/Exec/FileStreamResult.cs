@@ -23,6 +23,9 @@ public class FileStreamResult : OperationResult
     /// </param>
     public FileStreamResult(Stream stream, string contentType, string? fileName = null)
     {
+        ArgumentNullException.ThrowIfNull(stream);
+        ArgumentException.ThrowIfNullOrWhiteSpace(contentType);
+
         this.Stream = stream;
         this.ContentType = contentType;
         this.FileName = fileName;

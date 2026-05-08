@@ -13,6 +13,8 @@ public class PlainTextResult : OperationResult
     /// <param name="content">The plain-text content to write to the response body.</param>
     public PlainTextResult(string content)
     {
+        ArgumentNullException.ThrowIfNull(content);
+
         this.Content = content;
     }
 
