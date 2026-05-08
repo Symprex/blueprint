@@ -15,9 +15,9 @@
     "frameworkStatusDetail": "Core Blueprint source-generator framework is at full feature parity with legacy Blueprint for Signature365 migration. All consumer-space companion packages (Rebus, Marten, Hangfire, tenant context) are by-design extensions that consumers build in their own repositories.",
     "nextReadySlice": null,
     "lastCompletedSlice": {
-      "id": "docs/auth-middleware-guidance",
+      "id": "fix/route-parameter-tryparse",
       "workstream": "documentation-and-final-alignment",
-      "title": "Add authentication middleware guidance to sample app and consumer skill"
+      "title": "Fix route parameter binding to use TryParse (400) instead of Parse (500) for invalid values"
     },
     "openReviewGate": null,
     "openReviewGateRationale": null,
@@ -394,6 +394,12 @@
       "workstream": "documentation-and-final-alignment",
       "title": "Add authentication middleware guidance to sample app and consumer skill",
       "commit": "200c68f"
+    },
+    {
+      "id": "fix/route-parameter-tryparse",
+      "workstream": "documentation-and-final-alignment",
+      "title": "Fix route parameter binding to use TryParse (400) instead of Parse (500) for invalid values",
+      "commit": "23cff7a"
     }
   ],
   "decisions": [
