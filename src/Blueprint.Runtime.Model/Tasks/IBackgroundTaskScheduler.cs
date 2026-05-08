@@ -3,15 +3,18 @@ using JetBrains.Annotations;
 namespace Blueprint.Tasks;
 
 /// <summary>
-/// Abstraction for enqueueing background tasks during handler execution and flushing them
-/// after the handler completes successfully. Implementations may dispatch immediately,
-/// queue to Hangfire, or use any other scheduling mechanism.
+/// Abstraction for enqueueing and scheduling background tasks during handler execution.
+/// Tasks are held until the generated pipeline calls <see cref="RunNowAsync"/> in the
+/// PostExecution stage, ensuring tasks are only dispatched when the handler succeeds.
 /// </summary>
 /// <remarks>
 /// <para>
-/// Handlers receive this via DI (typically scoped per-operation). Tasks enqueued during handler
-/// execution are held until the generated pipeline's PostExecution stage calls <see cref="FlushAsync"/>.
-/// This ensures tasks are only dispatched when the handler succeeds.
+/// Handlers receive this via DI (typically scoped per-operation). Tasks enqueued or scheduled
+/// during handler execution are held until <see cref="RunNowAsync"/> releases them.
+/// </para>
+/// <para>
+/// Both <see cref="Enqueue"/> and <see cref="Schedule"/> return an <see cref="IScheduledBackgroundTask"/>
+/// that supports fluent continuation chaining via <see cref="IScheduledBackgroundTask.ContinueWith"/>.
 /// </para>
 /// <para>
 /// Concrete implementations live in optional packages (e.g. Hangfire integration) or in the
@@ -23,16 +26,25 @@ public interface IBackgroundTaskScheduler
 {
     /// <summary>
     /// Enqueues a background task for deferred execution. The task is held until
-    /// <see cref="FlushAsync"/> is called by the generated pipeline after successful handler execution.
+    /// <see cref="RunNowAsync"/> is called by the generated pipeline after successful handler execution.
     /// </summary>
     /// <param name="task">The background task to schedule.</param>
-    void Enqueue(IBackgroundTask task);
+    /// <returns>A scheduled task handle that supports fluent continuation chaining.</returns>
+    IScheduledBackgroundTask Enqueue(IBackgroundTask task);
 
     /// <summary>
-    /// Dispatches all previously enqueued tasks to the underlying scheduling mechanism.
+    /// Schedules a background task for deferred execution with a delay. The task is held until
+    /// <see cref="RunNowAsync"/> is called, at which point it is dispatched with the specified delay.
+    /// </summary>
+    /// <param name="task">The background task to schedule.</param>
+    /// <param name="delay">The amount of time to wait before executing the task.</param>
+    /// <returns>A scheduled task handle that supports fluent continuation chaining.</returns>
+    IScheduledBackgroundTask Schedule(IBackgroundTask task, TimeSpan delay);
+
+    /// <summary>
+    /// Dispatches all previously enqueued and scheduled tasks to the underlying scheduling mechanism.
     /// Called by the generated pipeline in the PostExecution stage after verifying handler success.
     /// </summary>
-    /// <param name="cancellationToken">Cancellation token for the flush operation.</param>
-    /// <returns>A task representing the asynchronous flush operation.</returns>
-    Task FlushAsync(CancellationToken cancellationToken = default);
+    /// <returns>A <see cref="ValueTask"/> representing the asynchronous dispatch operation.</returns>
+    ValueTask RunNowAsync();
 }

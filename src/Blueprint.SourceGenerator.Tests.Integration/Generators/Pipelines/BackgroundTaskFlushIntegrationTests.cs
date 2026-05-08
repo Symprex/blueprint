@@ -106,20 +106,38 @@ public sealed class TestBackgroundTaskScheduler : IBackgroundTaskScheduler
     /// <summary>Gets the tasks that were enqueued during handler execution.</summary>
     public List<object> EnqueuedTasks { get; } = [];
 
-    /// <summary>Gets the number of times FlushAsync was called.</summary>
+    /// <summary>Gets the number of times <see cref="RunNowAsync"/> was called.</summary>
     public int FlushCallCount { get; private set; }
 
     /// <inheritdoc />
-    public void Enqueue(IBackgroundTask task)
+    public IScheduledBackgroundTask Enqueue(IBackgroundTask task)
     {
         this.EnqueuedTasks.Add(task);
+        return new NullScheduledTask();
     }
 
     /// <inheritdoc />
-    public Task FlushAsync(CancellationToken cancellationToken = default)
+    public IScheduledBackgroundTask Schedule(IBackgroundTask task, TimeSpan delay)
+    {
+        this.EnqueuedTasks.Add(task);
+        return new NullScheduledTask();
+    }
+
+    /// <inheritdoc />
+    public ValueTask RunNowAsync()
     {
         this.FlushCallCount++;
-        return Task.CompletedTask;
+        return ValueTask.CompletedTask;
+    }
+
+    private sealed class NullScheduledTask : IScheduledBackgroundTask
+    {
+        public IScheduledBackgroundTask ContinueWith(
+            IBackgroundTask backgroundTask,
+            BackgroundTaskContinuationOptions options = BackgroundTaskContinuationOptions.OnlyOnSucceededState)
+        {
+            return this;
+        }
     }
 }
 
