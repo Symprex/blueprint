@@ -658,6 +658,175 @@ public class HttpEndToEndIntegrationTests
         response.Body.Should().Contain("priority:5");
     }
 
+    [Fact]
+    public async Task When_PATCH_with_json_body_then_returns_200_with_bound_value()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/e2e/templates/{Id}");
+        endpoint.Should().NotBeNull("the PATCH template route should be registered");
+
+        var bodyJson = """{"description":"updated desc"}"""u8.ToArray();
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = "PATCH";
+            context.Request.ContentType = "application/json; charset=utf-8";
+            context.Request.ContentLength = bodyJson.Length;
+            context.Request.Body = new MemoryStream(bodyJson);
+            context.Request.RouteValues["id"] = "abc-123";
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        response.Body.Should().Contain("abc-123");
+        response.Body.Should().Contain("updated desc");
+    }
+
+    [Fact]
+    public async Task When_PUT_with_json_body_then_returns_200_with_bound_value()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/e2e/settings/{Id}");
+        endpoint.Should().NotBeNull("the PUT settings route should be registered");
+
+        var bodyJson = """{"value":"new-setting-value"}"""u8.ToArray();
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = "PUT";
+            context.Request.ContentType = "application/json; charset=utf-8";
+            context.Request.ContentLength = bodyJson.Length;
+            context.Request.Body = new MemoryStream(bodyJson);
+            context.Request.RouteValues["id"] = "setting-42";
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        response.Body.Should().Contain("setting-42");
+        response.Body.Should().Contain("new-setting-value");
+    }
+
+    [Fact]
+    public async Task When_DELETE_then_returns_204_no_content()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/e2e/delete-items/{Id}");
+        endpoint.Should().NotBeNull("the DELETE items route should be registered");
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = "DELETE";
+            context.Request.RouteValues["id"] = "item-99";
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status204NoContent);
+    }
+
+    [Fact]
+    public async Task When_conditional_RequiredIf_is_satisfied_and_field_missing_then_returns_422()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/e2e/conditional-validation");
+        endpoint.Should().NotBeNull("the conditional validation route should be registered");
+
+        // Mode is "export" which triggers RequiredIf on OutputPath, but OutputPath is not provided
+        var bodyJson = """{"mode":"export"}"""u8.ToArray();
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.ContentType = "application/json; charset=utf-8";
+            context.Request.ContentLength = bodyJson.Length;
+            context.Request.Body = new MemoryStream(bodyJson);
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status422UnprocessableEntity);
+        response.ContentType.Should().StartWith("application/problem+json");
+        response.Body.Should().Contain("OutputPath");
+    }
+
+    [Fact]
+    public async Task When_conditional_RequiredIf_is_satisfied_and_field_present_then_returns_200()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/e2e/conditional-validation");
+        endpoint.Should().NotBeNull();
+
+        var bodyJson = """{"mode":"export","outputPath":"/tmp/export.csv"}"""u8.ToArray();
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.ContentType = "application/json; charset=utf-8";
+            context.Request.ContentLength = bodyJson.Length;
+            context.Request.Body = new MemoryStream(bodyJson);
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        response.Body.Should().Contain("export");
+        response.Body.Should().Contain("/tmp/export.csv");
+    }
+
+    [Fact]
+    public async Task When_conditional_RequiredIf_not_triggered_then_field_not_required()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/e2e/conditional-validation");
+        endpoint.Should().NotBeNull();
+
+        // Mode is "preview" (not "export"), so OutputPath should NOT be required
+        var bodyJson = """{"mode":"preview"}"""u8.ToArray();
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.ContentType = "application/json; charset=utf-8";
+            context.Request.ContentLength = bodyJson.Length;
+            context.Request.Body = new MemoryStream(bodyJson);
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        response.Body.Should().Contain("preview");
+    }
+
+    [Fact]
+    public async Task When_GET_with_enum_query_param_then_value_is_bound()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/e2e/enum-query");
+        endpoint.Should().NotBeNull("the enum query route should be registered");
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.QueryString = new QueryString("?status=Active&priority=2");
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        response.Body.Should().Contain("Active");
+        response.Body.Should().Contain("2");
+    }
+
+    [Fact]
+    public async Task When_GET_with_invalid_enum_query_param_then_returns_400()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/e2e/enum-query");
+        endpoint.Should().NotBeNull();
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.QueryString = new QueryString("?status=InvalidValue&priority=1");
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status400BadRequest);
+    }
+
     private static async Task<TestHttpResponse> InvokeEndpointAsync(
         RouteEndpoint endpoint,
         IServiceProvider serviceProvider,
@@ -1238,4 +1407,141 @@ public partial class E2EBulkItemsCommand : ICommand<string>
         var names = command.Names ?? [];
         return Task.FromResult($"count:{names.Length}|items:{string.Join(",", names)}|priority:{command.Priority}");
     }
+}
+
+/// <summary>
+/// Anonymous PATCH with a route parameter and JSON body for end-to-end partial-update binding.
+/// Proves that <c>[HttpPatch]</c> operations with mixed route and body parameters work correctly.
+/// </summary>
+[Blueprint.Model.Attributes.RootLink("/e2e/templates/{Id}")]
+[Blueprint.Model.Attributes.HttpPatch]
+[Blueprint.Model.Attributes.AllowAnonymous]
+[Blueprint.Auditing.DoNotAudit]
+public partial class E2EPatchTemplateCommand : ICommand<string>
+{
+    /// <summary>The template identifier from the route.</summary>
+    public string? Id { get; set; }
+
+    /// <summary>An optional description update from the body.</summary>
+    public string? Description { get; set; }
+
+    /// <summary>Echoes back the bound route and body values.</summary>
+    /// <param name="command">The command instance.</param>
+    /// <returns>A formatted string showing the bound values.</returns>
+    public static Task<string> HandleAsync(E2EPatchTemplateCommand command)
+    {
+        return Task.FromResult($"id:{command.Id}|description:{command.Description}");
+    }
+}
+
+/// <summary>
+/// Anonymous PUT with a route parameter and JSON body for end-to-end replacement-update binding.
+/// Proves that <c>[HttpPut]</c> operations with mixed route and body parameters work correctly.
+/// </summary>
+[Blueprint.Model.Attributes.RootLink("/e2e/settings/{Id}")]
+[Blueprint.Model.Attributes.HttpPut]
+[Blueprint.Model.Attributes.AllowAnonymous]
+[Blueprint.Auditing.DoNotAudit]
+public partial class E2EPutSettingCommand : ICommand<string>
+{
+    /// <summary>The setting identifier from the route.</summary>
+    public string? Id { get; set; }
+
+    /// <summary>The setting value from the body.</summary>
+    public string? Value { get; set; }
+
+    /// <summary>Echoes back the bound route and body values.</summary>
+    /// <param name="command">The command instance.</param>
+    /// <returns>A formatted string showing the bound values.</returns>
+    public static Task<string> HandleAsync(E2EPutSettingCommand command)
+    {
+        return Task.FromResult($"id:{command.Id}|value:{command.Value}");
+    }
+}
+
+/// <summary>
+/// Anonymous DELETE with a route parameter for end-to-end delete operation binding.
+/// Proves that <c>[HttpDelete]</c> operations return <see cref="HttpNoContentResult"/> (204).
+/// </summary>
+[Blueprint.Model.Attributes.RootLink("/e2e/delete-items/{Id}")]
+[Blueprint.Model.Attributes.HttpDelete]
+[Blueprint.Model.Attributes.AllowAnonymous]
+[Blueprint.Auditing.DoNotAudit]
+public partial class E2EDeleteItemCommand : ICommand<HttpNoContentResult>
+{
+    /// <summary>The item identifier to delete.</summary>
+    public string? Id { get; set; }
+
+    /// <summary>Returns 204 No Content after deletion.</summary>
+    /// <returns>An <see cref="HttpNoContentResult"/>.</returns>
+    public static Task<HttpNoContentResult> HandleAsync()
+    {
+        return Task.FromResult(new HttpNoContentResult());
+    }
+}
+
+/// <summary>
+/// Anonymous POST with <see cref="Blueprint.Validation.RequiredIfAttribute"/> for conditional
+/// validation end-to-end testing. When <c>Mode</c> is <c>"export"</c>, <c>OutputPath</c> is required.
+/// </summary>
+[Blueprint.Model.Attributes.RootLink("/e2e/conditional-validation")]
+[Blueprint.Model.Attributes.AllowAnonymous]
+[Blueprint.Auditing.DoNotAudit]
+public partial class E2EConditionalValidationCommand : ICommand<string>
+{
+    /// <summary>The operation mode — "preview" or "export".</summary>
+    [Required]
+    public string Mode { get; set; } = string.Empty;
+
+    /// <summary>Output path, required only when Mode is "export".</summary>
+    [Blueprint.Validation.RequiredIf(nameof(Mode), "export")]
+    public string? OutputPath { get; set; }
+
+    /// <summary>Echoes back the bound values.</summary>
+    /// <param name="command">The command instance.</param>
+    /// <returns>A formatted string showing the bound values.</returns>
+    public static Task<string> HandleAsync(E2EConditionalValidationCommand command)
+    {
+        return Task.FromResult($"mode:{command.Mode}|outputPath:{command.OutputPath ?? "null"}");
+    }
+}
+
+/// <summary>
+/// Anonymous GET with enum and int query parameters for end-to-end enum binding.
+/// Proves that enum-typed query parameters are correctly parsed via TryParse.
+/// </summary>
+[Blueprint.Model.Attributes.RootLink("/e2e/enum-query")]
+[Blueprint.Model.Attributes.HttpGet]
+[Blueprint.Model.Attributes.AllowAnonymous]
+[Blueprint.Auditing.DoNotAudit]
+public partial class E2EEnumQueryParamsQuery : IQuery<string>
+{
+    /// <summary>An enum-typed query parameter.</summary>
+    public E2EItemStatus Status { get; set; }
+
+    /// <summary>An integer priority alongside the enum.</summary>
+    public int Priority { get; set; }
+
+    /// <summary>Echoes back the parsed enum and int values.</summary>
+    /// <param name="query">The query instance.</param>
+    /// <returns>A formatted string showing the bound values.</returns>
+    public static Task<string> HandleAsync(E2EEnumQueryParamsQuery query)
+    {
+        return Task.FromResult($"status:{query.Status}|priority:{query.Priority}");
+    }
+}
+
+/// <summary>
+/// Enum type used by <see cref="E2EEnumQueryParamsQuery"/> for enum query-string binding tests.
+/// </summary>
+public enum E2EItemStatus
+{
+    /// <summary>Unknown status.</summary>
+    Unknown = 0,
+
+    /// <summary>Item is active.</summary>
+    Active = 1,
+
+    /// <summary>Item is archived.</summary>
+    Archived = 2,
 }
