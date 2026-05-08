@@ -72,6 +72,28 @@
     - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
     - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
 
+### DownloadTemplateQuery
+  Type: DownloadTemplateQuery
+  Source: Source Generated
+  HTTP Methods: GET
+  URL: /templates/{Id}/download
+  Hosts: http
+  Auth: Authenticated
+  Discovery: query (Blueprint.SourceGenerator.Sample.Contract.Api.DownloadTemplateQuery)
+  Group: Templates
+  Result Outcomes:
+    - FileStreamResult
+  Failure Outcomes:
+    - legacy-validation-exception: Blueprint.Validation.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
+    - data-annotations-validation-exception: System.ComponentModel.DataAnnotations.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
+    - default-unhandled-exception: System.Exception -> Blueprint.Runtime.Exec.UnhandledExceptionResult
+  HTTP Responses:
+    - 200: hasBody=True types=[]
+    - 401: hasBody=False types=[]
+    - 403: hasBody=False types=[]
+    - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
+    - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+
 ### GetTemplateQuery
   Type: GetTemplateQuery
   Source: Source Generated
@@ -140,6 +162,26 @@
     - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
     - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
 
+### HealthCheckQuery
+  Type: HealthCheckQuery
+  Source: Source Generated
+  HTTP Methods: GET
+  URL: /system/health
+  Hosts: http
+  Auth: Anonymous
+  Discovery: query (Blueprint.SourceGenerator.Sample.Contract.Api.HealthCheckQuery)
+  Group: System
+  Result Outcomes:
+    - PlainTextResult
+  Failure Outcomes:
+    - legacy-validation-exception: Blueprint.Validation.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
+    - data-annotations-validation-exception: System.ComponentModel.DataAnnotations.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
+    - default-unhandled-exception: System.Exception -> Blueprint.Runtime.Exec.UnhandledExceptionResult
+  HTTP Responses:
+    - 200: hasBody=True types=[]
+    - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
+    - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+
 ### PreviewTemplateCommand
   Type: PreviewTemplateCommand
   Source: Source Generated
@@ -183,6 +225,28 @@
     - 401: hasBody=False types=[]
     - 403: hasBody=False types=[]
     - 409: hasBody=True types=[Blueprint.SourceGenerator.Sample.Contract.Api.TemplateApiResource]
+    - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
+    - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+
+### RedirectToTemplateDocsQuery
+  Type: RedirectToTemplateDocsQuery
+  Source: Source Generated
+  HTTP Methods: GET
+  URL: /templates/{Id}/docs
+  Hosts: http
+  Auth: Authenticated
+  Discovery: query (Blueprint.SourceGenerator.Sample.Contract.Api.RedirectToTemplateDocsQuery)
+  Group: Templates
+  Result Outcomes:
+    - RedirectResult
+  Failure Outcomes:
+    - legacy-validation-exception: Blueprint.Validation.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
+    - data-annotations-validation-exception: System.ComponentModel.DataAnnotations.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
+    - default-unhandled-exception: System.Exception -> Blueprint.Runtime.Exec.UnhandledExceptionResult
+  HTTP Responses:
+    - 302: hasBody=False types=[]
+    - 401: hasBody=False types=[]
+    - 403: hasBody=False types=[]
     - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
     - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
 
