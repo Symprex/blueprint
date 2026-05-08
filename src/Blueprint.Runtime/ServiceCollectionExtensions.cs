@@ -133,6 +133,23 @@ public sealed class BlueprintServiceBuilder
     }
 
     /// <summary>
+    /// Registers a property populator that auto-fills operation properties from ambient context
+    /// (e.g., JWT claims, tenant accessor, or correlation state) during the Population pipeline stage.
+    /// <para>
+    /// Multiple populators are supported and will be called in registration order. This is the
+    /// compile-time equivalent of legacy Blueprint's <c>SetTenantMiddleware</c> pattern.
+    /// </para>
+    /// </summary>
+    /// <typeparam name="T">The <see cref="Blueprint.Runtime.Middleware.IPropertyPopulator"/> implementation type.</typeparam>
+    /// <returns>This builder for chaining.</returns>
+    public BlueprintServiceBuilder AddPropertyPopulator<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] T>()
+        where T : class, Blueprint.Runtime.Middleware.IPropertyPopulator
+    {
+        this.Services.AddSingleton<Blueprint.Runtime.Middleware.IPropertyPopulator, T>();
+        return this;
+    }
+
+    /// <summary>
     /// Configures Blueprint HTTP options such as the public host for link generation,
     /// exception detail exposure, and content negotiation behaviour.
     /// </summary>

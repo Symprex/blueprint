@@ -40,6 +40,10 @@ public class Startup
             blueprint.AddBackgroundTaskScheduler<InProcessBackgroundTaskScheduler>();
             blueprint.AddUnitOfWork<InMemoryUnitOfWork>();
 
+            // Property population: auto-populate TenantId from JWT claims
+            // (like Signature365's SetTenantMiddleware at Authentication stage)
+            blueprint.AddPropertyPopulator<TenantPropertyPopulator>();
+
             blueprint.ConfigureHttp(http =>
             {
                 // Expose full exception details in non-production environments for easier debugging.

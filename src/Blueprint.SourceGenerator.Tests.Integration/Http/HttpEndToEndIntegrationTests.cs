@@ -278,6 +278,41 @@ public class HttpEndToEndIntegrationTests
     }
 
     [Fact]
+    public async Task When_property_populator_registered_and_user_authenticated_then_populates_TenantId()
+    {
+        var endpoints = CreateEndpointsWithPropertyPopulator();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/e2e/populated-tenant");
+        endpoint.Should().NotBeNull("the populated-tenant query route should be registered");
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            var identity = new System.Security.Claims.ClaimsIdentity("TestAuth");
+            identity.AddClaim(new System.Security.Claims.Claim("tenant_id", "pop-tenant-123"));
+            context.User = new System.Security.Claims.ClaimsPrincipal(identity);
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        response.Body.Should().Be("\"tenant:pop-tenant-123\"");
+    }
+
+    [Fact]
+    public async Task When_property_populator_registered_and_user_anonymous_then_TenantId_remains_null()
+    {
+        var endpoints = CreateEndpointsWithPropertyPopulator();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/e2e/populated-tenant");
+        endpoint.Should().NotBeNull();
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider);
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        response.Body.Should().Be("\"tenant:\"");
+    }
+
+    [Fact]
     public async Task When_handler_throws_ApiException_with_404_then_returns_404_with_problem_details()
     {
         var endpoints = CreateEndpoints();
@@ -1268,6 +1303,18 @@ public class HttpEndToEndIntegrationTests
             .AddSingleton<IntegrationTestBlueprintAppExecutor>()
             .AddSingleton<Blueprint.Authorization.IResourceAuthorizationProvider>(
                 new OwnershipAwareAuthorizationProvider());
+
+        return new TestEndpointRouteBuilder(services.BuildServiceProvider());
+    }
+
+    private static TestEndpointRouteBuilder CreateEndpointsWithPropertyPopulator()
+    {
+        var services = new ServiceCollection()
+            .AddLogging()
+            .AddSingleton<IntegrationTestBlueprintApp>()
+            .AddSingleton<IntegrationTestBlueprintAppExecutor>()
+            .AddSingleton<Blueprint.Runtime.Middleware.IPropertyPopulator>(
+                new TestTenantPropertyPopulator());
 
         return new TestEndpointRouteBuilder(services.BuildServiceProvider());
     }
@@ -2350,5 +2397,66 @@ public partial class E2EMultiRouteParamQuery : IQuery<string>
     public static Task<string> HandleAsync(E2EMultiRouteParamQuery query)
     {
         return Task.FromResult($"parent:{query.ParentId}|child:{query.ChildId}");
+    }
+}
+
+/// <summary>
+/// Anonymous query with a <c>TenantId</c> property that is NOT route-bound, used to prove
+/// that <see cref="Blueprint.Runtime.Middleware.IPropertyPopulator"/> implementations can
+/// auto-populate properties from claims during the Population stage.
+/// </summary>
+[Blueprint.Model.Attributes.RootLink("/e2e/populated-tenant")]
+[Blueprint.Model.Attributes.AllowAnonymous]
+[Blueprint.Auditing.DoNotAudit]
+public partial class E2EPopulatedTenantQuery : IQuery<string>
+{
+    /// <summary>TenantId property populated by the IPropertyPopulator, not from the route.</summary>
+    public string? TenantId { get; set; }
+
+    /// <summary>Echoes the populated TenantId to prove population worked.</summary>
+    /// <param name="query">The query with potentially populated TenantId.</param>
+    /// <returns>A string showing the TenantId value.</returns>
+    public static Task<string> HandleAsync(E2EPopulatedTenantQuery query)
+    {
+        return Task.FromResult($"tenant:{query.TenantId}");
+    }
+}
+
+/// <summary>
+/// Test property populator that sets <c>TenantId</c> from a <c>tenant_id</c> JWT claim,
+/// matching the pattern used by Signature365's <c>SetTenantMiddleware</c>.
+/// </summary>
+internal sealed class TestTenantPropertyPopulator : Blueprint.Runtime.Middleware.IPropertyPopulator
+{
+    public Task PopulateAsync(Blueprint.Runtime.Exec.ApiOperationContext context, CancellationToken cancellationToken)
+    {
+        var identity = context.UserIdentity;
+
+        if (identity?.IsAuthenticated != true)
+        {
+            return Task.CompletedTask;
+        }
+
+        var tenantClaim = identity.FindFirst("tenant_id");
+
+        if (tenantClaim is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        var operation = context.Operation;
+        var tenantIdProp = operation.GetType().GetProperty("TenantId");
+
+        if (tenantIdProp is not null && tenantIdProp.CanWrite)
+        {
+            var current = tenantIdProp.GetValue(operation) as string;
+
+            if (string.IsNullOrEmpty(current))
+            {
+                tenantIdProp.SetValue(operation, tenantClaim.Value);
+            }
+        }
+
+        return Task.CompletedTask;
     }
 }
