@@ -826,6 +826,162 @@ public class ReferenceAppHttpEndToEndIntegrationTests
         response.StatusCode.Should().Be(StatusCodes.Status200OK);
     }
 
+    [Fact]
+    public async Task When_export_templates_with_auth_then_returns_202_accepted_with_job_reference()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/templates/export", "POST");
+        endpoint.Should().NotBeNull("the export route should be registered");
+
+        var bodyJson = """{"nameFilter":"Welcome"}"""u8.ToArray();
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Post;
+            context.Request.ContentType = "application/json; charset=utf-8";
+            context.Request.ContentLength = bodyJson.Length;
+            context.Request.Body = new MemoryStream(bodyJson);
+            context.User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "user-1"),
+                ],
+                authenticationType: "test"));
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status202Accepted);
+        response.ContentType.Should().Be("application/json; charset=utf-8");
+        response.Body.Should().Contain("JobId");
+        response.Body.Should().Contain("EstimatedSeconds");
+    }
+
+    [Fact]
+    public async Task When_export_templates_without_auth_then_returns_401()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/templates/export", "POST");
+        endpoint.Should().NotBeNull("the export route should be registered");
+
+        var bodyJson = """{}"""u8.ToArray();
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Post;
+            context.Request.ContentType = "application/json; charset=utf-8";
+            context.Request.ContentLength = bodyJson.Length;
+            context.Request.Body = new MemoryStream(bodyJson);
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status401Unauthorized);
+    }
+
+    [Fact]
+    public async Task When_health_check_invoked_anonymously_then_returns_200_plain_text()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/system/health", "GET");
+        endpoint.Should().NotBeNull("the health check route should be registered");
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Get;
+            context.Request.Path = "/api/system/health";
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        response.ContentType.Should().Be("text/plain; charset=utf-8");
+        response.Body.Should().Contain("healthy");
+    }
+
+    [Fact]
+    public async Task When_download_template_with_auth_then_returns_200_with_binary_stream()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/templates/{Id}/download", "GET");
+        endpoint.Should().NotBeNull("the download route should be registered");
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Get;
+            context.Request.Path = "/api/templates/template-001/download";
+            context.Request.RouteValues = new RouteValueDictionary { ["Id"] = "template-001" };
+            context.User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "user-1"),
+                ],
+                authenticationType: "test"));
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        response.ContentType.Should().Be("application/octet-stream");
+        response.Body.Should().NotBeEmpty("the template content should be streamed");
+    }
+
+    [Fact]
+    public async Task When_redirect_to_docs_with_auth_then_returns_redirect()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/templates/{Id}/docs", "GET");
+        endpoint.Should().NotBeNull("the redirect-to-docs route should be registered");
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Get;
+            context.Request.Path = "/api/templates/template-001/docs";
+            context.Request.RouteValues = new RouteValueDictionary { ["Id"] = "template-001" };
+            context.User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "user-1"),
+                ],
+                authenticationType: "test"));
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status302Found);
+        response.LocationHeader.Should().NotBeNull("redirect responses must include a Location header");
+        response.LocationHeader.Should().Contain("template-001");
+    }
+
+    [Fact]
+    public async Task When_update_template_with_ivalidatable_cross_field_violation_then_returns_422()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/templates/{Id}", "PUT");
+
+        // HtmlSource and PlainTextSource are both null/empty — cross-field IValidatableObject check triggers
+        var bodyJson = """{"name":"Valid Name"}"""u8.ToArray();
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Put;
+            context.Request.Path = "/api/templates/template-001";
+            context.Request.RouteValues = new RouteValueDictionary { ["Id"] = "template-001" };
+            context.Request.ContentType = "application/json; charset=utf-8";
+            context.Request.ContentLength = bodyJson.Length;
+            context.Request.Body = new MemoryStream(bodyJson);
+            context.User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "user-1"),
+                ],
+                authenticationType: "test"));
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status422UnprocessableEntity);
+        response.ContentType.Should().StartWith("application/problem+json");
+        response.Body.Should().Contain("content source");
+    }
+
     private static async Task<TestHttpResponse> InvokeEndpointAsync(
         RouteEndpoint endpoint,
         IServiceProvider serviceProvider,

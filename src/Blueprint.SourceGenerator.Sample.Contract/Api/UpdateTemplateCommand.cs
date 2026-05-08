@@ -10,13 +10,15 @@ namespace Blueprint.SourceGenerator.Sample.Contract.Api;
 /// Updates an existing template's metadata and content. Demonstrates a URL-parameterized command
 /// with body binding at the same route pattern as the GET query but with a different HTTP method.
 /// Returns a resource-event result (template.updated).
+/// Also demonstrates <see cref="IValidatableObject"/> for cross-field validation: at least one
+/// content source (HtmlSource or PlainTextSource) must be provided.
 /// </summary>
 [ApiOperations("Templates")]
 [RootLink("/templates/{Id}")]
 [HttpPut]
 [FromResource(typeof(CreateTemplateCommand))]
 [Description("Update an existing template's name and content.")]
-public partial class UpdateTemplateCommand : ICommand<ResourceEventResult<TemplateApiResource>>
+public partial class UpdateTemplateCommand : ICommand<ResourceEventResult<TemplateApiResource>>, IValidatableObject
 {
     /// <summary>
     /// The identifier of the template to update (bound from the route).
@@ -45,4 +47,19 @@ public partial class UpdateTemplateCommand : ICommand<ResourceEventResult<Templa
     [MaxLength(10000)]
     [Description("The updated plain text content.")]
     public string? PlainTextSource { get; set; }
+
+    /// <summary>
+    /// Validates cross-field constraints: at least one content source must be provided.
+    /// </summary>
+    /// <param name="validationContext">The validation context provided by the framework.</param>
+    /// <returns>Validation errors when neither HtmlSource nor PlainTextSource is supplied.</returns>
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        if (string.IsNullOrWhiteSpace(this.HtmlSource) && string.IsNullOrWhiteSpace(this.PlainTextSource))
+        {
+            yield return new ValidationResult(
+                "At least one content source (HtmlSource or PlainTextSource) must be provided.",
+                [nameof(this.HtmlSource), nameof(this.PlainTextSource)]);
+        }
+    }
 }
