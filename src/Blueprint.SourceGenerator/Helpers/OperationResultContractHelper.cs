@@ -114,6 +114,8 @@ public static class OperationResultContractHelper
     /// <param name="keyOnlyResourceEventResultType">The resolved <c>Blueprint.Runtime.Exec.KeyOnlyResourceEventResult</c> type when available.</param>
     /// <param name="resourceEventResultType">The resolved <c>Blueprint.Runtime.Exec.ResourceEventResult</c> type when available.</param>
     /// <param name="httpNoContentResultType">The resolved <c>Blueprint.Runtime.Http.HttpNoContentResult</c> type when available.</param>
+    /// <param name="plainTextResultType">The resolved <c>Blueprint.Runtime.Exec.PlainTextResult</c> type when available.</param>
+    /// <param name="redirectResultType">The resolved <c>Blueprint.Runtime.Http.RedirectResult</c> type when available.</param>
     /// <returns>Whether the current HTTP executor can translate the result type.</returns>
     public static bool IsSupportedByHttpOperationResultExecutor(
         ITypeSymbol resultType,
@@ -126,7 +128,9 @@ public static class OperationResultContractHelper
         INamedTypeSymbol noResultType,
         INamedTypeSymbol? keyOnlyResourceEventResultType,
         INamedTypeSymbol? resourceEventResultType,
-        INamedTypeSymbol? httpNoContentResultType)
+        INamedTypeSymbol? httpNoContentResultType,
+        INamedTypeSymbol? plainTextResultType = null,
+        INamedTypeSymbol? redirectResultType = null)
     {
         return IsTypeOrDerivedFrom(resultType, okResultType)
             || IsTypeOrDerivedFromOptional(resultType, acceptedResultType)
@@ -137,7 +141,9 @@ public static class OperationResultContractHelper
             || SymbolEqualityComparer.Default.Equals(resultType, noResultType)
             || SymbolEqualityComparer.Default.Equals(resultType, keyOnlyResourceEventResultType)
             || IsTypeOrDerivedFromOptional(resultType, resourceEventResultType)
-            || SymbolEqualityComparer.Default.Equals(resultType, httpNoContentResultType);
+            || SymbolEqualityComparer.Default.Equals(resultType, httpNoContentResultType)
+            || SymbolEqualityComparer.Default.Equals(resultType, plainTextResultType)
+            || SymbolEqualityComparer.Default.Equals(resultType, redirectResultType);
     }
 
     /// <summary>
@@ -156,6 +162,8 @@ public static class OperationResultContractHelper
     /// <param name="httpNoContentResultType">The resolved <c>Blueprint.Runtime.Http.HttpNoContentResult</c> type when available.</param>
     /// <param name="statusCode">The HTTP status code for the current executor path.</param>
     /// <param name="hasResponseBody">Whether the current executor path writes a response body.</param>
+    /// <param name="plainTextResultType">The resolved <c>Blueprint.Runtime.Exec.PlainTextResult</c> type when available.</param>
+    /// <param name="redirectResultType">The resolved <c>Blueprint.Runtime.Http.RedirectResult</c> type when available.</param>
     /// <returns>Whether the current executor path has a deterministic response shape for the semantic result type.</returns>
     public static bool TryGetHttpOperationResultResponseShape(
         ITypeSymbol resultType,
@@ -170,7 +178,9 @@ public static class OperationResultContractHelper
         INamedTypeSymbol? resourceEventResultType,
         INamedTypeSymbol? httpNoContentResultType,
         out int statusCode,
-        out bool hasResponseBody)
+        out bool hasResponseBody,
+        INamedTypeSymbol? plainTextResultType = null,
+        INamedTypeSymbol? redirectResultType = null)
     {
         if (IsTypeOrDerivedFrom(resultType, okResultType))
         {
@@ -238,6 +248,20 @@ public static class OperationResultContractHelper
         if (SymbolEqualityComparer.Default.Equals(resultType, httpNoContentResultType))
         {
             statusCode = 204;
+            hasResponseBody = false;
+            return true;
+        }
+
+        if (SymbolEqualityComparer.Default.Equals(resultType, plainTextResultType))
+        {
+            statusCode = 200;
+            hasResponseBody = true;
+            return true;
+        }
+
+        if (SymbolEqualityComparer.Default.Equals(resultType, redirectResultType))
+        {
+            statusCode = 302;
             hasResponseBody = false;
             return true;
         }

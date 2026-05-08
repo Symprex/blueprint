@@ -462,6 +462,37 @@ public class HttpEndToEndIntegrationTests
         response.Body.Should().Contain("Invalid input");
     }
 
+    [Fact]
+    public async Task When_handler_returns_plain_text_result_then_returns_200_text_plain()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/e2e/plain-text");
+        endpoint.Should().NotBeNull();
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider);
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        response.ContentType.Should().Be("text/plain; charset=utf-8");
+        response.Body.Should().Be("Hello, plain text!");
+    }
+
+    [Fact]
+    public async Task When_handler_returns_redirect_result_then_returns_302_with_location()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/e2e/redirect");
+        endpoint.Should().NotBeNull();
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider);
+
+        response.StatusCode.Should().Be(StatusCodes.Status302Found);
+        response.LocationHeader.Should().Be("https://example.com/target");
+    }
+
     private static async Task<TestHttpResponse> InvokeEndpointAsync(
         RouteEndpoint endpoint,
         IServiceProvider serviceProvider,
@@ -875,5 +906,37 @@ public partial class E2EBadRequestQuery : IQuery<string>
     public static Task<string> HandleAsync(E2EBadRequestQuery query)
     {
         throw new BadRequestException("Invalid input");
+    }
+}
+
+/// <summary>E2E operation returning a plain-text response (text/plain instead of JSON).</summary>
+[Blueprint.Model.Attributes.RootLink("/e2e/plain-text")]
+[Blueprint.Model.Attributes.HttpGet]
+[Blueprint.Model.Attributes.AllowAnonymous]
+[Blueprint.Auditing.DoNotAudit]
+public partial class E2EPlainTextQuery : IQuery<PlainTextResult>
+{
+    /// <summary>Returns a plain-text response.</summary>
+    /// <param name="query">The query instance (unused).</param>
+    /// <returns>A plain-text result.</returns>
+    public static Task<PlainTextResult> HandleAsync(E2EPlainTextQuery query)
+    {
+        return Task.FromResult(new PlainTextResult("Hello, plain text!"));
+    }
+}
+
+/// <summary>E2E operation returning an HTTP redirect response.</summary>
+[Blueprint.Model.Attributes.RootLink("/e2e/redirect")]
+[Blueprint.Model.Attributes.HttpGet]
+[Blueprint.Model.Attributes.AllowAnonymous]
+[Blueprint.Auditing.DoNotAudit]
+public partial class E2ERedirectQuery : IQuery<Blueprint.Runtime.Http.RedirectResult>
+{
+    /// <summary>Returns a redirect to an external URL.</summary>
+    /// <param name="query">The query instance (unused).</param>
+    /// <returns>A redirect result.</returns>
+    public static Task<Blueprint.Runtime.Http.RedirectResult> HandleAsync(E2ERedirectQuery query)
+    {
+        return Task.FromResult(new Blueprint.Runtime.Http.RedirectResult("https://example.com/target"));
     }
 }
