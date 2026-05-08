@@ -120,6 +120,26 @@ public class HttpEndToEndIntegrationTests
     }
 
     [Fact]
+    public async Task When_POST_with_malformed_json_body_then_returns_400_binding_failure()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/e2e/items");
+        endpoint.Should().NotBeNull("the create command route should be registered");
+
+        var malformedJson = "{not valid json!!!"u8.ToArray();
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.ContentType = "application/json; charset=utf-8";
+            context.Request.ContentLength = malformedJson.Length;
+            context.Request.Body = new MemoryStream(malformedJson);
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status400BadRequest);
+    }
+
+    [Fact]
     public async Task When_POST_validation_fails_then_returns_422_with_validation_problem_details()
     {
         var endpoints = CreateEndpoints();

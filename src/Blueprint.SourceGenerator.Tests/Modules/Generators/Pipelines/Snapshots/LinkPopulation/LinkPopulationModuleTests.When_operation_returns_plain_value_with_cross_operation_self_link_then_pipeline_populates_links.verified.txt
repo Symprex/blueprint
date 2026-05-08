@@ -155,6 +155,10 @@ namespace Blueprint.Generated
                     {
                         return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid JSON body");
                     }
+                    catch (System.NotSupportedException)
+                    {
+                        return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid JSON body");
+                    }
                 }
             }
 

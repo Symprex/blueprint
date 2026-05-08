@@ -761,6 +761,10 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
                     bodyContext.WriteStatement("    {");
                     bodyContext.WriteStatement("        return new Blueprint.Runtime.Exec.BindingFailureResult(\"Invalid JSON body\");");
                     bodyContext.WriteStatement("    }");
+                    bodyContext.WriteStatement("    catch (System.NotSupportedException)");
+                    bodyContext.WriteStatement("    {");
+                    bodyContext.WriteStatement("        return new Blueprint.Runtime.Exec.BindingFailureResult(\"Invalid JSON body\");");
+                    bodyContext.WriteStatement("    }");
                     bodyContext.WriteStatement("}");
                 });
 
