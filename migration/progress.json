@@ -13,10 +13,10 @@
     "activeWorkstream": "documentation-and-final-alignment",
     "nextReadySlice": null,
     "lastCompletedSlice": {
-      "id": "sample/from-header-binding-demo",
+      "id": "sample/result-type-demos",
       "workstream": "documentation-and-final-alignment",
-      "title": "Add [FromHeader] X-Correlation-Id binding to reference app with E2E test and OpenAPI header parameter",
-      "commit": "3dcd642"
+      "title": "Add sample app demos for PlainTextResult, FileStreamResult, and RedirectResult operations",
+      "commit": "15a8c0e"
     },
     "openReviewGate": null,
     "openReviewGateRationale": null,
@@ -309,6 +309,36 @@
       "workstream": "documentation-and-final-alignment",
       "title": "Add [FromHeader] X-Correlation-Id binding to reference app with E2E test and OpenAPI header parameter",
       "commit": "3dcd642"
+    },
+    {
+      "id": "openapi/tag-descriptions",
+      "workstream": "documentation-and-final-alignment",
+      "title": "Add OpenAPI tag descriptions from [ApiOperations] Description property",
+      "commit": "b89dfa7"
+    },
+    {
+      "id": "openapi/document-info-and-cookie-demo",
+      "workstream": "documentation-and-final-alignment",
+      "title": "Add OpenAPI contact, license, termsOfService document info and [FromCookie] sample demo",
+      "commit": "3347cd8"
+    },
+    {
+      "id": "runtime/plain-text-and-redirect-results",
+      "workstream": "documentation-and-final-alignment",
+      "title": "Add PlainTextResult and RedirectResult for non-JSON HTTP responses with generator and E2E support",
+      "commit": "ae148fd"
+    },
+    {
+      "id": "runtime/file-stream-result",
+      "workstream": "documentation-and-final-alignment",
+      "title": "Add FileStreamResult for binary file download responses with Content-Disposition support",
+      "commit": "2a173b8"
+    },
+    {
+      "id": "sample/result-type-demos",
+      "workstream": "documentation-and-final-alignment",
+      "title": "Add sample app demos for PlainTextResult, FileStreamResult, and RedirectResult operations",
+      "commit": "15a8c0e"
     }
   ],
   "decisions": [
