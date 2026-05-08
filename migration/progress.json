@@ -13,10 +13,10 @@
     "activeWorkstream": "documentation-and-final-alignment",
     "nextReadySlice": null,
     "lastCompletedSlice": {
-      "id": "runtime/changetype-status-codes-and-location-headers",
+      "id": "openapi/validation-format-projection",
       "workstream": "documentation-and-final-alignment",
-      "title": "ChangeType-aware HTTP status codes and Location headers for resource event results",
-      "commit": "38015c7"
+      "title": "Project OpenAPI format hints from validation attributes (EmailAddress→email, Url→uri, Phone→phone)",
+      "commit": "eb8543e"
     },
     "openReviewGate": null,
     "openReviewGateRationale": null,
@@ -279,6 +279,30 @@
       "workstream": "documentation-and-final-alignment",
       "title": "Add Location header to 201 Created HTTP responses from self-link URL",
       "commit": "38015c7"
+    },
+    {
+      "id": "validation/range-regex-fast-paths",
+      "workstream": "documentation-and-final-alignment",
+      "title": "Add RangeAttribute and RegularExpressionAttribute validation fast-path strategies with OpenAPI constraint projection",
+      "commit": "c60eeb7"
+    },
+    {
+      "id": "validation/sample-app-range-regex-demo",
+      "workstream": "documentation-and-final-alignment",
+      "title": "Add Range and RegularExpression validation examples to sample app with OpenAPI snapshot update",
+      "commit": "3c1138f"
+    },
+    {
+      "id": "validation/phone-url-fast-paths",
+      "workstream": "documentation-and-final-alignment",
+      "title": "Add Phone and Url validation fast-path strategies closing all DataAnnotations parity gaps",
+      "commit": "6953d42"
+    },
+    {
+      "id": "openapi/validation-format-projection",
+      "workstream": "documentation-and-final-alignment",
+      "title": "Project OpenAPI format hints from validation attributes (EmailAddress→email, Url→uri, Phone→phone)",
+      "commit": "eb8543e"
     }
   ],
   "decisions": [
