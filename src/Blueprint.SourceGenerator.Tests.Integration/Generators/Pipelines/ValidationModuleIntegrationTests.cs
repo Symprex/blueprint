@@ -501,6 +501,87 @@ public class ValidationModuleIntegrationTests
     }
 
     [Fact]
+    public async Task When_less_than_property_validation_fails_then_generated_pipeline_returns_validation_failure_and_skips_handler()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(LessThanPropertyValidationOperation));
+        var context = CreateContext(app, LessThanPropertyValidationOperation.Configure());
+        var operation = (LessThanPropertyValidationOperation)context.Operation;
+        operation.Start = 10m;
+        operation.End = 10m;
+
+        LessThanPropertyValidationOperation.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<ValidationFailedResult>();
+        LessThanPropertyValidationOperation.HandlerCallCount.Should().Be(0);
+        var validationResult = ((ValidationFailedResult)result).ValidationResults.Should().ContainSingle().Subject;
+        validationResult.MemberNames.Should().Contain(nameof(LessThanPropertyValidationOperation.Start));
+    }
+
+    [Fact]
+    public async Task When_less_than_property_validation_passes_then_generated_pipeline_runs_handler_and_returns_ok()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(LessThanPropertyValidationOperation));
+        var context = CreateContext(app, LessThanPropertyValidationOperation.Configure());
+        var operation = (LessThanPropertyValidationOperation)context.Operation;
+        operation.Start = 9m;
+        operation.End = 10m;
+
+        LessThanPropertyValidationOperation.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<OkResult<string>>();
+        LessThanPropertyValidationOperation.HandlerCallCount.Should().Be(1);
+        ((OkResult)result).Unwrap<string>().Should().Be("9:10");
+    }
+
+    [Fact]
+    public async Task When_less_than_validation_fails_then_generated_pipeline_returns_validation_failure_and_skips_handler()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(LessThanValidationOperation));
+        var context = CreateContext(app, LessThanValidationOperation.Configure());
+        var operation = (LessThanValidationOperation)context.Operation;
+        operation.Count = 100;
+
+        LessThanValidationOperation.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<ValidationFailedResult>();
+        LessThanValidationOperation.HandlerCallCount.Should().Be(0);
+        var validationResult = ((ValidationFailedResult)result).ValidationResults.Should().ContainSingle().Subject;
+        validationResult.MemberNames.Should().Contain(nameof(LessThanValidationOperation.Count));
+        validationResult.ErrorMessage.Should().Be("The field Count must be less than '100'.");
+    }
+
+    [Fact]
+    public async Task When_less_than_validation_passes_then_generated_pipeline_runs_handler_and_returns_ok()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(LessThanValidationOperation));
+        var context = CreateContext(app, LessThanValidationOperation.Configure());
+        var operation = (LessThanValidationOperation)context.Operation;
+        operation.Count = 99;
+
+        LessThanValidationOperation.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<OkResult<string>>();
+        LessThanValidationOperation.HandlerCallCount.Should().Be(1);
+        ((OkResult)result).Unwrap<string>().Should().Be("99");
+    }
+
+    [Fact]
     public async Task When_required_if_validation_fails_then_generated_pipeline_returns_validation_failure_and_skips_handler()
     {
         var app = new IntegrationTestBlueprintApp();
@@ -1386,6 +1467,46 @@ public partial class UrlValidationOperation : ICommand<string>
     {
         HandlerCallCount++;
         return Task.FromResult(operation.Website ?? string.Empty);
+    }
+}
+
+public partial class LessThanPropertyValidationOperation : ICommand<string>
+{
+    public static int HandlerCallCount { get; private set; }
+
+    [LessThanProperty(nameof(End))]
+    public decimal Start { get; set; }
+
+    public decimal End { get; set; }
+
+    public static void Reset()
+    {
+        HandlerCallCount = 0;
+    }
+
+    public static Task<string> HandleAsync(LessThanPropertyValidationOperation operation)
+    {
+        HandlerCallCount++;
+        return Task.FromResult($"{operation.Start}:{operation.End}");
+    }
+}
+
+public partial class LessThanValidationOperation : ICommand<string>
+{
+    public static int HandlerCallCount { get; private set; }
+
+    [LessThan(100)]
+    public int Count { get; set; }
+
+    public static void Reset()
+    {
+        HandlerCallCount = 0;
+    }
+
+    public static Task<string> HandleAsync(LessThanValidationOperation operation)
+    {
+        HandlerCallCount++;
+        return Task.FromResult(operation.Count.ToString());
     }
 }
 

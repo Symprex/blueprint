@@ -37,7 +37,7 @@ Do not use this skill to change Blueprint internals in `blueprint-source-gen`; u
 | Sensitive data | `[Sensitive]` on properties signals audit sinks to redact/mask that data |
 | Audit opt-out | `[DoNotAudit]` on a class opts out of automatic audit recording |
 | Trace opt-out | `[DoNotRecordPerformanceMetrics]` on a class suppresses Activity/trace span creation |
-| Validation | Prefer declarative `ValidationAttribute` usage; Blueprint generates validation from those contracts, and the current retained Blueprint-specific set now includes `Blueprint.Validation.GreaterThanPropertyAttribute` |
+| Validation | Prefer declarative `ValidationAttribute` usage; Blueprint generates validation from those contracts, and the current retained Blueprint-specific set now includes `Blueprint.Validation.GreaterThanPropertyAttribute`, `Blueprint.Validation.LessThanPropertyAttribute`, `Blueprint.Validation.GreaterThanAttribute`, and `Blueprint.Validation.LessThanAttribute` |
 | Debugging | Prefer build diagnostics, generated output, manifests, and sample patterns over runtime guesswork |
 
 ## Advanced analyzer extensions
@@ -74,8 +74,8 @@ At runtime, `BlueprintApp.GetOperationsForHost("custom-host")` returns operation
 - Treat validation attributes as compile-time inputs first and runtime behavior second; if the build can prove the contract is wrong, expect a diagnostic instead of a runtime repair path.
 - The validation pipeline plans each property independently: supported attributes generate direct inline checks (fast-paths), while unsupported attributes fall back to per-property runtime validation.
 - **Standard DataAnnotations fast-paths:** `Required`, `MaxLength`, `MinLength`, `StringLength`, `EmailAddress`, `Phone`, `Url`, `Range(int,int)`, `RegularExpression` (single-arg constructor).
-- **Blueprint-specific fast-paths:** `GreaterThanProperty`, `GreaterThan`, `RequiredIf`, `RequiredIfNot`, `NotAllowedIf` — all in `Blueprint.Validation.*`.
-- **Compile-time cross-property validation:** `CompareAttribute` (BPV001), `GreaterThanPropertyAttribute` (BPV002), `RequiredIfAttribute` (BPV003), `RequiredIfNotAttribute` (BPV004), and `NotAllowedIfAttribute` (BPV005) all reject invalid property references at build time.
+- **Blueprint-specific fast-paths:** `GreaterThanProperty`, `GreaterThan`, `LessThanProperty`, `LessThan`, `RequiredIf`, `RequiredIfNot`, `NotAllowedIf` — all in `Blueprint.Validation.*`.
+- **Compile-time cross-property validation:** `CompareAttribute` (BPV001), `GreaterThanPropertyAttribute` (BPV002), `RequiredIfAttribute` (BPV003), `RequiredIfNotAttribute` (BPV004), `NotAllowedIfAttribute` (BPV005), and `LessThanPropertyAttribute` (BPV006) all reject invalid property references at build time.
 - **OpenAPI constraint projection:** validation attributes automatically project into OpenAPI schemas — `Range` → min/max, `RegularExpression` → pattern, `MaxLength`/`MinLength`/`StringLength` → length constraints, `EmailAddress` → `format: "email"`, `Url` → `format: "uri"`, `Phone` → `format: "phone"`.
 - If an HTTP-exposed operation needs a consumer-owned OpenAPI tag/group that differs from the namespace-derived fallback, declare `[ApiOperations("...")]` on the operation type; the descriptor and OpenAPI seams now prefer that explicit group name when it is present.
 
