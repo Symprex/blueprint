@@ -20,6 +20,8 @@ public class AppModelOpenApiSchemaComponentRenderingContextTests
         componentContext.Components.Select(static component => component.BodyTypeName).Should().Equal(
             "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.LinkTestApiResource",
             "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.MappedLinkApiResource",
+            "Blueprint.SourceGenerator.Tests.Integration.Http.E2EConflictDetail",
+            "Blueprint.SourceGenerator.Tests.Integration.Http.E2EJobAcceptedPayload",
             "Blueprint.SourceGenerator.Tests.Integration.Http.E2EWidgetResponse",
             "Microsoft.AspNetCore.Mvc.ProblemDetails",
             "Microsoft.AspNetCore.Mvc.ValidationProblemDetails",

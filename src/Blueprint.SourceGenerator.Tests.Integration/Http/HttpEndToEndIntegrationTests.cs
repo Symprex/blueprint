@@ -811,6 +811,172 @@ public class HttpEndToEndIntegrationTests
     }
 
     [Fact]
+    public async Task When_command_returns_AcceptedResult_then_returns_202_with_json_body()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+        var endpoint = FindEndpoint(endpoints, "api/e2e/accepted-job")!;
+
+        var bodyJson = """{"jobName":"import-users"}"""u8.ToArray();
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, ctx =>
+        {
+            ctx.Request.ContentType = "application/json; charset=utf-8";
+            ctx.Request.ContentLength = bodyJson.Length;
+            ctx.Request.Body = new MemoryStream(bodyJson);
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status202Accepted);
+        response.ContentType.Should().StartWith("application/json");
+        response.Body.Should().Contain("import-users");
+    }
+
+    [Fact]
+    public async Task When_command_returns_ConflictResult_then_returns_409_with_json_body()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+        var endpoint = FindEndpoint(endpoints, "api/e2e/conflict-check/{Name}")!;
+
+        var bodyJson = "{}"u8.ToArray();
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, ctx =>
+        {
+            ctx.Request.ContentType = "application/json; charset=utf-8";
+            ctx.Request.ContentLength = bodyJson.Length;
+            ctx.Request.Body = new MemoryStream(bodyJson);
+            ctx.Request.RouteValues = new RouteValueDictionary { { "Name", "existing-item" } };
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status409Conflict);
+        response.ContentType.Should().StartWith("application/json");
+        response.Body.Should().Contain("existing-item");
+    }
+
+    [Fact]
+    public async Task When_GET_with_datetime_query_param_then_value_is_bound()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+        var endpoint = FindEndpoint(endpoints, "api/e2e/datetime-binding")!;
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, ctx =>
+        {
+            ctx.Request.Method = "GET";
+            ctx.Request.QueryString = new QueryString("?Since=2024-06-15T10:30:00Z&Until=2024-12-31");
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        response.Body.Should().Contain("2024-06-15");
+        response.Body.Should().Contain("2024-12-31");
+    }
+
+    [Fact]
+    public async Task When_GET_with_decimal_query_param_then_value_is_bound()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+        var endpoint = FindEndpoint(endpoints, "api/e2e/decimal-binding")!;
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, ctx =>
+        {
+            ctx.Request.Method = "GET";
+            ctx.Request.QueryString = new QueryString("?Amount=1234.56&TaxRate=0.175");
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        response.Body.Should().Contain("1234.56");
+        response.Body.Should().Contain("0.175");
+    }
+
+    [Fact]
+    public async Task When_GET_with_nullable_int_query_param_omitted_then_null_is_bound()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+        var endpoint = FindEndpoint(endpoints, "api/e2e/nullable-int")!;
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, ctx =>
+        {
+            ctx.Request.Method = "GET";
+            ctx.Request.QueryString = new QueryString("?Name=test");
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        response.Body.Should().Contain("name:test|page:null|size:null");
+    }
+
+    [Fact]
+    public async Task When_GET_with_nullable_int_query_param_provided_then_value_is_bound()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+        var endpoint = FindEndpoint(endpoints, "api/e2e/nullable-int")!;
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, ctx =>
+        {
+            ctx.Request.Method = "GET";
+            ctx.Request.QueryString = new QueryString("?Name=test&Page=3&PageSize=25");
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        response.Body.Should().Contain("name:test|page:3|size:25");
+    }
+
+    [Fact]
+    public async Task When_GET_with_bool_query_param_then_value_is_bound()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+        var endpoint = FindEndpoint(endpoints, "api/e2e/bool-binding")!;
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, ctx =>
+        {
+            ctx.Request.Method = "GET";
+            ctx.Request.QueryString = new QueryString("?IncludeArchived=true&Verbose=false");
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        response.Body.Should().Contain("archived:True|verbose:False");
+    }
+
+    [Fact]
+    public async Task When_POST_with_multiple_validation_errors_then_returns_422_with_all_errors()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+        var endpoint = FindEndpoint(endpoints, "api/e2e/multi-validation")!;
+
+        var bodyJson = """{"email":"","age":-1}"""u8.ToArray();
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, ctx =>
+        {
+            ctx.Request.ContentType = "application/json; charset=utf-8";
+            ctx.Request.ContentLength = bodyJson.Length;
+            ctx.Request.Body = new MemoryStream(bodyJson);
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status422UnprocessableEntity);
+        response.Body.Should().Contain("Name");
+        response.Body.Should().Contain("Email");
+    }
+
+    [Fact]
+    public async Task When_command_returns_KeyOnlyResourceEventResult_created_then_returns_201_no_body()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+        var endpoint = FindEndpoint(endpoints, "api/e2e/key-only-event")!;
+
+        var bodyJson = """{"resourceId":"res-123"}"""u8.ToArray();
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, ctx =>
+        {
+            ctx.Request.ContentType = "application/json; charset=utf-8";
+            ctx.Request.ContentLength = bodyJson.Length;
+            ctx.Request.Body = new MemoryStream(bodyJson);
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status201Created);
+    }
+
+    [Fact]
     public async Task When_GET_with_invalid_enum_query_param_then_returns_400()
     {
         var endpoints = CreateEndpoints();
@@ -1544,4 +1710,219 @@ public enum E2EItemStatus
 
     /// <summary>Item is archived.</summary>
     Archived = 2,
+}
+
+/// <summary>
+/// POST returning AcceptedResult (202) for asynchronous job patterns.
+/// </summary>
+[Blueprint.Model.Attributes.RootLink("/e2e/accepted-job")]
+[Blueprint.Model.Attributes.HttpPost]
+[Blueprint.Model.Attributes.AllowAnonymous]
+[Blueprint.Auditing.DoNotAudit]
+public partial class E2EAcceptedJobCommand : ICommand<AcceptedResult<E2EJobAcceptedPayload>>
+{
+    /// <summary>The name of the job to queue.</summary>
+    [Required]
+    public string JobName { get; set; } = default!;
+
+    /// <summary>Queues the job and returns an accepted result.</summary>
+    /// <param name="command">The command instance.</param>
+    /// <returns>An accepted result with job details.</returns>
+    public static Task<AcceptedResult<E2EJobAcceptedPayload>> HandleAsync(E2EAcceptedJobCommand command)
+    {
+        return Task.FromResult(new AcceptedResult<E2EJobAcceptedPayload>(new E2EJobAcceptedPayload { JobName = command.JobName, JobId = "job-001" }));
+    }
+}
+
+/// <summary>Payload returned by <see cref="E2EAcceptedJobCommand"/>.</summary>
+public class E2EJobAcceptedPayload
+{
+    /// <summary>The job name.</summary>
+    public string JobName { get; set; } = default!;
+
+    /// <summary>The assigned job ID.</summary>
+    public string JobId { get; set; } = default!;
+}
+
+/// <summary>
+/// POST returning ConflictResult (409) for duplicate-detection patterns.
+/// </summary>
+[Blueprint.Model.Attributes.RootLink("/e2e/conflict-check/{Name}")]
+[Blueprint.Model.Attributes.HttpPost]
+[Blueprint.Model.Attributes.AllowAnonymous]
+[Blueprint.Auditing.DoNotAudit]
+public partial class E2EConflictCheckCommand : ICommand<ConflictResult<E2EConflictDetail>>
+{
+    /// <summary>The name of the resource to check.</summary>
+    [Required]
+    public string Name { get; set; } = default!;
+
+    /// <summary>Always returns a conflict for testing purposes.</summary>
+    /// <param name="command">The command instance.</param>
+    /// <returns>A conflict result with detail.</returns>
+    public static Task<ConflictResult<E2EConflictDetail>> HandleAsync(E2EConflictCheckCommand command)
+    {
+        return Task.FromResult(new ConflictResult<E2EConflictDetail>(new E2EConflictDetail { ExistingName = command.Name }));
+    }
+}
+
+/// <summary>Detail payload returned by <see cref="E2EConflictCheckCommand"/>.</summary>
+public class E2EConflictDetail
+{
+    /// <summary>The name of the existing conflicting item.</summary>
+    public string ExistingName { get; set; } = default!;
+}
+
+/// <summary>
+/// GET with DateTime and DateTimeOffset query parameters for date binding validation.
+/// </summary>
+[Blueprint.Model.Attributes.RootLink("/e2e/datetime-binding")]
+[Blueprint.Model.Attributes.HttpGet]
+[Blueprint.Model.Attributes.AllowAnonymous]
+[Blueprint.Auditing.DoNotAudit]
+public partial class E2EDateTimeBindingQuery : IQuery<string>
+{
+    /// <summary>A DateTime query parameter.</summary>
+    public DateTime Since { get; set; }
+
+    /// <summary>A nullable DateTime query parameter.</summary>
+    public DateTime? Until { get; set; }
+
+    /// <summary>Echoes back the bound date values.</summary>
+    /// <param name="query">The query instance.</param>
+    /// <returns>A formatted string showing the bound dates.</returns>
+    public static Task<string> HandleAsync(E2EDateTimeBindingQuery query)
+    {
+        return Task.FromResult($"since:{query.Since:yyyy-MM-dd}|until:{query.Until?.ToString("yyyy-MM-dd") ?? "null"}");
+    }
+}
+
+/// <summary>
+/// GET with decimal query parameters for precise financial value binding.
+/// </summary>
+[Blueprint.Model.Attributes.RootLink("/e2e/decimal-binding")]
+[Blueprint.Model.Attributes.HttpGet]
+[Blueprint.Model.Attributes.AllowAnonymous]
+[Blueprint.Auditing.DoNotAudit]
+public partial class E2EDecimalBindingQuery : IQuery<string>
+{
+    /// <summary>A decimal amount.</summary>
+    public decimal Amount { get; set; }
+
+    /// <summary>A nullable decimal rate.</summary>
+    public decimal? TaxRate { get; set; }
+
+    /// <summary>Echoes back the bound decimal values.</summary>
+    /// <param name="query">The query instance.</param>
+    /// <returns>A formatted string showing the bound decimals.</returns>
+    public static Task<string> HandleAsync(E2EDecimalBindingQuery query)
+    {
+        return Task.FromResult($"amount:{query.Amount}|taxRate:{query.TaxRate?.ToString() ?? "null"}");
+    }
+}
+
+/// <summary>
+/// GET with nullable int query parameters for pagination-style binding.
+/// </summary>
+[Blueprint.Model.Attributes.RootLink("/e2e/nullable-int")]
+[Blueprint.Model.Attributes.HttpGet]
+[Blueprint.Model.Attributes.AllowAnonymous]
+[Blueprint.Auditing.DoNotAudit]
+public partial class E2ENullableIntQuery : IQuery<string>
+{
+    /// <summary>A required name parameter.</summary>
+    [Required]
+    public string Name { get; set; } = default!;
+
+    /// <summary>An optional page number.</summary>
+    public int? Page { get; set; }
+
+    /// <summary>An optional page size.</summary>
+    public int? PageSize { get; set; }
+
+    /// <summary>Echoes back the bound values.</summary>
+    /// <param name="query">The query instance.</param>
+    /// <returns>A formatted string showing the bound values.</returns>
+    public static Task<string> HandleAsync(E2ENullableIntQuery query)
+    {
+        return Task.FromResult($"name:{query.Name}|page:{query.Page?.ToString() ?? "null"}|size:{query.PageSize?.ToString() ?? "null"}");
+    }
+}
+
+/// <summary>
+/// GET with bool query parameters for flag-style binding.
+/// </summary>
+[Blueprint.Model.Attributes.RootLink("/e2e/bool-binding")]
+[Blueprint.Model.Attributes.HttpGet]
+[Blueprint.Model.Attributes.AllowAnonymous]
+[Blueprint.Auditing.DoNotAudit]
+public partial class E2EBoolBindingQuery : IQuery<string>
+{
+    /// <summary>Whether to include archived items.</summary>
+    public bool IncludeArchived { get; set; }
+
+    /// <summary>Whether to enable verbose output.</summary>
+    public bool Verbose { get; set; }
+
+    /// <summary>Echoes back the bound boolean values.</summary>
+    /// <param name="query">The query instance.</param>
+    /// <returns>A formatted string showing the bound booleans.</returns>
+    public static Task<string> HandleAsync(E2EBoolBindingQuery query)
+    {
+        return Task.FromResult($"archived:{query.IncludeArchived}|verbose:{query.Verbose}");
+    }
+}
+
+/// <summary>
+/// POST with multiple validation attributes for multi-error reporting.
+/// </summary>
+[Blueprint.Model.Attributes.RootLink("/e2e/multi-validation")]
+[Blueprint.Model.Attributes.HttpPost]
+[Blueprint.Model.Attributes.AllowAnonymous]
+[Blueprint.Auditing.DoNotAudit]
+public partial class E2EMultiValidationCommand : ICommand<string>
+{
+    /// <summary>Required name.</summary>
+    [Required]
+    [StringLength(100)]
+    public string Name { get; set; } = default!;
+
+    /// <summary>Required email.</summary>
+    [Required]
+    [EmailAddress]
+    public string Email { get; set; } = default!;
+
+    /// <summary>Age must be non-negative.</summary>
+    [Range(0, 150)]
+    public int Age { get; set; }
+
+    /// <summary>Echoes back the bound values.</summary>
+    /// <param name="command">The command instance.</param>
+    /// <returns>A formatted string showing the bound values.</returns>
+    public static Task<string> HandleAsync(E2EMultiValidationCommand command)
+    {
+        return Task.FromResult($"name:{command.Name}|email:{command.Email}|age:{command.Age}");
+    }
+}
+
+/// <summary>
+/// POST returning KeyOnlyResourceEventResult for body-less resource-event patterns.
+/// </summary>
+[Blueprint.Model.Attributes.RootLink("/e2e/key-only-event")]
+[Blueprint.Model.Attributes.HttpPost]
+[Blueprint.Model.Attributes.AllowAnonymous]
+[Blueprint.Auditing.DoNotAudit]
+public partial class E2EKeyOnlyEventCommand : ICommand<KeyOnlyResourceEventResult>
+{
+    /// <summary>The resource ID for the event.</summary>
+    [Required]
+    public string ResourceId { get; set; } = default!;
+
+    /// <summary>Creates a key-only resource event.</summary>
+    /// <param name="command">The command instance.</param>
+    /// <returns>A key-only resource event result.</returns>
+    public static Task<KeyOnlyResourceEventResult> HandleAsync(E2EKeyOnlyEventCommand command)
+    {
+        return Task.FromResult(new KeyOnlyResourceEventResult(Blueprint.Model.ChangeType.Created, "item.created", command.ResourceId));
+    }
 }

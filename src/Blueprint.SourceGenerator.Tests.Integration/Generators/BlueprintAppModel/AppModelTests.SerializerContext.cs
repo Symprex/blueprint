@@ -28,7 +28,9 @@ public class AppModelSerializerContextTests
             "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.LinkTestApiResource",
             "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.MappedLinkApiResource",
             "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.ResourceWithoutSelfLink",
-            "Blueprint.SourceGenerator.Tests.Integration.Http.E2EWidgetResponse");
+            "Blueprint.SourceGenerator.Tests.Integration.Http.E2EWidgetResponse",
+            "Blueprint.SourceGenerator.Tests.Integration.Http.E2EJobAcceptedPayload",
+            "Blueprint.SourceGenerator.Tests.Integration.Http.E2EConflictDetail");
     }
 
     [Fact]
@@ -53,6 +55,8 @@ public class AppModelSerializerContextTests
             typeof(LinkTestApiResource),
             typeof(MappedLinkApiResource),
             typeof(ResourceWithoutSelfLink),
-            typeof(E2EWidgetResponse));
+            typeof(E2EWidgetResponse),
+            typeof(E2EJobAcceptedPayload),
+            typeof(E2EConflictDetail));
     }
 }
