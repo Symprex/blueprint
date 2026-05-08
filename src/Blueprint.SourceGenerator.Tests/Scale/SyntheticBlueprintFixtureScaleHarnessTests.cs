@@ -179,4 +179,76 @@ public class SyntheticBlueprintFixtureScaleHarnessTests
             .Should()
             .BeEmpty();
     }
+
+    [Fact]
+    public void When_generating_tier3_fixture_at_500_operations_then_all_generators_compile_cleanly()
+    {
+        var fixture = SyntheticBlueprintFixtureGenerator.Create(
+            new SyntheticBlueprintFixtureOptions(
+                namespaceName: "Synthetic.Tier3",
+                appName: "SyntheticTier3App",
+                operationCount: 500,
+                includeRootLinks: true));
+
+        var result = TestHelpers.CompileWithTrackedGenerators(
+            [
+                TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>(),
+                TestHelpers.CreateTrackedGenerator<AppDataModelSourceGenerator>(),
+                TestHelpers.CreateTrackedGenerator<OperationExecutorPipelineSourceGenerator>(),
+            ],
+            fixture.SourceFiles.Select(static file => file.Content).ToArray(),
+            fixture.SourceFiles.Select(static file => file.Path).ToArray());
+
+        result.Diagnostics.Should().BeEmpty();
+        result.GetGeneratedSources(nameof(OperationDescriptorSourceGenerator))
+            .Count(static source => source.HintName.EndsWith("_Descriptor.g.cs", StringComparison.Ordinal))
+            .Should()
+            .Be(500);
+        result.GetGeneratedSources(nameof(AppDataModelSourceGenerator))
+            .Count(static source => source.HintName.EndsWith("_DataModelRegistration.g.cs", StringComparison.Ordinal))
+            .Should()
+            .Be(1);
+        result.GetGeneratedSources(nameof(OperationExecutorPipelineSourceGenerator))
+            .Count(static source => source.HintName.EndsWith("ExecutorPipeline.g.cs", StringComparison.Ordinal))
+            .Should()
+            .Be(500);
+    }
+
+    [Fact]
+    public void When_mutating_single_operation_in_tier3_fixture_then_only_that_pipeline_changes()
+    {
+        var fixture = SyntheticBlueprintFixtureGenerator.Create(
+            new SyntheticBlueprintFixtureOptions(
+                namespaceName: "Synthetic.Tier3",
+                appName: "SyntheticTier3App",
+                operationCount: 500,
+                includeRootLinks: true));
+        var updatedFixture = fixture.MutateOperation(
+            operationIndex: 250,
+            mutation: static source => source.Replace(
+                "public static global::System.Threading.Tasks.Task<string> InvokeAsync()",
+                "public static global::System.Threading.Tasks.Task<string> InvokeAsync(global::Blueprint.Runtime.Exec.ApiOperationContext context)",
+                StringComparison.Ordinal));
+
+        var editResult = TestHelpers.CompileWithTrackedGeneratorsAfterEdit(
+            [
+                TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>(),
+                TestHelpers.CreateTrackedGenerator<AppDataModelSourceGenerator>(),
+                TestHelpers.CreateTrackedGenerator<OperationExecutorPipelineSourceGenerator>(),
+            ],
+            fixture.SourceFiles.Select(static file => file.Content).ToArray(),
+            updatedFixture.SourceFiles.Select(static file => file.Content).ToArray(),
+            fixture.SourceFiles.Select(static file => file.Path).ToArray());
+
+        editResult.Updated.Diagnostics.Should().BeEmpty();
+        editResult.GetChangedGeneratedSourceHintNames(nameof(OperationDescriptorSourceGenerator))
+            .Should()
+            .BeEmpty();
+        editResult.GetChangedGeneratedSourceHintNames(nameof(AppDataModelSourceGenerator))
+            .Should()
+            .BeEmpty();
+        editResult.GetChangedGeneratedSourceHintNames(nameof(OperationExecutorPipelineSourceGenerator))
+            .Should()
+            .Equal("SyntheticOperation250ExecutorPipeline.g.cs");
+    }
 }
