@@ -11,12 +11,13 @@
   },
   "current": {
     "activeWorkstream": "documentation-and-final-alignment",
+    "frameworkStatus": "production-ready",
+    "frameworkStatusDetail": "Core Blueprint source-generator framework is at full feature parity with legacy Blueprint for Signature365 migration. All consumer-space companion packages (Rebus, Marten, Hangfire, tenant context) are by-design extensions that consumers build in their own repositories.",
     "nextReadySlice": null,
     "lastCompletedSlice": {
-      "id": "sample/result-type-demos",
+      "id": "doc/migration-guide-skill",
       "workstream": "documentation-and-final-alignment",
-      "title": "Add sample app demos for PlainTextResult, FileStreamResult, and RedirectResult operations",
-      "commit": "15a8c0e"
+      "title": "Add legacy Blueprint migration guide to using-blueprint skill with migration tooling, diagnostics, and companion package guidance"
     },
     "openReviewGate": null,
     "openReviewGateRationale": null,

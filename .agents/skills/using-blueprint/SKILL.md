@@ -392,6 +392,58 @@ Blueprint emits:
 3. Compare against the sample consumer story when available (`Blueprint.SourceGenerator.Sample` and `.Sample.Contract` in the Blueprint repo).
 4. For migrations, work in dependency order: bootstrap and discovery, pipeline and result handling, auth and validation, resource and link behavior, OpenAPI and inspection, then consumer-specific integrations.
 
+## Legacy Blueprint migration guide
+
+### Migration tooling
+
+Run the Blueprint codemod tool against your solution for a machine-readable migration report:
+
+```bash
+dotnet run --project src/Blueprint.Codemod -- --solution path/to/YourSolution.sln --output migration-report/
+```
+
+This produces:
+- `codemod-report.json` — machine-readable findings classified into auto-fixable, configuration-required, consumer-extension rewrite, and manual-design-review buckets
+- `codemod-report.md` — human-readable summary
+
+### Migration diagnostics
+
+The `Blueprint.Migration.Analyzers` package flags legacy patterns at build time:
+
+| Diagnostic | What it flags | Action |
+| --- | --- | --- |
+| BPMIG001 | Redundant `AddOpenApi()` (parameterless) | Auto-fix: safe removal |
+| BPMIG002 | Redundant `AddHateoasLinks()` (parameterless) | Auto-fix: safe removal |
+| BPMIG003 | Redundant `AddAuthorisation()` (parameterless) | Auto-fix: safe removal |
+| BPMIG100 | Configured `AddOpenApi(Action<OpenApiOptions>)` | Config-required: migrate to `MapBlueprintApi(configureOpenApi: ...)` |
+| BPMIG101 | Configured `AddAuthentication(...)` | Config-required: migrate to ASP.NET Core auth middleware |
+| BPMIG200 | Legacy `[FromResource(...)]` attribute | Consumer rewrite: implement `IResourceAuthorizationProvider` |
+| BPMIG201 | Legacy `{Auth:...}` placeholder in URL template | Consumer rewrite: implement template expansion in auth provider |
+
+### Key migration patterns
+
+| Legacy pattern | New pattern |
+| --- | --- |
+| `BlueprintApiBuilder.AddOpenApi()` | Built-in — remove call |
+| `BlueprintApiBuilder.AddHateoasLinks()` | Built-in — remove call |
+| `BlueprintApiBuilder.AddAuthorisation()` | Built-in — remove call |
+| `AddOpenApi(opts => ...)` | `MapBlueprintApi(..., configureOpenApi: info => ...)` |
+| `AddAuthentication(...)` | ASP.NET Core `UseAuthentication()` middleware |
+| `ScopeApiAuthoriser` | `IResourceAuthorizationProvider` implementation |
+| `[FromResource(...)]` | `[Resource("noun", "verb")]` / `[FromResource(typeof(X))]` |
+| `ValidationException` throw | Generated `ValidationFailedResult` (automatic) |
+| `SaveMartenChangesMiddleware` | `IUnitOfWork` implementation via `AddUnitOfWork<T>()` |
+| `RebusHandleMessageScanner` | Consumer companion generator (see companion generator section) |
+| `GetOpenApiQuery` operation | Built-in `/.blueprint/openapi.json` endpoint |
+
+### Consumer-space companion packages needed
+
+These integrations are consumer-owned by design and require companion generator packages:
+
+1. **Persistence (Marten/EF Core)** — Implement `Blueprint.Persistence.IUnitOfWork` and register via `AddUnitOfWork<T>()`. For outbox patterns, coordinate in the `IUnitOfWork.SaveChangesAsync` implementation.
+2. **Messaging (Rebus)** — Build a companion descriptor generator that derives from `OperationDescriptorSourceGenerator` to discover `IHandleMessages<T>` operations and expose them to a messaging host.
+3. **Task scheduling (Hangfire)** — Implement `Blueprint.Tasks.IBackgroundTaskScheduler` and register via `AddBackgroundTaskScheduler<T>()`.
+
 ## Common mistakes
 
 - Treating Blueprint as runtime-discovery-first
