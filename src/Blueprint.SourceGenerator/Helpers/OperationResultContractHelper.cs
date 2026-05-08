@@ -285,10 +285,9 @@ public static class OperationResultContractHelper
 
         if (IsTypeOrDerivedFromOptional(resultType, statusCodeResultType))
         {
-            // StatusCodeResult subclasses are bodyless status-code-only results; the exact code
-            // is determined at runtime from the StatusCode property, so we use 200 as the default
-            // for OpenAPI purposes while flagging no body.
-            statusCode = 200;
+            // StatusCodeResult subclasses are bodyless status-code-only results. Try to resolve the
+            // exact HTTP status code from the well-known nested type name for accurate OpenAPI metadata.
+            statusCode = ResolveStatusCodeResultHttpCode(resultType);
             hasResponseBody = false;
             return true;
         }
@@ -340,5 +339,24 @@ public static class OperationResultContractHelper
     {
         return candidateType.Name == typeName
             && candidateType.ContainingNamespace.ToDisplayString() == @namespace;
+    }
+
+    /// <summary>
+    /// Maps well-known <c>StatusCodeResult</c> nested type names to their HTTP status codes
+    /// for accurate OpenAPI metadata. Falls back to 200 for unrecognised subtypes.
+    /// </summary>
+    private static int ResolveStatusCodeResultHttpCode(ITypeSymbol resultType)
+    {
+        return resultType.Name switch
+        {
+            "OK" => 200,
+            "Created" => 201,
+            "Accepted" => 202,
+            "NoContent" => 204,
+            "BadRequest" => 400,
+            "NotImplemented" => 501,
+            "ServiceUnavailable" => 503,
+            _ => 200,
+        };
     }
 }

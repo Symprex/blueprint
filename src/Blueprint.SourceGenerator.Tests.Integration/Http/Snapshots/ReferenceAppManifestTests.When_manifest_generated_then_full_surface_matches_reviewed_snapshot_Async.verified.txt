@@ -40,7 +40,7 @@
     - data-annotations-validation-exception: System.ComponentModel.DataAnnotations.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
     - default-unhandled-exception: System.Exception -> Blueprint.Runtime.Exec.UnhandledExceptionResult
   HTTP Responses:
-    - 200: hasBody=False types=[]
+    - 202: hasBody=False types=[]
     - 400: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
     - 401: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
     - 403: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
