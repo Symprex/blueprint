@@ -5,7 +5,7 @@ namespace Blueprint.SourceGenerator.Sample.Api;
 
 /// <summary>
 /// Handles the <see cref="ArchiveTemplateCommand"/> by removing the template from the shared store
-/// and returning a key-only resource-event result (HTTP 201 with no body).
+/// and returning a key-only resource-event result (HTTP 204 No Content via <c>ChangeType.Deleted</c>).
 /// </summary>
 public class ArchiveTemplateCommandHandler(TemplateStore store)
 {

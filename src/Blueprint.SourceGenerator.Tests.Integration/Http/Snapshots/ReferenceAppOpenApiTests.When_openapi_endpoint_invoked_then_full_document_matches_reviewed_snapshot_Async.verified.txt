@@ -183,6 +183,16 @@
         ],
         "parameters": [
           {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "description": "Correlation ID for cross-system trace correlation.",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            }
+          },
+          {
             "name": "page",
             "in": "query",
             "required": false,
@@ -244,6 +254,9 @@
                 }
               }
             }
+          },
+          "400": {
+            "description": "Bad Request"
           },
           "422": {
             "description": "Unprocessable Entity",

@@ -9,7 +9,8 @@ namespace Blueprint.SourceGenerator.Sample.Contract.Api;
 
 /// <summary>
 /// Searches templates by name with pagination. Demonstrates query-string binding
-/// for non-route parameters, optional pagination defaults, and public access via [AllowAnonymous].
+/// for non-route parameters, optional pagination defaults, public access via [AllowAnonymous],
+/// and <see cref="FromHeaderAttribute"/> binding for correlation IDs.
 /// </summary>
 [ApiOperations("Templates")]
 [RootLink("/templates/search")]
@@ -47,4 +48,13 @@ public partial class SearchTemplatesQuery : IQuery<TemplateApiResource[]>
     /// </summary>
     [Description("The sort order for search results.")]
     public TemplateSortOrder SortBy { get; set; } = TemplateSortOrder.Name;
+
+    /// <summary>
+    /// An optional correlation ID provided via the <c>X-Correlation-Id</c> request header.
+    /// Demonstrates <see cref="FromHeaderAttribute"/> binding for cross-system trace correlation.
+    /// The handler echoes this value for observability integration.
+    /// </summary>
+    [FromHeader("X-Correlation-Id")]
+    [Description("Correlation ID for cross-system trace correlation.")]
+    public string? CorrelationId { get; set; }
 }
