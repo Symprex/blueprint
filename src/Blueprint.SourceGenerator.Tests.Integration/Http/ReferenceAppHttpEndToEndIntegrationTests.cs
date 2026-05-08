@@ -64,6 +64,41 @@ public class ReferenceAppHttpEndToEndIntegrationTests
     }
 
     [Fact]
+    public async Task When_get_template_returns_200_then_response_includes_object_type_and_self_link()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/templates/{Id}", "GET");
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Get;
+            context.Request.Path = "/api/templates/template-001";
+            context.Request.RouteValues = new RouteValueDictionary
+            {
+                ["Id"] = "template-001",
+            };
+            context.User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "user-1"),
+                ],
+                authenticationType: "test"));
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+
+        // ApiResource serializes $object as the resource type discriminator.
+        response.Body.Should().Contain("\"$object\":");
+
+        // The generated pipeline populates $links with self when [SelfLink] is declared.
+        response.Body.Should().Contain("\"$links\":");
+        response.Body.Should().Contain("\"self\":");
+        response.Body.Should().Contain("/templates/template-001");
+    }
+
+    [Fact]
     public async Task When_get_template_with_unknown_id_then_returns_404_not_found()
     {
         var endpoints = CreateEndpoints();
