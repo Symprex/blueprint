@@ -85,6 +85,148 @@ At runtime, `BlueprintApp.GetOperationsForHost("custom-host")` returns operation
 - **Anonymous access:** Use `[AllowAnonymous]` for public endpoints. Cannot be combined with `[Resource]` or `[MustBeAuthenticated]` (BPAU002/BPAU003).
 - **Compile-time diagnostics:** BPAU001 (auth on non-HTTP op), BPAU002 (conflicting AllowAnonymous + MustBeAuthenticated), BPAU003 (Resource + AllowAnonymous), BPAU004 (empty noun/verb), BPAU005 (FromResource + Resource on same op), BPAU006 (FromResource target has no Resource attrs).
 
+## HTTP routing contract
+
+Blueprint infers HTTP method from the operation interface convention (`IQuery` → GET, `ICommand` → POST) but allows explicit overrides:
+
+- **Explicit method:** `[HttpGet]`, `[HttpPost]`, `[HttpPut]`, `[HttpPatch]`, `[HttpDelete]` on the operation class (from `Blueprint.Model.Attributes`)
+- **Custom method:** `[HttpMethod("OPTIONS")]` for non-standard HTTP methods
+- **Route registration:** Routes are declared through `[SelfLink]` or `[RootLink]` (see Link generation below), not through a separate routing attribute
+
+### Convention defaults
+
+| Interface | Default HTTP method |
+| --- | --- |
+| `IQuery<T>` | GET |
+| `ICommand<T>` / `ICommand` | POST |
+
+Override when needed (e.g., a DELETE command):
+
+```csharp
+[RootLink("/templates/{Id}")]
+[HttpDelete]
+public partial class ArchiveTemplateCommand : ICommand<KeyOnlyResourceEventResult>
+{
+    public required string Id { get; set; }
+}
+```
+
+## Link generation and resource affordances
+
+Blueprint generates HATEOAS-style `$links` on API resources using source-generated marker attributes. These attributes are emitted into the consumer compilation by the generator.
+
+### SelfLink — parameterized resource link
+
+`[SelfLink(typeof(TResource), "/route/{Param}")]` declares a "self" relation for a resource type. The route pattern contains placeholders that map to operation properties:
+
+```csharp
+[SelfLink(typeof(TemplateApiResource), "/templates/{Id}")]
+[HttpGet]
+public partial class GetTemplateQuery : IQuery<Results<OkResult<TemplateApiResource>, NotFoundResult<TemplateApiResource>>>
+{
+    public required string Id { get; set; }
+}
+```
+
+### RootLink — collection or action link
+
+`[RootLink("/route")]` declares a root-level route with no resource binding. Used for collection endpoints or commands that don't target a specific resource:
+
+```csharp
+[RootLink("/templates")]
+[HttpPost]
+public partial class CreateTemplateCommand : ICommand<ResourceEventResult<TemplateApiResource>>
+{
+    [Required] public string? Name { get; set; }
+}
+```
+
+### ApiResource and ILinkableResource
+
+Response types that need `$links` should extend `ApiResource` (in `Blueprint.Model`):
+
+```csharp
+public partial class TemplateApiResource : ApiResource
+{
+    public override string Object => "template";
+    public override string ResourceKey => this.Id;
+
+    public string Id { get; private set; }
+    public string Name { get; private set; }
+}
+```
+
+- `Object` — the resource type discriminator serialized as `$object`
+- `ResourceKey` — the stable key used for link URL generation (must match route placeholder values)
+- `Links` — the `$links` dictionary populated by the generated pipeline's link generation step
+- `IsPartial` — set to `true` when a list response omits expensive fields
+
+The generated pipeline populates links automatically when the handler returns a result containing an `ILinkableResource`. Links are derived from all operations that declare `[SelfLink(typeof(TResource), ...)]` matching the resource type.
+
+### Route placeholder mapping
+
+Route patterns support `{PropertyName}` syntax. The placeholder binds to the operation property of the same name. For cross-property mapping (when the operation property name differs from the resource key), use `{OperationProperty:ResourceProperty}` syntax:
+
+```csharp
+[SelfLink(typeof(TemplateApiResource), "/templates/{TemplateId:Id}")]
+```
+
+### Link attribute — custom relations
+
+`[Link(typeof(TResource), "/route", Rel = "custom-rel")]` declares a named relation link:
+
+```csharp
+[Link(typeof(TemplateApiResource), "/templates/{Id}/versions", Rel = "versions")]
+```
+
+### Compile-time diagnostics
+
+- **BPLG001** — Route placeholder `{X}` does not match any public property on the operation
+- **BPLG002** — Duplicate self link for the same resource type
+- **BP002** — SelfLink/RootLink applied to a non-partial class (prevents generated code emission)
+
+## Property binding contract
+
+Blueprint's `PropertyOwnershipModule` generates HTTP request binding code at compile time. Properties are bound from different HTTP sources based on attributes and conventions.
+
+### Binding attributes
+
+| Attribute | Source | Notes |
+| --- | --- | --- |
+| `[FromRoute]` | Route segment `{Name}` | Marker only; placeholder name must match property name |
+| `[FromQuery]` | Query string `?name=` | Optional `Name` property overrides the parameter name |
+| `[FromHeader("X-Header")]` | HTTP header | Header name required (doesn't follow C# conventions) |
+| `[FromCookie("name")]` | HTTP cookie | Cookie name required |
+| `[FromBody]` | JSON request body | Marker; uses camelCase property name for field matching |
+
+### Convention-based binding
+
+When no explicit attribute is present, Blueprint infers binding source from context:
+
+1. Properties whose names match route placeholders bind from **route**
+2. For `GET`/`DELETE` operations (no body), remaining properties bind from **query string**
+3. For `POST`/`PUT`/`PATCH` operations, remaining properties bind from **JSON body**
+
+### Example — mixed binding
+
+```csharp
+[SelfLink(typeof(TemplateApiResource), "/templates/{Id}")]
+[HttpPut]
+public partial class UpdateTemplateCommand : ICommand<ResourceEventResult<TemplateApiResource>>
+{
+    // Bound from route (matches {Id} placeholder)
+    public required string Id { get; set; }
+
+    // Bound from JSON body (POST/PUT convention)
+    [Required] public string? Name { get; set; }
+    public string? HtmlSource { get; set; }
+
+    // Bound from header explicitly
+    [FromHeader("X-Correlation-Id")]
+    public string? CorrelationId { get; set; }
+}
+```
+
 ## Auditing and observability contract
 
 - **Audit opt-out:** `[DoNotAudit]` (from `Blueprint.Auditing`) on an operation class suppresses the PostExecution audit sink call.
