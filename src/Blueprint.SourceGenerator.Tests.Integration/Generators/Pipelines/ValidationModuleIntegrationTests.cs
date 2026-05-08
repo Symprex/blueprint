@@ -809,6 +809,112 @@ public class ValidationModuleIntegrationTests
         RegularExpressionValidationOperation.HandlerCallCount.Should().Be(1);
     }
 
+    [Fact]
+    public async Task When_phone_validation_fails_then_generated_pipeline_returns_validation_failure()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(PhoneValidationOperation));
+        var context = CreateContext(app, PhoneValidationOperation.Configure());
+
+        PhoneValidationOperation.Reset();
+        ((PhoneValidationOperation)context.Operation).PhoneNumber = "not-a-phone";
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<ValidationFailedResult>();
+        PhoneValidationOperation.HandlerCallCount.Should().Be(0);
+        var validationResult = ((ValidationFailedResult)result).ValidationResults.Should().ContainSingle().Subject;
+        validationResult.MemberNames.Should().Contain(nameof(PhoneValidationOperation.PhoneNumber));
+    }
+
+    [Fact]
+    public async Task When_phone_validation_passes_then_generated_pipeline_executes_handler()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(PhoneValidationOperation));
+        var context = CreateContext(app, PhoneValidationOperation.Configure());
+
+        PhoneValidationOperation.Reset();
+        ((PhoneValidationOperation)context.Operation).PhoneNumber = "+1-555-123-4567";
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<OkResult<string>>();
+        PhoneValidationOperation.HandlerCallCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task When_phone_validation_property_is_null_then_skips_phone_check_and_executes_handler()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(PhoneValidationOperation));
+        var context = CreateContext(app, PhoneValidationOperation.Configure());
+
+        PhoneValidationOperation.Reset();
+        ((PhoneValidationOperation)context.Operation).PhoneNumber = null;
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<OkResult<string>>();
+        PhoneValidationOperation.HandlerCallCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task When_url_validation_fails_then_generated_pipeline_returns_validation_failure()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(UrlValidationOperation));
+        var context = CreateContext(app, UrlValidationOperation.Configure());
+
+        UrlValidationOperation.Reset();
+        ((UrlValidationOperation)context.Operation).Website = "not-a-url";
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<ValidationFailedResult>();
+        UrlValidationOperation.HandlerCallCount.Should().Be(0);
+        var validationResult = ((ValidationFailedResult)result).ValidationResults.Should().ContainSingle().Subject;
+        validationResult.MemberNames.Should().Contain(nameof(UrlValidationOperation.Website));
+    }
+
+    [Fact]
+    public async Task When_url_validation_passes_then_generated_pipeline_executes_handler()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(UrlValidationOperation));
+        var context = CreateContext(app, UrlValidationOperation.Configure());
+
+        UrlValidationOperation.Reset();
+        ((UrlValidationOperation)context.Operation).Website = "https://example.com";
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<OkResult<string>>();
+        UrlValidationOperation.HandlerCallCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task When_url_validation_property_is_null_then_skips_url_check_and_executes_handler()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(UrlValidationOperation));
+        var context = CreateContext(app, UrlValidationOperation.Configure());
+
+        UrlValidationOperation.Reset();
+        ((UrlValidationOperation)context.Operation).Website = null;
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<OkResult<string>>();
+        UrlValidationOperation.HandlerCallCount.Should().Be(1);
+    }
+
     private static ApiOperationContext CreateContext(BlueprintApp app, ApiOperationDescriptor descriptor)
     {
         return new ApiOperationContext(new EmptyServiceProvider(), app, descriptor, CancellationToken.None);
@@ -1242,6 +1348,44 @@ public partial class RegularExpressionValidationOperation : ICommand<string>
     {
         HandlerCallCount++;
         return Task.FromResult(operation.Code ?? string.Empty);
+    }
+}
+
+public partial class PhoneValidationOperation : ICommand<string>
+{
+    public static int HandlerCallCount { get; private set; }
+
+    [Phone]
+    public string? PhoneNumber { get; set; }
+
+    public static void Reset()
+    {
+        HandlerCallCount = 0;
+    }
+
+    public static Task<string> HandleAsync(PhoneValidationOperation operation)
+    {
+        HandlerCallCount++;
+        return Task.FromResult(operation.PhoneNumber ?? string.Empty);
+    }
+}
+
+public partial class UrlValidationOperation : ICommand<string>
+{
+    public static int HandlerCallCount { get; private set; }
+
+    [Url]
+    public string? Website { get; set; }
+
+    public static void Reset()
+    {
+        HandlerCallCount = 0;
+    }
+
+    public static Task<string> HandleAsync(UrlValidationOperation operation)
+    {
+        HandlerCallCount++;
+        return Task.FromResult(operation.Website ?? string.Empty);
     }
 }
 

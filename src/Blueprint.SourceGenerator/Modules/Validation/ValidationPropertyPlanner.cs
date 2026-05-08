@@ -17,6 +17,8 @@ internal static class ValidationPropertyPlanner
         new MinLengthValidationFastPathStrategy(),
         new StringLengthValidationFastPathStrategy(),
         new EmailAddressValidationFastPathStrategy(),
+        new PhoneValidationFastPathStrategy(),
+        new UrlValidationFastPathStrategy(),
         new RangeValidationFastPathStrategy(),
         new RegularExpressionValidationFastPathStrategy(),
         new RequiredIfValidationFastPathStrategy(),

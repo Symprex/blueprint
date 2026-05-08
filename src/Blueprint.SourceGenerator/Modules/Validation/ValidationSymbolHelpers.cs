@@ -244,6 +244,30 @@ internal static class ValidationSymbolHelpers
     }
 
     /// <summary>
+    /// Returns <see langword="true"/> when the attribute class is <c>System.ComponentModel.DataAnnotations.PhoneAttribute</c>.
+    /// </summary>
+    /// <param name="attributeClass">The attribute type symbol to inspect.</param>
+    /// <returns><see langword="true"/> when the symbol represents <c>PhoneAttribute</c>.</returns>
+    public static bool IsPhoneAttribute(INamedTypeSymbol? attributeClass)
+    {
+        return attributeClass is not null
+               && attributeClass.Name == "PhoneAttribute"
+               && attributeClass.ContainingNamespace.ToDisplayString() == "System.ComponentModel.DataAnnotations";
+    }
+
+    /// <summary>
+    /// Returns <see langword="true"/> when the attribute class is <c>System.ComponentModel.DataAnnotations.UrlAttribute</c>.
+    /// </summary>
+    /// <param name="attributeClass">The attribute type symbol to inspect.</param>
+    /// <returns><see langword="true"/> when the symbol represents <c>UrlAttribute</c>.</returns>
+    public static bool IsUrlAttribute(INamedTypeSymbol? attributeClass)
+    {
+        return attributeClass is not null
+               && attributeClass.Name == "UrlAttribute"
+               && attributeClass.ContainingNamespace.ToDisplayString() == "System.ComponentModel.DataAnnotations";
+    }
+
+    /// <summary>
     /// Checks whether a type is <see cref="Nullable{T}" />.
     /// </summary>
     /// <param name="type">The type to inspect.</param>
