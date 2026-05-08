@@ -363,6 +363,8 @@ Blueprint intentionally delegates standard ASP.NET Core concerns to the consumer
 
 | Concern | Consumer action | Blueprint interaction |
 | --- | --- | --- |
+| **Authentication** | `services.AddAuthentication("Bearer").AddJwtBearer(...)` + `app.UseAuthentication()` | Blueprint's `[MustBeAuthenticated]` / `[Resource]` pipeline checks read `HttpContext.User`; the user must be populated by ASP.NET Core auth middleware before endpoint execution |
+| **Authorization** | `services.AddAuthorization()` + `app.UseAuthorization()` | Blueprint enforces its own scope-pair authorization via `IResourceAuthorizationProvider`; ASP.NET Core authorization is optional but place the middleware before routing if used |
 | **CORS** | `services.AddCors()` + `app.UseCors()` | None — Blueprint endpoints are just route endpoints |
 | **Health checks** | `app.MapHealthChecks("/health")` | None — add alongside `MapBlueprintApi` |
 | **Rate limiting** | `services.AddRateLimiter()` + `app.UseRateLimiter()` | None — standard middleware order applies |

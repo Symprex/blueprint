@@ -17,6 +17,14 @@ public class Startup
         services.AddLogging();
         services.AddSingleton<TemplateStore>();
 
+        // ASP.NET Core authentication must be configured so that HttpContext.User is
+        // populated before Blueprint's generated [MustBeAuthenticated] / [Resource]
+        // pipeline checks run.  A real consumer would wire a scheme here, e.g.:
+        //
+        //   services.AddAuthentication("Bearer")
+        //       .AddJwtBearer(options => { /* configure issuer, audience, key */ });
+        //   services.AddAuthorization();
+
         services.AddBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>(blueprint =>
         {
             blueprint.AddAuditSink<LoggingAuditSink>();
@@ -40,6 +48,12 @@ public class Startup
     public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
     {
         app.UseForwardedHeaders();
+
+        // In a production app, place authentication middleware before routing so
+        // that HttpContext.User is populated before Blueprint endpoint execution:
+        //
+        //   app.UseAuthentication();
+        //   app.UseAuthorization();
 
         app.UseRouting();
 
