@@ -220,6 +220,30 @@ internal static class ValidationSymbolHelpers
     }
 
     /// <summary>
+    /// Checks whether an attribute type is <c>RangeAttribute</c>.
+    /// </summary>
+    /// <param name="attributeClass">The attribute type to inspect.</param>
+    /// <returns><see langword="true"/> when the attribute is a range attribute.</returns>
+    public static bool IsRangeAttribute(INamedTypeSymbol? attributeClass)
+    {
+        return attributeClass is not null
+               && attributeClass.Name == "RangeAttribute"
+               && attributeClass.ContainingNamespace.ToDisplayString() == "System.ComponentModel.DataAnnotations";
+    }
+
+    /// <summary>
+    /// Checks whether an attribute type is <c>RegularExpressionAttribute</c>.
+    /// </summary>
+    /// <param name="attributeClass">The attribute type to inspect.</param>
+    /// <returns><see langword="true"/> when the attribute is a regular-expression attribute.</returns>
+    public static bool IsRegularExpressionAttribute(INamedTypeSymbol? attributeClass)
+    {
+        return attributeClass is not null
+               && attributeClass.Name == "RegularExpressionAttribute"
+               && attributeClass.ContainingNamespace.ToDisplayString() == "System.ComponentModel.DataAnnotations";
+    }
+
+    /// <summary>
     /// Checks whether a type is <see cref="Nullable{T}" />.
     /// </summary>
     /// <param name="type">The type to inspect.</param>

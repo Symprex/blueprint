@@ -701,6 +701,114 @@ public class ValidationModuleIntegrationTests
         validationResult.ErrorMessage.Should().Be("Code is required.");
     }
 
+    [Fact]
+    public async Task When_range_validation_fails_below_minimum_then_generated_pipeline_returns_validation_failure()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(RangeValidationOperation));
+        var context = CreateContext(app, RangeValidationOperation.Configure());
+
+        RangeValidationOperation.Reset();
+        ((RangeValidationOperation)context.Operation).Priority = 0;
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<ValidationFailedResult>();
+        RangeValidationOperation.HandlerCallCount.Should().Be(0);
+        var validationResult = ((ValidationFailedResult)result).ValidationResults.Should().ContainSingle().Subject;
+        validationResult.MemberNames.Should().Contain(nameof(RangeValidationOperation.Priority));
+    }
+
+    [Fact]
+    public async Task When_range_validation_fails_above_maximum_then_generated_pipeline_returns_validation_failure()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(RangeValidationOperation));
+        var context = CreateContext(app, RangeValidationOperation.Configure());
+
+        RangeValidationOperation.Reset();
+        ((RangeValidationOperation)context.Operation).Priority = 101;
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<ValidationFailedResult>();
+        RangeValidationOperation.HandlerCallCount.Should().Be(0);
+        var validationResult = ((ValidationFailedResult)result).ValidationResults.Should().ContainSingle().Subject;
+        validationResult.MemberNames.Should().Contain(nameof(RangeValidationOperation.Priority));
+    }
+
+    [Fact]
+    public async Task When_range_validation_passes_then_generated_pipeline_executes_handler()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(RangeValidationOperation));
+        var context = CreateContext(app, RangeValidationOperation.Configure());
+
+        RangeValidationOperation.Reset();
+        ((RangeValidationOperation)context.Operation).Priority = 50;
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<OkResult<string>>();
+        RangeValidationOperation.HandlerCallCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task When_regex_validation_fails_then_generated_pipeline_returns_validation_failure()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(RegularExpressionValidationOperation));
+        var context = CreateContext(app, RegularExpressionValidationOperation.Configure());
+
+        RegularExpressionValidationOperation.Reset();
+        ((RegularExpressionValidationOperation)context.Operation).Code = "lowercase";
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<ValidationFailedResult>();
+        RegularExpressionValidationOperation.HandlerCallCount.Should().Be(0);
+        var validationResult = ((ValidationFailedResult)result).ValidationResults.Should().ContainSingle().Subject;
+        validationResult.MemberNames.Should().Contain(nameof(RegularExpressionValidationOperation.Code));
+    }
+
+    [Fact]
+    public async Task When_regex_validation_passes_then_generated_pipeline_executes_handler()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(RegularExpressionValidationOperation));
+        var context = CreateContext(app, RegularExpressionValidationOperation.Configure());
+
+        RegularExpressionValidationOperation.Reset();
+        ((RegularExpressionValidationOperation)context.Operation).Code = "ABC";
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<OkResult<string>>();
+        RegularExpressionValidationOperation.HandlerCallCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task When_regex_validation_property_is_null_then_skips_regex_check_and_executes_handler()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(RegularExpressionValidationOperation));
+        var context = CreateContext(app, RegularExpressionValidationOperation.Configure());
+
+        RegularExpressionValidationOperation.Reset();
+        ((RegularExpressionValidationOperation)context.Operation).Code = null;
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<OkResult<string>>();
+        RegularExpressionValidationOperation.HandlerCallCount.Should().Be(1);
+    }
+
     private static ApiOperationContext CreateContext(BlueprintApp app, ApiOperationDescriptor descriptor)
     {
         return new ApiOperationContext(new EmptyServiceProvider(), app, descriptor, CancellationToken.None);
@@ -1096,6 +1204,44 @@ public partial class MixedFastAndRuntimeValidationOperation : ICommand<string>
     {
         HandlerCallCount++;
         return Task.FromResult($"{operation.Name}:{operation.Code}");
+    }
+}
+
+public partial class RangeValidationOperation : ICommand<string>
+{
+    public static int HandlerCallCount { get; private set; }
+
+    [Range(1, 100)]
+    public int Priority { get; set; }
+
+    public static void Reset()
+    {
+        HandlerCallCount = 0;
+    }
+
+    public static Task<string> HandleAsync(RangeValidationOperation operation)
+    {
+        HandlerCallCount++;
+        return Task.FromResult(operation.Priority.ToString());
+    }
+}
+
+public partial class RegularExpressionValidationOperation : ICommand<string>
+{
+    public static int HandlerCallCount { get; private set; }
+
+    [RegularExpression(@"^[A-Z]{2,5}$")]
+    public string? Code { get; set; }
+
+    public static void Reset()
+    {
+        HandlerCallCount = 0;
+    }
+
+    public static Task<string> HandleAsync(RegularExpressionValidationOperation operation)
+    {
+        HandlerCallCount++;
+        return Task.FromResult(operation.Code ?? string.Empty);
     }
 }
 
