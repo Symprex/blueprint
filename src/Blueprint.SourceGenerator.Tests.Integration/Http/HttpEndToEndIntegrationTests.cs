@@ -612,6 +612,52 @@ public class HttpEndToEndIntegrationTests
         response.Body.Should().Contain("maxPrice:null");
     }
 
+    [Fact]
+    public async Task When_GET_with_array_query_param_then_multi_value_binding_works()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/e2e/array-query");
+        endpoint.Should().NotBeNull("the array-query route should be registered");
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.QueryString = new QueryString("?tags=alpha&tags=beta&tags=gamma");
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        response.Body.Should().Contain("alpha");
+        response.Body.Should().Contain("beta");
+        response.Body.Should().Contain("gamma");
+        response.Body.Should().Contain("count:3");
+    }
+
+    [Fact]
+    public async Task When_POST_with_collection_body_property_then_json_deserialization_works()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/e2e/bulk-items");
+        endpoint.Should().NotBeNull("the bulk items route should be registered");
+
+        var bodyJson = """{"names":["item-a","item-b","item-c"],"priority":5}"""u8.ToArray();
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.ContentType = "application/json; charset=utf-8";
+            context.Request.ContentLength = bodyJson.Length;
+            context.Request.Body = new MemoryStream(bodyJson);
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        response.Body.Should().Contain("item-a");
+        response.Body.Should().Contain("item-b");
+        response.Body.Should().Contain("item-c");
+        response.Body.Should().Contain("count:3");
+        response.Body.Should().Contain("priority:5");
+    }
+
     private static async Task<TestHttpResponse> InvokeEndpointAsync(
         RouteEndpoint endpoint,
         IServiceProvider serviceProvider,
@@ -1143,5 +1189,53 @@ public partial class E2ETypedQueryParamsQuery : IQuery<string>
         var maxPriceStr = query.MaxPrice.HasValue ? query.MaxPrice.Value.ToString("G") : "null";
         var sinceStr = query.Since.HasValue ? query.Since.Value.ToString("o") : "null";
         return Task.FromResult($"rating:{query.Rating:G}|score:{query.Score:G}|maxPrice:{maxPriceStr}|since:{sinceStr}");
+    }
+}
+
+/// <summary>
+/// Anonymous GET with a <c>string[]</c> query parameter for end-to-end multi-value query-string binding.
+/// Proves that <c>?tags=a&amp;tags=b&amp;tags=c</c> is correctly bound to a <c>string[]</c> property.
+/// </summary>
+[Blueprint.Model.Attributes.RootLink("/e2e/array-query")]
+[Blueprint.Model.Attributes.HttpGet]
+[Blueprint.Model.Attributes.AllowAnonymous]
+[Blueprint.Auditing.DoNotAudit]
+public partial class E2EArrayQueryParamsQuery : IQuery<string>
+{
+    /// <summary>Multi-value tag filter.</summary>
+    public string[]? Tags { get; set; }
+
+    /// <summary>Echoes back the parsed array values for assertion.</summary>
+    /// <param name="query">The query instance.</param>
+    /// <returns>A formatted string showing the bound array contents.</returns>
+    public static Task<string> HandleAsync(E2EArrayQueryParamsQuery query)
+    {
+        var tags = query.Tags ?? [];
+        return Task.FromResult($"count:{tags.Length}|values:{string.Join(",", tags)}");
+    }
+}
+
+/// <summary>
+/// Anonymous POST with a body containing a collection property (<c>string[]</c>) and a scalar property.
+/// Proves that JSON deserialization handles array properties in command bodies end-to-end.
+/// </summary>
+[Blueprint.Model.Attributes.RootLink("/e2e/bulk-items")]
+[Blueprint.Model.Attributes.AllowAnonymous]
+[Blueprint.Auditing.DoNotAudit]
+public partial class E2EBulkItemsCommand : ICommand<string>
+{
+    /// <summary>A collection of item names to create.</summary>
+    public string[]? Names { get; set; }
+
+    /// <summary>A scalar priority value alongside the collection.</summary>
+    public int Priority { get; set; }
+
+    /// <summary>Echoes back the parsed body values for assertion.</summary>
+    /// <param name="command">The command instance.</param>
+    /// <returns>A formatted string showing the bound collection and scalar values.</returns>
+    public static Task<string> HandleAsync(E2EBulkItemsCommand command)
+    {
+        var names = command.Names ?? [];
+        return Task.FromResult($"count:{names.Length}|items:{string.Join(",", names)}|priority:{command.Priority}");
     }
 }
