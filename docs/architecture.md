@@ -128,6 +128,31 @@ At runtime:
 
 The important architectural rule is that runtime code consumes generated knowledge. It should not re-scan the compilation model or re-derive contracts that the generators already knew.
 
+### Supported HTTP result types
+
+`HttpOperationResultExecutor` translates semantic `OperationResult` subtypes to HTTP responses:
+
+| Result type | HTTP status | Body | Notes |
+| --- | --- | --- | --- |
+| `OkResult<T>` | 200 | JSON | Standard success with payload |
+| `CreatedResult<T>` | 201 | JSON | + Location header from self-link |
+| `AcceptedResult<T>` | 202 | JSON | Async accepted |
+| `NotFoundResult<T>` | 404 | JSON | Missing resource |
+| `ConflictResult<T>` | 409 | JSON | State conflict |
+| `ResourceEventResult<T>` | 200/201/204 | JSON envelope | Status from ChangeType; Created adds Location header |
+| `KeyOnlyResourceEventResult` | 200/201/204 | None | Status from ChangeType |
+| `NoResultOperationResult` | 200 | None | Default void success |
+| `HttpNoContentResult` | 204 | None | Explicit no-content |
+| `PlainTextResult` | 200 | text/plain | Plain-text body (e.g. health checks) |
+| `RedirectResult` | 302 (configurable) | None | Location header redirect |
+| `FileStreamResult` | 200 | Stream | Binary download; Content-Disposition when FileName set |
+| `ValidationFailedResult` | 422 | ProblemDetails | Validation errors |
+| `UnhandledExceptionResult` | 500 | ProblemDetails | Internal errors |
+| `UnauthenticatedResult` | 401 | None | Identity required |
+| `ForbiddenResult` | 403 | None | Permission denied |
+| `BindingFailureResult` | 400 | None | Request binding failed |
+| `UnsupportedMediaTypeResult` | 415 | None | Wrong content type |
+
 ## Modules are the extension seam
 
 `IBlueprintSourceGeneratorModule` is the main extension point for new compile-time features (`src\Blueprint.SourceGenerator\Modules\IBlueprintSourceGeneratorModule.cs`).

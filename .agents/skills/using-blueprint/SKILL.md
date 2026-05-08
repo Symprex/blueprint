@@ -118,6 +118,18 @@ public partial class ArchiveTemplateCommand : ICommand<KeyOnlyResourceEventResul
 
 Blueprint generates HATEOAS-style `$links` on API resources using source-generated marker attributes. These attributes are emitted into the consumer compilation by the generator.
 
+## OpenAPI metadata
+
+Blueprint generates a complete OpenAPI document from source-generated descriptors. Several attributes and conventions control the document shape:
+
+- **Operation grouping:** `[ApiOperations("Templates")]` sets the OpenAPI tag for an operation. The optional `Description` property sets the tag description in the document-level tags section.
+- **Deprecated operations:** Apply `[Obsolete]` to an operation class; the generated OpenAPI entry sets `deprecated: true`.
+- **Enum values:** Enum-typed operation properties are projected into OpenAPI schemas with their declared values.
+- **Security schemes:** Operations carrying `[Resource]` or `[MustBeAuthenticated]` automatically project a security requirement in the OpenAPI document. The default scheme is `Bearer` (`http`/`bearer`/`JWT`).
+- **OpenAPI document info:** Use `BlueprintHttpOptions` to configure top-level document metadata (`Contact`, `License`, `TermsOfService`) via `ConfigureHttp(...)` at registration time.
+- **Validation constraint projection:** validation attributes automatically project into OpenAPI parameter and request body schemas (see Validation section above).
+- **Format hints:** `EmailAddress` → `format: "email"`, `Url` → `format: "uri"`, `Phone` → `format: "phone"`.
+
 ### SelfLink — parameterized resource link
 
 `[SelfLink(typeof(TResource), "/route/{Param}")]` declares a "self" relation for a resource type. The route pattern contains placeholders that map to operation properties:
@@ -317,6 +329,10 @@ Pipeline order: Handler → UoW Save (900) → Audit (950) → Background Task F
 - Host-exposed `Results<T1, T2>` contracts now also fail build-time validation with `BP109` when multiple supported semantic result members would still collapse to the same current HTTP response shape, such as multiple `OkResult<T>` members that all translate to `200` JSON responses.
 - Host-exposed `Results<T1, T2>` contracts now also fail build-time validation with `BP110` when supported members still share the same HTTP status code without explicit host/client discrimination metadata, such as `OkResult<T>` plus `NoResultOperationResult` both mapping to `200 OK`.
 - Host-exposed `Results<T1, T2>` contracts now also fail build-time validation with `BP112` when they try to mix host-neutral `NoResultOperationResult` with host-owned no-content/status-only result families such as `Blueprint.Runtime.Http.HttpNoContentResult`; that semantic split is deliberate, so use one shape or the other instead of combining them.
+- Use `Blueprint.Runtime.Exec.PlainTextResult` when the consumer contract should return a plain `text/plain; charset=utf-8` response body (e.g. health checks, status endpoints); the HTTP host maps it to `200 OK` with no JSON wrapping.
+- Use `Blueprint.Runtime.Http.RedirectResult` when the consumer contract should redirect the client; set `Url` (required) and optionally `StatusCode` (defaults to `302 Found`). The HTTP host sets the `Location` header and returns the configured status code with no response body.
+- Use `Blueprint.Runtime.Exec.FileStreamResult` when the consumer contract should stream a binary file download; set `Stream`, `ContentType`, and optionally `FileName`. When `FileName` is set, the HTTP host adds a `Content-Disposition: attachment` header. The HTTP host maps it to `200 OK` and copies the stream to the response body.
+- Use `Blueprint.Runtime.Exec.ApiException` (or subclasses `NotFoundException`, `ConflictException`, `BadRequestException`, `ForbiddenException`) as an escape hatch when structured results are impractical. `ApiException.HttpStatus` controls the HTTP status code; the HTTP host translates it to a ProblemDetails response.
 - Nullable plain-value handler returns are a build-time error, and broader host translation remains follow-on work.
 
 ## Service registration (DX)
@@ -402,7 +418,7 @@ public Results<OkResult<Item>, NotFoundResult<Item>> Handle(GetItemQuery query)
 }
 ```
 
-Available result types: `OkResult<T>`, `CreatedResult<T>`, `AcceptedResult<T>`, `NotFoundResult<T>`, `ConflictResult<T>`, `HttpNoContentResult`, `NoResultOperationResult`.
+Available result types: `OkResult<T>`, `CreatedResult<T>`, `AcceptedResult<T>`, `NotFoundResult<T>`, `ConflictResult<T>`, `HttpNoContentResult`, `NoResultOperationResult`, `PlainTextResult`, `RedirectResult`, `FileStreamResult`.
 
 ### Typed exceptions (escape hatch)
 
