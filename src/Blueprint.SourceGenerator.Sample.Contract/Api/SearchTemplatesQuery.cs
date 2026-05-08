@@ -31,8 +31,10 @@ public partial class SearchTemplatesQuery : IQuery<TemplateApiResource[]>
 
     /// <summary>
     /// The page number for pagination (1-based). Defaults to 1.
+    /// Must be greater than 0 and less than 1001 (maximum 1000 pages).
     /// </summary>
     [GreaterThan(0)]
+    [LessThan(1001)]
     [Description("The 1-based page number for pagination.")]
     public int Page { get; set; } = 1;
 

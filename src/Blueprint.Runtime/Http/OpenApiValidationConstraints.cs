@@ -169,9 +169,17 @@ internal sealed record OpenApiValidationConstraints(
         decimal? maximum = null;
         var isExclusive = false;
 
-        foreach (var attribute in validationAttributes.OfType<RangeAttribute>())
+        foreach (var attribute in validationAttributes)
         {
-            ApplyUpperBound(ref maximum, ref isExclusive, ConvertToDecimal(attribute.Maximum), isExclusiveCandidate: false);
+            switch (attribute)
+            {
+                case RangeAttribute rangeAttribute:
+                    ApplyUpperBound(ref maximum, ref isExclusive, ConvertToDecimal(rangeAttribute.Maximum), isExclusiveCandidate: false);
+                    break;
+                case LessThanAttribute lessThanAttribute:
+                    ApplyUpperBound(ref maximum, ref isExclusive, lessThanAttribute.MaximumValue, isExclusiveCandidate: true);
+                    break;
+            }
         }
 
         return (maximum, isExclusive);

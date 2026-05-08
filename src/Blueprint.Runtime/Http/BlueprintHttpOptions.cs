@@ -15,19 +15,6 @@ public class BlueprintHttpOptions
     public bool ExposeExceptionDetailsInErrorResponses { get; set; }
 
     /// <summary>
-    /// Gets or sets the flag which causes content negotiation to ignore Accept header
-    /// when it contains the media type */*. <see langword="false"/> by default.
-    /// </summary>
-    public bool RespectBrowserAcceptHeader { get; set; }
-
-    /// <summary>
-    /// Gets or sets the flag which decides whether an HTTP 406 Not Acceptable response
-    /// will be returned if no formatter has been selected to format the response.
-    /// <see langword="false"/> by default.
-    /// </summary>
-    public bool ReturnHttpNotAcceptable { get; set; }
-
-    /// <summary>
     /// Gets or sets the optional embedded resource name for the canonical operations manifest that hosted inspection
     /// surfaces should expose. Keeping this explicit avoids introducing a hidden runtime resource-discovery convention
     /// before the manifest emission story is widened deliberately.

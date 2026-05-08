@@ -94,6 +94,18 @@ internal static class ValidationSymbolHelpers
     }
 
     /// <summary>
+    /// Checks whether an attribute type is Blueprint's <c>LessThanAttribute</c>.
+    /// </summary>
+    /// <param name="attributeClass">The attribute type to inspect.</param>
+    /// <returns><see langword="true"/> when the attribute is a less-than attribute.</returns>
+    public static bool IsLessThanAttribute(INamedTypeSymbol? attributeClass)
+    {
+        return attributeClass is not null
+               && attributeClass.Name == "LessThanAttribute"
+               && attributeClass.ContainingNamespace.ToDisplayString() == "Blueprint.Validation";
+    }
+
+    /// <summary>
     /// Checks whether an attribute type is Blueprint's <c>RequiredIfAttribute</c>.
     /// </summary>
     /// <param name="attributeClass">The attribute type to inspect.</param>

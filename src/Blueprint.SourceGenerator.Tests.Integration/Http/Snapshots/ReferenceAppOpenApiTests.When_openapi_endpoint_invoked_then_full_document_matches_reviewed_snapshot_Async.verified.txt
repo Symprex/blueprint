@@ -327,7 +327,9 @@
               "type": "integer",
               "format": "int32",
               "minimum": 0,
-              "exclusiveMinimum": true
+              "exclusiveMinimum": true,
+              "maximum": 1001,
+              "exclusiveMaximum": true
             }
           },
           {

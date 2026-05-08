@@ -25,6 +25,7 @@ internal static class ValidationPropertyPlanner
         new RequiredIfNotValidationFastPathStrategy(),
         new NotAllowedIfValidationFastPathStrategy(),
         new GreaterThanValidationFastPathStrategy(),
+        new LessThanValidationFastPathStrategy(),
         new GreaterThanPropertyValidationFastPathStrategy(),
     ];
 
