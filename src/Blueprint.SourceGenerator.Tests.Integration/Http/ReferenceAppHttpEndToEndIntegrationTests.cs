@@ -1148,7 +1148,9 @@ public class ReferenceAppHttpEndToEndIntegrationTests
             .AddSingleton<TemplateStore>()
             .AddSingleton<SampleBlueprintApp>()
             .AddSingleton<SampleBlueprintAppExecutor>()
-            .AddScoped<Blueprint.Tasks.IBackgroundTaskScheduler, InProcessBackgroundTaskScheduler>();
+            .AddScoped<Blueprint.Tasks.IBackgroundTaskScheduler, InProcessBackgroundTaskScheduler>()
+            .AddScoped<InMemoryUnitOfWork>()
+            .AddScoped<Blueprint.Persistence.IUnitOfWork>(sp => sp.GetRequiredService<InMemoryUnitOfWork>());
 
         return new TestEndpointRouteBuilder(services.BuildServiceProvider());
     }
@@ -1161,6 +1163,8 @@ public class ReferenceAppHttpEndToEndIntegrationTests
             .AddSingleton<SampleBlueprintApp>()
             .AddSingleton<SampleBlueprintAppExecutor>()
             .AddScoped<Blueprint.Tasks.IBackgroundTaskScheduler, InProcessBackgroundTaskScheduler>()
+            .AddScoped<InMemoryUnitOfWork>()
+            .AddScoped<Blueprint.Persistence.IUnitOfWork>(sp => sp.GetRequiredService<InMemoryUnitOfWork>())
             .AddSingleton<Blueprint.Authorization.IResourceAuthorizationProvider, SampleResourceAuthorizationProvider>();
 
         return new TestEndpointRouteBuilder(services.BuildServiceProvider());
