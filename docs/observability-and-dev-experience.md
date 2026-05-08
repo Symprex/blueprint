@@ -89,6 +89,35 @@ When adding or changing runtime behavior, ask:
 - what metadata or inspection surface would help on-call developers or AI agents understand the shape of the system?
 - is the output compatible with the repo's AOT-friendly, low-reflection goals?
 
+## HTTP error response surface
+
+All error responses use [RFC 7807](https://www.rfc-editor.org/rfc/rfc7807) `application/problem+json` bodies, giving clients a consistent machine-readable error envelope across every failure path. The `HttpOperationResultExecutor` switch statement maps each `OperationResult` subclass to the appropriate HTTP response.
+
+### Status codes and response shapes
+
+| Status | Result type | Body | Detail source |
+|--------|------------|------|---------------|
+| 400 | `BindingFailureResult` | `ProblemDetails` | Binding failure reason (e.g. "Invalid route parameter 'id'") |
+| 401 | `UnauthenticatedResult` | `ProblemDetails` | Fixed: "Authentication is required to access this resource." |
+| 403 | `ForbiddenResult` | `ProblemDetails` | Fixed: "You do not have permission to access this resource." |
+| 415 | `UnsupportedMediaTypeResult` | `ProblemDetails` | Fixed: "The request content type is not supported. Expected 'application/json'." |
+| 422 | `ValidationFailedResult` | `ValidationProblemDetails` | Per-member validation errors from DataAnnotations / IValidatableObject |
+| 500 | `UnhandledExceptionResult` | `ProblemDetails` | Generic message unless `ExposeExceptionDetailsInErrorResponses` is true |
+| 4xx | `UnhandledExceptionResult` (via `ApiException`) | `ProblemDetails` | Exception message (intentionally developer-authored) |
+
+### Exception detail control
+
+`BlueprintHttpOptions.ExposeExceptionDetailsInErrorResponses` controls 500-level detail exposure:
+
+- **false (default/production)**: 500 responses show `"An unexpected error occurred."` — no stack traces or internal details leak.
+- **true (development)**: 500 responses include the exception message and stack trace in the `stackTrace` extension property.
+
+Non-500 `ApiException` responses always include the exception message because `ApiException` is designed for developer-authored, client-facing error messages.
+
+### OpenAPI alignment
+
+The OpenAPI document generation declares `ProblemDetails` response schemas for all error status codes (400, 401, 403, 415, 422, 500), so client code generators produce strongly-typed error handling.
+
 ## Audit and sensitive-data observability surfaces
 
 The auditing module contributes compile-time and runtime observability hooks:
