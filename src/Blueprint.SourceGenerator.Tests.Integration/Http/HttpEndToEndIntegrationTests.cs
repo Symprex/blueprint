@@ -573,6 +573,45 @@ public class HttpEndToEndIntegrationTests
         response.ContentDisposition.Should().Be("attachment; filename=\"report.bin\"");
     }
 
+    [Fact]
+    public async Task When_GET_with_double_and_float_query_params_then_values_are_bound()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/e2e/typed-query");
+        endpoint.Should().NotBeNull("the typed-query route should be registered");
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.QueryString = new QueryString("?rating=4.5&score=0.95&since=2024-06-15T10:30:00Z");
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        response.Body.Should().Contain("4.5");
+        response.Body.Should().Contain("0.95");
+        response.Body.Should().Contain("2024-06-15");
+    }
+
+    [Fact]
+    public async Task When_GET_with_nullable_double_query_param_omitted_then_null_is_bound()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/e2e/typed-query");
+        endpoint.Should().NotBeNull();
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.QueryString = new QueryString("?rating=3.14");
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        response.Body.Should().Contain("3.14");
+        response.Body.Should().Contain("maxPrice:null");
+    }
+
     private static async Task<TestHttpResponse> InvokeEndpointAsync(
         RouteEndpoint endpoint,
         IServiceProvider serviceProvider,
@@ -1071,5 +1110,38 @@ public partial class E2ENamedFileDownloadQuery : IQuery<FileStreamResult>
     {
         var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes("binary-data"));
         return Task.FromResult(new FileStreamResult(stream, "application/octet-stream", "report.bin"));
+    }
+}
+
+/// <summary>
+/// Anonymous GET with double, float, nullable double, and DateTimeOffset query params
+/// for end-to-end type-binding validation.
+/// </summary>
+[Blueprint.Model.Attributes.RootLink("/e2e/typed-query")]
+[Blueprint.Model.Attributes.HttpGet]
+[Blueprint.Model.Attributes.AllowAnonymous]
+[Blueprint.Auditing.DoNotAudit]
+public partial class E2ETypedQueryParamsQuery : IQuery<string>
+{
+    /// <summary>A double-precision rating value.</summary>
+    public double Rating { get; set; }
+
+    /// <summary>A single-precision score value.</summary>
+    public float Score { get; set; }
+
+    /// <summary>A nullable double for optional max price filter.</summary>
+    public double? MaxPrice { get; set; }
+
+    /// <summary>An optional date-time-offset filter.</summary>
+    public DateTimeOffset? Since { get; set; }
+
+    /// <summary>Echoes back the parsed values for assertion.</summary>
+    /// <param name="query">The typed query instance.</param>
+    /// <returns>A formatted string of the parsed values.</returns>
+    public static Task<string> HandleAsync(E2ETypedQueryParamsQuery query)
+    {
+        var maxPriceStr = query.MaxPrice.HasValue ? query.MaxPrice.Value.ToString("G") : "null";
+        var sinceStr = query.Since.HasValue ? query.Since.Value.ToString("o") : "null";
+        return Task.FromResult($"rating:{query.Rating:G}|score:{query.Score:G}|maxPrice:{maxPriceStr}|since:{sinceStr}");
     }
 }

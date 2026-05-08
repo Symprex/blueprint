@@ -982,6 +982,127 @@ public class ReferenceAppHttpEndToEndIntegrationTests
         response.Body.Should().Contain("content source");
     }
 
+    [Fact]
+    public async Task When_patch_template_settings_with_valid_nullable_body_then_returns_200()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/templates/{Id}/settings", "PATCH");
+        endpoint.Should().NotBeNull("the PATCH settings route should be registered");
+
+        var bodyJson = """{"opacity":0.75,"minWeight":10,"maxWeight":50,"cssClassName":"my-class"}"""u8.ToArray();
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Patch;
+            context.Request.Path = "/api/templates/template-001/settings";
+            context.Request.RouteValues = new RouteValueDictionary { ["Id"] = "template-001" };
+            context.Request.ContentType = "application/json; charset=utf-8";
+            context.Request.ContentLength = bodyJson.Length;
+            context.Request.Body = new MemoryStream(bodyJson);
+            context.User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "user-1"),
+                ],
+                authenticationType: "test"));
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        response.ContentType.Should().Be("application/json; charset=utf-8");
+    }
+
+    [Fact]
+    public async Task When_patch_template_settings_with_opacity_out_of_range_then_returns_422()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/templates/{Id}/settings", "PATCH");
+
+        // Opacity must be in [0.0, 1.0]
+        var bodyJson = """{"opacity":1.5}"""u8.ToArray();
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Patch;
+            context.Request.Path = "/api/templates/template-001/settings";
+            context.Request.RouteValues = new RouteValueDictionary { ["Id"] = "template-001" };
+            context.Request.ContentType = "application/json; charset=utf-8";
+            context.Request.ContentLength = bodyJson.Length;
+            context.Request.Body = new MemoryStream(bodyJson);
+            context.User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "user-1"),
+                ],
+                authenticationType: "test"));
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status422UnprocessableEntity);
+        response.ContentType.Should().StartWith("application/problem+json");
+        response.Body.Should().Contain("Opacity");
+    }
+
+    [Fact]
+    public async Task When_patch_template_settings_with_maxweight_less_than_minweight_then_returns_422()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/templates/{Id}/settings", "PATCH");
+
+        // MaxWeight must be greater than MinWeight
+        var bodyJson = """{"minWeight":50,"maxWeight":10}"""u8.ToArray();
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Patch;
+            context.Request.Path = "/api/templates/template-001/settings";
+            context.Request.RouteValues = new RouteValueDictionary { ["Id"] = "template-001" };
+            context.Request.ContentType = "application/json; charset=utf-8";
+            context.Request.ContentLength = bodyJson.Length;
+            context.Request.Body = new MemoryStream(bodyJson);
+            context.User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "user-1"),
+                ],
+                authenticationType: "test"));
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status422UnprocessableEntity);
+        response.ContentType.Should().StartWith("application/problem+json");
+        response.Body.Should().Contain("MaxWeight");
+    }
+
+    [Fact]
+    public async Task When_patch_template_settings_with_null_nullable_fields_then_returns_200()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/templates/{Id}/settings", "PATCH");
+
+        // All nullable fields omitted — should pass validation
+        var bodyJson = """{}"""u8.ToArray();
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Patch;
+            context.Request.Path = "/api/templates/template-001/settings";
+            context.Request.RouteValues = new RouteValueDictionary { ["Id"] = "template-001" };
+            context.Request.ContentType = "application/json; charset=utf-8";
+            context.Request.ContentLength = bodyJson.Length;
+            context.Request.Body = new MemoryStream(bodyJson);
+            context.User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "user-1"),
+                ],
+                authenticationType: "test"));
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+    }
+
     private static async Task<TestHttpResponse> InvokeEndpointAsync(
         RouteEndpoint endpoint,
         IServiceProvider serviceProvider,
