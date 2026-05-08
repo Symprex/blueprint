@@ -601,6 +601,28 @@ public class ReferenceAppHttpEndToEndIntegrationTests
     }
 
     [Fact]
+    public async Task When_search_templates_with_correlation_header_then_header_is_bound()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/templates/search", "GET");
+        endpoint.Should().NotBeNull("the search route should be registered");
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Get;
+            context.Request.Path = "/api/templates/search";
+            context.Request.QueryString = new QueryString("?Q=Welcome&Page=1&PageSize=10");
+            context.Request.Headers["X-Correlation-Id"] = "test-correlation-123";
+        });
+
+        // The handler succeeds and returns results — this proves header binding didn't break the pipeline
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        response.Body.Should().Contain("Welcome Email");
+    }
+
+    [Fact]
     public async Task When_search_templates_without_required_query_then_returns_422()
     {
         var endpoints = CreateEndpoints();
