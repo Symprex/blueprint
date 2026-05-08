@@ -288,7 +288,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
 
                 branch.DeclareVariable(
                     "isAuthorized",
-                    $"await authorizationProvider.IsAuthorizedAsync(((Blueprint.Runtime.Http.IHttpOperationContext)context).HttpContext.User, new Blueprint.Model.ScopePair[] {{ {scopePairElements} }}, ((Blueprint.Runtime.Http.IHttpOperationContext)context).HttpContext.RequestAborted)");
+                    $"await authorizationProvider.IsAuthorizedAsync(context, ((Blueprint.Runtime.Http.IHttpOperationContext)context).HttpContext.User, new Blueprint.Model.ScopePair[] {{ {scopePairElements} }}, ((Blueprint.Runtime.Http.IHttpOperationContext)context).HttpContext.RequestAborted)");
 
                 branch.If(
                     "!isAuthorized",

@@ -228,6 +228,56 @@ public class HttpEndToEndIntegrationTests
     }
 
     [Fact]
+    public async Task When_GET_resource_protected_with_ownership_provider_matching_tenant_then_returns_200()
+    {
+        var endpoints = CreateEndpointsWithOwnershipAuthorization();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/e2e/tenant-resource/{TenantId}");
+        endpoint.Should().NotBeNull("the tenant-resource query route should be registered");
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            // Set authenticated user with tenant_id claim matching the route
+            var identity = new System.Security.Claims.ClaimsIdentity("TestAuth");
+            identity.AddClaim(new System.Security.Claims.Claim("scope", "tenant:read"));
+            identity.AddClaim(new System.Security.Claims.Claim("tenant_id", "tenant-abc"));
+            context.User = new System.Security.Claims.ClaimsPrincipal(identity);
+
+            // Route value provides the TenantId to the operation
+            context.Request.RouteValues["TenantId"] = "tenant-abc";
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        response.Body.Should().Be("\"tenant-data:tenant-abc\"");
+    }
+
+    [Fact]
+    public async Task When_GET_resource_protected_with_ownership_provider_mismatched_tenant_then_returns_403()
+    {
+        var endpoints = CreateEndpointsWithOwnershipAuthorization();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/e2e/tenant-resource/{TenantId}");
+        endpoint.Should().NotBeNull("the tenant-resource query route should be registered");
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            // Set authenticated user with tenant_id claim that does NOT match the route
+            var identity = new System.Security.Claims.ClaimsIdentity("TestAuth");
+            identity.AddClaim(new System.Security.Claims.Claim("scope", "tenant:read"));
+            identity.AddClaim(new System.Security.Claims.Claim("tenant_id", "tenant-abc"));
+            context.User = new System.Security.Claims.ClaimsPrincipal(identity);
+
+            // Route value provides a DIFFERENT TenantId
+            context.Request.RouteValues["TenantId"] = "tenant-xyz";
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status403Forbidden);
+        response.ContentType.Should().StartWith("application/problem+json");
+    }
+
+    [Fact]
     public async Task When_handler_throws_ApiException_with_404_then_returns_404_with_problem_details()
     {
         var endpoints = CreateEndpoints();
@@ -1210,6 +1260,18 @@ public class HttpEndToEndIntegrationTests
         return new TestEndpointRouteBuilder(services.BuildServiceProvider());
     }
 
+    private static TestEndpointRouteBuilder CreateEndpointsWithOwnershipAuthorization()
+    {
+        var services = new ServiceCollection()
+            .AddLogging()
+            .AddSingleton<IntegrationTestBlueprintApp>()
+            .AddSingleton<IntegrationTestBlueprintAppExecutor>()
+            .AddSingleton<Blueprint.Authorization.IResourceAuthorizationProvider>(
+                new OwnershipAwareAuthorizationProvider());
+
+        return new TestEndpointRouteBuilder(services.BuildServiceProvider());
+    }
+
     private sealed class TestEndpointRouteBuilder(IServiceProvider serviceProvider) : IEndpointRouteBuilder
     {
         public ICollection<EndpointDataSource> DataSources { get; } = [];
@@ -1322,11 +1384,82 @@ public partial class E2EValidatedCommand : ICommand<string>
 internal sealed class TestResourceAuthorizationProvider(bool authorized) : Blueprint.Authorization.IResourceAuthorizationProvider
 {
     public Task<bool> IsAuthorizedAsync(
+        Blueprint.Runtime.Exec.ApiOperationContext operationContext,
         System.Security.Claims.ClaimsPrincipal principal,
         IReadOnlyList<Blueprint.Model.ScopePair> requiredScopePairs,
         CancellationToken cancellationToken)
     {
         return Task.FromResult(authorized);
+    }
+}
+
+/// <summary>
+/// Ownership-aware authorization provider that checks both scope pair claims AND verifies
+/// the caller's tenant_id claim matches the operation's TenantId property. This proves
+/// the <see cref="Blueprint.Runtime.Exec.ApiOperationContext"/> parameter enables resource
+/// ownership patterns analogous to legacy Blueprint's resource key templates.
+/// </summary>
+internal sealed class OwnershipAwareAuthorizationProvider : Blueprint.Authorization.IResourceAuthorizationProvider
+{
+    public Task<bool> IsAuthorizedAsync(
+        Blueprint.Runtime.Exec.ApiOperationContext operationContext,
+        System.Security.Claims.ClaimsPrincipal principal,
+        IReadOnlyList<Blueprint.Model.ScopePair> requiredScopePairs,
+        CancellationToken cancellationToken)
+    {
+        // Check scope pairs (any-of)
+        var hasScopePair = false;
+
+        foreach (var scopePair in requiredScopePairs)
+        {
+            if (principal.HasClaim("scope", $"{scopePair.Noun}:{scopePair.Verb}"))
+            {
+                hasScopePair = true;
+                break;
+            }
+        }
+
+        if (!hasScopePair)
+        {
+            return Task.FromResult(false);
+        }
+
+        // Ownership check: verify caller's tenant_id matches operation's TenantId property
+        var tenantProperty = operationContext.Operation.GetType().GetProperty("TenantId");
+
+        if (tenantProperty != null)
+        {
+            var operationTenantId = tenantProperty.GetValue(operationContext.Operation)?.ToString();
+            var callerTenantId = principal.FindFirst("tenant_id")?.Value;
+
+            if (operationTenantId != null && callerTenantId != null &&
+                !string.Equals(operationTenantId, callerTenantId, StringComparison.Ordinal))
+            {
+                return Task.FromResult(false);
+            }
+        }
+
+        return Task.FromResult(true);
+    }
+}
+
+/// <summary>
+/// Tenant-scoped resource-protected query that carries a <c>TenantId</c> property bound from
+/// the route. Used to prove that <see cref="Blueprint.Authorization.IResourceAuthorizationProvider"/>
+/// can inspect operation properties via <see cref="Blueprint.Runtime.Exec.ApiOperationContext"/>
+/// for ownership-based authorization (analogous to legacy Blueprint's resource key template
+/// pattern: <c>[Resource("noun", "verb", "/Tenants/{Auth:AccountId}")]</c>).
+/// </summary>
+[Blueprint.Model.Attributes.Resource("tenant", "read")]
+[Blueprint.Model.Attributes.RootLink("/e2e/tenant-resource/{TenantId}")]
+public partial class E2ETenantResourceQuery : IQuery<string>
+{
+    /// <summary>Tenant identifier bound from the route, used in ownership authorization checks.</summary>
+    public string? TenantId { get; set; }
+
+    public static Task<string> HandleAsync(E2ETenantResourceQuery query)
+    {
+        return Task.FromResult($"tenant-data:{query.TenantId}");
     }
 }
 
