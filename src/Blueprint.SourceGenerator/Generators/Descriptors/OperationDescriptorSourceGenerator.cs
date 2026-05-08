@@ -9,6 +9,7 @@ using Blueprint.SourceGenerator.Modules.Authentication;
 using Blueprint.SourceGenerator.Modules.Authorization;
 using Blueprint.SourceGenerator.Modules.BackgroundTaskFlush;
 using Blueprint.SourceGenerator.Modules.LinkGeneration;
+using Blueprint.SourceGenerator.Modules.Messaging;
 using Blueprint.SourceGenerator.Modules.OpenApi;
 using Blueprint.SourceGenerator.Modules.Persistence;
 using Blueprint.SourceGenerator.Modules.Validation;
@@ -247,6 +248,7 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
             new LinkManifestModule(),
             new ValidationManifestModule(),
             new PersistenceManifestModule(),
+            new MessageOutboxManifestModule(),
             new BackgroundTaskFlushManifestModule(),
             new ResourceEventManifestModule(),
             new ResultContractManifestModule(),

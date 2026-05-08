@@ -77,13 +77,16 @@ those libraries as core Blueprint dependencies:
 | Seam | Sample Implementation | Production Equivalent |
 |------|----------------------|----------------------|
 | **Persistence** | `InMemoryUnitOfWork` | Marten `IDocumentSession`, EF Core `DbContext` |
-| **Messaging** | `InMemoryMessageOutbox` | Rebus `RebusTransactionScope` with outbox |
+| **Messaging** | `InMemoryMessageOutbox` (`IMessageOutbox`) | Rebus `RebusTransactionScope` with outbox |
 | **Multi-tenancy** | `AsyncLocalTenantAccessor` | Signature365's `ICurrentTenantAccessor` |
 | **Property population** | `TenantPropertyPopulator` | Signature365's `SetTenantMiddleware` |
 | **Task scheduling** | `InProcessBackgroundTaskScheduler` | Hangfire `BackgroundJob.Enqueue` |
 | **Auditing** | `LoggingAuditSink` | Database or event-store audit sink |
 | **Resource events** | `LoggingResourceEventAuditSink` | Event-bus or audit-store sink |
 | **Authorization** | `SampleResourceAuthorizationProvider` | Claims/scope-based ownership checks |
+| **User context** | `SampleUserAuthorisationContextFactory` | JWT→`IUserAuthorisationContext` mapping |
+| **Business auth** | `TenantIsolationApiAuthoriser` | Tenant isolation, role-based access |
+| **Recurring tasks** | `SampleRecurringTaskScheduler` | Hangfire `RecurringJob.AddOrUpdate` |
 
 These seams prove that the generated pipeline correctly calls consumer-registered services at the
 right pipeline stages, enabling companion packages to integrate without core framework changes.
