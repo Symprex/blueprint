@@ -104,6 +104,20 @@ public class BackgroundTaskHostDispatchIntegrationTests
         httpOperations.Should().NotContain(static op => op.OperationType == typeof(ValidatedBackgroundTask));
     }
 
+    [Fact]
+    public void When_background_task_has_no_auth_attribute_then_descriptor_projects_anonymous_access_mode()
+    {
+        var app = new IntegrationTestBlueprintApp();
+
+        var descriptor = app.GetOperationsForHost("tasks")
+            .First(static op => op.OperationType == typeof(DispatchableBackgroundTask));
+
+        var authFeature = descriptor.GetFeatureData<Blueprint.Model.OperationAuthenticationFeatureData>();
+        authFeature.Should().NotBeNull(
+            "background tasks should auto-project anonymous access mode even without [AllowAnonymous]");
+        authFeature!.Requirement.Should().Be(Blueprint.Model.AuthenticationRequirement.Anonymous);
+    }
+
     private sealed class EmptyServiceProvider : IServiceProvider
     {
         public object? GetService(Type serviceType)

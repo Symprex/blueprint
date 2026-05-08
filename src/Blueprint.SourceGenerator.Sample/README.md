@@ -58,6 +58,7 @@ A background task (`SendTemplateSharedNotificationTask`) demonstrates non-HTTP e
 - **General auditing** — `IAuditSink` for cross-operation audit recording with structured activity events
 - **Audit opt-out** — `[DoNotAudit]` on `SearchTemplatesQuery` to suppress noisy read auditing
 - **Background task scheduling** — `IBackgroundTaskScheduler` with `Enqueue()` in handler and pipeline-managed flush
+- **Background task anonymous convention** — background tasks auto-project `AuthenticationRequirement.Anonymous` in descriptors (matching legacy `BackgroundTaskAllowAnonymousConvention`)
 - **Persistence opt-out** — `[DoNotSaveChanges]` on `PreviewTemplateCommand` to suppress UoW commit for read-only commands
 - **Performance metrics opt-out** — `[DoNotRecordPerformanceMetrics]` on `GetTemplateVersionsQuery` for trace suppression
 - **Discriminated union results** — `Results<OkResult<T>, NotFoundResult<T>>` on `GetTemplateQuery` maps to 200/404 via generated pipeline
@@ -67,6 +68,25 @@ A background task (`SendTemplateSharedNotificationTask`) demonstrates non-HTTP e
 - **Operation grouping** — `[ApiOperations("Templates")]` for explicit OpenAPI tag provenance
 - **Serializer context** — `[BlueprintAppSerializerContext]` with `System.Text.Json` source-generated serialization
 - **Generated executor** — `SampleBlueprintAppExecutor` is entirely source-generated
+
+## Consumer seam demonstrations
+
+The sample app demonstrates how consumer apps wire companion middleware patterns without requiring
+those libraries as core Blueprint dependencies:
+
+| Seam | Sample Implementation | Production Equivalent |
+|------|----------------------|----------------------|
+| **Persistence** | `InMemoryUnitOfWork` | Marten `IDocumentSession`, EF Core `DbContext` |
+| **Messaging** | `InMemoryMessageOutbox` | Rebus `RebusTransactionScope` with outbox |
+| **Multi-tenancy** | `AsyncLocalTenantAccessor` | Signature365's `ICurrentTenantAccessor` |
+| **Property population** | `TenantPropertyPopulator` | Signature365's `SetTenantMiddleware` |
+| **Task scheduling** | `InProcessBackgroundTaskScheduler` | Hangfire `BackgroundJob.Enqueue` |
+| **Auditing** | `LoggingAuditSink` | Database or event-store audit sink |
+| **Resource events** | `LoggingResourceEventAuditSink` | Event-bus or audit-store sink |
+| **Authorization** | `SampleResourceAuthorizationProvider` | Claims/scope-based ownership checks |
+
+These seams prove that the generated pipeline correctly calls consumer-registered services at the
+right pipeline stages, enabling companion packages to integrate without core framework changes.
 
 ## Running
 
@@ -105,6 +125,8 @@ services.AddBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>(bluepri
     blueprint.AddResourceEventAuditSink<SampleResourceEventAuditSink>();
     blueprint.AddResourceAuthorizationProvider<SampleResourceAuthorizationProvider>();
     blueprint.AddBackgroundTaskScheduler<InProcessBackgroundTaskScheduler>();
+    blueprint.AddUnitOfWork<InMemoryUnitOfWork>();
+    blueprint.AddPropertyPopulator<TenantPropertyPopulator>();
     blueprint.ConfigureHttp(options => options.PublicHost = "https://api.example.com");
 });
 ```
