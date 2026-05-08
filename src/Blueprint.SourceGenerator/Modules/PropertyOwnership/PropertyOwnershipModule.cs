@@ -1079,25 +1079,6 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         }
     }
 
-    private static string GetScalarConversionExpression(ITypeSymbol typeSymbol, string stringExpression)
-    {
-        var typeDisplay = typeSymbol.WithNullableAnnotation(NullableAnnotation.NotAnnotated).ToDisplayString();
-
-        return typeDisplay switch
-        {
-            "string" => stringExpression,
-            "int" => $"int.Parse({stringExpression}, System.Globalization.CultureInfo.InvariantCulture)",
-            "long" => $"long.Parse({stringExpression}, System.Globalization.CultureInfo.InvariantCulture)",
-            "bool" => $"bool.Parse({stringExpression})",
-            "decimal" => $"decimal.Parse({stringExpression}, System.Globalization.CultureInfo.InvariantCulture)",
-            "System.Guid" => $"System.Guid.Parse({stringExpression})",
-            "System.DateTime" => $"System.DateTime.Parse({stringExpression}, System.Globalization.CultureInfo.InvariantCulture)",
-            _ when typeSymbol.TypeKind == TypeKind.Enum =>
-                $"System.Enum.Parse<{typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}>({stringExpression})",
-            _ => $"({typeDisplay}){stringExpression}",
-        };
-    }
-
     /// <summary>
     /// Returns a TryParse expression that avoids exception-handling overhead for malformed query values.
     /// The expression evaluates to <c>true</c> when parsing succeeds and writes the result into <paramref name="outVariable"/>.
