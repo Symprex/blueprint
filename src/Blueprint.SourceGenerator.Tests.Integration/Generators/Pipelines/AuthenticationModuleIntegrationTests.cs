@@ -21,12 +21,14 @@ public class AuthenticationModuleIntegrationTests
     }
 
     [Fact]
-    public void When_no_auth_attribute_then_descriptor_has_no_auth_feature_data()
+    public void When_no_auth_attribute_then_descriptor_defaults_to_authenticated()
     {
         var descriptor = UnauthenticatedIntegrationQuery.Configure();
 
-        descriptor.TryGetFeatureData<OperationAuthenticationFeatureData>(out _)
-            .Should().BeFalse("anonymous operations should not have authentication feature data");
+        descriptor.TryGetFeatureData<OperationAuthenticationFeatureData>(out var authData)
+            .Should().BeTrue("HTTP operations default to authenticated (legacy Blueprint parity)");
+
+        authData!.Requirement.Should().Be(AuthenticationRequirement.Authenticated);
     }
 }
 
@@ -44,7 +46,8 @@ public partial class AuthenticatedIntegrationQuery : IQuery<string>
 }
 
 /// <summary>
-/// HTTP-exposed query without auth attributes — anonymous by default.
+/// HTTP-exposed query without auth attributes — defaults to authenticated (legacy Blueprint parity).
+/// Use <c>[AllowAnonymous]</c> to opt out of authentication.
 /// </summary>
 [Blueprint.Model.Attributes.RootLink("/auth-test/public")]
 public partial class UnauthenticatedIntegrationQuery : IQuery<string>

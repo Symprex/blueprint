@@ -43,7 +43,7 @@ public class AuthenticationModuleTests
     }
 
     [Fact]
-    public void When_operation_has_no_auth_attribute_then_no_auth_feature_data()
+    public void When_operation_has_no_auth_attribute_and_http_exposed_then_defaults_to_authenticated()
     {
         var result = CompileDescriptor(
             """
@@ -64,7 +64,8 @@ public class AuthenticationModuleTests
             .FirstOrDefault(static s => s.Contains("GetItemsQueryDescriptor"));
 
         descriptorSource.Should().NotBeNull();
-        descriptorSource!.Should().NotContain("WellKnownFeatureData.RequiresAuthentication");
+        descriptorSource!.Should().Contain("WellKnownFeatureData.RequiresAuthentication",
+            "HTTP operations should require authentication by default (legacy Blueprint parity)");
     }
 
     [Fact]
@@ -310,7 +311,7 @@ public class AuthenticationModuleTests
     }
 
     [Fact]
-    public void When_no_auth_attribute_then_no_authentication_stage()
+    public void When_no_auth_attribute_and_http_exposed_then_pipeline_has_authentication_stage()
     {
         var compilation = CreateCompilation(
             """
@@ -335,8 +336,9 @@ public class AuthenticationModuleTests
 
         result.Diagnostics.Should().BeEmpty();
         result.Value.Should().NotBeNull();
-        result.Value!.Contributions.Should().NotContain(
-            static c => c.Stage == PipelineStage.Authentication);
+        result.Value!.Contributions.Should().Contain(
+            static c => c.Stage == PipelineStage.Authentication,
+            "HTTP operations should have an authentication pipeline stage by default (legacy Blueprint parity)");
     }
 
     [Fact]

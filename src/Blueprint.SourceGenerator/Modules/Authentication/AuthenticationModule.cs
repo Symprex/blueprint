@@ -82,25 +82,25 @@ public sealed class AuthenticationModule : IBlueprintSourceGeneratorModule, IDes
             }
         }
 
-        // [MustBeAuthenticated]: requires HTTP host for enforcement
-        if (hasMustBeAuthenticated)
+        // Default-on authentication: HTTP operations require authentication unless [AllowAnonymous].
+        // [MustBeAuthenticated] is optional/explicit — the behavior is the same with or without it.
+        // This matches legacy Blueprint where MustBeAuthenticatedApiAuthoriser is registered by default.
+        var isHttpExposedForAuth = context.GetMetadata<HostExposureRegistration>()
+            .Any(static r => string.Equals(r.HostName, HostExposureRegistration.Http.HostName, StringComparison.Ordinal));
+
+        if (isHttpExposedForAuth)
         {
-            var isHttpExposed = context.GetMetadata<HostExposureRegistration>()
-                .Any(static r => string.Equals(r.HostName, HostExposureRegistration.Http.HostName, StringComparison.Ordinal));
-
-            if (!isHttpExposed)
-            {
-                context.AddDiagnostic(
-                    new DiagnosticInfo(
-                        AuthenticationDiagnosticDescriptors.AuthAttributeOnNonHttpOperation,
-                        operationType.Locations.FirstOrDefault(),
-                        [operationType.Name]));
-
-                return;
-            }
-
             context.AddMetadata(new AuthenticationDescriptorRegistration(RequiresIdentityCheck: true));
             context.AddRenderStep(RenderAuthenticatedFeatureData);
+        }
+        else if (hasMustBeAuthenticated)
+        {
+            // [MustBeAuthenticated] on a non-HTTP operation is invalid
+            context.AddDiagnostic(
+                new DiagnosticInfo(
+                    AuthenticationDiagnosticDescriptors.AuthAttributeOnNonHttpOperation,
+                    operationType.Locations.FirstOrDefault(),
+                    [operationType.Name]));
         }
     }
 
@@ -115,16 +115,13 @@ public sealed class AuthenticationModule : IBlueprintSourceGeneratorModule, IDes
             return;
         }
 
-        if (!HasAttribute(operationType, MustBeAuthenticatedAttributeName))
-        {
-            return;
-        }
-
+        // Non-HTTP operations don't get pipeline auth checks
         if (!HasHttpHostExposure(operationType))
         {
             return;
         }
 
+        // Default-on: all HTTP operations get an auth check unless [AllowAnonymous]
         context.AddRenderStep(
             PipelineStage.Authentication,
             RenderAuthenticationCheck);
