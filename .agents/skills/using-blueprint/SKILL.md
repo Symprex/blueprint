@@ -72,8 +72,11 @@ At runtime, `BlueprintApp.GetOperationsForHost("custom-host")` returns operation
 ## Validation contract
 
 - Treat validation attributes as compile-time inputs first and runtime behavior second; if the build can prove the contract is wrong, expect a diagnostic instead of a runtime repair path.
-- `Blueprint.Validation.GreaterThanPropertyAttribute` is now part of the retained Blueprint-specific validation surface for property-to-property greater-than checks.
-- The retained Blueprint-specific conditional validator set now includes `GreaterThan`, `RequiredIf`, `RequiredIfNot`, and `NotAllowedIf` alongside `GreaterThanProperty`; verify the exact fast-path versus fallback shape before relying on a specific constructor or comparison form.
+- The validation pipeline plans each property independently: supported attributes generate direct inline checks (fast-paths), while unsupported attributes fall back to per-property runtime validation.
+- **Standard DataAnnotations fast-paths:** `Required`, `MaxLength`, `MinLength`, `StringLength`, `EmailAddress`, `Phone`, `Url`, `Range(int,int)`, `RegularExpression` (single-arg constructor).
+- **Blueprint-specific fast-paths:** `GreaterThanProperty`, `GreaterThan`, `RequiredIf`, `RequiredIfNot`, `NotAllowedIf` — all in `Blueprint.Validation.*`.
+- **Compile-time cross-property validation:** `CompareAttribute` (BPV001), `GreaterThanPropertyAttribute` (BPV002), `RequiredIfAttribute` (BPV003), `RequiredIfNotAttribute` (BPV004), and `NotAllowedIfAttribute` (BPV005) all reject invalid property references at build time.
+- **OpenAPI constraint projection:** validation attributes automatically project into OpenAPI schemas — `Range` → min/max, `RegularExpression` → pattern, `MaxLength`/`MinLength`/`StringLength` → length constraints, `EmailAddress` → `format: "email"`, `Url` → `format: "uri"`, `Phone` → `format: "phone"`.
 - If an HTTP-exposed operation needs a consumer-owned OpenAPI tag/group that differs from the namespace-derived fallback, declare `[ApiOperations("...")]` on the operation type; the descriptor and OpenAPI seams now prefer that explicit group name when it is present.
 
 ## Authorization contract

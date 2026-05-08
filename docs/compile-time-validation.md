@@ -219,6 +219,50 @@ Current authentication IDs in active use:
 - `BPAU005`: Both `[FromResource]` and `[Resource]` applied to the same operation (error — use one mechanism to declare scope pairs, not both).
 - `BPAU006`: `[FromResource(typeof(X))]` referencing a type that has no `[Resource]` attributes (error — the target must declare at least one scope pair to inherit).
 
+### Validation fast-path strategies
+
+The `ValidationModule` plans each property independently through extracted fast-path strategies, falling back to `ValidationRuntime.ValidateProperty(...)` per property when a strategy cannot handle an attribute at compile time. Type-level validation (`IValidatableObject`) uses the whole-object `Validator.TryValidateObject(...)` fallback.
+
+Current fast-path strategy coverage (in planning order):
+
+| Strategy | Attribute | Condition | Fallback trigger |
+| --- | --- | --- | --- |
+| Required | `RequiredAttribute` | exact default constructor only | custom error message, display-name shaping |
+| MaxLength | `MaxLengthAttribute` | string properties, default constructor | non-string types, custom error message |
+| MinLength | `MinLengthAttribute` | string properties, default constructor | non-string types, custom error message |
+| StringLength | `StringLengthAttribute` | string properties, default constructor | non-string types, custom error message |
+| EmailAddress | `EmailAddressAttribute` | default constructor | custom error message |
+| Phone | `PhoneAttribute` | default constructor, delegates to `new PhoneAttribute().IsValid()` | custom error message |
+| Url | `UrlAttribute` | default constructor, delegates to `new UrlAttribute().IsValid()` | custom error message |
+| Range | `RangeAttribute` | `Range(int, int)` constructor only | double overloads, Type overloads, named arguments |
+| RegularExpression | `RegularExpressionAttribute` | single-arg constructor with string pattern | named arguments (e.g. `ErrorMessage`), multiple constructor args |
+| Compare | `CompareAttribute` | same-type properties, compile-time `BPV001` for missing targets | n/a |
+| GreaterThanProperty | `GreaterThanPropertyAttribute` | same-type non-nullable numeric/decimal/DateTime, compile-time `BPV002` | unsupported types |
+| GreaterThan | `GreaterThanAttribute` | non-nullable numeric/decimal, default constructor | customized instances |
+| RequiredIf | `RequiredIfAttribute` | scalar/null dependent values, default constructor, compile-time `BPV003` | arrays, custom messages |
+| RequiredIfNot | `RequiredIfNotAttribute` | scalar/null dependent values, default constructor, compile-time `BPV004` | arrays, custom messages |
+| NotAllowedIf | `NotAllowedIfAttribute` | scalar dependent values, default constructor, compile-time `BPV005` | null dependent values, arrays, custom messages |
+
+When any single attribute on a property cannot be fast-pathed, only that property falls back to runtime validation — other properties with supported attributes remain fast-pathed.
+
+### OpenAPI validation constraint projection
+
+Validation attributes also project constraints into the OpenAPI specification at runtime through `OpenApiValidationConstraints.Extract(...)`:
+
+| Attribute | OpenAPI constraint |
+| --- | --- |
+| `RequiredAttribute` | `required: true` |
+| `MaxLengthAttribute` | `maxLength` |
+| `MinLengthAttribute` | `minLength` |
+| `StringLengthAttribute` | `minLength` + `maxLength` |
+| `RangeAttribute` | `minimum` + `maximum` (with `exclusiveMinimum`/`exclusiveMaximum` for exclusive bounds) |
+| `RegularExpressionAttribute` | `pattern` |
+| `EmailAddressAttribute` | `format: "email"` |
+| `UrlAttribute` | `format: "uri"` |
+| `PhoneAttribute` | `format: "phone"` |
+
+Format hints from validation attributes take precedence over CLR-type-derived format values (e.g. a `string` property with `[EmailAddress]` renders as `format: "email"` rather than no format).
+
 ## Diagnostic design rules
 
 When adding new diagnostics:
