@@ -10,14 +10,14 @@
     "workstreamPlan": "migration\\auditing-and-observability\\plan.md"
   },
   "current": {
-    "activeWorkstream": "documentation-and-final-alignment",
+    "activeWorkstream": "authorization-and-parity-alignment",
     "frameworkStatus": "production-ready",
-    "frameworkStatusDetail": "Core Blueprint source-generator framework is at full feature parity with legacy Blueprint for Signature365 migration. All consumer-space companion packages (Rebus, Marten, Hangfire, tenant context) are by-design extensions that consumers build in their own repositories.",
+    "frameworkStatusDetail": "Core Blueprint source-generator framework is at full feature parity with legacy Blueprint for Signature365 migration. Authorization pipeline (IApiAuthoriser, IUserAuthorisationContextFactory), background task scheduling (IScheduledBackgroundTask, ContinueWith, Schedule), and sample app demonstrations are complete.",
     "nextReadySlice": null,
     "lastCompletedSlice": {
-      "id": "validation/range-double-fast-path",
-      "workstream": "documentation-and-final-alignment",
-      "title": "Range(double, double) fast-path validation support with updated test and integration coverage"
+      "id": "auth/sample-app-auth-demonstrations",
+      "workstream": "authorization-and-parity-alignment",
+      "title": "Authorization builder methods and sample app IUserAuthorisationContextFactory/IApiAuthoriser demonstrations"
     },
     "openReviewGate": null,
     "openReviewGateRationale": null,
@@ -484,6 +484,36 @@
       "workstream": "documentation-and-final-alignment",
       "title": "Array query parameter and collection body type E2E integration tests",
       "commit": "be85252"
+    },
+    {
+      "id": "auth/default-authentication-on",
+      "workstream": "authorization-and-parity-alignment",
+      "title": "Default authentication to ON for HTTP operations (legacy Blueprint parity)",
+      "commit": "28b8ec0"
+    },
+    {
+      "id": "auth/authorization-infrastructure-types",
+      "workstream": "authorization-and-parity-alignment",
+      "title": "Add IApiAuthoriser, IUserAuthorisationContext, ExecutionAllowed, ForbiddenException authorization types",
+      "commit": "0767973"
+    },
+    {
+      "id": "auth/api-authoriser-module-pipeline",
+      "workstream": "authorization-and-parity-alignment",
+      "title": "ApiAuthoriserModule pipeline with IUserAuthorisationContextFactory and APM user tagging",
+      "commit": "58a7f18"
+    },
+    {
+      "id": "tasks/background-task-scheduler-parity",
+      "workstream": "authorization-and-parity-alignment",
+      "title": "Align IBackgroundTaskScheduler with legacy: IScheduledBackgroundTask, Schedule, ContinueWith, RunNowAsync",
+      "commit": "73cf30a"
+    },
+    {
+      "id": "auth/sample-app-auth-demonstrations",
+      "workstream": "authorization-and-parity-alignment",
+      "title": "Authorization builder methods and sample app IUserAuthorisationContextFactory/IApiAuthoriser demonstrations",
+      "commit": "5ba6c20"
     }
   ],
   "decisions": [

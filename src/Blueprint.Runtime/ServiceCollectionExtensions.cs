@@ -179,6 +179,32 @@ public sealed class BlueprintServiceBuilder
     }
 
     /// <summary>
+    /// Registers a recurring task scheduler that defines cron-based background task schedules.
+    /// Multiple schedulers are supported and each will be queried for its set of schedules.
+    /// </summary>
+    /// <typeparam name="T">The <see cref="Blueprint.Tasks.IRecurringTaskScheduler"/> implementation type.</typeparam>
+    /// <returns>This builder for chaining.</returns>
+    public BlueprintServiceBuilder AddRecurringTaskScheduler<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] T>()
+        where T : class, Blueprint.Tasks.IRecurringTaskScheduler
+    {
+        this.Services.AddSingleton<Blueprint.Tasks.IRecurringTaskScheduler, T>();
+        return this;
+    }
+
+    /// <summary>
+    /// Registers a recurring task provider that bridges Blueprint's recurring task model to
+    /// a concrete scheduler infrastructure (e.g., Hangfire's <c>IRecurringJobManager</c>).
+    /// </summary>
+    /// <typeparam name="T">The <see cref="Blueprint.Tasks.IRecurringTaskProvider"/> implementation type.</typeparam>
+    /// <returns>This builder for chaining.</returns>
+    public BlueprintServiceBuilder AddRecurringTaskProvider<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] T>()
+        where T : class, Blueprint.Tasks.IRecurringTaskProvider
+    {
+        this.Services.AddSingleton<Blueprint.Tasks.IRecurringTaskProvider, T>();
+        return this;
+    }
+
+    /// <summary>
     /// Configures Blueprint HTTP options such as the public host for link generation,
     /// exception detail exposure, and content negotiation behaviour.
     /// </summary>

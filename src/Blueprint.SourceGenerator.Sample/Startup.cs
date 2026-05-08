@@ -48,6 +48,10 @@ public class Startup
             // user's AccountId to the operation's TenantId property
             blueprint.AddApiAuthoriser<TenantIsolationApiAuthoriser>();
 
+            // Recurring tasks: declares cron-based schedules that a provider (e.g., Hangfire)
+            // registers for periodic execution. This proves the recurring task consumer seam.
+            blueprint.AddRecurringTaskScheduler<SampleRecurringTaskScheduler>();
+
             // Property population: auto-populate TenantId from JWT claims
             // (like Signature365's SetTenantMiddleware at Authentication stage)
             blueprint.AddPropertyPopulator<TenantPropertyPopulator>();
