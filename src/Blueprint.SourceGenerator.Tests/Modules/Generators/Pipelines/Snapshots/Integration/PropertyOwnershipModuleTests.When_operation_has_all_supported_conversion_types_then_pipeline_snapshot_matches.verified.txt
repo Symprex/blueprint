@@ -29,7 +29,14 @@ namespace Blueprint.Generated
             operation.OrgSlug = (string)httpContext.Request.RouteValues["OrgSlug"];
             if (httpContext.Request.RouteValues["CategoryId"] is string routeStr_CategoryId)
             {
-                operation.CategoryId = int.Parse(routeStr_CategoryId, System.Globalization.CultureInfo.InvariantCulture);
+                if (int.TryParse(routeStr_CategoryId, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var _parsed_CategoryId))
+                {
+                    operation.CategoryId = _parsed_CategoryId;
+                }
+                else
+                {
+                    return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid route parameter 'CategoryId'");
+                }
             }
 
             var _qv_Term = httpContext.Request.Query["term"];
@@ -247,11 +254,25 @@ namespace Blueprint.Generated
             operation.OrgSlug = (string)httpContext.Request.RouteValues["OrgSlug"];
             if (httpContext.Request.RouteValues["ProjectId"] is string routeStr_ProjectId)
             {
-                operation.ProjectId = int.Parse(routeStr_ProjectId, System.Globalization.CultureInfo.InvariantCulture);
+                if (int.TryParse(routeStr_ProjectId, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var _parsed_ProjectId))
+                {
+                    operation.ProjectId = _parsed_ProjectId;
+                }
+                else
+                {
+                    return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid route parameter 'ProjectId'");
+                }
             }
             if (httpContext.Request.RouteValues["ItemGuid"] is string routeStr_ItemGuid)
             {
-                operation.ItemGuid = System.Guid.Parse(routeStr_ItemGuid);
+                if (System.Guid.TryParse(routeStr_ItemGuid, out var _parsed_ItemGuid))
+                {
+                    operation.ItemGuid = _parsed_ItemGuid;
+                }
+                else
+                {
+                    return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid route parameter 'ItemGuid'");
+                }
             }
             var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<string>(await global::TestNamespace.AllTypesPostCommand.HandleAsync(operation));
 

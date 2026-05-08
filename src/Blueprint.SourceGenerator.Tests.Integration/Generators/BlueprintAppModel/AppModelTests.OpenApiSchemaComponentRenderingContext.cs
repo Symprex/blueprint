@@ -23,6 +23,7 @@ public class AppModelOpenApiSchemaComponentRenderingContextTests
             "Blueprint.SourceGenerator.Tests.Integration.Http.E2EWidgetResponse",
             "Microsoft.AspNetCore.Mvc.ProblemDetails",
             "Microsoft.AspNetCore.Mvc.ValidationProblemDetails",
+            "System.Guid",
             "string");
 
         var stringComponent = componentContext.Components.Single(static component => component.BodyTypeName == "string");

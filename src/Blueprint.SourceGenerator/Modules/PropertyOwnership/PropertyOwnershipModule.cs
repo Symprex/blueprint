@@ -891,10 +891,18 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         }
         else
         {
+            var tryParseExpr = GetScalarTryParseExpression(entry.TypeSymbol, $"routeStr_{entry.PropertyName}", $"_parsed_{entry.PropertyName}");
+
             context.If($"{routeValueExpr} is string routeStr_{entry.PropertyName}", ifCtx =>
             {
-                var convertExpr = GetScalarConversionExpression(entry.TypeSymbol, $"routeStr_{entry.PropertyName}");
-                ifCtx.WriteStatement($"{operationExpr}.{entry.PropertyName} = {convertExpr};");
+                ifCtx.If(tryParseExpr, parsedCtx =>
+                {
+                    parsedCtx.WriteStatement($"{operationExpr}.{entry.PropertyName} = _parsed_{entry.PropertyName};");
+                });
+                ifCtx.WriteStatement("else");
+                ifCtx.WriteStatement("{");
+                ifCtx.WriteStatement($"    return new Blueprint.Runtime.Exec.BindingFailureResult(\"Invalid route parameter '{entry.BindingName}'\");");
+                ifCtx.WriteStatement("}");
             });
         }
     }

@@ -17,6 +17,7 @@ public class AppModelOpenApiDocumentBuilderContextTests
         context.DeclaredSerializerContextType.Should().Be(typeof(IntegrationTestAppJsonContext));
         context.DeclaredSerializerContextBodyTypeNames.Should().Equal(
             "string",
+            "System.Guid",
             "Microsoft.AspNetCore.Mvc.ProblemDetails",
             "Microsoft.AspNetCore.Mvc.ValidationProblemDetails",
             "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.LinkTestApiResource",

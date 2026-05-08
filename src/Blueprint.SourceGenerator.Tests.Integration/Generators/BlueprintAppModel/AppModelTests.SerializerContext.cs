@@ -22,6 +22,7 @@ public class AppModelSerializerContextTests
 
         app.AppOwnedSerializerContextBodyTypeNames.Should().Equal(
             "string",
+            "System.Guid",
             "Microsoft.AspNetCore.Mvc.ProblemDetails",
             "Microsoft.AspNetCore.Mvc.ValidationProblemDetails",
             "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.LinkTestApiResource",
@@ -46,6 +47,7 @@ public class AppModelSerializerContextTests
 
         app.AppOwnedSerializerContextBodyTypes.Should().Equal(
             typeof(string),
+            typeof(Guid),
             typeof(Microsoft.AspNetCore.Mvc.ProblemDetails),
             typeof(Microsoft.AspNetCore.Mvc.ValidationProblemDetails),
             typeof(LinkTestApiResource),

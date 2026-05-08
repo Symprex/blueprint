@@ -20,6 +20,7 @@ public class AppModelOpenApiDocumentRenderingContextTests
             "Blueprint.SourceGenerator.Tests.Integration.Http.E2EWidgetResponse",
             "Microsoft.AspNetCore.Mvc.ProblemDetails",
             "Microsoft.AspNetCore.Mvc.ValidationProblemDetails",
+            "System.Guid",
             "string");
 
         var path = context.Paths.Single(static item => item.UrlFormat == "/openapi/http-response-metadata");

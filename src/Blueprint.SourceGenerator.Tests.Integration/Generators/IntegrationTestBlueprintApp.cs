@@ -19,6 +19,7 @@ public partial class IntegrationTestBlueprintApp : BlueprintApp;
 /// an app-owned JSON metadata type without changing runtime serializer behavior.
 /// </summary>
 [JsonSerializable(typeof(string))]
+[JsonSerializable(typeof(Guid))]
 [JsonSerializable(typeof(ProblemDetails))]
 [JsonSerializable(typeof(ValidationProblemDetails))]
 [JsonSerializable(typeof(LinkTestApiResource))]

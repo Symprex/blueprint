@@ -23,6 +23,7 @@ public class AppModelOpenApiSchemaProjectionContextTests
             "Blueprint.SourceGenerator.Tests.Integration.Http.E2EWidgetResponse",
             "Microsoft.AspNetCore.Mvc.ProblemDetails",
             "Microsoft.AspNetCore.Mvc.ValidationProblemDetails",
+            "System.Guid",
             "string");
 
         stringSchema.Kind.Should().Be(OpenApiSchemaKind.String);

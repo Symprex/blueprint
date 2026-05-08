@@ -335,6 +335,42 @@ public class HttpEndToEndIntegrationTests
     }
 
     [Fact]
+    public async Task When_GET_with_typed_route_parameter_and_valid_guid_then_route_value_is_bound()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/e2e/typed-items/{ItemId}");
+        endpoint.Should().NotBeNull("the typed-route-parameterised query should be registered");
+
+        var id = Guid.NewGuid();
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.RouteValues = new RouteValueDictionary { ["ItemId"] = id.ToString() };
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        response.Body.Should().Be($"\"{id}\"");
+    }
+
+    [Fact]
+    public async Task When_GET_with_typed_route_parameter_and_invalid_value_then_returns_400()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/e2e/typed-items/{ItemId}");
+        endpoint.Should().NotBeNull("the typed-route-parameterised query should be registered");
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.RouteValues = new RouteValueDictionary { ["ItemId"] = "not-a-guid" };
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status400BadRequest);
+    }
+
+    [Fact]
     public async Task When_command_returns_CreatedResult_then_returns_201_with_json_body()
     {
         var endpoints = CreateEndpoints();
@@ -817,6 +853,24 @@ public partial class E2ERouteParamQuery : IQuery<string>
     public static Task<string> HandleAsync(E2ERouteParamQuery query)
     {
         return Task.FromResult($"item:{query.ItemId}");
+    }
+}
+
+/// <summary>
+/// Query with a typed (Guid) route parameter to verify route-value TryParse binding and 400 on invalid values.
+/// </summary>
+[Blueprint.Model.Attributes.RootLink("/e2e/typed-items/{ItemId}")]
+public partial class E2ETypedRouteParamQuery : IQuery<Guid>
+{
+    /// <summary>Bound from the {ItemId} route segment as a <see cref="Guid"/>.</summary>
+    public Guid ItemId { get; set; }
+
+    /// <summary>Echoes the parsed Guid back.</summary>
+    /// <param name="query">The query with the typed route parameter.</param>
+    /// <returns>The parsed Guid value.</returns>
+    public static Task<Guid> HandleAsync(E2ETypedRouteParamQuery query)
+    {
+        return Task.FromResult(query.ItemId);
     }
 }
 
