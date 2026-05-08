@@ -1063,6 +1063,10 @@ public class PropertyOwnershipModuleTests
                     public System.Guid CorrelationId { get; set; }
                     public System.DateTime CreatedAt { get; set; }
 
+                    // Body: nullable value types (fall through to Deserialize<T?>)
+                    public int? OptionalCount { get; set; }
+                    public double? Score { get; set; }
+
                     public static Task<string> HandleAsync(AllTypesPostCommand operation)
                     {
                         return Task.FromResult("ok");

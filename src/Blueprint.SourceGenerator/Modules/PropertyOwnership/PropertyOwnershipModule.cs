@@ -848,34 +848,42 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
 
     private static void WriteUtf8ReaderAssignment(ICodeWriter writer, PropertyOwnershipEntry entry)
     {
-        var typeDisplay = entry.TypeSymbol.WithNullableAnnotation(NullableAnnotation.NotAnnotated).ToDisplayString();
+        var rawType = entry.TypeSymbol.WithNullableAnnotation(NullableAnnotation.NotAnnotated);
+        var isNullableValueType = rawType is INamedTypeSymbol { IsValueType: true, OriginalDefinition.SpecialType: SpecialType.System_Nullable_T };
+
+        // For nullable value types, unwrap to the underlying type for the switch lookup.
+        var unwrappedType = isNullableValueType
+            ? ((INamedTypeSymbol)rawType).TypeArguments[0]
+            : rawType;
+        var typeDisplay = unwrappedType.ToDisplayString();
 
         switch (typeDisplay)
         {
             case "string":
                 writer.AppendLine($"        operation.{entry.PropertyName} = reader.GetString();");
                 break;
-            case "int":
+            case "int" when !isNullableValueType:
                 writer.AppendLine($"        operation.{entry.PropertyName} = reader.GetInt32();");
                 break;
-            case "long":
+            case "long" when !isNullableValueType:
                 writer.AppendLine($"        operation.{entry.PropertyName} = reader.GetInt64();");
                 break;
-            case "bool":
+            case "bool" when !isNullableValueType:
                 writer.AppendLine($"        operation.{entry.PropertyName} = reader.GetBoolean();");
                 break;
-            case "decimal":
+            case "decimal" when !isNullableValueType:
                 writer.AppendLine($"        operation.{entry.PropertyName} = reader.GetDecimal();");
                 break;
-            case "System.Guid":
+            case "System.Guid" when !isNullableValueType:
                 writer.AppendLine($"        operation.{entry.PropertyName} = reader.GetGuid();");
                 break;
-            case "System.DateTime":
+            case "System.DateTime" when !isNullableValueType:
                 writer.AppendLine($"        operation.{entry.PropertyName} = reader.GetDateTime();");
                 break;
             default:
+                var fullyQualifiedType = rawType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
                 writer.AppendLine(
-                    $"        operation.{entry.PropertyName} = System.Text.Json.JsonSerializer.Deserialize<global::{typeDisplay}>(ref reader);");
+                    $"        operation.{entry.PropertyName} = System.Text.Json.JsonSerializer.Deserialize<{fullyQualifiedType}>(ref reader);");
                 break;
         }
     }

@@ -248,6 +248,30 @@
     - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
     - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
 
+### PatchTemplateSettingsCommand
+  Type: PatchTemplateSettingsCommand
+  Source: Source Generated
+  HTTP Methods: PATCH
+  URL: /templates/{Id}/settings
+  Hosts: http
+  Auth: Authenticated
+  Discovery: command (Blueprint.SourceGenerator.Sample.Contract.Api.PatchTemplateSettingsCommand)
+  Group: Templates
+  Result Outcomes:
+    - ResourceEventResult`1
+  Failure Outcomes:
+    - legacy-validation-exception: Blueprint.Validation.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
+    - data-annotations-validation-exception: System.ComponentModel.DataAnnotations.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
+    - default-unhandled-exception: System.Exception -> Blueprint.Runtime.Exec.UnhandledExceptionResult
+  HTTP Responses:
+    - 201: hasBody=True types=[Blueprint.SourceGenerator.Sample.Contract.Api.TemplateApiResource]
+    - 400: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+    - 401: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+    - 403: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+    - 415: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+    - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
+    - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+
 ### PreviewTemplateCommand
   Type: PreviewTemplateCommand
   Source: Source Generated

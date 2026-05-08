@@ -362,6 +362,16 @@ namespace Blueprint.Generated
                     reader.Read();
                     operation.CreatedAt = reader.GetDateTime();
                 }
+                else if (reader.ValueTextEquals("optionalCount"u8))
+                {
+                    reader.Read();
+                    operation.OptionalCount = System.Text.Json.JsonSerializer.Deserialize<int?>(ref reader);
+                }
+                else if (reader.ValueTextEquals("score"u8))
+                {
+                    reader.Read();
+                    operation.Score = System.Text.Json.JsonSerializer.Deserialize<double?>(ref reader);
+                }
                 else
                 {
                     reader.Skip();

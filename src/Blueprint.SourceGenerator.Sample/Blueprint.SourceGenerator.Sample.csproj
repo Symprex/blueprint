@@ -5,8 +5,9 @@
     <Nullable>enable</Nullable>
     <!-- The sample deliberately consumes [Obsolete] operations to demonstrate deprecated rendering. -->
     <NoWarn>$(NoWarn);CS0618</NoWarn>
-<!--    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>-->
-<!--    <CompilerGeneratedFilesOutputPath>Generated</CompilerGeneratedFilesOutputPath>-->
+    <!-- Uncomment to inspect generated source files:
+    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+    <CompilerGeneratedFilesOutputPath>Generated</CompilerGeneratedFilesOutputPath> -->
   </PropertyGroup>
 
   <ItemGroup>

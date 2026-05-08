@@ -1458,6 +1458,143 @@
         ]
       }
     },
+    "/templates/{Id}/settings": {
+      "patch": {
+        "operationId": "PatchTemplateSettingsCommand",
+        "summary": "Partially update a template\u0027s display settings.",
+        "tags": [
+          "Templates"
+        ],
+        "parameters": [
+          {
+            "name": "Id",
+            "in": "path",
+            "required": true,
+            "description": "The unique identifier of the template.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "opacity": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "Display opacity for the template preview (0.0 = fully transparent, 1.0 = fully opaque).",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "minWeight": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "Minimum display weight (0-100).",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  "maxWeight": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "Maximum display weight (0-100). Must be greater than MinWeight.",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  "cssClassName": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "Optional CSS class name for custom template styling.",
+                    "maxLength": 50,
+                    "pattern": "^[a-zA-Z][a-zA-Z0-9\\-_]*$"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Blueprint_SourceGenerator_Sample_Contract_Api_TemplateApiResource"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/templates/{Id}/versions": {
       "get": {
         "operationId": "GetTemplateVersionsQuery",

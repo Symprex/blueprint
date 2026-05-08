@@ -448,6 +448,18 @@
       "workstream": "documentation-and-final-alignment",
       "title": "Range(double, double) fast-path validation support with updated test and integration coverage",
       "commit": "d7b2286"
+    },
+    {
+      "id": "validation/nullable-range-greater-less-fast-paths",
+      "workstream": "documentation-and-final-alignment",
+      "title": "Nullable value type support for Range, GreaterThan, and LessThan validation fast-paths",
+      "commit": "c12e148"
+    },
+    {
+      "id": "validation/nullable-property-comparison-fast-paths",
+      "workstream": "documentation-and-final-alignment",
+      "title": "Nullable value type support for GreaterThanProperty and LessThanProperty validation fast-paths",
+      "commit": "6f23264"
     }
   ],
   "decisions": [
