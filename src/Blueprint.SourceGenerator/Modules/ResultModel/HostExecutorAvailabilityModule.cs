@@ -49,6 +49,7 @@ public sealed class HostExecutorAvailabilityModule : IBlueprintSourceGeneratorMo
         var httpNoContentResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Http.HttpNoContentResult");
         var plainTextResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.PlainTextResult");
         var redirectResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Http.RedirectResult");
+        var fileStreamResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.FileStreamResult");
         if (operationResultType is null || okResultType is null || noResultType is null)
         {
             return;
@@ -70,7 +71,7 @@ public sealed class HostExecutorAvailabilityModule : IBlueprintSourceGeneratorMo
         var operationName = context.GetOperationTypeSymbol().Name;
         foreach (var flattenedResult in flattenedResults)
         {
-            if (OperationResultContractHelper.IsSupportedByHttpOperationResultExecutor(flattenedResult, okResultType, acceptedResultType, conflictResultType, notFoundResultType, createdResultType, validationFailedResultType, noResultType, keyOnlyResourceEventResultType, resourceEventResultType, httpNoContentResultType, plainTextResultType, redirectResultType))
+            if (OperationResultContractHelper.IsSupportedByHttpOperationResultExecutor(flattenedResult, okResultType, acceptedResultType, conflictResultType, notFoundResultType, createdResultType, validationFailedResultType, noResultType, keyOnlyResourceEventResultType, resourceEventResultType, httpNoContentResultType, plainTextResultType, redirectResultType, fileStreamResultType))
             {
                 continue;
             }

@@ -96,6 +96,7 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
         var httpNoContentResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Http.HttpNoContentResult");
         var plainTextResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.PlainTextResult");
         var redirectResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Http.RedirectResult");
+        var fileStreamResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.FileStreamResult");
         if (operationResultType is null || okResultType is null || noResultType is null)
         {
             return [];
@@ -125,7 +126,7 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
         var responses = ImmutableArray.CreateBuilder<HttpResponseMetadataRegistration>(flattenedResults.Length);
         foreach (var flattenedResult in flattenedResults)
         {
-            if (OperationResultContractHelper.TryGetHttpOperationResultResponseShape(flattenedResult, okResultType, acceptedResultType, conflictResultType, notFoundResultType, createdResultType, validationFailedResultType, noResultType, keyOnlyResourceEventResultType, resourceEventResultType, httpNoContentResultType, out var statusCode, out var hasResponseBody, plainTextResultType, redirectResultType) == false)
+            if (OperationResultContractHelper.TryGetHttpOperationResultResponseShape(flattenedResult, okResultType, acceptedResultType, conflictResultType, notFoundResultType, createdResultType, validationFailedResultType, noResultType, keyOnlyResourceEventResultType, resourceEventResultType, httpNoContentResultType, out var statusCode, out var hasResponseBody, plainTextResultType, redirectResultType, fileStreamResultType) == false)
             {
                 continue;
             }
@@ -154,6 +155,7 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
         var httpNoContentResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Http.HttpNoContentResult");
         var plainTextResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.PlainTextResult");
         var redirectResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Http.RedirectResult");
+        var fileStreamResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.FileStreamResult");
         var unhandledExceptionResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.UnhandledExceptionResult");
         if (okResultType is null || noResultType is null)
         {
@@ -182,7 +184,8 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
                     out var hasResponseBody,
                     out var bodyTypeNames,
                     plainTextResultType,
-                    redirectResultType))
+                    redirectResultType,
+                    fileStreamResultType))
             {
                 responses.Add(CreateResponse(statusCode, hasResponseBody, failureOutcome.ResultTypeName, bodyTypeNames));
             }
@@ -238,11 +241,12 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
         out bool hasResponseBody,
         out ImmutableArray<string> bodyTypeNames,
         INamedTypeSymbol? plainTextResultType = null,
-        INamedTypeSymbol? redirectResultType = null)
+        INamedTypeSymbol? redirectResultType = null,
+        INamedTypeSymbol? fileStreamResultType = null)
     {
         var resultType = context.FindTypeByMetadataName(resultTypeName);
         if (resultType is not null
-            && OperationResultContractHelper.TryGetHttpOperationResultResponseShape(resultType, okResultType, acceptedResultType, conflictResultType, notFoundResultType, createdResultType, validationFailedResultType, noResultType, keyOnlyResourceEventResultType, resourceEventResultType, httpNoContentResultType, out statusCode, out hasResponseBody, plainTextResultType, redirectResultType))
+            && OperationResultContractHelper.TryGetHttpOperationResultResponseShape(resultType, okResultType, acceptedResultType, conflictResultType, notFoundResultType, createdResultType, validationFailedResultType, noResultType, keyOnlyResourceEventResultType, resourceEventResultType, httpNoContentResultType, out statusCode, out hasResponseBody, plainTextResultType, redirectResultType, fileStreamResultType))
         {
             bodyTypeNames = GetResponseBodyTypeNames(resultType, hasResponseBody, validationFailedResultType, unhandledExceptionResultType);
             return true;

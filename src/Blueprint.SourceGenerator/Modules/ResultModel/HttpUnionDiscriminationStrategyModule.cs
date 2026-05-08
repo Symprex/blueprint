@@ -49,6 +49,7 @@ public sealed class HttpUnionDiscriminationStrategyModule : IBlueprintSourceGene
         var httpNoContentResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Http.HttpNoContentResult");
         var plainTextResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.PlainTextResult");
         var redirectResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Http.RedirectResult");
+        var fileStreamResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.FileStreamResult");
         if (okResultType is null || noResultType is null)
         {
             return;
@@ -65,7 +66,7 @@ public sealed class HttpUnionDiscriminationStrategyModule : IBlueprintSourceGene
         var translatedMembers = new List<TranslatedResultMember>(unionMembers.Length);
         foreach (var unionMember in unionMembers)
         {
-            if (OperationResultContractHelper.TryGetHttpOperationResultResponseShape(unionMember, okResultType, acceptedResultType, conflictResultType, notFoundResultType, createdResultType, validationFailedResultType, noResultType, keyOnlyResourceEventResultType, resourceEventResultType, httpNoContentResultType, out var statusCode, out var hasResponseBody, plainTextResultType, redirectResultType) == false)
+            if (OperationResultContractHelper.TryGetHttpOperationResultResponseShape(unionMember, okResultType, acceptedResultType, conflictResultType, notFoundResultType, createdResultType, validationFailedResultType, noResultType, keyOnlyResourceEventResultType, resourceEventResultType, httpNoContentResultType, out var statusCode, out var hasResponseBody, plainTextResultType, redirectResultType, fileStreamResultType) == false)
             {
                 return;
             }

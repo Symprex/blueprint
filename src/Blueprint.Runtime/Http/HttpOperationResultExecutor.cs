@@ -113,6 +113,16 @@ public class HttpOperationResultExecutor
                 httpContext.Response.StatusCode = redirectResult.StatusCode;
                 httpContext.Response.Headers["Location"] = redirectResult.Url;
                 return true;
+            case FileStreamResult fileStreamResult:
+                httpContext.Response.StatusCode = StatusCodes.Status200OK;
+                httpContext.Response.ContentType = fileStreamResult.ContentType;
+                if (fileStreamResult.FileName is not null)
+                {
+                    httpContext.Response.Headers.ContentDisposition = $"attachment; filename=\"{fileStreamResult.FileName}\"";
+                }
+
+                await fileStreamResult.Stream.CopyToAsync(httpContext.Response.Body, httpContext.RequestAborted);
+                return true;
             default:
                 return false;
         }

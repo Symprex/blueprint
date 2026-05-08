@@ -493,6 +493,38 @@ public class HttpEndToEndIntegrationTests
         response.LocationHeader.Should().Be("https://example.com/target");
     }
 
+    [Fact]
+    public async Task When_handler_returns_file_stream_result_then_returns_200_with_binary_content()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/e2e/download");
+        endpoint.Should().NotBeNull();
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider);
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        response.ContentType.Should().Be("application/pdf");
+        response.Body.Should().Be("fake-pdf-content");
+    }
+
+    [Fact]
+    public async Task When_handler_returns_file_stream_result_with_filename_then_sets_content_disposition()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/e2e/download-named");
+        endpoint.Should().NotBeNull();
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider);
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        response.ContentType.Should().Be("application/octet-stream");
+        response.ContentDisposition.Should().Be("attachment; filename=\"report.bin\"");
+    }
+
     private static async Task<TestHttpResponse> InvokeEndpointAsync(
         RouteEndpoint endpoint,
         IServiceProvider serviceProvider,
@@ -518,7 +550,8 @@ public class HttpEndToEndIntegrationTests
             context.Response.StatusCode,
             context.Response.ContentType,
             Encoding.UTF8.GetString(body.ToArray()),
-            context.Response.Headers.Location.ToString() is { Length: > 0 } loc ? loc : null);
+            context.Response.Headers.Location.ToString() is { Length: > 0 } loc ? loc : null,
+            context.Response.Headers.ContentDisposition.ToString() is { Length: > 0 } cd ? cd : null);
     }
 
     private static RouteEndpoint? FindEndpoint(TestEndpointRouteBuilder builder, string routePattern)
@@ -563,7 +596,7 @@ public class HttpEndToEndIntegrationTests
         }
     }
 
-    private sealed record TestHttpResponse(int StatusCode, string? ContentType, string Body, string? LocationHeader);
+    private sealed record TestHttpResponse(int StatusCode, string? ContentType, string Body, string? LocationHeader, string? ContentDisposition);
 }
 
 // ─── E2E test operations ──────────────────────────────────────────────────────
@@ -938,5 +971,39 @@ public partial class E2ERedirectQuery : IQuery<Blueprint.Runtime.Http.RedirectRe
     public static Task<Blueprint.Runtime.Http.RedirectResult> HandleAsync(E2ERedirectQuery query)
     {
         return Task.FromResult(new Blueprint.Runtime.Http.RedirectResult("https://example.com/target"));
+    }
+}
+
+/// <summary>E2E operation returning a file download without a file name (inline).</summary>
+[Blueprint.Model.Attributes.RootLink("/e2e/download")]
+[Blueprint.Model.Attributes.HttpGet]
+[Blueprint.Model.Attributes.AllowAnonymous]
+[Blueprint.Auditing.DoNotAudit]
+public partial class E2EFileDownloadQuery : IQuery<FileStreamResult>
+{
+    /// <summary>Returns a binary PDF stream.</summary>
+    /// <param name="query">The query instance (unused).</param>
+    /// <returns>A file stream result with PDF content type.</returns>
+    public static Task<FileStreamResult> HandleAsync(E2EFileDownloadQuery query)
+    {
+        var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes("fake-pdf-content"));
+        return Task.FromResult(new FileStreamResult(stream, "application/pdf"));
+    }
+}
+
+/// <summary>E2E operation returning a file download with a file name (attachment).</summary>
+[Blueprint.Model.Attributes.RootLink("/e2e/download-named")]
+[Blueprint.Model.Attributes.HttpGet]
+[Blueprint.Model.Attributes.AllowAnonymous]
+[Blueprint.Auditing.DoNotAudit]
+public partial class E2ENamedFileDownloadQuery : IQuery<FileStreamResult>
+{
+    /// <summary>Returns a binary stream with a Content-Disposition attachment header.</summary>
+    /// <param name="query">The query instance (unused).</param>
+    /// <returns>A file stream result with file name.</returns>
+    public static Task<FileStreamResult> HandleAsync(E2ENamedFileDownloadQuery query)
+    {
+        var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes("binary-data"));
+        return Task.FromResult(new FileStreamResult(stream, "application/octet-stream", "report.bin"));
     }
 }
