@@ -239,6 +239,8 @@ Current fast-path strategy coverage (in planning order):
 | Compare | `CompareAttribute` | same-type properties, compile-time `BPV001` for missing targets | n/a |
 | GreaterThanProperty | `GreaterThanPropertyAttribute` | same-type non-nullable numeric/decimal/DateTime, compile-time `BPV002` | unsupported types |
 | GreaterThan | `GreaterThanAttribute` | non-nullable numeric/decimal, default constructor | customized instances |
+| LessThanProperty | `LessThanPropertyAttribute` | same-type non-nullable numeric/decimal/DateTime, compile-time `BPV006` | unsupported types |
+| LessThan | `LessThanAttribute` | non-nullable numeric/decimal, default constructor | customized instances |
 | RequiredIf | `RequiredIfAttribute` | scalar/null dependent values, default constructor, compile-time `BPV003` | arrays, custom messages |
 | RequiredIfNot | `RequiredIfNotAttribute` | scalar/null dependent values, default constructor, compile-time `BPV004` | arrays, custom messages |
 | NotAllowedIf | `NotAllowedIfAttribute` | scalar dependent values, default constructor, compile-time `BPV005` | null dependent values, arrays, custom messages |
@@ -256,6 +258,8 @@ Validation attributes also project constraints into the OpenAPI specification at
 | `MinLengthAttribute` | `minLength` |
 | `StringLengthAttribute` | `minLength` + `maxLength` |
 | `RangeAttribute` | `minimum` + `maximum` (with `exclusiveMinimum`/`exclusiveMaximum` for exclusive bounds) |
+| `GreaterThanAttribute` | `minimum` (with `exclusiveMinimum: true`) |
+| `LessThanAttribute` | `maximum` (with `exclusiveMaximum: true`) |
 | `RegularExpressionAttribute` | `pattern` |
 | `EmailAddressAttribute` | `format: "email"` |
 | `UrlAttribute` | `format: "uri"` |

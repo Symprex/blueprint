@@ -123,6 +123,22 @@ public class ReferenceAppOpenApiTests
     }
 
     [Fact]
+    public async Task When_openapi_endpoint_invoked_then_page_parameter_has_exclusive_maximum()
+    {
+        var (json, _) = await InvokeOpenApiEndpointAsync();
+        using var doc = JsonDocument.Parse(json);
+
+        var searchPath = doc.RootElement.GetProperty("paths").GetProperty("/templates/search");
+        var parameters = searchPath.GetProperty("get").GetProperty("parameters");
+        var pageParam = parameters.EnumerateArray()
+            .Single(static p => p.GetProperty("name").GetString() == "page");
+
+        var schema = pageParam.GetProperty("schema");
+        schema.GetProperty("maximum").GetDecimal().Should().Be(1001);
+        schema.GetProperty("exclusiveMaximum").GetBoolean().Should().BeTrue();
+    }
+
+    [Fact]
     public async Task When_openapi_endpoint_invoked_then_page_size_parameter_has_range_constraints()
     {
         var (json, _) = await InvokeOpenApiEndpointAsync();
