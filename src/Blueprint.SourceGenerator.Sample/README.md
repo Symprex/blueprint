@@ -14,7 +14,7 @@ handlers, registers services, and hosts the generated executor pipeline.
 
 ## Operations
 
-All operations belong to the `Templates` group (via `[ApiOperations("Templates")]`):
+Operations span the `Templates` group (via `[ApiOperations("Templates")]`) and a `System` group for infrastructure:
 
 | Operation | HTTP | Route | Result |
 |-----------|------|-------|--------|
@@ -28,6 +28,9 @@ All operations belong to the `Templates` group (via `[ApiOperations("Templates")
 | `CloneTemplateCommand` | POST | `/templates/{Id}/clone` | `ResourceEventResult<TemplateApiResource>` |
 | `PreviewTemplateCommand` | POST | `/templates/{Id}/preview` | `TemplatePreviewApiResource` |
 | `ArchiveTemplateCommand` | DELETE | `/templates/{Id}` | `KeyOnlyResourceEventResult` |
+| `HealthCheckQuery` | GET | `/system/health` | `PlainTextResult` |
+| `DownloadTemplateQuery` | GET | `/templates/{Id}/download` | `FileStreamResult` |
+| `RedirectToTemplateDocsQuery` | GET | `/templates/{Id}/docs` | `RedirectResult` |
 
 A background task (`SendTemplateSharedNotificationTask`) demonstrates non-HTTP execution.
 
@@ -41,6 +44,10 @@ A background task (`SendTemplateSharedNotificationTask`) demonstrates non-HTTP e
 - **Scope inheritance** — `[FromResource(typeof(X))]` inherits scope pairs from another operation
 - **Anonymous access** — `[AllowAnonymous]` on `SearchTemplatesQuery` for public endpoints
 - **Header binding** — `[FromHeader("X-Correlation-Id")]` on `SearchTemplatesQuery` for cross-system trace correlation
+- **Cookie binding** — `[FromCookie("session-id")]` on `SearchTemplatesQuery` for cookie-sourced values
+- **Plain text responses** — `PlainTextResult` on `HealthCheckQuery` for text/plain health-check endpoints
+- **File downloads** — `FileStreamResult` on `DownloadTemplateQuery` for binary file streaming with Content-Disposition
+- **HTTP redirects** — `RedirectResult` on `RedirectToTemplateDocsQuery` for 302 redirect responses
 - **Sensitive properties** — `[Sensitive]` on `CreateTemplateCommand.HtmlSource/PlainTextSource` for audit redaction hints
 - **General auditing** — `IAuditSink` for cross-operation audit recording with structured activity events
 - **Audit opt-out** — `[DoNotAudit]` on `SearchTemplatesQuery` to suppress noisy read auditing
