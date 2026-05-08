@@ -9,6 +9,7 @@ This folder is the detailed source of truth for repository-specific architecture
 - New to the repo: read `guiding-principles.md`, then `architecture.md`.
 - Changing generators, diagnostics, or compile-time rules: read `compile-time-validation.md`.
 - Changing runtime behavior, telemetry, or inspection surfaces: read `observability-and-dev-experience.md`.
+- Deploying to production or configuring middleware: read `deployment-and-operations.md`.
 - Working as an AI agent: read `ai-agent-playbook.md`.
 - Planning or running a large refactor or a legacy-app migration: read `refactoring-workflow.md`.
 - Implementing new features: keep `implementation-checklists.md` open while you work.
@@ -33,6 +34,7 @@ This folder is the detailed source of truth for repository-specific architecture
 | `architecture.md` | The compile-time and runtime flow of the system, plus the main extension points. |
 | `compile-time-validation.md` | How the repo uses diagnostics, snapshots, and incremental-generator checks as a deterministic harness. |
 | `observability-and-dev-experience.md` | Expectations for telemetry, diagnostics, and tooling that make large API surfaces inspectable. |
+| `deployment-and-operations.md` | Production deployment, middleware ordering, reverse proxy setup, and operations checklist. |
 | `ai-agent-playbook.md` | Repo-specific AI workflow guidance adapted from harness-engineering ideas. |
 | `refactoring-workflow.md` | The layered toolchain plus the concrete workflow for larger refactors and legacy-app migrations. |
 | `implementation-checklists.md` | Practical checklists for common change types. |
