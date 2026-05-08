@@ -5,7 +5,7 @@ namespace Blueprint.SourceGenerator.Modules;
 
 /// <summary>
 /// Handles <c>LessThanAttribute</c> when the property type supports direct generated comparisons against an integer
-/// literal threshold.
+/// literal threshold. Nullable value types are supported via a guard condition.
 /// </summary>
 internal sealed class LessThanValidationFastPathStrategy : IValidationFastPathStrategy
 {
@@ -20,15 +20,28 @@ internal sealed class LessThanValidationFastPathStrategy : IValidationFastPathSt
         rule = null;
 
         if (!ValidationSymbolHelpers.IsLessThanAttribute(attribute.AttributeClass)
-            || !TryGetSupportedMaximum(attribute, out var maximumValue)
-            || !SupportsDirectComparison(property.Type))
+            || !TryGetSupportedMaximum(attribute, out var maximumValue))
         {
             return false;
         }
 
+        var isNullable = ValidationSymbolHelpers.IsNullableValueType(property.Type);
+        var underlyingType = isNullable
+            ? ValidationSymbolHelpers.GetNullableValueTypeArgument(property.Type)!
+            : property.Type;
+
+        if (!SupportsDirectComparison(underlyingType))
+        {
+            return false;
+        }
+
+        var valueAccess = isNullable ? $"{propertyAccess}.Value" : propertyAccess;
+        var guardCondition = isNullable ? $"{propertyAccess} is not null" : null;
+
         rule = new ValidationFastPathRule(
-            $"{propertyAccess} >= {maximumValue}",
-            $"new global::Blueprint.Validation.LessThanAttribute({maximumValue})");
+            $"{valueAccess} >= {maximumValue}",
+            $"new global::Blueprint.Validation.LessThanAttribute({maximumValue})",
+            GuardCondition: guardCondition);
         return true;
     }
 
@@ -49,11 +62,6 @@ internal sealed class LessThanValidationFastPathStrategy : IValidationFastPathSt
 
     private static bool SupportsDirectComparison(ITypeSymbol propertyType)
     {
-        if (ValidationSymbolHelpers.IsNullableValueType(propertyType))
-        {
-            return false;
-        }
-
         return propertyType.SpecialType is SpecialType.System_SByte
             or SpecialType.System_Byte
             or SpecialType.System_Int16

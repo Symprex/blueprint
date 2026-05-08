@@ -7,7 +7,7 @@ namespace Blueprint.SourceGenerator.Modules;
 /// <summary>
 /// Handles <c>RangeAttribute</c> when both minimum and maximum are numeric literals (int or double) and the property
 /// type supports direct numeric comparisons, avoiding the runtime reflection path for the most common range
-/// validation patterns.
+/// validation patterns. Nullable value types are supported via a guard condition.
 /// </summary>
 internal sealed class RangeValidationFastPathStrategy : IValidationFastPathStrategy
 {
@@ -22,11 +22,23 @@ internal sealed class RangeValidationFastPathStrategy : IValidationFastPathStrat
         rule = null;
 
         if (!ValidationSymbolHelpers.IsRangeAttribute(attribute.AttributeClass)
-            || attribute.NamedArguments.Length > 0
-            || !SupportsDirectComparison(property.Type))
+            || attribute.NamedArguments.Length > 0)
         {
             return false;
         }
+
+        var isNullable = ValidationSymbolHelpers.IsNullableValueType(property.Type);
+        var underlyingType = isNullable
+            ? ValidationSymbolHelpers.GetNullableValueTypeArgument(property.Type)!
+            : property.Type;
+
+        if (!SupportsDirectComparison(underlyingType))
+        {
+            return false;
+        }
+
+        var valueAccess = isNullable ? $"{propertyAccess}.Value" : propertyAccess;
+        var guardCondition = isNullable ? $"{propertyAccess} is not null" : null;
 
         if (TryGetIntRange(attribute, out var intMin, out var intMax))
         {
@@ -34,8 +46,9 @@ internal sealed class RangeValidationFastPathStrategy : IValidationFastPathStrat
             var maxLiteral = intMax.ToString(CultureInfo.InvariantCulture);
 
             rule = new ValidationFastPathRule(
-                $"{propertyAccess} < {minLiteral} || {propertyAccess} > {maxLiteral}",
-                $"new global::System.ComponentModel.DataAnnotations.RangeAttribute({minLiteral}, {maxLiteral})");
+                $"{valueAccess} < {minLiteral} || {valueAccess} > {maxLiteral}",
+                $"new global::System.ComponentModel.DataAnnotations.RangeAttribute({minLiteral}, {maxLiteral})",
+                GuardCondition: guardCondition);
             return true;
         }
 
@@ -45,8 +58,9 @@ internal sealed class RangeValidationFastPathStrategy : IValidationFastPathStrat
             var maxLiteral = doubleMax.ToString(CultureInfo.InvariantCulture);
 
             rule = new ValidationFastPathRule(
-                $"{propertyAccess} < {minLiteral} || {propertyAccess} > {maxLiteral}",
-                $"new global::System.ComponentModel.DataAnnotations.RangeAttribute({minLiteral}, {maxLiteral})");
+                $"{valueAccess} < {minLiteral} || {valueAccess} > {maxLiteral}",
+                $"new global::System.ComponentModel.DataAnnotations.RangeAttribute({minLiteral}, {maxLiteral})",
+                GuardCondition: guardCondition);
             return true;
         }
 
@@ -89,11 +103,6 @@ internal sealed class RangeValidationFastPathStrategy : IValidationFastPathStrat
 
     private static bool SupportsDirectComparison(ITypeSymbol propertyType)
     {
-        if (ValidationSymbolHelpers.IsNullableValueType(propertyType))
-        {
-            return false;
-        }
-
         return propertyType.SpecialType is SpecialType.System_SByte
             or SpecialType.System_Byte
             or SpecialType.System_Int16

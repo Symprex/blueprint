@@ -15,9 +15,9 @@
     "frameworkStatusDetail": "Core Blueprint source-generator framework is at full feature parity with legacy Blueprint for Signature365 migration. All consumer-space companion packages (Rebus, Marten, Hangfire, tenant context) are by-design extensions that consumers build in their own repositories.",
     "nextReadySlice": null,
     "lastCompletedSlice": {
-      "id": "validation/null-guard-and-sample-enrichment",
+      "id": "validation/range-double-fast-path",
       "workstream": "documentation-and-final-alignment",
-      "title": "AllowedValues/DeniedValues null guard fix, sample app .NET 8 demos, compile-time-validation docs update"
+      "title": "Range(double, double) fast-path validation support with updated test and integration coverage"
     },
     "openReviewGate": null,
     "openReviewGateRationale": null,
@@ -436,6 +436,18 @@
       "workstream": "documentation-and-final-alignment",
       "title": "AllowedValues/DeniedValues null guard fix, sample app .NET 8 demos, compile-time-validation docs update",
       "commit": "08065c6"
+    },
+    {
+      "id": "openapi/allowedvalues-enum-string-projection",
+      "workstream": "documentation-and-final-alignment",
+      "title": "AllowedValues OpenAPI enum projection for string properties",
+      "commit": "4fb3e9d"
+    },
+    {
+      "id": "validation/range-double-fast-path",
+      "workstream": "documentation-and-final-alignment",
+      "title": "Range(double, double) fast-path validation support with updated test and integration coverage",
+      "commit": "d7b2286"
     }
   ],
   "decisions": [

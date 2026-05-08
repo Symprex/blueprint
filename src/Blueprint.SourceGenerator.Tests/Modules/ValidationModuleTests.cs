@@ -1941,6 +1941,150 @@ public class ValidationModuleTests
     }
 
     [Fact]
+    public void When_range_attribute_on_nullable_int_then_generates_guarded_bound_check()
+    {
+        var source = """
+                     using Blueprint;
+                     using Blueprint.Model;
+                     using System.ComponentModel.DataAnnotations;
+                     using System.Threading.Tasks;
+
+                     namespace TestNamespace;
+
+                     [BlueprintAppScan]
+                     public partial class TestApp : BlueprintApp
+                     {
+                         public TestApp()
+                         {
+                             this.Register(CreateUserCommand.Configure());
+                         }
+                     }
+
+                     public class CreateUserCommand : ICommand<string>
+                     {
+                         public static ApiOperationDescriptor Configure()
+                         {
+                             return new ApiOperationDescriptor(typeof(CreateUserCommand), nameof(CreateUserCommand), "Tests");
+                         }
+
+                         [Range(1, 100)]
+                         public int? Priority { get; set; }
+
+                         public static Task<string> HandleAsync(CreateUserCommand command)
+                         {
+                             return Task.FromResult(command.Priority?.ToString() ?? "");
+                         }
+                     }
+                     """;
+
+        var result = CompilePipeline(source);
+
+        result.Diagnostics.Should().BeEmpty();
+        var pipelineSource = result.Output.Single(static tree => tree.FilePath.EndsWith("CreateUserCommandExecutorPipeline.g.cs", StringComparison.Ordinal)).ToString();
+
+        pipelineSource.Should().NotContain("global::System.ComponentModel.DataAnnotations.Validator.TryValidateObject");
+        pipelineSource.Should().Contain("operation.Priority is not null");
+        pipelineSource.Should().Contain("operation.Priority.Value < 1 || operation.Priority.Value > 100");
+        pipelineSource.Should().Contain("global::System.ComponentModel.DataAnnotations.RangeAttribute");
+    }
+
+    [Fact]
+    public void When_greater_than_attribute_on_nullable_int_then_generates_guarded_comparison()
+    {
+        var source = """
+                     using Blueprint;
+                     using Blueprint.Model;
+                     using Blueprint.Validation;
+                     using System.Threading.Tasks;
+
+                     namespace TestNamespace;
+
+                     [BlueprintAppScan]
+                     public partial class TestApp : BlueprintApp
+                     {
+                         public TestApp()
+                         {
+                             this.Register(CreateUserCommand.Configure());
+                         }
+                     }
+
+                     public class CreateUserCommand : ICommand<string>
+                     {
+                         public static ApiOperationDescriptor Configure()
+                         {
+                             return new ApiOperationDescriptor(typeof(CreateUserCommand), nameof(CreateUserCommand), "Tests");
+                         }
+
+                         [GreaterThan(0)]
+                         public int? Score { get; set; }
+
+                         public static Task<string> HandleAsync(CreateUserCommand command)
+                         {
+                             return Task.FromResult(command.Score?.ToString() ?? "");
+                         }
+                     }
+                     """;
+
+        var result = CompilePipeline(source);
+
+        result.Diagnostics.Should().BeEmpty();
+        var pipelineSource = result.Output.Single(static tree => tree.FilePath.EndsWith("CreateUserCommandExecutorPipeline.g.cs", StringComparison.Ordinal)).ToString();
+
+        pipelineSource.Should().NotContain("global::System.ComponentModel.DataAnnotations.Validator.TryValidateObject");
+        pipelineSource.Should().Contain("operation.Score is not null");
+        pipelineSource.Should().Contain("operation.Score.Value <= 0");
+        pipelineSource.Should().Contain("global::Blueprint.Validation.GreaterThanAttribute");
+    }
+
+    [Fact]
+    public void When_less_than_attribute_on_nullable_int_then_generates_guarded_comparison()
+    {
+        var source = """
+                     using Blueprint;
+                     using Blueprint.Model;
+                     using Blueprint.Validation;
+                     using System.Threading.Tasks;
+
+                     namespace TestNamespace;
+
+                     [BlueprintAppScan]
+                     public partial class TestApp : BlueprintApp
+                     {
+                         public TestApp()
+                         {
+                             this.Register(CreateUserCommand.Configure());
+                         }
+                     }
+
+                     public class CreateUserCommand : ICommand<string>
+                     {
+                         public static ApiOperationDescriptor Configure()
+                         {
+                             return new ApiOperationDescriptor(typeof(CreateUserCommand), nameof(CreateUserCommand), "Tests");
+                         }
+
+                         [LessThan(1000)]
+                         public int? Limit { get; set; }
+
+                         public static Task<string> HandleAsync(CreateUserCommand command)
+                         {
+                             return Task.FromResult(command.Limit?.ToString() ?? "");
+                         }
+                     }
+                     """;
+
+        var result = CompilePipeline(source);
+
+        result.Diagnostics.Should().BeEmpty();
+        var pipelineSource = result.Output.Single(static tree => tree.FilePath.EndsWith("CreateUserCommandExecutorPipeline.g.cs", StringComparison.Ordinal)).ToString();
+
+        pipelineSource.Should().NotContain("global::System.ComponentModel.DataAnnotations.Validator.TryValidateObject");
+        pipelineSource.Should().Contain("operation.Limit is not null");
+        pipelineSource.Should().Contain("operation.Limit.Value >= 1000");
+        pipelineSource.Should().Contain("global::Blueprint.Validation.LessThanAttribute");
+    }
+
+    [Fact]
     public void When_regex_attribute_has_named_arguments_then_falls_back_to_runtime_validation()
     {
         var source = """

@@ -234,13 +234,13 @@ Current fast-path strategy coverage (in planning order):
 | EmailAddress | `EmailAddressAttribute` | default constructor | custom error message |
 | Phone | `PhoneAttribute` | default constructor, delegates to `new PhoneAttribute().IsValid()` | custom error message |
 | Url | `UrlAttribute` | default constructor, delegates to `new UrlAttribute().IsValid()` | custom error message |
-| Range | `RangeAttribute` | `Range(int, int)` and `Range(double, double)` constructors | Type overloads, named arguments |
+| Range | `RangeAttribute` | `Range(int, int)` and `Range(double, double)` constructors, nullable value types | Type overloads, named arguments |
 | RegularExpression | `RegularExpressionAttribute` | single-arg constructor with string pattern | named arguments (e.g. `ErrorMessage`), multiple constructor args |
 | Compare | `CompareAttribute` | same-type properties, compile-time `BPV001` for missing targets | n/a |
 | GreaterThanProperty | `GreaterThanPropertyAttribute` | same-type non-nullable numeric/decimal/DateTime, compile-time `BPV002` | unsupported types |
-| GreaterThan | `GreaterThanAttribute` | non-nullable numeric/decimal, default constructor | customized instances |
+| GreaterThan | `GreaterThanAttribute` | numeric/decimal including nullable, default constructor | customized instances |
 | LessThanProperty | `LessThanPropertyAttribute` | same-type non-nullable numeric/decimal/DateTime, compile-time `BPV006` | unsupported types |
-| LessThan | `LessThanAttribute` | non-nullable numeric/decimal, default constructor | customized instances |
+| LessThan | `LessThanAttribute` | numeric/decimal including nullable, default constructor | customized instances |
 | RequiredIf | `RequiredIfAttribute` | scalar/null dependent values, default constructor, compile-time `BPV003` | arrays, custom messages |
 | RequiredIfNot | `RequiredIfNotAttribute` | scalar/null dependent values, default constructor, compile-time `BPV004` | arrays, custom messages |
 | NotAllowedIf | `NotAllowedIfAttribute` | scalar dependent values, default constructor, compile-time `BPV005` | null dependent values, arrays, custom messages |

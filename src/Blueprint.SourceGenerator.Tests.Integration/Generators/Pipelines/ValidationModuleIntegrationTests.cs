@@ -949,6 +949,125 @@ public class ValidationModuleIntegrationTests
     }
 
     [Fact]
+    public async Task When_nullable_range_validation_value_is_null_then_generated_pipeline_skips_validation_and_executes_handler()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(NullableRangeValidationOperation));
+        var context = CreateContext(app, NullableRangeValidationOperation.Configure());
+
+        NullableRangeValidationOperation.Reset();
+        ((NullableRangeValidationOperation)context.Operation).Priority = null;
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<OkResult<string>>();
+        NullableRangeValidationOperation.HandlerCallCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task When_nullable_range_validation_value_is_out_of_range_then_generated_pipeline_returns_validation_failure()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(NullableRangeValidationOperation));
+        var context = CreateContext(app, NullableRangeValidationOperation.Configure());
+
+        NullableRangeValidationOperation.Reset();
+        ((NullableRangeValidationOperation)context.Operation).Priority = 0;
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<ValidationFailedResult>();
+        NullableRangeValidationOperation.HandlerCallCount.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task When_nullable_range_validation_value_is_in_range_then_generated_pipeline_executes_handler()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(NullableRangeValidationOperation));
+        var context = CreateContext(app, NullableRangeValidationOperation.Configure());
+
+        NullableRangeValidationOperation.Reset();
+        ((NullableRangeValidationOperation)context.Operation).Priority = 50;
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<OkResult<string>>();
+        NullableRangeValidationOperation.HandlerCallCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task When_nullable_greater_than_validation_value_is_null_then_generated_pipeline_skips_and_executes_handler()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(NullableGreaterThanValidationOperation));
+        var context = CreateContext(app, NullableGreaterThanValidationOperation.Configure());
+
+        NullableGreaterThanValidationOperation.Reset();
+        ((NullableGreaterThanValidationOperation)context.Operation).Score = null;
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<OkResult<string>>();
+        NullableGreaterThanValidationOperation.HandlerCallCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task When_nullable_greater_than_validation_value_fails_then_generated_pipeline_returns_validation_failure()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(NullableGreaterThanValidationOperation));
+        var context = CreateContext(app, NullableGreaterThanValidationOperation.Configure());
+
+        NullableGreaterThanValidationOperation.Reset();
+        ((NullableGreaterThanValidationOperation)context.Operation).Score = 0;
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<ValidationFailedResult>();
+        NullableGreaterThanValidationOperation.HandlerCallCount.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task When_nullable_less_than_validation_value_is_null_then_generated_pipeline_skips_and_executes_handler()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(NullableLessThanValidationOperation));
+        var context = CreateContext(app, NullableLessThanValidationOperation.Configure());
+
+        NullableLessThanValidationOperation.Reset();
+        ((NullableLessThanValidationOperation)context.Operation).Limit = null;
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<OkResult<string>>();
+        NullableLessThanValidationOperation.HandlerCallCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task When_nullable_less_than_validation_value_fails_then_generated_pipeline_returns_validation_failure()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(NullableLessThanValidationOperation));
+        var context = CreateContext(app, NullableLessThanValidationOperation.Configure());
+
+        NullableLessThanValidationOperation.Reset();
+        ((NullableLessThanValidationOperation)context.Operation).Limit = 1000;
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<ValidationFailedResult>();
+        NullableLessThanValidationOperation.HandlerCallCount.Should().Be(0);
+    }
+
+    [Fact]
     public async Task When_regex_validation_fails_then_generated_pipeline_returns_validation_failure()
     {
         var app = new IntegrationTestBlueprintApp();
@@ -1680,6 +1799,63 @@ public partial class DoubleRangeValidationOperation : ICommand<string>
     {
         HandlerCallCount++;
         return Task.FromResult(operation.Score.ToString());
+    }
+}
+
+public partial class NullableRangeValidationOperation : ICommand<string>
+{
+    public static int HandlerCallCount { get; private set; }
+
+    [Range(1, 100)]
+    public int? Priority { get; set; }
+
+    public static void Reset()
+    {
+        HandlerCallCount = 0;
+    }
+
+    public static Task<string> HandleAsync(NullableRangeValidationOperation operation)
+    {
+        HandlerCallCount++;
+        return Task.FromResult(operation.Priority?.ToString() ?? "null");
+    }
+}
+
+public partial class NullableGreaterThanValidationOperation : ICommand<string>
+{
+    public static int HandlerCallCount { get; private set; }
+
+    [GreaterThan(0)]
+    public int? Score { get; set; }
+
+    public static void Reset()
+    {
+        HandlerCallCount = 0;
+    }
+
+    public static Task<string> HandleAsync(NullableGreaterThanValidationOperation operation)
+    {
+        HandlerCallCount++;
+        return Task.FromResult(operation.Score?.ToString() ?? "null");
+    }
+}
+
+public partial class NullableLessThanValidationOperation : ICommand<string>
+{
+    public static int HandlerCallCount { get; private set; }
+
+    [LessThan(1000)]
+    public int? Limit { get; set; }
+
+    public static void Reset()
+    {
+        HandlerCallCount = 0;
+    }
+
+    public static Task<string> HandleAsync(NullableLessThanValidationOperation operation)
+    {
+        HandlerCallCount++;
+        return Task.FromResult(operation.Limit?.ToString() ?? "null");
     }
 }
 
