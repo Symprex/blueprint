@@ -15,9 +15,9 @@
     "frameworkStatusDetail": "Core Blueprint source-generator framework is at full feature parity with legacy Blueprint for Signature365 migration. Authorization pipeline (IApiAuthoriser, IUserAuthorisationContextFactory), background task scheduling (IScheduledBackgroundTask, ContinueWith, Schedule), and sample app demonstrations are complete.",
     "nextReadySlice": null,
     "lastCompletedSlice": {
-      "id": "auth/sample-app-auth-demonstrations",
-      "workstream": "authorization-and-parity-alignment",
-      "title": "Authorization builder methods and sample app IUserAuthorisationContextFactory/IApiAuthoriser demonstrations"
+      "id": "messaging/message-outbox-pipeline-module",
+      "workstream": "messaging-and-integration-hosts",
+      "title": "IMessageOutbox pipeline module with transactional outbox commit, DoNotPublishMessages opt-out, and sample app integration"
     },
     "openReviewGate": null,
     "openReviewGateRationale": null,
@@ -514,6 +514,18 @@
       "workstream": "authorization-and-parity-alignment",
       "title": "Authorization builder methods and sample app IUserAuthorisationContextFactory/IApiAuthoriser demonstrations",
       "commit": "5ba6c20"
+    },
+    {
+      "id": "auth/claim-types-constants",
+      "workstream": "authorization-and-parity-alignment",
+      "title": "Add ClaimTypes authorization constants for Permission and Role claim URNs",
+      "commit": "6226ce3"
+    },
+    {
+      "id": "messaging/message-outbox-pipeline-module",
+      "workstream": "messaging-and-integration-hosts",
+      "title": "IMessageOutbox pipeline module with transactional outbox commit, DoNotPublishMessages opt-out, and sample app integration",
+      "commit": "9994a7c"
     }
   ],
   "decisions": [
