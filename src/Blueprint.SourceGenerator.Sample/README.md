@@ -35,11 +35,12 @@ A background task (`SendTemplateSharedNotificationTask`) demonstrates non-HTTP e
 
 - **Cross-assembly scanning** — `[BlueprintAppScan(FromAssemblyOf = typeof(GetTemplatesQuery))]`
 - **Self and root links** — `[SelfLink]` / `[RootLink]` for HATEOAS-style URL generation
-- **Validation** — `[Required]`, `[MaxLength]`, `[Range]` with generated fast-path validation
+- **Validation** — `[Required]`, `[MaxLength]`, `[Range]`, `[RegularExpression]`, `[EmailAddress]`, `[Url]` with generated fast-path validation
 - **Resource authorization** — `[Resource("template", "read/write")]` scope-pair model (implies authentication)
 - **Authorization provider** — `IResourceAuthorizationProvider` with claim-based scope evaluation
 - **Scope inheritance** — `[FromResource(typeof(X))]` inherits scope pairs from another operation
 - **Anonymous access** — `[AllowAnonymous]` on `SearchTemplatesQuery` for public endpoints
+- **Header binding** — `[FromHeader("X-Correlation-Id")]` on `SearchTemplatesQuery` for cross-system trace correlation
 - **Sensitive properties** — `[Sensitive]` on `CreateTemplateCommand.HtmlSource/PlainTextSource` for audit redaction hints
 - **General auditing** — `IAuditSink` for cross-operation audit recording with structured activity events
 - **Audit opt-out** — `[DoNotAudit]` on `SearchTemplatesQuery` to suppress noisy read auditing

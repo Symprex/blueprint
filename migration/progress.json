@@ -13,10 +13,10 @@
     "activeWorkstream": "documentation-and-final-alignment",
     "nextReadySlice": null,
     "lastCompletedSlice": {
-      "id": "openapi/validation-format-projection",
+      "id": "sample/from-header-binding-demo",
       "workstream": "documentation-and-final-alignment",
-      "title": "Project OpenAPI format hints from validation attributes (EmailAddress→email, Url→uri, Phone→phone)",
-      "commit": "eb8543e"
+      "title": "Add [FromHeader] X-Correlation-Id binding to reference app with E2E test and OpenAPI header parameter",
+      "commit": "3dcd642"
     },
     "openReviewGate": null,
     "openReviewGateRationale": null,
@@ -303,6 +303,12 @@
       "workstream": "documentation-and-final-alignment",
       "title": "Project OpenAPI format hints from validation attributes (EmailAddress→email, Url→uri, Phone→phone)",
       "commit": "eb8543e"
+    },
+    {
+      "id": "sample/from-header-binding-demo",
+      "workstream": "documentation-and-final-alignment",
+      "title": "Add [FromHeader] X-Correlation-Id binding to reference app with E2E test and OpenAPI header parameter",
+      "commit": "3dcd642"
     }
   ],
   "decisions": [
