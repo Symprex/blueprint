@@ -5,6 +5,106 @@
     "version": "1.0.0"
   },
   "paths": {
+    "/account/password": {
+      "put": {
+        "operationId": "ChangePasswordCommand",
+        "summary": "Change the authenticated user\u0027s password.",
+        "tags": [
+          "Account"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "currentPassword": {
+                    "type": "string",
+                    "description": "The current password."
+                  },
+                  "newPassword": {
+                    "type": "string",
+                    "description": "The new password.",
+                    "minLength": 8,
+                    "maxLength": 128
+                  },
+                  "confirmNewPassword": {
+                    "type": "string",
+                    "description": "Re-enter the new password for confirmation."
+                  }
+                },
+                "required": [
+                  "currentPassword",
+                  "newPassword",
+                  "confirmNewPassword"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/system/health": {
       "get": {
         "operationId": "HealthCheckQuery",
@@ -275,6 +375,16 @@
                     "type": "string",
                     "nullable": true,
                     "description": "Optional name filter to restrict exported templates."
+                  },
+                  "notifyOnCompletion": {
+                    "type": "boolean",
+                    "description": "Send an email notification when the export completes."
+                  },
+                  "notifyEmail": {
+                    "type": "string",
+                    "format": "email",
+                    "nullable": true,
+                    "description": "Email address to notify on export completion. Required when NotifyOnCompletion is true."
                   }
                 }
               }
@@ -1033,6 +1143,108 @@
         ]
       }
     },
+    "/templates/{Id}/history": {
+      "get": {
+        "operationId": "GetTemplateHistoryQuery",
+        "summary": "Get the change history for a template, optionally filtered by date range.",
+        "tags": [
+          "Templates"
+        ],
+        "parameters": [
+          {
+            "name": "Id",
+            "in": "path",
+            "required": true,
+            "description": "The unique identifier of the template.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "authorFilter",
+            "in": "query",
+            "required": false,
+            "description": "Filter history by author name (2-100 characters).",
+            "schema": {
+              "type": "string",
+              "nullable": true,
+              "minLength": 2,
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "endDate",
+            "in": "query",
+            "required": false,
+            "description": "The end of the date range filter (inclusive). Required when StartDate is provided.",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            }
+          },
+          {
+            "name": "startDate",
+            "in": "query",
+            "required": false,
+            "description": "The start of the date range filter (inclusive).",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Blueprint_SourceGenerator_Sample_Contract_Api_TemplateVersionApiResource"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/templates/{Id}/preview": {
       "post": {
         "operationId": "PreviewTemplateCommand",
@@ -1483,6 +1695,9 @@
     }
   },
   "tags": [
+    {
+      "name": "Account"
+    },
     {
       "name": "System"
     },

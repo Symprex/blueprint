@@ -24,6 +24,29 @@
     - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
     - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
 
+### ChangePasswordCommand
+  Type: ChangePasswordCommand
+  Source: Source Generated
+  HTTP Methods: PUT
+  URL: /account/password
+  Hosts: http
+  Auth: Authenticated
+  Discovery: command (Blueprint.SourceGenerator.Sample.Contract.Api.ChangePasswordCommand)
+  Group: Account
+  Result Outcomes:
+    - NoResultOperationResult
+  Failure Outcomes:
+    - legacy-validation-exception: Blueprint.Validation.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
+    - data-annotations-validation-exception: System.ComponentModel.DataAnnotations.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
+    - default-unhandled-exception: System.Exception -> Blueprint.Runtime.Exec.UnhandledExceptionResult
+  HTTP Responses:
+    - 200: hasBody=False types=[]
+    - 400: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+    - 401: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+    - 415: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+    - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
+    - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+
 ### CloneTemplateCommand
   Type: CloneTemplateCommand
   Source: Source Generated
@@ -115,6 +138,25 @@
     - 401: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
     - 403: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
     - 415: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+    - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
+    - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+
+### GetTemplateHistoryQuery
+  Type: GetTemplateHistoryQuery
+  Source: Source Generated
+  HTTP Methods: GET
+  URL: /templates/{Id}/history
+  Hosts: http
+  Auth: Authenticated
+  Discovery: query (Blueprint.SourceGenerator.Sample.Contract.Api.GetTemplateHistoryQuery)
+  Group: Templates
+  Failure Outcomes:
+    - legacy-validation-exception: Blueprint.Validation.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
+    - data-annotations-validation-exception: System.ComponentModel.DataAnnotations.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
+    - default-unhandled-exception: System.Exception -> Blueprint.Runtime.Exec.UnhandledExceptionResult
+  HTTP Responses:
+    - 200: hasBody=True types=[Blueprint.SourceGenerator.Sample.Contract.Api.TemplateVersionApiResource[]]
+    - 401: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
     - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
     - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
 

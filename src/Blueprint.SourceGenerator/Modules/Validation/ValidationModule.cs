@@ -183,9 +183,9 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
         {
             var failureOperand = WrapConditionOperand(rule.FailureCondition);
             var failureCondition = property.RequiredRule?.SuccessCondition is string successCondition
-                ? $"{successCondition} && {failureOperand}"
+                ? $"{WrapConditionOperand(successCondition)} && {failureOperand}"
                 : rule.GuardCondition is string guardCondition
-                    ? $"{guardCondition} && {failureOperand}"
+                    ? $"{WrapConditionOperand(guardCondition)} && {failureOperand}"
                     : rule.FailureCondition;
             RenderValidationFailure(context, failureCondition, rule, property);
         }
