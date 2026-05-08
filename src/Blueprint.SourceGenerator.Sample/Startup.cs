@@ -20,10 +20,6 @@ public class Startup
         // Multi-tenancy: AsyncLocal-backed ambient tenant context (like Signature365's ICurrentTenantAccessor)
         services.AddSingleton<ITenantAccessor, AsyncLocalTenantAccessor>();
 
-        // Message outbox: scoped per-operation so each command gets its own outbox scope
-        // (like Signature365's RebusTransactionScope / StartRebusTransactionScopeMiddleware)
-        services.AddScoped<InMemoryMessageOutbox>();
-
         // ASP.NET Core authentication must be configured so that HttpContext.User is
         // populated before Blueprint's generated [MustBeAuthenticated] / [Resource]
         // pipeline checks run.  A real consumer would wire a scheme here, e.g.:
@@ -39,6 +35,7 @@ public class Startup
             blueprint.AddResourceAuthorizationProvider<SampleResourceAuthorizationProvider>();
             blueprint.AddBackgroundTaskScheduler<InProcessBackgroundTaskScheduler>();
             blueprint.AddUnitOfWork<InMemoryUnitOfWork>();
+            blueprint.AddMessageOutbox<InMemoryMessageOutbox>();
 
             // User context: converts ClaimsIdentity → IUserAuthorisationContext,
             // making user/account info available to authorisers and handler code

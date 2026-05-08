@@ -25,7 +25,7 @@ namespace Blueprint.SourceGenerator.Sample.Api;
 /// Signature365's <c>RebusTransactionScope</c> without requiring a dependency on Rebus.
 /// </para>
 /// </remarks>
-public sealed class InMemoryMessageOutbox : IAsyncDisposable
+public sealed class InMemoryMessageOutbox : Blueprint.Messaging.IMessageOutbox, IAsyncDisposable
 {
     private static readonly AsyncLocal<InMemoryMessageOutbox?> _current = new();
     private readonly List<object> _pendingMessages = [];
@@ -60,12 +60,8 @@ public sealed class InMemoryMessageOutbox : IAsyncDisposable
         this._logger.LogDebug("Message enqueued in outbox: {MessageType}", message.GetType().Name);
     }
 
-    /// <summary>
-    /// Commits the outbox scope, publishing all enqueued messages.
-    /// In production, this would call <c>RebusTransactionScope.CompleteAsync()</c>.
-    /// </summary>
-    /// <returns>A task representing the asynchronous commit operation.</returns>
-    public Task CommitAsync()
+    /// <inheritdoc />
+    public Task CommitAsync(CancellationToken cancellationToken)
     {
         if (this._pendingMessages.Count > 0)
         {

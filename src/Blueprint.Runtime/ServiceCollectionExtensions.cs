@@ -133,6 +133,26 @@ public sealed class BlueprintServiceBuilder
     }
 
     /// <summary>
+    /// Registers a message outbox implementation for transactional message publication.
+    /// The outbox is registered as scoped so each operation gets its own outbox instance.
+    /// Messages enqueued during handler execution are committed only on success.
+    /// <para>
+    /// This is the compile-time equivalent of legacy Blueprint's
+    /// <c>StartRebusTransactionScopeMiddleware</c> / <c>CommitRebusTransactionScopeMiddleware</c>
+    /// pattern. In production, the implementation typically wraps a messaging library's
+    /// transaction scope (e.g., Rebus's <c>RebusTransactionScope</c>).
+    /// </para>
+    /// </summary>
+    /// <typeparam name="T">The <see cref="Blueprint.Messaging.IMessageOutbox"/> implementation type.</typeparam>
+    /// <returns>This builder for chaining.</returns>
+    public BlueprintServiceBuilder AddMessageOutbox<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] T>()
+        where T : class, Blueprint.Messaging.IMessageOutbox
+    {
+        this.Services.AddScoped<Blueprint.Messaging.IMessageOutbox, T>();
+        return this;
+    }
+
+    /// <summary>
     /// Registers a property populator that auto-fills operation properties from ambient context
     /// (e.g., JWT claims, tenant accessor, or correlation state) during the Population pipeline stage.
     /// <para>

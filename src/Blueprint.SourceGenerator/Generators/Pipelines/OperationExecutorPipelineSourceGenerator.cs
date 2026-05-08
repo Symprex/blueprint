@@ -155,6 +155,7 @@ public partial class OperationExecutorPipelineSourceGenerator : IIncrementalGene
             new ValidationModule(),
             new HandlerExecutionModule(),
             new UnitOfWorkModule(),
+            new MessageOutboxModule(),
             new AuditingModule(),
             new ResourceEventAuditModule(),
             new AuditingManifestModule(),
