@@ -13,10 +13,10 @@
     "activeWorkstream": "documentation-and-final-alignment",
     "nextReadySlice": null,
     "lastCompletedSlice": {
-      "id": "openapi/security-scheme-projection",
+      "id": "runtime/changetype-status-codes-and-location-headers",
       "workstream": "documentation-and-final-alignment",
-      "title": "Project per-operation security requirements and securitySchemes into OpenAPI",
-      "commit": "ca1f47c"
+      "title": "ChangeType-aware HTTP status codes and Location headers for resource event results",
+      "commit": "38015c7"
     },
     "openReviewGate": null,
     "openReviewGateRationale": null,
@@ -255,6 +255,30 @@
       "workstream": "documentation-and-final-alignment",
       "title": "Project per-operation security requirements and securitySchemes into OpenAPI",
       "commit": "ca1f47c"
+    },
+    {
+      "id": "runtime/apiexception-http-status-and-subclasses",
+      "workstream": "documentation-and-final-alignment",
+      "title": "Respect ApiException.HttpStatus in HTTP translation and add convenience subclasses",
+      "commit": "09ea4a1"
+    },
+    {
+      "id": "integration/http-e2e-test-coverage",
+      "workstream": "documentation-and-final-alignment",
+      "title": "Comprehensive HTTP E2E test coverage for result types, binding, void commands, and edge cases",
+      "commit": "8d4903c"
+    },
+    {
+      "id": "runtime/changetype-status-codes",
+      "workstream": "documentation-and-final-alignment",
+      "title": "Map ResourceEvent ChangeType to correct HTTP status codes (Created→201, Updated→200, Deleted→204)",
+      "commit": "1e87bfe"
+    },
+    {
+      "id": "runtime/location-header-201-created",
+      "workstream": "documentation-and-final-alignment",
+      "title": "Add Location header to 201 Created HTTP responses from self-link URL",
+      "commit": "38015c7"
     }
   ],
   "decisions": [
