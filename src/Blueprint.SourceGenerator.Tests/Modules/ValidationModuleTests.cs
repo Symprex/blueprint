@@ -962,7 +962,106 @@ public class ValidationModuleTests
     }
 
     [Fact]
-    public void Inline_handler_with_compare_validation_attribute_generates_equality_check_before_handler_invocation()
+    public void When_greater_than_property_attribute_on_nullable_properties_then_generates_guarded_comparison()
+    {
+        var source = """
+                     using Blueprint;
+                     using Blueprint.Model;
+                     using Blueprint.Validation;
+                     using System.Threading.Tasks;
+
+                     namespace TestNamespace;
+
+                     [BlueprintAppScan]
+                     public partial class TestApp : BlueprintApp
+                     {
+                         public TestApp()
+                         {
+                             this.Register(CreateUserCommand.Configure());
+                         }
+                     }
+
+                     public class CreateUserCommand : ICommand<string>
+                     {
+                         public static ApiOperationDescriptor Configure()
+                         {
+                             return new ApiOperationDescriptor(typeof(CreateUserCommand), nameof(CreateUserCommand), "Tests");
+                         }
+
+                         public int? Minimum { get; set; }
+
+                         [GreaterThanProperty(nameof(Minimum))]
+                         public int? Maximum { get; set; }
+
+                         public static Task<string> HandleAsync(CreateUserCommand command)
+                         {
+                             return Task.FromResult($"{command.Minimum}:{command.Maximum}");
+                         }
+                     }
+                     """;
+
+        var result = CompilePipeline(source);
+
+        result.Diagnostics.Should().BeEmpty();
+        var pipelineSource = result.Output.Single(static tree => tree.FilePath.EndsWith("CreateUserCommandExecutorPipeline.g.cs", StringComparison.Ordinal)).ToString();
+
+        pipelineSource.Should().NotContain("global::System.ComponentModel.DataAnnotations.Validator.TryValidateObject");
+        pipelineSource.Should().Contain("operation.Maximum is not null && operation.Minimum is not null");
+        pipelineSource.Should().Contain("operation.Maximum.Value <= operation.Minimum.Value");
+    }
+
+    [Fact]
+    public void When_less_than_property_attribute_on_nullable_properties_then_generates_guarded_comparison()
+    {
+        var source = """
+                     using Blueprint;
+                     using Blueprint.Model;
+                     using Blueprint.Validation;
+                     using System;
+                     using System.Threading.Tasks;
+
+                     namespace TestNamespace;
+
+                     [BlueprintAppScan]
+                     public partial class TestApp : BlueprintApp
+                     {
+                         public TestApp()
+                         {
+                             this.Register(CreateUserCommand.Configure());
+                         }
+                     }
+
+                     public class CreateUserCommand : ICommand<string>
+                     {
+                         public static ApiOperationDescriptor Configure()
+                         {
+                             return new ApiOperationDescriptor(typeof(CreateUserCommand), nameof(CreateUserCommand), "Tests");
+                         }
+
+                         [LessThanProperty(nameof(Maximum))]
+                         public DateTime? Start { get; set; }
+
+                         public DateTime? Maximum { get; set; }
+
+                         public static Task<string> HandleAsync(CreateUserCommand command)
+                         {
+                             return Task.FromResult($"{command.Start}:{command.Maximum}");
+                         }
+                     }
+                     """;
+
+        var result = CompilePipeline(source);
+
+        result.Diagnostics.Should().BeEmpty();
+        var pipelineSource = result.Output.Single(static tree => tree.FilePath.EndsWith("CreateUserCommandExecutorPipeline.g.cs", StringComparison.Ordinal)).ToString();
+
+        pipelineSource.Should().NotContain("global::System.ComponentModel.DataAnnotations.Validator.TryValidateObject");
+        pipelineSource.Should().Contain("operation.Start is not null && operation.Maximum is not null");
+        pipelineSource.Should().Contain("operation.Start.Value >= operation.Maximum.Value");
+    }
+
+    [Fact]
+    public void When_compare_attribute_on_properties_then_generates_fast_path()
     {
         var source = """
                      using Blueprint;

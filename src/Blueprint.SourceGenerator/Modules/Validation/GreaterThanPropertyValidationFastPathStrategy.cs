@@ -5,7 +5,7 @@ namespace Blueprint.SourceGenerator.Modules;
 
 /// <summary>
 /// Handles <c>GreaterThanPropertyAttribute</c> when both properties can be compared directly in generated code without
-/// runtime reflection or boxing.
+/// runtime reflection or boxing. Nullable value types are supported when both properties share the same nullable type.
 /// </summary>
 internal sealed class GreaterThanPropertyValidationFastPathStrategy : IValidationFastPathStrategy
 {
@@ -20,14 +20,25 @@ internal sealed class GreaterThanPropertyValidationFastPathStrategy : IValidatio
         rule = null;
 
         if (!ValidationSymbolHelpers.IsGreaterThanPropertyAttribute(attribute.AttributeClass)
-            || !TryGetReferencedPropertyAccess(property, propertyAccess, attribute, out var referencedPropertyName, out var referencedPropertyAccess))
+            || !TryGetReferencedPropertyAccess(property, propertyAccess, attribute, out var referencedPropertyName, out var referencedPropertyAccess, out var isNullable))
         {
             return false;
         }
 
-        rule = new ValidationFastPathRule(
-            $"{propertyAccess} <= {referencedPropertyAccess}",
-            $"new global::Blueprint.Validation.GreaterThanPropertyAttribute(\"{referencedPropertyName}\")");
+        if (isNullable)
+        {
+            rule = new ValidationFastPathRule(
+                $"{propertyAccess}.Value <= {referencedPropertyAccess}.Value",
+                $"new global::Blueprint.Validation.GreaterThanPropertyAttribute(\"{referencedPropertyName}\")",
+                GuardCondition: $"{propertyAccess} is not null && {referencedPropertyAccess} is not null");
+        }
+        else
+        {
+            rule = new ValidationFastPathRule(
+                $"{propertyAccess} <= {referencedPropertyAccess}",
+                $"new global::Blueprint.Validation.GreaterThanPropertyAttribute(\"{referencedPropertyName}\")");
+        }
+
         return true;
     }
 
@@ -36,10 +47,12 @@ internal sealed class GreaterThanPropertyValidationFastPathStrategy : IValidatio
         string propertyAccess,
         AttributeData attribute,
         out string referencedPropertyName,
-        out string referencedPropertyAccess)
+        out string referencedPropertyAccess,
+        out bool isNullable)
     {
         referencedPropertyName = string.Empty;
         referencedPropertyAccess = string.Empty;
+        isNullable = false;
 
         var otherPropertyName = ValidationSymbolHelpers.GetReferencedPropertyName(attribute);
         if (string.IsNullOrWhiteSpace(otherPropertyName))
@@ -51,7 +64,7 @@ internal sealed class GreaterThanPropertyValidationFastPathStrategy : IValidatio
         var referencedProperty = ValidationSymbolHelpers.GetPublicInstanceProperties(containingType)
             .FirstOrDefault(candidate => candidate.Name == otherPropertyName);
         if (referencedProperty is null
-            || !SupportsDirectComparison(property.Type, referencedProperty.Type))
+            || !SupportsDirectComparison(property.Type, referencedProperty.Type, out isNullable))
         {
             return false;
         }
@@ -63,16 +76,37 @@ internal sealed class GreaterThanPropertyValidationFastPathStrategy : IValidatio
         return true;
     }
 
-    private static bool SupportsDirectComparison(ITypeSymbol propertyType, ITypeSymbol referencedPropertyType)
+    private static bool SupportsDirectComparison(ITypeSymbol propertyType, ITypeSymbol referencedPropertyType, out bool isNullable)
     {
-        if (!SymbolEqualityComparer.Default.Equals(propertyType, referencedPropertyType)
-            || ValidationSymbolHelpers.IsNullableValueType(propertyType)
+        isNullable = false;
+
+        if (!SymbolEqualityComparer.Default.Equals(propertyType, referencedPropertyType))
+        {
+            return false;
+        }
+
+        // Both nullable: unwrap and check the underlying type.
+        if (ValidationSymbolHelpers.IsNullableValueType(propertyType)
+            && ValidationSymbolHelpers.IsNullableValueType(referencedPropertyType))
+        {
+            isNullable = true;
+            var underlying = ValidationSymbolHelpers.GetNullableValueTypeArgument(propertyType)!;
+            return IsComparableNumericOrDateTime(underlying);
+        }
+
+        // One nullable and one not: not supported (types already don't match via Equals above, but guard explicitly).
+        if (ValidationSymbolHelpers.IsNullableValueType(propertyType)
             || ValidationSymbolHelpers.IsNullableValueType(referencedPropertyType))
         {
             return false;
         }
 
-        return propertyType.SpecialType is SpecialType.System_SByte
+        return IsComparableNumericOrDateTime(propertyType);
+    }
+
+    private static bool IsComparableNumericOrDateTime(ITypeSymbol type)
+    {
+        return type.SpecialType is SpecialType.System_SByte
             or SpecialType.System_Byte
             or SpecialType.System_Int16
             or SpecialType.System_UInt16

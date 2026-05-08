@@ -1068,6 +1068,114 @@ public class ValidationModuleIntegrationTests
     }
 
     [Fact]
+    public async Task When_nullable_greater_than_property_both_null_then_generated_pipeline_skips_and_executes_handler()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(NullableGreaterThanPropertyValidationOperation));
+        var context = CreateContext(app, NullableGreaterThanPropertyValidationOperation.Configure());
+
+        NullableGreaterThanPropertyValidationOperation.Reset();
+        ((NullableGreaterThanPropertyValidationOperation)context.Operation).Minimum = null;
+        ((NullableGreaterThanPropertyValidationOperation)context.Operation).Maximum = null;
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<OkResult<string>>();
+        NullableGreaterThanPropertyValidationOperation.HandlerCallCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task When_nullable_greater_than_property_fails_then_generated_pipeline_returns_validation_failure()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(NullableGreaterThanPropertyValidationOperation));
+        var context = CreateContext(app, NullableGreaterThanPropertyValidationOperation.Configure());
+
+        NullableGreaterThanPropertyValidationOperation.Reset();
+        ((NullableGreaterThanPropertyValidationOperation)context.Operation).Minimum = 10;
+        ((NullableGreaterThanPropertyValidationOperation)context.Operation).Maximum = 5;
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<ValidationFailedResult>();
+        NullableGreaterThanPropertyValidationOperation.HandlerCallCount.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task When_nullable_greater_than_property_passes_then_generated_pipeline_executes_handler()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(NullableGreaterThanPropertyValidationOperation));
+        var context = CreateContext(app, NullableGreaterThanPropertyValidationOperation.Configure());
+
+        NullableGreaterThanPropertyValidationOperation.Reset();
+        ((NullableGreaterThanPropertyValidationOperation)context.Operation).Minimum = 5;
+        ((NullableGreaterThanPropertyValidationOperation)context.Operation).Maximum = 10;
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<OkResult<string>>();
+        NullableGreaterThanPropertyValidationOperation.HandlerCallCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task When_nullable_less_than_property_both_null_then_generated_pipeline_skips_and_executes_handler()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(NullableLessThanPropertyValidationOperation));
+        var context = CreateContext(app, NullableLessThanPropertyValidationOperation.Configure());
+
+        NullableLessThanPropertyValidationOperation.Reset();
+        ((NullableLessThanPropertyValidationOperation)context.Operation).Start = null;
+        ((NullableLessThanPropertyValidationOperation)context.Operation).End = null;
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<OkResult<string>>();
+        NullableLessThanPropertyValidationOperation.HandlerCallCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task When_nullable_less_than_property_fails_then_generated_pipeline_returns_validation_failure()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(NullableLessThanPropertyValidationOperation));
+        var context = CreateContext(app, NullableLessThanPropertyValidationOperation.Configure());
+
+        NullableLessThanPropertyValidationOperation.Reset();
+        ((NullableLessThanPropertyValidationOperation)context.Operation).Start = 20;
+        ((NullableLessThanPropertyValidationOperation)context.Operation).End = 10;
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<ValidationFailedResult>();
+        NullableLessThanPropertyValidationOperation.HandlerCallCount.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task When_nullable_less_than_property_passes_then_generated_pipeline_executes_handler()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(NullableLessThanPropertyValidationOperation));
+        var context = CreateContext(app, NullableLessThanPropertyValidationOperation.Configure());
+
+        NullableLessThanPropertyValidationOperation.Reset();
+        ((NullableLessThanPropertyValidationOperation)context.Operation).Start = 5;
+        ((NullableLessThanPropertyValidationOperation)context.Operation).End = 10;
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<OkResult<string>>();
+        NullableLessThanPropertyValidationOperation.HandlerCallCount.Should().Be(1);
+    }
+
+    [Fact]
     public async Task When_regex_validation_fails_then_generated_pipeline_returns_validation_failure()
     {
         var app = new IntegrationTestBlueprintApp();
@@ -1856,6 +1964,48 @@ public partial class NullableLessThanValidationOperation : ICommand<string>
     {
         HandlerCallCount++;
         return Task.FromResult(operation.Limit?.ToString() ?? "null");
+    }
+}
+
+public partial class NullableGreaterThanPropertyValidationOperation : ICommand<string>
+{
+    public static int HandlerCallCount { get; private set; }
+
+    public int? Minimum { get; set; }
+
+    [GreaterThanProperty(nameof(Minimum))]
+    public int? Maximum { get; set; }
+
+    public static void Reset()
+    {
+        HandlerCallCount = 0;
+    }
+
+    public static Task<string> HandleAsync(NullableGreaterThanPropertyValidationOperation operation)
+    {
+        HandlerCallCount++;
+        return Task.FromResult($"{operation.Minimum}:{operation.Maximum}");
+    }
+}
+
+public partial class NullableLessThanPropertyValidationOperation : ICommand<string>
+{
+    public static int HandlerCallCount { get; private set; }
+
+    [LessThanProperty(nameof(End))]
+    public int? Start { get; set; }
+
+    public int? End { get; set; }
+
+    public static void Reset()
+    {
+        HandlerCallCount = 0;
+    }
+
+    public static Task<string> HandleAsync(NullableLessThanPropertyValidationOperation operation)
+    {
+        HandlerCallCount++;
+        return Task.FromResult($"{operation.Start}:{operation.End}");
     }
 }
 

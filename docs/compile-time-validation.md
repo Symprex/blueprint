@@ -237,9 +237,9 @@ Current fast-path strategy coverage (in planning order):
 | Range | `RangeAttribute` | `Range(int, int)` and `Range(double, double)` constructors, nullable value types | Type overloads, named arguments |
 | RegularExpression | `RegularExpressionAttribute` | single-arg constructor with string pattern | named arguments (e.g. `ErrorMessage`), multiple constructor args |
 | Compare | `CompareAttribute` | same-type properties, compile-time `BPV001` for missing targets | n/a |
-| GreaterThanProperty | `GreaterThanPropertyAttribute` | same-type non-nullable numeric/decimal/DateTime, compile-time `BPV002` | unsupported types |
+| GreaterThanProperty | `GreaterThanPropertyAttribute` | same-type numeric/decimal/DateTime including nullable pairs, compile-time `BPV002` | mixed nullable/non-nullable, unsupported types |
 | GreaterThan | `GreaterThanAttribute` | numeric/decimal including nullable, default constructor | customized instances |
-| LessThanProperty | `LessThanPropertyAttribute` | same-type non-nullable numeric/decimal/DateTime, compile-time `BPV006` | unsupported types |
+| LessThanProperty | `LessThanPropertyAttribute` | same-type numeric/decimal/DateTime including nullable pairs, compile-time `BPV006` | mixed nullable/non-nullable, unsupported types |
 | LessThan | `LessThanAttribute` | numeric/decimal including nullable, default constructor | customized instances |
 | RequiredIf | `RequiredIfAttribute` | scalar/null dependent values, default constructor, compile-time `BPV003` | arrays, custom messages |
 | RequiredIfNot | `RequiredIfNotAttribute` | scalar/null dependent values, default constructor, compile-time `BPV004` | arrays, custom messages |
