@@ -767,26 +767,59 @@ public sealed record OpenApiOutputRenderingContext(
     /// </summary>
     private static void WriteDocumentTags(Utf8JsonWriter writer, ImmutableArray<OpenApiPathItemModel> paths)
     {
-        var allTags = paths
-            .SelectMany(static path => path.Methods)
-            .SelectMany(static method => method.Operations)
-            .SelectMany(static operation => operation.Tags)
-            .Distinct(StringComparer.Ordinal)
-            .OrderBy(static tag => tag, StringComparer.Ordinal)
-            .ToArray();
+        // Collect all unique tags and the first description found for each tag across all operations.
+        var tagDescriptions = new Dictionary<string, string?>(StringComparer.Ordinal);
 
-        if (allTags.Length == 0)
+        foreach (var path in paths)
+        {
+            foreach (var method in path.Methods)
+            {
+                foreach (var operation in method.Operations)
+                {
+                    foreach (var tag in operation.Tags)
+                    {
+                        if (tagDescriptions.ContainsKey(tag))
+                        {
+                            // Keep the first non-null description encountered for this tag.
+                            if (tagDescriptions[tag] is null
+                                && operation.TagDescriptions.TryGetValue(tag, out var desc)
+                                && desc is not null)
+                            {
+                                tagDescriptions[tag] = desc;
+                            }
+
+                            continue;
+                        }
+
+                        operation.TagDescriptions.TryGetValue(tag, out var description);
+                        tagDescriptions[tag] = description;
+                    }
+                }
+            }
+        }
+
+        if (tagDescriptions.Count == 0)
         {
             return;
         }
 
+        var orderedTags = tagDescriptions.Keys
+            .OrderBy(static tag => tag, StringComparer.Ordinal)
+            .ToArray();
+
         writer.WritePropertyName("tags");
         writer.WriteStartArray();
 
-        foreach (var tag in allTags)
+        foreach (var tag in orderedTags)
         {
             writer.WriteStartObject();
             writer.WriteString("name", tag);
+
+            if (tagDescriptions[tag] is { Length: > 0 } desc)
+            {
+                writer.WriteString("description", desc);
+            }
+
             writer.WriteEndObject();
         }
 

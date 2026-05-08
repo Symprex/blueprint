@@ -42,13 +42,13 @@ public sealed class OperationGroupMetadataModule : IBlueprintSourceGeneratorModu
             return;
         }
 
-        var groupName = TryResolveGroupName(context);
+        var (groupName, groupDescription) = TryResolveGroup(context);
         if (string.IsNullOrWhiteSpace(groupName))
         {
             return;
         }
 
-        context.AddMetadata(new OperationGroupMetadataRegistration(groupName!));
+        context.AddMetadata(new OperationGroupMetadataRegistration(groupName!, groupDescription));
         context.AddRenderStep(writer => RenderDescriptor(writer, context.GetMetadata<OperationGroupMetadataRegistration>()));
     }
 
@@ -58,18 +58,18 @@ public sealed class OperationGroupMetadataModule : IBlueprintSourceGeneratorModu
             .Any(static registration => string.Equals(registration.HostName, HostExposureRegistration.Http.HostName, StringComparison.Ordinal));
     }
 
-    private static string? TryResolveGroupName(DescriptorContributorContext context)
+    private static (string? GroupName, string? GroupDescription) TryResolveGroup(DescriptorContributorContext context)
     {
-        var explicitGroupName = TryResolveExplicitGroupName(context.GetOperationTypeSymbol());
+        var (explicitGroupName, explicitDescription) = TryResolveExplicitGroup(context.GetOperationTypeSymbol());
         if (string.IsNullOrWhiteSpace(explicitGroupName) == false)
         {
-            return explicitGroupName;
+            return (explicitGroupName, explicitDescription);
         }
 
         var discoveryMetadata = context.GetMetadata<OperationDiscoveryManifestModule.DiscoveryPlanData>().FirstOrDefault();
         if (discoveryMetadata is null || string.IsNullOrWhiteSpace(discoveryMetadata.Namespace))
         {
-            return null;
+            return (null, null);
         }
 
         var namespaceSegments = discoveryMetadata.Namespace
@@ -78,30 +78,48 @@ public sealed class OperationGroupMetadataModule : IBlueprintSourceGeneratorModu
             .Where(static segment => segment.Length > 0)
             .ToArray();
 
-        return namespaceSegments.Length == 0 ? null : namespaceSegments[^1];
+        return namespaceSegments.Length == 0 ? (null, null) : (namespaceSegments[^1], null);
     }
 
-    private static string? TryResolveExplicitGroupName(INamedTypeSymbol operationType)
+    private static (string? GroupName, string? Description) TryResolveExplicitGroup(INamedTypeSymbol operationType)
     {
-        return operationType.GetAttributes()
-            .Where(static attribute => attribute.AttributeClass?.ToDisplayString() == ApiOperationsAttributeMetadataName)
-            .Select(static attribute => attribute.ConstructorArguments.Length == 1 ? attribute.ConstructorArguments[0].Value as string : null)
-            .FirstOrDefault(static groupName => string.IsNullOrWhiteSpace(groupName) == false);
+        var attribute = operationType.GetAttributes()
+            .FirstOrDefault(static attribute => attribute.AttributeClass?.ToDisplayString() == ApiOperationsAttributeMetadataName);
+
+        if (attribute is null || attribute.ConstructorArguments.Length != 1)
+        {
+            return (null, null);
+        }
+
+        var groupName = attribute.ConstructorArguments[0].Value as string;
+        if (string.IsNullOrWhiteSpace(groupName))
+        {
+            return (null, null);
+        }
+
+        var description = attribute.NamedArguments
+            .FirstOrDefault(static kvp => kvp.Key == "Description")
+            .Value.Value as string;
+
+        return (groupName, string.IsNullOrWhiteSpace(description) ? null : description);
     }
 
     private static void RenderDescriptor(ICodeWriter codeWriter, IEnumerable<OperationGroupMetadataRegistration> registrations)
     {
-        var groupName = registrations
-            .Select(static registration => registration.GroupName)
-            .FirstOrDefault(static name => !string.IsNullOrWhiteSpace(name));
+        var registration = registrations
+            .FirstOrDefault(static r => !string.IsNullOrWhiteSpace(r.GroupName));
 
-        if (string.IsNullOrWhiteSpace(groupName))
+        if (registration is null || string.IsNullOrWhiteSpace(registration.GroupName))
         {
             return;
         }
 
+        var descriptionArg = registration.GroupDescription is not null
+            ? $", {CSharpSymbolDisplay.FormatLiteral(registration.GroupDescription, quote: true)}"
+            : string.Empty;
+
         codeWriter.AppendLine(
             "this.SetFeatureData(new global::Blueprint.Model.OperationGroupMetadataFeatureData("
-            + $"{CSharpSymbolDisplay.FormatLiteral(groupName, quote: true)}));");
+            + $"{CSharpSymbolDisplay.FormatLiteral(registration.GroupName, quote: true)}{descriptionArg}));");
     }
 }

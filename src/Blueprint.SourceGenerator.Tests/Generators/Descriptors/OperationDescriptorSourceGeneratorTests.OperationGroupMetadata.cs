@@ -42,4 +42,24 @@ public class OperationDescriptorSourceGeneratorTestsOperationGroupMetadataTests
         descriptorSource!.Should().Contain(
             "this.SetFeatureData(new global::Blueprint.Model.OperationGroupMetadataFeatureData(\"Billing\"));");
     }
+
+    [Fact]
+    public void When_apioperations_has_description_then_descriptor_passes_description_to_feature_data()
+    {
+        var result = OperationDescriptorSourceGeneratorTests.Compile("""
+            [ApiOperations("Billing", Description = "Billing and subscription management.")]
+            [RootLink("/operation-group/described-query")]
+            public partial class DescribedGroupQueryOperation : IQuery<string> {}
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var descriptorSource = result.Output
+            .Select(static tree => tree.ToString())
+            .FirstOrDefault(static source => source.Contains("DescribedGroupQueryOperationDescriptor"));
+
+        descriptorSource.Should().NotBeNull();
+        descriptorSource!.Should().Contain(
+            "this.SetFeatureData(new global::Blueprint.Model.OperationGroupMetadataFeatureData(\"Billing\", \"Billing and subscription management.\"));");
+    }
 }

@@ -5,4 +5,5 @@ namespace Blueprint.Model;
 /// and inspection surfaces.
 /// </summary>
 /// <param name="GroupName">The deterministic group name for the operation when one is available.</param>
-public sealed record OperationGroupMetadataFeatureData(string GroupName);
+/// <param name="GroupDescription">An optional human-readable description for the operation group, published as the OpenAPI tag description.</param>
+public sealed record OperationGroupMetadataFeatureData(string GroupName, string? GroupDescription = null);

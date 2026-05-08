@@ -977,7 +977,8 @@
   },
   "tags": [
     {
-      "name": "Templates"
+      "name": "Templates",
+      "description": "Email template management including CRUD, publishing, and previewing."
     }
   ]
 }

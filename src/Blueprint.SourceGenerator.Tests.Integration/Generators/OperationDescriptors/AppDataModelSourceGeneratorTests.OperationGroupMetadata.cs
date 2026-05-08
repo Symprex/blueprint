@@ -22,11 +22,31 @@ public class AppDataModelSourceGeneratorOperationGroupMetadataTests
         data.Should().NotBeNull();
         data!.GroupName.Should().Be("Billing");
     }
+
+    [Fact]
+    public void When_http_descriptor_declares_apioperations_with_description_then_group_description_is_projected()
+    {
+        var data = DescribedOperationGroupQueryOp.Configure().GetFeatureData<OperationGroupMetadataFeatureData>();
+
+        data.Should().NotBeNull();
+        data!.GroupName.Should().Be("Invoices");
+        data.GroupDescription.Should().Be("Invoice management and billing operations.");
+    }
 }
 
 [Blueprint.Model.Attributes.ApiOperations("Billing")]
 [Blueprint.Model.Attributes.RootLink("/openapi/explicit-operation-group")]
 public partial class ExplicitOperationGroupQueryOp : IQuery<string>
+{
+    public string Handle()
+    {
+        return "OK";
+    }
+}
+
+[Blueprint.Model.Attributes.ApiOperations("Invoices", Description = "Invoice management and billing operations.")]
+[Blueprint.Model.Attributes.RootLink("/openapi/described-operation-group")]
+public partial class DescribedOperationGroupQueryOp : IQuery<string>
 {
     public string Handle()
     {

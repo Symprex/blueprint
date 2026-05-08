@@ -46,6 +46,9 @@ public sealed record OpenApiOperationRenderingContext(
             && string.IsNullOrWhiteSpace(operationGroupMetadata.GroupName) == false
             ? ImmutableArray.Create(operationGroupMetadata.GroupName)
             : ImmutableArray<string>.Empty;
+        var tagDescriptions = operationGroupMetadata?.GroupDescription is { Length: > 0 } desc
+            ? ImmutableDictionary<string, string>.Empty.Add(operationGroupMetadata.GroupName, desc)
+            : ImmutableDictionary<string, string>.Empty;
 
         var (parameters, requestBody) = ProjectInputMetadata(operation.Operation);
 
@@ -73,6 +76,7 @@ public sealed record OpenApiOperationRenderingContext(
             Summary = operationDescription,
             Deprecated = isDeprecated,
             RequiresAuthentication = requiresAuthentication,
+            TagDescriptions = tagDescriptions,
         };
     }
 
@@ -314,6 +318,9 @@ public sealed record OpenApiOperationModel(
 
     /// <summary>Gets whether this operation is deprecated in the OpenAPI output (maps from <see cref="ObsoleteAttribute"/>).</summary>
     public bool Deprecated { get; init; }
+
+    /// <summary>Gets the tag descriptions for this operation's tags, keyed by tag name.</summary>
+    public ImmutableDictionary<string, string> TagDescriptions { get; init; } = ImmutableDictionary<string, string>.Empty;
 
     /// <summary>Gets whether this operation requires authentication (maps from <see cref="AuthenticationRequirement.Authenticated"/>).</summary>
     public bool RequiresAuthentication { get; init; }
