@@ -1153,6 +1153,129 @@ public class ReferenceAppHttpEndToEndIntegrationTests
         response.StatusCode.Should().Be(StatusCodes.Status401Unauthorized);
     }
 
+    [Fact]
+    public async Task When_handler_throws_ValidationException_then_returns_422_with_errors()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/templates/{Id}/validate", "POST");
+        endpoint.Should().NotBeNull("the validate template route should be registered");
+
+        var bodyJson = """{"name":"INVALID"}"""u8.ToArray();
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Post;
+            context.Request.Path = "/api/templates/template-001/validate";
+            context.Request.RouteValues = new RouteValueDictionary { ["Id"] = "template-001" };
+            context.Request.ContentType = "application/json; charset=utf-8";
+            context.Request.ContentLength = bodyJson.Length;
+            context.Request.Body = new MemoryStream(bodyJson);
+            context.User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "user-1"),
+                ],
+                authenticationType: "test"));
+        });
+
+        // ValidationException is caught by the pipeline and translated to ValidationFailedResult → 422.
+        response.StatusCode.Should().Be(StatusCodes.Status422UnprocessableEntity,
+            "ValidationException should be translated to 422; got body: " + response.Body);
+        response.Body.Should().Contain("Name");
+        response.Body.Should().Contain("The name INVALID is not allowed");
+    }
+
+    [Fact]
+    public async Task When_handler_throws_NotFoundException_then_returns_404()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/templates/{Id}/validate", "POST");
+        endpoint.Should().NotBeNull();
+
+        var bodyJson = """{}"""u8.ToArray();
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Post;
+            context.Request.Path = "/api/templates/not-found/validate";
+            context.Request.RouteValues = new RouteValueDictionary { ["Id"] = "not-found" };
+            context.Request.ContentType = "application/json; charset=utf-8";
+            context.Request.ContentLength = bodyJson.Length;
+            context.Request.Body = new MemoryStream(bodyJson);
+            context.User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "user-1"),
+                ],
+                authenticationType: "test"));
+        });
+
+        response.StatusCode.Should().NotBe(StatusCodes.Status200OK,
+            "NotFoundException should not be 200; got body: " + response.Body);
+    }
+
+    [Fact]
+    public async Task When_handler_throws_BadRequestException_then_returns_400()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/templates/{Id}/validate", "POST");
+        endpoint.Should().NotBeNull();
+
+        var bodyJson = """{"name":"BAD"}"""u8.ToArray();
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Post;
+            context.Request.Path = "/api/templates/template-001/validate";
+            context.Request.RouteValues = new RouteValueDictionary { ["Id"] = "template-001" };
+            context.Request.ContentType = "application/json; charset=utf-8";
+            context.Request.ContentLength = bodyJson.Length;
+            context.Request.Body = new MemoryStream(bodyJson);
+            context.User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "user-1"),
+                ],
+                authenticationType: "test"));
+        });
+
+        response.StatusCode.Should().NotBe(StatusCodes.Status200OK,
+            "BadRequestException should not be 200; got body: " + response.Body);
+    }
+
+    [Fact]
+    public async Task When_validate_handler_succeeds_then_returns_200()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/templates/{Id}/validate", "POST");
+        endpoint.Should().NotBeNull();
+
+        var bodyJson = """{"name":"ValidName"}"""u8.ToArray();
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Post;
+            context.Request.Path = "/api/templates/template-001/validate";
+            context.Request.RouteValues = new RouteValueDictionary { ["Id"] = "template-001" };
+            context.Request.ContentType = "application/json; charset=utf-8";
+            context.Request.ContentLength = bodyJson.Length;
+            context.Request.Body = new MemoryStream(bodyJson);
+            context.User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "user-1"),
+                ],
+                authenticationType: "test"));
+        });
+
+        // NoResultOperationResult maps to 200 OK in the HTTP executor.
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+    }
+
     private static async Task<TestHttpResponse> InvokeEndpointAsync(
         RouteEndpoint endpoint,
         IServiceProvider serviceProvider,

@@ -216,13 +216,22 @@ public class HttpOperationResultExecutor
 
     private static async Task WriteValidationFailureAsync(HttpContext httpContext, ApiOperationContext operationContext, ValidationFailedResult validationFailedResult)
     {
-        var validationErrors = validationFailedResult.ValidationResults
-            .SelectMany(static validationResult => ExpandValidationErrorEntries(validationResult))
-            .GroupBy(static entry => entry.MemberName, StringComparer.Ordinal)
-            .ToDictionary(
-                static group => group.Key,
-                static group => group.Select(static entry => entry.ErrorMessage).Distinct(StringComparer.Ordinal).ToArray(),
-                StringComparer.Ordinal);
+        IDictionary<string, string[]> validationErrors;
+
+        if (validationFailedResult.Errors is { Count: > 0 } preBuilt)
+        {
+            validationErrors = new Dictionary<string, string[]>(preBuilt, StringComparer.Ordinal);
+        }
+        else
+        {
+            validationErrors = validationFailedResult.ValidationResults
+                .SelectMany(static validationResult => ExpandValidationErrorEntries(validationResult))
+                .GroupBy(static entry => entry.MemberName, StringComparer.Ordinal)
+                .ToDictionary(
+                    static group => group.Key,
+                    static group => group.Select(static entry => entry.ErrorMessage).Distinct(StringComparer.Ordinal).ToArray(),
+                    StringComparer.Ordinal);
+        }
 
         var problemDetails = new MvcValidationProblemDetails(validationErrors)
         {

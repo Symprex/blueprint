@@ -71,7 +71,7 @@ public abstract class OperationExecutorShell : IOperationExecutorPipeline
         catch (Validation.ValidationException e)
         {
             context.Activity?.SetTag("otel.status_code", "OK");
-            return new ValidationFailedResult(e.ValidationResults);
+            return new ValidationFailedResult(e);
         }
         catch (System.ComponentModel.DataAnnotations.ValidationException e)
         {

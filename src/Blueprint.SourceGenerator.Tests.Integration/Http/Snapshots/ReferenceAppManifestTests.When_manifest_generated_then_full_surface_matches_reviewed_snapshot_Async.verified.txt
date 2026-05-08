@@ -438,6 +438,26 @@
     - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
     - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
 
+### ValidateTemplateCommand
+  Type: ValidateTemplateCommand
+  Source: Source Generated
+  HTTP Methods: POST
+  URL: /templates/{Id}/validate
+  Hosts: http
+  Auth: Authenticated
+  Discovery: command (Blueprint.SourceGenerator.Sample.Contract.Api.ValidateTemplateCommand)
+  Group: Api
+  Failure Outcomes:
+    - legacy-validation-exception: Blueprint.Validation.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
+    - data-annotations-validation-exception: System.ComponentModel.DataAnnotations.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
+    - default-unhandled-exception: System.Exception -> Blueprint.Runtime.Exec.UnhandledExceptionResult
+  HTTP Responses:
+    - 400: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+    - 401: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+    - 415: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+    - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
+    - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+
 ## Resource Links
 
   TemplateApiResource [self] -> /templates/{Id} (GetTemplateQuery)

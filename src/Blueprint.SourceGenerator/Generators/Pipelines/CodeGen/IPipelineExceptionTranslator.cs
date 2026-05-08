@@ -93,7 +93,7 @@ internal sealed class LegacyValidationExceptionTranslator : IPipelineExceptionTr
             catchWriter =>
             {
                 catchWriter.AppendLine("context.Activity?.SetTag(\"otel.status_code\", \"OK\");");
-                catchWriter.Return(PipelineCodeGenerator.WrapOperationResult("new Blueprint.Runtime.Exec.ValidationFailedResult(e.ValidationResults)", isPipelineAsync));
+                catchWriter.Return(PipelineCodeGenerator.WrapOperationResult("new Blueprint.Runtime.Exec.ValidationFailedResult(e)", isPipelineAsync));
             });
     }
 }

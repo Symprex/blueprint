@@ -1210,7 +1210,7 @@ public class HttpEndToEndIntegrationTests
         response.StatusCode.Should().Be(503);
         response.ContentType.Should().StartWith("application/problem+json");
         response.Body.Should().Contain("\"status\":503");
-        response.Body.Should().Contain("Server error");
+        response.Body.Should().Contain("Downstream service unavailable");
     }
 
     [Fact]
