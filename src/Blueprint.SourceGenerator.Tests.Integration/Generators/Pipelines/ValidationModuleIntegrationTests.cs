@@ -894,6 +894,61 @@ public class ValidationModuleIntegrationTests
     }
 
     [Fact]
+    public async Task When_double_range_validation_fails_below_minimum_then_generated_pipeline_returns_validation_failure()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(DoubleRangeValidationOperation));
+        var context = CreateContext(app, DoubleRangeValidationOperation.Configure());
+
+        DoubleRangeValidationOperation.Reset();
+        ((DoubleRangeValidationOperation)context.Operation).Score = 0.1;
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<ValidationFailedResult>();
+        DoubleRangeValidationOperation.HandlerCallCount.Should().Be(0);
+        var validationResult = ((ValidationFailedResult)result).ValidationResults.Should().ContainSingle().Subject;
+        validationResult.MemberNames.Should().Contain(nameof(DoubleRangeValidationOperation.Score));
+    }
+
+    [Fact]
+    public async Task When_double_range_validation_fails_above_maximum_then_generated_pipeline_returns_validation_failure()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(DoubleRangeValidationOperation));
+        var context = CreateContext(app, DoubleRangeValidationOperation.Configure());
+
+        DoubleRangeValidationOperation.Reset();
+        ((DoubleRangeValidationOperation)context.Operation).Score = 100.0;
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<ValidationFailedResult>();
+        DoubleRangeValidationOperation.HandlerCallCount.Should().Be(0);
+        var validationResult = ((ValidationFailedResult)result).ValidationResults.Should().ContainSingle().Subject;
+        validationResult.MemberNames.Should().Contain(nameof(DoubleRangeValidationOperation.Score));
+    }
+
+    [Fact]
+    public async Task When_double_range_validation_passes_then_generated_pipeline_executes_handler()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(DoubleRangeValidationOperation));
+        var context = CreateContext(app, DoubleRangeValidationOperation.Configure());
+
+        DoubleRangeValidationOperation.Reset();
+        ((DoubleRangeValidationOperation)context.Operation).Score = 50.0;
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<OkResult<string>>();
+        DoubleRangeValidationOperation.HandlerCallCount.Should().Be(1);
+    }
+
+    [Fact]
     public async Task When_regex_validation_fails_then_generated_pipeline_returns_validation_failure()
     {
         var app = new IntegrationTestBlueprintApp();
@@ -1606,6 +1661,25 @@ public partial class RangeValidationOperation : ICommand<string>
     {
         HandlerCallCount++;
         return Task.FromResult(operation.Priority.ToString());
+    }
+}
+
+public partial class DoubleRangeValidationOperation : ICommand<string>
+{
+    public static int HandlerCallCount { get; private set; }
+
+    [Range(0.5, 99.9)]
+    public double Score { get; set; }
+
+    public static void Reset()
+    {
+        HandlerCallCount = 0;
+    }
+
+    public static Task<string> HandleAsync(DoubleRangeValidationOperation operation)
+    {
+        HandlerCallCount++;
+        return Task.FromResult(operation.Score.ToString());
     }
 }
 

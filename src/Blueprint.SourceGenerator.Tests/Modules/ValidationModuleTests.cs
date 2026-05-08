@@ -1891,7 +1891,7 @@ public class ValidationModuleTests
     }
 
     [Fact]
-    public void When_range_attribute_uses_double_overload_then_falls_back_to_runtime_validation()
+    public void When_range_attribute_uses_double_overload_then_generates_bound_check_before_handler_invocation()
     {
         var source = """
                      using Blueprint;
@@ -1932,8 +1932,12 @@ public class ValidationModuleTests
         result.Diagnostics.Should().BeEmpty();
         var pipelineSource = result.Output.Single(static tree => tree.FilePath.EndsWith("CreateUserCommandExecutorPipeline.g.cs", StringComparison.Ordinal)).ToString();
 
-        // Double overload should fall back to per-property runtime validation since we only support int ranges.
-        pipelineSource.Should().Contain("global::Blueprint.Validation.ValidationRuntime.ValidateProperty");
+        pipelineSource.Should().NotContain("global::System.ComponentModel.DataAnnotations.Validator.TryValidateObject");
+        pipelineSource.Should().Contain("operation.Score < 0.5 || operation.Score > 99.9");
+        pipelineSource.Should().Contain("global::System.ComponentModel.DataAnnotations.RangeAttribute");
+        pipelineSource.IndexOf("operation.Score < 0.5 || operation.Score > 99.9", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(pipelineSource.IndexOf("var handlerResult", StringComparison.Ordinal));
     }
 
     [Fact]

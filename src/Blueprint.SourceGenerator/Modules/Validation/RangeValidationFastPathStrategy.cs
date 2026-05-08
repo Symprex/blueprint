@@ -5,8 +5,9 @@ using Microsoft.CodeAnalysis;
 namespace Blueprint.SourceGenerator.Modules;
 
 /// <summary>
-/// Handles <c>RangeAttribute</c> when both minimum and maximum are integer literals and the property type supports
-/// direct numeric comparisons, avoiding the runtime reflection path for the most common range validation pattern.
+/// Handles <c>RangeAttribute</c> when both minimum and maximum are numeric literals (int or double) and the property
+/// type supports direct numeric comparisons, avoiding the runtime reflection path for the most common range
+/// validation patterns.
 /// </summary>
 internal sealed class RangeValidationFastPathStrategy : IValidationFastPathStrategy
 {
@@ -21,32 +22,62 @@ internal sealed class RangeValidationFastPathStrategy : IValidationFastPathStrat
         rule = null;
 
         if (!ValidationSymbolHelpers.IsRangeAttribute(attribute.AttributeClass)
-            || !TryGetSupportedIntRange(attribute, out var minimum, out var maximum)
+            || attribute.NamedArguments.Length > 0
             || !SupportsDirectComparison(property.Type))
         {
             return false;
         }
 
-        var minLiteral = minimum.ToString(CultureInfo.InvariantCulture);
-        var maxLiteral = maximum.ToString(CultureInfo.InvariantCulture);
+        if (TryGetIntRange(attribute, out var intMin, out var intMax))
+        {
+            var minLiteral = intMin.ToString(CultureInfo.InvariantCulture);
+            var maxLiteral = intMax.ToString(CultureInfo.InvariantCulture);
 
-        rule = new ValidationFastPathRule(
-            $"{propertyAccess} < {minLiteral} || {propertyAccess} > {maxLiteral}",
-            $"new global::System.ComponentModel.DataAnnotations.RangeAttribute({minLiteral}, {maxLiteral})");
-        return true;
+            rule = new ValidationFastPathRule(
+                $"{propertyAccess} < {minLiteral} || {propertyAccess} > {maxLiteral}",
+                $"new global::System.ComponentModel.DataAnnotations.RangeAttribute({minLiteral}, {maxLiteral})");
+            return true;
+        }
+
+        if (TryGetDoubleRange(attribute, out var doubleMin, out var doubleMax))
+        {
+            var minLiteral = doubleMin.ToString(CultureInfo.InvariantCulture);
+            var maxLiteral = doubleMax.ToString(CultureInfo.InvariantCulture);
+
+            rule = new ValidationFastPathRule(
+                $"{propertyAccess} < {minLiteral} || {propertyAccess} > {maxLiteral}",
+                $"new global::System.ComponentModel.DataAnnotations.RangeAttribute({minLiteral}, {maxLiteral})");
+            return true;
+        }
+
+        return false;
     }
 
-    private static bool TryGetSupportedIntRange(AttributeData attribute, out int minimum, out int maximum)
+    private static bool TryGetIntRange(AttributeData attribute, out int minimum, out int maximum)
     {
         minimum = default;
         maximum = default;
 
-        // Only support the RangeAttribute(int, int) constructor — the (double, double) and (Type, string, string)
-        // overloads require runtime type conversion that cannot be safely lowered.
         if (attribute.ConstructorArguments.Length != 2
             || attribute.ConstructorArguments[0].Value is not int supportedMinimum
-            || attribute.ConstructorArguments[1].Value is not int supportedMaximum
-            || attribute.NamedArguments.Length > 0)
+            || attribute.ConstructorArguments[1].Value is not int supportedMaximum)
+        {
+            return false;
+        }
+
+        minimum = supportedMinimum;
+        maximum = supportedMaximum;
+        return true;
+    }
+
+    private static bool TryGetDoubleRange(AttributeData attribute, out double minimum, out double maximum)
+    {
+        minimum = default;
+        maximum = default;
+
+        if (attribute.ConstructorArguments.Length != 2
+            || attribute.ConstructorArguments[0].Value is not double supportedMinimum
+            || attribute.ConstructorArguments[1].Value is not double supportedMaximum)
         {
             return false;
         }
