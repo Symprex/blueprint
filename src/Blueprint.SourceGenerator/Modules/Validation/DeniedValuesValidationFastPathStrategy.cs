@@ -42,13 +42,15 @@ internal sealed class DeniedValuesValidationFastPathStrategy : IValidationFastPa
         }
 
         // Build: prop == literal1 || prop == literal2 || ...
+        // DeniedValuesAttribute.IsValid(null) returns true, so null values must bypass the check.
         var failureCondition = values.Length == 1
             ? $"{propertyAccess} == {literals[0]}"
             : $"({string.Join(" || ", literals.Select(literal => $"{propertyAccess} == {literal}"))})";
 
         rule = new ValidationFastPathRule(
             failureCondition,
-            $"new global::System.ComponentModel.DataAnnotations.DeniedValuesAttribute({attributeCtorArgs})");
+            $"new global::System.ComponentModel.DataAnnotations.DeniedValuesAttribute({attributeCtorArgs})",
+            GuardCondition: $"{propertyAccess} is not null");
         return true;
     }
 

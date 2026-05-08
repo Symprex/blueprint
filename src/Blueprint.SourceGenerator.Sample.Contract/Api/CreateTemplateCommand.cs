@@ -30,12 +30,23 @@ public partial class CreateTemplateCommand : ICommand<ResourceEventResult<Templa
     /// <summary>
     /// An optional URL-safe slug for the template (lowercase letters, digits, and hyphens only).
     /// Demonstrates compile-time <see cref="RegularExpressionAttribute"/> fast-path validation
-    /// and OpenAPI <c>pattern</c> constraint projection.
+    /// and OpenAPI <c>pattern</c> constraint projection, plus <see cref="DeniedValuesAttribute"/>
+    /// to block reserved slug values at build time.
     /// </summary>
     [RegularExpression(@"^[a-z0-9]+(?:-[a-z0-9]+)*$")]
     [MaxLength(100)]
-    [Description("URL-safe slug for the template (lowercase letters, digits, hyphens).")]
+    [DeniedValues("admin", "api", "system", "health")]
+    [Description("URL-safe slug for the template (lowercase letters, digits, hyphens). Reserved values: admin, api, system, health.")]
     public string? Slug { get; set; }
+
+    /// <summary>
+    /// Visibility level for the template. Demonstrates <see cref="AllowedValuesAttribute"/>
+    /// (.NET 8) fast-path validation: the generator emits inline inequality checks at build time
+    /// instead of falling back to runtime validation.
+    /// </summary>
+    [AllowedValues("public", "internal", "private")]
+    [Description("Visibility level: public, internal, or private.")]
+    public string? Visibility { get; set; }
 
     /// <summary>
     /// Optional priority for template ordering. Demonstrates compile-time

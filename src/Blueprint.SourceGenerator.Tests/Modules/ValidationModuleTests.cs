@@ -2117,6 +2117,7 @@ public class ValidationModuleTests
         var pipelineSource = result.Output.Single(static tree => tree.FilePath.EndsWith("CreateUserCommandExecutorPipeline.g.cs", StringComparison.Ordinal)).ToString();
 
         pipelineSource.Should().Contain("operation.Role != \"admin\" && operation.Role != \"user\" && operation.Role != \"guest\"");
+        pipelineSource.Should().Contain("operation.Role is not null");
         pipelineSource.Should().Contain("AllowedValuesAttribute");
         pipelineSource.Should().NotContain("Validator.TryValidateObject");
     }
@@ -2164,6 +2165,7 @@ public class ValidationModuleTests
         var pipelineSource = result.Output.Single(static tree => tree.FilePath.EndsWith("CreateUserCommandExecutorPipeline.g.cs", StringComparison.Ordinal)).ToString();
 
         pipelineSource.Should().Contain("operation.Username == \"root\" || operation.Username == \"system\"");
+        pipelineSource.Should().Contain("operation.Username is not null");
         pipelineSource.Should().Contain("DeniedValuesAttribute");
         pipelineSource.Should().NotContain("Validator.TryValidateObject");
     }

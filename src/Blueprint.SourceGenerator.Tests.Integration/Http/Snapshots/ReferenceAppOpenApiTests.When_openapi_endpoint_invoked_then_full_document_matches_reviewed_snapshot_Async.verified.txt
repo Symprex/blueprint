@@ -235,9 +235,14 @@
                   "slug": {
                     "type": "string",
                     "nullable": true,
-                    "description": "URL-safe slug for the template (lowercase letters, digits, hyphens).",
+                    "description": "URL-safe slug for the template (lowercase letters, digits, hyphens). Reserved values: admin, api, system, health.",
                     "maxLength": 100,
                     "pattern": "^[a-z0-9]\u002B(?:-[a-z0-9]\u002B)*$"
+                  },
+                  "visibility": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "Visibility level: public, internal, or private."
                   },
                   "priority": {
                     "type": "integer",

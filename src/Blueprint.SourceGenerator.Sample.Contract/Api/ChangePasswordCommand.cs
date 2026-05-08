@@ -30,10 +30,12 @@ public partial class ChangePasswordCommand : ICommand<NoResultOperationResult>
 
     /// <summary>
     /// The desired new password. Must be between 8 and 128 characters.
+    /// Demonstrates <see cref="LengthAttribute"/> (.NET 8) fast-path: the generator emits a
+    /// single inline <c>prop.Length &lt; 8 || prop.Length &gt; 128</c> check instead of two
+    /// separate min/max fallback calls.
     /// </summary>
     [Required]
-    [MinLength(8)]
-    [MaxLength(128)]
+    [Length(8, 128)]
     [Description("The new password.")]
     public string? NewPassword { get; set; }
 

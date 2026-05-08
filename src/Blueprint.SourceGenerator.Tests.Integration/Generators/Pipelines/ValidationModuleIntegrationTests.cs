@@ -1089,6 +1089,22 @@ public class ValidationModuleIntegrationTests
     }
 
     [Fact]
+    public async Task When_allowed_values_property_is_null_then_generated_pipeline_runs_handler_and_returns_ok()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(AllowedValuesValidationOperation));
+        var context = CreateContext(app, AllowedValuesValidationOperation.Configure());
+
+        AllowedValuesValidationOperation.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<OkResult<string>>();
+        AllowedValuesValidationOperation.HandlerCallCount.Should().Be(1);
+    }
+
+    [Fact]
     public async Task When_denied_values_validation_fails_then_generated_pipeline_returns_validation_failure_and_skips_handler()
     {
         var app = new IntegrationTestBlueprintApp();
@@ -1115,6 +1131,22 @@ public class ValidationModuleIntegrationTests
         var context = CreateContext(app, DeniedValuesValidationOperation.Configure());
         var operation = (DeniedValuesValidationOperation)context.Operation;
         operation.Username = "jsmith";
+
+        DeniedValuesValidationOperation.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<OkResult<string>>();
+        DeniedValuesValidationOperation.HandlerCallCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task When_denied_values_property_is_null_then_generated_pipeline_runs_handler_and_returns_ok()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(DeniedValuesValidationOperation));
+        var context = CreateContext(app, DeniedValuesValidationOperation.Configure());
 
         DeniedValuesValidationOperation.Reset();
 

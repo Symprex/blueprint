@@ -42,11 +42,11 @@ internal sealed class AllowedValuesValidationFastPathStrategy : IValidationFastP
         }
 
         // Build: prop != literal1 && prop != literal2 && ...
-        var failureCondition = string.Join(" && ", literals.Select(literal => $"{propertyAccess} != {literal}"));
-
+        // AllowedValuesAttribute.IsValid(null) returns true, so null values must bypass the check.
         rule = new ValidationFastPathRule(
-            failureCondition,
-            $"new global::System.ComponentModel.DataAnnotations.AllowedValuesAttribute({attributeCtorArgs})");
+            string.Join(" && ", literals.Select(literal => $"{propertyAccess} != {literal}")),
+            $"new global::System.ComponentModel.DataAnnotations.AllowedValuesAttribute({attributeCtorArgs})",
+            GuardCondition: $"{propertyAccess} is not null");
         return true;
     }
 

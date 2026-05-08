@@ -244,6 +244,9 @@ Current fast-path strategy coverage (in planning order):
 | RequiredIf | `RequiredIfAttribute` | scalar/null dependent values, default constructor, compile-time `BPV003` | arrays, custom messages |
 | RequiredIfNot | `RequiredIfNotAttribute` | scalar/null dependent values, default constructor, compile-time `BPV004` | arrays, custom messages |
 | NotAllowedIf | `NotAllowedIfAttribute` | scalar dependent values, default constructor, compile-time `BPV005` | null dependent values, arrays, custom messages |
+| AllowedValues | `AllowedValuesAttribute` (.NET 8) | string/bool/int/long/double literal values in single `params` constructor | non-literal values, mixed types |
+| DeniedValues | `DeniedValuesAttribute` (.NET 8) | string/bool/int/long/double literal values in single `params` constructor | non-literal values, mixed types |
+| Length | `LengthAttribute` (.NET 8) | string properties, `Length(int, int)` constructor | non-string types (collections), custom error message |
 
 When any single attribute on a property cannot be fast-pathed, only that property falls back to runtime validation — other properties with supported attributes remain fast-pathed.
 
@@ -257,6 +260,7 @@ Validation attributes also project constraints into the OpenAPI specification at
 | `MaxLengthAttribute` | `maxLength` |
 | `MinLengthAttribute` | `minLength` |
 | `StringLengthAttribute` | `minLength` + `maxLength` |
+| `LengthAttribute` (.NET 8) | `minLength` + `maxLength` |
 | `RangeAttribute` | `minimum` + `maximum` (with `exclusiveMinimum`/`exclusiveMaximum` for exclusive bounds) |
 | `GreaterThanAttribute` | `minimum` (with `exclusiveMinimum: true`) |
 | `LessThanAttribute` | `maximum` (with `exclusiveMaximum: true`) |
