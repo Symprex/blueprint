@@ -51,6 +51,7 @@ public class HttpOperationResultExecutor
             case CreatedResult createdResult:
                 httpContext.Response.StatusCode = StatusCodes.Status201Created;
                 httpContext.Response.ContentType = "application/json; charset=utf-8";
+                TrySetLocationHeader(httpContext, createdResult.Content);
                 await WriteJsonAsync(httpContext, operationContext, createdResult.Content);
                 return true;
             case AcceptedResult acceptedResult:
@@ -93,6 +94,11 @@ public class HttpOperationResultExecutor
             case ResourceEventResult resourceEventResult:
                 httpContext.Response.StatusCode = MapChangeTypeToStatusCode(resourceEventResult.ChangeType);
                 httpContext.Response.ContentType = "application/json; charset=utf-8";
+                if (resourceEventResult.ChangeType == ChangeType.Created)
+                {
+                    TrySetLocationHeader(httpContext, resourceEventResult.Content);
+                }
+
                 await WriteJsonAsync(httpContext, operationContext, ResourceEventEnvelope.Create(resourceEventResult));
                 return true;
             case HttpNoContentResult:
@@ -228,6 +234,18 @@ public class HttpOperationResultExecutor
         httpContext.Response.StatusCode = statusCode;
         httpContext.Response.ContentType = "application/problem+json; charset=utf-8";
         await WriteJsonAsync(httpContext, operationContext, problemDetails);
+    }
+
+    /// <summary>
+    /// Attempts to extract a self-link URL from the content and set it as the Location response header,
+    /// which is required for HTTP 201 Created responses per RFC 7231 §6.3.2.
+    /// </summary>
+    private static void TrySetLocationHeader(HttpContext httpContext, object content)
+    {
+        if (content is ILinkableResource { Links: { } links } && links.TryGetValue("self", out var selfLink))
+        {
+            httpContext.Response.Headers.Location = selfLink.Href;
+        }
     }
 
     private static int MapChangeTypeToStatusCode(ChangeType changeType)

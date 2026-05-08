@@ -174,6 +174,8 @@ public class ReferenceAppHttpEndToEndIntegrationTests
 
         response.StatusCode.Should().Be(StatusCodes.Status201Created);
         response.ContentType.Should().Be("application/json; charset=utf-8");
+        response.LocationHeader.Should().NotBeNull("201 Created responses must include a Location header per RFC 7231");
+        response.LocationHeader.Should().Contain("/templates/", "Location should point to the created resource's self-link URL");
         response.Body.Should().Contain("\"eventId\":\"template.created\"");
         response.Body.Should().Contain("\"resourceId\":\"template-");
         response.Body.Should().Contain("\"content\":");
@@ -825,7 +827,8 @@ public class ReferenceAppHttpEndToEndIntegrationTests
         return new TestHttpResponse(
             context.Response.StatusCode,
             context.Response.ContentType,
-            Encoding.UTF8.GetString(body.ToArray()));
+            Encoding.UTF8.GetString(body.ToArray()),
+            context.Response.Headers.Location.ToString() is { Length: > 0 } loc ? loc : null);
     }
 
     private static RouteEndpoint? FindEndpoint(TestEndpointRouteBuilder builder, string routePattern, string httpMethod)
@@ -876,5 +879,5 @@ public class ReferenceAppHttpEndToEndIntegrationTests
         }
     }
 
-    private sealed record TestHttpResponse(int StatusCode, string? ContentType, string Body);
+    private sealed record TestHttpResponse(int StatusCode, string? ContentType, string Body, string? LocationHeader);
 }

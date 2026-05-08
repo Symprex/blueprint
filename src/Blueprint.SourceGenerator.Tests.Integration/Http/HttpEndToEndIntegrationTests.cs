@@ -466,7 +466,8 @@ public class HttpEndToEndIntegrationTests
         return new TestHttpResponse(
             context.Response.StatusCode,
             context.Response.ContentType,
-            Encoding.UTF8.GetString(body.ToArray()));
+            Encoding.UTF8.GetString(body.ToArray()),
+            context.Response.Headers.Location.ToString() is { Length: > 0 } loc ? loc : null);
     }
 
     private static RouteEndpoint? FindEndpoint(TestEndpointRouteBuilder builder, string routePattern)
@@ -511,7 +512,7 @@ public class HttpEndToEndIntegrationTests
         }
     }
 
-    private sealed record TestHttpResponse(int StatusCode, string? ContentType, string Body);
+    private sealed record TestHttpResponse(int StatusCode, string? ContentType, string Body, string? LocationHeader);
 }
 
 // ─── E2E test operations ──────────────────────────────────────────────────────
