@@ -15,9 +15,9 @@
     "frameworkStatusDetail": "Core Blueprint source-generator framework is at full feature parity with legacy Blueprint for Signature365 migration. All consumer-space companion packages (Rebus, Marten, Hangfire, tenant context) are by-design extensions that consumers build in their own repositories.",
     "nextReadySlice": null,
     "lastCompletedSlice": {
-      "id": "feat/rfc7807-error-responses",
+      "id": "docs/deployment-and-operations-guide",
       "workstream": "documentation-and-final-alignment",
-      "title": "Add RFC 7807 ProblemDetails bodies to all error responses (400/401/403/415)"
+      "title": "Add deployment and operations guide covering production configuration, middleware, and observability"
     },
     "openReviewGate": null,
     "openReviewGateRationale": null,
@@ -406,6 +406,12 @@
       "workstream": "documentation-and-final-alignment",
       "title": "Add RFC 7807 ProblemDetails bodies to all error responses (400/401/403/415)",
       "commit": "0df5948"
+    },
+    {
+      "id": "docs/deployment-and-operations-guide",
+      "workstream": "documentation-and-final-alignment",
+      "title": "Add deployment and operations guide covering production configuration, middleware, and observability",
+      "commit": "07c84e9"
     }
   ],
   "decisions": [
