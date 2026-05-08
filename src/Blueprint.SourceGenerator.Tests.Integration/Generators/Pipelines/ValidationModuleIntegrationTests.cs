@@ -582,6 +582,62 @@ public class ValidationModuleIntegrationTests
     }
 
     [Fact]
+    public async Task When_compare_validation_fails_then_generated_pipeline_returns_validation_failure_and_skips_handler()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(CompareValidationOperation));
+        var context = CreateContext(app, CompareValidationOperation.Configure());
+        var operation = (CompareValidationOperation)context.Operation;
+        operation.Password = "secret";
+        operation.ConfirmPassword = "different";
+
+        CompareValidationOperation.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<ValidationFailedResult>();
+        CompareValidationOperation.HandlerCallCount.Should().Be(0);
+        var validationResult = ((ValidationFailedResult)result).ValidationResults.Should().ContainSingle().Subject;
+        validationResult.MemberNames.Should().Contain(nameof(CompareValidationOperation.ConfirmPassword));
+    }
+
+    [Fact]
+    public async Task When_compare_validation_passes_then_generated_pipeline_runs_handler_and_returns_ok()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(CompareValidationOperation));
+        var context = CreateContext(app, CompareValidationOperation.Configure());
+        var operation = (CompareValidationOperation)context.Operation;
+        operation.Password = "secret";
+        operation.ConfirmPassword = "secret";
+
+        CompareValidationOperation.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<OkResult<string>>();
+        CompareValidationOperation.HandlerCallCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task When_compare_validation_both_null_then_generated_pipeline_runs_handler_and_returns_ok()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(CompareValidationOperation));
+        var context = CreateContext(app, CompareValidationOperation.Configure());
+
+        CompareValidationOperation.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<OkResult<string>>();
+        CompareValidationOperation.HandlerCallCount.Should().Be(1);
+    }
+
+    [Fact]
     public async Task When_required_if_validation_fails_then_generated_pipeline_returns_validation_failure_and_skips_handler()
     {
         var app = new IntegrationTestBlueprintApp();
@@ -1507,6 +1563,27 @@ public partial class LessThanValidationOperation : ICommand<string>
     {
         HandlerCallCount++;
         return Task.FromResult(operation.Count.ToString());
+    }
+}
+
+public partial class CompareValidationOperation : ICommand<string>
+{
+    public static int HandlerCallCount { get; private set; }
+
+    public string? Password { get; set; }
+
+    [Compare(nameof(Password))]
+    public string? ConfirmPassword { get; set; }
+
+    public static void Reset()
+    {
+        HandlerCallCount = 0;
+    }
+
+    public static Task<string> HandleAsync(CompareValidationOperation operation)
+    {
+        HandlerCallCount++;
+        return Task.FromResult("ok");
     }
 }
 

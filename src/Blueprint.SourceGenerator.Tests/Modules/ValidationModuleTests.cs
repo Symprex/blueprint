@@ -962,6 +962,101 @@ public class ValidationModuleTests
     }
 
     [Fact]
+    public void Inline_handler_with_compare_validation_attribute_generates_equality_check_before_handler_invocation()
+    {
+        var source = """
+                     using Blueprint;
+                     using Blueprint.Model;
+                     using System.ComponentModel.DataAnnotations;
+                     using System.Threading.Tasks;
+
+                     namespace TestNamespace;
+
+                     [BlueprintAppScan]
+                     public partial class TestApp : BlueprintApp
+                     {
+                         public TestApp()
+                         {
+                             this.Register(CreateUserCommand.Configure());
+                         }
+                     }
+
+                     public class CreateUserCommand : ICommand<string>
+                     {
+                         public static ApiOperationDescriptor Configure()
+                         {
+                             return new ApiOperationDescriptor(typeof(CreateUserCommand), nameof(CreateUserCommand), "Tests");
+                         }
+
+                         public string? Password { get; set; }
+
+                         [Compare(nameof(Password))]
+                         public string? ConfirmPassword { get; set; }
+
+                         public static Task<string> HandleAsync(CreateUserCommand command)
+                         {
+                             return Task.FromResult("ok");
+                         }
+                     }
+                     """;
+
+        var result = CompilePipeline(source);
+
+        result.Diagnostics.Should().BeEmpty();
+        var pipelineSource = result.Output.Single(static tree => tree.FilePath.EndsWith("CreateUserCommandExecutorPipeline.g.cs", StringComparison.Ordinal)).ToString();
+
+        pipelineSource.Should().NotContain("global::System.ComponentModel.DataAnnotations.Validator.TryValidateObject");
+        pipelineSource.Should().Contain("!object.Equals(operation.ConfirmPassword, operation.Password)");
+        pipelineSource.Should().Contain("global::System.ComponentModel.DataAnnotations.CompareAttribute");
+        pipelineSource.IndexOf("!object.Equals(operation.ConfirmPassword, operation.Password)", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(pipelineSource.IndexOf("var handlerResult", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Inline_handler_with_compare_validation_attribute_generates_correctly()
+    {
+        var source = """
+                     using Blueprint;
+                     using Blueprint.Model;
+                     using System.ComponentModel.DataAnnotations;
+                     using System.Threading.Tasks;
+
+                     namespace TestNamespace;
+
+                     [BlueprintAppScan]
+                     public partial class TestApp : BlueprintApp
+                     {
+                         public TestApp()
+                         {
+                             this.Register(CreateUserCommand.Configure());
+                         }
+                     }
+
+                     public class CreateUserCommand : ICommand<string>
+                     {
+                         public static ApiOperationDescriptor Configure()
+                         {
+                             return new ApiOperationDescriptor(typeof(CreateUserCommand), nameof(CreateUserCommand), "Tests");
+                         }
+
+                         public string? Password { get; set; }
+
+                         [Compare(nameof(Password))]
+                         public string? ConfirmPassword { get; set; }
+
+                         public static Task<string> HandleAsync(CreateUserCommand command)
+                         {
+                             return Task.FromResult("ok");
+                         }
+                     }
+                     """;
+
+        await CompilePipeline(source)
+            .VerifySuccessAsync(PipelineSnapshotsFolder);
+    }
+
+    [Fact]
     public void Inline_handler_with_required_and_min_length_validation_attributes_generates_fast_property_checks_before_handler_invocation()
     {
         var source = """
