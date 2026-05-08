@@ -222,7 +222,7 @@ public partial class ResourceEventAuditTestCommand : ICommand<ResourceEventResul
     public static Task<ResourceEventResult<ResourceEventAuditTestResource>> HandleAsync(ResourceEventAuditTestCommand operation)
     {
         var resource = new ResourceEventAuditTestResource();
-        return Task.FromResult(new ResourceEventResult<ResourceEventAuditTestResource>("test-resource.created", "res-42", resource));
+        return Task.FromResult(new ResourceEventResult<ResourceEventAuditTestResource>(ChangeType.Created, "test-resource.created", "res-42", resource));
     }
 }
 
@@ -236,6 +236,6 @@ public partial class KeyOnlyResourceEventAuditTestCommand : ICommand<KeyOnlyReso
     /// <returns>A key-only resource event result with event and resource IDs.</returns>
     public static Task<KeyOnlyResourceEventResult> HandleAsync(KeyOnlyResourceEventAuditTestCommand operation)
     {
-        return Task.FromResult(new KeyOnlyResourceEventResult("test-resource.deleted", "res-99"));
+        return Task.FromResult(new KeyOnlyResourceEventResult(ChangeType.Deleted, "test-resource.deleted", "res-99"));
     }
 }

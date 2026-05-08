@@ -288,7 +288,7 @@ public class ReferenceAppHttpEndToEndIntegrationTests
                 authenticationType: "test"));
         });
 
-        response.StatusCode.Should().Be(StatusCodes.Status201Created);
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
         response.ContentType.Should().Be("application/json; charset=utf-8");
         response.Body.Should().Contain("\"eventId\":\"template.updated\"");
         response.Body.Should().Contain("\"resourceId\":\"template-001\"");
@@ -375,7 +375,7 @@ public class ReferenceAppHttpEndToEndIntegrationTests
     }
 
     [Fact]
-    public async Task When_archive_template_with_auth_then_returns_201_key_only()
+    public async Task When_archive_template_with_auth_then_returns_204_no_content()
     {
         var endpoints = CreateEndpoints();
         endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
@@ -395,8 +395,8 @@ public class ReferenceAppHttpEndToEndIntegrationTests
                 authenticationType: "test"));
         });
 
-        // KeyOnlyResourceEventResult produces 201 Created with no body.
-        response.StatusCode.Should().Be(StatusCodes.Status201Created);
+        // KeyOnlyResourceEventResult with ChangeType.Deleted produces 204 No Content.
+        response.StatusCode.Should().Be(StatusCodes.Status204NoContent);
         response.Body.Should().BeEmpty();
     }
 
@@ -474,7 +474,7 @@ public class ReferenceAppHttpEndToEndIntegrationTests
                 authenticationType: "test"));
         });
 
-        response.StatusCode.Should().Be(StatusCodes.Status201Created);
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
         response.Body.Should().Contain("template.published");
     }
 
@@ -486,7 +486,7 @@ public class ReferenceAppHttpEndToEndIntegrationTests
 
         var endpoint = FindEndpoint(endpoints, "api/templates/{Id}/publish", "POST");
 
-        // First publish succeeds (201 Created)
+        // First publish succeeds (200 OK for ChangeType.Updated)
         var firstResponse = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
         {
             context.Request.Method = HttpMethods.Post;
@@ -500,7 +500,7 @@ public class ReferenceAppHttpEndToEndIntegrationTests
                 authenticationType: "test"));
         });
 
-        firstResponse.StatusCode.Should().Be(StatusCodes.Status201Created);
+        firstResponse.StatusCode.Should().Be(StatusCodes.Status200OK);
 
         // Second publish of the same template returns conflict (409)
         var secondResponse = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>

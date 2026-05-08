@@ -20,7 +20,7 @@ namespace TestNamespace
             /// <returns>A <see cref="global::Blueprint.Runtime.Exec.KeyOnlyResourceEventResult"/> that carries this event's identity.</returns>
             public global::Blueprint.Runtime.Exec.KeyOnlyResourceEventResult ToOperationResult()
             {
-                return new global::Blueprint.Runtime.Exec.KeyOnlyResourceEventResult(EventId, this.Key.ToString());
+                return new global::Blueprint.Runtime.Exec.KeyOnlyResourceEventResult((global::Blueprint.Model.ChangeType)2, EventId, this.Key.ToString());
             }
 
             /// <summary>

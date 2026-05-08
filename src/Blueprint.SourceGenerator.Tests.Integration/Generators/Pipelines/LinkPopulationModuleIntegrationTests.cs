@@ -126,7 +126,7 @@ public partial class CreateLinkTestResourceCommand : ICommand<ResourceEventResul
     public static Task<ResourceEventResult<LinkTestApiResource>> HandleAsync(CreateLinkTestResourceCommand operation)
     {
         var resource = new LinkTestApiResource { Id = operation.Id, Name = operation.Name };
-        return Task.FromResult(new ResourceEventResult<LinkTestApiResource>("created", operation.Id, resource));
+        return Task.FromResult(new ResourceEventResult<LinkTestApiResource>(ChangeType.Created, "created", operation.Id, resource));
     }
 }
 

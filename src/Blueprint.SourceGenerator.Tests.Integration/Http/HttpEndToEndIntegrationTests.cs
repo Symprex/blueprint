@@ -805,6 +805,7 @@ public partial class E2EResourceEventCommand : ICommand<ResourceEventResult<E2EW
     public static Task<ResourceEventResult<E2EWidgetResponse>> HandleAsync(E2EResourceEventCommand command)
     {
         return Task.FromResult(new ResourceEventResult<E2EWidgetResponse>(
+            ChangeType.Created,
             "evt-001",
             "res-001",
             new E2EWidgetResponse { Name = command.Title ?? "untitled" }));

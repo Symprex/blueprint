@@ -176,11 +176,14 @@ public sealed class ResourceEventFamilySourceGenerator : IIncrementalGenerator, 
                 continue;
             }
 
-            // Extract reason
+            // Extract reason and change type
+            var changeTypeValue = reasonAttr.ConstructorArguments.Length >= 1
+                ? (int?)reasonAttr.ConstructorArguments[0].Value
+                : null;
             var reason = reasonAttr.ConstructorArguments.Length >= 2
                 ? reasonAttr.ConstructorArguments[1].Value as string
                 : null;
-            if (string.IsNullOrWhiteSpace(reason))
+            if (string.IsNullOrWhiteSpace(reason) || changeTypeValue is null)
             {
                 continue;
             }
@@ -224,6 +227,7 @@ public sealed class ResourceEventFamilySourceGenerator : IIncrementalGenerator, 
             events.Add(new EventRecordInfo(
                 RecordName: member.Name,
                 EventId: eventId,
+                ChangeTypeValue: changeTypeValue.Value,
                 IsBodyBearing: eventShape.Value.IsBodyBearing,
                 BodyParameterName: eventShape.Value.BodyParameterName,
                 KeyParameterName: eventShape.Value.KeyParameterName,
@@ -381,7 +385,7 @@ public sealed class ResourceEventFamilySourceGenerator : IIncrementalGenerator, 
                 sb.AppendLine($"            /// <returns>A <see cref=\"global::Blueprint.Runtime.Exec.ResourceEventResult{{T}}\"/> that wraps this event's payload.</returns>");
                 sb.AppendLine($"            public global::Blueprint.Runtime.Exec.ResourceEventResult<{evt.ContentTypeFullName}> ToOperationResult()");
                 sb.AppendLine("            {");
-                sb.AppendLine($"                return new global::Blueprint.Runtime.Exec.ResourceEventResult<{evt.ContentTypeFullName}>(EventId, {evt.ResourceIdExpression}, this.{evt.BodyParameterName});");
+                sb.AppendLine($"                return new global::Blueprint.Runtime.Exec.ResourceEventResult<{evt.ContentTypeFullName}>((global::Blueprint.Model.ChangeType){evt.ChangeTypeValue}, EventId, {evt.ResourceIdExpression}, this.{evt.BodyParameterName});");
                 sb.AppendLine("            }");
                 sb.AppendLine();
                 sb.AppendLine($"            /// <summary>");
@@ -408,7 +412,7 @@ public sealed class ResourceEventFamilySourceGenerator : IIncrementalGenerator, 
                 sb.AppendLine($"            /// <returns>A <see cref=\"global::Blueprint.Runtime.Exec.KeyOnlyResourceEventResult\"/> that carries this event's identity.</returns>");
                 sb.AppendLine($"            public global::Blueprint.Runtime.Exec.KeyOnlyResourceEventResult ToOperationResult()");
                 sb.AppendLine("            {");
-                sb.AppendLine($"                return new global::Blueprint.Runtime.Exec.KeyOnlyResourceEventResult(EventId, {evt.ResourceIdExpression});");
+                sb.AppendLine($"                return new global::Blueprint.Runtime.Exec.KeyOnlyResourceEventResult((global::Blueprint.Model.ChangeType){evt.ChangeTypeValue}, EventId, {evt.ResourceIdExpression});");
                 sb.AppendLine("            }");
                 sb.AppendLine();
                 sb.AppendLine($"            /// <summary>");
@@ -482,6 +486,7 @@ public sealed class ResourceEventFamilySourceGenerator : IIncrementalGenerator, 
     private sealed record EventRecordInfo(
         string RecordName,
         string EventId,
+        int ChangeTypeValue,
         bool IsBodyBearing,
         string? BodyParameterName,
         string? KeyParameterName,

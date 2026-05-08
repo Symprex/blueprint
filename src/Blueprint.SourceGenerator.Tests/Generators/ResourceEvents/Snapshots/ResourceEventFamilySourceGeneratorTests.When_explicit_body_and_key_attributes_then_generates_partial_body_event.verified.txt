@@ -20,7 +20,7 @@ namespace TestNamespace
             /// <returns>A <see cref="global::Blueprint.Runtime.Exec.ResourceEventResult{T}"/> that wraps this event's payload.</returns>
             public global::Blueprint.Runtime.Exec.ResourceEventResult<global::TestNamespace.PartialBodyResource> ToOperationResult()
             {
-                return new global::Blueprint.Runtime.Exec.ResourceEventResult<global::TestNamespace.PartialBodyResource>(EventId, this.Key.ToString(), this.Body);
+                return new global::Blueprint.Runtime.Exec.ResourceEventResult<global::TestNamespace.PartialBodyResource>((global::Blueprint.Model.ChangeType)1, EventId, this.Key.ToString(), this.Body);
             }
 
             /// <summary>

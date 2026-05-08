@@ -1,3 +1,5 @@
+using Blueprint.Model;
+
 namespace Blueprint.Runtime.Exec;
 
 /// <summary>
@@ -9,19 +11,27 @@ public class ResourceEventResult : OperationResult
     /// <summary>
     /// Initializes a new instance of the <see cref="ResourceEventResult"/> class.
     /// </summary>
+    /// <param name="changeType">The coarse mutation kind (created, updated, deleted) that determines host-level status codes.</param>
     /// <param name="eventId">The stable event identity for the semantic resource-event outcome.</param>
     /// <param name="resourceId">The stable resource identity associated with the event.</param>
     /// <param name="content">The resource-event payload that hosts may serialize in the response body.</param>
-    public ResourceEventResult(string eventId, string resourceId, object content)
+    public ResourceEventResult(ChangeType changeType, string eventId, string resourceId, object content)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(eventId);
         ArgumentException.ThrowIfNullOrWhiteSpace(resourceId);
         ArgumentNullException.ThrowIfNull(content);
 
+        this.ChangeType = changeType;
         this.EventId = eventId;
         this.ResourceId = resourceId;
         this.Content = content;
     }
+
+    /// <summary>
+    /// Gets the coarse mutation kind that the HTTP host uses to select the appropriate status code
+    /// (201 Created, 200 OK, or 204 No Content).
+    /// </summary>
+    public ChangeType ChangeType { get; }
 
     /// <summary>
     /// Gets the stable event identity that later hosts and tooling can use as a body discriminator.
@@ -62,11 +72,12 @@ public sealed class ResourceEventResult<T> : ResourceEventResult where T : notnu
     /// <summary>
     /// Initializes a new instance of the <see cref="ResourceEventResult{T}"/> class.
     /// </summary>
+    /// <param name="changeType">The coarse mutation kind (created, updated, deleted) that determines host-level status codes.</param>
     /// <param name="eventId">The stable event identity for the semantic resource-event outcome.</param>
     /// <param name="resourceId">The stable resource identity associated with the event.</param>
     /// <param name="content">The resource-event payload.</param>
-    public ResourceEventResult(string eventId, string resourceId, T content)
-        : base(eventId, resourceId, content)
+    public ResourceEventResult(ChangeType changeType, string eventId, string resourceId, T content)
+        : base(changeType, eventId, resourceId, content)
     {
     }
 

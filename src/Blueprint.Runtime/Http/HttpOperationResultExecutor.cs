@@ -87,11 +87,11 @@ public class HttpOperationResultExecutor
             case NoResultOperationResult:
                 httpContext.Response.StatusCode = StatusCodes.Status200OK;
                 return true;
-            case KeyOnlyResourceEventResult:
-                httpContext.Response.StatusCode = StatusCodes.Status201Created;
+            case KeyOnlyResourceEventResult keyOnlyEvent:
+                httpContext.Response.StatusCode = MapChangeTypeToStatusCode(keyOnlyEvent.ChangeType);
                 return true;
             case ResourceEventResult resourceEventResult:
-                httpContext.Response.StatusCode = StatusCodes.Status201Created;
+                httpContext.Response.StatusCode = MapChangeTypeToStatusCode(resourceEventResult.ChangeType);
                 httpContext.Response.ContentType = "application/json; charset=utf-8";
                 await WriteJsonAsync(httpContext, operationContext, ResourceEventEnvelope.Create(resourceEventResult));
                 return true;
@@ -228,6 +228,17 @@ public class HttpOperationResultExecutor
         httpContext.Response.StatusCode = statusCode;
         httpContext.Response.ContentType = "application/problem+json; charset=utf-8";
         await WriteJsonAsync(httpContext, operationContext, problemDetails);
+    }
+
+    private static int MapChangeTypeToStatusCode(ChangeType changeType)
+    {
+        return changeType switch
+        {
+            ChangeType.Created => StatusCodes.Status201Created,
+            ChangeType.Updated => StatusCodes.Status200OK,
+            ChangeType.Deleted => StatusCodes.Status204NoContent,
+            _ => StatusCodes.Status200OK,
+        };
     }
 
     private sealed class ResourceEventEnvelope

@@ -38,7 +38,7 @@ public class LinkPopulationModuleTests
                     public static Task<ResourceEventResult<TestApiResource>> HandleAsync(CreateResourceCommand operation)
                     {
                         var resource = new TestApiResource { Id = operation.Id, Name = operation.Name };
-                        return Task.FromResult(new ResourceEventResult<TestApiResource>("created", operation.Id, resource));
+                        return Task.FromResult(new ResourceEventResult<TestApiResource>(ChangeType.Created, "created", operation.Id, resource));
                     }
                 }
             }
@@ -104,7 +104,7 @@ public class LinkPopulationModuleTests
                     public static Task<ResourceEventResult<WidgetApiResource>> HandleAsync(UpdateWidgetCommand operation)
                     {
                         var resource = new WidgetApiResource { Id = operation.Id, Label = operation.Label };
-                        return Task.FromResult(new ResourceEventResult<WidgetApiResource>("updated", operation.Id, resource));
+                        return Task.FromResult(new ResourceEventResult<WidgetApiResource>(ChangeType.Updated, "updated", operation.Id, resource));
                     }
                 }
 

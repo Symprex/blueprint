@@ -153,7 +153,7 @@ public partial class OperationResultTranslationEndpointTests
     }
 
     [Fact]
-    public async Task When_http_endpoint_pipeline_returns_key_only_resource_event_result_then_host_route_completes_with_empty_201_response()
+    public async Task When_http_endpoint_pipeline_returns_key_only_resource_event_result_then_host_route_completes_with_204_response()
     {
         var endpoints = CreateEndpoints();
         endpoints.MapBlueprintApi<ResultTranslationBlueprintApp, ResultTranslationBlueprintAppExecutor>("api/");
@@ -164,7 +164,7 @@ public partial class OperationResultTranslationEndpointTests
 
         var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider);
 
-        response.StatusCode.Should().Be(StatusCodes.Status201Created);
+        response.StatusCode.Should().Be(StatusCodes.Status204NoContent);
         response.ContentType.Should().BeNull();
         response.Body.Should().BeEmpty();
     }
@@ -494,7 +494,7 @@ public partial class OperationResultTranslationEndpointTests
     {
         public Task<OperationResult> ExecuteAsync(ApiOperationContext context)
         {
-            return Task.FromResult<OperationResult>(new KeyOnlyResourceEventResult("events.deleted", "resource-123"));
+            return Task.FromResult<OperationResult>(new KeyOnlyResourceEventResult(ChangeType.Deleted, "events.deleted", "resource-123"));
         }
     }
 
@@ -503,6 +503,7 @@ public partial class OperationResultTranslationEndpointTests
         public Task<OperationResult> ExecuteAsync(ApiOperationContext context)
         {
             return Task.FromResult<OperationResult>(new ResourceEventResult<ResultTranslationResponseDto>(
+                ChangeType.Created,
                 "events.created",
                 "resource-123",
                 new ResultTranslationResponseDto
