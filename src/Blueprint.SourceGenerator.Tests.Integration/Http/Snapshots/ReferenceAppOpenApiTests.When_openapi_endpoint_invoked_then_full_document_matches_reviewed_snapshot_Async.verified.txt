@@ -77,6 +77,20 @@
                     "description": "The display name for the template.",
                     "maxLength": 200
                   },
+                  "slug": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "URL-safe slug for the template (lowercase letters, digits, hyphens).",
+                    "maxLength": 100,
+                    "pattern": "^[a-z0-9]\u002B(?:-[a-z0-9]\u002B)*$"
+                  },
+                  "priority": {
+                    "type": "integer",
+                    "format": "int32",
+                    "description": "Priority for template ordering (1-1000).",
+                    "minimum": 1,
+                    "maximum": 1000
+                  },
                   "htmlSource": {
                     "type": "string",
                     "nullable": true,

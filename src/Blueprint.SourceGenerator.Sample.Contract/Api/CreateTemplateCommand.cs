@@ -28,6 +28,24 @@ public partial class CreateTemplateCommand : ICommand<ResourceEventResult<Templa
     public string? Name { get; set; }
 
     /// <summary>
+    /// An optional URL-safe slug for the template (lowercase letters, digits, and hyphens only).
+    /// Demonstrates compile-time <see cref="RegularExpressionAttribute"/> fast-path validation
+    /// and OpenAPI <c>pattern</c> constraint projection.
+    /// </summary>
+    [RegularExpression(@"^[a-z0-9]+(?:-[a-z0-9]+)*$")]
+    [MaxLength(100)]
+    [Description("URL-safe slug for the template (lowercase letters, digits, hyphens).")]
+    public string? Slug { get; set; }
+
+    /// <summary>
+    /// Optional priority for template ordering. Demonstrates compile-time
+    /// <see cref="RangeAttribute"/> fast-path validation and OpenAPI min/max constraints.
+    /// </summary>
+    [Range(1, 1000)]
+    [Description("Priority for template ordering (1-1000).")]
+    public int Priority { get; set; } = 100;
+
+    /// <summary>
     /// The HTML source content of the template. Limited to 50000 characters.
     /// Marked [Sensitive] to signal audit sinks that template content may contain embedded PII.
     /// </summary>
