@@ -197,6 +197,85 @@ public class AuthenticationModuleTests
             "[AllowAnonymous] operations should not have authentication pipeline checks");
     }
 
+    // ── BackgroundTask anonymous convention tests ─────────────────────
+
+    [Fact]
+    public void When_background_task_without_auth_attribute_then_descriptor_has_anonymous_feature_data()
+    {
+        var result = CompileDescriptorWithTasks(
+            """
+            public partial class ProcessItemTask : ICommand<string>, IBackgroundTask
+            {
+                public static Task<string> HandleAsync(ProcessItemTask operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var descriptorSource = result.Output
+            .Select(static t => t.ToString())
+            .FirstOrDefault(static s => s.Contains("ProcessItemTaskDescriptor"));
+
+        descriptorSource.Should().NotBeNull("descriptor should be generated");
+        descriptorSource!.Should().Contain("AuthenticationRequirement.Anonymous",
+            "background tasks without explicit auth attribute should auto-project anonymous access mode");
+    }
+
+    [Fact]
+    public void When_background_task_with_explicit_MustBeAuthenticated_then_no_anonymous_convention()
+    {
+        var result = CompileDescriptorWithTasks(
+            """
+            [MustBeAuthenticated]
+            public partial class ProcessItemTask : ICommand<string>, IBackgroundTask
+            {
+                public static Task<string> HandleAsync(ProcessItemTask operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        // [MustBeAuthenticated] on non-HTTP should still produce BPAU001,
+        // but should NOT project anonymous (the explicit intent takes precedence)
+        var descriptorSource = result.Output
+            .Select(static t => t.ToString())
+            .FirstOrDefault(static s => s.Contains("ProcessItemTaskDescriptor"));
+
+        descriptorSource.Should().NotBeNull("descriptor should be generated");
+        descriptorSource!.Should().NotContain("AuthenticationRequirement.Anonymous",
+            "[MustBeAuthenticated] should prevent the background task anonymous convention");
+    }
+
+    [Fact]
+    public void When_background_task_with_explicit_AllowAnonymous_then_projects_anonymous_as_before()
+    {
+        var result = CompileDescriptorWithTasks(
+            """
+            [AllowAnonymous]
+            public partial class ProcessItemTask : ICommand<string>, IBackgroundTask
+            {
+                public static Task<string> HandleAsync(ProcessItemTask operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var descriptorSource = result.Output
+            .Select(static t => t.ToString())
+            .FirstOrDefault(static s => s.Contains("ProcessItemTaskDescriptor"));
+
+        descriptorSource.Should().NotBeNull("descriptor should be generated");
+        descriptorSource!.Should().Contain("AuthenticationRequirement.Anonymous",
+            "explicit [AllowAnonymous] on background task should project anonymous access mode");
+    }
+
     // ── Pipeline plan tests ───────────────────────────────────────────
 
     [Fact]
@@ -357,6 +436,13 @@ public class AuthenticationModuleTests
     {
         return TestHelpers.Compile<OperationDescriptorSourceGenerator>(
             "using Blueprint.Model;\nusing Blueprint.Model.Attributes;\nusing System.Threading.Tasks;\n\n"
+            + "namespace TestNamespace;\n\n" + source);
+    }
+
+    private static GenerationResult CompileDescriptorWithTasks(string source)
+    {
+        return TestHelpers.Compile<OperationDescriptorSourceGenerator>(
+            "using Blueprint.Model;\nusing Blueprint.Model.Attributes;\nusing Blueprint.Tasks;\nusing System.Threading.Tasks;\n\n"
             + "namespace TestNamespace;\n\n" + source);
     }
 

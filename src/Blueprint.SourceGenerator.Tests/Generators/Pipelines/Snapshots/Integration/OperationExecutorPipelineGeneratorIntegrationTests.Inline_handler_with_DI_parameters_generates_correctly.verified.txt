@@ -24,6 +24,15 @@ namespace Blueprint.Generated
         {
             var operation = (global::TestNamespace.TestQuery)context.Operation;
 
+
+            var propertyPopulators = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Runtime.Middleware.IPropertyPopulator>>(context.ServiceProvider);
+            if (propertyPopulators != null)
+            {
+                foreach (var populator in propertyPopulators)
+                {
+                    await populator.PopulateAsync(context, context.OperationCancelled);
+                }
+            }
             var service = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::TestNamespace.IMyService>(context.ServiceProvider);
             var logger = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::Microsoft.Extensions.Logging.ILogger<global::TestNamespace.TestQuery>>(context.ServiceProvider);
 
@@ -61,7 +70,7 @@ namespace Blueprint.Generated
 
         public static System.Collections.Generic.IReadOnlyList<string> GetAppliedModules()
         {
-            return new string[] { "HandlerExecutionModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
+            return new string[] { "PropertyPopulationModule", "HandlerExecutionModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
         }
     }
 }

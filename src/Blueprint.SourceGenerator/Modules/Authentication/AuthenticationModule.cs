@@ -66,6 +66,22 @@ public sealed class AuthenticationModule : IBlueprintSourceGeneratorModule, IDes
             return;
         }
 
+        // BackgroundTask convention: auto-project anonymous when no explicit auth attribute is present
+        // and the operation is exposed on the tasks host. Background tasks execute server-side without
+        // HTTP identity, matching legacy Blueprint's BackgroundTaskAllowAnonymousConvention behavior.
+        if (!hasMustBeAuthenticated)
+        {
+            var isTaskExposed = context.GetMetadata<HostExposureRegistration>()
+                .Any(static r => string.Equals(r.HostName, HostExposureRegistration.Tasks.HostName, StringComparison.Ordinal));
+
+            if (isTaskExposed)
+            {
+                context.AddMetadata(new AuthenticationDescriptorRegistration(RequiresIdentityCheck: false));
+                context.AddRenderStep(RenderAnonymousFeatureData);
+                return;
+            }
+        }
+
         // [MustBeAuthenticated]: requires HTTP host for enforcement
         if (hasMustBeAuthenticated)
         {

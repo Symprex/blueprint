@@ -24,6 +24,15 @@ namespace Blueprint.Generated
         {
             var operation = (global::TestNamespace.CreateUserCommand)context.Operation;
 
+
+            var propertyPopulators = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Runtime.Middleware.IPropertyPopulator>>(context.ServiceProvider);
+            if (propertyPopulators != null)
+            {
+                foreach (var populator in propertyPopulators)
+                {
+                    await populator.PopulateAsync(context, context.OperationCancelled);
+                }
+            }
             var validationResults = default(global::System.Collections.Generic.List<global::System.ComponentModel.DataAnnotations.ValidationResult>);
             if (operation.Maximum <= operation.Minimum)
             {
@@ -76,7 +85,7 @@ namespace Blueprint.Generated
 
         public static System.Collections.Generic.IReadOnlyList<string> GetAppliedModules()
         {
-            return new string[] { "ValidationModule", "HandlerExecutionModule", "UnitOfWorkModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
+            return new string[] { "PropertyPopulationModule", "ValidationModule", "HandlerExecutionModule", "UnitOfWorkModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
         }
     }
 }

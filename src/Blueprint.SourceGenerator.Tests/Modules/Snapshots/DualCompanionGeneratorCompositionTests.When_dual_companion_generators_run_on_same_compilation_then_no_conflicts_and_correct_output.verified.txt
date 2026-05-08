@@ -140,6 +140,15 @@ namespace Blueprint.Generated
         {
             var operation = (global::TestNamespace.GetOrderStatus)context.Operation;
 
+
+            var propertyPopulators = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Runtime.Middleware.IPropertyPopulator>>(context.ServiceProvider);
+            if (propertyPopulators != null)
+            {
+                foreach (var populator in propertyPopulators)
+                {
+                    await populator.PopulateAsync(context, context.OperationCancelled);
+                }
+            }
             var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<string>(await global::TestNamespace.GetOrderStatus.HandleAsync(operation));
 
             if (handlerResult.WasSuccessful)
@@ -174,7 +183,7 @@ namespace Blueprint.Generated
 
         public static System.Collections.Generic.IReadOnlyList<string> GetAppliedModules()
         {
-            return new string[] { "HandlerExecutionModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
+            return new string[] { "PropertyPopulationModule", "HandlerExecutionModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
         }
     }
 }
@@ -208,6 +217,15 @@ namespace Blueprint.Generated
 
             // [MessagingPipeline] Deserialize message envelope
             context.Activity?.AddTag("messaging.deserialized", true);
+
+            var propertyPopulators = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Runtime.Middleware.IPropertyPopulator>>(context.ServiceProvider);
+            if (propertyPopulators != null)
+            {
+                foreach (var populator in propertyPopulators)
+                {
+                    await populator.PopulateAsync(context, context.OperationCancelled);
+                }
+            }
             var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<string>(await global::TestNamespace.ProcessOrderMessage.HandleAsync(operation));
 
             var unitOfWork = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Persistence.IUnitOfWork>(context.ServiceProvider);
@@ -254,7 +272,7 @@ namespace Blueprint.Generated
 
         public static System.Collections.Generic.IReadOnlyList<string> GetAppliedModules()
         {
-            return new string[] { "TestMessagingPipelineModule", "HandlerExecutionModule", "UnitOfWorkModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
+            return new string[] { "TestMessagingPipelineModule", "PropertyPopulationModule", "HandlerExecutionModule", "UnitOfWorkModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
         }
     }
 }

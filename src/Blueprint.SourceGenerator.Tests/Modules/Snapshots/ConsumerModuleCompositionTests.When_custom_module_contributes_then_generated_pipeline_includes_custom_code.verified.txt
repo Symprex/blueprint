@@ -26,6 +26,15 @@ namespace Blueprint.Generated
 
             // Tenant enrichment contributed by consumer companion module
             var tenantId = context.Descriptor.OperationType.Name;
+
+            var propertyPopulators = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Runtime.Middleware.IPropertyPopulator>>(context.ServiceProvider);
+            if (propertyPopulators != null)
+            {
+                foreach (var populator in propertyPopulators)
+                {
+                    await populator.PopulateAsync(context, context.OperationCancelled);
+                }
+            }
             var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<string>(await global::TestNamespace.EnrichedCommand.HandleAsync(operation));
 
             var unitOfWork = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Persistence.IUnitOfWork>(context.ServiceProvider);
@@ -66,7 +75,7 @@ namespace Blueprint.Generated
 
         public static System.Collections.Generic.IReadOnlyList<string> GetAppliedModules()
         {
-            return new string[] { "TestTenantEnrichmentModule", "HandlerExecutionModule", "UnitOfWorkModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
+            return new string[] { "TestTenantEnrichmentModule", "PropertyPopulationModule", "HandlerExecutionModule", "UnitOfWorkModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
         }
     }
 }

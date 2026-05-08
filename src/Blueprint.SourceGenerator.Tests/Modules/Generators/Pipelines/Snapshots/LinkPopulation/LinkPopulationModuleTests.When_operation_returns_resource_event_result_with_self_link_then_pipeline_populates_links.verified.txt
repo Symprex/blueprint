@@ -60,6 +60,15 @@ namespace Blueprint.Generated
             }
 
             operation.Id = (string)httpContext.Request.RouteValues["Id"];
+
+            var propertyPopulators = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Runtime.Middleware.IPropertyPopulator>>(context.ServiceProvider);
+            if (propertyPopulators != null)
+            {
+                foreach (var populator in propertyPopulators)
+                {
+                    await populator.PopulateAsync(context, context.OperationCancelled);
+                }
+            }
             var handlerResult = await global::TestNamespace.CreateResourceCommand.HandleAsync(operation);
 
             // Populate $links.self on the returned resource
@@ -125,7 +134,7 @@ namespace Blueprint.Generated
 
         public static System.Collections.Generic.IReadOnlyList<string> GetAppliedModules()
         {
-            return new string[] { "PropertyOwnershipModule", "HandlerExecutionModule", "LinkGenerationModule", "UnitOfWorkModule", "AuditingModule", "ResourceEventAuditModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
+            return new string[] { "PropertyOwnershipModule", "PropertyPopulationModule", "HandlerExecutionModule", "LinkGenerationModule", "UnitOfWorkModule", "AuditingModule", "ResourceEventAuditModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
         }
 
         private static void PopulateFromJsonBody(System.ReadOnlySpan<byte> bodyBytes, global::TestNamespace.CreateResourceCommand operation)
