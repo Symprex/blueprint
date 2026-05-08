@@ -24,10 +24,14 @@ Operations span the `Templates` group (via `[ApiOperations("Templates")]`) and a
 | `GetTemplateVersionsQuery` | GET | `/templates/{Id}/versions` | `TemplateVersionApiResource[]` |
 | `CreateTemplateCommand` | POST | `/templates` | `ResourceEventResult<TemplateApiResource>` |
 | `UpdateTemplateCommand` | PUT | `/templates/{Id}` | `ResourceEventResult<TemplateApiResource>` |
+| `PatchTemplateSettingsCommand` | PATCH | `/templates/{Id}/settings` | `ResourceEventResult<TemplateApiResource>` |
 | `PublishTemplateCommand` | POST | `/templates/{Id}/publish` | `Results<ResourceEventResult<TemplateApiResource>, ConflictResult<TemplateApiResource>>` |
 | `CloneTemplateCommand` | POST | `/templates/{Id}/clone` | `ResourceEventResult<TemplateApiResource>` |
 | `PreviewTemplateCommand` | POST | `/templates/{Id}/preview` | `TemplatePreviewApiResource` |
 | `ArchiveTemplateCommand` | DELETE | `/templates/{Id}` | `KeyOnlyResourceEventResult` |
+| `ExportTemplatesCommand` | POST | `/templates/export` | `ExportJobApiResource` |
+| `ChangePasswordCommand` | POST | `/system/change-password` | `OkResult` |
+| `GetTemplateHistoryQuery` | GET | `/templates/{Id}/history` | `TemplateVersionApiResource[]` |
 | `HealthCheckQuery` | GET | `/system/health` | `PlainTextResult` |
 | `DownloadTemplateQuery` | GET | `/templates/{Id}/download` | `FileStreamResult` |
 | `RedirectToTemplateDocsQuery` | GET | `/templates/{Id}/docs` | `RedirectResult` |
@@ -38,7 +42,9 @@ A background task (`SendTemplateSharedNotificationTask`) demonstrates non-HTTP e
 
 - **Cross-assembly scanning** — `[BlueprintAppScan(FromAssemblyOf = typeof(GetTemplatesQuery))]`
 - **Self and root links** — `[SelfLink]` / `[RootLink]` for HATEOAS-style URL generation
-- **Validation** — `[Required]`, `[MaxLength]`, `[Range]`, `[RegularExpression]`, `[EmailAddress]`, `[Url]` with generated fast-path validation
+- **Validation** — `[Required]`, `[MaxLength]`, `[Range]`, `[RegularExpression]`, `[EmailAddress]`, `[Url]`, `[GreaterThanProperty]` with generated fast-path validation
+- **Nullable validation** — `[Range]`, `[GreaterThanProperty]` on `int?`/`double?` with null-guard fast-paths
+- **PATCH semantics** — `[HttpPatch]` on `PatchTemplateSettingsCommand` for partial updates
 - **Resource authorization** — `[Resource("template", "read/write")]` scope-pair model (implies authentication)
 - **Authorization provider** — `IResourceAuthorizationProvider` with claim-based scope evaluation
 - **Scope inheritance** — `[FromResource(typeof(X))]` inherits scope pairs from another operation

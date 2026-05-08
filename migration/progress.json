@@ -460,6 +460,12 @@
       "workstream": "documentation-and-final-alignment",
       "title": "Nullable value type support for GreaterThanProperty and LessThanProperty validation fast-paths",
       "commit": "6f23264"
+    },
+    {
+      "id": "codegen/nullable-json-deserialization-fix",
+      "workstream": "documentation-and-final-alignment",
+      "title": "Fix nullable value type JSON deserialization codegen (global::double? -> double?) and PATCH sample operation",
+      "commit": "6432d07"
     }
   ],
   "decisions": [

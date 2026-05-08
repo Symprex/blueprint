@@ -614,8 +614,11 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         return displayName is "string"
             or "int"
             or "long"
+            or "double"
+            or "float"
             or "System.Guid"
             or "System.DateTime"
+            or "System.DateTimeOffset"
             or "bool"
             or "decimal"
             || type.TypeKind == TypeKind.Enum;
@@ -648,8 +651,11 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         return displayName is "string"
             or "int"
             or "long"
+            or "double"
+            or "float"
             or "System.Guid"
             or "System.DateTime"
+            or "System.DateTimeOffset"
             or "bool"
             or "decimal"
             || type.TypeKind == TypeKind.Enum;
@@ -868,6 +874,12 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             case "long" when !isNullableValueType:
                 writer.AppendLine($"        operation.{entry.PropertyName} = reader.GetInt64();");
                 break;
+            case "double" when !isNullableValueType:
+                writer.AppendLine($"        operation.{entry.PropertyName} = reader.GetDouble();");
+                break;
+            case "float" when !isNullableValueType:
+                writer.AppendLine($"        operation.{entry.PropertyName} = reader.GetSingle();");
+                break;
             case "bool" when !isNullableValueType:
                 writer.AppendLine($"        operation.{entry.PropertyName} = reader.GetBoolean();");
                 break;
@@ -879,6 +891,9 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
                 break;
             case "System.DateTime" when !isNullableValueType:
                 writer.AppendLine($"        operation.{entry.PropertyName} = reader.GetDateTime();");
+                break;
+            case "System.DateTimeOffset" when !isNullableValueType:
+                writer.AppendLine($"        operation.{entry.PropertyName} = reader.GetDateTimeOffset();");
                 break;
             default:
                 var fullyQualifiedType = rawType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
@@ -1099,10 +1114,13 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         {
             "int" => $"int.TryParse({stringExpression}, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var {outVariable})",
             "long" => $"long.TryParse({stringExpression}, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var {outVariable})",
+            "double" => $"double.TryParse({stringExpression}, System.Globalization.NumberStyles.Float | System.Globalization.NumberStyles.AllowThousands, System.Globalization.CultureInfo.InvariantCulture, out var {outVariable})",
+            "float" => $"float.TryParse({stringExpression}, System.Globalization.NumberStyles.Float | System.Globalization.NumberStyles.AllowThousands, System.Globalization.CultureInfo.InvariantCulture, out var {outVariable})",
             "bool" => $"bool.TryParse({stringExpression}, out var {outVariable})",
             "decimal" => $"decimal.TryParse({stringExpression}, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var {outVariable})",
             "System.Guid" => $"System.Guid.TryParse({stringExpression}, out var {outVariable})",
             "System.DateTime" => $"System.DateTime.TryParse({stringExpression}, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var {outVariable})",
+            "System.DateTimeOffset" => $"System.DateTimeOffset.TryParse({stringExpression}, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var {outVariable})",
             _ when typeSymbol.TypeKind == TypeKind.Enum =>
                 $"System.Enum.TryParse<{typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}>({stringExpression}, out var {outVariable})",
             _ => $"int.TryParse({stringExpression}, out var {outVariable})", // fallback — should not be reached for supported types

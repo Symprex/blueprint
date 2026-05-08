@@ -68,6 +68,18 @@ namespace Blueprint.Generated
                     return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid query parameter 'offset'");
                 }
             }
+            var _qv_MinRating = httpContext.Request.Query["minRating"];
+            if (_qv_MinRating.Count > 0)
+            {
+                if (double.TryParse(_qv_MinRating[0], System.Globalization.NumberStyles.Float | System.Globalization.NumberStyles.AllowThousands, System.Globalization.CultureInfo.InvariantCulture, out var _parsed_MinRating))
+                {
+                    operation.MinRating = _parsed_MinRating;
+                }
+                else
+                {
+                    return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid query parameter 'minRating'");
+                }
+            }
             var _qv_IncludeDeleted = httpContext.Request.Query["includeDeleted"];
             if (_qv_IncludeDeleted.Count > 0)
             {
@@ -116,6 +128,18 @@ namespace Blueprint.Generated
                     return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid query parameter 'since'");
                 }
             }
+            var _qv_ModifiedAfter = httpContext.Request.Query["modifiedAfter"];
+            if (_qv_ModifiedAfter.Count > 0)
+            {
+                if (System.DateTimeOffset.TryParse(_qv_ModifiedAfter[0], System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var _parsed_ModifiedAfter))
+                {
+                    operation.ModifiedAfter = _parsed_ModifiedAfter;
+                }
+                else
+                {
+                    return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid query parameter 'modifiedAfter'");
+                }
+            }
             var _qv_MaxResults = httpContext.Request.Query["maxResults"];
             if (_qv_MaxResults.Count > 0)
             {
@@ -126,6 +150,18 @@ namespace Blueprint.Generated
                 else
                 {
                     return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid query parameter 'maxResults'");
+                }
+            }
+            var _qv_MaxPrice = httpContext.Request.Query["maxPrice"];
+            if (_qv_MaxPrice.Count > 0)
+            {
+                if (double.TryParse(_qv_MaxPrice[0], System.Globalization.NumberStyles.Float | System.Globalization.NumberStyles.AllowThousands, System.Globalization.CultureInfo.InvariantCulture, out var _parsed_MaxPrice))
+                {
+                    operation.MaxPrice = _parsed_MaxPrice;
+                }
+                else
+                {
+                    return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid query parameter 'maxPrice'");
                 }
             }
             var _qv_Tags = httpContext.Request.Query["tags"];
@@ -342,6 +378,16 @@ namespace Blueprint.Generated
                     reader.Read();
                     operation.BigNumber = reader.GetInt64();
                 }
+                else if (reader.ValueTextEquals("rating"u8))
+                {
+                    reader.Read();
+                    operation.Rating = reader.GetDouble();
+                }
+                else if (reader.ValueTextEquals("score"u8))
+                {
+                    reader.Read();
+                    operation.Score = reader.GetSingle();
+                }
                 else if (reader.ValueTextEquals("isActive"u8))
                 {
                     reader.Read();
@@ -362,15 +408,20 @@ namespace Blueprint.Generated
                     reader.Read();
                     operation.CreatedAt = reader.GetDateTime();
                 }
+                else if (reader.ValueTextEquals("modifiedAt"u8))
+                {
+                    reader.Read();
+                    operation.ModifiedAt = reader.GetDateTimeOffset();
+                }
                 else if (reader.ValueTextEquals("optionalCount"u8))
                 {
                     reader.Read();
                     operation.OptionalCount = System.Text.Json.JsonSerializer.Deserialize<int?>(ref reader);
                 }
-                else if (reader.ValueTextEquals("score"u8))
+                else if (reader.ValueTextEquals("optionalRating"u8))
                 {
                     reader.Read();
-                    operation.Score = System.Text.Json.JsonSerializer.Deserialize<double?>(ref reader);
+                    operation.OptionalRating = System.Text.Json.JsonSerializer.Deserialize<double?>(ref reader);
                 }
                 else
                 {

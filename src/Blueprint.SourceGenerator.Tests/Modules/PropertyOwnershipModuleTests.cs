@@ -1058,14 +1058,17 @@ public class PropertyOwnershipModuleTests
                     public string Title { get; set; }
                     public int Count { get; set; }
                     public long BigNumber { get; set; }
+                    public double Rating { get; set; }
+                    public float Score { get; set; }
                     public bool IsActive { get; set; }
                     public decimal Price { get; set; }
                     public System.Guid CorrelationId { get; set; }
                     public System.DateTime CreatedAt { get; set; }
+                    public System.DateTimeOffset ModifiedAt { get; set; }
 
                     // Body: nullable value types (fall through to Deserialize<T?>)
                     public int? OptionalCount { get; set; }
-                    public double? Score { get; set; }
+                    public double? OptionalRating { get; set; }
 
                     public static Task<string> HandleAsync(AllTypesPostCommand operation)
                     {
@@ -1092,6 +1095,8 @@ public class PropertyOwnershipModuleTests
                     public int PageSize { get; set; }
                     // Query: long scalar
                     public long Offset { get; set; }
+                    // Query: double scalar
+                    public double MinRating { get; set; }
                     // Query: bool scalar
                     public bool IncludeDeleted { get; set; }
                     // Query: decimal scalar
@@ -1100,8 +1105,12 @@ public class PropertyOwnershipModuleTests
                     public System.Guid TenantId { get; set; }
                     // Query: DateTime scalar
                     public System.DateTime Since { get; set; }
+                    // Query: DateTimeOffset scalar
+                    public System.DateTimeOffset ModifiedAfter { get; set; }
                     // Query: nullable int
                     public int? MaxResults { get; set; }
+                    // Query: nullable double
+                    public double? MaxPrice { get; set; }
                     // Query: string array
                     public string[] Tags { get; set; }
                     // Query: int array
