@@ -105,4 +105,53 @@ public abstract class StatusCodeResult : OperationResult
         {
         }
     }
+
+    /// <summary>
+    /// A bodyless 400 Bad Request result for malformed or semantically invalid requests
+    /// that fall outside standard validation (which uses <see cref="ValidationFailedResult"/>).
+    /// </summary>
+    public sealed class BadRequest : StatusCodeResult
+    {
+        /// <summary>
+        /// The singleton instance.
+        /// </summary>
+        public static readonly BadRequest Instance = new();
+
+        private BadRequest()
+            : base(400)
+        {
+        }
+    }
+
+    /// <summary>
+    /// A bodyless 501 Not Implemented result for operations that are declared but not yet functional.
+    /// </summary>
+    public sealed class NotImplemented : StatusCodeResult
+    {
+        /// <summary>
+        /// The singleton instance.
+        /// </summary>
+        public static readonly NotImplemented Instance = new();
+
+        private NotImplemented()
+            : base(501)
+        {
+        }
+    }
+
+    /// <summary>
+    /// A bodyless 503 Service Unavailable result for operations that are temporarily offline.
+    /// </summary>
+    public sealed class ServiceUnavailable : StatusCodeResult
+    {
+        /// <summary>
+        /// The singleton instance.
+        /// </summary>
+        public static readonly ServiceUnavailable Instance = new();
+
+        private ServiceUnavailable()
+            : base(503)
+        {
+        }
+    }
 }
