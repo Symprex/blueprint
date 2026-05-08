@@ -17,6 +17,10 @@ public sealed record OpenApiResponseObjectRenderingContext(
     ImmutableArray<OpenApiResponseObjectOperationContext> Operations)
 {
     private const string JsonMediaType = "application/json";
+    private const string PlainTextMediaType = "text/plain";
+    private const string OctetStreamMediaType = "application/octet-stream";
+    private const string PlainTextResultTypeName = "Blueprint.Runtime.Exec.PlainTextResult";
+    private const string FileStreamResultTypeName = "Blueprint.Runtime.Exec.FileStreamResult";
 
     /// <summary>
     /// Creates deterministic OpenAPI-style response objects from the supplied response-schema reference projection.
@@ -78,8 +82,44 @@ public sealed record OpenApiResponseObjectRenderingContext(
         var discriminator = TryCreateResourceEventDiscriminator(operation, response.Response, schemaComponents);
 
         return schemaComponents.IsEmpty
-            ? ImmutableArray<OpenApiResponseContentModel>.Empty
+            ? TryCreateNonJsonContent(response.Response)
             : [new OpenApiResponseContentModel(JsonMediaType, schemaComponents, discriminator)];
+    }
+
+    /// <summary>
+    /// Creates content entries for non-JSON body responses (e.g. <c>text/plain</c> for PlainTextResult,
+    /// <c>application/octet-stream</c> for FileStreamResult) that carry a body but have no CLR payload
+    /// type to schema-project. Returns empty when no known non-JSON type is present.
+    /// </summary>
+    private static ImmutableArray<OpenApiResponseContentModel> TryCreateNonJsonContent(
+        Model.OperationHttpResponseMetadata response)
+    {
+        foreach (var resultTypeName in response.ResultTypeNames)
+        {
+            if (string.Equals(resultTypeName, PlainTextResultTypeName, StringComparison.Ordinal))
+            {
+                return
+                [
+                    new OpenApiResponseContentModel(
+                        PlainTextMediaType,
+                        ImmutableArray<OpenApiResponseContentSchemaComponent>.Empty,
+                        InlineSchema: new OpenApiInlineSchemaModel("string")),
+                ];
+            }
+
+            if (string.Equals(resultTypeName, FileStreamResultTypeName, StringComparison.Ordinal))
+            {
+                return
+                [
+                    new OpenApiResponseContentModel(
+                        OctetStreamMediaType,
+                        ImmutableArray<OpenApiResponseContentSchemaComponent>.Empty,
+                        InlineSchema: new OpenApiInlineSchemaModel("string", "binary")),
+                ];
+            }
+        }
+
+        return ImmutableArray<OpenApiResponseContentModel>.Empty;
     }
 
     private static OpenApiResponseContentSchemaComponent? TryCreateContentSchemaComponent(
@@ -162,10 +202,12 @@ public sealed record OpenApiResponseObjectModel(
 /// <param name="MediaType">The response media type key.</param>
 /// <param name="SchemaComponents">The schema components referenced by this content entry.</param>
 /// <param name="Discriminator">Optional discriminator metadata when the response schema represents a same-status union.</param>
+/// <param name="InlineSchema">Optional inline schema for non-JSON body types (e.g. plain text, binary) that have no reusable component.</param>
 public sealed record OpenApiResponseContentModel(
     string MediaType,
     ImmutableArray<OpenApiResponseContentSchemaComponent> SchemaComponents,
-    OpenApiResponseDiscriminatorModel? Discriminator = null);
+    OpenApiResponseDiscriminatorModel? Discriminator = null,
+    OpenApiInlineSchemaModel? InlineSchema = null);
 
 /// <summary>
 /// Captures the OpenAPI discriminator metadata for a response content schema when a same-status union can be distinguished
@@ -198,3 +240,14 @@ public sealed record OpenApiResponseContentSchemaComponent(
     string BodyTypeName,
     OpenApiSchemaComponentModel Component,
     bool IsArrayWrapper = false);
+
+/// <summary>
+/// Represents a simple inline OpenAPI schema for non-JSON body responses such as plain text
+/// (<c>text/plain</c>) and binary streams (<c>application/octet-stream</c>) that do not
+/// require a reusable <c>#/components/schemas</c> reference.
+/// </summary>
+/// <param name="Type">The OpenAPI schema type (e.g. <c>string</c>).</param>
+/// <param name="Format">Optional OpenAPI schema format (e.g. <c>binary</c>).</param>
+public sealed record OpenApiInlineSchemaModel(
+    string Type,
+    string? Format = null);

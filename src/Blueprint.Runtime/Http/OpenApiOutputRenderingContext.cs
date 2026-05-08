@@ -565,6 +565,18 @@ public sealed record OpenApiOutputRenderingContext(
             writer.WriteEndArray();
             writer.WriteEndObject();
         }
+        else if (content.InlineSchema is not null)
+        {
+            writer.WriteStartObject();
+            writer.WriteString("type", content.InlineSchema.Type);
+
+            if (content.InlineSchema.Format is not null)
+            {
+                writer.WriteString("format", content.InlineSchema.Format);
+            }
+
+            writer.WriteEndObject();
+        }
         else
         {
             writer.WriteStartObject();

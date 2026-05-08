@@ -272,8 +272,8 @@ public partial class OperationResultTranslationEndpointTests
 
         var act = () => InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider);
 
-        await act.Should().ThrowAsync<InvalidOperationException>()
-            .WithMessage("*OkResult*null content*");
+        await act.Should().ThrowAsync<ArgumentNullException>()
+            .WithMessage("*content*");
     }
 
     private static async Task<TestEndpointInvocationResult> InvokeEndpointAsync(RouteEndpoint endpoint, IServiceProvider serviceProvider)
