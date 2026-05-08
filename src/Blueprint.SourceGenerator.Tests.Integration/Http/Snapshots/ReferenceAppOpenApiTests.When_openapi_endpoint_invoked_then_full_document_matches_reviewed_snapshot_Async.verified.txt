@@ -215,6 +215,81 @@
         ]
       }
     },
+    "/templates/export": {
+      "post": {
+        "operationId": "ExportTemplatesCommand",
+        "summary": "Queue a bulk export of templates and receive a job tracking reference.",
+        "tags": [
+          "Templates"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "nameFilter": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "Optional name filter to restrict exported templates."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Blueprint_SourceGenerator_Sample_Contract_Api_ExportJobApiResource"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "415": {
+            "description": "Unsupported Media Type"
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/templates/search": {
       "get": {
         "operationId": "SearchTemplatesQuery",
@@ -998,6 +1073,20 @@
   },
   "components": {
     "schemas": {
+      "Blueprint_SourceGenerator_Sample_Contract_Api_ExportJobApiResource": {
+        "type": "object",
+        "required": [
+          "JobId"
+        ],
+        "properties": {
+          "EstimatedSeconds": {
+            "type": "integer"
+          },
+          "JobId": {
+            "type": "string"
+          }
+        }
+      },
       "Blueprint_SourceGenerator_Sample_Contract_Api_TemplateApiResource": {
         "type": "object",
         "properties": {
