@@ -342,14 +342,11 @@ Blueprint exposes development-only endpoints for inspecting the generated API su
 
 | Endpoint | Description |
 |---|---|
-| `/.blueprint/manifests/operations` | All registered operations with metadata |
-| `/.blueprint/manifests/routes` | HTTP route map |
-| `/.blueprint/manifests/auth` | Per-operation authentication and authorization |
-| `/.blueprint/manifests/validation` | Validation plan per operation |
-| `/.blueprint/manifests/pipeline` | Applied pipeline modules per operation |
-| `/.blueprint/manifests/links` | Link metadata |
-| `/.blueprint/manifests/results` | Result type contracts |
 | `/.blueprint/openapi.json` | Generated OpenAPI 3.0 document |
+| `/.blueprint/manifests/operations.json` | Full operations manifest with all metadata (JSON) |
+| `/.blueprint/manifests/operations.html` | Interactive diagnostics page |
+| `/.blueprint/manifests/operations.md` | Markdown-formatted manifest |
+| `/.blueprint/manifests/operations.schema.json` | JSON Schema for the manifest envelope |
 
 These endpoints are only mapped when `IWebHostEnvironment.IsDevelopment()` is true.
 
@@ -409,3 +406,98 @@ After migration, verify:
 - [ ] Unit of work saves after successful commands
 - [ ] Resource events emit with correct change types (201 Created, 200 Updated, 204 Deleted)
 - [ ] Self-link URLs appear in response `_links` and 201 Location headers
+
+## Consumer-space companion packages
+
+The source-generated Blueprint framework provides proven extensibility seams for consumer-specific infrastructure. Signature365 services should implement these as companion generator packages in their own repositories:
+
+### Marten / EF Core persistence
+
+Blueprint generates `IUnitOfWork.SaveChangesAsync()` calls automatically. Connect your persistence provider:
+
+```csharp
+// Register your IUnitOfWork implementation
+services.AddScoped<IUnitOfWork, MartenUnitOfWork>();
+```
+
+For advanced patterns (outbox, event sourcing), create a companion pipeline module:
+
+```csharp
+// In your companion generator package
+public class MartenOutboxModule : IBlueprintSourceGeneratorModule
+{
+    public void ContributeToPipeline(PipelineContributorContext context)
+    {
+        // Add transactional outbox coordination after SaveChanges
+    }
+}
+```
+
+The `ConsumerModuleCompositionTests` in this repository prove that companion generators can compose custom modules into the pipeline via `BlueprintSourceGenerationConfig`.
+
+### Rebus messaging
+
+Blueprint's consumer integration seam supports Rebus handler discovery. Create a companion generator that:
+
+1. Derives from `OperationExecutorPipelineSourceGenerator`
+2. Adds a `RebusTransactionModule` that wraps handler execution in a Rebus transaction scope
+3. Registers a `RebusHostContributor` that exposes messaging operations on the Rebus host
+
+The dual-companion-generator integration proof (commit `1d47a1e`) demonstrates descriptor + pipeline generators composing for a consumer host with runtime partitioning.
+
+### Hangfire background tasks
+
+Blueprint's `IBackgroundTaskScheduler` abstraction is deliberately minimal. For Hangfire integration:
+
+```csharp
+public class HangfireBackgroundTaskScheduler : IBackgroundTaskScheduler
+{
+    public void Enqueue<TTask>(TTask task) where TTask : class, ICommand
+    {
+        BackgroundJob.Enqueue<IBlueprintTaskDispatcher>(
+            dispatcher => dispatcher.DispatchAsync(task, CancellationToken.None));
+    }
+}
+```
+
+Register it via the builder:
+
+```csharp
+blueprint.AddBackgroundTaskScheduler<HangfireBackgroundTaskScheduler>();
+```
+
+### Tenant context
+
+Multi-tenant resolution is a consumer concern. Typical patterns:
+
+```csharp
+// ASP.NET Core middleware approach (runs before Blueprint)
+app.UseMiddleware<TenantResolutionMiddleware>();
+
+// Or register a scoped tenant context that handlers can inject
+services.AddScoped<ITenantContext>(sp =>
+{
+    var httpContext = sp.GetRequiredService<IHttpContextAccessor>().HttpContext!;
+    return new ClaimsTenantContext(httpContext.User);
+});
+```
+
+For compile-time tenant-aware route expansion, create a companion descriptor module that enriches operation URLs with `{tenantId}` placeholders derived from a `[TenantScoped]` attribute.
+
+### Building a companion generator package
+
+The proven recipe for companion generators:
+
+1. Create a new class library referencing `Blueprint.SourceGenerator` internals
+2. Derive from `OperationExecutorPipelineSourceGenerator` or `OperationDescriptorSourceGenerator`
+3. Pass your custom module(s) via `CreateDefaultConfig(new YourModule())`
+4. Reference it as an additional analyzer in consumer projects
+
+```xml
+<!-- Consumer .csproj -->
+<ProjectReference Include="..\Blueprint.Rebus\Blueprint.Rebus.csproj"
+                  OutputItemType="Analyzer"
+                  ReferenceOutputAssembly="false" />
+```
+
+See `src/Blueprint.SourceGenerator.Tests/Modules/ConsumerModuleCompositionTests.cs` for complete integration proofs covering single-module, dual-module, and host-partitioning scenarios.
