@@ -275,7 +275,8 @@ public sealed partial class AppDataModelSourceGenerator
                 foreach (var attribute in property.GetAttributes())
                 {
                     if (ValidationSymbolHelpers.IsCompareAttribute(attribute.AttributeClass) == false
-                        && ValidationSymbolHelpers.IsGreaterThanPropertyAttribute(attribute.AttributeClass) == false)
+                        && ValidationSymbolHelpers.IsGreaterThanPropertyAttribute(attribute.AttributeClass) == false
+                        && ValidationSymbolHelpers.IsLessThanPropertyAttribute(attribute.AttributeClass) == false)
                     {
                         continue;
                     }

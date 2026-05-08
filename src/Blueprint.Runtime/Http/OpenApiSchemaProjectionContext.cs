@@ -241,7 +241,8 @@ public sealed record OpenApiSchemaProjectionContext(
     {
         var unsupportedAttribute = validationAttributes.FirstOrDefault(static attribute =>
             attribute is CompareAttribute
-            || string.Equals(attribute.GetType().FullName, typeof(GreaterThanPropertyAttribute).FullName, StringComparison.Ordinal));
+            || string.Equals(attribute.GetType().FullName, typeof(GreaterThanPropertyAttribute).FullName, StringComparison.Ordinal)
+            || string.Equals(attribute.GetType().FullName, typeof(LessThanPropertyAttribute).FullName, StringComparison.Ordinal));
 
         if (unsupportedAttribute is null)
         {

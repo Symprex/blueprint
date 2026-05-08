@@ -83,6 +83,14 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
                 operationType.Name,
                 operationProperties,
                 property,
+                property.GetAttributes().Where(static attribute => ValidationSymbolHelpers.IsLessThanPropertyAttribute(attribute.AttributeClass)),
+                ValidationDiagnosticDescriptors.MissingLessThanProperty);
+
+            AddMissingPropertyDiagnostics(
+                context,
+                operationType.Name,
+                operationProperties,
+                property,
                 property.GetAttributes().Where(static attribute => ValidationSymbolHelpers.IsRequiredIfAttribute(attribute.AttributeClass)),
                 ValidationDiagnosticDescriptors.MissingRequiredIfProperty);
 
