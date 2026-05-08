@@ -150,6 +150,35 @@ public sealed class BlueprintServiceBuilder
     }
 
     /// <summary>
+    /// Registers a factory that converts a <see cref="System.Security.Claims.ClaimsIdentity"/> into an
+    /// application-specific <see cref="Blueprint.Authorization.IUserAuthorisationContext"/>.
+    /// The generated pipeline resolves this (optionally) during the Authentication stage to populate
+    /// <see cref="Blueprint.Runtime.Exec.ApiOperationContext.UserAuthorisationContext"/>.
+    /// </summary>
+    /// <typeparam name="T">The <see cref="Blueprint.Authorization.IUserAuthorisationContextFactory"/> implementation type.</typeparam>
+    /// <returns>This builder for chaining.</returns>
+    public BlueprintServiceBuilder AddUserAuthorisationContextFactory<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] T>()
+        where T : class, Blueprint.Authorization.IUserAuthorisationContextFactory
+    {
+        this.Services.AddSingleton<Blueprint.Authorization.IUserAuthorisationContextFactory, T>();
+        return this;
+    }
+
+    /// <summary>
+    /// Registers an API authoriser that performs business-level authorization checks
+    /// (e.g., tenant isolation, feature-flag gating, or custom permission logic) during the
+    /// Authorisation pipeline stage. Multiple authorisers are supported and evaluated in order.
+    /// </summary>
+    /// <typeparam name="T">The <see cref="Blueprint.Authorization.IApiAuthoriser"/> implementation type.</typeparam>
+    /// <returns>This builder for chaining.</returns>
+    public BlueprintServiceBuilder AddApiAuthoriser<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] T>()
+        where T : class, Blueprint.Authorization.IApiAuthoriser
+    {
+        this.Services.AddSingleton<Blueprint.Authorization.IApiAuthoriser, T>();
+        return this;
+    }
+
+    /// <summary>
     /// Configures Blueprint HTTP options such as the public host for link generation,
     /// exception detail exposure, and content negotiation behaviour.
     /// </summary>

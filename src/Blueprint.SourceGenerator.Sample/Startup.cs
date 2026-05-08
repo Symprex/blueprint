@@ -40,6 +40,14 @@ public class Startup
             blueprint.AddBackgroundTaskScheduler<InProcessBackgroundTaskScheduler>();
             blueprint.AddUnitOfWork<InMemoryUnitOfWork>();
 
+            // User context: converts ClaimsIdentity → IUserAuthorisationContext,
+            // making user/account info available to authorisers and handler code
+            blueprint.AddUserAuthorisationContextFactory<SampleUserAuthorisationContextFactory>();
+
+            // Business authorization: enforces tenant isolation by comparing the
+            // user's AccountId to the operation's TenantId property
+            blueprint.AddApiAuthoriser<TenantIsolationApiAuthoriser>();
+
             // Property population: auto-populate TenantId from JWT claims
             // (like Signature365's SetTenantMiddleware at Authentication stage)
             blueprint.AddPropertyPopulator<TenantPropertyPopulator>();
