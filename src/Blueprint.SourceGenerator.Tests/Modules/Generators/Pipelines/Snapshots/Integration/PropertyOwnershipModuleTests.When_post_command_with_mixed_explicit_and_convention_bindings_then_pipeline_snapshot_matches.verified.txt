@@ -102,6 +102,45 @@ namespace Blueprint.Generated
                 return new Blueprint.Runtime.Exec.UnauthenticatedResult();
             }
 
+            var userContextFactory = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Authorization.IUserAuthorisationContextFactory>(context.ServiceProvider);
+            if (userContextFactory != null)
+            {
+                var userIdentity = ((Blueprint.Runtime.Http.IHttpOperationContext)context).HttpContext.User.Identity as System.Security.Claims.ClaimsIdentity;
+                if (userIdentity != null && userIdentity.IsAuthenticated)
+                {
+                    context.UserAuthorisationContext = await userContextFactory.CreateContextAsync(userIdentity, context.OperationCancelled);
+                }
+            }
+            if (context.UserAuthorisationContext != null && context.Activity != null)
+            {
+                context.Activity.SetTag("enduser.id", context.UserAuthorisationContext.Id);
+                context.Activity.SetTag("enduser.account_id", context.UserAuthorisationContext.AccountId);
+                context.UserAuthorisationContext.PopulateMetadata(static (key, value) => System.Diagnostics.Activity.Current?.SetTag(key, value));
+            }
+
+            if (!context.SkipAuthorisation)
+            {
+                var apiAuthorisers = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Authorization.IApiAuthoriser>>(context.ServiceProvider);
+                if (apiAuthorisers != null)
+                {
+                    foreach (var authoriser in apiAuthorisers)
+                    {
+                    if (authoriser.AppliesTo(context.Descriptor))
+                    {
+                        var authoriseResult = await authoriser.CanExecuteOperationAsync(context, context.Descriptor, context.Operation);
+                        if (!authoriseResult.IsAllowed)
+                        {
+                            if (authoriseResult.FailureType == Blueprint.Authorization.ExecutionAllowedFailureType.Authentication)
+                            {
+                                return new Blueprint.Runtime.Exec.UnauthenticatedResult();
+                            }
+                            return new Blueprint.Runtime.Exec.ForbiddenResult();
+                        }
+                    }
+                    }
+                }
+            }
+
             var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<string>(await global::TestNamespace.CreateItemCommand.HandleAsync(operation));
 
             var unitOfWork = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Persistence.IUnitOfWork>(context.ServiceProvider);
@@ -142,7 +181,7 @@ namespace Blueprint.Generated
 
         public static System.Collections.Generic.IReadOnlyList<string> GetAppliedModules()
         {
-            return new string[] { "PropertyOwnershipModule", "PropertyPopulationModule", "AuthenticationModule", "HandlerExecutionModule", "UnitOfWorkModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
+            return new string[] { "PropertyOwnershipModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "HandlerExecutionModule", "UnitOfWorkModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
         }
 
         private static void PopulateFromJsonBody(System.ReadOnlySpan<byte> bodyBytes, global::TestNamespace.CreateItemCommand operation)

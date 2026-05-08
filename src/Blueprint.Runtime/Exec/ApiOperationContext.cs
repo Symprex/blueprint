@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics;
 using System.Security.Claims;
+using Blueprint.Authorization;
 using Blueprint.Model;
 using Blueprint.Runtime.Http;
 
@@ -101,6 +102,21 @@ public class ApiOperationContext : IHttpOperationContext
     /// Set by the HTTP host from <see cref="Microsoft.AspNetCore.Http.HttpContext.User"/>.
     /// </summary>
     public ClaimsPrincipal? UserPrincipal { get; set; }
+
+    /// <summary>
+    /// Gets or sets the application-specific authorization context for the current user. Populated
+    /// by the generated pipeline when an <see cref="IUserAuthorisationContextFactory"/> is registered
+    /// in DI. Authorizers (<see cref="IApiAuthoriser"/>) and operation handlers read this to inspect
+    /// application-level identity properties (tenant, roles, account status).
+    /// </summary>
+    public IUserAuthorisationContext? UserAuthorisationContext { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether authorization checks should be skipped for this
+    /// operation execution. Used for nested/child operations that inherit the parent's authorization
+    /// context and should not be re-evaluated.
+    /// </summary>
+    public bool SkipAuthorisation { get; set; }
 
     /// <summary>
     /// Gets the primary <see cref="ClaimsIdentity"/> of the current user, or <c>null</c> when no
