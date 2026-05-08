@@ -15,9 +15,9 @@
     "frameworkStatusDetail": "Core Blueprint source-generator framework is at full feature parity with legacy Blueprint for Signature365 migration. All consumer-space companion packages (Rebus, Marten, Hangfire, tenant context) are by-design extensions that consumers build in their own repositories.",
     "nextReadySlice": null,
     "lastCompletedSlice": {
-      "id": "quality/openapi-content-types",
+      "id": "docs/less-than-validation-docs",
       "workstream": "documentation-and-final-alignment",
-      "title": "Emit proper OpenAPI content types for PlainTextResult (text/plain) and FileStreamResult (application/octet-stream)"
+      "title": "Update compile-time-validation docs with LessThan/LessThanProperty entries and OpenAPI exclusiveMaximum test"
     },
     "openReviewGate": null,
     "openReviewGateRationale": null,
@@ -358,6 +358,30 @@
       "workstream": "documentation-and-final-alignment",
       "title": "Add ExportTemplatesCommand sample demonstrating AcceptedResult<T> pattern with 202 Accepted response",
       "commit": "791bf6f"
+    },
+    {
+      "id": "validation/ivalidatable-object-sample",
+      "workstream": "documentation-and-final-alignment",
+      "title": "Add IValidatableObject cross-field validation to UpdateTemplateCommand and 7 new E2E tests",
+      "commit": "0774f2b"
+    },
+    {
+      "id": "validation/less-than-attribute",
+      "workstream": "documentation-and-final-alignment",
+      "title": "Add LessThanAttribute with compile-time fast-path strategy and OpenAPI exclusive maximum projection",
+      "commit": "7ff147e"
+    },
+    {
+      "id": "validation/less-than-property-attribute",
+      "workstream": "documentation-and-final-alignment",
+      "title": "Add LessThanPropertyAttribute with compile-time fast-path, BPV006 diagnostic, and cross-property comparison",
+      "commit": "6c66867"
+    },
+    {
+      "id": "docs/less-than-validation-docs",
+      "workstream": "documentation-and-final-alignment",
+      "title": "Update compile-time-validation docs with LessThan/LessThanProperty entries and OpenAPI exclusiveMaximum test",
+      "commit": "7569afd"
     }
   ],
   "decisions": [
