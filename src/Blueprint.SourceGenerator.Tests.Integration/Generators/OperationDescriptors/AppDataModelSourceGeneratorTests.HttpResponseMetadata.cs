@@ -32,6 +32,7 @@ public class AppDataModelSourceGeneratorHttpResponseMetadataTests
     }
 }
 
+[Blueprint.Model.Attributes.AllowAnonymous]
 [Blueprint.Model.Attributes.RootLink("/openapi/http-response-metadata")]
 public partial class HttpResponseMetadataQueryOp : IQuery<OkResult<string>>
 {

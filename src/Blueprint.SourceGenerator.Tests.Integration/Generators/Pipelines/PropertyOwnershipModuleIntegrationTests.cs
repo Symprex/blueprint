@@ -213,6 +213,7 @@ public class PropertyOwnershipModuleIntegrationTests
 
 // Test operations — these are discovered by the source generator at compile time.
 
+[Blueprint.Model.Attributes.AllowAnonymous]
 [Blueprint.Model.Attributes.RootLink("/population-test/users-update/{Id}")]
 public partial class UpdateUserPopulationCommand : ICommand<string>
 {
@@ -236,6 +237,7 @@ public partial class UpdateUserPopulationCommand : ICommand<string>
     }
 }
 
+[Blueprint.Model.Attributes.AllowAnonymous]
 [Blueprint.Model.Attributes.RootLink("/population-test/users/{Id}")]
 public partial class GetUserPopulationQuery : IQuery<string>
 {
@@ -249,6 +251,7 @@ public partial class GetUserPopulationQuery : IQuery<string>
     }
 }
 
+[Blueprint.Model.Attributes.AllowAnonymous]
 [Blueprint.Model.Attributes.RootLink("/population-test/users-int/{Id}")]
 public partial class GetUserByIntIdQuery : IQuery<string>
 {
@@ -279,6 +282,7 @@ public partial class SelfLinkRoutePopulationApiResource : ApiResource
 /// <summary>
 /// Query-only GET with no route params — all bindable properties are query-owned.
 /// </summary>
+[Blueprint.Model.Attributes.AllowAnonymous]
 [Blueprint.Model.Attributes.RootLink("/population-test/search")]
 public partial class SearchPopulationQuery : IQuery<string>
 {
@@ -300,6 +304,7 @@ public partial class SearchPopulationQuery : IQuery<string>
 /// <summary>
 /// GET with array query params for testing multi-value query strings.
 /// </summary>
+[Blueprint.Model.Attributes.AllowAnonymous]
 [Blueprint.Model.Attributes.RootLink("/population-test/filter")]
 public partial class FilterPopulationQuery : IQuery<string>
 {
@@ -316,6 +321,7 @@ public partial class FilterPopulationQuery : IQuery<string>
 /// DELETE with route + query params for testing DELETE query binding.
 /// </summary>
 [Blueprint.Model.Attributes.HttpDelete]
+[Blueprint.Model.Attributes.AllowAnonymous]
 [Blueprint.Model.Attributes.RootLink("/population-test/items/{Id}")]
 public partial class DeleteItemPopulationCommand : ICommand<string>
 {
@@ -334,6 +340,7 @@ public partial class DeleteItemPopulationCommand : ICommand<string>
 /// <summary>
 /// GET query with explicit [FromHeader] for testing header binding in descriptors.
 /// </summary>
+[Blueprint.Model.Attributes.AllowAnonymous]
 [Blueprint.Model.Attributes.RootLink("/population-test/header-bound")]
 public partial class HeaderBoundPopulationQuery : IQuery<string>
 {
@@ -349,6 +356,7 @@ public partial class HeaderBoundPopulationQuery : IQuery<string>
 /// <summary>
 /// GET query with explicit [FromCookie] for testing cookie binding in descriptors.
 /// </summary>
+[Blueprint.Model.Attributes.AllowAnonymous]
 [Blueprint.Model.Attributes.RootLink("/population-test/cookie-bound")]
 public partial class CookieBoundPopulationQuery : IQuery<string>
 {
@@ -365,6 +373,7 @@ public partial class CookieBoundPopulationQuery : IQuery<string>
 /// POST command with explicit [FromQuery(Name = "q")] overriding the convention on a
 /// write-method operation, plus a remaining body-owned property.
 /// </summary>
+[Blueprint.Model.Attributes.AllowAnonymous]
 [Blueprint.Model.Attributes.RootLink("/population-test/explicit-query")]
 public partial class ExplicitQueryPopulationCommand : ICommand<string>
 {
@@ -384,6 +393,7 @@ public partial class ExplicitQueryPopulationCommand : ICommand<string>
 /// POST command combining all binding sources: route (convention), query (explicit),
 /// header (explicit), cookie (explicit), and body (convention remaining).
 /// </summary>
+[Blueprint.Model.Attributes.AllowAnonymous]
 [Blueprint.Model.Attributes.RootLink("/population-test/mixed/{OrgId}")]
 public partial class MixedBindingPopulationCommand : ICommand<string>
 {

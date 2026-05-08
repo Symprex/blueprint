@@ -23,7 +23,10 @@ public class OperationDescriptorSourceGeneratorTestsHttpResponseMetadata
         descriptorSource.Should().NotBeNull();
         descriptorSource!.Should().Contain("new global::Blueprint.Model.OperationHttpResponseMetadataFeatureData(");
         descriptorSource.Should().Contain("new global::Blueprint.Model.OperationHttpResponseMetadata(200");
-        descriptorSource.Should().Contain(".AddRange(global::Blueprint.Model.WellKnownFeatureData.CommonFailureResponses)");
+
+        // HTTP operations default to authenticated, so failure responses include 401
+        descriptorSource.Should().Contain(".AddRange(global::Blueprint.Model.WellKnownFeatureData.AuthenticatedFailureResponses)",
+            "HTTP operations default to authenticated and their failure responses should include 401");
         descriptorSource.Should().Contain("\"Blueprint.Runtime.Exec.OkResult<string>\"");
     }
 
@@ -50,7 +53,7 @@ public class OperationDescriptorSourceGeneratorTestsHttpResponseMetadata
     }
 
     [Fact]
-    public void When_http_command_has_body_binding_then_generated_descriptor_includes_400_and_415_responses()
+    public void When_http_command_has_body_binding_then_generated_descriptor_includes_400_401_and_415_responses()
     {
         var result = OperationDescriptorSourceGeneratorTests.Compile("""
             using Blueprint.Runtime.Exec;
@@ -68,9 +71,9 @@ public class OperationDescriptorSourceGeneratorTestsHttpResponseMetadata
             .Select(static tree => tree.ToString())
             .FirstOrDefault(static source => source.Contains("BodyBoundCommandDescriptor"));
 
-        // Failures-only [400, 415, 422, 500] → BodyBindingFailureResponsesFeatureData constant
+        // HTTP operations default to authenticated, so body-bound ops include 401
         descriptorSource.Should().NotBeNull();
-        descriptorSource!.Should().Contain("BodyBindingFailureResponsesFeatureData");
+        descriptorSource!.Should().Contain("AuthenticatedBodyBindingFailureResponsesFeatureData");
     }
 
     [Fact]

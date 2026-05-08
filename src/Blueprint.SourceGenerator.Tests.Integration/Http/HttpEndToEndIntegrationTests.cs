@@ -1378,6 +1378,7 @@ public class HttpEndToEndIntegrationTests
 /// <summary>
 /// Anonymous GET with a query-string parameter for end-to-end query-binding and routing validation.
 /// </summary>
+[Blueprint.Model.Attributes.AllowAnonymous]
 [Blueprint.Model.Attributes.RootLink("/e2e/echo")]
 public partial class E2EEchoQuery : IQuery<string>
 {
@@ -1434,6 +1435,7 @@ public partial class E2EFromResourceInheritedQuery : IQuery<string>
 /// <summary>
 /// POST command with a body-bound property for end-to-end body-binding and routing validation.
 /// </summary>
+[Blueprint.Model.Attributes.AllowAnonymous]
 [Blueprint.Model.Attributes.RootLink("/e2e/items")]
 public partial class E2ECreateCommand : ICommand<string>
 {
@@ -1449,6 +1451,7 @@ public partial class E2ECreateCommand : ICommand<string>
 /// <summary>
 /// POST command with a <see cref="RequiredAttribute"/> field for end-to-end validation-failure (422) testing.
 /// </summary>
+[Blueprint.Model.Attributes.AllowAnonymous]
 [Blueprint.Model.Attributes.RootLink("/e2e/validated")]
 public partial class E2EValidatedCommand : ICommand<string>
 {
@@ -1551,6 +1554,7 @@ public partial class E2ETenantResourceQuery : IQuery<string>
 /// <summary>
 /// Query that throws an <see cref="ApiException"/> with HTTP 404 to verify non-500 exception translation.
 /// </summary>
+[Blueprint.Model.Attributes.AllowAnonymous]
 [Blueprint.Model.Attributes.RootLink("/e2e/not-found-exception")]
 public partial class E2ENotFoundExceptionQuery : IQuery<string>
 {
@@ -1566,6 +1570,7 @@ public partial class E2ENotFoundExceptionQuery : IQuery<string>
 /// <summary>
 /// Query that throws a plain <see cref="InvalidOperationException"/> to verify 500 fallback.
 /// </summary>
+[Blueprint.Model.Attributes.AllowAnonymous]
 [Blueprint.Model.Attributes.RootLink("/e2e/unhandled-exception")]
 public partial class E2EUnhandledExceptionQuery : IQuery<string>
 {
@@ -1581,6 +1586,7 @@ public partial class E2EUnhandledExceptionQuery : IQuery<string>
 /// <summary>
 /// Query with a <see cref="Blueprint.Model.Attributes.FromHeaderAttribute"/> property to verify HTTP header binding.
 /// </summary>
+[Blueprint.Model.Attributes.AllowAnonymous]
 [Blueprint.Model.Attributes.RootLink("/e2e/header-binding")]
 public partial class E2EHeaderBindingQuery : IQuery<string>
 {
@@ -1600,6 +1606,7 @@ public partial class E2EHeaderBindingQuery : IQuery<string>
 /// <summary>
 /// Query with a <see cref="Blueprint.Model.Attributes.FromCookieAttribute"/> property to verify HTTP cookie binding.
 /// </summary>
+[Blueprint.Model.Attributes.AllowAnonymous]
 [Blueprint.Model.Attributes.RootLink("/e2e/cookie-binding")]
 public partial class E2ECookieBindingQuery : IQuery<string>
 {
@@ -1649,6 +1656,7 @@ public partial class E2ENoContentCommand : ICommand<HttpNoContentResult>
 /// <summary>
 /// Query with a route parameter to verify route-value binding end-to-end.
 /// </summary>
+[Blueprint.Model.Attributes.AllowAnonymous]
 [Blueprint.Model.Attributes.RootLink("/e2e/items/{ItemId}")]
 public partial class E2ERouteParamQuery : IQuery<string>
 {
@@ -1667,6 +1675,7 @@ public partial class E2ERouteParamQuery : IQuery<string>
 /// <summary>
 /// Query with a typed (Guid) route parameter to verify route-value TryParse binding and 400 on invalid values.
 /// </summary>
+[Blueprint.Model.Attributes.AllowAnonymous]
 [Blueprint.Model.Attributes.RootLink("/e2e/typed-items/{ItemId}")]
 public partial class E2ETypedRouteParamQuery : IQuery<Guid>
 {
@@ -1685,6 +1694,7 @@ public partial class E2ETypedRouteParamQuery : IQuery<Guid>
 /// <summary>
 /// Command that returns <see cref="CreatedResult{T}"/> to verify 201 Created response translation.
 /// </summary>
+[Blueprint.Model.Attributes.AllowAnonymous]
 [Blueprint.Model.Attributes.RootLink("/e2e/widgets")]
 public partial class E2ECreatedCommand : ICommand<CreatedResult<E2EWidgetResponse>>
 {
@@ -1714,6 +1724,7 @@ public class E2EWidgetResponse
 /// Query returning a discriminated union — found items return <see cref="OkResult{T}"/>,
 /// missing items return <see cref="NotFoundResult{T}"/>.
 /// </summary>
+[Blueprint.Model.Attributes.AllowAnonymous]
 [Blueprint.Model.Attributes.RootLink("/e2e/maybe-items/{ItemId}")]
 public partial class E2EMaybeItemQuery : IQuery<Results<OkResult<E2EWidgetResponse>, NotFoundResult<E2EWidgetResponse>>>
 {
@@ -1740,6 +1751,7 @@ public partial class E2EMaybeItemQuery : IQuery<Results<OkResult<E2EWidgetRespon
 /// <summary>
 /// Command that returns <see cref="ResourceEventResult{T}"/> to verify 201 with envelope.
 /// </summary>
+[Blueprint.Model.Attributes.AllowAnonymous]
 [Blueprint.Model.Attributes.RootLink("/e2e/events")]
 public partial class E2EResourceEventCommand : ICommand<ResourceEventResult<E2EWidgetResponse>>
 {
@@ -1762,6 +1774,7 @@ public partial class E2EResourceEventCommand : ICommand<ResourceEventResult<E2EW
 /// <summary>
 /// Query that throws <see cref="NotFoundException"/> to verify the typed convenience exception returns 404.
 /// </summary>
+[Blueprint.Model.Attributes.AllowAnonymous]
 [Blueprint.Model.Attributes.RootLink("/e2e/not-found-typed")]
 public partial class E2ENotFoundTypedQuery : IQuery<string>
 {
@@ -1777,6 +1790,7 @@ public partial class E2ENotFoundTypedQuery : IQuery<string>
 /// <summary>
 /// Query that throws <see cref="ConflictException"/> to verify 409 response.
 /// </summary>
+[Blueprint.Model.Attributes.AllowAnonymous]
 [Blueprint.Model.Attributes.RootLink("/e2e/conflict")]
 public partial class E2EConflictQuery : IQuery<string>
 {
@@ -1792,6 +1806,7 @@ public partial class E2EConflictQuery : IQuery<string>
 /// <summary>
 /// Query that throws <see cref="BadRequestException"/> to verify 400 response.
 /// </summary>
+[Blueprint.Model.Attributes.AllowAnonymous]
 [Blueprint.Model.Attributes.RootLink("/e2e/bad-request")]
 public partial class E2EBadRequestQuery : IQuery<string>
 {

@@ -195,6 +195,11 @@ namespace Blueprint.Generated
                     await populator.PopulateAsync(context, context.OperationCancelled);
                 }
             }
+            if (((Blueprint.Runtime.Http.IHttpOperationContext)context).HttpContext.User.Identity?.IsAuthenticated != true)
+            {
+                return new Blueprint.Runtime.Exec.UnauthenticatedResult();
+            }
+
             var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<string>(await global::TestNamespace.AllTypesGetQuery.HandleAsync(operation));
 
             if (handlerResult.WasSuccessful)
@@ -229,7 +234,7 @@ namespace Blueprint.Generated
 
         public static System.Collections.Generic.IReadOnlyList<string> GetAppliedModules()
         {
-            return new string[] { "PropertyOwnershipModule", "PropertyPopulationModule", "HandlerExecutionModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
+            return new string[] { "PropertyOwnershipModule", "PropertyPopulationModule", "AuthenticationModule", "HandlerExecutionModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
         }
     }
 }
@@ -328,6 +333,11 @@ namespace Blueprint.Generated
                     await populator.PopulateAsync(context, context.OperationCancelled);
                 }
             }
+            if (((Blueprint.Runtime.Http.IHttpOperationContext)context).HttpContext.User.Identity?.IsAuthenticated != true)
+            {
+                return new Blueprint.Runtime.Exec.UnauthenticatedResult();
+            }
+
             var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<string>(await global::TestNamespace.AllTypesPostCommand.HandleAsync(operation));
 
             var unitOfWork = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Persistence.IUnitOfWork>(context.ServiceProvider);
@@ -368,7 +378,7 @@ namespace Blueprint.Generated
 
         public static System.Collections.Generic.IReadOnlyList<string> GetAppliedModules()
         {
-            return new string[] { "PropertyOwnershipModule", "PropertyPopulationModule", "HandlerExecutionModule", "UnitOfWorkModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
+            return new string[] { "PropertyOwnershipModule", "PropertyPopulationModule", "AuthenticationModule", "HandlerExecutionModule", "UnitOfWorkModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
         }
 
         private static void PopulateFromJsonBody(System.ReadOnlySpan<byte> bodyBytes, global::TestNamespace.AllTypesPostCommand operation)

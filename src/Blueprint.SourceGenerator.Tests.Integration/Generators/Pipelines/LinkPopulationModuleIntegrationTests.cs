@@ -116,6 +116,7 @@ public partial class MappedLinkApiResource : ApiResource
 /// A command that creates a resource and returns it via ResourceEventResult.
 /// The SelfLink declares how to build the $links.self href for this resource type.
 /// </summary>
+[Blueprint.Model.Attributes.AllowAnonymous]
 [Blueprint.Model.Attributes.SelfLink(typeof(LinkTestApiResource), "/link-test-resources/{Id}")]
 public partial class CreateLinkTestResourceCommand : ICommand<ResourceEventResult<LinkTestApiResource>>
 {
@@ -158,6 +159,7 @@ public partial class GetResourceWithoutSelfLinkQuery : IQuery<ResourceWithoutSel
 /// <summary>
 /// Declares a self-link with a mapped placeholder: route uses Slug, resource uses MappedId.
 /// </summary>
+[Blueprint.Model.Attributes.AllowAnonymous]
 [Blueprint.Model.Attributes.SelfLink(typeof(MappedLinkApiResource), "/mapped-resources/{Slug:MappedId}")]
 public partial class GetMappedLinkResourceQuery : IQuery<MappedLinkApiResource>
 {

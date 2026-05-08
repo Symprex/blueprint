@@ -25,6 +25,7 @@ public class AppDataModelSourceGeneratorRootLinkTests
     }
 }
 
+[Blueprint.Model.Attributes.AllowAnonymous]
 [Blueprint.Model.Attributes.RootLink("/test")]
 public partial class RootLinkOperationWithNoParameters : IOperation
 {
@@ -34,6 +35,7 @@ public partial class RootLinkOperationWithNoParameters : IOperation
     }
 }
 
+[Blueprint.Model.Attributes.AllowAnonymous]
 [Blueprint.Model.Attributes.RootLink("/test/{Id}")]
 public partial class RootLinkOperationWithParameter : IOperation
 {

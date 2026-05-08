@@ -71,6 +71,11 @@ namespace Blueprint.Generated
                     await populator.PopulateAsync(context, context.OperationCancelled);
                 }
             }
+            if (((Blueprint.Runtime.Http.IHttpOperationContext)context).HttpContext.User.Identity?.IsAuthenticated != true)
+            {
+                return new Blueprint.Runtime.Exec.UnauthenticatedResult();
+            }
+
             var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<string>(await global::TestNamespace.GetUserItemsQuery.HandleAsync(operation));
 
             if (handlerResult.WasSuccessful)
@@ -105,7 +110,7 @@ namespace Blueprint.Generated
 
         public static System.Collections.Generic.IReadOnlyList<string> GetAppliedModules()
         {
-            return new string[] { "PropertyOwnershipModule", "PropertyPopulationModule", "HandlerExecutionModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
+            return new string[] { "PropertyOwnershipModule", "PropertyPopulationModule", "AuthenticationModule", "HandlerExecutionModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
         }
     }
 }

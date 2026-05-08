@@ -53,6 +53,7 @@ public class AppModelHostExposureTests
     }
 }
 
+[Blueprint.Model.Attributes.AllowAnonymous]
 [Blueprint.Model.Attributes.RootLink("/host-aware/test")]
 public partial class HttpExposedOperationToScan : IOperation
 {

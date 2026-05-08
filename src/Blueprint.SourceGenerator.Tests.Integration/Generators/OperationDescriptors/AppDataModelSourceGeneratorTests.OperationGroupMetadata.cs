@@ -34,6 +34,7 @@ public class AppDataModelSourceGeneratorOperationGroupMetadataTests
     }
 }
 
+[Blueprint.Model.Attributes.AllowAnonymous]
 [Blueprint.Model.Attributes.ApiOperations("Billing")]
 [Blueprint.Model.Attributes.RootLink("/openapi/explicit-operation-group")]
 public partial class ExplicitOperationGroupQueryOp : IQuery<string>
@@ -44,6 +45,7 @@ public partial class ExplicitOperationGroupQueryOp : IQuery<string>
     }
 }
 
+[Blueprint.Model.Attributes.AllowAnonymous]
 [Blueprint.Model.Attributes.ApiOperations("Invoices", Description = "Invoice management and billing operations.")]
 [Blueprint.Model.Attributes.RootLink("/openapi/described-operation-group")]
 public partial class DescribedOperationGroupQueryOp : IQuery<string>

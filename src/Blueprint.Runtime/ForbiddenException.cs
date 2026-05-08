@@ -1,3 +1,5 @@
+using Blueprint.Authorization;
+
 namespace Blueprint;
 
 /// <summary>
@@ -15,6 +17,17 @@ public class ForbiddenException : ApiException
     }
 
     /// <summary>
+    /// Initializes a new instance of the <see cref="ForbiddenException"/> class from an
+    /// <see cref="ExecutionAllowed"/> denial, preserving the failure reason and diagnostic metadata.
+    /// </summary>
+    /// <param name="failure">The authorization check result that caused the denial.</param>
+    public ForbiddenException(ExecutionAllowed failure)
+        : base(failure.Message, "unauthorized", failure.Reason, 403)
+    {
+        this.FailureReason = failure;
+    }
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="ForbiddenException"/> class.
     /// </summary>
     /// <param name="message">A description of why access was denied.</param>
@@ -23,4 +36,11 @@ public class ForbiddenException : ApiException
         : base(message, innerException, 403)
     {
     }
+
+    /// <summary>
+    /// Gets the authorization failure that caused this exception, if constructed from an
+    /// <see cref="ExecutionAllowed"/> denial. <see langword="null"/> when constructed with
+    /// a plain message string.
+    /// </summary>
+    public ExecutionAllowed? FailureReason { get; }
 }

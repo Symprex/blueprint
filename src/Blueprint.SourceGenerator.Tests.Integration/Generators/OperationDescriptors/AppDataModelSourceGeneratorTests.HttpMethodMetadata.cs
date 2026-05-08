@@ -44,6 +44,7 @@ public class AppDataModelSourceGeneratorHttpMethodMetadataTests
     }
 }
 
+[AllowAnonymous]
 [RootLink("/openapi/http-method-convention-command")]
 public partial class HttpMethodConventionCommandOp : ICommand<OkResult<string>>
 {
@@ -53,6 +54,7 @@ public partial class HttpMethodConventionCommandOp : ICommand<OkResult<string>>
     }
 }
 
+[AllowAnonymous]
 [RootLink("/openapi/http-method-explicit-get-command")]
 [HttpGet]
 public partial class HttpMethodExplicitGetCommandOp : ICommand<OkResult<string>>
@@ -63,6 +65,7 @@ public partial class HttpMethodExplicitGetCommandOp : ICommand<OkResult<string>>
     }
 }
 
+[AllowAnonymous]
 [RootLink("/openapi/http-method-multi-explicit-query")]
 [HttpMethod("post")]
 [HttpGet]

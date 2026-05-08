@@ -36,6 +36,11 @@ namespace Blueprint.Generated
                     await populator.PopulateAsync(context, context.OperationCancelled);
                 }
             }
+            if (((Blueprint.Runtime.Http.IHttpOperationContext)context).HttpContext.User.Identity?.IsAuthenticated != true)
+            {
+                return new Blueprint.Runtime.Exec.UnauthenticatedResult();
+            }
+
             var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<global::TestNamespace.WidgetApiResource>(await global::TestNamespace.GetWidgetQuery.HandleAsync(operation));
 
             // Populate $links.self on the returned resource
@@ -77,7 +82,7 @@ namespace Blueprint.Generated
 
         public static System.Collections.Generic.IReadOnlyList<string> GetAppliedModules()
         {
-            return new string[] { "PropertyOwnershipModule", "PropertyPopulationModule", "HandlerExecutionModule", "LinkGenerationModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
+            return new string[] { "PropertyOwnershipModule", "PropertyPopulationModule", "AuthenticationModule", "HandlerExecutionModule", "LinkGenerationModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
         }
     }
 }
@@ -181,6 +186,11 @@ namespace Blueprint.Generated
                     await populator.PopulateAsync(context, context.OperationCancelled);
                 }
             }
+            if (((Blueprint.Runtime.Http.IHttpOperationContext)context).HttpContext.User.Identity?.IsAuthenticated != true)
+            {
+                return new Blueprint.Runtime.Exec.UnauthenticatedResult();
+            }
+
             var handlerResult = await global::TestNamespace.UpdateWidgetCommand.HandleAsync(operation);
 
             // Populate $links.self on the returned resource
@@ -246,7 +256,7 @@ namespace Blueprint.Generated
 
         public static System.Collections.Generic.IReadOnlyList<string> GetAppliedModules()
         {
-            return new string[] { "PropertyOwnershipModule", "PropertyPopulationModule", "HandlerExecutionModule", "LinkGenerationModule", "UnitOfWorkModule", "AuditingModule", "ResourceEventAuditModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
+            return new string[] { "PropertyOwnershipModule", "PropertyPopulationModule", "AuthenticationModule", "HandlerExecutionModule", "LinkGenerationModule", "UnitOfWorkModule", "AuditingModule", "ResourceEventAuditModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
         }
 
         private static void PopulateFromJsonBody(System.ReadOnlySpan<byte> bodyBytes, global::TestNamespace.UpdateWidgetCommand operation)

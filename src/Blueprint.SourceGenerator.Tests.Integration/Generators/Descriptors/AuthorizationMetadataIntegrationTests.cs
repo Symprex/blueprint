@@ -138,6 +138,7 @@ public partial class MultiResourceCommand : ICommand<string>
 /// <summary>
 /// Operation without any <c>[Resource]</c> for negative-path integration testing.
 /// </summary>
+[AllowAnonymous]
 [RootLink("/authz-test/items")]
 public partial class NoResourceQuery : IQuery<string>
 {
