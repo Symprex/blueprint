@@ -259,22 +259,30 @@ public class HttpOperationResultExecutor
     private static async Task WriteUnhandledExceptionAsync(HttpContext httpContext, ApiOperationContext operationContext, UnhandledExceptionResult unhandledExceptionResult, BlueprintHttpOptions httpOptions)
     {
         var exposeDetails = httpOptions.ExposeExceptionDetailsInErrorResponses;
+        var apiEx = unhandledExceptionResult.Exception as ApiException;
 
-        // Respect ApiException.HttpStatus when the exception carries a specific HTTP status code.
-        var statusCode = unhandledExceptionResult.Exception is ApiException apiEx
-            ? apiEx.HttpStatus
-            : StatusCodes.Status500InternalServerError;
+        var statusCode = apiEx?.HttpStatus ?? StatusCodes.Status500InternalServerError;
 
         var problemDetails = new MvcProblemDetails
         {
             Status = statusCode,
-            Title = statusCode >= 500 ? "Server error" : "Request error",
+            Title = apiEx?.Title ?? (statusCode >= 500 ? "Server error" : "Request error"),
+            Type = apiEx?.Type,
             Detail = exposeDetails
-                ? unhandledExceptionResult.Exception.Message
+                ? apiEx?.Detail ?? unhandledExceptionResult.Exception.Message
                 : statusCode >= 500
                     ? "An unexpected error occurred."
-                    : unhandledExceptionResult.Exception.Message,
+                    : apiEx?.Detail ?? unhandledExceptionResult.Exception.Message,
         };
+
+        // Carry over any extension data from the ApiException into the ProblemDetails response.
+        if (apiEx?.Extensions is { Count: > 0 })
+        {
+            foreach (var kvp in apiEx.Extensions)
+            {
+                problemDetails.Extensions[kvp.Key] = kvp.Value;
+            }
+        }
 
         if (exposeDetails && statusCode >= 500)
         {
