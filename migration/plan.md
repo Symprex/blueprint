@@ -260,10 +260,10 @@ This phase closes the richer API surface expected by consumer apps.
 
 **Phase 2 exit gate**
 
-- [ ] Resource metadata, link generation, post-processing, and resource-event behavior are implemented with a deliberate no-general-nested-execution story.
-- [ ] OpenAPI is generated automatically from the same source-generated metadata used by the HTTP host.
-- [ ] The reference app and artifacts demonstrate these capabilities end to end.
-- [ ] The Phase 2 review artifact set exists: resource/link manifest, OpenAPI artifact, and post-processing/resource-event test evidence.
+- [x] Resource metadata, link generation, post-processing, and resource-event behavior are implemented with a deliberate no-general-nested-execution story.
+- [x] OpenAPI is generated automatically from the same source-generated metadata used by the HTTP host.
+- [x] The reference app and artifacts demonstrate these capabilities end to end.
+- [x] The Phase 2 review artifact set exists: resource/link manifest, OpenAPI artifact, and post-processing/resource-event test evidence.
 
 ### Phase 3 - Non-HTTP hosts and extensibility
 
@@ -271,10 +271,10 @@ This phase proves that the architecture is general, not HTTP-only.
 
 **Phase 3 exit gate**
 
-- [ ] At least one non-HTTP host works through the shared module/contributor model.
-- [ ] At least one consumer-space integration seam is proven with a realistic package-style example.
-- [ ] The migration tooling and extension seams are credible enough for Signature365-style migrations beyond the reference app.
-- [ ] The Phase 3 review artifact set exists: non-HTTP host manifest, a worked example that shows clear host/package separation in namespacing, and a realistic migration dry-run/report sample.
+- [x] At least one non-HTTP host works through the shared module/contributor model.
+- [x] At least one consumer-space integration seam is proven with a realistic package-style example.
+- [x] The migration tooling and extension seams are credible enough for Signature365-style migrations beyond the reference app.
+- [x] The Phase 3 review artifact set exists: non-HTTP host manifest, a worked example that shows clear host/package separation in namespacing, and a realistic migration dry-run/report sample.
 
 ## Dependency summary
 
@@ -496,7 +496,7 @@ When delegating a workstream, include:
 
 ### Acceptance criteria
 
-- [ ] Medium-scale compile-time locality is measured and gated in CI.
+- [x] Medium-scale compile-time locality is measured and gated in CI.
 - [x] Build telemetry can explain cold, no-op, and single-edit behavior.
 - [x] Runtime hotspot measurements exist for known registration/lookup bottlenecks.
 - [x] A reviewable benchmark baseline exists for the known `BlueprintApp` hotspots before Phase 1 starts.

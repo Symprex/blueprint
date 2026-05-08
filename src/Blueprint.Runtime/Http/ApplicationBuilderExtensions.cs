@@ -44,12 +44,9 @@ public static class EndpointRouteBuilderExtensions
         // Ensure ends with a slash, but only one
         basePath = basePath.TrimEnd('/') + '/';
 
-        // var logger = endpoints.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("Blueprint.Compilation");
         var runtimeModel = new T();
 
         var httpOptions = endpoints.ServiceProvider.GetService<IOptions<BlueprintHttpOptions>>()?.Value ?? new BlueprintHttpOptions();
-
-        // var apiOperationExecutor = endpoints.ServiceProvider.GetRequiredService<IApiOperationExecutor>();
 
         RequestDelegate requestDelegate = new BlueprintApiRouter<TExec>(
             endpoints.ServiceProvider,
@@ -82,21 +79,6 @@ public static class EndpointRouteBuilderExtensions
         openApiBuilder.WithMetadata(new HttpMethodMetadata([HttpMethods.Get]));
 
         builders.Add(openApiBuilder);
-
-        // Ordering by 'indexOf {' means we put those URLs which are not placeholders
-        // first (e.g. /users/{id} and /users/me will put /users/me first) because those without would return -1
-        // foreach (var link in apiDataModel.Links.OrderBy(l => l.UrlFormat.IndexOf('{')))
-        // {
-        //     var httpFeatureData = link.OperationDescriptor.GetFeatureData<HttpOperationFeatureData>();
-        //
-        //     var builder = endpoints.Map(RoutePatternFactory.Parse(basePath + link.RoutingUrl), requestDelegate);
-        //
-        //     builder.WithDisplayName($"{httpFeatureData.HttpMethod} {link.OperationDescriptor.Name}");
-        //     builder.WithMetadata(new HttpMethodMetadata(new[] { httpFeatureData.HttpMethod }));
-        //     builder.WithMetadata(link.OperationDescriptor);
-        //
-        //     builders.Add(builder);
-        // }
 
         foreach (var operation in runtimeModel.Operations)
         {
@@ -207,20 +189,6 @@ public static class EndpointRouteBuilderExtensions
                 Activity.Current.DisplayName = operation.Name;
             }
 
-            // var httpFeatureData = operation.GetFeatureData<HttpOperationFeatureData>();
-            //
-            // if (httpFeatureData.HttpMethod != httpRequest.Method)
-            // {
-            //     this._logger.LogInformation(
-            //         "Request {Method} {Url} does not match required HTTP method {RequiredMethod}",
-            //         httpRequest.Method,
-            //         httpRequest.GetDisplayUrl(),
-            //         httpFeatureData.HttpMethod);
-            //
-            //     httpContext.Response.StatusCode = (int)HttpStatusCode.MethodNotAllowed;
-            //
-            //     return;
-            // }
             // Method enforcement is handled by ASP.NET Core routing via HttpMethodMetadata on mapped endpoints.
 
             using var nestedContainer = this._rootServiceProvider.CreateScope();
