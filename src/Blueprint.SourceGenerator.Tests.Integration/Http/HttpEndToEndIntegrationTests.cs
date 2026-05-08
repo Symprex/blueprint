@@ -993,6 +993,164 @@ public class HttpEndToEndIntegrationTests
         response.StatusCode.Should().Be(StatusCodes.Status400BadRequest);
     }
 
+    [Fact]
+    public async Task When_command_returns_ResourceEventResult_updated_then_returns_200_with_envelope()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/e2e/events-update");
+        endpoint.Should().NotBeNull("the resource-event-update command route should be registered");
+
+        var bodyJson = """{"title":"updated-widget"}"""u8.ToArray();
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.ContentType = "application/json; charset=utf-8";
+            context.Request.ContentLength = bodyJson.Length;
+            context.Request.Body = new MemoryStream(bodyJson);
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        response.ContentType.Should().StartWith("application/json");
+        response.Body.Should().Contain("evt-update-001");
+        response.Body.Should().Contain("res-update-001");
+        response.Body.Should().Contain("updated-widget");
+    }
+
+    [Fact]
+    public async Task When_command_returns_ResourceEventResult_deleted_then_returns_204_no_body()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/e2e/events-delete");
+        endpoint.Should().NotBeNull("the resource-event-delete command route should be registered");
+
+        var bodyJson = """{"resourceId":"del-001"}"""u8.ToArray();
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.ContentType = "application/json; charset=utf-8";
+            context.Request.ContentLength = bodyJson.Length;
+            context.Request.Body = new MemoryStream(bodyJson);
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status204NoContent);
+    }
+
+    [Fact]
+    public async Task When_command_returns_KeyOnlyResourceEventResult_updated_then_returns_200()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+        var endpoint = FindEndpoint(endpoints, "api/e2e/key-only-event-update")!;
+
+        var bodyJson = """{"resourceId":"res-upd-001"}"""u8.ToArray();
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, ctx =>
+        {
+            ctx.Request.ContentType = "application/json; charset=utf-8";
+            ctx.Request.ContentLength = bodyJson.Length;
+            ctx.Request.Body = new MemoryStream(bodyJson);
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+    }
+
+    [Fact]
+    public async Task When_command_returns_KeyOnlyResourceEventResult_deleted_then_returns_204()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+        var endpoint = FindEndpoint(endpoints, "api/e2e/key-only-event-delete")!;
+
+        var bodyJson = """{"resourceId":"res-del-001"}"""u8.ToArray();
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, ctx =>
+        {
+            ctx.Request.ContentType = "application/json; charset=utf-8";
+            ctx.Request.ContentLength = bodyJson.Length;
+            ctx.Request.Body = new MemoryStream(bodyJson);
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status204NoContent);
+    }
+
+    [Fact]
+    public async Task When_handler_throws_ApiException_with_503_then_returns_503_with_problem_details()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/e2e/service-unavailable");
+        endpoint.Should().NotBeNull();
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider);
+
+        response.StatusCode.Should().Be(503);
+        response.ContentType.Should().StartWith("application/problem+json");
+        response.Body.Should().Contain("\"status\":503");
+        response.Body.Should().Contain("Server error");
+    }
+
+    [Fact]
+    public async Task When_GET_with_multiple_route_parameters_then_all_are_bound()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/e2e/parents/{ParentId}/children/{ChildId}");
+        endpoint.Should().NotBeNull("the multi-route-param endpoint should be registered");
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.RouteValues = new RouteValueDictionary
+            {
+                ["ParentId"] = "parent-42",
+                ["ChildId"] = "child-7",
+            };
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        response.Body.Should().Contain("parent-42");
+        response.Body.Should().Contain("child-7");
+    }
+
+    [Fact]
+    public async Task When_POST_with_empty_body_on_required_fields_then_returns_422()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/e2e/key-only-event");
+        endpoint.Should().NotBeNull();
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.ContentType = "application/json; charset=utf-8";
+            context.Request.ContentLength = 0;
+            context.Request.Body = new MemoryStream(Array.Empty<byte>());
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status422UnprocessableEntity);
+    }
+
+    [Fact]
+    public async Task When_POST_with_wrong_content_type_then_returns_415()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/e2e/key-only-event");
+        endpoint.Should().NotBeNull();
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.ContentType = "application/xml";
+            context.Request.ContentLength = 10;
+            context.Request.Body = new MemoryStream("<r/>"u8.ToArray());
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status415UnsupportedMediaType);
+    }
+
     private static async Task<TestHttpResponse> InvokeEndpointAsync(
         RouteEndpoint endpoint,
         IServiceProvider serviceProvider,
@@ -1924,5 +2082,140 @@ public partial class E2EKeyOnlyEventCommand : ICommand<KeyOnlyResourceEventResul
     public static Task<KeyOnlyResourceEventResult> HandleAsync(E2EKeyOnlyEventCommand command)
     {
         return Task.FromResult(new KeyOnlyResourceEventResult(Blueprint.Model.ChangeType.Created, "item.created", command.ResourceId));
+    }
+}
+
+/// <summary>
+/// POST returning ResourceEventResult with ChangeType.Updated to verify 200 OK with envelope.
+/// </summary>
+[Blueprint.Model.Attributes.RootLink("/e2e/events-update")]
+[Blueprint.Model.Attributes.HttpPost]
+[Blueprint.Model.Attributes.AllowAnonymous]
+[Blueprint.Auditing.DoNotAudit]
+public partial class E2EResourceEventUpdateCommand : ICommand<ResourceEventResult<E2EWidgetResponse>>
+{
+    /// <summary>Body-bound title for update.</summary>
+    public string? Title { get; set; }
+
+    /// <summary>Returns a resource event with Updated change type.</summary>
+    /// <param name="command">The command with the body-bound title.</param>
+    /// <returns>A ResourceEventResult with ChangeType.Updated.</returns>
+    public static Task<ResourceEventResult<E2EWidgetResponse>> HandleAsync(E2EResourceEventUpdateCommand command)
+    {
+        return Task.FromResult(new ResourceEventResult<E2EWidgetResponse>(
+            ChangeType.Updated,
+            "evt-update-001",
+            "res-update-001",
+            new E2EWidgetResponse { Name = command.Title ?? "untitled" }));
+    }
+}
+
+/// <summary>
+/// POST returning ResourceEventResult with ChangeType.Deleted to verify 204 No Content.
+/// </summary>
+[Blueprint.Model.Attributes.RootLink("/e2e/events-delete")]
+[Blueprint.Model.Attributes.HttpPost]
+[Blueprint.Model.Attributes.AllowAnonymous]
+[Blueprint.Auditing.DoNotAudit]
+public partial class E2EResourceEventDeleteCommand : ICommand<ResourceEventResult<E2EWidgetResponse>>
+{
+    /// <summary>The resource ID being deleted.</summary>
+    [Required]
+    public string ResourceId { get; set; } = default!;
+
+    /// <summary>Returns a resource event with Deleted change type.</summary>
+    /// <param name="command">The command instance.</param>
+    /// <returns>A ResourceEventResult with ChangeType.Deleted.</returns>
+    public static Task<ResourceEventResult<E2EWidgetResponse>> HandleAsync(E2EResourceEventDeleteCommand command)
+    {
+        return Task.FromResult(new ResourceEventResult<E2EWidgetResponse>(
+            ChangeType.Deleted,
+            "evt-delete-001",
+            command.ResourceId,
+            new E2EWidgetResponse { Name = "deleted" }));
+    }
+}
+
+/// <summary>
+/// POST returning KeyOnlyResourceEventResult with ChangeType.Updated to verify 200 OK.
+/// </summary>
+[Blueprint.Model.Attributes.RootLink("/e2e/key-only-event-update")]
+[Blueprint.Model.Attributes.HttpPost]
+[Blueprint.Model.Attributes.AllowAnonymous]
+[Blueprint.Auditing.DoNotAudit]
+public partial class E2EKeyOnlyEventUpdateCommand : ICommand<KeyOnlyResourceEventResult>
+{
+    /// <summary>The resource ID for the event.</summary>
+    [Required]
+    public string ResourceId { get; set; } = default!;
+
+    /// <summary>Creates a key-only resource event with Updated change type.</summary>
+    /// <param name="command">The command instance.</param>
+    /// <returns>A key-only resource event result with Updated.</returns>
+    public static Task<KeyOnlyResourceEventResult> HandleAsync(E2EKeyOnlyEventUpdateCommand command)
+    {
+        return Task.FromResult(new KeyOnlyResourceEventResult(Blueprint.Model.ChangeType.Updated, "item.updated", command.ResourceId));
+    }
+}
+
+/// <summary>
+/// POST returning KeyOnlyResourceEventResult with ChangeType.Deleted to verify 204 No Content.
+/// </summary>
+[Blueprint.Model.Attributes.RootLink("/e2e/key-only-event-delete")]
+[Blueprint.Model.Attributes.HttpPost]
+[Blueprint.Model.Attributes.AllowAnonymous]
+[Blueprint.Auditing.DoNotAudit]
+public partial class E2EKeyOnlyEventDeleteCommand : ICommand<KeyOnlyResourceEventResult>
+{
+    /// <summary>The resource ID for the event.</summary>
+    [Required]
+    public string ResourceId { get; set; } = default!;
+
+    /// <summary>Creates a key-only resource event with Deleted change type.</summary>
+    /// <param name="command">The command instance.</param>
+    /// <returns>A key-only resource event result with Deleted.</returns>
+    public static Task<KeyOnlyResourceEventResult> HandleAsync(E2EKeyOnlyEventDeleteCommand command)
+    {
+        return Task.FromResult(new KeyOnlyResourceEventResult(Blueprint.Model.ChangeType.Deleted, "item.deleted", command.ResourceId));
+    }
+}
+
+/// <summary>
+/// Query that throws <see cref="ApiException"/> with HTTP 503 to verify non-standard status code translation.
+/// </summary>
+[Blueprint.Model.Attributes.RootLink("/e2e/service-unavailable")]
+[Blueprint.Model.Attributes.AllowAnonymous]
+[Blueprint.Auditing.DoNotAudit]
+public partial class E2EServiceUnavailableQuery : IQuery<string>
+{
+    /// <summary>Throws ApiException(503) to test custom HTTP status translation.</summary>
+    /// <param name="query">The query instance (unused).</param>
+    /// <returns>Never returns — always throws.</returns>
+    public static Task<string> HandleAsync(E2EServiceUnavailableQuery query)
+    {
+        throw new ApiException("Downstream service unavailable", 503);
+    }
+}
+
+/// <summary>
+/// Query with multiple route parameters to verify compound URL binding.
+/// </summary>
+[Blueprint.Model.Attributes.RootLink("/e2e/parents/{ParentId}/children/{ChildId}")]
+[Blueprint.Model.Attributes.AllowAnonymous]
+[Blueprint.Auditing.DoNotAudit]
+public partial class E2EMultiRouteParamQuery : IQuery<string>
+{
+    /// <summary>The parent resource identifier from the URL.</summary>
+    public string ParentId { get; set; } = default!;
+
+    /// <summary>The child resource identifier from the URL.</summary>
+    public string ChildId { get; set; } = default!;
+
+    /// <summary>Echoes both route parameters.</summary>
+    /// <param name="query">The query with bound route params.</param>
+    /// <returns>A string showing both bound values.</returns>
+    public static Task<string> HandleAsync(E2EMultiRouteParamQuery query)
+    {
+        return Task.FromResult($"parent:{query.ParentId}|child:{query.ChildId}");
     }
 }
