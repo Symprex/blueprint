@@ -466,6 +466,24 @@
       "workstream": "documentation-and-final-alignment",
       "title": "Fix nullable value type JSON deserialization codegen (global::double? -> double?) and PATCH sample operation",
       "commit": "6432d07"
+    },
+    {
+      "id": "codegen/double-float-datetimeoffset-support",
+      "workstream": "documentation-and-final-alignment",
+      "title": "Add double, float, and DateTimeOffset support to property ownership codegen",
+      "commit": "06bccb5"
+    },
+    {
+      "id": "test/patch-and-typed-query-e2e",
+      "workstream": "documentation-and-final-alignment",
+      "title": "PATCH endpoint and typed query parameter (double/float/DateTimeOffset/nullable) E2E integration tests",
+      "commit": "2a85ced"
+    },
+    {
+      "id": "test/array-query-collection-body-e2e",
+      "workstream": "documentation-and-final-alignment",
+      "title": "Array query parameter and collection body type E2E integration tests",
+      "commit": "be85252"
     }
   ],
   "decisions": [
