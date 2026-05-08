@@ -94,6 +94,9 @@ public sealed record OpenApiOperationRenderingContext(
             var description = GetPropertyDescription(descriptor.OperationType, entry.PropertyName);
             var enumValues = GetEnumValues(descriptor.OperationType, entry.PropertyName);
 
+            // Validation-derived format (email, uri, phone) takes precedence over CLR type format.
+            var effectiveFormat = constraints.Format ?? schemaFormat;
+
             switch (entry.Source)
             {
                 case PropertyBindingSource.Route:
@@ -102,7 +105,7 @@ public sealed record OpenApiOperationRenderingContext(
                         "path",
                         Required: true,
                         schemaType,
-                        schemaFormat)
+                        effectiveFormat)
                     {
                         Description = description,
                         MinLength = constraints.MinLength,
@@ -123,7 +126,7 @@ public sealed record OpenApiOperationRenderingContext(
                         "query",
                         Required: constraints.IsRequired,
                         schemaType,
-                        schemaFormat)
+                        effectiveFormat)
                     {
                         Description = description,
                         MinLength = constraints.MinLength,
@@ -144,7 +147,7 @@ public sealed record OpenApiOperationRenderingContext(
                         "header",
                         Required: constraints.IsRequired,
                         schemaType,
-                        schemaFormat)
+                        effectiveFormat)
                     {
                         Description = description,
                         MinLength = constraints.MinLength,
@@ -165,7 +168,7 @@ public sealed record OpenApiOperationRenderingContext(
                         "cookie",
                         Required: constraints.IsRequired,
                         schemaType,
-                        schemaFormat)
+                        effectiveFormat)
                     {
                         Description = description,
                         MinLength = constraints.MinLength,
@@ -184,7 +187,7 @@ public sealed record OpenApiOperationRenderingContext(
                     bodyProperties.Add(new OpenApiRequestBodyPropertyModel(
                         entry.BindingName ?? entry.PropertyName,
                         schemaType,
-                        schemaFormat)
+                        effectiveFormat)
                     {
                         Description = description,
                         IsRequired = constraints.IsRequired,

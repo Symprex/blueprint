@@ -102,6 +102,18 @@
                     "nullable": true,
                     "description": "The plain text fallback content of the template.",
                     "maxLength": 10000
+                  },
+                  "authorEmail": {
+                    "type": "string",
+                    "format": "email",
+                    "nullable": true,
+                    "description": "Email address of the template author."
+                  },
+                  "callbackUrl": {
+                    "type": "string",
+                    "format": "uri",
+                    "nullable": true,
+                    "description": "Callback URL for template lifecycle events."
                   }
                 },
                 "required": [

@@ -62,4 +62,20 @@ public partial class CreateTemplateCommand : ICommand<ResourceEventResult<Templa
     [Sensitive]
     [Description("The plain text fallback content of the template.")]
     public string? PlainTextSource { get; set; }
+
+    /// <summary>
+    /// Optional author email address. Demonstrates <see cref="EmailAddressAttribute"/>
+    /// fast-path validation and OpenAPI <c>format: "email"</c> projection.
+    /// </summary>
+    [EmailAddress]
+    [Description("Email address of the template author.")]
+    public string? AuthorEmail { get; set; }
+
+    /// <summary>
+    /// Optional callback URL for template lifecycle events. Demonstrates <see cref="UrlAttribute"/>
+    /// fast-path validation and OpenAPI <c>format: "uri"</c> projection.
+    /// </summary>
+    [Url]
+    [Description("Callback URL for template lifecycle events.")]
+    public string? CallbackUrl { get; set; }
 }

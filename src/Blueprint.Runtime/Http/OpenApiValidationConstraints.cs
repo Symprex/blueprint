@@ -18,12 +18,13 @@ internal sealed record OpenApiValidationConstraints(
     decimal? Minimum,
     decimal? Maximum,
     bool ExclusiveMinimum,
-    bool ExclusiveMaximum)
+    bool ExclusiveMaximum,
+    string? Format)
 {
     /// <summary>
     /// Empty constraints indicating no validation metadata was found.
     /// </summary>
-    public static OpenApiValidationConstraints None { get; } = new(false, null, null, null, null, null, false, false);
+    public static OpenApiValidationConstraints None { get; } = new(false, null, null, null, null, null, false, false, null);
 
     /// <summary>
     /// Returns <see langword="true"/> when at least one constraint value is non-default
@@ -34,7 +35,8 @@ internal sealed record OpenApiValidationConstraints(
         || this.MaxLength.HasValue
         || this.Pattern is not null
         || this.Minimum.HasValue
-        || this.Maximum.HasValue;
+        || this.Maximum.HasValue
+        || this.Format is not null;
 
     /// <summary>
     /// Extracts validation constraints from the CLR property attributes on an operation type's property.
@@ -69,6 +71,7 @@ internal sealed record OpenApiValidationConstraints(
         var pattern = GetPattern(attributes);
         var minimum = GetMinimum(attributes);
         var maximum = GetMaximum(attributes);
+        var format = GetFormat(attributes);
 
         return new OpenApiValidationConstraints(
             isRequired,
@@ -78,7 +81,8 @@ internal sealed record OpenApiValidationConstraints(
             minimum.Value,
             maximum.Value,
             minimum.IsExclusive,
-            maximum.IsExclusive);
+            maximum.IsExclusive,
+            format);
     }
 
     private static int? GetMinLength(IReadOnlyList<ValidationAttribute> validationAttributes)
@@ -236,5 +240,28 @@ internal sealed record OpenApiValidationConstraints(
         {
             return null;
         }
+    }
+
+    /// <summary>
+    /// Infers an OpenAPI <c>format</c> hint from well-known validation attributes
+    /// (<c>EmailAddressAttribute</c> → <c>"email"</c>, <c>PhoneAttribute</c> → <c>"phone"</c>,
+    /// <c>UrlAttribute</c> → <c>"uri"</c>).
+    /// </summary>
+    private static string? GetFormat(IReadOnlyList<ValidationAttribute> validationAttributes)
+    {
+        foreach (var attribute in validationAttributes)
+        {
+            switch (attribute)
+            {
+                case EmailAddressAttribute:
+                    return "email";
+                case PhoneAttribute:
+                    return "phone";
+                case UrlAttribute:
+                    return "uri";
+            }
+        }
+
+        return null;
     }
 }
