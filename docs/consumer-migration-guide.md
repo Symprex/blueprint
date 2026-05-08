@@ -26,6 +26,12 @@ This guide walks through migrating a legacy Blueprint application (such as a Sig
 | `ICommand` / `IQuery` | Same interfaces | No change |
 | `ValidationException` | `ValidationFailedResult` (no-exception fast path) | Transparent |
 | `IAuditSink` | Same interface, registered via `BlueprintServiceBuilder` | No change |
+| `SetTenantMiddleware` | `IPropertyPopulator` via `AddPropertyPopulator<T>()` | Consumer rewrite |
+| `StartRebusTransactionScope` | `IMessageOutbox` via `AddMessageOutbox<T>()` | Consumer rewrite |
+| `IUnitOfWork` middleware | Built-in `UnitOfWorkModule` via `AddUnitOfWork<T>()` | No change |
+| `IBackgroundTaskScheduler` | Same interface via `AddBackgroundTaskScheduler<T>()` | No change |
+| `IUserAuthorisationContext` | Same interface via `AddUserAuthorisationContextFactory<T>()` | No change |
+| `IApiAuthoriser` | Same interface via `AddApiAuthoriser<T>()` | No change |
 
 ## Step-by-step migration
 
@@ -413,14 +419,13 @@ The source-generated Blueprint framework provides proven extensibility seams for
 
 ### Marten / EF Core persistence
 
-Blueprint generates `IUnitOfWork.SaveChangesAsync()` calls automatically. Connect your persistence provider:
+Blueprint generates `IUnitOfWork.SaveChangesAsync()` calls automatically. Connect your persistence provider via the builder:
 
 ```csharp
-// Register your IUnitOfWork implementation
-services.AddScoped<IUnitOfWork, MartenUnitOfWork>();
+blueprint.AddUnitOfWork<MartenUnitOfWork>();
 ```
 
-For advanced patterns (outbox, event sourcing), create a companion pipeline module:
+For advanced patterns (event sourcing, read-model projections), create a companion pipeline module:
 
 ```csharp
 // In your companion generator package
@@ -437,11 +442,32 @@ The `ConsumerModuleCompositionTests` in this repository prove that companion gen
 
 ### Rebus messaging
 
-Blueprint's consumer integration seam supports Rebus handler discovery. Create a companion generator that:
+Blueprint includes a built-in `IMessageOutbox` pipeline module that commits enqueued messages after successful command execution. This replaces legacy Blueprint's `StartRebusTransactionScopeMiddleware` / `CommitRebusTransactionScopeMiddleware` pair:
+
+```csharp
+public class RebusMessageOutbox : IMessageOutbox
+{
+    private readonly RebusTransactionScope _scope = new();
+
+    public Task CommitAsync(CancellationToken cancellationToken)
+    {
+        return _scope.CompleteAsync();
+    }
+}
+```
+
+Register it via the builder:
+
+```csharp
+blueprint.AddMessageOutbox<RebusMessageOutbox>();
+```
+
+The generated pipeline calls `CommitAsync` in the PostExecution stage (after UnitOfWork save, before auditing) only when `handlerResult.WasSuccessful` is true. Operations decorated with `[DoNotPublishMessages]` are excluded.
+
+For Rebus handler discovery, create a companion generator that:
 
 1. Derives from `OperationExecutorPipelineSourceGenerator`
-2. Adds a `RebusTransactionModule` that wraps handler execution in a Rebus transaction scope
-3. Registers a `RebusHostContributor` that exposes messaging operations on the Rebus host
+2. Registers a `RebusHostContributor` that exposes messaging operations on the Rebus host
 
 The dual-companion-generator integration proof (commit `1d47a1e`) demonstrates descriptor + pipeline generators composing for a consumer host with runtime partitioning.
 

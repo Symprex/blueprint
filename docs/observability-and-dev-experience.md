@@ -186,6 +186,25 @@ The exception handling pipeline has two observable layers:
 
 This two-layer design means trace spans naturally carry the exception info (with correct severity) while the HTTP response controls what the client sees. OTel spans show the full picture; client responses show only safe details.
 
+### Messaging outbox coordination
+
+The `MessageOutboxModule` contributes a PostExecution render step at Order 920 (after UnitOfWork save at 900, before auditing at 950) that commits enqueued messages via `IMessageOutbox.CommitAsync`. This replaces legacy Blueprint's `StartRebusTransactionScopeMiddleware` / `CommitRebusTransactionScopeMiddleware` pair.
+
+Key characteristics:
+- **Command-only**: only command operations participate (queries never have outbox commits)
+- **Success-guarded**: `handlerResult.WasSuccessful` must be true for commit
+- **Opt-out**: `[DoNotPublishMessages]` suppresses outbox commit per-operation
+- **Optional resolution**: if no `IMessageOutbox` is registered, the step is a no-op
+- **Diagnostic**: `BPM001` warning for `[DoNotPublishMessages]` on non-command operations
+
+The `MessageOutboxManifestModule` contributes `messaging.outboxCommitEnabled` to the debug manifest.
+
+Key files:
+- `src\Blueprint.Runtime.Model\Messaging\IMessageOutbox.cs`
+- `src\Blueprint.Runtime.Model\Messaging\DoNotPublishMessagesAttribute.cs`
+- `src\Blueprint.SourceGenerator\Modules\Messaging\MessageOutboxModule.cs`
+- `src\Blueprint.SourceGenerator\Modules\Messaging\MessageOutboxManifestModule.cs`
+
 ## Do not hide complexity
 
 Large API surfaces become dangerous when the only way to understand them is to read source and mentally simulate multiple generators.

@@ -172,6 +172,20 @@ Current persistence IDs in active use:
 
 - `BPP001`: `[DoNotSaveChanges]` applied to a non-command operation where it has no effect (only `ICommand` operations trigger the `UnitOfWorkModule`).
 
+### Messaging diagnostics
+
+Messaging diagnostics detect misapplied messaging attributes that have no observable effect at runtime.
+
+Reserved direction:
+
+| Range | Meaning |
+| --- | --- |
+| `BPM001`-`BPM099` | messaging diagnostics for invalid or no-effect declarative contracts that the generator can prove at build time |
+
+Current messaging IDs in active use:
+
+- `BPM001`: `[DoNotPublishMessages]` applied to a non-command operation where it has no effect (warning — only `ICommand` operations trigger the `MessageOutboxModule`).
+
 ### Auditing diagnostics
 
 Auditing diagnostics detect misapplied audit-related attributes that have no observable effect at runtime.
