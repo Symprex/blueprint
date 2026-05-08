@@ -102,44 +102,44 @@ public static class WellKnownFeatureData
         new(CommonFailureBodyTypeNames);
 
     /// <summary>
-    /// The HTTP response metadata entry for a 400 binding-failure response (no body).
+    /// The HTTP response metadata entry for a 400 binding-failure response with RFC 7807 ProblemDetails body.
     /// Shared by all operations that project this status via <c>BindingFailureResult</c>.
     /// </summary>
     public static readonly OperationHttpResponseMetadata BindingFailureResponse = new(
         400,
-        false,
+        true,
         ImmutableArray.Create<string>("Blueprint.Runtime.Exec.BindingFailureResult"),
-        ImmutableArray<string>.Empty);
+        ImmutableArray.Create<string>("Microsoft.AspNetCore.Mvc.ProblemDetails"));
 
     /// <summary>
-    /// The HTTP response metadata entry for a 401 unauthenticated response (no body).
+    /// The HTTP response metadata entry for a 401 unauthenticated response with RFC 7807 ProblemDetails body.
     /// Shared by all operations that project this status via <c>UnauthenticatedResult</c>.
     /// </summary>
     public static readonly OperationHttpResponseMetadata UnauthenticatedResponse = new(
         401,
-        false,
+        true,
         ImmutableArray.Create<string>("Blueprint.Runtime.Exec.UnauthenticatedResult"),
-        ImmutableArray<string>.Empty);
+        ImmutableArray.Create<string>("Microsoft.AspNetCore.Mvc.ProblemDetails"));
 
     /// <summary>
-    /// The HTTP response metadata entry for a 415 unsupported-media-type response (no body).
+    /// The HTTP response metadata entry for a 415 unsupported-media-type response with RFC 7807 ProblemDetails body.
     /// Shared by all operations that project this status via <c>UnsupportedMediaTypeResult</c>.
     /// </summary>
     public static readonly OperationHttpResponseMetadata UnsupportedMediaTypeResponse = new(
         415,
-        false,
+        true,
         ImmutableArray.Create<string>("Blueprint.Runtime.Exec.UnsupportedMediaTypeResult"),
-        ImmutableArray<string>.Empty);
+        ImmutableArray.Create<string>("Microsoft.AspNetCore.Mvc.ProblemDetails"));
 
     /// <summary>
-    /// The HTTP response metadata entry for a 403 forbidden response (no body).
+    /// The HTTP response metadata entry for a 403 forbidden response with RFC 7807 ProblemDetails body.
     /// Shared by all operations that project this status via <c>ForbiddenResult</c>.
     /// </summary>
     public static readonly OperationHttpResponseMetadata ForbiddenResponse = new(
         403,
-        false,
+        true,
         ImmutableArray.Create<string>("Blueprint.Runtime.Exec.ForbiddenResult"),
-        ImmutableArray<string>.Empty);
+        ImmutableArray.Create<string>("Microsoft.AspNetCore.Mvc.ProblemDetails"));
 
     /// <summary>
     /// The common HTTP failure responses for operations with body binding but no authentication:

@@ -19,8 +19,8 @@
     - default-unhandled-exception: System.Exception -> Blueprint.Runtime.Exec.UnhandledExceptionResult
   HTTP Responses:
     - 201: hasBody=False types=[]
-    - 401: hasBody=False types=[]
-    - 403: hasBody=False types=[]
+    - 401: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+    - 403: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
     - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
     - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
 
@@ -41,10 +41,10 @@
     - default-unhandled-exception: System.Exception -> Blueprint.Runtime.Exec.UnhandledExceptionResult
   HTTP Responses:
     - 201: hasBody=True types=[Blueprint.SourceGenerator.Sample.Contract.Api.TemplateApiResource]
-    - 400: hasBody=False types=[]
-    - 401: hasBody=False types=[]
-    - 403: hasBody=False types=[]
-    - 415: hasBody=False types=[]
+    - 400: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+    - 401: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+    - 403: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+    - 415: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
     - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
     - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
 
@@ -65,10 +65,10 @@
     - default-unhandled-exception: System.Exception -> Blueprint.Runtime.Exec.UnhandledExceptionResult
   HTTP Responses:
     - 201: hasBody=True types=[Blueprint.SourceGenerator.Sample.Contract.Api.TemplateApiResource]
-    - 400: hasBody=False types=[]
-    - 401: hasBody=False types=[]
-    - 403: hasBody=False types=[]
-    - 415: hasBody=False types=[]
+    - 400: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+    - 401: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+    - 403: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+    - 415: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
     - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
     - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
 
@@ -89,8 +89,8 @@
     - default-unhandled-exception: System.Exception -> Blueprint.Runtime.Exec.UnhandledExceptionResult
   HTTP Responses:
     - 200: hasBody=True types=[]
-    - 401: hasBody=False types=[]
-    - 403: hasBody=False types=[]
+    - 401: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+    - 403: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
     - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
     - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
 
@@ -111,10 +111,10 @@
     - default-unhandled-exception: System.Exception -> Blueprint.Runtime.Exec.UnhandledExceptionResult
   HTTP Responses:
     - 202: hasBody=True types=[Blueprint.SourceGenerator.Sample.Contract.Api.ExportJobApiResource]
-    - 400: hasBody=False types=[]
-    - 401: hasBody=False types=[]
-    - 403: hasBody=False types=[]
-    - 415: hasBody=False types=[]
+    - 400: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+    - 401: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+    - 403: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+    - 415: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
     - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
     - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
 
@@ -136,8 +136,8 @@
     - default-unhandled-exception: System.Exception -> Blueprint.Runtime.Exec.UnhandledExceptionResult
   HTTP Responses:
     - 200: hasBody=True types=[Blueprint.SourceGenerator.Sample.Contract.Api.TemplateApiResource]
-    - 401: hasBody=False types=[]
-    - 403: hasBody=False types=[]
+    - 401: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+    - 403: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
     - 404: hasBody=True types=[Blueprint.SourceGenerator.Sample.Contract.Api.TemplateApiResource]
     - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
     - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
@@ -159,8 +159,8 @@
     - default-unhandled-exception: System.Exception -> Blueprint.Runtime.Exec.UnhandledExceptionResult
   HTTP Responses:
     - 200: hasBody=True types=[Blueprint.SourceGenerator.Sample.Contract.Api.TemplateApiResource[]]
-    - 401: hasBody=False types=[]
-    - 403: hasBody=False types=[]
+    - 401: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+    - 403: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
     - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
     - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
   Links:
@@ -181,8 +181,8 @@
     - default-unhandled-exception: System.Exception -> Blueprint.Runtime.Exec.UnhandledExceptionResult
   HTTP Responses:
     - 200: hasBody=True types=[Blueprint.SourceGenerator.Sample.Contract.Api.TemplateVersionApiResource[]]
-    - 401: hasBody=False types=[]
-    - 403: hasBody=False types=[]
+    - 401: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+    - 403: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
     - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
     - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
 
@@ -221,10 +221,10 @@
     - default-unhandled-exception: System.Exception -> Blueprint.Runtime.Exec.UnhandledExceptionResult
   HTTP Responses:
     - 200: hasBody=True types=[Blueprint.SourceGenerator.Sample.Contract.Api.TemplatePreviewApiResource]
-    - 400: hasBody=False types=[]
-    - 401: hasBody=False types=[]
-    - 403: hasBody=False types=[]
-    - 415: hasBody=False types=[]
+    - 400: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+    - 401: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+    - 403: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+    - 415: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
     - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
     - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
 
@@ -246,8 +246,8 @@
     - default-unhandled-exception: System.Exception -> Blueprint.Runtime.Exec.UnhandledExceptionResult
   HTTP Responses:
     - 201: hasBody=True types=[Blueprint.SourceGenerator.Sample.Contract.Api.TemplateApiResource]
-    - 401: hasBody=False types=[]
-    - 403: hasBody=False types=[]
+    - 401: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+    - 403: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
     - 409: hasBody=True types=[Blueprint.SourceGenerator.Sample.Contract.Api.TemplateApiResource]
     - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
     - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
@@ -269,8 +269,8 @@
     - default-unhandled-exception: System.Exception -> Blueprint.Runtime.Exec.UnhandledExceptionResult
   HTTP Responses:
     - 302: hasBody=False types=[]
-    - 401: hasBody=False types=[]
-    - 403: hasBody=False types=[]
+    - 401: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+    - 403: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
     - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
     - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
 
@@ -289,7 +289,7 @@
     - default-unhandled-exception: System.Exception -> Blueprint.Runtime.Exec.UnhandledExceptionResult
   HTTP Responses:
     - 200: hasBody=True types=[Blueprint.SourceGenerator.Sample.Contract.Api.TemplateApiResource[]]
-    - 400: hasBody=False types=[]
+    - 400: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
     - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
     - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
 
@@ -320,10 +320,10 @@
     - default-unhandled-exception: System.Exception -> Blueprint.Runtime.Exec.UnhandledExceptionResult
   HTTP Responses:
     - 201: hasBody=True types=[Blueprint.SourceGenerator.Sample.Contract.Api.TemplateApiResource]
-    - 400: hasBody=False types=[]
-    - 401: hasBody=False types=[]
-    - 403: hasBody=False types=[]
-    - 415: hasBody=False types=[]
+    - 400: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+    - 401: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+    - 403: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+    - 415: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
     - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
     - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
 

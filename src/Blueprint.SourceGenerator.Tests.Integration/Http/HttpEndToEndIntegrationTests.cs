@@ -49,6 +49,8 @@ public class HttpEndToEndIntegrationTests
         var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider);
 
         response.StatusCode.Should().Be(StatusCodes.Status401Unauthorized);
+        response.ContentType.Should().StartWith("application/problem+json");
+        response.Body.Should().Contain("Unauthorized");
     }
 
     [Fact]
@@ -63,6 +65,7 @@ public class HttpEndToEndIntegrationTests
         var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider);
 
         response.StatusCode.Should().Be(StatusCodes.Status401Unauthorized);
+        response.ContentType.Should().StartWith("application/problem+json");
     }
 
     [Fact]
@@ -77,6 +80,7 @@ public class HttpEndToEndIntegrationTests
         var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider);
 
         response.StatusCode.Should().Be(StatusCodes.Status401Unauthorized);
+        response.ContentType.Should().StartWith("application/problem+json");
     }
 
     [Fact]
@@ -117,6 +121,8 @@ public class HttpEndToEndIntegrationTests
         });
 
         response.StatusCode.Should().Be(StatusCodes.Status415UnsupportedMediaType);
+        response.ContentType.Should().StartWith("application/problem+json");
+        response.Body.Should().Contain("Unsupported Media Type");
     }
 
     [Fact]
@@ -137,6 +143,8 @@ public class HttpEndToEndIntegrationTests
         });
 
         response.StatusCode.Should().Be(StatusCodes.Status400BadRequest);
+        response.ContentType.Should().StartWith("application/problem+json");
+        response.Body.Should().Contain("Invalid JSON body");
     }
 
     [Fact]
@@ -197,6 +205,8 @@ public class HttpEndToEndIntegrationTests
         });
 
         response.StatusCode.Should().Be(StatusCodes.Status403Forbidden);
+        response.ContentType.Should().StartWith("application/problem+json");
+        response.Body.Should().Contain("Forbidden");
     }
 
     [Fact]
@@ -368,6 +378,8 @@ public class HttpEndToEndIntegrationTests
         });
 
         response.StatusCode.Should().Be(StatusCodes.Status400BadRequest);
+        response.ContentType.Should().StartWith("application/problem+json");
+        response.Body.Should().Contain("Invalid route parameter");
     }
 
     [Fact]

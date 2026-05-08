@@ -194,30 +194,32 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
         // Binding-driven pipeline short-circuits: 400 (binding failure) and 415 (unsupported media type).
         // 400 applies when the operation has body or header/cookie bindings that can fail during population.
         // 415 applies only when body binding is present (content-type rejection before parsing).
+        // All four short-circuit responses return RFC 7807 application/problem+json bodies.
+        var problemDetailsBody = ImmutableArray.Create(ProblemDetailsTypeName);
         var binding = context.GetMetadata<BindingDescriptorRegistration>().FirstOrDefault();
         if (binding is not null)
         {
             if (binding.HasBodyBinding || binding.HasHeaderOrCookieBinding)
             {
-                responses.Add(CreateResponse(400, false, "Blueprint.Runtime.Exec.BindingFailureResult", []));
+                responses.Add(CreateResponse(400, true, "Blueprint.Runtime.Exec.BindingFailureResult", problemDetailsBody));
             }
 
             if (binding.HasBodyBinding)
             {
-                responses.Add(CreateResponse(415, false, "Blueprint.Runtime.Exec.UnsupportedMediaTypeResult", []));
+                responses.Add(CreateResponse(415, true, "Blueprint.Runtime.Exec.UnsupportedMediaTypeResult", problemDetailsBody));
             }
         }
 
         // Authentication-driven short-circuit: 401 when [MustBeAuthenticated] is declared.
         if (context.GetMetadata<AuthenticationDescriptorRegistration>().Any(static r => r.RequiresIdentityCheck))
         {
-            responses.Add(CreateResponse(401, false, "Blueprint.Runtime.Exec.UnauthenticatedResult", []));
+            responses.Add(CreateResponse(401, true, "Blueprint.Runtime.Exec.UnauthenticatedResult", problemDetailsBody));
         }
 
         // Authorization-driven short-circuit: 403 when [Resource] scopes are declared.
         if (context.GetMetadata<AuthorizationDescriptorRegistration>().Any(static r => r.RequiresPermissionCheck))
         {
-            responses.Add(CreateResponse(403, false, "Blueprint.Runtime.Exec.ForbiddenResult", []));
+            responses.Add(CreateResponse(403, true, "Blueprint.Runtime.Exec.ForbiddenResult", problemDetailsBody));
         }
 
         return responses.ToImmutable();
@@ -602,37 +604,41 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
     private static bool IsBindingFailureEntry(HttpResponseMetadataRegistration response)
     {
         return response.StatusCode == 400
-            && response.HasResponseBody == false
+            && response.HasResponseBody
             && response.ResultTypeNames.Length == 1
             && response.ResultTypeNames[0] == "Blueprint.Runtime.Exec.BindingFailureResult"
-            && response.BodyTypeNames.IsEmpty;
+            && response.BodyTypeNames.Length == 1
+            && response.BodyTypeNames[0] == ProblemDetailsTypeName;
     }
 
     private static bool IsUnauthenticatedEntry(HttpResponseMetadataRegistration response)
     {
         return response.StatusCode == 401
-            && response.HasResponseBody == false
+            && response.HasResponseBody
             && response.ResultTypeNames.Length == 1
             && response.ResultTypeNames[0] == "Blueprint.Runtime.Exec.UnauthenticatedResult"
-            && response.BodyTypeNames.IsEmpty;
+            && response.BodyTypeNames.Length == 1
+            && response.BodyTypeNames[0] == ProblemDetailsTypeName;
     }
 
     private static bool IsUnsupportedMediaTypeEntry(HttpResponseMetadataRegistration response)
     {
         return response.StatusCode == 415
-            && response.HasResponseBody == false
+            && response.HasResponseBody
             && response.ResultTypeNames.Length == 1
             && response.ResultTypeNames[0] == "Blueprint.Runtime.Exec.UnsupportedMediaTypeResult"
-            && response.BodyTypeNames.IsEmpty;
+            && response.BodyTypeNames.Length == 1
+            && response.BodyTypeNames[0] == ProblemDetailsTypeName;
     }
 
     private static bool IsForbiddenEntry(HttpResponseMetadataRegistration response)
     {
         return response.StatusCode == 403
-            && response.HasResponseBody == false
+            && response.HasResponseBody
             && response.ResultTypeNames.Length == 1
             && response.ResultTypeNames[0] == "Blueprint.Runtime.Exec.ForbiddenResult"
-            && response.BodyTypeNames.IsEmpty;
+            && response.BodyTypeNames.Length == 1
+            && response.BodyTypeNames[0] == ProblemDetailsTypeName;
     }
 
     private static string RenderStringLiteral(string value)

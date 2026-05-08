@@ -35,15 +35,43 @@ public class HttpOperationResultExecutor
         {
             case UnauthenticatedResult:
                 httpContext.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                httpContext.Response.ContentType = "application/problem+json; charset=utf-8";
+                await WriteJsonAsync(httpContext, operationContext, new MvcProblemDetails
+                {
+                    Status = StatusCodes.Status401Unauthorized,
+                    Title = "Unauthorized",
+                    Detail = "Authentication is required to access this resource.",
+                });
                 return true;
             case ForbiddenResult:
                 httpContext.Response.StatusCode = StatusCodes.Status403Forbidden;
+                httpContext.Response.ContentType = "application/problem+json; charset=utf-8";
+                await WriteJsonAsync(httpContext, operationContext, new MvcProblemDetails
+                {
+                    Status = StatusCodes.Status403Forbidden,
+                    Title = "Forbidden",
+                    Detail = "You do not have permission to access this resource.",
+                });
                 return true;
-            case BindingFailureResult:
+            case BindingFailureResult bindingFailureResult:
                 httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
+                httpContext.Response.ContentType = "application/problem+json; charset=utf-8";
+                await WriteJsonAsync(httpContext, operationContext, new MvcProblemDetails
+                {
+                    Status = StatusCodes.Status400BadRequest,
+                    Title = "Bad Request",
+                    Detail = bindingFailureResult.Reason,
+                });
                 return true;
             case UnsupportedMediaTypeResult:
                 httpContext.Response.StatusCode = StatusCodes.Status415UnsupportedMediaType;
+                httpContext.Response.ContentType = "application/problem+json; charset=utf-8";
+                await WriteJsonAsync(httpContext, operationContext, new MvcProblemDetails
+                {
+                    Status = StatusCodes.Status415UnsupportedMediaType,
+                    Title = "Unsupported Media Type",
+                    Detail = "The request content type is not supported. Expected 'application/json'.",
+                });
                 return true;
             case HttpPipelineShortCircuitResult:
                 // Response was already written by the generated pipeline (e.g. binding failure).
