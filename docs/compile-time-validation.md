@@ -268,6 +268,7 @@ Validation attributes also project constraints into the OpenAPI specification at
 | `EmailAddressAttribute` | `format: "email"` |
 | `UrlAttribute` | `format: "uri"` |
 | `PhoneAttribute` | `format: "phone"` |
+| `AllowedValuesAttribute` (.NET 8) | `enum` (string values only) |
 
 Format hints from validation attributes take precedence over CLR-type-derived format values (e.g. a `string` property with `[EmailAddress]` renders as `format: "email"` rather than no format).
 

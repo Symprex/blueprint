@@ -242,7 +242,12 @@
                   "visibility": {
                     "type": "string",
                     "nullable": true,
-                    "description": "Visibility level: public, internal, or private."
+                    "description": "Visibility level: public, internal, or private.",
+                    "enum": [
+                      "public",
+                      "internal",
+                      "private"
+                    ]
                   },
                   "priority": {
                     "type": "integer",

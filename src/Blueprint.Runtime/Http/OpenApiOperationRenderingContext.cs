@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
 using Blueprint.Model;
 
 namespace Blueprint.Runtime.Http;
@@ -279,12 +280,32 @@ public sealed record OpenApiOperationRenderingContext(
         }
 
         var propertyType = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
-        if (!propertyType.IsEnum)
+        if (propertyType.IsEnum)
         {
-            return ImmutableArray<string>.Empty;
+            return Enum.GetNames(propertyType).ToImmutableArray();
         }
 
-        return Enum.GetNames(propertyType).ToImmutableArray();
+        // Project AllowedValuesAttribute string values as OpenAPI enum when the property is a string.
+        if (propertyType == typeof(string))
+        {
+            var allowedValues = property.GetCustomAttributes(inherit: true)
+                .OfType<AllowedValuesAttribute>()
+                .FirstOrDefault();
+
+            if (allowedValues?.Values is { Length: > 0 } values)
+            {
+                var stringValues = values
+                    .OfType<string>()
+                    .ToImmutableArray();
+
+                if (stringValues.Length == values.Length)
+                {
+                    return stringValues;
+                }
+            }
+        }
+
+        return ImmutableArray<string>.Empty;
     }
 }
 

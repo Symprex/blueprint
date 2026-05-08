@@ -15,9 +15,9 @@
     "frameworkStatusDetail": "Core Blueprint source-generator framework is at full feature parity with legacy Blueprint for Signature365 migration. All consumer-space companion packages (Rebus, Marten, Hangfire, tenant context) are by-design extensions that consumers build in their own repositories.",
     "nextReadySlice": null,
     "lastCompletedSlice": {
-      "id": "validation/sample-enrichment-and-guard-fix",
+      "id": "validation/null-guard-and-sample-enrichment",
       "workstream": "documentation-and-final-alignment",
-      "title": "Fix validation guard operator precedence and enrich sample with CompareAttribute, conditional validation demos"
+      "title": "AllowedValues/DeniedValues null guard fix, sample app .NET 8 demos, compile-time-validation docs update"
     },
     "openReviewGate": null,
     "openReviewGateRationale": null,
@@ -424,6 +424,18 @@
       "workstream": "documentation-and-final-alignment",
       "title": "Fix validation guard operator precedence and enrich sample with ChangePasswordCommand, GetTemplateHistoryQuery, conditional validation demos",
       "commit": "c3021f4"
+    },
+    {
+      "id": "validation/net8-fast-path-strategies",
+      "workstream": "documentation-and-final-alignment",
+      "title": "AllowedValues, DeniedValues, and Length .NET 8 validation fast-path strategies with OpenAPI LengthAttribute projection",
+      "commit": "d0aa8f6"
+    },
+    {
+      "id": "validation/null-guard-and-sample-enrichment",
+      "workstream": "documentation-and-final-alignment",
+      "title": "AllowedValues/DeniedValues null guard fix, sample app .NET 8 demos, compile-time-validation docs update",
+      "commit": "08065c6"
     }
   ],
   "decisions": [
