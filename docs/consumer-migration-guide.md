@@ -365,6 +365,7 @@ The source generator catches contract errors at build time. Key diagnostics:
 | BP001–BP008 | Core contracts | Missing partial, missing handler, unsupported return type |
 | BP101–BP104 | Validation | Invalid CompareAttribute, GreaterThanProperty, LessThanProperty references |
 | BPA001 | Auditing | [Sensitive] on non-public property |
+| BPM001 | Messaging | [DoNotPublishMessages] on non-command |
 | BPP001 | Persistence | [DoNotSaveChanges] on non-command |
 | BPT001 | Background tasks | BackgroundTask operation not a command |
 | BPMOD001–004 | Module system | Ordering conflicts, duplicate contributors, missing variables |
@@ -397,6 +398,36 @@ dotnet run --project src/Blueprint.Codemod -- --solution YourApp.sln --mode revi
 ```
 
 Writes `codemod-report.json` and `codemod-report.md` to the output directory.
+
+## Namespace mapping
+
+The source-generated Blueprint framework reorganizes namespaces for clarity and consistency. Use this reference when updating `using` directives:
+
+| Legacy namespace | New namespace | Notes |
+|---|---|---|
+| `Blueprint` (root) | `Blueprint.Model` | Core types: `BlueprintApp`, `ApiOperationDescriptor`, `ICommand`, `IQuery`, `ApiResource` |
+| `Blueprint` (root) | `Blueprint.Runtime.Exec` | Result types: `OkResult`, `OperationResult`, `ApiOperationContext` |
+| `Blueprint.Authorisation` | `Blueprint.Authorization` | US spelling, same interfaces: `IApiAuthoriser`, `IUserAuthorisationContext` |
+| `Blueprint.Http` | `Blueprint.Model.Attributes` | HTTP method attributes: `HttpMethodAttribute`, `FromRouteAttribute` etc. |
+| `Blueprint.Http` | `Blueprint.Model` | Resource types: `ApiResource`, `PagedApiResource`, `ApiOperationLink` |
+| `Blueprint.Validation` | `Blueprint.Validation` | Same namespace: `ValidationException` |
+| `Blueprint.Auditing` | `Blueprint.Auditing` | Same namespace: `IAuditSink`, `DoNotAuditAttribute`, `SensitiveAttribute` |
+| `Blueprint.Tasks` | `Blueprint.Tasks` | Same namespace: `IBackgroundTaskScheduler`, `IScheduledBackgroundTask` |
+| `Blueprint.Configuration` | N/A | Replaced by `[BlueprintAppScan]` + `BlueprintServiceBuilder` |
+| `Blueprint.Middleware` | N/A | Replaced by source-generated pipeline modules |
+| `Blueprint.Compiler` | N/A | Replaced by source-generated code |
+| `Blueprint.CodeGen` | N/A | Replaced by source-generated code |
+| `Blueprint.Utilities` | N/A | Consumer-owned utilities; copy to your project |
+
+### Compatibility aliases
+
+For gradual migration, the framework provides obsolete compatibility types that map to new names:
+
+| Legacy type | New type | Provided by |
+|---|---|---|
+| `ApiDataModel` | `BlueprintApp` | `Blueprint.Runtime.Model` (obsolete alias) |
+
+These aliases emit compiler warnings pointing to the correct type. Use them to unblock compilation during incremental migration, then update to the new types.
 
 ## Verification checklist
 
