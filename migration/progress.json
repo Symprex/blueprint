@@ -15,9 +15,9 @@
     "frameworkStatusDetail": "Core Blueprint source-generator framework is at full feature parity with legacy Blueprint for Signature365 migration. All consumer-space companion packages (Rebus, Marten, Hangfire, tenant context) are by-design extensions that consumers build in their own repositories.",
     "nextReadySlice": null,
     "lastCompletedSlice": {
-      "id": "docs/less-than-validation-docs",
+      "id": "docs/auth-middleware-guidance",
       "workstream": "documentation-and-final-alignment",
-      "title": "Update compile-time-validation docs with LessThan/LessThanProperty entries and OpenAPI exclusiveMaximum test"
+      "title": "Add authentication middleware guidance to sample app and consumer skill"
     },
     "openReviewGate": null,
     "openReviewGateRationale": null,
@@ -382,6 +382,18 @@
       "workstream": "documentation-and-final-alignment",
       "title": "Update compile-time-validation docs with LessThan/LessThanProperty entries and OpenAPI exclusiveMaximum test",
       "commit": "7569afd"
+    },
+    {
+      "id": "integration/less-than-runtime-tests",
+      "workstream": "documentation-and-final-alignment",
+      "title": "Add LessThan/LessThanProperty runtime integration tests and skill updates",
+      "commit": "b8a054b"
+    },
+    {
+      "id": "docs/auth-middleware-guidance",
+      "workstream": "documentation-and-final-alignment",
+      "title": "Add authentication middleware guidance to sample app and consumer skill",
+      "commit": "200c68f"
     }
   ],
   "decisions": [
