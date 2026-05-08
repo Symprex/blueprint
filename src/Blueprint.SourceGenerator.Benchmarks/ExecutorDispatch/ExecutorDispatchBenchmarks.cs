@@ -27,7 +27,7 @@ public class ExecutorDispatchBenchmarks
     /// <summary>
     /// Gets or sets how many synthetic operations are registered before measuring dispatch.
     /// </summary>
-    [Params(10, 100, 250)]
+    [Params(10, 100, 250, 500)]
     public int OperationCount { get; set; }
 
     /// <summary>

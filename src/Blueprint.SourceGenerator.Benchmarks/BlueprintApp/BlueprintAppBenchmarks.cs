@@ -25,7 +25,7 @@ public class BlueprintAppRegistrationBenchmarks
     /// <summary>
     /// Gets or sets how many synthetic operation descriptors the setup phase prepares for each benchmark iteration.
     /// </summary>
-    [Params(10, 100, 250)]
+    [Params(10, 100, 250, 500)]
     public int OperationCount { get; set; }
 
     /// <summary>
@@ -69,7 +69,7 @@ public class BlueprintAppLookupBenchmarks
     /// <summary>
     /// Gets or sets how many synthetic operations are registered before running the lookup scenarios.
     /// </summary>
-    [Params(10, 100, 250)]
+    [Params(10, 100, 250, 500)]
     public int OperationCount { get; set; }
 
     /// <summary>
@@ -146,6 +146,13 @@ internal static class BlueprintAppBenchmarkScenarioFactory
         typeof(Marker13),
         typeof(Marker14),
         typeof(Marker15),
+        typeof(Marker16),
+        typeof(Marker17),
+        typeof(Marker18),
+        typeof(Marker19),
+        typeof(Marker20),
+        typeof(Marker21),
+        typeof(Marker22),
     ];
 
     /// <summary>
@@ -309,3 +316,38 @@ public class Marker14;
 /// Marker type 15 used to synthesize a unique benchmark operation identity.
 /// </summary>
 public class Marker15;
+
+/// <summary>
+/// Marker type 16 used to synthesize a unique benchmark operation identity.
+/// </summary>
+public class Marker16;
+
+/// <summary>
+/// Marker type 17 used to synthesize a unique benchmark operation identity.
+/// </summary>
+public class Marker17;
+
+/// <summary>
+/// Marker type 18 used to synthesize a unique benchmark operation identity.
+/// </summary>
+public class Marker18;
+
+/// <summary>
+/// Marker type 19 used to synthesize a unique benchmark operation identity.
+/// </summary>
+public class Marker19;
+
+/// <summary>
+/// Marker type 20 used to synthesize a unique benchmark operation identity.
+/// </summary>
+public class Marker20;
+
+/// <summary>
+/// Marker type 21 used to synthesize a unique benchmark operation identity.
+/// </summary>
+public class Marker21;
+
+/// <summary>
+/// Marker type 22 used to synthesize a unique benchmark operation identity.
+/// </summary>
+public class Marker22;

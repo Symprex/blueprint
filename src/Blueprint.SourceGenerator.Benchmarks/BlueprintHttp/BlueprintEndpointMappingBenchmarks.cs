@@ -25,7 +25,7 @@ public class BlueprintEndpointMappingBenchmarks
     /// <summary>
     /// Gets or sets how many synthetic operation descriptors are mapped into the benchmark endpoint builder.
     /// </summary>
-    [Params(10, 100, 250)]
+    [Params(10, 100, 250, 500)]
     public int OperationCount { get; set; }
 
     /// <summary>
