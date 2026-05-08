@@ -292,6 +292,35 @@ public class ReferenceAppHttpEndToEndIntegrationTests
     }
 
     [Fact]
+    public async Task When_update_template_with_unknown_id_then_returns_404_via_typed_exception()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/templates/{Id}", "PUT");
+
+        var bodyJson = """{"name":"Ghost","htmlSource":"<p>gone</p>","plainTextSource":"gone"}"""u8.ToArray();
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Put;
+            context.Request.Path = "/api/templates/nonexistent-999";
+            context.Request.RouteValues = new RouteValueDictionary { ["Id"] = "nonexistent-999" };
+            context.Request.ContentType = "application/json; charset=utf-8";
+            context.Request.ContentLength = bodyJson.Length;
+            context.Request.Body = new MemoryStream(bodyJson);
+            context.User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "user-1"),
+                ],
+                authenticationType: "test"));
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status404NotFound);
+        response.Body.Should().Contain("nonexistent-999");
+    }
+
+    [Fact]
     public async Task When_archive_template_without_auth_then_returns_401()
     {
         var endpoints = CreateEndpoints();
