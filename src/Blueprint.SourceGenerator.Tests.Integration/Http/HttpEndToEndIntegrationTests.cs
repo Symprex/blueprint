@@ -296,6 +296,152 @@ public class HttpEndToEndIntegrationTests
         response.Body.Should().BeEmpty();
     }
 
+    [Fact]
+    public async Task When_GET_with_route_parameter_then_route_value_is_bound()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/e2e/items/{ItemId}");
+        endpoint.Should().NotBeNull("the route-parameterised query should be registered");
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.RouteValues = new RouteValueDictionary { ["ItemId"] = "route-42" };
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        response.Body.Should().Be("\"item:route-42\"");
+    }
+
+    [Fact]
+    public async Task When_command_returns_CreatedResult_then_returns_201_with_json_body()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/e2e/widgets");
+        endpoint.Should().NotBeNull("the created-result command route should be registered");
+
+        var bodyJson = """{"name":"widget-one"}"""u8.ToArray();
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.ContentType = "application/json; charset=utf-8";
+            context.Request.ContentLength = bodyJson.Length;
+            context.Request.Body = new MemoryStream(bodyJson);
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status201Created);
+        response.ContentType.Should().StartWith("application/json");
+        response.Body.Should().Contain("widget-one");
+    }
+
+    [Fact]
+    public async Task When_query_returns_OkResult_from_union_then_returns_200_with_json_body()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/e2e/maybe-items/{ItemId}");
+        endpoint.Should().NotBeNull("the union-result query route should be registered");
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.RouteValues = new RouteValueDictionary { ["ItemId"] = "found-item" };
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        response.ContentType.Should().StartWith("application/json");
+        response.Body.Should().Contain("found-item");
+    }
+
+    [Fact]
+    public async Task When_query_returns_NotFoundResult_from_union_then_returns_404()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/e2e/maybe-items/{ItemId}");
+        endpoint.Should().NotBeNull();
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.RouteValues = new RouteValueDictionary { ["ItemId"] = "missing" };
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status404NotFound);
+        response.ContentType.Should().StartWith("application/json");
+    }
+
+    [Fact]
+    public async Task When_command_returns_ResourceEventResult_then_returns_201_with_envelope()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/e2e/events");
+        endpoint.Should().NotBeNull("the resource-event command route should be registered");
+
+        var bodyJson = """{"title":"test-event"}"""u8.ToArray();
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.ContentType = "application/json; charset=utf-8";
+            context.Request.ContentLength = bodyJson.Length;
+            context.Request.Body = new MemoryStream(bodyJson);
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status201Created);
+        response.ContentType.Should().StartWith("application/json");
+        response.Body.Should().Contain("evt-001");
+        response.Body.Should().Contain("res-001");
+        response.Body.Should().Contain("test-event");
+    }
+
+    [Fact]
+    public async Task When_handler_throws_NotFoundException_then_returns_404()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/e2e/not-found-typed");
+        endpoint.Should().NotBeNull();
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider);
+
+        response.StatusCode.Should().Be(StatusCodes.Status404NotFound);
+        response.Body.Should().Contain("Widget not found");
+    }
+
+    [Fact]
+    public async Task When_handler_throws_ConflictException_then_returns_409()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/e2e/conflict");
+        endpoint.Should().NotBeNull();
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider);
+
+        response.StatusCode.Should().Be(StatusCodes.Status409Conflict);
+        response.Body.Should().Contain("Already exists");
+    }
+
+    [Fact]
+    public async Task When_handler_throws_BadRequestException_then_returns_400()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/e2e/bad-request");
+        endpoint.Should().NotBeNull();
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider);
+
+        response.StatusCode.Should().Be(StatusCodes.Status400BadRequest);
+        response.Body.Should().Contain("Invalid input");
+    }
+
     private static async Task<TestHttpResponse> InvokeEndpointAsync(
         RouteEndpoint endpoint,
         IServiceProvider serviceProvider,
@@ -568,5 +714,144 @@ public partial class E2ENoContentCommand : ICommand<HttpNoContentResult>
     public static Task<HttpNoContentResult> HandleAsync()
     {
         return Task.FromResult(new HttpNoContentResult());
+    }
+}
+
+/// <summary>
+/// Query with a route parameter to verify route-value binding end-to-end.
+/// </summary>
+[Blueprint.Model.Attributes.RootLink("/e2e/items/{ItemId}")]
+public partial class E2ERouteParamQuery : IQuery<string>
+{
+    /// <summary>Bound from the {ItemId} route segment.</summary>
+    public string? ItemId { get; set; }
+
+    /// <summary>Echoes the route-bound ItemId value.</summary>
+    /// <param name="query">The query with the route-bound property.</param>
+    /// <returns>A string echoing the ItemId value.</returns>
+    public static Task<string> HandleAsync(E2ERouteParamQuery query)
+    {
+        return Task.FromResult($"item:{query.ItemId}");
+    }
+}
+
+/// <summary>
+/// Command that returns <see cref="CreatedResult{T}"/> to verify 201 Created response translation.
+/// </summary>
+[Blueprint.Model.Attributes.RootLink("/e2e/widgets")]
+public partial class E2ECreatedCommand : ICommand<CreatedResult<E2EWidgetResponse>>
+{
+    /// <summary>Body-bound widget name.</summary>
+    public string? Name { get; set; }
+
+    /// <summary>Returns a 201 Created result wrapping the new widget.</summary>
+    /// <param name="command">The command with the body-bound name.</param>
+    /// <returns>A CreatedResult wrapping the new widget.</returns>
+    public static Task<CreatedResult<E2EWidgetResponse>> HandleAsync(E2ECreatedCommand command)
+    {
+        return Task.FromResult(new CreatedResult<E2EWidgetResponse>(
+            new E2EWidgetResponse { Name = command.Name ?? "unnamed" }));
+    }
+}
+
+/// <summary>
+/// Simple response DTO for the created-result E2E test.
+/// </summary>
+public class E2EWidgetResponse
+{
+    /// <summary>The widget name.</summary>
+    public string Name { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Query returning a discriminated union — found items return <see cref="OkResult{T}"/>,
+/// missing items return <see cref="NotFoundResult{T}"/>.
+/// </summary>
+[Blueprint.Model.Attributes.RootLink("/e2e/maybe-items/{ItemId}")]
+public partial class E2EMaybeItemQuery : IQuery<Results<OkResult<E2EWidgetResponse>, NotFoundResult<E2EWidgetResponse>>>
+{
+    /// <summary>Bound from the {ItemId} route segment; "missing" triggers the 404 path.</summary>
+    public string? ItemId { get; set; }
+
+    /// <summary>Returns Ok for any ID except "missing".</summary>
+    /// <param name="query">The query with the route-bound ItemId.</param>
+    /// <returns>OkResult for found items, NotFoundResult for "missing".</returns>
+    public static Task<Results<OkResult<E2EWidgetResponse>, NotFoundResult<E2EWidgetResponse>>> HandleAsync(
+        E2EMaybeItemQuery query)
+    {
+        if (query.ItemId == "missing")
+        {
+            return Task.FromResult<Results<OkResult<E2EWidgetResponse>, NotFoundResult<E2EWidgetResponse>>>(
+                new NotFoundResult<E2EWidgetResponse>(new E2EWidgetResponse { Name = "not-found" }));
+        }
+
+        return Task.FromResult<Results<OkResult<E2EWidgetResponse>, NotFoundResult<E2EWidgetResponse>>>(
+            new OkResult<E2EWidgetResponse>(new E2EWidgetResponse { Name = query.ItemId ?? "unknown" }));
+    }
+}
+
+/// <summary>
+/// Command that returns <see cref="ResourceEventResult{T}"/> to verify 201 with envelope.
+/// </summary>
+[Blueprint.Model.Attributes.RootLink("/e2e/events")]
+public partial class E2EResourceEventCommand : ICommand<ResourceEventResult<E2EWidgetResponse>>
+{
+    /// <summary>Body-bound event title.</summary>
+    public string? Title { get; set; }
+
+    /// <summary>Returns a resource event result with a stable event/resource ID.</summary>
+    /// <param name="command">The command with the body-bound title.</param>
+    /// <returns>A ResourceEventResult wrapping the widget response.</returns>
+    public static Task<ResourceEventResult<E2EWidgetResponse>> HandleAsync(E2EResourceEventCommand command)
+    {
+        return Task.FromResult(new ResourceEventResult<E2EWidgetResponse>(
+            "evt-001",
+            "res-001",
+            new E2EWidgetResponse { Name = command.Title ?? "untitled" }));
+    }
+}
+
+/// <summary>
+/// Query that throws <see cref="NotFoundException"/> to verify the typed convenience exception returns 404.
+/// </summary>
+[Blueprint.Model.Attributes.RootLink("/e2e/not-found-typed")]
+public partial class E2ENotFoundTypedQuery : IQuery<string>
+{
+    /// <summary>Always throws NotFoundException.</summary>
+    /// <param name="query">The query instance (unused).</param>
+    /// <returns>Never returns — always throws.</returns>
+    public static Task<string> HandleAsync(E2ENotFoundTypedQuery query)
+    {
+        throw new NotFoundException("Widget not found");
+    }
+}
+
+/// <summary>
+/// Query that throws <see cref="ConflictException"/> to verify 409 response.
+/// </summary>
+[Blueprint.Model.Attributes.RootLink("/e2e/conflict")]
+public partial class E2EConflictQuery : IQuery<string>
+{
+    /// <summary>Always throws ConflictException.</summary>
+    /// <param name="query">The query instance (unused).</param>
+    /// <returns>Never returns — always throws.</returns>
+    public static Task<string> HandleAsync(E2EConflictQuery query)
+    {
+        throw new ConflictException("Already exists");
+    }
+}
+
+/// <summary>
+/// Query that throws <see cref="BadRequestException"/> to verify 400 response.
+/// </summary>
+[Blueprint.Model.Attributes.RootLink("/e2e/bad-request")]
+public partial class E2EBadRequestQuery : IQuery<string>
+{
+    /// <summary>Always throws BadRequestException.</summary>
+    /// <param name="query">The query instance (unused).</param>
+    /// <returns>Never returns — always throws.</returns>
+    public static Task<string> HandleAsync(E2EBadRequestQuery query)
+    {
+        throw new BadRequestException("Invalid input");
     }
 }

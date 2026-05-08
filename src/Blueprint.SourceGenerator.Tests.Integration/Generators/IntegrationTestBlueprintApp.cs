@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 using Blueprint.Model;
 using Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines;
+using Blueprint.SourceGenerator.Tests.Integration.Http;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Blueprint.SourceGenerator.Tests.Integration.Generators.OperationDescriptors;
@@ -23,4 +24,5 @@ public partial class IntegrationTestBlueprintApp : BlueprintApp;
 [JsonSerializable(typeof(LinkTestApiResource))]
 [JsonSerializable(typeof(MappedLinkApiResource))]
 [JsonSerializable(typeof(ResourceWithoutSelfLink))]
+[JsonSerializable(typeof(E2EWidgetResponse))]
 public partial class IntegrationTestAppJsonContext : JsonSerializerContext;

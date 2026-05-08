@@ -23,11 +23,7 @@ public class OkResult : OperationResult
     /// <inheritdoc />
     public override Task ExecuteAsync(ApiOperationContext context)
     {
-        throw new NotImplementedException("OkResult.ExecuteAsync");
-
-        // var executor = context.ServiceProvider.GetRequiredService<IOperationResultExecutor<OkResult>>();
-        //
-        // return executor.ExecuteAsync(context, this);
+        throw new NotSupportedException("OkResult must be translated by a host-specific result executor instead of self-executing.");
     }
 
     /// <summary>

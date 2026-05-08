@@ -21,7 +21,8 @@ public class AppModelOpenApiDocumentBuilderContextTests
             "Microsoft.AspNetCore.Mvc.ValidationProblemDetails",
             "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.LinkTestApiResource",
             "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.MappedLinkApiResource",
-            "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.ResourceWithoutSelfLink");
+            "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.ResourceWithoutSelfLink",
+            "Blueprint.SourceGenerator.Tests.Integration.Http.E2EWidgetResponse");
         context.Operations.Select(static operation => operation.Operation.OperationType)
             .Should()
             .NotContain(typeof(InternalOnlyOperationToScan))

@@ -1,5 +1,6 @@
 using Blueprint.SourceGenerator.Tests.Integration.Generators.OperationDescriptors;
 using Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines;
+using Blueprint.SourceGenerator.Tests.Integration.Http;
 using FluentAssertions;
 
 namespace Blueprint.SourceGenerator.Tests.Integration.Generators.BlueprintAppModel;
@@ -25,7 +26,8 @@ public class AppModelSerializerContextTests
             "Microsoft.AspNetCore.Mvc.ValidationProblemDetails",
             "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.LinkTestApiResource",
             "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.MappedLinkApiResource",
-            "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.ResourceWithoutSelfLink");
+            "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.ResourceWithoutSelfLink",
+            "Blueprint.SourceGenerator.Tests.Integration.Http.E2EWidgetResponse");
     }
 
     [Fact]
@@ -48,6 +50,7 @@ public class AppModelSerializerContextTests
             typeof(Microsoft.AspNetCore.Mvc.ValidationProblemDetails),
             typeof(LinkTestApiResource),
             typeof(MappedLinkApiResource),
-            typeof(ResourceWithoutSelfLink));
+            typeof(ResourceWithoutSelfLink),
+            typeof(E2EWidgetResponse));
     }
 }

@@ -20,6 +20,7 @@ public class AppModelOpenApiSchemaProjectionContextTests
         schemaContext.Schemas.Select(static schema => schema.BodyTypeName).Should().Equal(
             "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.LinkTestApiResource",
             "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.MappedLinkApiResource",
+            "Blueprint.SourceGenerator.Tests.Integration.Http.E2EWidgetResponse",
             "Microsoft.AspNetCore.Mvc.ProblemDetails",
             "Microsoft.AspNetCore.Mvc.ValidationProblemDetails",
             "string");
