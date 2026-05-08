@@ -183,6 +183,16 @@
         ],
         "parameters": [
           {
+            "name": "pref-locale",
+            "in": "cookie",
+            "required": false,
+            "description": "Preferred locale from a user-preference cookie.",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            }
+          },
+          {
             "name": "X-Correlation-Id",
             "in": "header",
             "required": false,

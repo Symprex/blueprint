@@ -52,6 +52,18 @@ public class Startup
                     info.Title = "Template Management API";
                     info.Version = "1.0.0";
                     info.Description = "Blueprint sample API demonstrating template lifecycle operations.";
+                    info.TermsOfService = "https://example.com/terms";
+                    info.Contact = new Blueprint.Runtime.Http.OpenApiContactInfo
+                    {
+                        Name = "API Support",
+                        Email = "support@example.com",
+                        Url = "https://example.com/support",
+                    };
+                    info.License = new Blueprint.Runtime.Http.OpenApiLicenseInfo
+                    {
+                        Name = "MIT",
+                        Url = "https://opensource.org/licenses/MIT",
+                    };
                 });
         });
     }

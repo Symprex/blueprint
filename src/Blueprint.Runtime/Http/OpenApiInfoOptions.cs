@@ -20,10 +20,59 @@ public sealed class OpenApiInfoOptions
     public string? Description { get; set; }
 
     /// <summary>
+    /// Gets or sets an optional terms-of-service URL for the API.
+    /// When <see langword="null"/> or empty the <c>termsOfService</c> property is omitted from the rendered output.
+    /// </summary>
+    public string? TermsOfService { get; set; }
+
+    /// <summary>
+    /// Gets or sets optional contact information for the API.
+    /// When <see langword="null"/> the <c>contact</c> object is omitted from the rendered output.
+    /// </summary>
+    public OpenApiContactInfo? Contact { get; set; }
+
+    /// <summary>
+    /// Gets or sets optional license information for the API.
+    /// When <see langword="null"/> the <c>license</c> object is omitted from the rendered output.
+    /// </summary>
+    public OpenApiLicenseInfo? License { get; set; }
+
+    /// <summary>
     /// Gets the list of server objects to include in the OpenAPI <c>servers</c> array.
     /// When empty, the <c>servers</c> section is omitted. Servers are rendered in list order.
     /// </summary>
     public List<OpenApiServerEntry> Servers { get; } = [];
+}
+
+/// <summary>
+/// Contact information for the exposed API, rendered in the OpenAPI <c>info.contact</c> object.
+/// At least one property should be non-null for the contact block to appear in the output.
+/// </summary>
+public sealed class OpenApiContactInfo
+{
+    /// <summary>Gets or sets the identifying name of the contact person or organisation.</summary>
+    public string? Name { get; set; }
+
+    /// <summary>Gets or sets the URL pointing to the contact information (e.g. a support page).</summary>
+    public string? Url { get; set; }
+
+    /// <summary>Gets or sets the email address of the contact person or organisation.</summary>
+    public string? Email { get; set; }
+
+    /// <summary>Returns <see langword="true"/> when at least one contact field is populated.</summary>
+    internal bool HasValue => !string.IsNullOrEmpty(this.Name) || !string.IsNullOrEmpty(this.Url) || !string.IsNullOrEmpty(this.Email);
+}
+
+/// <summary>
+/// License information for the exposed API, rendered in the OpenAPI <c>info.license</c> object.
+/// </summary>
+public sealed class OpenApiLicenseInfo
+{
+    /// <summary>Gets or sets the license name used for the API (required by the OpenAPI spec when the license object is present).</summary>
+    public required string Name { get; set; }
+
+    /// <summary>Gets or sets an optional URL to the full license text.</summary>
+    public string? Url { get; set; }
 }
 
 /// <summary>

@@ -10,7 +10,8 @@ namespace Blueprint.SourceGenerator.Sample.Contract.Api;
 /// <summary>
 /// Searches templates by name with pagination. Demonstrates query-string binding
 /// for non-route parameters, optional pagination defaults, public access via [AllowAnonymous],
-/// and <see cref="FromHeaderAttribute"/> binding for correlation IDs.
+/// <see cref="FromHeaderAttribute"/> binding for correlation IDs,
+/// and <see cref="FromCookieAttribute"/> binding for user preferences.
 /// </summary>
 [ApiOperations("Templates")]
 [RootLink("/templates/search")]
@@ -57,4 +58,12 @@ public partial class SearchTemplatesQuery : IQuery<TemplateApiResource[]>
     [FromHeader("X-Correlation-Id")]
     [Description("Correlation ID for cross-system trace correlation.")]
     public string? CorrelationId { get; set; }
+
+    /// <summary>
+    /// An optional user-preference cookie that stores the preferred locale for template content.
+    /// Demonstrates <see cref="FromCookieAttribute"/> binding for reading per-request state from cookies.
+    /// </summary>
+    [FromCookie("pref-locale")]
+    [Description("Preferred locale from a user-preference cookie.")]
+    public string? PreferredLocale { get; set; }
 }

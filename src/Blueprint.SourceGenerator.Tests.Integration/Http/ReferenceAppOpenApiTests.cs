@@ -359,6 +359,91 @@ public class ReferenceAppOpenApiTests
             "items $ref should reference the element type schema component");
     }
 
+    [Fact]
+    public async Task When_openapi_info_has_contact_then_contact_object_rendered()
+    {
+        var (json, _) = await InvokeOpenApiEndpointAsync(info =>
+        {
+            info.Contact = new OpenApiContactInfo
+            {
+                Name = "Test Contact",
+                Email = "test@example.com",
+                Url = "https://example.com/support",
+            };
+        });
+
+        using var doc = JsonDocument.Parse(json);
+        var info = doc.RootElement.GetProperty("info");
+        var contact = info.GetProperty("contact");
+
+        contact.GetProperty("name").GetString().Should().Be("Test Contact");
+        contact.GetProperty("email").GetString().Should().Be("test@example.com");
+        contact.GetProperty("url").GetString().Should().Be("https://example.com/support");
+    }
+
+    [Fact]
+    public async Task When_openapi_info_has_license_then_license_object_rendered()
+    {
+        var (json, _) = await InvokeOpenApiEndpointAsync(info =>
+        {
+            info.License = new OpenApiLicenseInfo
+            {
+                Name = "MIT",
+                Url = "https://opensource.org/licenses/MIT",
+            };
+        });
+
+        using var doc = JsonDocument.Parse(json);
+        var info = doc.RootElement.GetProperty("info");
+        var license = info.GetProperty("license");
+
+        license.GetProperty("name").GetString().Should().Be("MIT");
+        license.GetProperty("url").GetString().Should().Be("https://opensource.org/licenses/MIT");
+    }
+
+    [Fact]
+    public async Task When_openapi_info_has_terms_of_service_then_terms_rendered()
+    {
+        var (json, _) = await InvokeOpenApiEndpointAsync(info =>
+        {
+            info.TermsOfService = "https://example.com/terms";
+        });
+
+        using var doc = JsonDocument.Parse(json);
+        var info = doc.RootElement.GetProperty("info");
+
+        info.GetProperty("termsOfService").GetString().Should().Be("https://example.com/terms");
+    }
+
+    [Fact]
+    public async Task When_openapi_info_has_no_contact_or_license_then_fields_omitted()
+    {
+        var (json, _) = await InvokeOpenApiEndpointAsync();
+        using var doc = JsonDocument.Parse(json);
+        var info = doc.RootElement.GetProperty("info");
+
+        info.TryGetProperty("contact", out _).Should().BeFalse("contact should be omitted when not configured");
+        info.TryGetProperty("license", out _).Should().BeFalse("license should be omitted when not configured");
+        info.TryGetProperty("termsOfService", out _).Should().BeFalse("termsOfService should be omitted when not configured");
+    }
+
+    [Fact]
+    public async Task When_search_query_has_from_cookie_property_then_openapi_renders_cookie_parameter()
+    {
+        var (json, _) = await InvokeOpenApiEndpointAsync();
+        using var doc = JsonDocument.Parse(json);
+
+        var searchPath = doc.RootElement.GetProperty("paths").GetProperty("/templates/search");
+        var parameters = searchPath.GetProperty("get").GetProperty("parameters");
+        var cookieParam = parameters.EnumerateArray()
+            .SingleOrDefault(static p => p.GetProperty("name").GetString() == "pref-locale");
+
+        cookieParam.ValueKind.Should().NotBe(JsonValueKind.Undefined,
+            "[FromCookie] properties should appear in the OpenAPI parameters list");
+        cookieParam.GetProperty("in").GetString().Should().Be("cookie");
+        cookieParam.GetProperty("schema").GetProperty("type").GetString().Should().Be("string");
+    }
+
     private static async Task<(string Json, int StatusCode)> InvokeOpenApiEndpointAsync(Action<OpenApiInfoOptions>? configureOpenApi = null)
     {
         var endpoints = CreateEndpoints();

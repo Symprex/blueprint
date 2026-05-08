@@ -106,6 +106,48 @@ public sealed record OpenApiOutputRenderingContext(
             writer.WriteString("description", infoOptions.Description);
         }
 
+        if (!string.IsNullOrEmpty(infoOptions.TermsOfService))
+        {
+            writer.WriteString("termsOfService", infoOptions.TermsOfService);
+        }
+
+        if (infoOptions.Contact is { HasValue: true } contact)
+        {
+            writer.WritePropertyName("contact");
+            writer.WriteStartObject();
+
+            if (!string.IsNullOrEmpty(contact.Name))
+            {
+                writer.WriteString("name", contact.Name);
+            }
+
+            if (!string.IsNullOrEmpty(contact.Url))
+            {
+                writer.WriteString("url", contact.Url);
+            }
+
+            if (!string.IsNullOrEmpty(contact.Email))
+            {
+                writer.WriteString("email", contact.Email);
+            }
+
+            writer.WriteEndObject();
+        }
+
+        if (infoOptions.License is { } license)
+        {
+            writer.WritePropertyName("license");
+            writer.WriteStartObject();
+            writer.WriteString("name", license.Name);
+
+            if (!string.IsNullOrEmpty(license.Url))
+            {
+                writer.WriteString("url", license.Url);
+            }
+
+            writer.WriteEndObject();
+        }
+
         writer.WriteEndObject();
     }
 
