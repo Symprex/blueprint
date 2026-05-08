@@ -27,6 +27,10 @@ public class ApiOperationContext : IHttpOperationContext
         ApiOperationDescriptor operationDescriptor,
         CancellationToken token)
     {
+        ArgumentNullException.ThrowIfNull(serviceProvider);
+        ArgumentNullException.ThrowIfNull(app);
+        ArgumentNullException.ThrowIfNull(operationDescriptor);
+
         this.Descriptor = operationDescriptor;
         this.OperationCancelled = token;
         this.App = app;

@@ -45,6 +45,9 @@ public abstract class OperationExecutorShell : IOperationExecutorPipeline
     /// </param>
     protected OperationExecutorShell(ILoggerFactory loggerFactory, string operationTypeName, bool suppressActivity = false)
     {
+        ArgumentNullException.ThrowIfNull(loggerFactory);
+        ArgumentException.ThrowIfNullOrWhiteSpace(operationTypeName);
+
         this._logger = loggerFactory.CreateLogger(operationTypeName + "ExecutorPipeline");
         this._operationTypeName = operationTypeName;
         this._suppressActivity = suppressActivity;
