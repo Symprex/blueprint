@@ -1052,6 +1052,114 @@ public class ValidationModuleIntegrationTests
         UrlValidationOperation.HandlerCallCount.Should().Be(1);
     }
 
+    [Fact]
+    public async Task When_allowed_values_validation_fails_then_generated_pipeline_returns_validation_failure_and_skips_handler()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(AllowedValuesValidationOperation));
+        var context = CreateContext(app, AllowedValuesValidationOperation.Configure());
+        var operation = (AllowedValuesValidationOperation)context.Operation;
+        operation.Role = "superadmin";
+
+        AllowedValuesValidationOperation.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<ValidationFailedResult>();
+        AllowedValuesValidationOperation.HandlerCallCount.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task When_allowed_values_validation_passes_then_generated_pipeline_runs_handler_and_returns_ok()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(AllowedValuesValidationOperation));
+        var context = CreateContext(app, AllowedValuesValidationOperation.Configure());
+        var operation = (AllowedValuesValidationOperation)context.Operation;
+        operation.Role = "admin";
+
+        AllowedValuesValidationOperation.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<OkResult<string>>();
+        AllowedValuesValidationOperation.HandlerCallCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task When_denied_values_validation_fails_then_generated_pipeline_returns_validation_failure_and_skips_handler()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(DeniedValuesValidationOperation));
+        var context = CreateContext(app, DeniedValuesValidationOperation.Configure());
+        var operation = (DeniedValuesValidationOperation)context.Operation;
+        operation.Username = "root";
+
+        DeniedValuesValidationOperation.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<ValidationFailedResult>();
+        DeniedValuesValidationOperation.HandlerCallCount.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task When_denied_values_validation_passes_then_generated_pipeline_runs_handler_and_returns_ok()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(DeniedValuesValidationOperation));
+        var context = CreateContext(app, DeniedValuesValidationOperation.Configure());
+        var operation = (DeniedValuesValidationOperation)context.Operation;
+        operation.Username = "jsmith";
+
+        DeniedValuesValidationOperation.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<OkResult<string>>();
+        DeniedValuesValidationOperation.HandlerCallCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task When_length_validation_too_short_then_generated_pipeline_returns_validation_failure_and_skips_handler()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(LengthValidationOperation));
+        var context = CreateContext(app, LengthValidationOperation.Configure());
+        var operation = (LengthValidationOperation)context.Operation;
+        operation.Code = "A";
+
+        LengthValidationOperation.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<ValidationFailedResult>();
+        LengthValidationOperation.HandlerCallCount.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task When_length_validation_passes_then_generated_pipeline_runs_handler_and_returns_ok()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(LengthValidationOperation));
+        var context = CreateContext(app, LengthValidationOperation.Configure());
+        var operation = (LengthValidationOperation)context.Operation;
+        operation.Code = "ABC";
+
+        LengthValidationOperation.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<OkResult<string>>();
+        LengthValidationOperation.HandlerCallCount.Should().Be(1);
+    }
+
     private static ApiOperationContext CreateContext(BlueprintApp app, ApiOperationDescriptor descriptor)
     {
         return new ApiOperationContext(new EmptyServiceProvider(), app, descriptor, CancellationToken.None);
@@ -1584,6 +1692,63 @@ public partial class CompareValidationOperation : ICommand<string>
     {
         HandlerCallCount++;
         return Task.FromResult("ok");
+    }
+}
+
+public partial class AllowedValuesValidationOperation : ICommand<string>
+{
+    public static int HandlerCallCount { get; private set; }
+
+    [AllowedValues("admin", "user", "guest")]
+    public string? Role { get; set; }
+
+    public static void Reset()
+    {
+        HandlerCallCount = 0;
+    }
+
+    public static Task<string> HandleAsync(AllowedValuesValidationOperation operation)
+    {
+        HandlerCallCount++;
+        return Task.FromResult(operation.Role ?? string.Empty);
+    }
+}
+
+public partial class DeniedValuesValidationOperation : ICommand<string>
+{
+    public static int HandlerCallCount { get; private set; }
+
+    [DeniedValues("root", "system")]
+    public string? Username { get; set; }
+
+    public static void Reset()
+    {
+        HandlerCallCount = 0;
+    }
+
+    public static Task<string> HandleAsync(DeniedValuesValidationOperation operation)
+    {
+        HandlerCallCount++;
+        return Task.FromResult(operation.Username ?? string.Empty);
+    }
+}
+
+public partial class LengthValidationOperation : ICommand<string>
+{
+    public static int HandlerCallCount { get; private set; }
+
+    [Length(2, 50)]
+    public string? Code { get; set; }
+
+    public static void Reset()
+    {
+        HandlerCallCount = 0;
+    }
+
+    public static Task<string> HandleAsync(LengthValidationOperation operation)
+    {
+        HandlerCallCount++;
+        return Task.FromResult(operation.Code ?? string.Empty);
     }
 }
 

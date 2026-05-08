@@ -138,6 +138,11 @@ public sealed record OpenApiSchemaProjectionContext(
                         ? Math.Max(minLength.Value, minLengthAttribute.Length)
                         : minLengthAttribute.Length;
                     break;
+                case LengthAttribute lengthAttribute when lengthAttribute.MinimumLength > 0:
+                    minLength = minLength.HasValue
+                        ? Math.Max(minLength.Value, lengthAttribute.MinimumLength)
+                        : lengthAttribute.MinimumLength;
+                    break;
             }
         }
 
@@ -154,6 +159,7 @@ public sealed record OpenApiSchemaProjectionContext(
             {
                 StringLengthAttribute stringLengthAttribute when stringLengthAttribute.MaximumLength != int.MaxValue => stringLengthAttribute.MaximumLength,
                 MaxLengthAttribute maxLengthAttribute when maxLengthAttribute.Length >= 0 => maxLengthAttribute.Length,
+                LengthAttribute lengthAttribute when lengthAttribute.MaximumLength != int.MaxValue => lengthAttribute.MaximumLength,
                 _ => (int?)null,
             };
 

@@ -15,9 +15,9 @@
     "frameworkStatusDetail": "Core Blueprint source-generator framework is at full feature parity with legacy Blueprint for Signature365 migration. All consumer-space companion packages (Rebus, Marten, Hangfire, tenant context) are by-design extensions that consumers build in their own repositories.",
     "nextReadySlice": null,
     "lastCompletedSlice": {
-      "id": "docs/deployment-and-operations-guide",
+      "id": "validation/sample-enrichment-and-guard-fix",
       "workstream": "documentation-and-final-alignment",
-      "title": "Add deployment and operations guide covering production configuration, middleware, and observability"
+      "title": "Fix validation guard operator precedence and enrich sample with CompareAttribute, conditional validation demos"
     },
     "openReviewGate": null,
     "openReviewGateRationale": null,
@@ -412,6 +412,18 @@
       "workstream": "documentation-and-final-alignment",
       "title": "Add deployment and operations guide covering production configuration, middleware, and observability",
       "commit": "07c84e9"
+    },
+    {
+      "id": "validation/compare-attribute-fast-path",
+      "workstream": "validation",
+      "title": "Add CompareAttribute compile-time fast-path strategy with generator and integration tests",
+      "commit": "8b62b0a"
+    },
+    {
+      "id": "validation/sample-enrichment-and-guard-fix",
+      "workstream": "documentation-and-final-alignment",
+      "title": "Fix validation guard operator precedence and enrich sample with ChangePasswordCommand, GetTemplateHistoryQuery, conditional validation demos",
+      "commit": "c3021f4"
     }
   ],
   "decisions": [
