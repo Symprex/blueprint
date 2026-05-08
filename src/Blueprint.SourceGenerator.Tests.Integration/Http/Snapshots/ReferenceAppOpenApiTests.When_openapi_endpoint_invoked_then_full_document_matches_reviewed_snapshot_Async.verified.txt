@@ -588,31 +588,18 @@
     "/templates/paged": {
       "get": {
         "operationId": "GetPagedTemplatesQuery",
-        "summary": "List templates with pagination.",
+        "summary": "List templates with pagination and optional ordering.",
         "tags": [
           "Templates"
         ],
         "parameters": [
           {
-            "name": "page",
+            "name": "nameFilter",
             "in": "query",
             "required": false,
             "schema": {
-              "type": "integer",
-              "format": "int32",
-              "minimum": 1,
-              "maximum": 2147483647
-            }
-          },
-          {
-            "name": "pageSize",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int32",
-              "minimum": 1,
-              "maximum": 100
+              "type": "string",
+              "nullable": true
             }
           }
         ],

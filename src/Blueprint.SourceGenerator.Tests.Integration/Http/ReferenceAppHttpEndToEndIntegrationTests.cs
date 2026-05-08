@@ -1103,6 +1103,56 @@ public class ReferenceAppHttpEndToEndIntegrationTests
         response.StatusCode.Should().Be(StatusCodes.Status200OK);
     }
 
+    [Fact]
+    public async Task When_paged_templates_endpoint_invoked_with_auth_then_returns_paged_result()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/templates/paged", "GET");
+        endpoint.Should().NotBeNull("the paged templates route should be registered");
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Get;
+            context.Request.Path = "/api/templates/paged";
+            context.Request.QueryString = new QueryString("?Page=1&PageSize=2");
+            context.User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "user-1"),
+                ],
+                authenticationType: "test"));
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        response.ContentType.Should().Be("application/json; charset=utf-8");
+
+        // PagedApiResource includes pagination metadata in the response body.
+        response.Body.Should().Contain("\"$object\":");
+        response.Body.Should().Contain("\"PageSize\":");
+        response.Body.Should().Contain("\"CurrentPage\":1");
+        response.Body.Should().Contain("\"Total\":");
+        response.Body.Should().Contain("\"Values\":");
+    }
+
+    [Fact]
+    public async Task When_paged_templates_endpoint_invoked_without_auth_then_returns_401()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/templates/paged", "GET");
+        endpoint.Should().NotBeNull();
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Get;
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status401Unauthorized);
+    }
+
     private static async Task<TestHttpResponse> InvokeEndpointAsync(
         RouteEndpoint endpoint,
         IServiceProvider serviceProvider,
