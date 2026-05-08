@@ -15,9 +15,9 @@
     "frameworkStatusDetail": "Core Blueprint source-generator framework is at full feature parity with legacy Blueprint for Signature365 migration. All consumer-space companion packages (Rebus, Marten, Hangfire, tenant context) are by-design extensions that consumers build in their own repositories.",
     "nextReadySlice": null,
     "lastCompletedSlice": {
-      "id": "doc/migration-guide-skill",
+      "id": "quality/openapi-content-types",
       "workstream": "documentation-and-final-alignment",
-      "title": "Add legacy Blueprint migration guide to using-blueprint skill with migration tooling, diagnostics, and companion package guidance"
+      "title": "Emit proper OpenAPI content types for PlainTextResult (text/plain) and FileStreamResult (application/octet-stream)"
     },
     "openReviewGate": null,
     "openReviewGateRationale": null,
@@ -340,6 +340,24 @@
       "workstream": "documentation-and-final-alignment",
       "title": "Add sample app demos for PlainTextResult, FileStreamResult, and RedirectResult operations",
       "commit": "15a8c0e"
+    },
+    {
+      "id": "quality/result-null-guards",
+      "workstream": "documentation-and-final-alignment",
+      "title": "Add null guards to OkResult, PlainTextResult, FileStreamResult, RedirectResult, ApiOperationContext, and OperationExecutorShell",
+      "commit": "26896d1"
+    },
+    {
+      "id": "quality/openapi-content-types",
+      "workstream": "documentation-and-final-alignment",
+      "title": "Emit proper OpenAPI content types for PlainTextResult (text/plain) and FileStreamResult (application/octet-stream)",
+      "commit": "b21f561"
+    },
+    {
+      "id": "sample/accepted-result-demo",
+      "workstream": "documentation-and-final-alignment",
+      "title": "Add ExportTemplatesCommand sample demonstrating AcceptedResult<T> pattern with 202 Accepted response",
+      "commit": "791bf6f"
     }
   ],
   "decisions": [
