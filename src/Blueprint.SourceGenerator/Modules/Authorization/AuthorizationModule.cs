@@ -73,7 +73,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
         }
 
         // Resolve the effective scope pairs — either direct or inherited
-        List<(string Noun, string Verb)> effectiveScopePairs;
+        List<(string Noun, string Verb, string? ResourceKeyTemplate)> effectiveScopePairs;
 
         if (fromResourceTarget is not null)
         {
@@ -107,7 +107,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
         {
             var hasValidationErrors = false;
 
-            foreach (var (noun, verb) in effectiveScopePairs)
+            foreach (var (noun, verb, _) in effectiveScopePairs)
             {
                 if (string.IsNullOrWhiteSpace(noun))
                 {
@@ -168,7 +168,9 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
         // Project scope pairs and authentication feature data
         var scopePairEntries = string.Join(
             ", ",
-            effectiveScopePairs.Select(static sp => $"new global::Blueprint.Model.ScopePair(\"{sp.Noun}\", \"{sp.Verb}\")"));
+            effectiveScopePairs.Select(static sp => sp.ResourceKeyTemplate is not null
+                ? $"new global::Blueprint.Model.ScopePair(\"{sp.Noun}\", \"{sp.Verb}\", \"{sp.ResourceKeyTemplate}\")"
+                : $"new global::Blueprint.Model.ScopePair(\"{sp.Noun}\", \"{sp.Verb}\")"));
 
         context.AddRenderStep(writer =>
         {
@@ -211,7 +213,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
         }
 
         // Resolve effective scope pairs for the pipeline authorization check
-        List<(string Noun, string Verb)> effectiveScopePairs;
+        List<(string Noun, string Verb, string? ResourceKeyTemplate)> effectiveScopePairs;
 
         if (fromResourceTarget is not null)
         {
@@ -270,7 +272,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
         context.WriteBlankLine();
     }
 
-    private static void RenderAuthorizationCheck(PipelineRenderContext context, List<(string Noun, string Verb)> scopePairs)
+    private static void RenderAuthorizationCheck(PipelineRenderContext context, List<(string Noun, string Verb, string? ResourceKeyTemplate)> scopePairs)
     {
         // Resolve optional IResourceAuthorizationProvider — permissive when not registered
         context.DeclareVariable(
@@ -281,10 +283,12 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
             "authorizationProvider != null",
             branch =>
             {
-                // Build the scope pairs array expression
+                // Build the scope pairs array expression including optional resource key templates
                 var scopePairElements = string.Join(
                     ", ",
-                    scopePairs.Select(static sp => $"new Blueprint.Model.ScopePair(\"{sp.Noun}\", \"{sp.Verb}\")"));
+                    scopePairs.Select(static sp => sp.ResourceKeyTemplate is not null
+                        ? $"new Blueprint.Model.ScopePair(\"{sp.Noun}\", \"{sp.Verb}\", \"{sp.ResourceKeyTemplate}\")"
+                        : $"new Blueprint.Model.ScopePair(\"{sp.Noun}\", \"{sp.Verb}\")"));
 
                 branch.DeclareVariable(
                     "isAuthorized",
@@ -304,9 +308,9 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
         context.WriteBlankLine();
     }
 
-    private static List<(string Noun, string Verb)> GetResourceAttributes(INamedTypeSymbol operationType)
+    private static List<(string Noun, string Verb, string? ResourceKeyTemplate)> GetResourceAttributes(INamedTypeSymbol operationType)
     {
-        var result = new List<(string Noun, string Verb)>();
+        var result = new List<(string Noun, string Verb, string? ResourceKeyTemplate)>();
 
         foreach (var attribute in operationType.GetAttributes())
         {
@@ -330,8 +334,11 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
 
             var noun = attribute.ConstructorArguments[0].Value as string ?? string.Empty;
             var verb = attribute.ConstructorArguments[1].Value as string ?? string.Empty;
+            var resourceKeyTemplate = attribute.ConstructorArguments.Length >= 3
+                ? attribute.ConstructorArguments[2].Value as string
+                : null;
 
-            result.Add((noun, verb));
+            result.Add((noun, verb, resourceKeyTemplate));
         }
 
         return result;
