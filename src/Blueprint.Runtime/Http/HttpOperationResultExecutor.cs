@@ -149,8 +149,8 @@ public class HttpOperationResultExecutor
                 httpContext.Response.StatusCode = StatusCodes.Status204NoContent;
                 return true;
             case PlainTextResult plainTextResult:
-                httpContext.Response.StatusCode = StatusCodes.Status200OK;
-                httpContext.Response.ContentType = "text/plain; charset=utf-8";
+                httpContext.Response.StatusCode = (int)plainTextResult.StatusCode;
+                httpContext.Response.ContentType = plainTextResult.ContentType + "; charset=utf-8";
                 await httpContext.Response.WriteAsync(plainTextResult.Content, httpContext.RequestAborted);
                 return true;
             case RedirectResult redirectResult:

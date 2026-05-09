@@ -612,6 +612,38 @@ public class HttpEndToEndIntegrationTests
     }
 
     [Fact]
+    public async Task When_handler_returns_plain_text_with_custom_status_code_then_respects_status()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/e2e/plain-text-not-found");
+        endpoint.Should().NotBeNull();
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider);
+
+        response.StatusCode.Should().Be(StatusCodes.Status404NotFound);
+        response.ContentType.Should().Be("text/plain; charset=utf-8");
+        response.Body.Should().Be("Resource not found");
+    }
+
+    [Fact]
+    public async Task When_handler_returns_plain_text_with_custom_content_type_then_respects_content_type()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/e2e/vcard");
+        endpoint.Should().NotBeNull();
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider);
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        response.ContentType.Should().Be("text/vcard; charset=utf-8");
+        response.Body.Should().Be("BEGIN:VCARD\r\nVERSION:3.0\r\nFN:John Doe\r\nEND:VCARD");
+    }
+
+    [Fact]
     public async Task When_handler_returns_redirect_result_then_returns_302_with_location()
     {
         var endpoints = CreateEndpoints();
@@ -1832,6 +1864,41 @@ public partial class E2EPlainTextQuery : IQuery<PlainTextResult>
     public static Task<PlainTextResult> HandleAsync(E2EPlainTextQuery query)
     {
         return Task.FromResult(new PlainTextResult("Hello, plain text!"));
+    }
+}
+
+/// <summary>E2E operation returning a plain-text response with a 404 status code.</summary>
+[Blueprint.Model.Attributes.RootLink("/e2e/plain-text-not-found")]
+[Blueprint.Model.Attributes.HttpGet]
+[Blueprint.Model.Attributes.AllowAnonymous]
+[Blueprint.Auditing.DoNotAudit]
+public partial class E2EPlainTextNotFoundQuery : IQuery<PlainTextResult>
+{
+    /// <summary>Returns a plain-text response with a 404 status code.</summary>
+    /// <param name="query">The query instance (unused).</param>
+    /// <returns>A not-found plain-text result.</returns>
+    public static Task<PlainTextResult> HandleAsync(E2EPlainTextNotFoundQuery query)
+    {
+        return Task.FromResult(new PlainTextResult("Resource not found", System.Net.HttpStatusCode.NotFound));
+    }
+}
+
+/// <summary>E2E operation returning a vCard-typed plain-text response (text/vcard content type).</summary>
+[Blueprint.Model.Attributes.RootLink("/e2e/vcard")]
+[Blueprint.Model.Attributes.HttpGet]
+[Blueprint.Model.Attributes.AllowAnonymous]
+[Blueprint.Auditing.DoNotAudit]
+public partial class E2EVCardQuery : IQuery<PlainTextResult>
+{
+    /// <summary>Returns a vCard response with custom content type.</summary>
+    /// <param name="query">The query instance (unused).</param>
+    /// <returns>A plain-text result with text/vcard content type.</returns>
+    public static Task<PlainTextResult> HandleAsync(E2EVCardQuery query)
+    {
+        return Task.FromResult(new PlainTextResult("BEGIN:VCARD\r\nVERSION:3.0\r\nFN:John Doe\r\nEND:VCARD")
+        {
+            ContentType = "text/vcard",
+        });
     }
 }
 
