@@ -15,6 +15,7 @@ namespace Blueprint.SourceGenerator.Benchmarks.Validation;
 /// <summary>
 /// Measures generated validation pipeline costs across fast-path and runtime-fallback validation scenarios.
 /// </summary>
+[Config(typeof(InProcessBenchmarkConfig))]
 [MemoryDiagnoser]
 [Orderer(SummaryOrderPolicy.FastestToSlowest)]
 public class ValidationPipelineBenchmarks

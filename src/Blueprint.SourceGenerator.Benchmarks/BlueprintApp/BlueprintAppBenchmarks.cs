@@ -12,8 +12,8 @@ namespace Blueprint.SourceGenerator.Benchmarks.RuntimeModel;
 /// <summary>
 /// Measures the cost of registering batches of generated operation descriptors into a fresh <see cref="BlueprintAppModel"/>.
 /// </summary>
+[Config(typeof(InProcessBenchmarkConfig))]
 [MemoryDiagnoser]
-[ShortRunJob]
 [Orderer(SummaryOrderPolicy.FastestToSlowest)]
 public class BlueprintAppRegistrationBenchmarks
 {
@@ -51,8 +51,8 @@ public class BlueprintAppRegistrationBenchmarks
 /// <summary>
 /// Measures the cost of locating registered and missing operations in a populated <see cref="BlueprintAppModel"/>.
 /// </summary>
+[Config(typeof(InProcessBenchmarkConfig))]
 [MemoryDiagnoser]
-[ShortRunJob]
 [Orderer(SummaryOrderPolicy.FastestToSlowest)]
 public class BlueprintAppLookupBenchmarks
 {

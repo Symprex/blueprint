@@ -14,8 +14,8 @@ namespace Blueprint.SourceGenerator.Benchmarks.RuntimeExec;
 /// Measures the shared executor shell separately from direct pipeline execution so request-path cost can be compared
 /// against the existing Blueprint app and endpoint-mapping baselines.
 /// </summary>
+[Config(typeof(InProcessBenchmarkConfig))]
 [MemoryDiagnoser]
-[ShortRunJob]
 [Orderer(SummaryOrderPolicy.FastestToSlowest)]
 public class ExecutorDispatchBenchmarks
 {

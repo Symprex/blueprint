@@ -14,8 +14,8 @@ namespace Blueprint.SourceGenerator.Benchmarks.RuntimeHttp;
 /// <summary>
 /// Measures the cost of mapping Blueprint-generated endpoints for varying operation counts.
 /// </summary>
+[Config(typeof(InProcessBenchmarkConfig))]
 [MemoryDiagnoser]
-[ShortRunJob]
 [Orderer(SummaryOrderPolicy.FastestToSlowest)]
 public class BlueprintEndpointMappingBenchmarks
 {

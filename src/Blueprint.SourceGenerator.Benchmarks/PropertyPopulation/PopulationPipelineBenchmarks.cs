@@ -4,10 +4,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using BenchmarkDotNet.Attributes;
-using BenchmarkDotNet.Configs;
-using BenchmarkDotNet.Jobs;
 using BenchmarkDotNet.Order;
-using BenchmarkDotNet.Toolchains.InProcess.Emit;
 using Blueprint.Model;
 using Blueprint.Runtime.Exec;
 using Blueprint.SourceGenerator.Benchmarks.Validation;
@@ -18,25 +15,10 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace Blueprint.SourceGenerator.Benchmarks.PropertyPopulation;
 
 /// <summary>
-/// Runs population benchmarks in-process to avoid the out-of-process build path issue
-/// with the source generator's CodeWriter relative reference.
-/// </summary>
-public class InProcessConfig : ManualConfig
-{
-    /// <summary>
-    /// Initializes a new instance of the <see cref="InProcessConfig"/> class with in-process emit toolchain.
-    /// </summary>
-    public InProcessConfig()
-    {
-        this.AddJob(Job.ShortRun.WithToolchain(InProcessEmitToolchain.Instance));
-    }
-}
-
-/// <summary>
 /// Measures generated property population pipeline costs across different binding source profiles:
 /// route-only, body-only, mixed route+body, typed properties, and larger payloads.
 /// </summary>
-[Config(typeof(InProcessConfig))]
+[Config(typeof(InProcessBenchmarkConfig))]
 [MemoryDiagnoser]
 [Orderer(SummaryOrderPolicy.FastestToSlowest)]
 public class PopulationPipelineBenchmarks
