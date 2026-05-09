@@ -108,6 +108,14 @@ namespace Blueprint.Generated
                 linkableResource.AddLink("self", new global::Blueprint.Model.Link { Href = $"/widgets/{linkableResource.Id}" });
             }
 
+            // Populate full HATEOAS links (all registered operations for this resource type)
+            var apiLinkGenerator = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Http.IApiLinkGenerator>(context.ServiceProvider);
+            if (apiLinkGenerator != null)
+            {
+                var resourceLinkGenerators = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<System.Collections.Generic.IEnumerable<Blueprint.Http.IResourceLinkGenerator>>(context.ServiceProvider);
+                await Blueprint.Http.LinkGeneratorHandler.AddLinksAsync(apiLinkGenerator, resourceLinkGenerators, context, handlerResult);
+            }
+
             if (handlerResult.WasSuccessful)
             {
                 var auditSink = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Auditing.IAuditSink>(context.ServiceProvider);
@@ -314,6 +322,14 @@ namespace Blueprint.Generated
             {
                 var linkableResource = (global::TestNamespace.WidgetApiResource)((global::Blueprint.Runtime.Exec.ResourceEventResult<global::TestNamespace.WidgetApiResource>)handlerResult).Content;
                 linkableResource.AddLink("self", new global::Blueprint.Model.Link { Href = $"/widgets/{linkableResource.Id}" });
+            }
+
+            // Populate full HATEOAS links (all registered operations for this resource type)
+            var apiLinkGenerator = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Http.IApiLinkGenerator>(context.ServiceProvider);
+            if (apiLinkGenerator != null)
+            {
+                var resourceLinkGenerators = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<System.Collections.Generic.IEnumerable<Blueprint.Http.IResourceLinkGenerator>>(context.ServiceProvider);
+                await Blueprint.Http.LinkGeneratorHandler.AddLinksAsync(apiLinkGenerator, resourceLinkGenerators, context, handlerResult);
             }
 
             var unitOfWork = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Persistence.IUnitOfWork>(context.ServiceProvider);

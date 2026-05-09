@@ -141,6 +141,14 @@ namespace Blueprint.Generated
                 linkableResource.AddLink("self", new global::Blueprint.Model.Link { Href = $"/resources/{linkableResource.Id}" });
             }
 
+            // Populate full HATEOAS links (all registered operations for this resource type)
+            var apiLinkGenerator = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Http.IApiLinkGenerator>(context.ServiceProvider);
+            if (apiLinkGenerator != null)
+            {
+                var resourceLinkGenerators = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<System.Collections.Generic.IEnumerable<Blueprint.Http.IResourceLinkGenerator>>(context.ServiceProvider);
+                await Blueprint.Http.LinkGeneratorHandler.AddLinksAsync(apiLinkGenerator, resourceLinkGenerators, context, handlerResult);
+            }
+
             var unitOfWork = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Persistence.IUnitOfWork>(context.ServiceProvider);
             if (unitOfWork != null && handlerResult.WasSuccessful)
             {

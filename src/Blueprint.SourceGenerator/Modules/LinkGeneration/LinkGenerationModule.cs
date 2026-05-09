@@ -122,7 +122,12 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
             new VariableKey(HandlerExecutionModule.HandlerResultTypeName, HandlerExecutionModule.HandlerResultPurpose),
             PipelineStage.PostExecution);
 
-        context.AddRenderStep(PipelineStage.PostExecution, renderContext => RenderLinkPopulation(renderContext, resourceBinding, selfLinks));
+        context.RequireAsync();
+        context.AddRenderStep(PipelineStage.PostExecution, renderContext =>
+        {
+            RenderLinkPopulation(renderContext, resourceBinding, selfLinks);
+            RenderFullHateoasLinkPopulation(renderContext);
+        });
     }
 
     // Normalise away the parameter names, so that we can compare URLs with different property names (as utimately they are
@@ -507,6 +512,32 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
                     var hrefExpression = BuildHrefInterpolation(selfLink.UrlTemplate);
                     branch.WriteStatement($"linkableResource.AddLink(\"self\", new global::Blueprint.Model.Link {{ Href = {hrefExpression} }});");
                 }
+            });
+    }
+
+    /// <summary>
+    /// Generates the pipeline step that resolves <c>IResourceLinkGenerator</c> and
+    /// <c>IApiLinkGenerator</c> from DI and calls <c>LinkGeneratorHandler.AddLinksAsync</c>
+    /// to populate all HATEOAS links (root links, self links from other operations) on the
+    /// returned resource. This replaces the legacy <c>LinkGeneratorMiddlewareBuilder</c>.
+    /// </summary>
+    private static void RenderFullHateoasLinkPopulation(PipelineRenderContext context)
+    {
+        context.WriteBlankLine();
+        context.WriteStatement("// Populate full HATEOAS links (all registered operations for this resource type)");
+        context.DeclareVariable(
+            "apiLinkGenerator",
+            context.GetOptionalServiceExpression("Blueprint.Http.IApiLinkGenerator"));
+
+        context.If(
+            "apiLinkGenerator != null",
+            branch =>
+            {
+                branch.DeclareVariable(
+                    "resourceLinkGenerators",
+                    "Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<System.Collections.Generic.IEnumerable<Blueprint.Http.IResourceLinkGenerator>>(context.ServiceProvider)");
+
+                branch.WriteStatement("await Blueprint.Http.LinkGeneratorHandler.AddLinksAsync(apiLinkGenerator, resourceLinkGenerators, context, handlerResult);");
             });
     }
 
