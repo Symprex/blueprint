@@ -481,15 +481,64 @@ The generator validates coverage at build time — missing types produce BP006/B
 
 ### 12. Background tasks
 
-Register a task scheduler and use `IBackgroundTaskScheduler` in handlers:
-
-```csharp
-blueprint.AddBackgroundTaskScheduler<YourTaskScheduler>();
-```
-
 Background task operations implement `ICommand` and are discovered via `[BlueprintAppScan]` like any other operation. The generated pipeline automatically flushes scheduled tasks after successful handler execution.
 
+#### Task scheduling
+
+Register a task schedule provider and optionally a context provider:
+
+```csharp
+// Provider that actually enqueues tasks (e.g. Hangfire, custom queue)
+blueprint.AddBackgroundTaskScheduleProvider<HangfireTaskProvider>();
+
+// Context provider that captures ambient state (e.g. tenant) for later restoration
+blueprint.AddBackgroundTaskContextProvider<TenantContextProvider>();
+
+// Recurring tasks with cron schedules
+blueprint.AddRecurringTaskScheduler<HangfireRecurringScheduler>();
+```
+
+#### Scheduling from handlers
+
+Inject `IBackgroundTaskScheduler` to enqueue tasks from command handlers:
+
+```csharp
+public class CreateTemplateHandler(IBackgroundTaskScheduler scheduler)
+{
+    public async Task<ResourceEventResult<Template>> Handle(CreateTemplateCommand op, ApiOperationContext ctx)
+    {
+        var template = new Template(op.Name);
+
+        // Schedule a background task — flushed after successful command completion
+        scheduler.Enqueue(new SendWelcomeEmailTask { TemplateId = template.Id });
+
+        return new ResourceEventResult<Template>(ResourceCreated.Instance, template);
+    }
+}
+```
+
+#### Background task operations
+
+Background tasks are regular operations with a `[Queue]` attribute:
+
+```csharp
+[Queue("email")]
+[DoNotAudit]
+public partial class SendWelcomeEmailTask : ICommand<NoResultOperationResult>
+{
+    public string TemplateId { get; set; }
+}
+```
+
+The generated pipeline for background tasks includes validation, unit-of-work, message outbox, and audit stages just like HTTP operations.
+
 ### 13. Persistence
+
+Register a unit-of-work implementation to auto-save changes after successful command execution:
+
+```csharp
+blueprint.AddUnitOfWork<MartenUnitOfWork>();
+```
 
 The generated pipeline calls `SaveChangesAsync()` on `IUnitOfWork` after successful command execution. Opt out per-operation:
 
@@ -497,6 +546,46 @@ The generated pipeline calls `SaveChangesAsync()` on `IUnitOfWork` after success
 [DoNotSaveChanges]
 public partial class PreviewCommand : ICommand<OkResult<Preview>> { }
 ```
+
+### 14. Messaging
+
+Register a message outbox to publish messages after successful command execution:
+
+```csharp
+blueprint.AddMessageOutbox<RebusMessageOutbox>();
+```
+
+The generated pipeline calls `FlushAsync()` on `IMessageOutbox` after successful command execution (and after unit-of-work save). Opt out per-operation:
+
+```csharp
+[DoNotPublishMessages]
+public partial class InternalSyncCommand : ICommand<NoResultOperationResult> { }
+```
+
+### 15. Property population
+
+Replace manual property-setting middleware (like legacy `SetTenantMiddleware`) with `IPropertyPopulator`:
+
+```csharp
+public sealed class TenantPropertyPopulator : IPropertyPopulator
+{
+    public void Populate(object operation, ApiOperationContext context)
+    {
+        if (operation.GetType().GetProperty("TenantId") is { } prop
+            && prop.GetValue(operation) is null)
+        {
+            var tenantId = context.UserAuthorisationContext?.AccountId;
+            if (tenantId is not null)
+                prop.SetValue(operation, tenantId);
+        }
+    }
+}
+
+// Register:
+blueprint.AddPropertyPopulator<TenantPropertyPopulator>();
+```
+
+Property populators run at the Authentication stage, after user context is loaded but before validation and authorization.
 
 ## Development-time inspection
 
