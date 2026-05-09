@@ -1974,6 +1974,171 @@ public class ReferenceAppHttpEndToEndIntegrationTests
         response.Body.Should().Contain("Priority");
     }
 
+    [Fact]
+    public async Task When_create_template_with_invalid_slug_regex_returns_422()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/templates", "POST");
+        endpoint.Should().NotBeNull();
+
+        // Slug must match ^[a-z0-9]+(?:-[a-z0-9]+)*$ — uppercase letters violate it
+        var bodyJson = """{"name":"Valid Name","slug":"Invalid-SLUG!"}"""u8.ToArray();
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Post;
+            context.Request.Path = "/api/templates";
+            context.Request.ContentType = "application/json; charset=utf-8";
+            context.Request.ContentLength = bodyJson.Length;
+            context.Request.Body = new MemoryStream(bodyJson);
+            context.User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "user-1"),
+                ],
+                authenticationType: "test"));
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status422UnprocessableEntity,
+            "[RegularExpression] should reject slug that doesn't match pattern");
+        response.Body.Should().Contain("Slug");
+    }
+
+    [Fact]
+    public async Task When_create_template_with_invalid_url_returns_422()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/templates", "POST");
+        endpoint.Should().NotBeNull();
+
+        var bodyJson = """{"name":"Valid Name","callbackUrl":"not-a-valid-url"}"""u8.ToArray();
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Post;
+            context.Request.Path = "/api/templates";
+            context.Request.ContentType = "application/json; charset=utf-8";
+            context.Request.ContentLength = bodyJson.Length;
+            context.Request.Body = new MemoryStream(bodyJson);
+            context.User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "user-1"),
+                ],
+                authenticationType: "test"));
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status422UnprocessableEntity,
+            "[Url] should reject values that are not valid absolute URIs");
+        response.Body.Should().Contain("CallbackUrl");
+    }
+
+    [Fact]
+    public async Task When_create_template_with_too_long_name_returns_422()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/templates", "POST");
+        endpoint.Should().NotBeNull();
+
+        // Name has [MaxLength(200)] — send 201 characters
+        var longName = new string('x', 201);
+        var bodyJson = Encoding.UTF8.GetBytes($$$"""{"name":"{{{longName}}}"}""");
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Post;
+            context.Request.Path = "/api/templates";
+            context.Request.ContentType = "application/json; charset=utf-8";
+            context.Request.ContentLength = bodyJson.Length;
+            context.Request.Body = new MemoryStream(bodyJson);
+            context.User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "user-1"),
+                ],
+                authenticationType: "test"));
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status422UnprocessableEntity,
+            "[MaxLength(200)] should reject name exceeding 200 characters");
+        response.Body.Should().Contain("Name");
+    }
+
+    [Fact]
+    public async Task When_create_template_with_all_valid_fields_returns_201_created()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/templates", "POST");
+        endpoint.Should().NotBeNull();
+
+        var bodyJson = """
+            {
+                "name": "My Template",
+                "slug": "my-template",
+                "visibility": "public",
+                "priority": 50,
+                "htmlSource": "<h1>Hello</h1>",
+                "plainTextSource": "Hello",
+                "authorEmail": "author@example.com",
+                "callbackUrl": "https://example.com/callback"
+            }
+            """u8.ToArray();
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Post;
+            context.Request.Path = "/api/templates";
+            context.Request.ContentType = "application/json; charset=utf-8";
+            context.Request.ContentLength = bodyJson.Length;
+            context.Request.Body = new MemoryStream(bodyJson);
+            context.User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "user-1"),
+                ],
+                authenticationType: "test"));
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status201Created,
+            "a fully valid create template should pass all validation and return 201");
+        response.Body.Should().Contain("My Template");
+    }
+
+    [Fact]
+    public async Task When_create_template_with_range_above_maximum_returns_422()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/templates", "POST");
+        endpoint.Should().NotBeNull();
+
+        // [Range(1, 1000)] — test upper boundary
+        var bodyJson = """{"name":"Valid Name","priority":1001}"""u8.ToArray();
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Post;
+            context.Request.Path = "/api/templates";
+            context.Request.ContentType = "application/json; charset=utf-8";
+            context.Request.ContentLength = bodyJson.Length;
+            context.Request.Body = new MemoryStream(bodyJson);
+            context.User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "user-1"),
+                ],
+                authenticationType: "test"));
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status422UnprocessableEntity,
+            "[Range(1,1000)] should reject priority above maximum");
+        response.Body.Should().Contain("Priority");
+    }
+
     private static async Task<TestHttpResponse> InvokeEndpointAsync(
         RouteEndpoint endpoint,
         IServiceProvider serviceProvider,
