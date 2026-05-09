@@ -3,6 +3,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
+using Blueprint.Http;
 using Blueprint.Model;
 using Blueprint.Runtime.Exec;
 using MvcProblemDetails = Microsoft.AspNetCore.Mvc.ProblemDetails;
@@ -169,6 +170,9 @@ public class HttpOperationResultExecutor
                 return true;
             case StatusCodeResult statusCodeResult:
                 httpContext.Response.StatusCode = statusCodeResult.StatusCode;
+                return true;
+            case HttpResult httpResult:
+                await httpResult.ExecuteAsync(operationContext);
                 return true;
             default:
                 return false;
