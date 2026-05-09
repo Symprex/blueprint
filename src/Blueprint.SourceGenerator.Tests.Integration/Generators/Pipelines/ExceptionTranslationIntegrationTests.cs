@@ -21,6 +21,7 @@ public class ExceptionTranslationIntegrationTests
         var result = await pipeline.ExecuteAsync(context);
 
         result.Should().BeOfType<UnhandledExceptionResult>();
+        result.WasSuccessful.Should().BeFalse();
         ((UnhandledExceptionResult)result).Exception.Should().BeSameAs(NonServerApiExceptionOperation.LastThrownException);
         NonServerApiExceptionOperation.HandlerCallCount.Should().Be(1);
     }
@@ -38,6 +39,7 @@ public class ExceptionTranslationIntegrationTests
         var result = await pipeline.ExecuteAsync(context);
 
         result.Should().BeOfType<UnhandledExceptionResult>();
+        result.WasSuccessful.Should().BeFalse();
         ((UnhandledExceptionResult)result).Exception.Should().BeSameAs(ServerApiExceptionOperation.LastThrownException);
         ServerApiExceptionOperation.HandlerCallCount.Should().Be(1);
     }
@@ -77,6 +79,45 @@ public class ExceptionTranslationIntegrationTests
         result.Should().BeOfType<ValidationFailedResult>();
         result.WasSuccessful.Should().BeFalse();
         ValidationExceptionOperation.HandlerCallCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task When_handler_throws_data_annotations_validation_exception_then_generated_pipeline_returns_validation_failed_result()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(ExTranslationDataAnnotationsOperation));
+        var context = CreateContext(app, ExTranslationDataAnnotationsOperation.Configure());
+
+        ExTranslationDataAnnotationsOperation.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<ValidationFailedResult>();
+        result.WasSuccessful.Should().BeFalse();
+        var validationResult = (ValidationFailedResult)result;
+        validationResult.ValidationResults.Should().ContainSingle()
+            .Which.ErrorMessage.Should().Be("Email is invalid");
+        ExTranslationDataAnnotationsOperation.HandlerCallCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task When_handler_throws_generic_exception_then_generated_pipeline_returns_unhandled_exception_result()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(GenericExceptionOperation));
+        var context = CreateContext(app, GenericExceptionOperation.Configure());
+
+        GenericExceptionOperation.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<UnhandledExceptionResult>();
+        result.WasSuccessful.Should().BeFalse();
+        var unhandled = (UnhandledExceptionResult)result;
+        unhandled.Exception.Should().BeSameAs(GenericExceptionOperation.LastThrownException);
+        GenericExceptionOperation.HandlerCallCount.Should().Be(1);
     }
 
     [Fact]
@@ -243,6 +284,42 @@ public partial class ConflictExceptionOperation : ICommand<string>
     {
         HandlerCallCount++;
         LastThrownException = new ConflictException("Resource already exists");
+        throw LastThrownException;
+    }
+}
+
+public partial class ExTranslationDataAnnotationsOperation : ICommand<string>
+{
+    public static int HandlerCallCount { get; private set; }
+
+    public static void Reset()
+    {
+        HandlerCallCount = 0;
+    }
+
+    public static Task<string> HandleAsync(ExTranslationDataAnnotationsOperation operation)
+    {
+        HandlerCallCount++;
+        throw new System.ComponentModel.DataAnnotations.ValidationException("Email is invalid");
+    }
+}
+
+public partial class GenericExceptionOperation : ICommand<string>
+{
+    public static int HandlerCallCount { get; private set; }
+
+    public static InvalidOperationException? LastThrownException { get; private set; }
+
+    public static void Reset()
+    {
+        HandlerCallCount = 0;
+        LastThrownException = null;
+    }
+
+    public static Task<string> HandleAsync(GenericExceptionOperation operation)
+    {
+        HandlerCallCount++;
+        LastThrownException = new InvalidOperationException("Something went wrong");
         throw LastThrownException;
     }
 }
