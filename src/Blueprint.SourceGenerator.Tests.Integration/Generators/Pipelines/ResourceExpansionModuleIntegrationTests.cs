@@ -122,6 +122,34 @@ public class ResourceExpansionModuleIntegrationTests
     }
 
     [Fact]
+    public async Task When_multiple_expand_params_then_each_property_expanded_by_matching_expander()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(GetMultiExpandableResourceQuery));
+        var descriptor = GetMultiExpandableResourceQuery.Configure();
+
+        var deptExpander = new TestDepartmentExpander();
+        var locationExpander = new TestLocationExpander();
+        var serviceProvider = new MultiExpansionTestServiceProvider(deptExpander, locationExpander);
+
+        var context = new ApiOperationContext(serviceProvider, app, descriptor, CancellationToken.None)
+        {
+            Operation = new GetMultiExpandableResourceQuery { Id = "emp-multi" },
+            HttpContext = CreateHttpContextWithExpand("Department,Location"),
+        };
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<OkResult<MultiExpandableTestEmployee>>();
+        var okResult = (OkResult<MultiExpandableTestEmployee>)result;
+        okResult.Content.Department.Value.Should().NotBeNull("department expander should have populated Value");
+        okResult.Content.Location.Value.Should().NotBeNull("location expander should have populated Value");
+        deptExpander.ExpandCallCount.Should().Be(1);
+        locationExpander.ExpandCallCount.Should().Be(1);
+    }
+
+    [Fact]
     public async Task When_expand_array_syntax_used_then_expandable_value_is_populated()
     {
         var app = new IntegrationTestBlueprintApp();
@@ -173,6 +201,26 @@ public class ResourceExpansionModuleIntegrationTests
                 return this._expander != null
                     ? new[] { this._expander }
                     : Array.Empty<IResourceExpander>();
+            }
+
+            return null;
+        }
+    }
+
+    private sealed class MultiExpansionTestServiceProvider : IServiceProvider
+    {
+        private readonly IResourceExpander[] _expanders;
+
+        public MultiExpansionTestServiceProvider(params IResourceExpander[] expanders)
+        {
+            this._expanders = expanders;
+        }
+
+        public object? GetService(Type serviceType)
+        {
+            if (serviceType == typeof(IEnumerable<IResourceExpander>))
+            {
+                return this._expanders;
             }
 
             return null;
@@ -268,6 +316,75 @@ public partial class GetAlwaysExpandResourceQuery : IQuery<AlwaysExpandTestEmplo
         {
             Department = new Expandable<DepartmentResource>("dept-always"),
         };
+    }
+}
+
+// ── Multi-expandable types ──────────────────────────────────────────────────
+
+public class LocationResource : ApiResource
+{
+    public override string Object => "LocationResource";
+
+    public string City { get; set; } = string.Empty;
+}
+
+public class MultiExpandableTestEmployee : ApiResource
+{
+    public override string Object => "MultiExpandableTestEmployee";
+
+    public Expandable<DepartmentResource> Department { get; set; } = new("dept-1");
+
+    public Expandable<LocationResource> Location { get; set; } = new("loc-1");
+}
+
+[AllowAnonymous]
+[RootLink("/multi-expandable-employees/{Id}")]
+public partial class GetMultiExpandableResourceQuery : IQuery<MultiExpandableTestEmployee>
+{
+    public string Id { get; set; } = string.Empty;
+
+    public static MultiExpandableTestEmployee Handle(GetMultiExpandableResourceQuery op)
+    {
+        return new MultiExpandableTestEmployee
+        {
+            Department = new Expandable<DepartmentResource>("dept-multi"),
+            Location = new Expandable<LocationResource>("loc-multi"),
+        };
+    }
+}
+
+/// <summary>
+/// A test expander that populates <see cref="Expandable{T}.Value"/> for <see cref="LocationResource"/>.
+/// </summary>
+public sealed class TestLocationExpander : IResourceExpander
+{
+    /// <summary>Gets the number of times <see cref="ExpandAsync"/> was called.</summary>
+    public int ExpandCallCount { get; private set; }
+
+    /// <inheritdoc />
+    public bool CanExpand(Type type)
+    {
+        return type == typeof(LocationResource);
+    }
+
+    /// <inheritdoc />
+    public ValueTask ExpandAsync(
+        ApiOperationContext context,
+        object response,
+        IEnumerable entities,
+        CancellationToken cancellationToken = default)
+    {
+        this.ExpandCallCount++;
+
+        foreach (var entity in entities)
+        {
+            if (entity is Expandable<LocationResource> expandable)
+            {
+                expandable.Value = new LocationResource { City = "London" };
+            }
+        }
+
+        return ValueTask.CompletedTask;
     }
 }
 

@@ -22,6 +22,7 @@ public class AppModelOpenApiSchemaComponentRenderingContextTests
             "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.ExpandableTestEmployee",
             "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.LinkTestApiResource",
             "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.MappedLinkApiResource",
+            "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.MultiExpandableTestEmployee",
             "Blueprint.SourceGenerator.Tests.Integration.Http.E2EConflictDetail",
             "Blueprint.SourceGenerator.Tests.Integration.Http.E2EJobAcceptedPayload",
             "Blueprint.SourceGenerator.Tests.Integration.Http.E2EWidgetResponse",

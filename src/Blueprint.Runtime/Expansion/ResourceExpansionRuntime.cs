@@ -148,7 +148,23 @@ public static class ResourceExpansionRuntime
     {
         foreach (var v in expandables)
         {
-            if (v?.Equals(propertyPath, StringComparison.OrdinalIgnoreCase) == true)
+            if (v is null)
+            {
+                continue;
+            }
+
+            // Support both repeated keys (?expand=A&expand=B) and comma-separated (?expand=A,B)
+            if (v.Contains(','))
+            {
+                foreach (var part in v.Split(','))
+                {
+                    if (part.Trim().Equals(propertyPath, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return true;
+                    }
+                }
+            }
+            else if (v.Equals(propertyPath, StringComparison.OrdinalIgnoreCase))
             {
                 return true;
             }
