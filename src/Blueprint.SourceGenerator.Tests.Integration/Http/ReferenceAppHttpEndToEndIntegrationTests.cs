@@ -2162,6 +2162,130 @@ public class ReferenceAppHttpEndToEndIntegrationTests
     }
 
     [Fact]
+    public async Task When_search_templates_with_page_zero_returns_422()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/templates/search", "GET");
+        endpoint.Should().NotBeNull();
+
+        // Page has [GreaterThan(0)] — zero should fail
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Get;
+            context.Request.Path = "/api/templates/search";
+            context.Request.QueryString = new QueryString("?q=test&page=0");
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status422UnprocessableEntity,
+            "[GreaterThan(0)] should reject page=0");
+        response.Body.Should().Contain("Page");
+    }
+
+    [Fact]
+    public async Task When_search_templates_with_page_above_max_returns_422()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/templates/search", "GET");
+        endpoint.Should().NotBeNull();
+
+        // Page has [LessThan(1001)] — 1001 should fail
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Get;
+            context.Request.Path = "/api/templates/search";
+            context.Request.QueryString = new QueryString("?q=test&page=1001");
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status422UnprocessableEntity,
+            "[LessThan(1001)] should reject page=1001");
+        response.Body.Should().Contain("Page");
+    }
+
+    [Fact]
+    public async Task When_search_templates_with_page_size_above_max_returns_422()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/templates/search", "GET");
+        endpoint.Should().NotBeNull();
+
+        // PageSize has [Range(1, 100)] — 101 should fail
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Get;
+            context.Request.Path = "/api/templates/search";
+            context.Request.QueryString = new QueryString("?q=test&pageSize=101");
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status422UnprocessableEntity,
+            "[Range(1,100)] should reject pageSize=101");
+        response.Body.Should().Contain("PageSize");
+    }
+
+    [Fact]
+    public async Task When_get_history_with_start_date_but_no_end_date_returns_422()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/templates/{Id}/history", "GET");
+        endpoint.Should().NotBeNull();
+
+        // EndDate has [RequiredIfNot(nameof(StartDate), null)] — providing StartDate without EndDate should fail
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Get;
+            context.Request.Path = "/api/templates/template-001/history";
+            context.Request.QueryString = new QueryString("?startDate=2024-01-01");
+            context.Request.RouteValues = new RouteValueDictionary { ["Id"] = "template-001" };
+            context.User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "user-1"),
+                ],
+                authenticationType: "test"));
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status422UnprocessableEntity,
+            "[RequiredIfNot(StartDate, null)] should require EndDate when StartDate is provided");
+        response.Body.Should().Contain("EndDate");
+    }
+
+    [Fact]
+    public async Task When_get_history_with_too_short_author_filter_returns_422()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/templates/{Id}/history", "GET");
+        endpoint.Should().NotBeNull();
+
+        // AuthorFilter has [StringLength(100, MinimumLength = 2)] — single char should fail
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Get;
+            context.Request.Path = "/api/templates/template-001/history";
+            context.Request.QueryString = new QueryString("?authorFilter=x");
+            context.Request.RouteValues = new RouteValueDictionary { ["Id"] = "template-001" };
+            context.User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "user-1"),
+                ],
+                authenticationType: "test"));
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status422UnprocessableEntity,
+            "[StringLength(100, MinimumLength = 2)] should reject single character author filter");
+        response.Body.Should().Contain("AuthorFilter");
+    }
+
+    [Fact]
     public async Task When_create_template_with_range_above_maximum_returns_422()
     {
         var endpoints = CreateEndpoints();
