@@ -90,6 +90,7 @@ public static class ParameterAnalyzer
         {
             case "Blueprint.Model.BlueprintApp":
             case "System.Threading.CancellationToken":
+            case "Blueprint.Authorization.IUserAuthorisationContext":
                 return true;
         }
 
@@ -113,6 +114,7 @@ public static class ParameterAnalyzer
         {
             "Blueprint.Model.BlueprintApp" => "App",
             "System.Threading.CancellationToken" => "OperationCancelled",
+            "Blueprint.Authorization.IUserAuthorisationContext" => "UserAuthorisationContext!",
             _ => param.Name.ToLowerInvariant() switch
             {
                 "datamodel" or "app" => "App",

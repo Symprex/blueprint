@@ -163,6 +163,37 @@ public class ParameterAnalyzerTests
     }
 
     [Fact]
+    public void AnalyzeParameters_WithUserAuthorisationContext_IdentifiesAsFromContextProperty()
+    {
+        // Arrange
+        var source = """
+            using Blueprint.Model;
+            using Blueprint.Authorization;
+
+            namespace TestNamespace;
+
+            public partial class TestQuery : IQuery<string>
+            {
+                public static string Handle(IUserAuthorisationContext identity)
+                {
+                    return identity.Id;
+                }
+            }
+            """;
+
+        var (method, operationType) = GetHandlerMethodAndOperationType(source, "TestQuery", "Handle", "TestQuery");
+
+        // Act
+        var parameters = ParameterAnalyzer.AnalyzeParameters(method, operationType, isExternalHandler: false);
+
+        // Assert
+        parameters.Count.Should().Be(1);
+        parameters[0].ParameterName.Should().Be("identity");
+        parameters[0].Source.Should().Be(ParameterSource.FromContextProperty);
+        parameters[0].ContextPropertyName.Should().Be("UserAuthorisationContext!");
+    }
+
+    [Fact]
     public void AnalyzeParameters_WithDependencyInjectionService_IdentifiesAsFromDI()
     {
         // Arrange

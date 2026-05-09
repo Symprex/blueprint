@@ -158,6 +158,28 @@ public class ApiAuthoriserIntegrationTests
         response.StatusCode.Should().Be(StatusCodes.Status200OK, "authorizer that doesn't apply should not block");
     }
 
+    [Fact]
+    public async Task When_handler_takes_IUserAuthorisationContext_parameter_then_receives_populated_identity()
+    {
+        var services = new ServiceCollection()
+            .AddLogging()
+            .AddSingleton<IntegrationTestBlueprintApp>()
+            .AddSingleton<IntegrationTestBlueprintAppExecutor>()
+            .AddSingleton<IUserAuthorisationContextFactory>(new TestUserContextFactory("user-99", "acct-42"));
+
+        var endpoints = new TestEndpointRouteBuilder(services.BuildServiceProvider());
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/e2e/identity-echo");
+        endpoint.Should().NotBeNull("E2EIdentityEchoQuery should map to /e2e/identity-echo");
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, SetAuthenticatedUser);
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        response.Body.Should().Contain("user:user-99", "handler should receive the populated IUserAuthorisationContext");
+        response.Body.Should().Contain("account:acct-42");
+    }
+
     // ─── Helpers ──────────────────────────────────────────────────────────────────
 
     private static void SetAuthenticatedUser(DefaultHttpContext context)

@@ -1437,6 +1437,20 @@ public partial class E2EProtectedQuery : IQuery<string>
 }
 
 /// <summary>
+/// Authenticated query whose handler takes <see cref="Blueprint.Authorization.IUserAuthorisationContext"/> as a method
+/// parameter, proving context-property injection (not DI) works end-to-end.
+/// </summary>
+[Blueprint.Model.Attributes.MustBeAuthenticated]
+[Blueprint.Model.Attributes.RootLink("/e2e/identity-echo")]
+public partial class E2EIdentityEchoQuery : IQuery<string>
+{
+    public static Task<string> HandleAsync(E2EIdentityEchoQuery query, Blueprint.Authorization.IUserAuthorisationContext identity)
+    {
+        return Task.FromResult($"user:{identity.Id}|account:{identity.AccountId}");
+    }
+}
+
+/// <summary>
 /// Resource-permissioned GET — exercises the authorization-implied identity check path (401) end-to-end.
 /// Operations with <c>[Resource]</c> implicitly require authentication even without <c>[MustBeAuthenticated]</c>.
 /// </summary>
