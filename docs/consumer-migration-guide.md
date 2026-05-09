@@ -356,6 +356,31 @@ Blueprint exposes development-only endpoints for inspecting the generated API su
 
 These endpoints are only mapped when `IWebHostEnvironment.IsDevelopment()` is true.
 
+### OpenAPI operation customisation
+
+Use `configureOpenApiOperations` in `MapBlueprintApi` to modify rendered OpenAPI operations before the document is cached. This replaces legacy Blueprint's `OpenApiOptions.ConfigureOperation` hook.
+
+```csharp
+endpoints.MapBlueprintApi<MyApp, MyAppExecutor>(
+    "api/",
+    configureOpenApiOperations: ops =>
+    {
+        // Remove auto-populated TenantId parameters from the public spec
+        ops.Processors.Add(static (operation, descriptor) =>
+        {
+            var filtered = operation.Parameters
+                .Where(static p => !string.Equals(p.Name, "tenantId", StringComparison.OrdinalIgnoreCase))
+                .ToImmutableArray();
+
+            return filtered.Length != operation.Parameters.Length
+                ? operation with { Parameters = filtered }
+                : operation;
+        });
+    });
+```
+
+Processors run once at startup and receive both the rendered `OpenApiOperationModel` and the source `ApiOperationDescriptor`, so you can filter by descriptor metadata (e.g. only strip parameters from authenticated operations).
+
 ## Compile-time diagnostics
 
 The source generator catches contract errors at build time. Key diagnostics:
