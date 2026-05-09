@@ -54,6 +54,17 @@ internal sealed record OpenApiValidationConstraints(
     public static OpenApiValidationConstraints Extract(Type operationType, string propertyName)
     {
         var property = operationType.GetProperty(propertyName, BindingFlags.Public | BindingFlags.Instance);
+        return ExtractFromProperty(property);
+    }
+
+    /// <summary>
+    /// Extracts validation constraints from a pre-resolved CLR property, avoiding redundant
+    /// <c>GetProperty</c> calls when the caller already has the <see cref="PropertyInfo"/>.
+    /// </summary>
+    /// <param name="property">The CLR property to extract constraints from, or <c>null</c> when not found.</param>
+    /// <returns>The extracted validation constraints, or <see cref="None"/> when no attributes are found.</returns>
+    public static OpenApiValidationConstraints ExtractFromProperty(PropertyInfo? property)
+    {
         if (property is null)
         {
             return None;

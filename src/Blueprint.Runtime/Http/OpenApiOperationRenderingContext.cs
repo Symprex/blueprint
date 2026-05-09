@@ -133,6 +133,10 @@ public sealed record OpenApiOperationRenderingContext(
         };
     }
 
+    [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2070",
+        Justification = "OpenAPI projection reflects over operation type properties that are preserved by the source generator's generated pipeline code.")]
     private static (ImmutableArray<OpenApiParameterModel> Parameters, OpenApiRequestBodyModel? RequestBody)
         ProjectInputMetadata(ApiOperationDescriptor descriptor)
     {
@@ -149,9 +153,12 @@ public sealed record OpenApiOperationRenderingContext(
         foreach (var entry in ownershipData.Entries)
         {
             var (schemaType, schemaFormat) = MapClrTypeToOpenApiSchema(entry.PropertyTypeName);
-            var constraints = OpenApiValidationConstraints.Extract(descriptor.OperationType, entry.PropertyName);
-            var description = GetPropertyDescription(descriptor.OperationType, entry.PropertyName, docData);
-            var enumValues = GetEnumValues(descriptor.OperationType, entry.PropertyName);
+            var clrProperty = descriptor.OperationType.GetProperty(
+                entry.PropertyName,
+                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+            var constraints = OpenApiValidationConstraints.ExtractFromProperty(clrProperty);
+            var description = GetPropertyDescription(clrProperty, entry.PropertyName, docData);
+            var enumValues = GetEnumValues(clrProperty);
 
             // Validation-derived format (email, uri, phone) takes precedence over CLR type format.
             var effectiveFormat = constraints.Format ?? schemaFormat;
@@ -311,16 +318,11 @@ public sealed record OpenApiOperationRenderingContext(
     /// Extracts the <see cref="DescriptionAttribute"/> value from a property on the operation type,
     /// returning null when no description is specified.
     /// </summary>
-    [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
-        "Trimming",
-        "IL2070",
-        Justification = "OpenAPI description projection reflects over operation type properties that are preserved by the source generator's generated pipeline code.")]
     private static string? GetPropertyDescription(
-        Type operationType,
+        System.Reflection.PropertyInfo? property,
         string propertyName,
         OperationDocumentationFeatureData? docData)
     {
-        var property = operationType.GetProperty(propertyName, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
         var attributeDescription = property?
             .GetCustomAttributes(typeof(DescriptionAttribute), inherit: true)
             .OfType<DescriptionAttribute>()
@@ -344,13 +346,8 @@ public sealed record OpenApiOperationRenderingContext(
     /// Extracts enum values when a property's CLR type is an enum, returning the defined names
     /// as an immutable array for OpenAPI <c>enum</c> rendering.
     /// </summary>
-    [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
-        "Trimming",
-        "IL2070",
-        Justification = "OpenAPI enum projection reflects over operation type properties that are preserved by the source generator's generated pipeline code.")]
-    private static ImmutableArray<string> GetEnumValues(Type operationType, string propertyName)
+    private static ImmutableArray<string> GetEnumValues(System.Reflection.PropertyInfo? property)
     {
-        var property = operationType.GetProperty(propertyName, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
         if (property is null)
         {
             return ImmutableArray<string>.Empty;
