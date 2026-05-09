@@ -1,0 +1,74 @@
+using Blueprint.Tasks;
+
+namespace Blueprint.Runtime.Tasks;
+
+/// <summary>
+/// A hosted service that discovers all <see cref="IRecurringTaskScheduler"/> implementations
+/// at startup, collects their schedules, and pushes them to the registered
+/// <see cref="IRecurringTaskProvider"/> for infrastructure-level registration (e.g., Hangfire recurring jobs).
+/// </summary>
+/// <remarks>
+/// This is the compile-time equivalent of legacy Blueprint's <c>RecurringTaskSetupTask</c> that ran during
+/// app startup. It ensures all declared recurring tasks are registered (or updated/removed) when the
+/// application starts.
+/// </remarks>
+public sealed class RecurringTaskRegistrationService : IHostedService
+{
+    private readonly IEnumerable<IRecurringTaskScheduler> _schedulers;
+    private readonly IRecurringTaskProvider? _provider;
+    private readonly ILogger<RecurringTaskRegistrationService> _logger;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="RecurringTaskRegistrationService"/> class.
+    /// </summary>
+    /// <param name="schedulers">All registered recurring task schedulers.</param>
+    /// <param name="provider">The recurring task provider (may be null if none is registered).</param>
+    /// <param name="logger">Logger for diagnostic output.</param>
+    public RecurringTaskRegistrationService(
+        IEnumerable<IRecurringTaskScheduler> schedulers,
+        ILogger<RecurringTaskRegistrationService> logger,
+        IRecurringTaskProvider? provider = null)
+    {
+        this._schedulers = schedulers;
+        this._logger = logger;
+        this._provider = provider;
+    }
+
+    /// <inheritdoc />
+    public async Task StartAsync(CancellationToken cancellationToken)
+    {
+        if (this._provider is null)
+        {
+            this._logger.LogDebug(
+                "No IRecurringTaskProvider registered — skipping recurring task registration");
+            return;
+        }
+
+        var allSchedules = new List<RecurringTaskSchedule>();
+
+        foreach (var scheduler in this._schedulers)
+        {
+            var schedules = await scheduler.GetTaskSchedulesAsync();
+            allSchedules.AddRange(schedules);
+        }
+
+        if (allSchedules.Count == 0)
+        {
+            this._logger.LogDebug("No recurring task schedules declared");
+            return;
+        }
+
+        this._logger.LogInformation(
+            "Registering {Count} recurring task schedule(s) with {Provider}",
+            allSchedules.Count,
+            this._provider.GetType().Name);
+
+        await this._provider.RegisterSchedulesAsync(allSchedules, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public Task StopAsync(CancellationToken cancellationToken)
+    {
+        return Task.CompletedTask;
+    }
+}

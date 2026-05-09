@@ -44,4 +44,14 @@ public sealed class BackgroundTaskEnvelope
     {
         return this.Task.GetType().GetCustomAttribute<QueueAttribute>()?.Name;
     }
+
+    /// <summary>
+    /// Gets the retry attempt count specified by the <see cref="AutomaticRetryAttribute"/> on the task type,
+    /// or <c>null</c> if no explicit retry configuration is present (provider uses its default from options).
+    /// </summary>
+    /// <returns>The maximum retry attempts, or <c>null</c> for the default from <see cref="BlueprintTaskOptions"/>.</returns>
+    public int? GetRetryAttempts()
+    {
+        return this.Task.GetType().GetCustomAttribute<AutomaticRetryAttribute>()?.Attempts;
+    }
 }

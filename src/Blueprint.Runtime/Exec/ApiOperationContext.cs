@@ -119,6 +119,50 @@ public class ApiOperationContext : IHttpOperationContext
     public bool SkipAuthorisation { get; set; }
 
     /// <summary>
+    /// Creates a nested execution context for dispatching a child operation from within a handler or
+    /// middleware. The nested context inherits the current scope's service provider and user identity
+    /// but targets a different operation and descriptor.
+    /// </summary>
+    /// <param name="operation">The child operation to execute.</param>
+    /// <param name="skipAuthorisation">
+    /// Whether to skip authorization for the nested operation. Defaults to <c>true</c> because
+    /// the parent operation has already been authorized.
+    /// </param>
+    /// <returns>A new context configured for the nested operation.</returns>
+    /// <exception cref="InvalidOperationException">If no descriptor is found for the operation type.</exception>
+    public ApiOperationContext CreateNested(IOperation operation, bool skipAuthorisation = true)
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+
+        var operationType = operation.GetType();
+        var descriptor = this.App.Operations
+            .FirstOrDefault(d => d.OperationType == operationType)
+            ?? throw new InvalidOperationException(
+                $"No operation descriptor found for type '{operationType.FullName}'. " +
+                $"Ensure the operation is registered in the BlueprintApp.");
+
+        var nested = new ApiOperationContext(
+            this.ServiceProvider,
+            this.App,
+            descriptor,
+            this.OperationCancelled)
+        {
+            Operation = operation,
+            SkipAuthorisation = skipAuthorisation,
+            Parent = this,
+            UserPrincipal = this.UserPrincipal,
+            UserAuthorisationContext = this.UserAuthorisationContext,
+            HttpContext = this.HttpContext,
+
+            // Share mutable state dictionary with the parent so nested operations
+            // can read/write ambient data established by the parent pipeline.
+            Data = this.Data,
+        };
+
+        return nested;
+    }
+
+    /// <summary>
     /// Gets the primary <see cref="ClaimsIdentity"/> of the current user, or <c>null</c> when no
     /// authenticated identity is available. Derived from <see cref="UserPrincipal"/> so the two
     /// cannot diverge.

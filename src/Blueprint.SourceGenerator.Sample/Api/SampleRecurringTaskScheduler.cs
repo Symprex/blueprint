@@ -41,7 +41,7 @@ public sealed class SampleRecurringTaskScheduler(ILogger<SampleRecurringTaskSche
                     TemplateId = "recurring-check",
                     RecipientEmail = "system@example.com",
                 },
-                "0 2 * * *"),
+                Cron.Daily(2)),
         };
 
         return Task.FromResult<IEnumerable<RecurringTaskSchedule>>(schedules);

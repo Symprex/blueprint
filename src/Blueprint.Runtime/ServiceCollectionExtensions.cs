@@ -279,6 +279,7 @@ public sealed class BlueprintServiceBuilder
         where T : class, Blueprint.Tasks.IRecurringTaskProvider
     {
         this.Services.AddSingleton<Blueprint.Tasks.IRecurringTaskProvider, T>();
+        this.Services.AddHostedService<Blueprint.Runtime.Tasks.RecurringTaskRegistrationService>();
         return this;
     }
 
