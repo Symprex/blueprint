@@ -125,6 +125,24 @@ public sealed class BlueprintServiceBuilder
     }
 
     /// <summary>
+    /// Registers a background task schedule provider that performs the actual dispatch of tasks
+    /// to infrastructure such as Hangfire, Azure Queue Storage, or an in-process dispatcher.
+    /// Also registers the production <see cref="Blueprint.Runtime.Tasks.BackgroundTaskScheduler"/>
+    /// (with trace-context preprocessing) if no custom scheduler has been registered.
+    /// </summary>
+    /// <typeparam name="T">The <see cref="Blueprint.Tasks.IBackgroundTaskScheduleProvider"/> implementation type.</typeparam>
+    /// <returns>This builder for chaining.</returns>
+    public BlueprintServiceBuilder AddBackgroundTaskScheduleProvider<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] T>()
+        where T : class, Blueprint.Tasks.IBackgroundTaskScheduleProvider
+    {
+        this.Services.AddSingleton<Blueprint.Tasks.IBackgroundTaskScheduleProvider, T>();
+        this.Services.TryAddSingleton<Blueprint.Tasks.IBackgroundTaskPreprocessor, Blueprint.Runtime.Tasks.TraceContextPreprocessor>();
+        this.Services.TryAddScoped<Blueprint.Tasks.IBackgroundTaskScheduler, Blueprint.Runtime.Tasks.BackgroundTaskScheduler>();
+        this.Services.TryAddSingleton<Blueprint.Runtime.Tasks.TaskExecutor>();
+        return this;
+    }
+
+    /// <summary>
     /// Registers a unit-of-work implementation for persistence coordination.
     /// The UoW is registered as scoped so each operation tracks its own changes.
     /// </summary>
