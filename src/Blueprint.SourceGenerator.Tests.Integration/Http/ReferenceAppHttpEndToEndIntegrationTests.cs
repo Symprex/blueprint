@@ -1676,6 +1676,37 @@ public class ReferenceAppHttpEndToEndIntegrationTests
     }
 
     [Fact]
+    public async Task When_change_password_with_too_short_new_password_returns_422()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/account/password", "PUT");
+        endpoint.Should().NotBeNull();
+
+        // NewPassword has [Length(8, 128)] — 7 chars should fail
+        var bodyJson = """{"currentPassword":"oldpassword1","newPassword":"short12","confirmNewPassword":"short12"}"""u8.ToArray();
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Put;
+            context.Request.Path = "/api/account/password";
+            context.Request.ContentType = "application/json";
+            context.Request.Body = new MemoryStream(bodyJson);
+            context.Request.ContentLength = bodyJson.Length;
+            context.User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "user-1"),
+                ],
+                authenticationType: "test"));
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status422UnprocessableEntity,
+            "[Length(8, 128)] should reject password shorter than 8 characters");
+        response.Body.Should().Contain("NewPassword");
+    }
+
+    [Fact]
     public async Task When_create_template_with_multiple_invalid_fields_then_returns_422_with_all_errors_aggregated()
     {
         var endpoints = CreateEndpoints();
