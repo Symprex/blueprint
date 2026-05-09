@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using Blueprint.Model;
 using Blueprint.Runtime.Http;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 // This is the recommendation from MS for extensions to IServiceCollection to aid discoverability
 // ReSharper disable once CheckNamespace
@@ -195,6 +196,10 @@ public sealed class BlueprintServiceBuilder
         where T : class, Blueprint.Authorization.IApiAuthoriser
     {
         this.Services.AddSingleton<Blueprint.Authorization.IApiAuthoriser, T>();
+
+        // Ensure the aggregator is registered (idempotent via TryAdd)
+        this.Services.TryAddSingleton<Blueprint.Authorization.IApiAuthoriserAggregator, Blueprint.Authorization.ApiAuthoriserAggregator>();
+
         return this;
     }
 
