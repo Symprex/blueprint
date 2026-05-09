@@ -2457,6 +2457,72 @@ public class ReferenceAppHttpEndToEndIntegrationTests
         response.Body.Should().Contain("Priority");
     }
 
+    [Fact]
+    public async Task When_create_template_with_auth_but_without_permission_claim_then_returns_403()
+    {
+        // Arrange — user is authenticated but does NOT hold the ManageTemplates permission
+        var endpoints = CreateEndpointsWithClaimsAuthorisation();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+        var endpoint = FindEndpoint(endpoints, "api/templates", "POST");
+        endpoint.Should().NotBeNull("the POST /api/templates endpoint should exist");
+
+        var bodyJson = Encoding.UTF8.GetBytes("""{"name":"Denied Template"}""");
+
+        // Act
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Post;
+            context.Request.Path = "/api/templates";
+            context.Request.ContentType = "application/json; charset=utf-8";
+            context.Request.ContentLength = bodyJson.Length;
+            context.Request.Body = new MemoryStream(bodyJson);
+            context.User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "user-claims-test"),
+                ],
+                authenticationType: "test"));
+        });
+
+        // Assert — the generated inline claims check should deny before the handler runs
+        response.StatusCode.Should().Be(StatusCodes.Status403Forbidden,
+            "[Permission(\"ManageTemplates\")] should deny users without the required permission claim");
+    }
+
+    [Fact]
+    public async Task When_create_template_with_auth_and_permission_claim_then_returns_201()
+    {
+        // Arrange — user is authenticated AND holds the ManageTemplates permission
+        var endpoints = CreateEndpointsWithClaimsAuthorisation();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+        var endpoint = FindEndpoint(endpoints, "api/templates", "POST");
+        endpoint.Should().NotBeNull("the POST /api/templates endpoint should exist");
+
+        var bodyJson = Encoding.UTF8.GetBytes("""{"name":"Allowed Template","priority":1}""");
+
+        // Act
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Post;
+            context.Request.Path = "/api/templates";
+            context.Request.ContentType = "application/json; charset=utf-8";
+            context.Request.ContentLength = bodyJson.Length;
+            context.Request.Body = new MemoryStream(bodyJson);
+            context.User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "user-claims-test"),
+                    new Claim("urn:claims/permission", "ManageTemplates"),
+                ],
+                authenticationType: "test"));
+        });
+
+        // Assert — claim check passes, handler returns 201 Created with resource event
+        response.StatusCode.Should().Be(StatusCodes.Status201Created,
+            "user with ManageTemplates permission should be allowed to create templates");
+        response.Body.Should().Contain("template.created");
+    }
+
     private static async Task<TestHttpResponse> InvokeEndpointAsync(
         RouteEndpoint endpoint,
         IServiceProvider serviceProvider,
@@ -2585,6 +2651,25 @@ public class ReferenceAppHttpEndToEndIntegrationTests
         return new TestEndpointRouteBuilder(services.BuildServiceProvider());
     }
 
+    private static TestEndpointRouteBuilder CreateEndpointsWithClaimsAuthorisation()
+    {
+        var services = new ServiceCollection()
+            .AddLogging()
+            .AddSingleton<TemplateStore>()
+            .AddSingleton<SampleBlueprintApp>()
+            .AddSingleton<SampleBlueprintAppExecutor>()
+            .AddScoped<Blueprint.Tasks.IBackgroundTaskScheduler, InProcessBackgroundTaskScheduler>()
+            .AddScoped<InMemoryUnitOfWork>()
+            .AddScoped<Blueprint.Persistence.IUnitOfWork>(sp => sp.GetRequiredService<InMemoryUnitOfWork>())
+            .AddSingleton<Blueprint.Authorization.IClaimInspector>(
+                new Blueprint.Authorization.ClaimInspector(
+                    Array.Empty<Blueprint.Authorization.IResourceKeyExpander>()))
+            .AddSingleton<Blueprint.Authorization.IUserAuthorisationContextFactory>(
+                new ClaimsTestUserContextFactory());
+
+        return new TestEndpointRouteBuilder(services.BuildServiceProvider());
+    }
+
     private sealed class TestEndpointRouteBuilder(IServiceProvider serviceProvider) : IEndpointRouteBuilder
     {
         public ICollection<EndpointDataSource> DataSources { get; } = [];
@@ -2607,6 +2692,66 @@ public class ReferenceAppHttpEndToEndIntegrationTests
             object? resource)
         {
             return new ValueTask<Blueprint.Authorization.ExecutionAllowed>(Blueprint.Authorization.ExecutionAllowed.Yes);
+        }
+    }
+
+    /// <summary>
+    /// Test-only <see cref="Blueprint.Authorization.IUserAuthorisationContextFactory"/> that maps
+    /// ASP.NET Core permission claims into a Blueprint <see cref="Blueprint.Authorization.IClaimsHolder"/>
+    /// so the source-generated inline claims checks can evaluate them.
+    /// </summary>
+    private sealed class ClaimsTestUserContextFactory : Blueprint.Authorization.IUserAuthorisationContextFactory
+    {
+        public Task<Blueprint.Authorization.IUserAuthorisationContext?> CreateContextAsync(
+            ClaimsIdentity identity,
+            CancellationToken cancellationToken)
+        {
+            var userId = identity.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "test-user";
+
+            var permissionClaims = identity.Claims
+                .Where(static c => c.Type == "urn:claims/permission")
+                .Select(static c => new Blueprint.Authorization.Claim("urn:claims/permission", "*", c.Value))
+                .ToList();
+
+            Blueprint.Authorization.IUserAuthorisationContext ctx =
+                new ClaimsTestUserContext(userId, permissionClaims);
+            return Task.FromResult<Blueprint.Authorization.IUserAuthorisationContext?>(ctx);
+        }
+    }
+
+    /// <summary>
+    /// Minimal <see cref="Blueprint.Authorization.IUserAuthorisationContext"/> and
+    /// <see cref="Blueprint.Authorization.IClaimsHolder"/> for claims authorization E2E tests.
+    /// </summary>
+    private sealed class ClaimsTestUserContext(
+        string id,
+        IReadOnlyList<Blueprint.Authorization.Claim> claims) : Blueprint.Authorization.IUserAuthorisationContext, Blueprint.Authorization.IClaimsHolder
+    {
+        private readonly ILookup<string, Blueprint.Authorization.Claim> _byValueType =
+            claims.ToLookup(static c => c.ValueType, StringComparer.Ordinal);
+
+        public bool IsActive => true;
+
+        public bool IsAnonymous => false;
+
+        public string Id => id;
+
+        public string IdentityId => id;
+
+        public string AccountId => "test-account";
+
+        public string Email => $"{id}@test.com";
+
+        public string Name => id;
+
+        public IEnumerable<Blueprint.Authorization.Claim> GetClaimsByValueType(string valueType)
+        {
+            return this._byValueType[valueType];
+        }
+
+        public void PopulateMetadata(Action<string, object> add)
+        {
+            add("enduser.id", this.Id);
         }
     }
 }
