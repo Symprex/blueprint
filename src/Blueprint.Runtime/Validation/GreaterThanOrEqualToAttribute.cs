@@ -1,0 +1,57 @@
+using System.ComponentModel.DataAnnotations;
+using System.Globalization;
+
+namespace Blueprint.Validation;
+
+/// <summary>
+/// Requires a numeric value to be greater than or equal to a configured minimum while still producing
+/// DataAnnotations-compatible validation messages.
+/// </summary>
+[AttributeUsage(AttributeTargets.Parameter | AttributeTargets.Field | AttributeTargets.Property)]
+public sealed class GreaterThanOrEqualToAttribute : ValidationAttribute
+{
+    /// <summary>
+    /// Initializes a new instance of the <see cref="GreaterThanOrEqualToAttribute"/> class using the default error message.
+    /// </summary>
+    /// <param name="minimumValue">The inclusive minimum value the annotated member must meet or exceed.</param>
+    public GreaterThanOrEqualToAttribute(int minimumValue)
+        : base("The field {0} must be greater than or equal to '{1}'.")
+    {
+        this.MinimumValue = minimumValue;
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="GreaterThanOrEqualToAttribute"/> class using a custom error message.
+    /// </summary>
+    /// <param name="minimumValue">The inclusive minimum value the annotated member must meet or exceed.</param>
+    /// <param name="errorMessage">The custom error message template.</param>
+    public GreaterThanOrEqualToAttribute(int minimumValue, string errorMessage)
+        : base(errorMessage)
+    {
+        this.MinimumValue = minimumValue;
+    }
+
+    /// <summary>
+    /// Gets the inclusive minimum value that the annotated member must meet or exceed.
+    /// </summary>
+    public int MinimumValue { get; }
+
+    /// <inheritdoc />
+    public override string FormatErrorMessage(string name)
+    {
+        return string.Format(CultureInfo.CurrentCulture, this.ErrorMessageString, name, this.MinimumValue);
+    }
+
+    /// <inheritdoc />
+    public override bool IsValid(object? value)
+    {
+        if (value is null)
+        {
+            return true;
+        }
+
+        var valueText = Convert.ToString(value, CultureInfo.CurrentCulture);
+        return decimal.TryParse(valueText, NumberStyles.Number, CultureInfo.CurrentCulture, out var numericValue)
+               && numericValue >= this.MinimumValue;
+    }
+}
