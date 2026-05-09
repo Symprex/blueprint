@@ -21,26 +21,17 @@
                 "properties": {
                   "currentPassword": {
                     "type": "string",
-                    "description": "The current password.",
-                    "items": {
-                      "type": "string"
-                    }
+                    "description": "The current password."
                   },
                   "newPassword": {
                     "type": "string",
                     "description": "The new password.",
-                    "items": {
-                      "type": "string"
-                    },
                     "minLength": 8,
                     "maxLength": 128
                   },
                   "confirmNewPassword": {
                     "type": "string",
-                    "description": "Re-enter the new password for confirmation.",
-                    "items": {
-                      "type": "string"
-                    }
+                    "description": "Re-enter the new password for confirmation."
                   }
                 },
                 "required": [
@@ -295,18 +286,12 @@
                   "name": {
                     "type": "string",
                     "description": "The display name for the template.",
-                    "items": {
-                      "type": "string"
-                    },
                     "maxLength": 200
                   },
                   "slug": {
                     "type": "string",
                     "nullable": true,
                     "description": "URL-safe slug for the template (lowercase letters, digits, hyphens). Reserved values: admin, api, system, health.",
-                    "items": {
-                      "type": "string"
-                    },
                     "maxLength": 100,
                     "pattern": "^[a-z0-9]\u002B(?:-[a-z0-9]\u002B)*$"
                   },
@@ -318,10 +303,7 @@
                       "public",
                       "internal",
                       "private"
-                    ],
-                    "items": {
-                      "type": "string"
-                    }
+                    ]
                   },
                   "priority": {
                     "type": "integer",
@@ -334,37 +316,25 @@
                     "type": "string",
                     "nullable": true,
                     "description": "The HTML source content of the template.",
-                    "items": {
-                      "type": "string"
-                    },
                     "maxLength": 50000
                   },
                   "plainTextSource": {
                     "type": "string",
                     "nullable": true,
                     "description": "The plain text fallback content of the template.",
-                    "items": {
-                      "type": "string"
-                    },
                     "maxLength": 10000
                   },
                   "authorEmail": {
                     "type": "string",
                     "format": "email",
                     "nullable": true,
-                    "description": "Email address of the template author.",
-                    "items": {
-                      "type": "string"
-                    }
+                    "description": "Email address of the template author."
                   },
                   "callbackUrl": {
                     "type": "string",
                     "format": "uri",
                     "nullable": true,
-                    "description": "Callback URL for template lifecycle events.",
-                    "items": {
-                      "type": "string"
-                    }
+                    "description": "Callback URL for template lifecycle events."
                   }
                 },
                 "required": [
@@ -479,9 +449,6 @@
                     "type": "string",
                     "nullable": true,
                     "description": "Optional reason for the bulk archive.",
-                    "items": {
-                      "type": "string"
-                    },
                     "maxLength": 500
                   }
                 },
@@ -581,10 +548,7 @@
                   "nameFilter": {
                     "type": "string",
                     "nullable": true,
-                    "description": "Optional name filter to restrict exported templates.",
-                    "items": {
-                      "type": "string"
-                    }
+                    "description": "Optional name filter to restrict exported templates."
                   },
                   "notifyOnCompletion": {
                     "type": "boolean",
@@ -594,10 +558,7 @@
                     "type": "string",
                     "format": "email",
                     "nullable": true,
-                    "description": "Email address to notify on export completion. Required when NotifyOnCompletion is true.",
-                    "items": {
-                      "type": "string"
-                    }
+                    "description": "Email address to notify on export completion. Required when NotifyOnCompletion is true."
                   }
                 }
               }
@@ -1061,27 +1022,18 @@
                   "name": {
                     "type": "string",
                     "description": "The new display name for the template.",
-                    "items": {
-                      "type": "string"
-                    },
                     "maxLength": 200
                   },
                   "htmlSource": {
                     "type": "string",
                     "nullable": true,
                     "description": "The updated HTML source content.",
-                    "items": {
-                      "type": "string"
-                    },
                     "maxLength": 50000
                   },
                   "plainTextSource": {
                     "type": "string",
                     "nullable": true,
                     "description": "The updated plain text content.",
-                    "items": {
-                      "type": "string"
-                    },
                     "maxLength": 10000
                   }
                 },
@@ -1199,9 +1151,6 @@
                   "newName": {
                     "type": "string",
                     "description": "The display name for the new cloned template.",
-                    "items": {
-                      "type": "string"
-                    },
                     "maxLength": 200
                   }
                 },
@@ -1802,9 +1751,6 @@
                     "type": "string",
                     "nullable": true,
                     "description": "Optional CSS class name for custom template styling.",
-                    "items": {
-                      "type": "string"
-                    },
                     "maxLength": 50,
                     "pattern": "^[a-zA-Z][a-zA-Z0-9\\-_]*$"
                   }
@@ -1920,10 +1866,7 @@
                   "name": {
                     "type": "string",
                     "nullable": true,
-                    "description": "Gets or sets the template name to validate. \u0022INVALID\u0022 triggers a validation exception, \u0022BAD\u0022 triggers a bad-request exception.",
-                    "items": {
-                      "type": "string"
-                    }
+                    "description": "Gets or sets the template name to validate. \u0022INVALID\u0022 triggers a validation exception, \u0022BAD\u0022 triggers a bad-request exception."
                   }
                 }
               }
@@ -2107,10 +2050,7 @@
                   "displayName": {
                     "type": "string",
                     "nullable": true,
-                    "description": "The new display name.",
-                    "items": {
-                      "type": "string"
-                    }
+                    "description": "The new display name."
                   }
                 }
               }

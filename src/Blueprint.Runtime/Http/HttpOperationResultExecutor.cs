@@ -192,6 +192,15 @@ public class HttpOperationResultExecutor
         }
     }
 
+    /// <summary>
+    /// Per-type cache key that binds a content <see cref="Type"/> to a specific
+    /// <see cref="JsonSerializerContext"/> so the <see cref="JsonTypeInfo"/> lookup
+    /// is performed at most once per (context, type) pair.
+    /// </summary>
+    private readonly record struct TypeInfoCacheKey(JsonSerializerContext? Context, Type ContentType);
+
+    private static readonly ConcurrentDictionary<TypeInfoCacheKey, JsonTypeInfo?> _typeInfoCache = new();
+
     [UnconditionalSuppressMessage(
         "Trimming",
         "IL2026",
@@ -199,10 +208,23 @@ public class HttpOperationResultExecutor
     private static async Task WriteJsonAsync(HttpContext httpContext, ApiOperationContext operationContext, object content)
     {
         var serializerContext = operationContext.App.AppOwnedSerializerContext;
-        var serializerOptions = serializerContext?.Options ?? new JsonSerializerOptions();
-        var json = serializerContext?.GetTypeInfo(content.GetType()) is JsonTypeInfo jsonTypeInfo
-            ? JsonSerializer.Serialize(content, jsonTypeInfo)
-            : JsonSerializer.Serialize(content, content.GetType(), CreateFallbackSerializerOptions(serializerOptions));
+        var contentType = content.GetType();
+
+        var jsonTypeInfo = _typeInfoCache.GetOrAdd(
+            new TypeInfoCacheKey(serializerContext, contentType),
+            static key => key.Context?.GetTypeInfo(key.ContentType));
+
+        string json;
+
+        if (jsonTypeInfo is not null)
+        {
+            json = JsonSerializer.Serialize(content, jsonTypeInfo);
+        }
+        else
+        {
+            var serializerOptions = serializerContext?.Options ?? new JsonSerializerOptions();
+            json = JsonSerializer.Serialize(content, contentType, CreateFallbackSerializerOptions(serializerOptions));
+        }
 
         await httpContext.Response.WriteAsync(json, httpContext.RequestAborted);
     }

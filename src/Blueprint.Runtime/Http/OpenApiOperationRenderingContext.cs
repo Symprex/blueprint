@@ -409,6 +409,12 @@ public sealed record OpenApiOperationRenderingContext(
 
         var propertyType = property.PropertyType;
 
+        // string implements IEnumerable<char> — skip it to avoid emitting a spurious items schema.
+        if (propertyType == typeof(string))
+        {
+            return (null, null, null, null);
+        }
+
         // Check for IDictionary<TKey, TValue> first (dictionaries also implement IEnumerable).
         var dictInterface = propertyType.GetInterfaces()
             .FirstOrDefault(static i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IDictionary<,>));
