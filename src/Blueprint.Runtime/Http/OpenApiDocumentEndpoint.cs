@@ -22,15 +22,20 @@ internal static class OpenApiDocumentEndpoint
     /// Optional ordered schema processors that can customise rendered schema components before the document is cached.
     /// When <see langword="null"/> no schema processors are applied.
     /// </param>
+    /// <param name="operationProcessorOptions">
+    /// Optional ordered per-operation processors that can customise rendered operation objects before the document is cached.
+    /// When <see langword="null"/> no operation processors are applied.
+    /// </param>
     /// <returns>A request delegate that writes the rendered OpenAPI 3.x JSON to the response.</returns>
     public static RequestDelegate Create(
         BlueprintApp app,
         OpenApiInfoOptions? infoOptions = null,
-        OpenApiSchemaProcessorOptions? schemaProcessorOptions = null)
+        OpenApiSchemaProcessorOptions? schemaProcessorOptions = null,
+        OpenApiOperationProcessorOptions? operationProcessorOptions = null)
     {
         ArgumentNullException.ThrowIfNull(app);
 
-        var json = RenderDocument(app, infoOptions, schemaProcessorOptions);
+        var json = RenderDocument(app, infoOptions, schemaProcessorOptions, operationProcessorOptions);
 
         return async httpContext =>
         {
@@ -43,13 +48,22 @@ internal static class OpenApiDocumentEndpoint
     private static string RenderDocument(
         BlueprintApp app,
         OpenApiInfoOptions? infoOptions,
-        OpenApiSchemaProcessorOptions? schemaProcessorOptions)
+        OpenApiSchemaProcessorOptions? schemaProcessorOptions,
+        OpenApiOperationProcessorOptions? operationProcessorOptions)
     {
         var documentBuilderContext = OpenApiDocumentBuilderContext.Create(app);
         var schemaProjectionContext = OpenApiSchemaProjectionContext.Create(documentBuilderContext);
         var responseSchemaProjectionContext = OpenApiResponseSchemaReferenceProjectionContext.Create(schemaProjectionContext);
         var responseObjectContext = OpenApiResponseObjectRenderingContext.Create(responseSchemaProjectionContext);
         var operationContext = OpenApiOperationRenderingContext.Create(responseObjectContext);
+
+        // Apply per-operation processors before path-item grouping so consumers can strip
+        // auto-populated parameters, override summaries, etc.
+        if (operationProcessorOptions?.Processors is { Count: > 0 })
+        {
+            operationContext = operationContext.ApplyProcessors(app, operationProcessorOptions);
+        }
+
         var pathItemContext = OpenApiPathItemRenderingContext.Create(operationContext);
         var documentContext = OpenApiDocumentRenderingContext.Create(pathItemContext);
 

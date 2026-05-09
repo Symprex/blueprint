@@ -33,12 +33,18 @@ public static class EndpointRouteBuilderExtensions
     /// An optional delegate that registers ordered schema processors for the rendered OpenAPI <c>components/schemas</c>
     /// section. Processors run once when the document is pre-rendered at startup.
     /// </param>
+    /// <param name="configureOpenApiOperations">
+    /// An optional delegate that registers ordered per-operation processors for OpenAPI operation objects.
+    /// Each processor can modify the rendered operation (e.g. removing auto-populated parameters like TenantId
+    /// from the public spec). Processors run once when the document is pre-rendered at startup.
+    /// </param>
     /// <returns>A builder that allows adding metadata / conventions to all mapped endpoints.</returns>
     public static IEndpointConventionBuilder MapBlueprintApi<T, TExec>(
         this IEndpointRouteBuilder endpoints,
         string basePath,
         Action<OpenApiInfoOptions>? configureOpenApi = null,
-        Action<OpenApiSchemaProcessorOptions>? configureOpenApiSchemas = null) where T : BlueprintApp, new()
+        Action<OpenApiSchemaProcessorOptions>? configureOpenApiSchemas = null,
+        Action<OpenApiOperationProcessorOptions>? configureOpenApiOperations = null) where T : BlueprintApp, new()
                          where TExec : BlueprintAppExecutor
     {
         // Ensure ends with a slash, but only one
@@ -72,9 +78,16 @@ public static class EndpointRouteBuilderExtensions
             configureOpenApiSchemas(schemaProcessorOptions);
         }
 
+        OpenApiOperationProcessorOptions? operationProcessorOptions = null;
+        if (configureOpenApiOperations is not null)
+        {
+            operationProcessorOptions = new OpenApiOperationProcessorOptions();
+            configureOpenApiOperations(operationProcessorOptions);
+        }
+
         var openApiBuilder = endpoints.Map(
             RoutePatternFactory.Parse(basePath.TrimEnd('/') + "/.blueprint/openapi.json"),
-            OpenApiDocumentEndpoint.Create(runtimeModel, infoOptions, schemaProcessorOptions));
+            OpenApiDocumentEndpoint.Create(runtimeModel, infoOptions, schemaProcessorOptions, operationProcessorOptions));
         openApiBuilder.WithDisplayName("GET Blueprint OpenAPI document");
         openApiBuilder.WithMetadata(new HttpMethodMetadata([HttpMethods.Get]));
 

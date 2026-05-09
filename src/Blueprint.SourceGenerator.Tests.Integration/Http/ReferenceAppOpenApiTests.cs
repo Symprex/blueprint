@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Text.Json;
 using Blueprint.Runtime.Http;
 using Blueprint.SourceGenerator.Sample;
@@ -460,10 +461,69 @@ public class ReferenceAppOpenApiTests
         cookieParam.GetProperty("schema").GetProperty("type").GetString().Should().Be("string");
     }
 
-    private static async Task<(string Json, int StatusCode)> InvokeOpenApiEndpointAsync(Action<OpenApiInfoOptions>? configureOpenApi = null)
+    [Fact]
+    public async Task When_operation_processor_strips_parameter_then_openapi_omits_it()
+    {
+        var (json, _) = await InvokeOpenApiEndpointAsync(
+            configureOperationProcessors: ops =>
+            {
+                ops.Processors.Add((operation, descriptor) =>
+                {
+                    // Strip internal header parameters from the public spec (like S365 strips TenantId)
+                    var filtered = operation.Parameters
+                        .Where(static p => !string.Equals(p.Name, "X-Correlation-Id", StringComparison.OrdinalIgnoreCase))
+                        .ToImmutableArray();
+
+                    return operation with { Parameters = filtered };
+                });
+            });
+
+        using var doc = JsonDocument.Parse(json);
+
+        // SearchTemplatesQuery has an X-Correlation-Id header parameter.
+        // The processor should have stripped it.
+        var searchPath = doc.RootElement.GetProperty("paths").GetProperty("/templates/search");
+        var parameters = searchPath.GetProperty("get").GetProperty("parameters");
+        var correlationParam = parameters.EnumerateArray()
+            .Where(static p => string.Equals(p.GetProperty("name").GetString(), "X-Correlation-Id", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+
+        correlationParam.Should().BeEmpty("the operation processor should have stripped the X-Correlation-Id parameter");
+    }
+
+    [Fact]
+    public async Task When_operation_processor_overrides_summary_then_openapi_reflects_change()
+    {
+        var (json, _) = await InvokeOpenApiEndpointAsync(
+            configureOperationProcessors: ops =>
+            {
+                ops.Processors.Add((operation, descriptor) =>
+                {
+                    if (descriptor.Name == "GetTemplatesQuery")
+                    {
+                        return operation with { Summary = "Custom override summary" };
+                    }
+
+                    return operation;
+                });
+            });
+
+        using var doc = JsonDocument.Parse(json);
+
+        var templatesPath = doc.RootElement.GetProperty("paths").GetProperty("/templates");
+        var getOp = templatesPath.GetProperty("get");
+        getOp.GetProperty("summary").GetString().Should().Be("Custom override summary");
+    }
+
+    private static async Task<(string Json, int StatusCode)> InvokeOpenApiEndpointAsync(
+        Action<OpenApiInfoOptions>? configureOpenApi = null,
+        Action<OpenApiOperationProcessorOptions>? configureOperationProcessors = null)
     {
         var endpoints = CreateEndpoints();
-        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/", configureOpenApi: configureOpenApi);
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>(
+            "api/",
+            configureOpenApi: configureOpenApi,
+            configureOpenApiOperations: configureOperationProcessors);
 
         var endpoint = FindEndpoint(endpoints, "api/.blueprint/openapi.json", "GET");
         endpoint.Should().NotBeNull("the OpenAPI endpoint should be registered");

@@ -32,6 +32,51 @@ public sealed record OpenApiOperationRenderingContext(
         return new OpenApiOperationRenderingContext(responseObjects, operations);
     }
 
+    /// <summary>
+    /// Applies consumer-provided per-operation processors, returning a new context with the modified operations.
+    /// Each processor receives the current operation model and the source descriptor and may return a modified model
+    /// (e.g. with parameters stripped or summaries overridden).
+    /// </summary>
+    /// <param name="app">The Blueprint app whose descriptors provide the source metadata for each operation.</param>
+    /// <param name="options">The operation processor options containing the ordered processor list.</param>
+    /// <returns>A new rendering context with the processed operations.</returns>
+    public OpenApiOperationRenderingContext ApplyProcessors(BlueprintApp app, OpenApiOperationProcessorOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(app);
+        ArgumentNullException.ThrowIfNull(options);
+
+        if (options.Processors.Count == 0)
+        {
+            return this;
+        }
+
+        var descriptorsByName = app.Operations.ToImmutableDictionary(
+            static d => d.Name,
+            static d => d,
+            StringComparer.OrdinalIgnoreCase);
+
+        var processed = this.Operations
+            .Select(operation =>
+            {
+                if (!descriptorsByName.TryGetValue(operation.OperationName, out var descriptor))
+                {
+                    return operation;
+                }
+
+                var current = operation;
+
+                foreach (var processor in options.Processors)
+                {
+                    current = processor(current, descriptor);
+                }
+
+                return current;
+            })
+            .ToImmutableArray();
+
+        return this with { Operations = processed };
+    }
+
     private static OpenApiOperationModel CreateOperation(OpenApiResponseObjectOperationContext operation)
     {
         var httpMethods = operation.Operation.TryGetFeatureData<OperationHttpMethodMetadataFeatureData>(out var httpMethodMetadata)

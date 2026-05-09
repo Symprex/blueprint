@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using Blueprint.SourceGenerator.Sample.Api;
 
 namespace Blueprint.SourceGenerator.Sample;
@@ -110,6 +111,22 @@ public class Startup
                         Name = "MIT",
                         Url = "https://opensource.org/licenses/MIT",
                     };
+                },
+                configureOpenApiOperations: ops =>
+                {
+                    // Remove auto-populated TenantId parameters from public API docs.
+                    // In production, TenantId is set by TenantPropertyPopulator from JWT claims,
+                    // so external callers should not see it in the OpenAPI spec.
+                    ops.Processors.Add(static (operation, descriptor) =>
+                    {
+                        var filtered = operation.Parameters
+                            .Where(static p => !string.Equals(p.Name, "tenantId", StringComparison.OrdinalIgnoreCase))
+                            .ToImmutableArray();
+
+                        return filtered.Length != operation.Parameters.Length
+                            ? operation with { Parameters = filtered }
+                            : operation;
+                    });
                 });
         });
     }
