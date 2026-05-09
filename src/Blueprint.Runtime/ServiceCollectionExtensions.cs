@@ -43,6 +43,9 @@ public static class ServiceCollectionExtensions
         services.TryAddScoped<Blueprint.Http.IApiLinkGenerator, Blueprint.Http.ApiLinkGenerator>();
         services.TryAddScoped<Blueprint.Http.IResourceLinkGenerator, Blueprint.Http.EntityOperationResourceLinkGenerator>();
 
+        // Pre-rendered OpenAPI document holder — populated at endpoint mapping time
+        services.TryAddSingleton<PreRenderedOpenApiDocumentHolder>();
+
         var builder = new BlueprintServiceBuilder(services);
         configure?.Invoke(builder);
 

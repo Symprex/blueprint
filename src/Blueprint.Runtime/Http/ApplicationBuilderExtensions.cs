@@ -85,9 +85,14 @@ public static class EndpointRouteBuilderExtensions
             configureOpenApiOperations(operationProcessorOptions);
         }
 
+        var (openApiDelegate, openApiDocument) = OpenApiDocumentEndpoint.Create(runtimeModel, infoOptions, schemaProcessorOptions, operationProcessorOptions);
+
+        // Register the pre-rendered document in DI so development utilities (e.g. OutputOpenApi) can retrieve it
+        endpoints.ServiceProvider.GetService<PreRenderedOpenApiDocumentHolder>()?.Set(openApiDocument);
+
         var openApiBuilder = endpoints.Map(
             RoutePatternFactory.Parse(basePath.TrimEnd('/') + "/.blueprint/openapi.json"),
-            OpenApiDocumentEndpoint.Create(runtimeModel, infoOptions, schemaProcessorOptions, operationProcessorOptions));
+            openApiDelegate);
         openApiBuilder.WithDisplayName("GET Blueprint OpenAPI document");
         openApiBuilder.WithMetadata(new HttpMethodMetadata([HttpMethods.Get]));
 

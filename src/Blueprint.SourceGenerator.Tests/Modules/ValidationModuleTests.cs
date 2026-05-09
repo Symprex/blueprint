@@ -2465,6 +2465,222 @@ public class ValidationModuleTests
         pipelineSource.Should().NotContain("Validator.TryValidateObject");
     }
 
+    [Fact]
+    public async Task When_must_be_greater_than_or_equal_attribute_references_missing_property_then_reports_validation_diagnostic()
+    {
+        var source = """
+                     using Blueprint.Validation;
+
+                     public partial class IncludedOperation : IOperation
+                     {
+                         [MustBeGreaterThanOrEqual("MissingProperty")]
+                         public decimal Maximum { get; set; }
+                     }
+                     """;
+
+        var result = CompileDescriptor(source);
+
+        result.Diagnostics.Select(static d => d.Id).Should().Contain("BPV007");
+        await result.VerifyCompilationFailedAsync(DescriptorSnapshotsFolder);
+    }
+
+    [Fact]
+    public void Inline_handler_with_additional_blueprint_validation_attributes_generates_fast_property_checks_before_handler_invocation()
+    {
+        var source = """
+                     using System;
+                     using Blueprint;
+                     using Blueprint.Model;
+                     using Blueprint.Validation;
+                     using System.Threading.Tasks;
+
+                     namespace TestNamespace;
+
+                     [BlueprintAppScan]
+                     public partial class TestApp : BlueprintApp
+                     {
+                         public TestApp()
+                         {
+                             this.Register(CreateUserCommand.Configure());
+                         }
+                     }
+
+                     public class CreateUserCommand : ICommand<string>
+                     {
+                         public static ApiOperationDescriptor Configure()
+                         {
+                             return new ApiOperationDescriptor(typeof(CreateUserCommand), nameof(CreateUserCommand), "Tests");
+                         }
+
+                         [MustBeTrue("Accept the terms.")]
+                         public bool AcceptedTerms { get; set; }
+
+                         [InFuture("Future only.")]
+                         public DateTime? StartsAt { get; set; }
+
+                         [InPast]
+                         public DateTimeOffset? CompletedAt { get; set; }
+
+                         [NotInFuture]
+                         public DateTime PublishedAt { get; set; }
+
+                         [NotInPast]
+                         public DateTimeOffset ScheduledAt { get; set; }
+
+                         [NotEmptyList("Add at least one item.")]
+                         public int[]? ItemIds { get; set; }
+
+                         [MaxItemsList(2, "Too many items.")]
+                         public int[]? ScoreIds { get; set; }
+
+                         [GreaterThanOrEqualTo(5, "Minimum five.")]
+                         public decimal? MinimumAge { get; set; }
+
+                         [LessThanOrEqualTo(10)]
+                         public float? MaximumAge { get; set; }
+
+                         public int? MinimumValue { get; set; }
+
+                         [MustBeGreaterThanOrEqual(nameof(MinimumValue))]
+                         public int? MaximumValue { get; set; }
+
+                         [Password("Weak password.")]
+                         public string? Password { get; set; }
+
+                         [ResourceKey("Bad resource key.")]
+                         public string? ResourceKey { get; set; }
+
+                         [UkPostcode("Bad postcode.")]
+                         public string? Postcode { get; set; }
+
+                         public static Task<string> HandleAsync(CreateUserCommand command)
+                         {
+                             return Task.FromResult("ok");
+                         }
+                     }
+                     """;
+
+        var result = CompilePipeline(source);
+
+        result.Diagnostics.Should().BeEmpty();
+        var pipelineSource = result.Output.Single(static tree => tree.FilePath.EndsWith("CreateUserCommandExecutorPipeline.g.cs", StringComparison.Ordinal)).ToString();
+
+        pipelineSource.Should().NotContain("global::System.ComponentModel.DataAnnotations.Validator.TryValidateObject");
+        pipelineSource.Should().Contain("operation.AcceptedTerms == false");
+        pipelineSource.Should().Contain("new global::Blueprint.Validation.MustBeTrueAttribute(\"Accept the terms.\")");
+        pipelineSource.Should().Contain("operation.StartsAt is not null");
+        pipelineSource.Should().Contain("operation.StartsAt.Value <= global::System.DateTime.UtcNow");
+        pipelineSource.Should().Contain("new global::Blueprint.Validation.InFutureAttribute(\"Future only.\")");
+        pipelineSource.Should().Contain("operation.CompletedAt is not null");
+        pipelineSource.Should().Contain("operation.CompletedAt.Value >= global::System.DateTimeOffset.UtcNow");
+        pipelineSource.Should().Contain("new global::Blueprint.Validation.InPastAttribute()");
+        pipelineSource.Should().Contain("operation.PublishedAt > global::System.DateTime.UtcNow");
+        pipelineSource.Should().Contain("new global::Blueprint.Validation.NotInFutureAttribute()");
+        pipelineSource.Should().Contain("operation.ScheduledAt < global::System.DateTimeOffset.UtcNow");
+        pipelineSource.Should().Contain("new global::Blueprint.Validation.NotInPastAttribute()");
+        pipelineSource.Should().Contain("operation.ItemIds is not null");
+        pipelineSource.Should().Contain("operation.ItemIds.Length == 0");
+        pipelineSource.Should().Contain("new global::Blueprint.Validation.NotEmptyListAttribute(\"Add at least one item.\")");
+        pipelineSource.Should().Contain("operation.ScoreIds is not null");
+        pipelineSource.Should().Contain("operation.ScoreIds.Length > 2");
+        pipelineSource.Should().Contain("new global::Blueprint.Validation.MaxItemsListAttribute(2, \"Too many items.\")");
+        pipelineSource.Should().Contain("operation.MinimumAge is not null");
+        pipelineSource.Should().Contain("operation.MinimumAge.Value < 5");
+        pipelineSource.Should().Contain("new global::Blueprint.Validation.GreaterThanOrEqualToAttribute(5, \"Minimum five.\")");
+        pipelineSource.Should().Contain("operation.MaximumAge is not null");
+        pipelineSource.Should().Contain("operation.MaximumAge.Value > 10");
+        pipelineSource.Should().Contain("new global::Blueprint.Validation.LessThanOrEqualToAttribute(10)");
+        pipelineSource.Should().Contain("operation.MaximumValue is not null && operation.MinimumValue is not null");
+        pipelineSource.Should().Contain("operation.MaximumValue.Value < operation.MinimumValue.Value");
+        pipelineSource.Should().Contain("new global::Blueprint.Validation.MustBeGreaterThanOrEqualAttribute(\"MinimumValue\")");
+        pipelineSource.Should().Contain("new global::Blueprint.Validation.PasswordAttribute(\"Weak password.\").IsValid(operation.Password) == false");
+        pipelineSource.Should().Contain("new global::Blueprint.Validation.ResourceKeyAttribute(\"Bad resource key.\").IsValid(operation.ResourceKey) == false");
+        pipelineSource.Should().Contain("new global::Blueprint.Validation.UkPostcodeAttribute(\"Bad postcode.\").IsValid(operation.Postcode) == false");
+        pipelineSource.IndexOf("operation.AcceptedTerms == false", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(pipelineSource.IndexOf("var handlerResult", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Inline_handler_with_additional_blueprint_validation_attributes_generates_correctly()
+    {
+        var source = """
+                     using System;
+                     using Blueprint;
+                     using Blueprint.Model;
+                     using Blueprint.Validation;
+                     using System.Threading.Tasks;
+
+                     namespace TestNamespace;
+
+                     [BlueprintAppScan]
+                     public partial class TestApp : BlueprintApp
+                     {
+                         public TestApp()
+                         {
+                             this.Register(CreateUserCommand.Configure());
+                         }
+                     }
+
+                     public class CreateUserCommand : ICommand<string>
+                     {
+                         public static ApiOperationDescriptor Configure()
+                         {
+                             return new ApiOperationDescriptor(typeof(CreateUserCommand), nameof(CreateUserCommand), "Tests");
+                         }
+
+                         [MustBeTrue("Accept the terms.")]
+                         public bool AcceptedTerms { get; set; }
+
+                         [InFuture("Future only.")]
+                         public DateTime? StartsAt { get; set; }
+
+                         [InPast]
+                         public DateTimeOffset? CompletedAt { get; set; }
+
+                         [NotInFuture]
+                         public DateTime PublishedAt { get; set; }
+
+                         [NotInPast]
+                         public DateTimeOffset ScheduledAt { get; set; }
+
+                         [NotEmptyList("Add at least one item.")]
+                         public int[]? ItemIds { get; set; }
+
+                         [MaxItemsList(2, "Too many items.")]
+                         public int[]? ScoreIds { get; set; }
+
+                         [GreaterThanOrEqualTo(5, "Minimum five.")]
+                         public decimal? MinimumAge { get; set; }
+
+                         [LessThanOrEqualTo(10)]
+                         public float? MaximumAge { get; set; }
+
+                         public int? MinimumValue { get; set; }
+
+                         [MustBeGreaterThanOrEqual(nameof(MinimumValue))]
+                         public int? MaximumValue { get; set; }
+
+                         [Password("Weak password.")]
+                         public string? Password { get; set; }
+
+                         [ResourceKey("Bad resource key.")]
+                         public string? ResourceKey { get; set; }
+
+                         [UkPostcode("Bad postcode.")]
+                         public string? Postcode { get; set; }
+
+                         public static Task<string> HandleAsync(CreateUserCommand command)
+                         {
+                             return Task.FromResult("ok");
+                         }
+                     }
+                     """;
+
+        await CompilePipeline(source)
+            .VerifySuccessAsync(PipelineSnapshotsFolder);
+    }
+
     private static GenerationResult CompileDescriptor(string source)
     {
         return TestHelpers.Compile<OperationDescriptorSourceGenerator>(

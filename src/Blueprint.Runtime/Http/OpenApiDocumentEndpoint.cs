@@ -27,7 +27,7 @@ internal static class OpenApiDocumentEndpoint
     /// When <see langword="null"/> no operation processors are applied.
     /// </param>
     /// <returns>A request delegate that writes the rendered OpenAPI 3.x JSON to the response.</returns>
-    public static RequestDelegate Create(
+    public static (RequestDelegate Delegate, PreRenderedOpenApiDocument Document) Create(
         BlueprintApp app,
         OpenApiInfoOptions? infoOptions = null,
         OpenApiSchemaProcessorOptions? schemaProcessorOptions = null,
@@ -36,13 +36,16 @@ internal static class OpenApiDocumentEndpoint
         ArgumentNullException.ThrowIfNull(app);
 
         var json = RenderDocument(app, infoOptions, schemaProcessorOptions, operationProcessorOptions);
+        var document = new PreRenderedOpenApiDocument(json);
 
-        return async httpContext =>
+        var handler = new RequestDelegate(async httpContext =>
         {
             httpContext.Response.StatusCode = StatusCodes.Status200OK;
             httpContext.Response.ContentType = "application/json; charset=utf-8";
             await httpContext.Response.WriteAsync(json, httpContext.RequestAborted);
-        };
+        });
+
+        return (handler, document);
     }
 
     private static string RenderDocument(

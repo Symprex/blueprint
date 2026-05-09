@@ -1479,6 +1479,88 @@ public class ValidationModuleIntegrationTests
         return new ApiOperationContext(new EmptyServiceProvider(), app, descriptor, CancellationToken.None);
     }
 
+    [Fact]
+    public async Task When_additional_blueprint_validation_fast_paths_fail_then_generated_pipeline_returns_all_validation_failures_and_skips_handler()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(AdditionalBlueprintValidationFastPathOperation));
+        var context = CreateContext(app, AdditionalBlueprintValidationFastPathOperation.Configure());
+        var operation = (AdditionalBlueprintValidationFastPathOperation)context.Operation;
+        operation.AcceptedTerms = false;
+        operation.StartsAt = DateTime.UtcNow.AddDays(-1);
+        operation.CompletedAt = DateTimeOffset.UtcNow.AddDays(1);
+        operation.PublishedAt = DateTime.UtcNow.AddDays(1);
+        operation.ScheduledAt = DateTimeOffset.UtcNow.AddDays(-1);
+        operation.ItemIds = [];
+        operation.ScoreIds = [1, 2, 3];
+        operation.MinimumAge = 4;
+        operation.MaximumAge = 11;
+        operation.MinimumValue = 10;
+        operation.MaximumValue = 9;
+        operation.Password = "weak";
+        operation.ResourceKey = "invalid";
+        operation.Postcode = "invalid";
+
+        AdditionalBlueprintValidationFastPathOperation.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<ValidationFailedResult>();
+        AdditionalBlueprintValidationFastPathOperation.HandlerCallCount.Should().Be(0);
+        var memberNames = ((ValidationFailedResult)result).ValidationResults
+            .SelectMany(static validationResult => validationResult.MemberNames)
+            .ToArray();
+        memberNames.Should().Contain(
+        [
+            nameof(AdditionalBlueprintValidationFastPathOperation.AcceptedTerms),
+            nameof(AdditionalBlueprintValidationFastPathOperation.StartsAt),
+            nameof(AdditionalBlueprintValidationFastPathOperation.CompletedAt),
+            nameof(AdditionalBlueprintValidationFastPathOperation.PublishedAt),
+            nameof(AdditionalBlueprintValidationFastPathOperation.ScheduledAt),
+            nameof(AdditionalBlueprintValidationFastPathOperation.ItemIds),
+            nameof(AdditionalBlueprintValidationFastPathOperation.ScoreIds),
+            nameof(AdditionalBlueprintValidationFastPathOperation.MinimumAge),
+            nameof(AdditionalBlueprintValidationFastPathOperation.MaximumAge),
+            nameof(AdditionalBlueprintValidationFastPathOperation.MaximumValue),
+            nameof(AdditionalBlueprintValidationFastPathOperation.Password),
+            nameof(AdditionalBlueprintValidationFastPathOperation.ResourceKey),
+            nameof(AdditionalBlueprintValidationFastPathOperation.Postcode),
+        ]);
+    }
+
+    [Fact]
+    public async Task When_additional_blueprint_validation_fast_paths_pass_then_generated_pipeline_runs_handler_and_returns_ok()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(AdditionalBlueprintValidationFastPathOperation));
+        var context = CreateContext(app, AdditionalBlueprintValidationFastPathOperation.Configure());
+        var operation = (AdditionalBlueprintValidationFastPathOperation)context.Operation;
+        operation.AcceptedTerms = true;
+        operation.StartsAt = DateTime.UtcNow.AddDays(1);
+        operation.CompletedAt = DateTimeOffset.UtcNow.AddDays(-1);
+        operation.PublishedAt = DateTime.UtcNow.AddDays(-1);
+        operation.ScheduledAt = DateTimeOffset.UtcNow.AddDays(1);
+        operation.ItemIds = [1];
+        operation.ScoreIds = [1, 2];
+        operation.MinimumAge = 5;
+        operation.MaximumAge = 10;
+        operation.MinimumValue = 10;
+        operation.MaximumValue = 10;
+        operation.Password = "StrongP@ss1";
+        operation.ResourceKey = "Widget/5C65D124-F856-46A4-BB3F-19764429BA1F";
+        operation.Postcode = "SW1A 1AA";
+
+        AdditionalBlueprintValidationFastPathOperation.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<OkResult<string>>();
+        AdditionalBlueprintValidationFastPathOperation.HandlerCallCount.Should().Be(1);
+        ((OkResult)result).Unwrap<string>().Should().Be("ok");
+    }
+
     private sealed class EmptyServiceProvider : IServiceProvider
     {
         public object? GetService(Type serviceType)
@@ -2181,6 +2263,63 @@ public partial class LengthValidationOperation : ICommand<string>
     {
         HandlerCallCount++;
         return Task.FromResult(operation.Code ?? string.Empty);
+    }
+}
+
+public partial class AdditionalBlueprintValidationFastPathOperation : ICommand<string>
+{
+    public static int HandlerCallCount { get; private set; }
+
+    [MustBeTrue]
+    public bool AcceptedTerms { get; set; }
+
+    [InFuture]
+    public DateTime? StartsAt { get; set; }
+
+    [InPast]
+    public DateTimeOffset? CompletedAt { get; set; }
+
+    [NotInFuture]
+    public DateTime PublishedAt { get; set; }
+
+    [NotInPast]
+    public DateTimeOffset ScheduledAt { get; set; }
+
+    [NotEmptyList]
+    public int[]? ItemIds { get; set; }
+
+    [MaxItemsList(2)]
+    public int[]? ScoreIds { get; set; }
+
+    [GreaterThanOrEqualTo(5)]
+    public int? MinimumAge { get; set; }
+
+    [LessThanOrEqualTo(10)]
+    public int? MaximumAge { get; set; }
+
+    public int? MinimumValue { get; set; }
+
+    [MustBeGreaterThanOrEqual(nameof(MinimumValue))]
+    public int? MaximumValue { get; set; }
+
+    [Password]
+    public string? Password { get; set; }
+
+    [ResourceKey]
+    public string? ResourceKey { get; set; }
+
+    [UkPostcode]
+    public string? Postcode { get; set; }
+
+    public static void Reset()
+    {
+        HandlerCallCount = 0;
+    }
+
+    public static Task<string> HandleAsync(AdditionalBlueprintValidationFastPathOperation operation)
+    {
+        HandlerCallCount++;
+        return Task.FromResult("ok");
     }
 }
 
