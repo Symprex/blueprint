@@ -271,6 +271,20 @@ public sealed class BlueprintServiceBuilder
     }
 
     /// <summary>
+    /// Registers a context metadata provider that enriches resource events and audit records
+    /// with ambient context data (tenant ID, correlation ID, user info, etc.).
+    /// Multiple providers are supported and each will be called to contribute metadata.
+    /// </summary>
+    /// <typeparam name="T">The <see cref="Blueprint.Model.IContextMetadataProvider"/> implementation type.</typeparam>
+    /// <returns>This builder for chaining.</returns>
+    public BlueprintServiceBuilder AddContextMetadataProvider<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] T>()
+        where T : class, Blueprint.Model.IContextMetadataProvider
+    {
+        this.Services.TryAddEnumerable(ServiceDescriptor.Scoped<Blueprint.Model.IContextMetadataProvider, T>());
+        return this;
+    }
+
+    /// <summary>
     /// Registers a resource link generator that dynamically adds links to resources at runtime.
     /// Multiple generators are supported and all will be invoked on matching resource types.
     /// </summary>

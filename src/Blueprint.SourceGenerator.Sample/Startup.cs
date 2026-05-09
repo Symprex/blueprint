@@ -50,6 +50,9 @@ public class Startup
             // attributes by matching user claims against demanded permissions.
             blueprint.AddClaimsAuthorisation();
 
+            // Context metadata: enriches resource events with tenant context
+            blueprint.AddContextMetadataProvider<SampleContextMetadataProvider>();
+
             // State-based link visibility: hide the Archive link on already-archived templates
             blueprint.AddApiAuthoriser<ArchiveTemplateLinkChecker>();
 
