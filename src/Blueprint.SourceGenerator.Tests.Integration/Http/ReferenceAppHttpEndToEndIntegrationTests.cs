@@ -1478,6 +1478,111 @@ public class ReferenceAppHttpEndToEndIntegrationTests
         response.Body.Should().Contain("StartDate");
     }
 
+    [Fact]
+    public async Task When_auth_manifest_invoked_with_authenticated_user_returns_accessible_operations()
+    {
+        var endpoints = CreateEndpointsWithAuthManifest();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/me/authManifest", "GET");
+        endpoint.Should().NotBeNull("the auth manifest route should be registered");
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Get;
+            context.Request.Path = "/api/me/authManifest";
+            context.User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "user-1"),
+                ],
+                authenticationType: "test"));
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        response.ContentType.Should().Be("application/json; charset=utf-8");
+
+        // The AllowAll aggregator allows everything, so all exposed operations should appear
+        response.Body.Should().Contain("AccessibleOperations");
+    }
+
+    [Fact]
+    public async Task When_auth_manifest_invoked_without_authentication_returns_401()
+    {
+        var endpoints = CreateEndpointsWithAuthManifest();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/me/authManifest", "GET");
+        endpoint.Should().NotBeNull("the auth manifest route should be registered");
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Get;
+            context.Request.Path = "/api/me/authManifest";
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status401Unauthorized,
+            "[MustBeAuthenticated] should reject unauthenticated requests");
+    }
+
+    [Fact]
+    public async Task When_change_password_invoked_with_mismatched_passwords_returns_422()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/account/password", "PUT");
+        endpoint.Should().NotBeNull("the change password route should be registered");
+
+        var bodyJson = """{"currentPassword":"oldpassword1","newPassword":"newpass123","confirmNewPassword":"different789"}"""u8.ToArray();
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Put;
+            context.Request.Path = "/api/account/password";
+            context.Request.ContentType = "application/json";
+            context.Request.Body = new MemoryStream(bodyJson);
+            context.Request.ContentLength = bodyJson.Length;
+            context.User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "user-1"),
+                ],
+                authenticationType: "test"));
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status422UnprocessableEntity,
+            "Compare attribute should fail when NewPassword != ConfirmNewPassword");
+        response.Body.Should().Contain("ConfirmNewPassword");
+    }
+
+    [Fact]
+    public async Task When_change_password_invoked_with_matching_passwords_returns_200()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/account/password", "PUT");
+        endpoint.Should().NotBeNull("the change password route should be registered");
+
+        var bodyJson = """{"currentPassword":"oldpassword1","newPassword":"newpass123","confirmNewPassword":"newpass123"}"""u8.ToArray();
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Put;
+            context.Request.Path = "/api/account/password";
+            context.Request.ContentType = "application/json";
+            context.Request.Body = new MemoryStream(bodyJson);
+            context.Request.ContentLength = bodyJson.Length;
+            context.User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "user-1"),
+                ],
+                authenticationType: "test"));
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+    }
+
     private static async Task<TestHttpResponse> InvokeEndpointAsync(
         RouteEndpoint endpoint,
         IServiceProvider serviceProvider,
@@ -1561,6 +1666,23 @@ public class ReferenceAppHttpEndToEndIntegrationTests
         return new TestEndpointRouteBuilder(services.BuildServiceProvider());
     }
 
+    private static TestEndpointRouteBuilder CreateEndpointsWithAuthManifest()
+    {
+        var services = new ServiceCollection()
+            .AddLogging()
+            .AddSingleton<TemplateStore>()
+            .AddSingleton<SampleBlueprintApp>()
+            .AddSingleton<SampleBlueprintAppExecutor>()
+            .AddScoped<Blueprint.Tasks.IBackgroundTaskScheduler, InProcessBackgroundTaskScheduler>()
+            .AddScoped<InMemoryUnitOfWork>()
+            .AddScoped<Blueprint.Persistence.IUnitOfWork>(sp => sp.GetRequiredService<InMemoryUnitOfWork>())
+            .AddSingleton<Blueprint.Authorization.IUserAuthorisationContextFactory, SampleUserAuthorisationContextFactory>()
+            .AddSingleton<Blueprint.Authorization.IApiAuthoriser, TenantIsolationApiAuthoriser>()
+            .AddSingleton<Blueprint.Authorization.IApiAuthoriserAggregator, AllowAllApiAuthoriserAggregator>();
+
+        return new TestEndpointRouteBuilder(services.BuildServiceProvider());
+    }
+
     private sealed class TestEndpointRouteBuilder(IServiceProvider serviceProvider) : IEndpointRouteBuilder
     {
         public ICollection<EndpointDataSource> DataSources { get; } = [];
@@ -1574,4 +1696,15 @@ public class ReferenceAppHttpEndToEndIntegrationTests
     }
 
     private sealed record TestHttpResponse(int StatusCode, string? ContentType, string Body, string? LocationHeader);
+
+    private sealed class AllowAllApiAuthoriserAggregator : Blueprint.Authorization.IApiAuthoriserAggregator
+    {
+        public ValueTask<Blueprint.Authorization.ExecutionAllowed> CanShowLinkAsync(
+            Blueprint.Runtime.Exec.ApiOperationContext operationContext,
+            Blueprint.Model.ApiOperationDescriptor descriptor,
+            object? resource)
+        {
+            return new ValueTask<Blueprint.Authorization.ExecutionAllowed>(Blueprint.Authorization.ExecutionAllowed.Yes);
+        }
+    }
 }
