@@ -98,6 +98,17 @@ public class HttpOperationResultExecutor
                 await WriteJsonAsync(httpContext, operationContext, notFoundResult.Content);
                 return true;
             case OkResult okResult:
+                if (okResult is INotModifiedResult notModifiedResult)
+                {
+                    httpContext.Response.StatusCode = StatusCodes.Status304NotModified;
+                    foreach (var header in okResult.Headers)
+                    {
+                        httpContext.Response.Headers[header.Key] = header.Value;
+                    }
+
+                    return true;
+                }
+
                 if (okResult.Content is null)
                 {
                     throw new InvalidOperationException("OkResult must not carry null content when translated by the HTTP executor.");
@@ -105,6 +116,11 @@ public class HttpOperationResultExecutor
 
                 httpContext.Response.StatusCode = StatusCodes.Status200OK;
                 httpContext.Response.ContentType = "application/json; charset=utf-8";
+                foreach (var header in okResult.Headers)
+                {
+                    httpContext.Response.Headers[header.Key] = header.Value;
+                }
+
                 await WriteJsonAsync(httpContext, operationContext, okResult.Content);
                 return true;
             case ValidationFailedResult validationFailedResult when DescriptorSupportsFailureResult(operationContext.Descriptor, validationFailedResult):

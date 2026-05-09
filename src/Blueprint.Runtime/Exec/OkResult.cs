@@ -3,6 +3,18 @@ using Microsoft.Extensions.Primitives;
 namespace Blueprint.Runtime.Exec;
 
 /// <summary>
+/// Marker interface for results that represent a 304 Not Modified response. Checked by the HTTP
+/// executor to emit the correct status code and suppress body writing.
+/// </summary>
+public interface INotModifiedResult
+{
+    /// <summary>
+    /// Gets the ETag value that matched the client's <c>If-None-Match</c> header.
+    /// </summary>
+    string ETag { get; }
+}
+
+/// <summary>
 /// Represents a known result, a well-handled result of executing an operation that will use conneg to
 /// determine _how_ to output a value and also set the status code of the HTTP response.
 /// </summary>

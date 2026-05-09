@@ -11,7 +11,7 @@ namespace Blueprint.Runtime.Exec;
 /// The type of content that <em>would have been</em> returned had the resource changed. This allows
 /// the result to remain type-compatible with <see cref="OkResult{T}"/> in handler return types.
 /// </typeparam>
-public sealed class NotModifiedResult<T> : OkResult<T> where T : notnull
+public sealed class NotModifiedResult<T> : OkResult<T>, INotModifiedResult where T : notnull
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="NotModifiedResult{T}"/> class.
