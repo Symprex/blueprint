@@ -1583,6 +1583,180 @@ public class ReferenceAppHttpEndToEndIntegrationTests
         response.StatusCode.Should().Be(StatusCodes.Status200OK);
     }
 
+    [Fact]
+    public async Task When_create_template_with_multiple_invalid_fields_then_returns_422_with_all_errors_aggregated()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/templates", "POST");
+        endpoint.Should().NotBeNull();
+
+        // Missing required Name, invalid Slug (uppercase), invalid Visibility, out-of-range Priority,
+        // invalid AuthorEmail, invalid CallbackUrl — all should be reported in one response
+        var bodyJson = """{"slug":"INVALID_SLUG!","visibility":"secret","priority":9999,"authorEmail":"not-an-email","callbackUrl":"not-a-url"}"""u8.ToArray();
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Post;
+            context.Request.Path = "/api/templates";
+            context.Request.ContentType = "application/json; charset=utf-8";
+            context.Request.ContentLength = bodyJson.Length;
+            context.Request.Body = new MemoryStream(bodyJson);
+            context.User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "user-1"),
+                ],
+                authenticationType: "test"));
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status422UnprocessableEntity,
+            "multiple invalid fields should all be caught and returned as 422");
+
+        // Prove all validation errors are aggregated, not just the first one
+        response.Body.Should().Contain("Name", "missing required Name should be reported");
+        response.Body.Should().Contain("Slug", "invalid regex pattern should be reported");
+        response.Body.Should().Contain("Visibility", "disallowed value should be reported");
+        response.Body.Should().Contain("Priority", "out-of-range value should be reported");
+        response.Body.Should().Contain("AuthorEmail", "invalid email should be reported");
+        response.Body.Should().Contain("CallbackUrl", "invalid URL should be reported");
+    }
+
+    [Fact]
+    public async Task When_create_template_with_denied_slug_value_returns_422()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/templates", "POST");
+        endpoint.Should().NotBeNull();
+
+        // "admin" is in the DeniedValues list
+        var bodyJson = """{"name":"Valid Name","slug":"admin"}"""u8.ToArray();
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Post;
+            context.Request.Path = "/api/templates";
+            context.Request.ContentType = "application/json; charset=utf-8";
+            context.Request.ContentLength = bodyJson.Length;
+            context.Request.Body = new MemoryStream(bodyJson);
+            context.User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "user-1"),
+                ],
+                authenticationType: "test"));
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status422UnprocessableEntity,
+            "denied slug value 'admin' should trigger validation failure");
+        response.Body.Should().Contain("Slug");
+    }
+
+    [Fact]
+    public async Task When_validate_template_throws_not_found_exception_then_returns_404()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/templates/{Id}/validate", "POST");
+        endpoint.Should().NotBeNull("the validate template route should be registered");
+
+        // The handler throws NotFoundException when Id == "not-found"
+        var bodyJson = """{"id":"not-found","name":"Test"}"""u8.ToArray();
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Post;
+            context.Request.Path = "/api/templates/not-found/validate";
+            context.Request.ContentType = "application/json; charset=utf-8";
+            context.Request.ContentLength = bodyJson.Length;
+            context.Request.Body = new MemoryStream(bodyJson);
+            context.Request.RouteValues = new RouteValueDictionary
+            {
+                ["Id"] = "not-found",
+            };
+            context.User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "user-1"),
+                ],
+                authenticationType: "test"));
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status404NotFound,
+            "NotFoundException from handler should translate to 404 via exception pipeline");
+    }
+
+    [Fact]
+    public async Task When_validate_template_throws_validation_exception_then_returns_422()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/templates/{Id}/validate", "POST");
+        endpoint.Should().NotBeNull("the validate template route should be registered");
+
+        // The handler throws ValidationException when Name is "INVALID"
+        var bodyJson = """{"id":"template-001","name":"INVALID"}"""u8.ToArray();
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Post;
+            context.Request.Path = "/api/templates/template-001/validate";
+            context.Request.ContentType = "application/json; charset=utf-8";
+            context.Request.ContentLength = bodyJson.Length;
+            context.Request.Body = new MemoryStream(bodyJson);
+            context.Request.RouteValues = new RouteValueDictionary
+            {
+                ["Id"] = "template-001",
+            };
+            context.User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "user-1"),
+                ],
+                authenticationType: "test"));
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status422UnprocessableEntity,
+            "handler-thrown ValidationException should translate to 422 via exception pipeline");
+    }
+
+    [Fact]
+    public async Task When_property_populator_registered_then_tenant_id_auto_populated_from_jwt_claim()
+    {
+        var endpoints = CreateEndpointsWithPropertyPopulator();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        // UpdateTemplateSettings requires TenantId — property populator should fill it from claim
+        var endpoint = FindEndpoint(endpoints, "api/tenants/{TenantId}/templates/{Id}/settings", "PUT");
+        endpoint.Should().NotBeNull("tenant-scoped template settings route should be registered");
+
+        var bodyJson = """{"displayName":"Updated Name"}"""u8.ToArray();
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Put;
+            context.Request.Path = "/api/tenants/tenant-123/templates/template-001/settings";
+            context.Request.ContentType = "application/json; charset=utf-8";
+            context.Request.ContentLength = bodyJson.Length;
+            context.Request.Body = new MemoryStream(bodyJson);
+            context.Request.RouteValues = new RouteValueDictionary
+            {
+                ["TenantId"] = "tenant-123",
+                ["Id"] = "template-001",
+            };
+            context.User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "user-1"),
+                    new Claim("tenant_id", "tenant-123"),
+                ],
+                authenticationType: "test"));
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK,
+            "property populator should fill TenantId from JWT claim, allowing the request to proceed");
+    }
+
     private static async Task<TestHttpResponse> InvokeEndpointAsync(
         RouteEndpoint endpoint,
         IServiceProvider serviceProvider,
@@ -1679,6 +1853,22 @@ public class ReferenceAppHttpEndToEndIntegrationTests
             .AddSingleton<Blueprint.Authorization.IUserAuthorisationContextFactory, SampleUserAuthorisationContextFactory>()
             .AddSingleton<Blueprint.Authorization.IApiAuthoriser, TenantIsolationApiAuthoriser>()
             .AddSingleton<Blueprint.Authorization.IApiAuthoriserAggregator, AllowAllApiAuthoriserAggregator>();
+
+        return new TestEndpointRouteBuilder(services.BuildServiceProvider());
+    }
+
+    private static TestEndpointRouteBuilder CreateEndpointsWithPropertyPopulator()
+    {
+        var services = new ServiceCollection()
+            .AddLogging()
+            .AddSingleton<TemplateStore>()
+            .AddSingleton<SampleBlueprintApp>()
+            .AddSingleton<SampleBlueprintAppExecutor>()
+            .AddScoped<Blueprint.Tasks.IBackgroundTaskScheduler, InProcessBackgroundTaskScheduler>()
+            .AddScoped<InMemoryUnitOfWork>()
+            .AddScoped<Blueprint.Persistence.IUnitOfWork>(sp => sp.GetRequiredService<InMemoryUnitOfWork>())
+            .AddSingleton<ITenantAccessor, AsyncLocalTenantAccessor>()
+            .AddSingleton<Blueprint.Runtime.Middleware.IPropertyPopulator, TenantPropertyPopulator>();
 
         return new TestEndpointRouteBuilder(services.BuildServiceProvider());
     }
