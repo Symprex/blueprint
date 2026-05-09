@@ -923,3 +923,49 @@ public class Startup
 | Persistence | Blueprint middleware | `AddUnitOfWork<T>()` seam |
 | Messaging | Blueprint Rebus middleware | `AddMessageOutbox<T>()` seam |
 | Endpoint mapping | `endpoints.MapBlueprintApi("api/")` | `endpoints.MapBlueprintApi<TApp, TExecutor>("api/")` |
+
+## Convenience result types
+
+### ResourceCreated / ResourceUpdated / ResourceDeleted
+
+The `ResourceCreated<T>`, `ResourceUpdated<T>`, and `ResourceDeleted<T>` convenience types **are retained** in the source-generated Blueprint. They provide:
+
+- **Correct HTTP semantics** — 201 for Created, 200 for Updated, 200/204 for Deleted
+- **Conventional event IDs** — auto-generated from `resource:verb` format
+- **HATEOAS link population** — links are attached to the resource content automatically
+
+These types extend `ResourceEventResult` and work seamlessly with the generated pipeline. No migration action needed.
+
+```csharp
+// Both legacy and new — unchanged handler return type
+public Task<ResourceUpdated<TemplateResource>> HandleAsync(UpdateTemplate command)
+{
+    // ... update logic ...
+    return new ResourceUpdated<TemplateResource>(resource);
+}
+```
+
+## Source-generation optimization notes
+
+### What is already compile-time optimised
+
+| Area | Legacy approach | Source-gen approach |
+|------|----------------|---------------------|
+| **Pipeline steps** | Runtime middleware chain discovery | Generated per-operation pipeline code |
+| **Self-link URLs** | Runtime reflection-based URL construction | Compiled `$links.self` URL builder inlined in pipeline |
+| **Resource key expansion** | `PropertyResourceKeyTemplateExpander` via regex + reflection | Generated property-access expressions in `ResourceKeyTemplateParser` |
+| **Validation** | Data Annotations via reflection | Generated validation expressions per-property |
+| **Handler dispatch** | Runtime method discovery | Direct `HandleAsync` call in generated code |
+| **HATEOAS link URLs** | `CompiledUrlBuilder` set at app startup | Source-generated lambda delegates per link |
+| **Auth metadata** | `[Resource]` attributes read at runtime | Compiled into `ApiOperationDescriptor.Configure()` |
+
+### What remains at runtime (by design)
+
+Some operations are inherently runtime because they depend on per-request state:
+
+- **`CanShowLinkAsync`** checks — authorizer decisions depend on the authenticated user and resource state
+- **`IResourceLinkGenerator`** loop — the set of applicable links is determined by DI registrations which can vary between tests and production
+- **`IApiAuthoriser`** execution — business-logic authorization depends on runtime context
+- **`IPropertyPopulator`** execution — populating operation properties from request context
+
+The `ApiAuthoriserAggregator` already caches `AppliesTo()` results per operation type using `ConcurrentDictionary`, so the "does this authorizer apply" check only runs once per operation type lifetime.
