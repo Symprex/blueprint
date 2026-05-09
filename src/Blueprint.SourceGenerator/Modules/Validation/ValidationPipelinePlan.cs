@@ -51,3 +51,29 @@ internal sealed record FastPathPropertyValidationPlan(
     ValidationFastPathRule? RequiredRule,
     IReadOnlyList<ValidationFastPathRule> OtherRules)
     : PropertyValidationPlan(MemberName, PropertyAccess);
+
+/// <summary>
+/// Indicates that a property is a complex child object whose type has its own validation attributes and should be
+/// recursively validated using <c>RecursiveDataAnnotationValidator.ValidateChildObject</c>.
+/// </summary>
+/// <param name="MemberName">The property name used in path prefixes.</param>
+/// <param name="PropertyAccess">The generated-code expression used to read the property value.</param>
+/// <param name="ChildTypeName">The fully-qualified type name of the child type for the generic call.</param>
+internal sealed record ChildObjectValidationPlan(
+    string MemberName,
+    string PropertyAccess,
+    string ChildTypeName)
+    : PropertyValidationPlan(MemberName, PropertyAccess);
+
+/// <summary>
+/// Indicates that a property is a list of complex child objects that should be recursively validated using
+/// <c>RecursiveDataAnnotationValidator.ValidateChildList</c>.
+/// </summary>
+/// <param name="MemberName">The property name used in path prefixes.</param>
+/// <param name="PropertyAccess">The generated-code expression used to read the property value.</param>
+/// <param name="ElementTypeName">The fully-qualified type name of the list element for the generic call.</param>
+internal sealed record ChildListValidationPlan(
+    string MemberName,
+    string PropertyAccess,
+    string ElementTypeName)
+    : PropertyValidationPlan(MemberName, PropertyAccess);

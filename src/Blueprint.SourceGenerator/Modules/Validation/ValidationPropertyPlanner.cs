@@ -51,16 +51,34 @@ internal static class ValidationPropertyPlanner
 
         foreach (var property in ValidationSymbolHelpers.GetPublicInstanceProperties(operationType))
         {
+            var propertyAccess = $"operation.{ValidationSymbolHelpers.EscapeIdentifier(property.Name)}";
+
             var validationAttributes = property.GetAttributes()
                 .Where(static attribute => ValidationSymbolHelpers.IsValidationAttribute(attribute.AttributeClass))
                 .ToArray();
 
             if (validationAttributes.Length == 0)
             {
+                // Even without direct attributes, check if the property is a complex child type
+                // whose own properties have validation attributes
+                if (ValidationSymbolHelpers.TryGetValidatableListElementType(property.Type, out var elementType))
+                {
+                    properties.Add(new ChildListValidationPlan(
+                        property.Name,
+                        propertyAccess,
+                        elementType!.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)));
+                }
+                else if (ValidationSymbolHelpers.IsValidatableComplexType(property.Type))
+                {
+                    properties.Add(new ChildObjectValidationPlan(
+                        property.Name,
+                        propertyAccess,
+                        property.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)));
+                }
+
                 continue;
             }
 
-            var propertyAccess = $"operation.{ValidationSymbolHelpers.EscapeIdentifier(property.Name)}";
             if (property.GetAttributes().Any(static attribute => ValidationSymbolHelpers.IsDisplayNameAffectingAttribute(attribute.AttributeClass)))
             {
                 properties.Add(new RuntimeFallbackPropertyValidationPlan(property.Name, propertyAccess));

@@ -350,4 +350,87 @@ internal static class ValidationSymbolHelpers
 
         return property.Locations.Length > 0 ? LocationInfo.CreateFrom(property.Locations[0]) : null;
     }
+
+    /// <summary>
+    /// Determines whether a property type is a complex child object whose own properties carry validation attributes
+    /// and therefore should be recursively validated.
+    /// </summary>
+    /// <param name="propertyType">The type of the property.</param>
+    /// <returns><see langword="true"/> when the type is a validatable complex object.</returns>
+    public static bool IsValidatableComplexType(ITypeSymbol propertyType)
+    {
+        if (propertyType is not INamedTypeSymbol namedType)
+        {
+            return false;
+        }
+
+        // Exclude primitives, enums, strings, and well-known framework types
+        if (namedType.SpecialType != SpecialType.None
+            || namedType.TypeKind == TypeKind.Enum
+            || namedType.IsValueType)
+        {
+            return false;
+        }
+
+        var fullName = namedType.ToDisplayString();
+        if (fullName is "string" or "System.String" or "object" or "System.Object")
+        {
+            return false;
+        }
+
+        // Check if any public instance property on the type has a validation attribute
+        return GetPublicInstanceProperties(namedType)
+            .Any(static p => p.GetAttributes().Any(static a => IsValidationAttribute(a.AttributeClass)));
+    }
+
+    /// <summary>
+    /// Tries to extract the element type from a list/collection property if the elements are validatable complex types.
+    /// </summary>
+    /// <param name="propertyType">The type of the property.</param>
+    /// <param name="elementType">The element type if found and validatable.</param>
+    /// <returns><see langword="true"/> when the property is a list of validatable complex objects.</returns>
+    public static bool TryGetValidatableListElementType(ITypeSymbol propertyType, out INamedTypeSymbol? elementType)
+    {
+        elementType = null;
+
+        if (propertyType is not INamedTypeSymbol namedType)
+        {
+            return false;
+        }
+
+        // Check IReadOnlyList<T>, IList<T>, List<T>, IEnumerable<T>, ICollection<T>, IReadOnlyCollection<T>
+        var candidate = GetGenericListElementType(namedType)
+                        ?? namedType.AllInterfaces
+                            .Select(static i => GetGenericListElementType(i))
+                            .FirstOrDefault(static t => t is not null);
+
+        if (candidate is not null && IsValidatableComplexType(candidate))
+        {
+            elementType = candidate as INamedTypeSymbol;
+            return elementType is not null;
+        }
+
+        return false;
+    }
+
+    private static ITypeSymbol? GetGenericListElementType(INamedTypeSymbol type)
+    {
+        if (!type.IsGenericType || type.TypeArguments.Length != 1)
+        {
+            return null;
+        }
+
+        var definition = type.ConstructedFrom.ToDisplayString();
+        if (definition is "System.Collections.Generic.IReadOnlyList<T>"
+            or "System.Collections.Generic.IList<T>"
+            or "System.Collections.Generic.List<T>"
+            or "System.Collections.Generic.IEnumerable<T>"
+            or "System.Collections.Generic.ICollection<T>"
+            or "System.Collections.Generic.IReadOnlyCollection<T>")
+        {
+            return type.TypeArguments[0];
+        }
+
+        return null;
+    }
 }

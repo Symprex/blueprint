@@ -161,6 +161,12 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
                 case RuntimeFallbackPropertyValidationPlan runtimeFallbackProperty:
                     RenderRuntimeFallbackValidation(context, runtimeFallbackProperty);
                     break;
+                case ChildObjectValidationPlan childObjectProperty:
+                    RenderChildObjectValidation(context, childObjectProperty);
+                    break;
+                case ChildListValidationPlan childListProperty:
+                    RenderChildListValidation(context, childListProperty);
+                    break;
             }
         }
 
@@ -206,6 +212,18 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
     {
         context.WriteStatement(
             $"global::Blueprint.Validation.ValidationRuntime.ValidateProperty({context.GetContextPropertyExpression("Descriptor")}.GetPropertyAttributes(\"{property.MemberName}\"), {context.GetOperationExpression()}, {property.PropertyAccess}, \"{property.MemberName}\", ref validationResults);");
+    }
+
+    private static void RenderChildObjectValidation(PipelineRenderContext context, ChildObjectValidationPlan property)
+    {
+        context.WriteStatement(
+            $"validationResults = global::Blueprint.Validation.RecursiveDataAnnotationValidator.AppendChildObjectErrors<{property.ChildTypeName}>(\"{property.MemberName}\", {property.PropertyAccess}, new global::System.ComponentModel.DataAnnotations.ValidationContext({context.GetOperationExpression()}), validationResults);");
+    }
+
+    private static void RenderChildListValidation(PipelineRenderContext context, ChildListValidationPlan property)
+    {
+        context.WriteStatement(
+            $"validationResults = global::Blueprint.Validation.RecursiveDataAnnotationValidator.AppendChildListErrors<{property.ElementTypeName}>(\"{property.MemberName}\", {property.PropertyAccess}, new global::System.ComponentModel.DataAnnotations.ValidationContext({context.GetOperationExpression()}), validationResults);");
     }
 
     private static void RenderValidationFailure(

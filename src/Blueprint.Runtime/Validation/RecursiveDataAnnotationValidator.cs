@@ -84,6 +84,68 @@ public static class RecursiveDataAnnotationValidator
         }
     }
 
+    /// <summary>
+    /// Validates a child object and appends any errors to the provided results list, creating it if needed.
+    /// Designed for use by generated pipeline code where the list is lazily allocated.
+    /// </summary>
+    /// <typeparam name="T">The type of the child object.</typeparam>
+    /// <param name="propertyName">The name of the property on the parent operation.</param>
+    /// <param name="value">The value to validate; <c>null</c> produces no errors.</param>
+    /// <param name="validationContext">The validation context from the parent object.</param>
+    /// <param name="results">The existing results list (may be <c>null</c>); created on first error.</param>
+    /// <returns>The results list, possibly newly allocated, or <c>null</c> if no errors were found.</returns>
+    [RequiresUnreferencedCode("DataAnnotations validation uses reflection to read attributes.")]
+    public static List<ValidationResult>? AppendChildObjectErrors<T>(
+        string propertyName,
+        T? value,
+        ValidationContext validationContext,
+        List<ValidationResult>? results)
+    {
+        if (value == null)
+        {
+            return results;
+        }
+
+        foreach (var error in ValidateChildObject(propertyName, value, validationContext))
+        {
+            results ??= new List<ValidationResult>();
+            results.Add(error);
+        }
+
+        return results;
+    }
+
+    /// <summary>
+    /// Validates a child list and appends any errors to the provided results list, creating it if needed.
+    /// Designed for use by generated pipeline code where the list is lazily allocated.
+    /// </summary>
+    /// <typeparam name="T">The type of the list element.</typeparam>
+    /// <param name="propertyName">The name of the property on the parent operation.</param>
+    /// <param name="values">The values to validate; <c>null</c> produces no errors.</param>
+    /// <param name="validationContext">The validation context from the parent object.</param>
+    /// <param name="results">The existing results list (may be <c>null</c>); created on first error.</param>
+    /// <returns>The results list, possibly newly allocated, or <c>null</c> if no errors were found.</returns>
+    [RequiresUnreferencedCode("DataAnnotations validation uses reflection to read attributes.")]
+    public static List<ValidationResult>? AppendChildListErrors<T>(
+        string propertyName,
+        IReadOnlyList<T>? values,
+        ValidationContext validationContext,
+        List<ValidationResult>? results)
+    {
+        if (values == null)
+        {
+            return results;
+        }
+
+        foreach (var error in ValidateChildList(propertyName, values, validationContext))
+        {
+            results ??= new List<ValidationResult>();
+            results.Add(error);
+        }
+
+        return results;
+    }
+
     [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = "Callers propagate RequiresUnreferencedCode.")]
     private static IEnumerable<ValidationResult> ValidateObject(
         object value,
