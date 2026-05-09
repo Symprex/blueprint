@@ -90,4 +90,16 @@ public static class MigrationDiagnosticDescriptors
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
         description: "Legacy Blueprint migrations should treat raw {Auth:...} placeholder templates as consumer-extension rewrite work because the replacement auth/resource model needs explicit generated placeholder bindings instead of runtime string expansion.");
+
+    /// <summary>
+    /// Gets the diagnostic emitted when a using directive references a legacy Blueprint namespace that has been renamed or reorganised.
+    /// </summary>
+    public static DiagnosticDescriptor LegacyNamespaceUsing { get; } = new(
+        id: "BPMIG300",
+        title: "Update legacy Blueprint namespace",
+        messageFormat: "Replace 'using {0};' with 'using {1};' for the source-generated Blueprint framework.",
+        category: "BlueprintMigration",
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "Legacy Blueprint namespaces have been reorganised in the source-generated framework. Update using directives to the new namespace locations.");
 }

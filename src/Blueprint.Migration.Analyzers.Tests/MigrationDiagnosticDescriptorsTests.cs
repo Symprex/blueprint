@@ -73,4 +73,13 @@ public sealed class MigrationDiagnosticDescriptorsTests
         Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.LegacyAuthPlaceholderUsageRequiresMigration.IsEnabledByDefault.Should().BeTrue();
         Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.LegacyAuthPlaceholderUsageRequiresMigration.MessageFormat.ToString().Should().Contain("{Auth:");
     }
+
+    [Xunit.Fact]
+    public void When_loading_migration_diagnostic_descriptors_then_legacy_namespace_uses_the_first_namespace_migration_slot()
+    {
+        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.LegacyNamespaceUsing.Id.Should().Be("BPMIG300");
+        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.LegacyNamespaceUsing.DefaultSeverity.Should().Be(Microsoft.CodeAnalysis.DiagnosticSeverity.Warning);
+        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.LegacyNamespaceUsing.IsEnabledByDefault.Should().BeTrue();
+        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.LegacyNamespaceUsing.MessageFormat.ToString().Should().Contain("using");
+    }
 }
