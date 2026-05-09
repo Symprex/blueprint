@@ -330,7 +330,7 @@ Blueprint-specific validators are also available:
 | `PasswordAttribute` | Strong password complexity requirements |
 | `ResourceKeyAttribute` | type/GUID resource key format |
 
-Invalid property references in cross-property validators are caught at build time (BPV001–BPV006).
+Invalid property references in cross-property validators are caught at build time (BPV001–BPV007).
 
 ### 8. Migrate result types
 

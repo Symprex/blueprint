@@ -80,4 +80,16 @@ internal static class ValidationDiagnosticDescriptors
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
         description: "LessThanPropertyAttribute must reference a real operation property so generated validation and runtime behavior stay deterministic.");
+
+    /// <summary>
+    /// Gets the diagnostic emitted when a <c>MustBeGreaterThanOrEqualAttribute</c> references a missing property.
+    /// </summary>
+    public static readonly DiagnosticDescriptor MissingMustBeGreaterThanOrEqualProperty = new(
+        id: "BPV007",
+        title: "MustBeGreaterThanOrEqualAttribute references a missing property",
+        messageFormat: "The property '{0}' referenced by MustBeGreaterThanOrEqualAttribute on '{1}' does not exist on operation '{2}'",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "MustBeGreaterThanOrEqualAttribute must reference a real operation property so generated validation and runtime behavior stay deterministic.");
 }

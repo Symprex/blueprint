@@ -138,6 +138,8 @@ Current validation contributor IDs in active use:
 - `BPV003`: `RequiredIfAttribute` references a property that does not exist on the operation type.
 - `BPV004`: `RequiredIfNotAttribute` references a property that does not exist on the operation type.
 - `BPV005`: `NotAllowedIfAttribute` references a property that does not exist on the operation type.
+- `BPV006`: `LessThanPropertyAttribute` references a property that does not exist on the operation type.
+- `BPV007`: `MustBeGreaterThanOrEqualAttribute` references a property that does not exist on the operation type.
 
 ### Resource event family diagnostics
 
@@ -253,11 +255,24 @@ Current fast-path strategy coverage (in planning order):
 | Compare | `CompareAttribute` | same-type properties, compile-time `BPV001` for missing targets | n/a |
 | GreaterThanProperty | `GreaterThanPropertyAttribute` | same-type numeric/decimal/DateTime including nullable pairs, compile-time `BPV002` | mixed nullable/non-nullable, unsupported types |
 | GreaterThan | `GreaterThanAttribute` | numeric/decimal including nullable, default constructor | customized instances |
+| GreaterThanOrEqualTo | `GreaterThanOrEqualToAttribute` | numeric/decimal including nullable, `int` threshold constructor with optional custom message | unsupported types, named arguments |
 | LessThanProperty | `LessThanPropertyAttribute` | same-type numeric/decimal/DateTime including nullable pairs, compile-time `BPV006` | mixed nullable/non-nullable, unsupported types |
 | LessThan | `LessThanAttribute` | numeric/decimal including nullable, default constructor | customized instances |
+| LessThanOrEqualTo | `LessThanOrEqualToAttribute` | numeric/decimal including nullable, `int` threshold constructor with optional custom message | unsupported types, named arguments |
+| MustBeGreaterThanOrEqual | `MustBeGreaterThanOrEqualAttribute` | same-type numeric/decimal/DateTime/DateTimeOffset including nullable pairs, compile-time `BPV007` | mixed nullable/non-nullable, unsupported types, named arguments |
+| MustBeTrue | `MustBeTrueAttribute` | `bool` properties, optional custom message constructor | non-boolean types, named arguments |
+| InFuture | `InFutureAttribute` | `DateTime`/`DateTimeOffset` including nullable pairs, optional custom message constructor | unsupported temporal types, named arguments |
+| InPast | `InPastAttribute` | `DateTime`/`DateTimeOffset` including nullable pairs, optional custom message constructor | unsupported temporal types, named arguments |
+| NotInFuture | `NotInFutureAttribute` | `DateTime`/`DateTimeOffset` including nullable pairs, optional custom message constructor | unsupported temporal types, named arguments |
+| NotInPast | `NotInPastAttribute` | `DateTime`/`DateTimeOffset` including nullable pairs, optional custom message constructor | unsupported temporal types, named arguments |
+| NotEmptyList | `NotEmptyListAttribute` | arrays and collection shapes with generated `Count`/`Length`, optional custom message constructor | enumerable-only shapes without deterministic count, named arguments |
+| MaxItemsList | `MaxItemsListAttribute` | arrays and collection shapes with generated `Count`/`Length`, required max-items constructor with optional custom message | enumerable-only shapes without deterministic count, named arguments |
 | RequiredIf | `RequiredIfAttribute` | scalar/null dependent values, default constructor, compile-time `BPV003` | arrays, custom messages |
 | RequiredIfNot | `RequiredIfNotAttribute` | scalar/null dependent values, default constructor, compile-time `BPV004` | arrays, custom messages |
 | NotAllowedIf | `NotAllowedIfAttribute` | scalar dependent values, default constructor, compile-time `BPV005` | null dependent values, arrays, custom messages |
+| Password | `PasswordAttribute` | string properties, direct `IsValid` call, constructors with optional custom message/description flag | non-string types, named arguments |
+| ResourceKey | `ResourceKeyAttribute` | string properties, direct `IsValid` call, optional custom message constructor | non-string types, named arguments |
+| UkPostcode | `UkPostcodeAttribute` | string properties, direct `IsValid` call, optional custom message constructor | non-string types, named arguments |
 | AllowedValues | `AllowedValuesAttribute` (.NET 8) | string/bool/int/long/double literal values in single `params` constructor | non-literal values, mixed types |
 | DeniedValues | `DeniedValuesAttribute` (.NET 8) | string/bool/int/long/double literal values in single `params` constructor | non-literal values, mixed types |
 | Length | `LengthAttribute` (.NET 8) | string properties, `Length(int, int)` constructor | non-string types (collections), custom error message |

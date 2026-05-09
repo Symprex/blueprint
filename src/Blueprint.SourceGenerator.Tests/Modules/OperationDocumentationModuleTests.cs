@@ -1,10 +1,15 @@
+using System.Text;
 using Blueprint.SourceGenerator.Generators.Descriptors;
 using FluentAssertions;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 
 namespace Blueprint.SourceGenerator.Tests.Modules;
 
 public class OperationDocumentationModuleTests
 {
+    private const string DescriptorSnapshotsFolder = "..\\Generators\\OperationDescriptor\\Snapshots\\";
+
     [Fact]
     public void When_operation_has_xml_summary_then_descriptor_emits_documentation_feature_data()
     {
@@ -242,5 +247,94 @@ public class OperationDocumentationModuleTests
         descriptorSource.Should().Contain("OperationDocumentationFeatureData");
         descriptorSource.Should().Contain("null,"); // null summary
         descriptorSource.Should().Contain("The thing identifier.");
+    }
+
+    [Fact]
+    public async Task Operation_with_xml_docs_generates_feature_data_in_descriptor()
+    {
+        const string source = """
+            using Blueprint;
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace
+            {
+                [BlueprintAppScan]
+                public partial class TestApp : BlueprintApp { }
+
+                /// <summary>
+                /// Retrieves a documented widget.
+                /// </summary>
+                /// <remarks>
+                /// Includes related metadata for UI rendering.
+                /// </remarks>
+                [RootLink("/widgets/{Id}")]
+                public partial class GetDocumentedWidgetQuery : IQuery<string>
+                {
+                    /// <summary>
+                    /// The widget identifier.
+                    /// </summary>
+                    public string Id { get; set; }
+
+                    /// <summary>
+                    /// The locale used to format the documentation output.
+                    /// </summary>
+                    public string Locale { get; set; }
+
+                    public static Task<string> HandleAsync(GetDocumentedWidgetQuery operation) => Task.FromResult("ok");
+                }
+            }
+            """;
+
+        var compilation = CreateCompilation(source);
+        var driver = TestHelpers.CreateBlueprintSourceGeneratorDriver(new OperationDescriptorSourceGenerator());
+
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var diagnostics);
+
+        diagnostics.Should().BeEmpty();
+        outputCompilation.GetDiagnostics().Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error).Should().BeEmpty();
+
+        var descriptorSource = driver.GetRunResult().Results
+            .Single()
+            .GeneratedSources
+            .Select(static source => source.SourceText.ToString())
+            .Single(static source => source.Contains("GetDocumentedWidgetQueryDescriptor", StringComparison.Ordinal));
+
+        descriptorSource.Should().Contain("OperationDocumentationFeatureData");
+        descriptorSource.Should().Contain("Retrieves a documented widget.");
+        descriptorSource.Should().Contain("Includes related metadata for UI rendering.");
+        descriptorSource.Should().Contain("\"Id\"");
+        descriptorSource.Should().Contain("The widget identifier.");
+        descriptorSource.Should().Contain("\"Locale\"");
+        descriptorSource.Should().Contain("The locale used to format the documentation output.");
+
+        var outputText = new StringBuilder();
+        outputText.AppendLine("GetDocumentedWidgetQueryDescriptor.g.cs:");
+        outputText.AppendLine();
+        outputText.AppendLine(descriptorSource);
+        outputText.AppendLine();
+
+        await Verify(outputText)
+            .UseDirectory(DescriptorSnapshotsFolder);
+    }
+
+    private static CSharpCompilation CreateCompilation(string source)
+    {
+        var parseOptions = new CSharpParseOptions(LanguageVersion.Preview, documentationMode: DocumentationMode.Parse);
+        var syntaxTree = CSharpSyntaxTree.ParseText(source, parseOptions, "Input0.cs");
+        var references = AppDomain.CurrentDomain.GetAssemblies()
+            .Where(static assembly => !assembly.IsDynamic && !string.IsNullOrWhiteSpace(assembly.Location))
+            .Select(static assembly => MetadataReference.CreateFromFile(assembly.Location))
+            .ToList();
+
+        references.Add(MetadataReference.CreateFromFile(typeof(Blueprint.Model.IOperation).Assembly.Location));
+        references.Add(MetadataReference.CreateFromFile(typeof(System.ComponentModel.DataAnnotations.RequiredAttribute).Assembly.Location));
+
+        return CSharpCompilation.Create(
+            assemblyName: "OperationDocumentationModuleTests",
+            syntaxTrees: [syntaxTree],
+            references: references,
+            options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
     }
 }

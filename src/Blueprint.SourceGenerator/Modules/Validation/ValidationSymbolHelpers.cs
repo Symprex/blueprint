@@ -118,6 +118,162 @@ internal static class ValidationSymbolHelpers
     }
 
     /// <summary>
+    /// Checks whether an attribute type is Blueprint's <c>MustBeTrueAttribute</c>.
+    /// </summary>
+    /// <param name="attributeClass">The attribute type to inspect.</param>
+    /// <returns><see langword="true"/> when the attribute is a must-be-true attribute.</returns>
+    public static bool IsMustBeTrueAttribute(INamedTypeSymbol? attributeClass)
+    {
+        return attributeClass is not null
+               && attributeClass.Name == "MustBeTrueAttribute"
+               && attributeClass.ContainingNamespace.ToDisplayString() == "Blueprint.Validation";
+    }
+
+    /// <summary>
+    /// Checks whether an attribute type is Blueprint's <c>InFutureAttribute</c>.
+    /// </summary>
+    /// <param name="attributeClass">The attribute type to inspect.</param>
+    /// <returns><see langword="true"/> when the attribute is an in-future attribute.</returns>
+    public static bool IsInFutureAttribute(INamedTypeSymbol? attributeClass)
+    {
+        return attributeClass is not null
+               && attributeClass.Name == "InFutureAttribute"
+               && attributeClass.ContainingNamespace.ToDisplayString() == "Blueprint.Validation";
+    }
+
+    /// <summary>
+    /// Checks whether an attribute type is Blueprint's <c>InPastAttribute</c>.
+    /// </summary>
+    /// <param name="attributeClass">The attribute type to inspect.</param>
+    /// <returns><see langword="true"/> when the attribute is an in-past attribute.</returns>
+    public static bool IsInPastAttribute(INamedTypeSymbol? attributeClass)
+    {
+        return attributeClass is not null
+               && attributeClass.Name == "InPastAttribute"
+               && attributeClass.ContainingNamespace.ToDisplayString() == "Blueprint.Validation";
+    }
+
+    /// <summary>
+    /// Checks whether an attribute type is Blueprint's <c>NotInFutureAttribute</c>.
+    /// </summary>
+    /// <param name="attributeClass">The attribute type to inspect.</param>
+    /// <returns><see langword="true"/> when the attribute is a not-in-future attribute.</returns>
+    public static bool IsNotInFutureAttribute(INamedTypeSymbol? attributeClass)
+    {
+        return attributeClass is not null
+               && attributeClass.Name == "NotInFutureAttribute"
+               && attributeClass.ContainingNamespace.ToDisplayString() == "Blueprint.Validation";
+    }
+
+    /// <summary>
+    /// Checks whether an attribute type is Blueprint's <c>NotInPastAttribute</c>.
+    /// </summary>
+    /// <param name="attributeClass">The attribute type to inspect.</param>
+    /// <returns><see langword="true"/> when the attribute is a not-in-past attribute.</returns>
+    public static bool IsNotInPastAttribute(INamedTypeSymbol? attributeClass)
+    {
+        return attributeClass is not null
+               && attributeClass.Name == "NotInPastAttribute"
+               && attributeClass.ContainingNamespace.ToDisplayString() == "Blueprint.Validation";
+    }
+
+    /// <summary>
+    /// Checks whether an attribute type is Blueprint's <c>NotEmptyListAttribute</c>.
+    /// </summary>
+    /// <param name="attributeClass">The attribute type to inspect.</param>
+    /// <returns><see langword="true"/> when the attribute is a not-empty-list attribute.</returns>
+    public static bool IsNotEmptyListAttribute(INamedTypeSymbol? attributeClass)
+    {
+        return attributeClass is not null
+               && attributeClass.Name == "NotEmptyListAttribute"
+               && attributeClass.ContainingNamespace.ToDisplayString() == "Blueprint.Validation";
+    }
+
+    /// <summary>
+    /// Checks whether an attribute type is Blueprint's <c>MaxItemsListAttribute</c>.
+    /// </summary>
+    /// <param name="attributeClass">The attribute type to inspect.</param>
+    /// <returns><see langword="true"/> when the attribute is a max-items-list attribute.</returns>
+    public static bool IsMaxItemsListAttribute(INamedTypeSymbol? attributeClass)
+    {
+        return attributeClass is not null
+               && attributeClass.Name == "MaxItemsListAttribute"
+               && attributeClass.ContainingNamespace.ToDisplayString() == "Blueprint.Validation";
+    }
+
+    /// <summary>
+    /// Checks whether an attribute type is Blueprint's <c>GreaterThanOrEqualToAttribute</c>.
+    /// </summary>
+    /// <param name="attributeClass">The attribute type to inspect.</param>
+    /// <returns><see langword="true"/> when the attribute is a greater-than-or-equal-to attribute.</returns>
+    public static bool IsGreaterThanOrEqualToAttribute(INamedTypeSymbol? attributeClass)
+    {
+        return attributeClass is not null
+               && attributeClass.Name == "GreaterThanOrEqualToAttribute"
+               && attributeClass.ContainingNamespace.ToDisplayString() == "Blueprint.Validation";
+    }
+
+    /// <summary>
+    /// Checks whether an attribute type is Blueprint's <c>LessThanOrEqualToAttribute</c>.
+    /// </summary>
+    /// <param name="attributeClass">The attribute type to inspect.</param>
+    /// <returns><see langword="true"/> when the attribute is a less-than-or-equal-to attribute.</returns>
+    public static bool IsLessThanOrEqualToAttribute(INamedTypeSymbol? attributeClass)
+    {
+        return attributeClass is not null
+               && attributeClass.Name == "LessThanOrEqualToAttribute"
+               && attributeClass.ContainingNamespace.ToDisplayString() == "Blueprint.Validation";
+    }
+
+    /// <summary>
+    /// Checks whether an attribute type is Blueprint's <c>MustBeGreaterThanOrEqualAttribute</c>.
+    /// </summary>
+    /// <param name="attributeClass">The attribute type to inspect.</param>
+    /// <returns><see langword="true"/> when the attribute is a must-be-greater-than-or-equal attribute.</returns>
+    public static bool IsMustBeGreaterThanOrEqualAttribute(INamedTypeSymbol? attributeClass)
+    {
+        return attributeClass is not null
+               && attributeClass.Name == "MustBeGreaterThanOrEqualAttribute"
+               && attributeClass.ContainingNamespace.ToDisplayString() == "Blueprint.Validation";
+    }
+
+    /// <summary>
+    /// Checks whether an attribute type is Blueprint's <c>PasswordAttribute</c>.
+    /// </summary>
+    /// <param name="attributeClass">The attribute type to inspect.</param>
+    /// <returns><see langword="true"/> when the attribute is a password attribute.</returns>
+    public static bool IsPasswordAttribute(INamedTypeSymbol? attributeClass)
+    {
+        return attributeClass is not null
+               && attributeClass.Name == "PasswordAttribute"
+               && attributeClass.ContainingNamespace.ToDisplayString() == "Blueprint.Validation";
+    }
+
+    /// <summary>
+    /// Checks whether an attribute type is Blueprint's <c>ResourceKeyAttribute</c>.
+    /// </summary>
+    /// <param name="attributeClass">The attribute type to inspect.</param>
+    /// <returns><see langword="true"/> when the attribute is a resource-key attribute.</returns>
+    public static bool IsResourceKeyAttribute(INamedTypeSymbol? attributeClass)
+    {
+        return attributeClass is not null
+               && attributeClass.Name == "ResourceKeyAttribute"
+               && attributeClass.ContainingNamespace.ToDisplayString() == "Blueprint.Validation";
+    }
+
+    /// <summary>
+    /// Checks whether an attribute type is Blueprint's <c>UkPostcodeAttribute</c>.
+    /// </summary>
+    /// <param name="attributeClass">The attribute type to inspect.</param>
+    /// <returns><see langword="true"/> when the attribute is a UK-postcode attribute.</returns>
+    public static bool IsUkPostcodeAttribute(INamedTypeSymbol? attributeClass)
+    {
+        return attributeClass is not null
+               && attributeClass.Name == "UkPostcodeAttribute"
+               && attributeClass.ContainingNamespace.ToDisplayString() == "Blueprint.Validation";
+    }
+
+    /// <summary>
     /// Checks whether an attribute type is Blueprint's <c>RequiredIfAttribute</c>.
     /// </summary>
     /// <param name="attributeClass">The attribute type to inspect.</param>
@@ -292,6 +448,51 @@ internal static class ValidationSymbolHelpers
     }
 
     /// <summary>
+    /// Returns <see langword="true"/> when the supplied type is <see cref="DateTimeOffset"/>.
+    /// </summary>
+    /// <param name="type">The type to inspect.</param>
+    /// <returns><see langword="true"/> when the type is <see cref="DateTimeOffset"/>.</returns>
+    public static bool IsDateTimeOffsetType(ITypeSymbol type)
+    {
+        return type is INamedTypeSymbol namedType
+               && namedType.Name == nameof(DateTimeOffset)
+               && namedType.ContainingNamespace.ToDisplayString() == "System";
+    }
+
+    /// <summary>
+    /// Tries to build a count expression for a collection-like property shape that can be checked in generated code.
+    /// </summary>
+    /// <param name="type">The property type to inspect.</param>
+    /// <param name="propertyAccess">The generated expression used to read the property value.</param>
+    /// <param name="countExpression">Receives the generated count expression when supported.</param>
+    /// <returns><see langword="true"/> when the property exposes a deterministic count.</returns>
+    public static bool TryGetCollectionCountExpression(ITypeSymbol type, string propertyAccess, out string? countExpression)
+    {
+        if (type is IArrayTypeSymbol)
+        {
+            countExpression = propertyAccess + ".Length";
+            return true;
+        }
+
+        if (HasAccessibleIntCountProperty(type))
+        {
+            countExpression = propertyAccess + ".Count";
+            return true;
+        }
+
+        if (type is INamedTypeSymbol namedType
+            && (namedType.ToDisplayString() == "System.Collections.ICollection"
+                || namedType.AllInterfaces.Any(static candidate => candidate.ToDisplayString() == "System.Collections.ICollection")))
+        {
+            countExpression = $"((global::System.Collections.ICollection){propertyAccess}).Count";
+            return true;
+        }
+
+        countExpression = null;
+        return false;
+    }
+
+    /// <summary>
     /// Checks whether a type is <see cref="Nullable{T}" />.
     /// </summary>
     /// <param name="type">The type to inspect.</param>
@@ -411,6 +612,14 @@ internal static class ValidationSymbolHelpers
         }
 
         return false;
+    }
+
+    private static bool HasAccessibleIntCountProperty(ITypeSymbol type)
+    {
+        return type.GetMembers("Count")
+            .OfType<IPropertySymbol>()
+            .Any(static property => property is { Parameters.Length: 0, DeclaredAccessibility: Accessibility.Public }
+                                    && property.Type.SpecialType == SpecialType.System_Int32);
     }
 
     private static ITypeSymbol? GetGenericListElementType(INamedTypeSymbol type)

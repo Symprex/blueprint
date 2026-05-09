@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Concurrent;
 
 using Blueprint.Runtime.Exec;
 
@@ -16,6 +17,12 @@ public static class ResourceExpansionRuntime
 {
     private const string ExpandQueryStringParameterName = "expand";
     private const string ExpandArrayQueryStringParameterName = "expand[]";
+
+    /// <summary>
+    /// Caches which <see cref="IResourceExpander"/> handles each expandable resource type so
+    /// subsequent requests avoid the O(n) scan of all registered expanders.
+    /// </summary>
+    private static readonly ConcurrentDictionary<Type, Type?> _expanderTypeCache = new();
 
     /// <summary>
     /// Attempts to expand an <c>Expandable&lt;T&gt;</c> property if the client requested it
@@ -96,15 +103,44 @@ public static class ResourceExpansionRuntime
         Type expandableResourceType,
         bool isEnumerable)
     {
+        // Fast path: if we've already determined no expander handles this type, skip immediately
+        if (_expanderTypeCache.TryGetValue(expandableResourceType, out var cachedExpanderType) && cachedExpanderType is null)
+        {
+            return;
+        }
+
         var expanders = context.ServiceProvider.GetServices<IResourceExpander>();
         IResourceExpander? matchingExpander = null;
 
-        foreach (var expander in expanders)
+        if (cachedExpanderType is not null)
         {
-            if (expander.CanExpand(expandableResourceType))
+            // We know which concrete type handles this resource — find it directly
+            foreach (var expander in expanders)
             {
-                matchingExpander = expander;
-                break;
+                if (expander.GetType() == cachedExpanderType)
+                {
+                    matchingExpander = expander;
+                    break;
+                }
+            }
+        }
+        else
+        {
+            // First encounter: scan all expanders by capability and cache the winning type
+            foreach (var expander in expanders)
+            {
+                if (expander.CanExpand(expandableResourceType))
+                {
+                    matchingExpander = expander;
+                    _expanderTypeCache.TryAdd(expandableResourceType, expander.GetType());
+                    break;
+                }
+            }
+
+            if (matchingExpander is null)
+            {
+                _expanderTypeCache.TryAdd(expandableResourceType, null);
+                return;
             }
         }
 

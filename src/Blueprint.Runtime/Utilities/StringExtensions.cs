@@ -174,7 +174,7 @@ public static partial class StringExtensions
             return word;
         }
 
-        return string.Concat(word[0].ToString().ToLower(), word.AsSpan(1));
+        return string.Concat(char.ToLowerInvariant(word[0]).ToString(), word.AsSpan(1));
     }
 
     /// <summary>

@@ -70,11 +70,7 @@ public sealed class TaskExecutor
         this.RestoreContext(envelope.Headers, scope.ServiceProvider);
 
         var operationType = envelope.Task.GetType();
-        var descriptor = this._executor.App.Operations
-            .FirstOrDefault(d => d.OperationType == operationType)
-            ?? throw new InvalidOperationException(
-                $"No operation descriptor found for background task type '{operationType.FullName}'. " +
-                $"Ensure the task is registered in the BlueprintApp.");
+        var descriptor = this._executor.App.FindOperation(operationType);
 
         var context = new ApiOperationContext(
             scope.ServiceProvider,

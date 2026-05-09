@@ -231,6 +231,29 @@ public static class TestHelpers
     }
 
     /// <summary>
+    /// Creates the standard Roslyn generator driver used by Blueprint tests so manual driver-based scenarios can share
+    /// the same parse options and incremental-tracking defaults as the main harness.
+    /// </summary>
+    /// <param name="generator">The incremental generator instance to execute.</param>
+    /// <param name="parseOptions">Optional parse options; when omitted the shared preview-language defaults are used.</param>
+    /// <returns>A generator driver configured with Blueprint's default incremental tracking behaviour.</returns>
+    public static GeneratorDriver CreateBlueprintSourceGeneratorDriver(
+        IIncrementalGenerator generator,
+        CSharpParseOptions? parseOptions = null)
+    {
+        ArgumentNullException.ThrowIfNull(generator);
+
+        var driverOptions = new GeneratorDriverOptions(
+            disabledOutputs: IncrementalGeneratorOutputKind.None,
+            trackIncrementalGeneratorSteps: true);
+
+        return CSharpGeneratorDriver.Create(
+            [generator.AsSourceGenerator()],
+            driverOptions: driverOptions,
+            parseOptions: parseOptions ?? new CSharpParseOptions(LanguageVersion.Preview));
+    }
+
+    /// <summary>
     /// Executes several tracked generators against the same compilation so tests can observe how descriptor, app, and
     /// pipeline emitters behave together from one baseline input set.
     /// </summary>

@@ -83,6 +83,7 @@ For detailed explanations, see [compile-time-validation.md](compile-time-validat
 | BPV004 | Error | `RequiredIfNotAttribute` references a missing property |
 | BPV005 | Error | `NotAllowedIfAttribute` references a missing property |
 | BPV006 | Error | `LessThanPropertyAttribute` references a missing property |
+| BPV007 | Error | `MustBeGreaterThanOrEqualAttribute` references a missing property |
 
 ## Property ownership and binding (BPPO)
 
