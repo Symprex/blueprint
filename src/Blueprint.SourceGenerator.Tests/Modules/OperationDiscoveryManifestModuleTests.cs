@@ -373,4 +373,78 @@ public class OperationDiscoveryManifestModuleTests
             context.AddMetadata(new HostExposureRegistration(hostName));
         }
     }
+
+    [Fact]
+    public void When_operation_has_unexposed_attribute_then_descriptor_sets_IsExposed_false()
+    {
+        var compilation = CreateCompilation(
+            """
+            using Blueprint;
+            using Blueprint.Model;
+
+            namespace TestNamespace;
+
+            [UnexposedOperation]
+            public partial class InternalCommand : ICommand<string>
+            {
+            }
+            """);
+        var operation = OperationModel.Create(compilation.GetTypeByMetadataName("TestNamespace.InternalCommand")!);
+        var plan = new DescriptorPlan(operation);
+        var context = new DescriptorContributorContext(operation, plan, new CompilationOperationLookup(compilation));
+        var module = new OperationDiscoveryManifestModule();
+
+        module.ContributeToDescriptor(context);
+
+        var generated = RenderDescriptor(plan);
+
+        generated.Should().Contain("this.IsExposed = false;");
+    }
+
+    [Fact]
+    public void When_operation_is_tasks_only_then_descriptor_sets_IsExposed_false()
+    {
+        var compilation = CreateCompilation(
+            """
+            using Blueprint.Model;
+            using Blueprint.Tasks;
+
+            namespace TestNamespace;
+
+            public partial class SendEmailTask : IBackgroundTask
+            {
+            }
+            """);
+        var operation = OperationModel.Create(compilation.GetTypeByMetadataName("TestNamespace.SendEmailTask")!);
+        var plan = new DescriptorPlan(operation);
+        var context = new DescriptorContributorContext(operation, plan, new CompilationOperationLookup(compilation));
+        var module = new OperationDiscoveryManifestModule();
+
+        // Simulate TasksHostModule having run first by adding tasks host exposure
+        context.AddMetadata(HostExposureRegistration.Tasks);
+
+        module.ContributeToDescriptor(context);
+
+        var generated = RenderDescriptor(plan);
+
+        generated.Should().Contain("this.IsExposed = false;");
+    }
+
+    [Fact]
+    public void When_operation_is_http_exposed_then_descriptor_does_not_set_IsExposed_false()
+    {
+        var compilation = CreateCompilation();
+        var operation = OperationModel.Create(compilation.GetTypeByMetadataName("TestNamespace.ListUsersQuery")!);
+        var plan = new DescriptorPlan(operation);
+        var context = new DescriptorContributorContext(operation, plan, new CompilationOperationLookup(compilation));
+        var module = new OperationDiscoveryManifestModule();
+
+        context.AddMetadata(HostExposureRegistration.Http);
+
+        module.ContributeToDescriptor(context);
+
+        var generated = RenderDescriptor(plan);
+
+        generated.Should().NotContain("this.IsExposed = false;");
+    }
 }

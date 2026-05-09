@@ -45,6 +45,12 @@ public sealed class OperationDiscoveryManifestModule : IBlueprintSourceGenerator
         context.AddRenderStep(w =>
             w.AppendLine($"this.SetFeatureData(new global::Blueprint.Model.OperationDiscoveryFeatureData({RenderStringLiteral(featureData.Kind)}, {RenderStringLiteral(featureData.Namespace)}, {RenderStringLiteral(featureData.TypeName)}));"));
 
+        // Operations marked with [UnexposedOperation] or exposed only to the tasks host are not publicly visible.
+        if (HasUnexposedOperationAttribute(typeSymbol) || IsTasksOnlyExposure(hostNames))
+        {
+            context.AddRenderStep(static w => w.AppendLine("this.IsExposed = false;"));
+        }
+
         if (hostNames.Length == 0)
         {
             return;
@@ -112,6 +118,19 @@ public sealed class OperationDiscoveryManifestModule : IBlueprintSourceGenerator
             .Distinct(StringComparer.Ordinal)
             .OrderBy(static hostName => hostName, StringComparer.Ordinal)
             .ToArray();
+    }
+
+    private static bool HasUnexposedOperationAttribute(INamedTypeSymbol typeSymbol)
+    {
+        return typeSymbol.GetAttributes().Any(static attr =>
+            attr.AttributeClass?.Name is "UnexposedOperationAttribute" or "UnexposedOperation"
+            && attr.AttributeClass.ContainingNamespace.ToDisplayString() == "Blueprint");
+    }
+
+    private static bool IsTasksOnlyExposure(string[] hostNames)
+    {
+        return hostNames.Length > 0
+               && hostNames.All(static h => string.Equals(h, "tasks", StringComparison.Ordinal));
     }
 
     private static string RenderStringLiteral(string value)
