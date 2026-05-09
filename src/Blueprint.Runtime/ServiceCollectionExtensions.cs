@@ -412,4 +412,20 @@ public sealed class BlueprintServiceBuilder
         this.Services.Configure(configure);
         return this;
     }
+
+    /// <summary>
+    /// Registers a resource expander that populates <c>Expandable&lt;T&gt;</c> properties
+    /// when the client requests <c>?expand=PropertyName</c> or the property is marked
+    /// <c>[AlwaysExpand]</c>. Multiple expanders can be registered; the generated expansion
+    /// pipeline calls <see cref="Blueprint.Runtime.Expansion.IResourceExpander.CanExpand"/>
+    /// to find the matching expander for each expandable resource type.
+    /// </summary>
+    /// <typeparam name="T">The <see cref="Blueprint.Runtime.Expansion.IResourceExpander"/> implementation type.</typeparam>
+    /// <returns>This builder for chaining.</returns>
+    public BlueprintServiceBuilder AddResourceExpander<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] T>()
+        where T : class, Blueprint.Runtime.Expansion.IResourceExpander
+    {
+        this.Services.AddSingleton<Blueprint.Runtime.Expansion.IResourceExpander, T>();
+        return this;
+    }
 }

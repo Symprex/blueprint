@@ -2181,6 +2181,9 @@
           "Object": {
             "type": "string"
           },
+          "Owner": {
+            "type": "object"
+          },
           "PlainTextSource": {
             "type": "string"
           },

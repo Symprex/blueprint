@@ -19,12 +19,14 @@ public partial class TemplateApiResource : ApiResource
     /// <param name="name">The display name of this template.</param>
     /// <param name="htmlSource">The HTML source of this template</param>
     /// <param name="plainTextSource">The plain text source of this template.</param>
-    public TemplateApiResource(string id, string name, string htmlSource, string plainTextSource)
+    /// <param name="ownerId">The identifier of the template owner.</param>
+    public TemplateApiResource(string id, string name, string htmlSource, string plainTextSource, string ownerId = "owner-1")
     {
         this.Id = id;
         this.Name = name;
         this.HtmlSource = htmlSource;
         this.PlainTextSource = plainTextSource;
+        this.Owner = new Expandable<OwnerApiResource>(ownerId);
     }
 
     /// <summary>
@@ -51,4 +53,11 @@ public partial class TemplateApiResource : ApiResource
     /// Gets or sets a value indicating whether the template is archived (soft-deleted).
     /// </summary>
     public bool IsArchived { get; set; }
+
+    /// <summary>
+    /// The owner of this template. Expandable via <c>?expand=Owner</c> query parameter,
+    /// which causes the generated pipeline to resolve an <c>IResourceExpander</c> from DI
+    /// and populate <see cref="Expandable{T}.Value"/> with the full <see cref="OwnerApiResource"/>.
+    /// </summary>
+    public Expandable<OwnerApiResource>? Owner { get; set; }
 }

@@ -65,6 +65,11 @@ public class Startup
             // (like Signature365's SetTenantMiddleware at Authentication stage)
             blueprint.AddPropertyPopulator<TenantPropertyPopulator>();
 
+            // Resource expansion: populate Expandable<OwnerApiResource> when client
+            // requests ?expand=Owner (like Signature365's AzureAdGroupApiResourceExpander).
+            // The generated pipeline discovers Expandable<T> properties at compile time.
+            blueprint.AddResourceExpander<OwnerResourceExpander>();
+
             blueprint.ConfigureHttp(http =>
             {
                 // Expose full exception details in non-production environments for easier debugging.
