@@ -67,6 +67,8 @@ public sealed class TaskExecutor
 
         using var scope = this._rootServiceProvider.CreateScope();
 
+        this.RestoreContext(envelope.Headers, scope.ServiceProvider);
+
         var operationType = envelope.Task.GetType();
         var descriptor = this._executor.App.Operations
             .FirstOrDefault(d => d.OperationType == operationType)
@@ -113,6 +115,42 @@ public sealed class TaskExecutor
         }
 
         return default;
+    }
+
+    private void RestoreContext(IDictionary<string, string>? headers, IServiceProvider scopedServiceProvider)
+    {
+        if (headers is null or { Count: 0 })
+        {
+            return;
+        }
+
+        var providers = scopedServiceProvider.GetService<IEnumerable<IBackgroundTaskContextProvider>>();
+
+        if (providers is null)
+        {
+            return;
+        }
+
+        // Extract context headers (prefixed with "ctx:") into a clean dictionary for providers.
+        var contextData = new Dictionary<string, string>();
+
+        foreach (var (key, value) in headers)
+        {
+            if (key.StartsWith(ContextCapturingPreprocessor.ContextHeaderPrefix, StringComparison.Ordinal))
+            {
+                contextData[key[ContextCapturingPreprocessor.ContextHeaderPrefix.Length..]] = value;
+            }
+        }
+
+        if (contextData.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var provider in providers)
+        {
+            provider.RestoreContext(contextData, scopedServiceProvider);
+        }
     }
 }
 

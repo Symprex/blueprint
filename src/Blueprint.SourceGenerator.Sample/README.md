@@ -76,11 +76,14 @@ those libraries as core Blueprint dependencies:
 
 | Seam | Sample Implementation | Production Equivalent |
 |------|----------------------|----------------------|
-| **Persistence** | `InMemoryUnitOfWork` | Marten `IDocumentSession`, EF Core `DbContext` |
-| **Messaging** | `InMemoryMessageOutbox` (`IMessageOutbox`) | Rebus `RebusTransactionScope` with outbox |
+| **Persistence** | `SampleMartenUnitOfWork` | Marten `IDocumentSession.SaveChangesAsync()` |
+| **Messaging** | `SampleRebusMessageOutbox` (`IMessageOutbox`) | Rebus `RebusTransactionScope` with outbox |
 | **Multi-tenancy** | `AsyncLocalTenantAccessor` | Signature365's `ICurrentTenantAccessor` |
 | **Property population** | `TenantPropertyPopulator` | Signature365's `SetTenantMiddleware` |
-| **Task scheduling** | `InProcessBackgroundTaskScheduler` | Hangfire `BackgroundJob.Enqueue` |
+| **Task scheduling** | `SampleHangfireTaskProvider` (`IBackgroundTaskScheduleProvider`) | Hangfire `IBackgroundJobClient.Create()` |
+| **Task execution** | `TaskExecutor` (built-in) | Hangfire `HangfireTaskExecutor` entry point |
+| **Trace propagation** | `TraceContextPreprocessor` (built-in) | W3C traceparent/tracestate injection |
+| **Queue routing** | `[Queue("name")]` attribute | Hangfire named queues |
 | **Auditing** | `LoggingAuditSink` | Database or event-store audit sink |
 | **Resource events** | `LoggingResourceEventAuditSink` | Event-bus or audit-store sink |
 | **Authorization** | `SampleResourceAuthorizationProvider` | Claims/scope-based ownership checks |
@@ -127,8 +130,9 @@ services.AddBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>(bluepri
     blueprint.AddAuditSink<SampleAuditSink>();
     blueprint.AddResourceEventAuditSink<SampleResourceEventAuditSink>();
     blueprint.AddResourceAuthorizationProvider<SampleResourceAuthorizationProvider>();
-    blueprint.AddBackgroundTaskScheduler<InProcessBackgroundTaskScheduler>();
-    blueprint.AddUnitOfWork<InMemoryUnitOfWork>();
+    blueprint.AddBackgroundTaskScheduleProvider<SampleHangfireTaskProvider>();
+    blueprint.AddUnitOfWork<SampleMartenUnitOfWork>();
+    blueprint.AddMessageOutbox<SampleRebusMessageOutbox>();
     blueprint.AddPropertyPopulator<TenantPropertyPopulator>();
     blueprint.ConfigureHttp(options => options.PublicHost = "https://api.example.com");
 });

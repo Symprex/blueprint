@@ -56,4 +56,45 @@ public class BlueprintAppExecutor
     {
         return this.GetPipeline(context.Descriptor.OperationType).ExecuteAsync(context);
     }
+
+    /// <summary>
+    /// Creates a new DI scope and executes the given operation through the generated pipeline.
+    /// This is the equivalent of legacy Blueprint's <c>IApiOperationExecutor.ExecuteWithNewScopeAsync</c>
+    /// and is used for programmatic operation dispatch from CLI commands, nested handler calls, or tests.
+    /// </summary>
+    /// <param name="operation">The operation instance to execute.</param>
+    /// <param name="serviceProvider">
+    /// The service provider to create a scope from. Typically the root provider or a parent scope's provider.
+    /// </param>
+    /// <param name="cancellationToken">Cancellation token to abort execution.</param>
+    /// <returns>The result produced by the resolved pipeline.</returns>
+    /// <exception cref="InvalidOperationException">If no descriptor is registered for the operation type.</exception>
+    public async Task<OperationResult> ExecuteWithNewScopeAsync(
+        IOperation operation,
+        IServiceProvider serviceProvider,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+        ArgumentNullException.ThrowIfNull(serviceProvider);
+
+        var operationType = operation.GetType();
+        var descriptor = this.App.Operations
+            .FirstOrDefault(d => d.OperationType == operationType)
+            ?? throw new InvalidOperationException(
+                $"No operation descriptor found for type '{operationType.FullName}'. " +
+                $"Ensure the operation is registered in the BlueprintApp.");
+
+        using var scope = serviceProvider.CreateScope();
+
+        var context = new ApiOperationContext(
+            scope.ServiceProvider,
+            this.App,
+            descriptor,
+            cancellationToken)
+        {
+            Operation = operation,
+        };
+
+        return await this.ExecuteAsync(context);
+    }
 }

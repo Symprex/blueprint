@@ -136,9 +136,27 @@ public sealed class BlueprintServiceBuilder
         where T : class, Blueprint.Tasks.IBackgroundTaskScheduleProvider
     {
         this.Services.AddSingleton<Blueprint.Tasks.IBackgroundTaskScheduleProvider, T>();
-        this.Services.TryAddSingleton<Blueprint.Tasks.IBackgroundTaskPreprocessor, Blueprint.Runtime.Tasks.TraceContextPreprocessor>();
         this.Services.TryAddScoped<Blueprint.Tasks.IBackgroundTaskScheduler, Blueprint.Runtime.Tasks.BackgroundTaskScheduler>();
         this.Services.TryAddSingleton<Blueprint.Runtime.Tasks.TaskExecutor>();
+
+        // Register both preprocessors. Using Add (not TryAdd) because IEnumerable<IBackgroundTaskPreprocessor>
+        // resolves all registrations — trace context and ambient context capture should both run.
+        this.Services.TryAddEnumerable(ServiceDescriptor.Singleton<Blueprint.Tasks.IBackgroundTaskPreprocessor, Blueprint.Runtime.Tasks.TraceContextPreprocessor>());
+        this.Services.TryAddEnumerable(ServiceDescriptor.Singleton<Blueprint.Tasks.IBackgroundTaskPreprocessor, Blueprint.Runtime.Tasks.ContextCapturingPreprocessor>());
+        return this;
+    }
+
+    /// <summary>
+    /// Registers a background task context provider that captures ambient context (e.g., tenant ID,
+    /// user ID, correlation ID) when tasks are scheduled and restores it when they execute.
+    /// Multiple providers are supported and all will be called during capture and restore.
+    /// </summary>
+    /// <typeparam name="T">The <see cref="Blueprint.Tasks.IBackgroundTaskContextProvider"/> implementation type.</typeparam>
+    /// <returns>This builder for chaining.</returns>
+    public BlueprintServiceBuilder AddBackgroundTaskContextProvider<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] T>()
+        where T : class, Blueprint.Tasks.IBackgroundTaskContextProvider
+    {
+        this.Services.AddSingleton<Blueprint.Tasks.IBackgroundTaskContextProvider, T>();
         return this;
     }
 
@@ -261,6 +279,18 @@ public sealed class BlueprintServiceBuilder
         where T : class, Blueprint.Tasks.IRecurringTaskProvider
     {
         this.Services.AddSingleton<Blueprint.Tasks.IRecurringTaskProvider, T>();
+        return this;
+    }
+
+    /// <summary>
+    /// Configures background task infrastructure options such as the default queue name
+    /// and retry count. Providers read these from <c>IOptions&lt;BlueprintTaskOptions&gt;</c>.
+    /// </summary>
+    /// <param name="configure">Action to configure task options.</param>
+    /// <returns>This builder for chaining.</returns>
+    public BlueprintServiceBuilder ConfigureTasks(Action<Blueprint.Tasks.BlueprintTaskOptions> configure)
+    {
+        this.Services.Configure(configure);
         return this;
     }
 

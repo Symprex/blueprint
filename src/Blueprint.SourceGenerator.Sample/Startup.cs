@@ -34,6 +34,7 @@ public class Startup
             blueprint.AddResourceEventAuditSink<LoggingResourceEventAuditSink>();
             blueprint.AddResourceAuthorizationProvider<SampleResourceAuthorizationProvider>();
             blueprint.AddBackgroundTaskScheduleProvider<SampleHangfireTaskProvider>();
+            blueprint.AddBackgroundTaskContextProvider<SampleTenantContextProvider>();
             blueprint.AddUnitOfWork<SampleMartenUnitOfWork>();
             blueprint.AddMessageOutbox<SampleRebusMessageOutbox>();
 
