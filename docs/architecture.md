@@ -152,6 +152,8 @@ The important architectural rule is that runtime code consumes generated knowled
 | `ForbiddenResult` | 403 | None | Permission denied |
 | `BindingFailureResult` | 400 | None | Request binding failed |
 | `UnsupportedMediaTypeResult` | 415 | None | Wrong content type |
+| `StatusCodeResult.*` | Various | None | Bodyless status code singletons (200, 201, 202, 204, 400, 501, 503) |
+| `NotModifiedResult<T>` | 304 | None | Conditional request matched (ETag/If-None-Match via `ETagger`) |
 
 ## Modules are the extension seam
 
@@ -177,7 +179,7 @@ A module typically implements one or two contributors. For example:
 - `AuthenticationModule` implements `IDescriptorContributor` (projects auth metadata) and `IPipelineContributor` (renders identity checks)
 - `OperationDiscoveryManifestModule` implements `IDebugManifestContributor` (emits per-operation discovery entries)
 
-The repository currently has ~39 modules covering validation, persistence, auditing, authentication, authorization, performance metrics, link generation, resource events, property ownership, OpenAPI metadata, debug manifests, and host dispatch.
+The repository currently has 43 modules covering validation, persistence, auditing, authentication, authorization, performance metrics, link generation, resource events, property ownership, background tasks, messaging, OpenAPI metadata, debug manifests, and host dispatch.
 
 If a new feature needs compile-time metadata or diagnostics, adding or extending a module is usually the right place to start.
 
