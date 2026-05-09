@@ -33,6 +33,10 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<TApp>();
         services.AddSingleton<TExec>();
 
+        // Default link generation infrastructure
+        services.TryAddScoped<Blueprint.Http.IApiLinkGenerator, Blueprint.Http.ApiLinkGenerator>();
+        services.TryAddScoped<Blueprint.Http.IResourceLinkGenerator, Blueprint.Http.EntityOperationResourceLinkGenerator>();
+
         var builder = new BlueprintServiceBuilder(services);
         configure?.Invoke(builder);
 
@@ -212,7 +216,7 @@ public sealed class BlueprintServiceBuilder
     public BlueprintServiceBuilder AddResourceLinkGenerator<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] T>()
         where T : class, Blueprint.Http.IResourceLinkGenerator
     {
-        this.Services.AddSingleton<Blueprint.Http.IResourceLinkGenerator, T>();
+        this.Services.AddScoped<Blueprint.Http.IResourceLinkGenerator, T>();
         return this;
     }
 
