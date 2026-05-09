@@ -33,9 +33,9 @@ public class Startup
             blueprint.AddAuditSink<LoggingAuditSink>();
             blueprint.AddResourceEventAuditSink<LoggingResourceEventAuditSink>();
             blueprint.AddResourceAuthorizationProvider<SampleResourceAuthorizationProvider>();
-            blueprint.AddBackgroundTaskScheduler<InProcessBackgroundTaskScheduler>();
-            blueprint.AddUnitOfWork<InMemoryUnitOfWork>();
-            blueprint.AddMessageOutbox<InMemoryMessageOutbox>();
+            blueprint.AddBackgroundTaskScheduleProvider<SampleHangfireTaskProvider>();
+            blueprint.AddUnitOfWork<SampleMartenUnitOfWork>();
+            blueprint.AddMessageOutbox<SampleRebusMessageOutbox>();
 
             // User context: converts ClaimsIdentity → IUserAuthorisationContext,
             // making user/account info available to authorisers and handler code

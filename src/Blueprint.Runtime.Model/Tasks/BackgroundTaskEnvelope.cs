@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Text.Json.Serialization;
 using JetBrains.Annotations;
 
@@ -33,4 +34,14 @@ public sealed class BackgroundTaskEnvelope
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IDictionary<string, string>? Headers { get; set; }
+
+    /// <summary>
+    /// Gets the queue name specified by the <see cref="QueueAttribute"/> on the task type,
+    /// or <c>null</c> if no queue is explicitly specified (provider uses its default).
+    /// </summary>
+    /// <returns>The queue name, or <c>null</c> for the default queue.</returns>
+    public string? GetQueueName()
+    {
+        return this.Task.GetType().GetCustomAttribute<QueueAttribute>()?.Name;
+    }
 }
