@@ -824,6 +824,55 @@ The proven recipe for companion generators:
 
 See `src/Blueprint.SourceGenerator.Tests/Modules/ConsumerModuleCompositionTests.cs` for complete integration proofs covering single-module, dual-module, and host-partitioning scenarios.
 
+## Source-generation optimizations vs. legacy
+
+The new Blueprint stack moves substantial runtime work to compile-time code generation.
+This section documents what has been optimized and what remains runtime by design.
+
+### What is source-generated (zero reflection at runtime)
+
+| Area | Legacy (runtime) | New (compile-time) |
+|------|------------------|--------------------|
+| Pipeline construction | Middleware chain built via reflection at startup | Per-operation `IOperationExecutorPipeline` class generated at build |
+| Handler discovery | Assembly scanning + `MethodInfo` resolution | Static `HandleAsync` call inlined in generated pipeline |
+| Validation | `DataAnnotations` via reflection walker | Generated inline property checks |
+| Resource key expansion | `Regex.Replace` + `GetProperty().GetValue()` per request | String interpolation with direct property access (`operation.TenantId`) |
+| Claims template tokens | `Regex` parsing at every authorization check | `$"Tenant/{operation.TenantId}"` in generated code |
+| Self-link URLs | Runtime URL construction via `UriTemplate` | Inline `$"/resources/{resource.Id}"` in generated pipeline |
+| Compiled URL builders | Not available | Lambda `static (obj) => { ... }` stored on `ApiOperationLink` |
+| OpenAPI document | NSwag runtime reflection | Compile-time schema generation from operation types |
+| Operation descriptors | Runtime `ApiOperationDescriptor` assembly scan | Generated `static Configure()` methods per operation |
+| Resource event IDs | `typeof(T).Name + ".created"` string at runtime | `const string EventId` in generated event records |
+| Property ownership | Runtime `SetProperty` via reflection | Generated inline `operation.Property = value` in pipeline |
+| Resource expansion discovery | Runtime property-walker via reflection | Compile-time `Expandable<T>` property discovery |
+
+### What remains runtime (by design)
+
+| Area | Reason |
+|------|--------|
+| Authorization checks (`CanShowLinkAsync`) | Depend on current user's claims and context |
+| `IApiAuthoriser` / `IOperationAuthoriser` | Business-rule authorizers are DI-resolved by design |
+| `IResourceKeyExpander` | Hierarchical key expansion depends on runtime data |
+| HATEOAS link population (non-self) | Auth-gated link visibility requires runtime user context |
+| `IUnitOfWork.SaveChangesAsync` | Database persistence is inherently runtime |
+| `IMessageOutbox.CommitAsync` | Message bus interaction is runtime |
+| `IAuditSink.RecordAsync` | Audit recording targets runtime sinks |
+| `IResourceExpander.ExpandAsync` | Lazy-loaded data depends on runtime queries |
+
+### Diagnostic coverage (compile-time validation)
+
+The source-generator emits diagnostics that catch configuration errors at build time
+rather than runtime:
+
+| ID | What it catches |
+|----|-----------------|
+| BP001–BP004 | Invalid operation class structure (not partial, missing handler, etc.) |
+| BPLG001–004 | Link format errors, missing URL placeholders, duplicate URLs |
+| BPAU003–009 | Authorization conflicts (`[Resource]` + `[AllowAnonymous]`, missing template properties) |
+| BPRE001–006 | Resource event family shape errors |
+| BPOW001–002 | Property ownership route placeholder mismatches |
+| BPMIG001–200 | Migration diagnostics for legacy patterns |
+
 ## Full migration example: Signature365-style service
 
 This shows the complete before/after for a typical Signature365 service startup.
