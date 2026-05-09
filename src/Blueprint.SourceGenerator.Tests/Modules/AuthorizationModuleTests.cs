@@ -79,6 +79,37 @@ public class AuthorizationModuleTests
     }
 
     [Fact]
+    public void When_operation_has_Resource_with_template_then_descriptor_projects_scope_pair_with_template()
+    {
+        var result = CompileDescriptor(
+            """
+            [RootLink("/tenants/{TenantId}/templates/{Id}")]
+            [Resource("template", "write", "/Tenants/{Auth:AccountId}/Templates/{Id}")]
+            public partial class UpdateTemplateCommand : ICommand<string>
+            {
+                public string TenantId { get; set; }
+                public string Id { get; set; }
+
+                public static Task<string> HandleAsync(UpdateTemplateCommand operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var descriptorSource = result.Output
+            .Select(static t => t.ToString())
+            .FirstOrDefault(static s => s.Contains("UpdateTemplateCommandDescriptor"));
+
+        descriptorSource.Should().NotBeNull();
+        descriptorSource!.Should().Contain("\"template\"");
+        descriptorSource.Should().Contain("\"write\"");
+        descriptorSource.Should().Contain("/Tenants/{Auth:AccountId}/Templates/{Id}");
+    }
+
+    [Fact]
     public void When_Resource_with_AllowAnonymous_then_reports_BPAU003_diagnostic()
     {
         var result = CompileDescriptor(
