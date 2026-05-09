@@ -928,22 +928,80 @@ public class Startup
 
 ### ResourceCreated / ResourceUpdated / ResourceDeleted
 
-The `ResourceCreated<T>`, `ResourceUpdated<T>`, and `ResourceDeleted<T>` convenience types **are retained** in the source-generated Blueprint. They provide:
+The `ResourceCreated<T>`, `ResourceUpdated<T>`, and `ResourceDeleted<T>` convenience types are
+now **deprecated** in favor of the source-generated `[ResourceEventFamily]` pattern (see
+[Migrating from ResourceCreated/Updated/Deleted](#migrating-from-resourcecreatedupdateddeleted-convenience-types)
+below). They still work but will produce `[Obsolete]` warnings.
 
-- **Correct HTTP semantics** — 201 for Created, 200 for Updated, 200/204 for Deleted
-- **Conventional event IDs** — auto-generated from `resource:verb` format
-- **HATEOAS link population** — links are attached to the resource content automatically
+## Consumer integration seams
 
-These types extend `ResourceEventResult` and work seamlessly with the generated pipeline. No migration action needed.
+Blueprint provides clean interfaces for third-party infrastructure integration. These replace
+the legacy middleware-builder pattern with DI-resolved contracts that the generated pipeline
+calls at the correct stage.
+
+### Hangfire (background task scheduling)
+
+| Legacy | New |
+|--------|-----|
+| `HangfireBackgroundTaskScheduleProvider` | Implement `IBackgroundTaskScheduleProvider` |
+| `HangfireRecurringTaskProvider` | Implement `IRecurringTaskScheduler` |
+| `BlueprintTasksBuilderExtensions.UseHangfire()` | `blueprint.AddBackgroundTaskScheduleProvider<T>()` |
 
 ```csharp
-// Both legacy and new — unchanged handler return type
-public Task<ResourceUpdated<TemplateResource>> HandleAsync(UpdateTemplate command)
-{
-    // ... update logic ...
-    return new ResourceUpdated<TemplateResource>(resource);
-}
+// Register in startup:
+blueprint.AddBackgroundTaskScheduleProvider<HangfireTaskProvider>();
+blueprint.AddRecurringTaskScheduler<HangfireRecurringTasks>();
+
+// The provider receives BackgroundTaskEnvelope with W3C traceparent headers
+// for distributed trace correlation across async boundaries.
 ```
+
+### Rebus (transactional outbox)
+
+| Legacy | New |
+|--------|-----|
+| `StartRebusTransactionScopeMiddleware` | Implement `IMessageOutbox` |
+| `CommitRebusTransactionScopeMiddleware` | (automatic — generated pipeline calls `CommitAsync`) |
+
+```csharp
+// Register in startup:
+blueprint.AddMessageOutbox<RebusMessageOutbox>();
+
+// The generated pipeline calls CommitAsync() in PostExecution stage
+// only on handler success, after unit-of-work save. If handler fails,
+// the outbox is never committed and messages are discarded.
+```
+
+### Marten (document store persistence)
+
+| Legacy | New |
+|--------|-----|
+| `SaveMartenChangesMiddleware` | Implement `IUnitOfWork` |
+| `UseMartenAsOutboxMiddleware` | Combine with `IMessageOutbox` above |
+
+```csharp
+// Register in startup:
+blueprint.AddUnitOfWork<MartenUnitOfWork>();
+
+// The generated pipeline calls SaveChangesAsync() after successful
+// command execution, before background task flush. Skipped for queries,
+// validation failures, and [DoNotSaveChanges] operations.
+```
+
+### Pipeline execution order
+
+The generated pipeline executes consumer seams in this order:
+
+1. **Authentication** → identity check
+2. **Property population** → `IPropertyPopulator` (e.g. set TenantId from JWT)
+3. **Authorization** → `[Resource]`, `[Permission]`, `IApiAuthoriser`
+4. **Validation** → data annotation + `IValidator` checks
+5. **Handler execution** → `HandleAsync()`
+6. **Unit of work** → `IUnitOfWork.SaveChangesAsync()` (commands only, on success)
+7. **Message outbox** → `IMessageOutbox.CommitAsync()` (on success)
+8. **Background task flush** → `IBackgroundTaskScheduleProvider.EnqueueAsync()`
+9. **Resource expansion** → `IResourceExpander` (for `?expand=` parameters)
+10. **Link generation** → HATEOAS link population
 
 ## Source-generation optimization notes
 
