@@ -66,11 +66,17 @@ public sealed class ETagger(IHttpContextAccessor contextAccessor)
 
         foreach (var headerValue in ifNoneMatchValues)
         {
-            foreach (var v in (headerValue ?? string.Empty).Split(','))
-            {
-                var candidate = v.Trim();
+            var remaining = (headerValue ?? string.Empty).AsSpan();
 
-                if (string.Equals(candidate, eTag, StringComparison.Ordinal))
+            while (!remaining.IsEmpty)
+            {
+                var commaIndex = remaining.IndexOf(',');
+                var segment = commaIndex >= 0 ? remaining[..commaIndex] : remaining;
+                remaining = commaIndex >= 0 ? remaining[(commaIndex + 1)..] : ReadOnlySpan<char>.Empty;
+
+                var candidate = segment.Trim();
+
+                if (candidate.Equals(eTag.AsSpan(), StringComparison.Ordinal))
                 {
                     return true;
                 }

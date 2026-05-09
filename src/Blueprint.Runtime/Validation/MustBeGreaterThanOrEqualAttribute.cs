@@ -44,7 +44,7 @@ public sealed class MustBeGreaterThanOrEqualAttribute : ValidationAttribute
     {
         ArgumentNullException.ThrowIfNull(validationContext);
 
-        var property = validationContext.ObjectType.GetProperty(this.DependentProperty);
+        var property = CrossPropertyAccessorCache.GetProperty(validationContext.ObjectType, this.DependentProperty);
 
         if (property is null)
         {

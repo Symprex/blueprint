@@ -59,7 +59,7 @@ public sealed class RequiredIfAttribute : ValidationAttribute
     {
         ArgumentNullException.ThrowIfNull(validationContext);
 
-        var dependentProperty = validationContext.ObjectType.GetProperty(this.DependentProperty);
+        var dependentProperty = CrossPropertyAccessorCache.GetProperty(validationContext.ObjectType, this.DependentProperty);
         if (dependentProperty is null)
         {
             return new ValidationResult(

@@ -42,7 +42,7 @@ public sealed class LessThanPropertyAttribute : ValidationAttribute
     {
         ArgumentNullException.ThrowIfNull(validationContext);
 
-        var otherProperty = validationContext.ObjectType.GetProperty(this.OtherPropertyName);
+        var otherProperty = CrossPropertyAccessorCache.GetProperty(validationContext.ObjectType, this.OtherPropertyName);
         if (otherProperty is null)
         {
             return new ValidationResult(

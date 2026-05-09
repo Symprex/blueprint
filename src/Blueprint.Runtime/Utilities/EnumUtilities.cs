@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.ComponentModel;
 
 namespace Blueprint.Utilities;
@@ -8,6 +9,8 @@ namespace Blueprint.Utilities;
 /// </summary>
 public static class EnumUtilities
 {
+    private static readonly ConcurrentDictionary<Enum, string> _descriptionCache = new();
+
     /// <summary>
     /// Gets the <see cref="DescriptionAttribute"/> value for the given enum member,
     /// falling back to <see cref="Enum.ToString()"/> when no description is defined.
@@ -18,23 +21,26 @@ public static class EnumUtilities
     {
         Guard.NotNull(value);
 
-        var stringValue = value.ToString();
-        var memberInfo = value.GetType().GetMember(stringValue);
-
-        if (memberInfo.Length > 0)
+        return _descriptionCache.GetOrAdd(value, static v =>
         {
-            var descriptionAttribute = memberInfo[0]
-                .GetCustomAttributes(typeof(DescriptionAttribute), false)
-                .OfType<DescriptionAttribute>()
-                .FirstOrDefault();
+            var stringValue = v.ToString();
+            var memberInfo = v.GetType().GetMember(stringValue);
 
-            if (descriptionAttribute != null)
+            if (memberInfo.Length > 0)
             {
-                return descriptionAttribute.Description;
-            }
-        }
+                var descriptionAttribute = memberInfo[0]
+                    .GetCustomAttributes(typeof(DescriptionAttribute), false)
+                    .OfType<DescriptionAttribute>()
+                    .FirstOrDefault();
 
-        return stringValue;
+                if (descriptionAttribute != null)
+                {
+                    return descriptionAttribute.Description;
+                }
+            }
+
+            return stringValue;
+        });
     }
 
     /// <summary>

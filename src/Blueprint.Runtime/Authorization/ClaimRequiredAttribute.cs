@@ -1,3 +1,6 @@
+using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 using System.Text.RegularExpressions;
 using JetBrains.Annotations;
 
@@ -83,10 +86,13 @@ public class ClaimRequiredAttribute : Attribute
         return new Claim(this.ClaimType, resolvedValue, this.ValueType);
     }
 
+    private static readonly ConcurrentDictionary<(Type, string), PropertyInfo?> _propertyCache = new();
+
+    [UnconditionalSuppressMessage("Trimming", "IL2080", Justification = "Blueprint operation types are preserved; property lookups are cached for performance.")]
     private static object? GetPropertyValue(object resource, string propertyName)
     {
         var type = resource.GetType();
-        var property = type.GetProperty(propertyName);
+        var property = _propertyCache.GetOrAdd((type, propertyName), static key => key.Item1.GetProperty(key.Item2));
 
         if (property == null)
         {
