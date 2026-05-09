@@ -1154,6 +1154,65 @@ public class PropertyOwnershipModuleTests
     }
 
     [Fact]
+    public async Task When_operation_uses_init_only_properties_then_pipeline_snapshot_matches()
+    {
+        var source =
+            """
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace
+            {
+                [BlueprintAppScan]
+                public partial class TestApp : BlueprintApp { }
+
+                [RootLink("/items/{Id}")]
+                [HttpPost]
+                public partial class UpdateInitCommand : ICommand<string>
+                {
+                    public required string Id { get; init; }
+                    public required string Name { get; init; }
+                    public int? Score { get; init; }
+
+                    public static Task<string> HandleAsync(UpdateInitCommand operation)
+                    {
+                        return Task.FromResult("ok");
+                    }
+                }
+            }
+            """;
+
+        var generators = new[]
+        {
+            TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>(),
+            TestHelpers.CreateTrackedGenerator<OperationExecutorPipelineSourceGenerator>(),
+        };
+
+        var result = TestHelpers.CompileWithTrackedGenerators(
+            generators,
+            [source],
+            ["Input0.cs"]);
+
+        result.Diagnostics.Should().BeEmpty("the compilation should have no diagnostics");
+
+        var pipelineSources = result.GetGeneratedSources(nameof(OperationExecutorPipelineSourceGenerator));
+        pipelineSources.Should().NotBeEmpty("a pipeline should be generated");
+
+        var outputText = new StringBuilder();
+        foreach (var s in pipelineSources)
+        {
+            outputText.AppendLine(s.HintName + ":");
+            outputText.AppendLine();
+            outputText.AppendLine(s.SourceText);
+            outputText.AppendLine();
+        }
+
+        await Verify(outputText)
+            .UseDirectory("Generators/Pipelines/Snapshots/Integration/");
+    }
+
+    [Fact]
     public void When_root_link_uses_catch_all_route_parameter_then_descriptor_treats_property_as_route_owned()
     {
         var result = CompileDescriptor(

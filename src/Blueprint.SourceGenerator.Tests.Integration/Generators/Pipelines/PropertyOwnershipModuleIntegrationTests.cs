@@ -232,6 +232,89 @@ public class PropertyOwnershipModuleIntegrationTests
         ownershipData.Entries.Should().Contain(
             static e => e.PropertyName == "Name" && e.Source == PropertyBindingSource.Body);
     }
+
+    [Fact]
+    public async Task When_route_binding_targets_init_only_property_then_pipeline_populates_init_value()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(RouteInitOnlyPopulationQuery));
+        var httpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        httpContext.Request.RouteValues["Id"] = "route-init-123";
+
+        var context = CreateContext(app, RouteInitOnlyPopulationQuery.Configure(), new RouteInitOnlyPopulationQuery { Id = string.Empty }, httpContext);
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<Blueprint.Runtime.Exec.OkResult<string>>();
+        ((Blueprint.Runtime.Exec.OkResult<string>)result).Content.Should().Be("route-init-123");
+    }
+
+    [Fact]
+    public async Task When_query_binding_targets_init_only_property_then_pipeline_populates_init_value()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(QueryInitOnlyPopulationQuery));
+        var httpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        httpContext.Request.QueryString = new Microsoft.AspNetCore.Http.QueryString("?term=blueprint-init");
+
+        var context = CreateContext(app, QueryInitOnlyPopulationQuery.Configure(), new QueryInitOnlyPopulationQuery { Term = string.Empty }, httpContext);
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<Blueprint.Runtime.Exec.OkResult<string>>();
+        ((Blueprint.Runtime.Exec.OkResult<string>)result).Content.Should().Be("blueprint-init");
+    }
+
+    [Fact]
+    public async Task When_operation_has_mixed_init_and_set_properties_then_pipeline_populates_both()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(MixedInitAndSetPopulationQuery));
+        var httpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        httpContext.Request.RouteValues["Id"] = "mixed-init-456";
+        httpContext.Request.QueryString = new Microsoft.AspNetCore.Http.QueryString("?filter=recent");
+
+        var context = CreateContext(app, MixedInitAndSetPopulationQuery.Configure(), new MixedInitAndSetPopulationQuery { Id = string.Empty }, httpContext);
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<Blueprint.Runtime.Exec.OkResult<string>>();
+        ((Blueprint.Runtime.Exec.OkResult<string>)result).Content.Should().Be("mixed-init-456:recent");
+    }
+
+    [Fact]
+    public async Task When_body_binding_targets_init_only_properties_then_pipeline_populates_init_values()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(BodyInitOnlyPopulationCommand));
+        var json = "{\"title\":\"init-body\",\"count\":7}";
+        var bytes = System.Text.Encoding.UTF8.GetBytes(json);
+        var httpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        httpContext.Request.ContentType = "application/json";
+        httpContext.Request.ContentLength = bytes.Length;
+        httpContext.Request.Body = new MemoryStream(bytes);
+
+        var context = CreateContext(app, BodyInitOnlyPopulationCommand.Configure(), new BodyInitOnlyPopulationCommand { Title = string.Empty, Count = -1 }, httpContext);
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<Blueprint.Runtime.Exec.OkResult<string>>();
+        ((Blueprint.Runtime.Exec.OkResult<string>)result).Content.Should().Be("init-body:7");
+    }
+
+    private static Blueprint.Runtime.Exec.ApiOperationContext CreateContext(BlueprintApp app, ApiOperationDescriptor descriptor, object operation, Microsoft.AspNetCore.Http.HttpContext httpContext)
+    {
+        return new Blueprint.Runtime.Exec.ApiOperationContext(new EmptyServiceProvider(), app, descriptor, CancellationToken.None)
+        {
+            Operation = operation,
+            HttpContext = httpContext,
+            UserPrincipal = httpContext.User,
+        };
+    }
 }
 
 // Test operations — these are discovered by the source generator at compile time.
@@ -311,6 +394,58 @@ public partial class GetFolderByPathPopulationQuery : IQuery<string>
     public static Task<string> HandleAsync(GetFolderByPathPopulationQuery operation)
     {
         return Task.FromResult(operation.FolderPath ?? string.Empty);
+    }
+}
+
+[Blueprint.Model.Attributes.AllowAnonymous]
+[Blueprint.Model.Attributes.RootLink("/population-test/init-route/{Id}")]
+public partial class RouteInitOnlyPopulationQuery : IQuery<string>
+{
+    public required string Id { get; init; }
+
+    public static Task<string> HandleAsync(RouteInitOnlyPopulationQuery operation)
+    {
+        return Task.FromResult(operation.Id);
+    }
+}
+
+[Blueprint.Model.Attributes.AllowAnonymous]
+[Blueprint.Model.Attributes.RootLink("/population-test/init-query")]
+public partial class QueryInitOnlyPopulationQuery : IQuery<string>
+{
+    public required string Term { get; init; }
+
+    public static Task<string> HandleAsync(QueryInitOnlyPopulationQuery operation)
+    {
+        return Task.FromResult(operation.Term);
+    }
+}
+
+[Blueprint.Model.Attributes.AllowAnonymous]
+[Blueprint.Model.Attributes.RootLink("/population-test/init-mixed/{Id}")]
+public partial class MixedInitAndSetPopulationQuery : IQuery<string>
+{
+    public required string Id { get; init; }
+
+    public string? Filter { get; set; }
+
+    public static Task<string> HandleAsync(MixedInitAndSetPopulationQuery operation)
+    {
+        return Task.FromResult($"{operation.Id}:{operation.Filter}");
+    }
+}
+
+[Blueprint.Model.Attributes.AllowAnonymous]
+[Blueprint.Model.Attributes.RootLink("/population-test/init-body")]
+public partial class BodyInitOnlyPopulationCommand : ICommand<string>
+{
+    public required string Title { get; init; }
+
+    public int Count { get; init; }
+
+    public static Task<string> HandleAsync(BodyInitOnlyPopulationCommand operation)
+    {
+        return Task.FromResult($"{operation.Title}:{operation.Count}");
     }
 }
 
