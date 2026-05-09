@@ -171,6 +171,16 @@ public class HttpOperationResultExecutor
             case StatusCodeResult statusCodeResult:
                 httpContext.Response.StatusCode = statusCodeResult.StatusCode;
                 return true;
+            case ResourceEvent resourceEvent:
+                httpContext.Response.StatusCode = MapResourceEventChangeTypeToStatusCode(resourceEvent.ChangeType);
+                httpContext.Response.ContentType = "application/json; charset=utf-8";
+                if (resourceEvent.ChangeType == ResourceEventChangeType.Created && resourceEvent.Data is not null)
+                {
+                    TrySetLocationHeader(httpContext, resourceEvent.Data);
+                }
+
+                await WriteJsonAsync(httpContext, operationContext, resourceEvent);
+                return true;
             case HttpResult httpResult:
                 await httpResult.ExecuteAsync(operationContext);
                 return true;
@@ -342,6 +352,17 @@ public class HttpOperationResultExecutor
             ChangeType.Created => StatusCodes.Status201Created,
             ChangeType.Updated => StatusCodes.Status200OK,
             ChangeType.Deleted => StatusCodes.Status204NoContent,
+            _ => StatusCodes.Status200OK,
+        };
+    }
+
+    private static int MapResourceEventChangeTypeToStatusCode(ResourceEventChangeType changeType)
+    {
+        return changeType switch
+        {
+            ResourceEventChangeType.Created => StatusCodes.Status201Created,
+            ResourceEventChangeType.Updated => StatusCodes.Status200OK,
+            ResourceEventChangeType.Deleted => StatusCodes.Status204NoContent,
             _ => StatusCodes.Status200OK,
         };
     }
