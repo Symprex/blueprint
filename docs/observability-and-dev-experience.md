@@ -249,3 +249,24 @@ Compile-time validation fast paths are 40–60 % faster than the DataAnnotations
 | 500 | ~103 μs | ~219 KB |
 
 Registration scales linearly with operation count.
+
+### Property population (per-request)
+
+| Scenario | Mean | Allocated |
+|---|---|---|
+| Route-only (3 props) | ~4.3 μs | ~2.5 KB |
+| Mixed route + query (6 props) | ~6.7 μs | ~3.8 KB |
+| Body-only (JSON) | ~7.6 μs | ~4.2 KB |
+| Typed properties (enums, guids) | ~8.9 μs | ~5.0 KB |
+| Large payload (10 props) | ~10.0 μs | ~6.5 KB |
+
+### Endpoint mapping (startup)
+
+| Operations | Mean | Allocated |
+|---|---|---|
+| 10 | ~82 μs | ~56 KB |
+| 100 | ~628 μs | ~489 KB |
+| 250 | ~1.5 ms | ~1.2 MB |
+| 500 | ~3.4 ms | ~2.4 MB |
+
+Endpoint mapping scales linearly. For a typical Signature365-sized API (~100 operations), startup mapping completes in under 1 ms.
