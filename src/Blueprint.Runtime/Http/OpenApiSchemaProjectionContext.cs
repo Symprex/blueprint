@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
@@ -113,6 +114,7 @@ public sealed record OpenApiSchemaProjectionContext(
         var isNullable = IsNullableProperty(property, nullabilityContext);
         var format = MapFormat(property.PropertyType);
         var enumValues = MapEnumValues(property.PropertyType);
+        var description = GetPropertyDescription(property);
 
         return new OpenApiSchemaPropertyModel(
             property.Name,
@@ -122,6 +124,7 @@ public sealed record OpenApiSchemaProjectionContext(
             isNullable,
             format,
             enumValues,
+            description,
             GetMinLength(validationAttributes),
             GetMaxLength(validationAttributes),
             GetPattern(validationAttributes),
@@ -137,6 +140,12 @@ public sealed record OpenApiSchemaProjectionContext(
     /// </summary>
     private static string? MapFormat(Type propertyType)
     {
+        // byte[] maps to base64-encoded binary before Nullable unwrapping.
+        if (propertyType == typeof(byte[]))
+        {
+            return "byte";
+        }
+
         var underlying = Nullable.GetUnderlyingType(propertyType) ?? propertyType;
 
         if (underlying == typeof(int))
@@ -245,6 +254,20 @@ public sealed record OpenApiSchemaProjectionContext(
         }
 
         return Enum.GetNames(underlying).ToImmutableArray();
+    }
+
+    /// <summary>
+    /// Extracts the <see cref="DescriptionAttribute"/> value from a body property's underlying CLR member,
+    /// returning <c>null</c> when no description is specified.
+    /// </summary>
+    private static string? GetPropertyDescription(JsonPropertyInfo property)
+    {
+        if (property.AttributeProvider is not MemberInfo member)
+        {
+            return null;
+        }
+
+        return member.GetCustomAttribute<DescriptionAttribute>()?.Description;
     }
 
     /// <summary>
@@ -587,6 +610,7 @@ public sealed record OpenApiSchemaModel(
 /// <param name="IsNullable">Whether this property is nullable (NRT-annotated reference type or <c>Nullable&lt;T&gt;</c>).</param>
 /// <param name="Format">The OpenAPI format hint (e.g. <c>int32</c>, <c>date-time</c>, <c>uuid</c>) when the CLR type has a standard mapping.</param>
 /// <param name="EnumValues">The enum member names when the property is an enum type, or empty when not an enum.</param>
+/// <param name="Description">The property description from <c>[Description]</c> attribute when specified.</param>
 /// <param name="MinLength">The inclusive minimum string/collection length when validation attributes expose one.</param>
 /// <param name="MaxLength">The inclusive maximum string/collection length when validation attributes expose one.</param>
 /// <param name="Pattern">The regular-expression pattern when validation attributes expose one.</param>
@@ -602,6 +626,7 @@ public sealed record OpenApiSchemaPropertyModel(
     bool IsNullable,
     string? Format,
     ImmutableArray<string> EnumValues,
+    string? Description,
     int? MinLength = null,
     int? MaxLength = null,
     string? Pattern = null,

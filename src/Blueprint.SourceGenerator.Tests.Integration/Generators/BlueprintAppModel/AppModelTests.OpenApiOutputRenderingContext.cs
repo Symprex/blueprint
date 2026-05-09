@@ -230,6 +230,42 @@ public class AppModelOpenApiOutputRenderingContextTests
     }
 
     [Fact]
+    public void When_schema_component_property_has_description_then_output_emits_description()
+    {
+        var context = CreateSyntheticOutputContext(
+            [],
+            [
+                new OpenApiSchemaComponentModel(
+                    "Sample.ResponseDto",
+                    "object",
+                    [],
+                    [
+                        new OpenApiSchemaComponentPropertyModel(
+                            "Code",
+                            "string",
+                            false,
+                            false,
+                            Description: "The unique code identifying the resource."),
+                        new OpenApiSchemaComponentPropertyModel("Name", "string", false, false),
+                    ]),
+            ]);
+
+        var doc = JsonDocument.Parse(context.Json);
+
+        var properties = doc.RootElement
+            .GetProperty("components")
+            .GetProperty("schemas")
+            .GetProperty("Sample_ResponseDto")
+            .GetProperty("properties");
+
+        properties.GetProperty("Code").GetProperty("description").GetString()
+            .Should().Be("The unique code identifying the resource.");
+
+        properties.GetProperty("Name").TryGetProperty("description", out _).Should().BeFalse(
+            "properties without a [Description] attribute should not emit description");
+    }
+
+    [Fact]
     public void When_schema_processors_are_configured_then_they_transform_components_in_registration_order()
     {
         var context = CreateSyntheticOutputContext(
