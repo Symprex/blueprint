@@ -48,6 +48,26 @@ public class ResourceEventResult : OperationResult
     /// </summary>
     public object Content { get; }
 
+    /// <summary>
+    /// Gets a metadata dictionary of key-value pairs associated with this event that can be
+    /// persisted alongside the event for auditing or enrichment purposes.
+    /// </summary>
+    public Dictionary<string, object>? Metadata { get; private set; }
+
+    /// <summary>
+    /// Adds a metadata key-value pair to this event, returning this instance for fluent chaining.
+    /// Metadata is persisted with the event for auditing and downstream enrichment.
+    /// </summary>
+    /// <param name="key">The metadata key.</param>
+    /// <param name="value">The metadata value.</param>
+    /// <returns>This <see cref="ResourceEventResult"/> for chaining.</returns>
+    public ResourceEventResult WithMetadata(string key, object value)
+    {
+        this.Metadata ??= new Dictionary<string, object>();
+        this.Metadata[key] = value;
+        return this;
+    }
+
     /// <inheritdoc />
     public override Task ExecuteAsync(ApiOperationContext context)
     {
@@ -67,7 +87,7 @@ public class ResourceEventResult : OperationResult
 /// Represents a host-neutral resource-event success outcome with a typed payload.
 /// </summary>
 /// <typeparam name="T">The type of payload that will be serialized by the host.</typeparam>
-public sealed class ResourceEventResult<T> : ResourceEventResult where T : notnull
+public class ResourceEventResult<T> : ResourceEventResult where T : notnull
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="ResourceEventResult{T}"/> class.
