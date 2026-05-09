@@ -12,26 +12,26 @@
   "current": {
     "activeWorkstream": "authorization-and-parity-alignment",
     "frameworkStatus": "production-ready",
-    "frameworkStatusDetail": "Core Blueprint source-generator framework is at full feature parity with legacy Blueprint for Signature365 migration. Authorization pipeline, background task scheduling, OpenAPI per-operation customization hook (configureOpenApiOperations), and all consumer seams are complete. All 1196 tests pass. Performance benchmarks validated across all hot paths.",
+    "frameworkStatusDetail": "Full S365 feature parity confirmed. All consumer seams (Hangfire, Rebus, Marten) implemented and demonstrated in sample app. Authorization pipeline, resource expansion, background tasks, OpenAPI, HATEOAS links all complete. Source-gen optimization analysis done: resource key expansion already compiled, IApiAuthoriser already split. ResourceCreated/Updated/Deleted marked [Obsolete] in favor of [ResourceEventFamily]. All 1260 tests pass.",
     "nextReadySlice": null,
     "lastCompletedSlice": {
-      "id": "openapi/operation-processor-hook",
+      "id": "sourcegen-optimization-analysis",
       "workstream": "authorization-and-parity-alignment",
-      "title": "OpenAPI per-operation customization hook (configureOpenApiOperations) with parameter stripping and summary override"
+      "title": "Source-gen optimization analysis, ResourceEvent deprecation, consumer seam documentation"
     },
     "openReviewGate": null,
     "openReviewGateRationale": null,
     "phase2Criteria": {
-      "resourceAndLinks": "SATISFIED — LinkGenerationModule, ResourceEventAuditModule, 5 resource events, SelfLink/RootLink proven in 10-operation reference app",
-      "openApi": "SATISFIED — OpenAPI rendered from source-generated descriptors, snapshot-tested in ReferenceAppOpenApiTests",
-      "referenceApp": "SATISFIED — 10 HTTP operations + 1 background task demonstrating all Phase 2 capabilities end to end",
-      "reviewArtifact": "SATISFIED — phase2-resource-api-shape-review.html at ~/.agent/diagrams/"
+      "resourceAndLinks": "SATISFIED \u00e2\u20ac\u201d LinkGenerationModule, ResourceEventAuditModule, 5 resource events, SelfLink/RootLink proven in 10-operation reference app",
+      "openApi": "SATISFIED \u00e2\u20ac\u201d OpenAPI rendered from source-generated descriptors, snapshot-tested in ReferenceAppOpenApiTests",
+      "referenceApp": "SATISFIED \u00e2\u20ac\u201d 10 HTTP operations + 1 background task demonstrating all Phase 2 capabilities end to end",
+      "reviewArtifact": "SATISFIED \u00e2\u20ac\u201d phase2-resource-api-shape-review.html at ~/.agent/diagrams/"
     },
     "phase3Criteria": {
-      "nonHttpHost": "SATISFIED — BackgroundTaskHostDispatchIntegrationTests prove task pipeline dispatch, validation, and host partitioning (commit 8931b64)",
-      "consumerIntegrationSeam": "SATISFIED — SendTemplateSharedNotificationTask in Sample.Contract with handler in Sample app, manifest updated (commit d627e8d)",
-      "migrationTooling": "SATISFIED — Blueprint.Codemod (14 tests) + Blueprint.Migration.Analyzers (24 tests) with BPMIG100-201 diagnostics, SARIF output, dry-run mode",
-      "reviewArtifact": "SATISFIED — phase3-non-http-host-review.html at ~/.agent/diagrams/"
+      "nonHttpHost": "SATISFIED \u00e2\u20ac\u201d BackgroundTaskHostDispatchIntegrationTests prove task pipeline dispatch, validation, and host partitioning (commit 8931b64)",
+      "consumerIntegrationSeam": "SATISFIED \u00e2\u20ac\u201d SendTemplateSharedNotificationTask in Sample.Contract with handler in Sample app, manifest updated (commit d627e8d)",
+      "migrationTooling": "SATISFIED \u00e2\u20ac\u201d Blueprint.Codemod (14 tests) + Blueprint.Migration.Analyzers (24 tests) with BPMIG100-201 diagnostics, SARIF output, dry-run mode",
+      "reviewArtifact": "SATISFIED \u00e2\u20ac\u201d phase3-non-http-host-review.html at ~/.agent/diagrams/"
     }
   },
   "completedSlices": [
@@ -272,7 +272,7 @@
     {
       "id": "runtime/changetype-status-codes",
       "workstream": "documentation-and-final-alignment",
-      "title": "Map ResourceEvent ChangeType to correct HTTP status codes (Created→201, Updated→200, Deleted→204)",
+      "title": "Map ResourceEvent ChangeType to correct HTTP status codes (Created\u00e2\u2020\u2019201, Updated\u00e2\u2020\u2019200, Deleted\u00e2\u2020\u2019204)",
       "commit": "1e87bfe"
     },
     {
@@ -302,7 +302,7 @@
     {
       "id": "openapi/validation-format-projection",
       "workstream": "documentation-and-final-alignment",
-      "title": "Project OpenAPI format hints from validation attributes (EmailAddress→email, Url→uri, Phone→phone)",
+      "title": "Project OpenAPI format hints from validation attributes (EmailAddress\u00e2\u2020\u2019email, Url\u00e2\u2020\u2019uri, Phone\u00e2\u2020\u2019phone)",
       "commit": "eb8543e"
     },
     {

@@ -70,6 +70,10 @@ public class Startup
             // The generated pipeline discovers Expandable<T> properties at compile time.
             blueprint.AddResourceExpander<OwnerResourceExpander>();
 
+            // ETag support: enables conditional request handling (If-None-Match / 304 Not Modified).
+            // Handlers inject ETagger and call WithETag() to avoid re-computing responses.
+            blueprint.AddETagSupport();
+
             blueprint.ConfigureHttp(http =>
             {
                 // Expose full exception details in non-production environments for easier debugging.
