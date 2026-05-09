@@ -702,7 +702,7 @@ The source-generated Blueprint framework reorganizes namespaces for clarity and 
 | `Blueprint.Middleware` | N/A | Replaced by source-generated pipeline modules |
 | `Blueprint.Compiler` | N/A | Replaced by source-generated code |
 | `Blueprint.CodeGen` | N/A | Replaced by source-generated code |
-| `Blueprint.Utilities` | N/A | Consumer-owned utilities; copy to your project |
+| `Blueprint.Utilities` | `Blueprint.Utilities` | Same namespace: `TypeExtensions`, `FileSize`, `DictionaryExtensions`, `ReflectionUtilities`, `TaskExtensions`, `DateTimeExtensions`, `EnumUtilities`, `StreamExtensions`, `CiDetector`, `Inflector`, `StringExtensions`, `CommonRegularExpressions` |
 
 ### Compatibility aliases
 

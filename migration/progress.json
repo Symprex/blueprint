@@ -12,12 +12,12 @@
   "current": {
     "activeWorkstream": "authorization-and-parity-alignment",
     "frameworkStatus": "production-ready",
-    "frameworkStatusDetail": "Full S365 feature parity confirmed. All consumer seams (Hangfire, Rebus, Marten) implemented and demonstrated in sample app. Authorization pipeline, resource expansion, background tasks, OpenAPI, HATEOAS links all complete. Source-gen optimization audits done: resource key expansion already compiled (ResourceKeyTemplateParser generates direct property access), IApiAuthoriser already split into IOperationAuthoriser+ILinkVisibilityAuthoriser, CompiledUrlBuilder eliminates URL reflection, ApiAuthoriserAggregator caches AppliesTo. ResourceCreated/Updated/Deleted marked [Obsolete] in favor of [ResourceEventFamily]. 304 Not Modified link guard fix committed. All 1272 tests pass.",
+    "frameworkStatusDetail": "Full S365 feature parity confirmed including all consumer-facing utility types. Deep gap audit verified zero missing critical types. 9 utility types ported (TypeExtensions, FileSize, DictionaryExtensions, ReflectionUtilities, TaskExtensions, DateTimeExtensions, EnumUtilities, StreamExtensions, TemporalCheck) with 44 tests. All consumer seams (Hangfire, Rebus, Marten) implemented and demonstrated in sample app. Authorization pipeline, resource expansion, background tasks, OpenAPI, HATEOAS links all complete. Source-gen optimization audits done. 1400+ tests pass (593 generator + 807 integration).",
     "nextReadySlice": null,
     "lastCompletedSlice": {
-      "id": "sourcegen-optimization-analysis",
+      "id": "utility-types-port",
       "workstream": "authorization-and-parity-alignment",
-      "title": "Source-gen optimization analysis, ResourceEvent deprecation, consumer seam documentation"
+      "title": "Port 9 utility types from legacy Blueprint for S365 consumer parity"
     },
     "openReviewGate": null,
     "openReviewGateRationale": null,
@@ -35,6 +35,12 @@
     }
   },
   "completedSlices": [
+    {
+      "id": "utility-types-port",
+      "workstream": "authorization-and-parity-alignment",
+      "title": "Port 9 utility types + CiDetector from legacy Blueprint for S365 consumer parity",
+      "commit": "66a8e66"
+    },
     {
       "id": "persistence/cross-module-variable-sharing-proof",
       "workstream": "persistence-and-transaction-coordination",
