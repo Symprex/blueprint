@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using Blueprint;
 using Blueprint.Model;
 using Blueprint.Runtime.Http;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -28,10 +29,15 @@ public static class ServiceCollectionExtensions
         this IServiceCollection services,
         Action<BlueprintServiceBuilder>? configure = null)
         where TApp : BlueprintApp
-        where TExec : class
+        where TExec : BlueprintAppExecutor
     {
         services.AddSingleton<TApp>();
+        services.AddSingleton<BlueprintApp>(sp => sp.GetRequiredService<TApp>());
         services.AddSingleton<TExec>();
+
+        // Register the base executor type so handlers and infrastructure can inject
+        // BlueprintAppExecutor for nested operation execution without knowing the concrete type.
+        services.AddSingleton<BlueprintAppExecutor>(sp => sp.GetRequiredService<TExec>());
 
         // Default link generation infrastructure
         services.TryAddScoped<Blueprint.Http.IApiLinkGenerator, Blueprint.Http.ApiLinkGenerator>();
