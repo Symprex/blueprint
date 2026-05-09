@@ -1,6 +1,8 @@
 using Blueprint.Model;
 using Blueprint.Runtime.Exec;
 
+#pragma warning disable CS0618 // Testing obsolete convenience types intentionally
+
 namespace Blueprint.SourceGenerator.Tests.Integration.Exec;
 
 /// <summary>
