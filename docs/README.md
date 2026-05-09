@@ -8,6 +8,7 @@ This folder is the detailed source of truth for repository-specific architecture
 
 - New to the repo: read `guiding-principles.md`, then `architecture.md`.
 - Migrating a legacy Blueprint or Signature365 app: read `consumer-migration-guide.md`.
+- Looking up a specific diagnostic code: read `diagnostic-reference.md`.
 - Changing generators, diagnostics, or compile-time rules: read `compile-time-validation.md`.
 - Changing runtime behavior, telemetry, or inspection surfaces: read `observability-and-dev-experience.md`.
 - Deploying to production or configuring middleware: read `deployment-and-operations.md`.
@@ -34,6 +35,7 @@ This folder is the detailed source of truth for repository-specific architecture
 | `guiding-principles.md` | The design principles that should shape new code and refactors. |
 | `architecture.md` | The compile-time and runtime flow of the system, plus the main extension points. |
 | `consumer-migration-guide.md` | Step-by-step guide for migrating legacy Blueprint or Signature365 apps to source-generated Blueprint. |
+| `diagnostic-reference.md` | Quick-lookup table of all 67+ compile-time diagnostics with IDs, severity, and titles. |
 | `compile-time-validation.md` | How the repo uses diagnostics, snapshots, and incremental-generator checks as a deterministic harness. |
 | `observability-and-dev-experience.md` | Expectations for telemetry, diagnostics, and tooling that make large API surfaces inspectable. |
 | `deployment-and-operations.md` | Production deployment, middleware ordering, reverse proxy setup, and operations checklist. |
