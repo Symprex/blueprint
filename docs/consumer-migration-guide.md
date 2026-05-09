@@ -1052,6 +1052,45 @@ The generated pipeline executes consumer seams in this order:
 9. **Resource expansion** → `IResourceExpander` (for `?expand=` parameters)
 10. **Link generation** → HATEOAS link population
 
+### Resource expansion (`?expand=`)
+
+Legacy Blueprint uses `ResourceExpandMiddleware` with runtime property-walker reflection.
+New Blueprint discovers `Expandable<T>` properties at compile time and generates typed
+expansion calls per property. `IResourceExpander` remains a runtime interface.
+
+```csharp
+// Response type with expandable properties
+public class EmployeeApiResource : ApiResource
+{
+    public override string Object => "employee";
+    public Expandable<DepartmentResource> Department { get; set; } = new("dept-1");
+
+    [AlwaysExpand]
+    public Expandable<ManagerResource> Manager { get; set; } = new("mgr-1");
+}
+
+// Expander implementation (same interface as legacy)
+public class DepartmentExpander : IResourceExpander
+{
+    public bool CanExpand(Type type) => type == typeof(DepartmentResource);
+
+    public async ValueTask ExpandAsync(
+        ApiOperationContext context, object response,
+        IEnumerable entities, CancellationToken ct)
+    {
+        foreach (var entity in entities.Cast<Expandable<DepartmentResource>>())
+            entity.Value = await LoadDepartment(entity.Key);
+    }
+}
+
+// Registration
+blueprint.AddResourceExpander<DepartmentExpander>();
+```
+
+Supported query formats: `?expand=Department`, `?expand=Department,Manager` (comma-separated),
+`?expand=Department&expand=Manager` (repeated keys), and `?expand[]=Department&expand[]=Manager`
+(array syntax).
+
 ## Source-generation optimization notes
 
 ### What is already compile-time optimised

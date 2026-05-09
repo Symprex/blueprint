@@ -82,6 +82,9 @@ A background task (`SendTemplateSharedNotificationTask`) demonstrates non-HTTP e
 - **Tenant-scoped routes** — `/tenants/{TenantId}/templates/{Id}/settings` with multi-segment route binding
 - **Claims authorization** — `[Permission]` and `[PermissionFor]` with claims-based access control
 - **Context metadata** — `IContextMetadataProvider` for enriching resource events with ambient context
+- **Resource expansion** — `Expandable<T>` properties with `?expand=` query parameter support (comma-separated, repeated keys, array syntax)
+- **Always-expand** — `[AlwaysExpand]` for properties that load unconditionally
+- **ETag / conditional requests** — `ETagger.WithETag()` for `If-None-Match` → 304 Not Modified
 
 ## Consumer seam demonstrations
 
@@ -108,6 +111,8 @@ those libraries as core Blueprint dependencies:
 | **Claims auth** | `AddClaimsAuthorisation()` | Permission/PermissionFor claims evaluation |
 | **Recurring tasks** | `SampleRecurringTaskScheduler` | Hangfire `RecurringJob.AddOrUpdate` |
 | **Context metadata** | `SampleContextMetadataProvider` | Enrich resource events with tenant/correlation context |
+| **Resource expansion** | `OwnerResourceExpander` (`IResourceExpander`) | S365's `AzureAdGroupApiResourceExpander` |
+| **ETag support** | `AddETagSupport()` | Conditional GET with `If-None-Match` → 304 |
 
 These seams prove that the generated pipeline correctly calls consumer-registered services at the
 right pipeline stages, enabling companion packages to integrate without core framework changes.
