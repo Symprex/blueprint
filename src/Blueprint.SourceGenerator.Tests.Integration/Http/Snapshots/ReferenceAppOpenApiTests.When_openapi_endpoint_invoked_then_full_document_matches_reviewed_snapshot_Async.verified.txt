@@ -653,6 +653,7 @@
             "name": "nameFilter",
             "in": "query",
             "required": false,
+            "description": "Optional name filter to search templates.",
             "schema": {
               "type": "string",
               "nullable": true
@@ -1829,6 +1830,7 @@
     "/templates/{Id}/validate": {
       "post": {
         "operationId": "ValidateTemplateCommand",
+        "summary": "A sample command that exercises handler-level exception translation by throwing or depending on the input. Used by E2E tests to prove the generated pipeline correctly translates handler-thrown exceptions into the appropriate HTTP responses.",
         "tags": [
           "Api"
         ],
@@ -1837,6 +1839,7 @@
             "name": "Id",
             "in": "path",
             "required": true,
+            "description": "Gets or sets the template identifier.",
             "schema": {
               "type": "string"
             }
@@ -1851,7 +1854,8 @@
                 "properties": {
                   "name": {
                     "type": "string",
-                    "nullable": true
+                    "nullable": true,
+                    "description": "Gets or sets the template name to validate. \u0022INVALID\u0022 triggers a validation exception, \u0022BAD\u0022 triggers a bad-request exception."
                   }
                 }
               }

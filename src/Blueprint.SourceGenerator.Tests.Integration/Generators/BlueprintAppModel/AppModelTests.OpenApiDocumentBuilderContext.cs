@@ -23,6 +23,7 @@ public class AppModelOpenApiDocumentBuilderContextTests
             "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.LinkTestApiResource",
             "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.MappedLinkApiResource",
             "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.ResourceWithoutSelfLink",
+            "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.CatchAllFolderApiResource",
             "Blueprint.SourceGenerator.Tests.Integration.Http.E2EWidgetResponse",
             "Blueprint.SourceGenerator.Tests.Integration.Http.E2EJobAcceptedPayload",
             "Blueprint.SourceGenerator.Tests.Integration.Http.E2EConflictDetail",

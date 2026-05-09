@@ -151,6 +151,89 @@ public class LinkPopulationModuleTests
     }
 
     [Fact]
+    public void When_self_link_uses_catch_all_route_parameter_then_descriptor_compilation_has_no_diagnostics()
+    {
+        const string source = """
+            using Blueprint;
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace
+            {
+                [BlueprintAppScan]
+                public partial class TestApp : BlueprintApp { }
+
+                public partial class FolderApiResource : ApiResource
+                {
+                    public override string Object => "folder_api_resource";
+                    public string FolderPath { get; set; }
+                }
+
+                [SelfLink(typeof(FolderApiResource), "/folders/{**FolderPath}")]
+                public partial class GetFolderQuery : IQuery<FolderApiResource>
+                {
+                    public string FolderPath { get; set; }
+
+                    public static Task<FolderApiResource> HandleAsync(GetFolderQuery operation)
+                    {
+                        return Task.FromResult(new FolderApiResource { FolderPath = operation.FolderPath });
+                    }
+                }
+            }
+            """;
+
+        var result = TestHelpers.Compile<OperationDescriptorSourceGenerator>(source);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var descriptorSource = result.Output.Select(static t => t.ToString()).Single(static s => s.Contains("GetFolderQueryDescriptor"));
+        descriptorSource.Should().Contain("/folders/{**FolderPath}");
+    }
+
+    [Fact]
+    public void When_self_link_uses_catch_all_route_parameter_then_compiled_url_builder_preserves_path_separators()
+    {
+        const string source = """
+            using Blueprint;
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace
+            {
+                [BlueprintAppScan]
+                public partial class TestApp : BlueprintApp { }
+
+                public partial class FolderApiResource : ApiResource
+                {
+                    public override string Object => "folder_api_resource";
+                    public string FolderPath { get; set; }
+                }
+
+                [SelfLink(typeof(FolderApiResource), "/folders/{**FolderPath}")]
+                public partial class GetFolderQuery : IQuery<FolderApiResource>
+                {
+                    public string FolderPath { get; set; }
+
+                    public static Task<FolderApiResource> HandleAsync(GetFolderQuery operation)
+                    {
+                        return Task.FromResult(new FolderApiResource { FolderPath = operation.FolderPath });
+                    }
+                }
+            }
+            """;
+
+        var result = TestHelpers.Compile<OperationDescriptorSourceGenerator>(source);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var descriptorSource = result.Output.Select(static t => t.ToString()).Single(static s => s.Contains("GetFolderQueryDescriptor"));
+        descriptorSource.Should().Contain("$\"/folders/{r.FolderPath?.ToString() ?? \"\"}\"");
+        descriptorSource.Should().NotContain("EscapeDataString(r.FolderPath");
+    }
+
+    [Fact]
     public void When_multiple_distinct_self_link_urls_target_same_resource_then_BPLG004_is_emitted()
     {
         const string source = """

@@ -25,6 +25,7 @@ public partial class IntegrationTestBlueprintApp : BlueprintApp;
 [JsonSerializable(typeof(LinkTestApiResource))]
 [JsonSerializable(typeof(MappedLinkApiResource))]
 [JsonSerializable(typeof(ResourceWithoutSelfLink))]
+[JsonSerializable(typeof(CatchAllFolderApiResource))]
 [JsonSerializable(typeof(E2EWidgetResponse))]
 [JsonSerializable(typeof(E2EJobAcceptedPayload))]
 [JsonSerializable(typeof(E2EConflictDetail))]

@@ -137,6 +137,35 @@ public class LinkPopulationModuleIntegrationTests
     }
 
     [Fact]
+    public void When_compiled_url_builder_uses_catch_all_then_slashes_are_not_escaped()
+    {
+        var descriptor = GetCatchAllFolderResourceQuery.Configure();
+        var link = descriptor.Links.Single(static l => l.Rel == "self");
+
+        var resource = new CatchAllFolderApiResource { FolderPath = "UK/Marketing" };
+        var url = link.CompiledUrlBuilder!(resource);
+
+        url.Should().Be("/folder-link-test/UK/Marketing");
+    }
+
+    [Fact]
+    public async Task When_self_link_uses_catch_all_then_links_self_preserves_path_separators()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(GetCatchAllFolderResourceQuery));
+        var context = CreateContext(app, GetCatchAllFolderResourceQuery.Configure());
+        context.Operation = new GetCatchAllFolderResourceQuery { FolderPath = "UK/Marketing" };
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<OkResult<CatchAllFolderApiResource>>();
+        var okResult = (OkResult<CatchAllFolderApiResource>)result;
+        okResult.Content.Links.Should().ContainKey("self");
+        okResult.Content.Links["self"].Href.Should().Be("/folder-link-test/UK/Marketing");
+    }
+
+    [Fact]
     public void When_CreateRelativeUrl_called_with_compiled_builder_then_uses_fast_path()
     {
         var descriptor = CreateLinkTestResourceCommand.Configure();
@@ -234,6 +263,11 @@ public partial class MappedLinkApiResource : ApiResource
     public string Title { get; set; } = null!;
 }
 
+public partial class CatchAllFolderApiResource : ApiResource
+{
+    public string FolderPath { get; set; } = null!;
+}
+
 // --- Operations ---
 
 /// <summary>
@@ -292,6 +326,18 @@ public partial class GetMappedLinkResourceQuery : IQuery<MappedLinkApiResource>
     public static Task<MappedLinkApiResource> HandleAsync(GetMappedLinkResourceQuery operation)
     {
         return Task.FromResult(new MappedLinkApiResource { MappedId = "mapped-id-99", Title = "Mapped" });
+    }
+}
+
+[Blueprint.Model.Attributes.AllowAnonymous]
+[Blueprint.Model.Attributes.SelfLink(typeof(CatchAllFolderApiResource), "/folder-link-test/{**FolderPath}")]
+public partial class GetCatchAllFolderResourceQuery : IQuery<CatchAllFolderApiResource>
+{
+    public required string FolderPath { get; init; }
+
+    public static Task<CatchAllFolderApiResource> HandleAsync(GetCatchAllFolderResourceQuery operation)
+    {
+        return Task.FromResult(new CatchAllFolderApiResource { FolderPath = operation.FolderPath });
     }
 }
 

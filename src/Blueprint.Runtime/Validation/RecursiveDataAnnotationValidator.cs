@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Concurrent;
 using System.ComponentModel.DataAnnotations;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
@@ -12,6 +13,11 @@ namespace Blueprint.Validation;
 /// </summary>
 public static class RecursiveDataAnnotationValidator
 {
+    /// <summary>
+    /// Caches the public instance properties for each validated type to avoid repeated reflection allocations.
+    /// </summary>
+    private static readonly ConcurrentDictionary<Type, PropertyInfo[]> _propertyCache = new();
+
     /// <summary>
     /// Validates each item in a child list using DataAnnotations, prepending indexed path prefixes
     /// to each error's member names for precise client-side error binding.
@@ -180,7 +186,7 @@ public static class RecursiveDataAnnotationValidator
             {
                 yield return new ValidationResult(
                     result.ErrorMessage,
-                    memberNames.Select(static n => n).Select(n => $"{path}.{ToCamelCasePath(n)}"));
+                    memberNames.Select(n => string.Concat(path, ".", ToCamelCasePath(n))));
             }
         }
 
@@ -189,7 +195,14 @@ public static class RecursiveDataAnnotationValidator
             yield break;
         }
 
-        foreach (var property in value.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance))
+        var valueType = value.GetType();
+
+#pragma warning disable IL2070 // The property cache is populated from types discovered at runtime during recursive validation
+        var properties = _propertyCache.GetOrAdd(valueType, static t =>
+            t.GetProperties(BindingFlags.Public | BindingFlags.Instance));
+#pragma warning restore IL2070
+
+        foreach (var property in properties)
         {
             if (property.GetIndexParameters().Length > 0 || !property.CanRead)
             {
@@ -204,6 +217,7 @@ public static class RecursiveDataAnnotationValidator
             }
 
             var propertyType = property.PropertyType;
+            var childPath = string.Concat(path, ".", ToCamelCase(property.Name));
 
             if (IsEnumerableType(propertyType))
             {
@@ -215,7 +229,7 @@ public static class RecursiveDataAnnotationValidator
                     {
                         foreach (var result in ValidateObject(
                             item,
-                            $"{path}.{ToCamelCase(property.Name)}[{index}]",
+                            string.Concat(childPath, "[", index.ToString(), "]"),
                             parentContext,
                             remainingDepth - 1,
                             visited))
@@ -231,7 +245,7 @@ public static class RecursiveDataAnnotationValidator
             {
                 foreach (var result in ValidateObject(
                     childValue,
-                    $"{path}.{ToCamelCase(property.Name)}",
+                    childPath,
                     parentContext,
                     remainingDepth - 1,
                     visited))

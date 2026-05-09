@@ -98,11 +98,18 @@ public sealed record OpenApiOperationRenderingContext(
 
         var (parameters, requestBody) = ProjectInputMetadata(operation.Operation);
 
-        // Extract [Description] from the operation type for the operation-level summary
+        // Extract [Description] from the operation type for the operation-level summary.
+        // Fall back to compile-time XML documentation when no [Description] attribute is present.
         var operationDescription = operation.Operation.OperationType
             .GetCustomAttributes(typeof(DescriptionAttribute), inherit: false)
             .OfType<DescriptionAttribute>()
             .FirstOrDefault()?.Description;
+
+        if (operationDescription is null
+            && operation.Operation.TryGetFeatureData<OperationDocumentationFeatureData>(out var docData))
+        {
+            operationDescription = docData.Summary;
+        }
 
         var isDeprecated = operation.Operation.OperationType.IsDefined(typeof(ObsoleteAttribute), inherit: false);
 
@@ -134,6 +141,8 @@ public sealed record OpenApiOperationRenderingContext(
             return (ImmutableArray<OpenApiParameterModel>.Empty, null);
         }
 
+        descriptor.TryGetFeatureData<OperationDocumentationFeatureData>(out var docData);
+
         var parameters = ImmutableArray.CreateBuilder<OpenApiParameterModel>();
         var bodyProperties = ImmutableArray.CreateBuilder<OpenApiRequestBodyPropertyModel>();
 
@@ -141,7 +150,7 @@ public sealed record OpenApiOperationRenderingContext(
         {
             var (schemaType, schemaFormat) = MapClrTypeToOpenApiSchema(entry.PropertyTypeName);
             var constraints = OpenApiValidationConstraints.Extract(descriptor.OperationType, entry.PropertyName);
-            var description = GetPropertyDescription(descriptor.OperationType, entry.PropertyName);
+            var description = GetPropertyDescription(descriptor.OperationType, entry.PropertyName, docData);
             var enumValues = GetEnumValues(descriptor.OperationType, entry.PropertyName);
 
             // Validation-derived format (email, uri, phone) takes precedence over CLR type format.
@@ -299,13 +308,29 @@ public sealed record OpenApiOperationRenderingContext(
         "Trimming",
         "IL2070",
         Justification = "OpenAPI description projection reflects over operation type properties that are preserved by the source generator's generated pipeline code.")]
-    private static string? GetPropertyDescription(Type operationType, string propertyName)
+    private static string? GetPropertyDescription(
+        Type operationType,
+        string propertyName,
+        OperationDocumentationFeatureData? docData)
     {
         var property = operationType.GetProperty(propertyName, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
-        return property?
+        var attributeDescription = property?
             .GetCustomAttributes(typeof(DescriptionAttribute), inherit: true)
             .OfType<DescriptionAttribute>()
             .FirstOrDefault()?.Description;
+
+        if (attributeDescription is not null)
+        {
+            return attributeDescription;
+        }
+
+        // Fall back to compile-time XML documentation when no [Description] attribute is present
+        if (docData?.PropertySummaries.TryGetValue(propertyName, out var xmlSummary) == true)
+        {
+            return xmlSummary;
+        }
+
+        return null;
     }
 
     /// <summary>

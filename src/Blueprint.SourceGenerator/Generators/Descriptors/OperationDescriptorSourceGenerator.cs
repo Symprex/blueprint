@@ -241,6 +241,7 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
             new OperationHttpMethodMetadataModule(),
             new PropertyOwnershipModule(),
             new OperationGroupMetadataModule(),
+            new OperationDocumentationModule(),
             new HttpResponseMetadataModule(),
             new SerializerContextCoverageModule(),
             new SensitivePropertyMetadataModule(),

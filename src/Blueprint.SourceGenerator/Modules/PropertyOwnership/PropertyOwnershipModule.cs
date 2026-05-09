@@ -13,7 +13,7 @@ namespace Blueprint.SourceGenerator.Modules;
 /// </summary>
 public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, IDescriptorContributor, IPipelineContributor
 {
-    private static readonly Regex PlaceholderRegex = new(@"\{([A-Za-z0-9]+)\}", RegexOptions.Compiled);
+    private static readonly Regex PlaceholderRegex = new(@"\{\*{0,2}([A-Za-z0-9]+)\}", RegexOptions.Compiled);
 
     /// <inheritdoc />
     public string ModuleId => nameof(PropertyOwnershipModule);

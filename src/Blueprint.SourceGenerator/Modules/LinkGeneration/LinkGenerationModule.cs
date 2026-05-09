@@ -67,8 +67,8 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
 
-    private static readonly Regex _placeholderRegex = new(@"\{[A-Za-z0-9]+\}", RegexOptions.Compiled);
-    private static readonly Regex _mappedPlaceholderRegex = new(@"{(?<routeName>.*?)(:(?<resourcePropName>.*?))?(\((?<format>.*)\))?}", RegexOptions.Compiled);
+    private static readonly Regex _placeholderRegex = new(@"\{\*{0,2}[A-Za-z0-9]+\}", RegexOptions.Compiled);
+    private static readonly Regex _mappedPlaceholderRegex = new(@"\{(?<catchAll>\*{0,2})(?<routeName>[A-Za-z0-9]+)(:(?<resourcePropName>.*?))?(\((?<format>.*)\))?\}", RegexOptions.Compiled);
 
     /// <inheritdoc/>
     public void RegisterMarkerAttributes(IncrementalGeneratorPostInitializationContext initializationContext)
@@ -176,14 +176,22 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
         EquatableList<LinkPlaceholderMapping> mappings,
         string resourceTypeFqn)
     {
-        // Build an interpolated string expression replacing each {Placeholder} with typed access
-        var interpolated = urlFormat;
-        foreach (var mapping in mappings)
-        {
-            interpolated = interpolated.Replace(
-                $"{{{mapping.RouteName}}}",
-                $"{{System.Uri.EscapeDataString(r.{mapping.ResourcePropertyName}?.ToString() ?? \"\")}}");
-        }
+        var mappingLookup = mappings.ToDictionary(static m => m.RouteName, static m => m.ResourcePropertyName, StringComparer.Ordinal);
+        var interpolated = _mappedPlaceholderRegex.Replace(
+            urlFormat,
+            match =>
+            {
+                var routeName = match.Groups["routeName"].Value;
+                if (!mappingLookup.TryGetValue(routeName, out var resourcePropertyName))
+                {
+                    return match.Value;
+                }
+
+                var propertyValueExpression = $"r.{resourcePropertyName}?.ToString() ?? \"\"";
+                return match.Groups["catchAll"].Length > 0
+                    ? $"{{{propertyValueExpression}}}"
+                    : $"{{System.Uri.EscapeDataString({propertyValueExpression})}}";
+            });
 
         // Build null-guard conditions: return null if any required property is null
         var nullChecks = string.Join(
@@ -213,7 +221,7 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
 
             foreach (var placeholder in placeholders.Cast<Match>())
             {
-                var placeholderName = placeholder.Value.Trim('{', '}');
+                var placeholderName = placeholder.Value.Trim('{', '}', '*');
 
                 if (operationType.GetMembers().Any(m => m.Name == placeholderName) == false)
                 {
@@ -300,7 +308,7 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
                             }
                         }
 
-                        return "{" + routePropertyName + "}";
+                        return "{" + match.Groups["catchAll"].Value + routePropertyName + "}";
                     });
             }
 

@@ -1153,6 +1153,115 @@ public class PropertyOwnershipModuleTests
             .UseDirectory("Generators/Pipelines/Snapshots/Integration/");
     }
 
+    [Fact]
+    public void When_root_link_uses_catch_all_route_parameter_then_descriptor_treats_property_as_route_owned()
+    {
+        var result = CompileDescriptor(
+            """
+            [global::Blueprint.Model.Attributes.RootLink("/folders/{**FolderPath}")]
+            public partial class GetFolderQuery : IQuery<string>
+            {
+                public string FolderPath { get; set; }
+
+                public static Task<string> HandleAsync(GetFolderQuery operation)
+                {
+                    return Task.FromResult(operation.FolderPath);
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var descriptorSource = result.Output
+            .Select(static t => t.ToString())
+            .FirstOrDefault(static s => s.Contains("GetFolderQueryDescriptor") || s.Contains("OperationPropertyOwnershipFeatureData"));
+
+        descriptorSource.Should().NotBeNull();
+        descriptorSource!.Should().Contain("PropertyBindingSource.Route");
+        descriptorSource.Should().Contain("FolderPath");
+    }
+
+    [Fact]
+    public void When_self_link_uses_catch_all_route_parameter_then_descriptor_treats_property_as_route_owned()
+    {
+        var result = CompileDescriptor(
+            """
+            public partial class FolderApiResource : global::Blueprint.Model.ApiResource
+            {
+                public override string Object => "folder_api_resource";
+                public string FolderPath { get; set; }
+            }
+
+            [global::Blueprint.Model.Attributes.SelfLink(typeof(FolderApiResource), "/folders/{**FolderPath}")]
+            public partial class GetFolderResourceQuery : IQuery<string>
+            {
+                public string FolderPath { get; set; }
+
+                public static Task<string> HandleAsync(GetFolderResourceQuery operation)
+                {
+                    return Task.FromResult(operation.FolderPath);
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var descriptorSource = result.Output
+            .Select(static t => t.ToString())
+            .FirstOrDefault(static s => s.Contains("GetFolderResourceQueryDescriptor") || s.Contains("OperationPropertyOwnershipFeatureData"));
+
+        descriptorSource.Should().NotBeNull();
+        descriptorSource!.Should().Contain("PropertyBindingSource.Route");
+        descriptorSource.Should().Contain("FolderPath");
+    }
+
+    [Fact]
+    public void When_root_link_uses_catch_all_route_parameter_then_pipeline_extracts_route_value()
+    {
+        const string source = """
+            using Blueprint;
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace
+            {
+                [BlueprintAppScan]
+                public partial class TestApp : BlueprintApp { }
+
+                [RootLink("/folders/{**FolderPath}")]
+                public partial class GetFolderPipelineQuery : IQuery<string>
+                {
+                    public string FolderPath { get; set; }
+
+                    public static Task<string> HandleAsync(GetFolderPipelineQuery operation)
+                    {
+                        return Task.FromResult(operation.FolderPath);
+                    }
+                }
+            }
+            """;
+
+        var generators = new[]
+        {
+            TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>(),
+            TestHelpers.CreateTrackedGenerator<OperationExecutorPipelineSourceGenerator>(),
+        };
+
+        var result = TestHelpers.CompileWithTrackedGenerators(
+            generators,
+            [source],
+            ["Input0.cs"]);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var pipelineSource = string.Join(
+            Environment.NewLine,
+            result.GetGeneratedSources(nameof(OperationExecutorPipelineSourceGenerator)).Select(static s => s.SourceText.ToString()));
+
+        pipelineSource.Should().Contain("httpContext.Request.RouteValues[\"FolderPath\"]");
+    }
+
     private static GenerationResult CompileDescriptor(string source)
     {
         return TestHelpers.Compile<OperationDescriptorSourceGenerator>(

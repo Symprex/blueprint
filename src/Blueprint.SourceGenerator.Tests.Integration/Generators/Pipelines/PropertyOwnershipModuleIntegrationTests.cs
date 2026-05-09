@@ -1,4 +1,5 @@
 using Blueprint.Model;
+using Blueprint.SourceGenerator.Tests.Integration.Generators.OperationDescriptors;
 using FluentAssertions;
 
 namespace Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines;
@@ -66,6 +67,28 @@ public class PropertyOwnershipModuleIntegrationTests
 
         ownershipData!.Entries.Should().Contain(
             static e => e.PropertyName == "Id" && e.Source == PropertyBindingSource.Route);
+    }
+
+    [Fact]
+    public async Task When_route_uses_catch_all_then_pipeline_populates_full_path_from_route_values()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(GetFolderByPathPopulationQuery));
+        var descriptor = GetFolderByPathPopulationQuery.Configure();
+        var httpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        httpContext.Request.RouteValues["FolderPath"] = "UK/Marketing";
+
+        var context = new Blueprint.Runtime.Exec.ApiOperationContext(new EmptyServiceProvider(), app, descriptor, CancellationToken.None)
+        {
+            Operation = new GetFolderByPathPopulationQuery(),
+            HttpContext = httpContext,
+        };
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<Blueprint.Runtime.Exec.OkResult<string>>();
+        ((Blueprint.Runtime.Exec.OkResult<string>)result).Content.Should().Be("UK/Marketing");
     }
 
     [Fact]
@@ -279,6 +302,18 @@ public partial class SelfLinkRoutePopulationApiResource : ApiResource
     public string Id { get; init; } = null!;
 }
 
+[Blueprint.Model.Attributes.AllowAnonymous]
+[Blueprint.Model.Attributes.RootLink("/population-test/folders/{**FolderPath}")]
+public partial class GetFolderByPathPopulationQuery : IQuery<string>
+{
+    public string? FolderPath { get; set; }
+
+    public static Task<string> HandleAsync(GetFolderByPathPopulationQuery operation)
+    {
+        return Task.FromResult(operation.FolderPath ?? string.Empty);
+    }
+}
+
 /// <summary>
 /// Query-only GET with no route params — all bindable properties are query-owned.
 /// </summary>
@@ -418,5 +453,13 @@ public partial class MixedBindingPopulationCommand : ICommand<string>
     public static Task<string> HandleAsync(MixedBindingPopulationCommand operation)
     {
         return Task.FromResult($"{operation.OrgId}:{operation.Filter}:{operation.TenantId}:{operation.Token}:{operation.Name}");
+    }
+}
+
+internal sealed class EmptyServiceProvider : IServiceProvider
+{
+    public object? GetService(Type serviceType)
+    {
+        return null;
     }
 }

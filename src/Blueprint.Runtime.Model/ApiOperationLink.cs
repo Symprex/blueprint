@@ -167,6 +167,8 @@ public class ApiOperationLink
             // Strip any format specifier (e.g. {Id:UserId} → just use "Id")
             var colonIndex = placeholder.IndexOf(':');
             var propertyName = colonIndex >= 0 ? placeholder[..colonIndex] : placeholder;
+            var isCatchAll = propertyName.StartsWith('*');
+            propertyName = propertyName.TrimStart('*');
 
             var property = _propertyCache.GetOrAdd(
                 (valueType, propertyName),
@@ -186,7 +188,8 @@ public class ApiOperationLink
                 return null;
             }
 
-            var encoded = Uri.EscapeDataString(value.ToString()!);
+            var renderedValue = value.ToString()!;
+            var encoded = isCatchAll ? renderedValue : Uri.EscapeDataString(renderedValue);
             result = string.Concat(result.AsSpan(0, openBrace), encoded, result.AsSpan(closeBrace + 1));
             startIndex = openBrace + encoded.Length;
         }
