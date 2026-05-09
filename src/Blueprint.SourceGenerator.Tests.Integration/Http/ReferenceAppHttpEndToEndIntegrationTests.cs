@@ -1757,6 +1757,131 @@ public class ReferenceAppHttpEndToEndIntegrationTests
             "property populator should fill TenantId from JWT claim, allowing the request to proceed");
     }
 
+    [Fact]
+    public async Task When_validate_template_throws_bad_request_exception_then_returns_400()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/templates/{Id}/validate", "POST");
+        endpoint.Should().NotBeNull("the validate template route should be registered");
+
+        // The handler throws BadRequestException when Name is "BAD"
+        var bodyJson = """{"id":"template-001","name":"BAD"}"""u8.ToArray();
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Post;
+            context.Request.Path = "/api/templates/template-001/validate";
+            context.Request.ContentType = "application/json; charset=utf-8";
+            context.Request.ContentLength = bodyJson.Length;
+            context.Request.Body = new MemoryStream(bodyJson);
+            context.Request.RouteValues = new RouteValueDictionary
+            {
+                ["Id"] = "template-001",
+            };
+            context.User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "user-1"),
+                ],
+                authenticationType: "test"));
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status400BadRequest,
+            "BadRequestException from handler should translate to 400 via exception pipeline");
+    }
+
+    [Fact]
+    public async Task When_create_template_with_invalid_allowed_value_returns_422()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/templates", "POST");
+        endpoint.Should().NotBeNull();
+
+        // "secret" is not in AllowedValues("public", "internal", "private")
+        var bodyJson = """{"name":"Valid Name","visibility":"secret"}"""u8.ToArray();
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Post;
+            context.Request.Path = "/api/templates";
+            context.Request.ContentType = "application/json; charset=utf-8";
+            context.Request.ContentLength = bodyJson.Length;
+            context.Request.Body = new MemoryStream(bodyJson);
+            context.User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "user-1"),
+                ],
+                authenticationType: "test"));
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status422UnprocessableEntity,
+            "[AllowedValues] should reject values not in the permitted set");
+        response.Body.Should().Contain("Visibility");
+    }
+
+    [Fact]
+    public async Task When_create_template_with_invalid_email_returns_422()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/templates", "POST");
+        endpoint.Should().NotBeNull();
+
+        var bodyJson = """{"name":"Valid Name","authorEmail":"not-an-email"}"""u8.ToArray();
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Post;
+            context.Request.Path = "/api/templates";
+            context.Request.ContentType = "application/json; charset=utf-8";
+            context.Request.ContentLength = bodyJson.Length;
+            context.Request.Body = new MemoryStream(bodyJson);
+            context.User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "user-1"),
+                ],
+                authenticationType: "test"));
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status422UnprocessableEntity,
+            "[EmailAddress] should reject invalid email format");
+        response.Body.Should().Contain("AuthorEmail");
+    }
+
+    [Fact]
+    public async Task When_create_template_with_out_of_range_priority_returns_422()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/templates", "POST");
+        endpoint.Should().NotBeNull();
+
+        var bodyJson = """{"name":"Valid Name","priority":0}"""u8.ToArray();
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Post;
+            context.Request.Path = "/api/templates";
+            context.Request.ContentType = "application/json; charset=utf-8";
+            context.Request.ContentLength = bodyJson.Length;
+            context.Request.Body = new MemoryStream(bodyJson);
+            context.User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "user-1"),
+                ],
+                authenticationType: "test"));
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status422UnprocessableEntity,
+            "[Range(1,1000)] should reject priority below minimum");
+        response.Body.Should().Contain("Priority");
+    }
+
     private static async Task<TestHttpResponse> InvokeEndpointAsync(
         RouteEndpoint endpoint,
         IServiceProvider serviceProvider,
