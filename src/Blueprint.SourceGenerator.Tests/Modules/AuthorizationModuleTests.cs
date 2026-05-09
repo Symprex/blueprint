@@ -1,4 +1,6 @@
+using System.Text;
 using Blueprint.SourceGenerator.Generators.Descriptors;
+using Blueprint.SourceGenerator.Generators.Pipelines;
 using Blueprint.SourceGenerator.Modules.Authentication;
 using Blueprint.SourceGenerator.Modules.Authorization;
 using Blueprint.SourceGenerator.Planning;
@@ -713,6 +715,166 @@ public class AuthorizationModuleTests
         result.Diagnostics.Should().Contain(
             static d => d.Id == "BPAU006",
             "[FromResource] should not follow transitive chains");
+    }
+
+    // ── Resource key template validation tests ──────────────────────
+
+    [Fact]
+    public void When_Resource_template_token_references_missing_property_then_reports_BPAU007()
+    {
+        var compilation = CreateCompilation(
+            """
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace;
+
+            [RootLink("/accounts/{Id}")]
+            [Resource("account", "read", "/tenants/{TenantId}/accounts/{NonExistentProp}")]
+            public partial class GetAccountQuery : IQuery<string>
+            {
+                public string Id { get; set; }
+                public string TenantId { get; set; }
+
+                public static Task<string> HandleAsync(GetAccountQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        var config = new BlueprintSourceGenerationConfig([new AuthenticationModule(), new AuthorizationModule()]);
+        var result = config.BuildPipelinePlan("TestNamespace.GetAccountQuery", compilation);
+
+        result.Diagnostics.Should().Contain(
+            static d => d.Descriptor.Id == "BPAU007",
+            "template token referencing a non-existent property should report BPAU007");
+    }
+
+    [Fact]
+    public void When_Resource_template_token_references_existing_property_then_no_diagnostic()
+    {
+        var compilation = CreateCompilation(
+            """
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace;
+
+            [RootLink("/accounts/{Id}")]
+            [Resource("account", "read", "/tenants/{TenantId}/accounts/{Id}")]
+            public partial class GetAccountQuery : IQuery<string>
+            {
+                public string Id { get; set; }
+                public string TenantId { get; set; }
+
+                public static Task<string> HandleAsync(GetAccountQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        var config = new BlueprintSourceGenerationConfig([new AuthenticationModule(), new AuthorizationModule()]);
+        var result = config.BuildPipelinePlan("TestNamespace.GetAccountQuery", compilation);
+
+        result.Diagnostics.Should().NotContain(
+            static d => d.Descriptor.Id == "BPAU007",
+            "all template tokens resolve to existing properties");
+    }
+
+    [Fact]
+    public void When_Resource_template_has_Auth_claim_token_then_no_diagnostic()
+    {
+        var compilation = CreateCompilation(
+            """
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace;
+
+            [RootLink("/accounts/{Id}")]
+            [Resource("account", "read", "/tenants/{Auth:AccountId}/accounts/{Id}")]
+            public partial class GetAccountQuery : IQuery<string>
+            {
+                public string Id { get; set; }
+
+                public static Task<string> HandleAsync(GetAccountQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        var config = new BlueprintSourceGenerationConfig([new AuthenticationModule(), new AuthorizationModule()]);
+        var result = config.BuildPipelinePlan("TestNamespace.GetAccountQuery", compilation);
+
+        result.Diagnostics.Should().NotContain(
+            static d => d.Descriptor.Id == "BPAU007",
+            "Auth:ClaimType tokens should not be validated as operation properties");
+    }
+
+    // ── Pipeline snapshot test ──────────────────────────────────────
+
+    [Fact]
+    public async Task When_Resource_with_template_then_pipeline_snapshot_matches()
+    {
+        const string source = """
+            using Blueprint;
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace
+            {
+                [BlueprintAppScan]
+                public partial class TestApp : BlueprintApp { }
+
+                [RootLink("/tenants/{TenantId}/accounts/{Id}")]
+                [Resource("account", "read", "/tenants/{Auth:AccountId}/accounts/{Id}")]
+                public partial class GetAccountQuery : IQuery<string>
+                {
+                    public string TenantId { get; set; }
+                    public string Id { get; set; }
+
+                    public static Task<string> HandleAsync(GetAccountQuery operation)
+                    {
+                        return Task.FromResult("ok");
+                    }
+                }
+            }
+            """;
+
+        var generators = new[]
+        {
+            TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>(),
+            TestHelpers.CreateTrackedGenerator<OperationExecutorPipelineSourceGenerator>(),
+        };
+
+        var result = TestHelpers.CompileWithTrackedGenerators(
+            generators,
+            [source],
+            ["Input0.cs"]);
+
+        result.Diagnostics.Should().BeEmpty("the compilation should have no diagnostics");
+
+        var pipelineSources = result.GetGeneratedSources(nameof(OperationExecutorPipelineSourceGenerator));
+        pipelineSources.Should().HaveCountGreaterOrEqualTo(1, "pipeline should be generated");
+
+        var outputText = new StringBuilder();
+        foreach (var s in pipelineSources.OrderBy(static s => s.HintName))
+        {
+            outputText.AppendLine(s.HintName + ":");
+            outputText.AppendLine();
+            outputText.AppendLine(s.SourceText);
+            outputText.AppendLine();
+        }
+
+        await Verify(outputText)
+            .UseDirectory("Generators/Pipelines/Snapshots/Integration/");
     }
 
     // ── Helpers ───────────────────────────────────────────────────────

@@ -215,6 +215,8 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
         // Resolve effective scope pairs for the pipeline authorization check
         List<(string Noun, string Verb, string? ResourceKeyTemplate)> effectiveScopePairs;
 
+        // For [FromResource], property tokens are resolved against the current operation type
+        // (which may differ from the template source operation)
         if (fromResourceTarget is not null)
         {
             var targetResourceAttributes = GetResourceAttributes(fromResourceTarget);
@@ -236,6 +238,42 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
             return;
         }
 
+        // Validate template property tokens exist on the operation type
+        var hasTemplateValidationErrors = false;
+
+        foreach (var (_, _, template) in effectiveScopePairs)
+        {
+            if (template is null)
+            {
+                continue;
+            }
+
+            var tokens = ResourceKeyTemplateParser.ParseTokens(template);
+
+            foreach (var token in tokens)
+            {
+                if (token.IsClaimToken)
+                {
+                    continue;
+                }
+
+                // Property tokens must exist on the operation type
+                var hasProperty = operationType.GetMembers()
+                    .Any(m => m is IPropertySymbol && m.Name == token.Name);
+
+                if (!hasProperty)
+                {
+                    context.AddDiagnostic(
+                        new DiagnosticInfo(
+                            AuthorizationDiagnosticDescriptors.ResourceKeyTemplatePropertyNotFound,
+                            operationType.Locations.FirstOrDefault(),
+                            [operationType.Name, token.Name]));
+
+                    hasTemplateValidationErrors = true;
+                }
+            }
+        }
+
         // Only add our own identity check if AuthenticationModule isn't already doing it
         if (!HasAttribute(operationType, MustBeAuthenticatedAttributeName))
         {
@@ -248,7 +286,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
         context.RequireAsync();
         context.AddRenderStep(
             PipelineStage.Authorisation,
-            ctx => RenderAuthorizationCheck(ctx, effectiveScopePairs));
+            ctx => RenderAuthorizationCheck(ctx, effectiveScopePairs, hasTemplateValidationErrors));
     }
 
     private static bool HasHttpHostExposure(INamedTypeSymbol operationType)
@@ -272,7 +310,93 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
         context.WriteBlankLine();
     }
 
-    private static void RenderAuthorizationCheck(PipelineRenderContext context, List<(string Noun, string Verb, string? ResourceKeyTemplate)> scopePairs)
+    private static void RenderAuthorizationCheck(
+        PipelineRenderContext context,
+        List<(string Noun, string Verb, string? ResourceKeyTemplate)> scopePairs,
+        bool hasTemplateValidationErrors)
+    {
+        var hasTemplates = scopePairs.Any(static sp => sp.ResourceKeyTemplate is not null);
+
+        // When templates are valid, prefer the resolved provider for zero-reflection expansion
+        if (hasTemplates && !hasTemplateValidationErrors)
+        {
+            RenderResolvedAuthorizationCheck(context, scopePairs);
+        }
+        else
+        {
+            RenderLegacyAuthorizationCheck(context, scopePairs);
+        }
+    }
+
+    /// <summary>
+    /// Generates pipeline code that uses <c>IResolvedResourceAuthorizationProvider</c> with
+    /// compile-time expanded resource keys. Falls back to <c>IResourceAuthorizationProvider</c>
+    /// when the resolved provider is not registered.
+    /// </summary>
+    private static void RenderResolvedAuthorizationCheck(
+        PipelineRenderContext context,
+        List<(string Noun, string Verb, string? ResourceKeyTemplate)> scopePairs)
+    {
+        var operationExpr = context.GetOperationExpression();
+        var principalExpr = "((Blueprint.Runtime.Http.IHttpOperationContext)context).HttpContext.User";
+
+        // Try resolved provider first
+        context.DeclareVariable(
+            "resolvedAuthProvider",
+            context.GetOptionalServiceExpression("Blueprint.Authorization.IResolvedResourceAuthorizationProvider"));
+
+        context.If(
+            "resolvedAuthProvider != null",
+            resolvedBranch =>
+            {
+                // Generate inline-expanded ResolvedScopePair array
+                var resolvedElements = string.Join(
+                    ", ",
+                    scopePairs.Select(sp =>
+                    {
+                        if (sp.ResourceKeyTemplate is not null)
+                        {
+                            var tokens = ResourceKeyTemplateParser.ParseTokens(sp.ResourceKeyTemplate);
+                            var expandedExpr = ResourceKeyTemplateParser.GenerateExpansionExpression(
+                                sp.ResourceKeyTemplate, tokens, operationExpr, principalExpr);
+
+                            return $"new Blueprint.Model.ResolvedScopePair(\"{sp.Noun}\", \"{sp.Verb}\", \"{sp.ResourceKeyTemplate}\", {expandedExpr})";
+                        }
+
+                        return $"new Blueprint.Model.ResolvedScopePair(\"{sp.Noun}\", \"{sp.Verb}\", null, null)";
+                    }));
+
+                resolvedBranch.DeclareVariable(
+                    "isAuthorized",
+                    $"await resolvedAuthProvider.IsAuthorizedAsync(context, {principalExpr}, new Blueprint.Model.ResolvedScopePair[] {{ {resolvedElements} }}, ((Blueprint.Runtime.Http.IHttpOperationContext)context).HttpContext.RequestAborted)");
+
+                resolvedBranch.If(
+                    "!isAuthorized",
+                    deniedBranch =>
+                    {
+                        deniedBranch.Return(
+                            context.IsPipelineAsync()
+                                ? "new Blueprint.Runtime.Exec.ForbiddenResult()"
+                                : "System.Threading.Tasks.Task.FromResult<Blueprint.OperationResult>(new Blueprint.Runtime.Exec.ForbiddenResult())");
+                    });
+            });
+
+        // Fallback to legacy provider
+        context.WriteStatement("else");
+        context.WriteStatement("{");
+        RenderLegacyAuthorizationCheckBody(context, scopePairs);
+        context.WriteStatement("}");
+
+        context.WriteBlankLine();
+    }
+
+    /// <summary>
+    /// Generates pipeline code that uses the legacy <c>IResourceAuthorizationProvider</c> with
+    /// raw template strings (runtime expansion via regex/reflection).
+    /// </summary>
+    private static void RenderLegacyAuthorizationCheck(
+        PipelineRenderContext context,
+        List<(string Noun, string Verb, string? ResourceKeyTemplate)> scopePairs)
     {
         // Resolve optional IResourceAuthorizationProvider — permissive when not registered
         context.DeclareVariable(
@@ -283,29 +407,72 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
             "authorizationProvider != null",
             branch =>
             {
-                // Build the scope pairs array expression including optional resource key templates
-                var scopePairElements = string.Join(
-                    ", ",
-                    scopePairs.Select(static sp => sp.ResourceKeyTemplate is not null
-                        ? $"new Blueprint.Model.ScopePair(\"{sp.Noun}\", \"{sp.Verb}\", \"{sp.ResourceKeyTemplate}\")"
-                        : $"new Blueprint.Model.ScopePair(\"{sp.Noun}\", \"{sp.Verb}\")"));
+                RenderLegacyAuthorizationCheckInner(branch, context, scopePairs);
+            });
+
+        context.WriteBlankLine();
+    }
+
+    private static void RenderLegacyAuthorizationCheckBody(
+        PipelineRenderContext context,
+        List<(string Noun, string Verb, string? ResourceKeyTemplate)> scopePairs)
+    {
+        context.DeclareVariable(
+            "legacyAuthProvider",
+            context.GetOptionalServiceExpression("Blueprint.Authorization.IResourceAuthorizationProvider"));
+
+        context.If(
+            "legacyAuthProvider != null",
+            branch =>
+            {
+                var scopePairElements = BuildScopePairArrayExpression(scopePairs);
 
                 branch.DeclareVariable(
                     "isAuthorized",
-                    $"await authorizationProvider.IsAuthorizedAsync(context, ((Blueprint.Runtime.Http.IHttpOperationContext)context).HttpContext.User, new Blueprint.Model.ScopePair[] {{ {scopePairElements} }}, ((Blueprint.Runtime.Http.IHttpOperationContext)context).HttpContext.RequestAborted)");
+                    $"await legacyAuthProvider.IsAuthorizedAsync(context, ((Blueprint.Runtime.Http.IHttpOperationContext)context).HttpContext.User, new Blueprint.Model.ScopePair[] {{ {scopePairElements} }}, ((Blueprint.Runtime.Http.IHttpOperationContext)context).HttpContext.RequestAborted)");
 
                 branch.If(
                     "!isAuthorized",
-                    innerBranch =>
+                    deniedBranch =>
                     {
-                        innerBranch.Return(
+                        deniedBranch.Return(
                             context.IsPipelineAsync()
                                 ? "new Blueprint.Runtime.Exec.ForbiddenResult()"
                                 : "System.Threading.Tasks.Task.FromResult<Blueprint.OperationResult>(new Blueprint.Runtime.Exec.ForbiddenResult())");
                     });
             });
+    }
 
-        context.WriteBlankLine();
+    private static void RenderLegacyAuthorizationCheckInner(
+        PipelineRenderContext branch,
+        PipelineRenderContext context,
+        List<(string Noun, string Verb, string? ResourceKeyTemplate)> scopePairs)
+    {
+        var scopePairElements = BuildScopePairArrayExpression(scopePairs);
+
+        branch.DeclareVariable(
+            "isAuthorized",
+            $"await authorizationProvider.IsAuthorizedAsync(context, ((Blueprint.Runtime.Http.IHttpOperationContext)context).HttpContext.User, new Blueprint.Model.ScopePair[] {{ {scopePairElements} }}, ((Blueprint.Runtime.Http.IHttpOperationContext)context).HttpContext.RequestAborted)");
+
+        branch.If(
+            "!isAuthorized",
+            deniedBranch =>
+            {
+                deniedBranch.Return(
+                    context.IsPipelineAsync()
+                        ? "new Blueprint.Runtime.Exec.ForbiddenResult()"
+                        : "System.Threading.Tasks.Task.FromResult<Blueprint.OperationResult>(new Blueprint.Runtime.Exec.ForbiddenResult())");
+            });
+    }
+
+    private static string BuildScopePairArrayExpression(
+        List<(string Noun, string Verb, string? ResourceKeyTemplate)> scopePairs)
+    {
+        return string.Join(
+            ", ",
+            scopePairs.Select(static sp => sp.ResourceKeyTemplate is not null
+                ? $"new Blueprint.Model.ScopePair(\"{sp.Noun}\", \"{sp.Verb}\", \"{sp.ResourceKeyTemplate}\")"
+                : $"new Blueprint.Model.ScopePair(\"{sp.Noun}\", \"{sp.Verb}\")"));
     }
 
     private static List<(string Noun, string Verb, string? ResourceKeyTemplate)> GetResourceAttributes(INamedTypeSymbol operationType)

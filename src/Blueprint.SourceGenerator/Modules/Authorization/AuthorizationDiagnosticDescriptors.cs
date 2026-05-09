@@ -54,4 +54,16 @@ internal static class AuthorizationDiagnosticDescriptors
         category: "Blueprint.Authorization",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
+
+    /// <summary>
+    /// BPAU007: A <c>{PropertyName}</c> token in a resource key template does not match any
+    /// public property on the operation type (or the <c>[FromResource]</c> source operation).
+    /// </summary>
+    public static readonly DiagnosticDescriptor ResourceKeyTemplatePropertyNotFound = new(
+        id: "BPAU007",
+        title: "Resource key template token does not match a property",
+        messageFormat: "Resource key template for operation '{0}' contains token '{{{1}}}' but no public property '{1}' exists on the operation type. Fix the template or add the property.",
+        category: "Blueprint.Authorization",
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
 }
