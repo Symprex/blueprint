@@ -38,8 +38,6 @@ public class ApiOperationContext : IHttpOperationContext
         this.ServiceProvider = serviceProvider;
         this.Operation = operationDescriptor.CreateInstance();
         this.Activity = Activity.Current;
-
-        this.Data = new Dictionary<string, object>();
     }
 
     /// <summary>
@@ -85,11 +83,17 @@ public class ApiOperationContext : IHttpOperationContext
     /// </summary>
     public bool IsNested => this.Parent != null;
 
+    private Dictionary<string, object>? _data;
+
     /// <summary>
     /// Provides a generic means of middleware components or hosts to store data related to an API operation
-    /// to be used throughout the processing pipeline.
+    /// to be used throughout the processing pipeline. Lazy-initialized to avoid allocation when not used.
     /// </summary>
-    public Dictionary<string, object> Data { get; private set; }
+    public Dictionary<string, object> Data
+    {
+        get => this._data ??= new Dictionary<string, object>();
+        private set => this._data = value;
+    }
 
     /// <summary>
     /// Gets or sets the <see cref="Microsoft.AspNetCore.Http.HttpContext"/> associated with this operation

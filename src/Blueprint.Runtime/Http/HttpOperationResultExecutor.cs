@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.ComponentModel.DataAnnotations;
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
@@ -204,19 +205,21 @@ public class HttpOperationResultExecutor
         await httpContext.Response.WriteAsync(json, httpContext.RequestAborted);
     }
 
+    private static readonly ConcurrentDictionary<JsonSerializerOptions, JsonSerializerOptions> _fallbackOptionsCache = new();
+
     [UnconditionalSuppressMessage(
         "Trimming",
         "IL2026",
         Justification = "The HTTP executor already relies on runtime serialization for uncovered response roots while the serializer-coverage migration remains in progress. This fallback keeps app-owned source-generated metadata first and only adds reflection metadata for wrapper roots the app context does not declare.")]
     private static JsonSerializerOptions CreateFallbackSerializerOptions(JsonSerializerOptions serializerOptions)
     {
-        var fallbackOptions = new JsonSerializerOptions(serializerOptions)
-        {
-            TypeInfoResolver = serializerOptions.TypeInfoResolver is null
-            ? new DefaultJsonTypeInfoResolver()
-            : JsonTypeInfoResolver.Combine(serializerOptions.TypeInfoResolver, new DefaultJsonTypeInfoResolver()),
-        };
-        return fallbackOptions;
+        return _fallbackOptionsCache.GetOrAdd(serializerOptions, static opts =>
+            new JsonSerializerOptions(opts)
+            {
+                TypeInfoResolver = opts.TypeInfoResolver is null
+                    ? new DefaultJsonTypeInfoResolver()
+                    : JsonTypeInfoResolver.Combine(opts.TypeInfoResolver, new DefaultJsonTypeInfoResolver()),
+            });
     }
 
     private static bool DescriptorSupportsFailureResult(ApiOperationDescriptor descriptor, OperationResult result)
