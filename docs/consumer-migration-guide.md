@@ -176,6 +176,113 @@ Register your `IResourceAuthorizationProvider` to implement scope checking:
 blueprint.AddResourceAuthorizationProvider<YourResourceAuthorizationProvider>();
 ```
 
+#### User context factory
+
+In legacy Blueprint, the user context was built during the authentication middleware. In source-generated Blueprint, register an `IUserAuthorisationContextFactory` that converts ASP.NET Core's `ClaimsIdentity` into your application-specific `IUserAuthorisationContext`:
+
+```csharp
+public sealed class AppUserContextFactory : IUserAuthorisationContextFactory
+{
+    public Task<IUserAuthorisationContext?> CreateContextAsync(
+        ClaimsIdentity identity,
+        CancellationToken cancellationToken)
+    {
+        var userId = identity.FindFirst("sub")?.Value;
+        if (userId is null) return Task.FromResult<IUserAuthorisationContext?>(null);
+
+        var accountId = identity.FindFirst("account_id")?.Value ?? "default";
+        return Task.FromResult<IUserAuthorisationContext?>(
+            new AppUserContext(userId, accountId, identity));
+    }
+}
+
+// Register:
+blueprint.AddUserAuthorisationContextFactory<AppUserContextFactory>();
+```
+
+The user context is then available via `operationContext.UserAuthorisationContext` in authorisers and handlers.
+
+#### Business-level authorisers
+
+Register `IApiAuthoriser` implementations for business-level access control (tenant isolation, feature gates, subscription checks):
+
+```csharp
+public sealed class TenantIsolationAuthoriser : IApiAuthoriser
+{
+    // Only check operations with a TenantId property
+    public bool AppliesTo(ApiOperationDescriptor descriptor)
+        => descriptor.OperationType.GetProperty("TenantId") is not null;
+
+    public Task<ExecutionAllowed> CanExecuteOperationAsync(
+        ApiOperationContext ctx, ApiOperationDescriptor descriptor, object operation)
+    {
+        var tenantId = operation.GetType().GetProperty("TenantId")?.GetValue(operation)?.ToString();
+        var userAccountId = ctx.UserAuthorisationContext?.AccountId;
+
+        if (tenantId is not null && !string.Equals(userAccountId, tenantId, StringComparison.OrdinalIgnoreCase))
+            return Task.FromResult(ExecutionAllowed.No("Access denied", "tenant-isolation", ExecutionAllowedFailureType.Authorisation));
+
+        return ExecutionAllowed.YesTask;
+    }
+
+    public Task<ExecutionAllowed> CanShowLinkAsync(
+        ApiOperationContext ctx, ApiOperationDescriptor descriptor, object resource)
+        => ExecutionAllowed.YesTask;
+}
+
+// Register:
+blueprint.AddApiAuthoriser<TenantIsolationAuthoriser>();
+```
+
+#### Claims-based authorization
+
+For permission-based access control, use `[Permission]` and `[PermissionFor]` attributes with the built-in claims authoriser:
+
+```csharp
+// System-wide permission (not scoped to a resource)
+[Permission("ManageUsers")]
+public partial class ListUsersQuery : IQuery<OkResult<UserList>> { }
+
+// Resource-scoped permission with templated resource key
+[PermissionFor("Edit", "Tenant/{TenantId}/Document/{DocumentId}")]
+public partial class UpdateDocumentCommand : ICommand<OkResult<Document>>
+{
+    public string TenantId { get; set; }
+    public string DocumentId { get; set; }
+}
+```
+
+Register the claims authoriser:
+
+```csharp
+blueprint.AddClaimsAuthorisation();
+```
+
+#### State-based link visibility
+
+To conditionally hide HATEOAS links based on resource state, implement `IApiAuthoriser` with a `CanShowLinkAsync` check:
+
+```csharp
+public sealed class ArchiveLinkChecker : IApiAuthoriser
+{
+    public bool AppliesTo(ApiOperationDescriptor descriptor)
+        => descriptor.OperationType == typeof(ArchiveTemplateCommand);
+
+    public Task<ExecutionAllowed> CanExecuteOperationAsync(
+        ApiOperationContext ctx, ApiOperationDescriptor descriptor, object operation)
+        => ExecutionAllowed.YesTask;
+
+    public Task<ExecutionAllowed> CanShowLinkAsync(
+        ApiOperationContext ctx, ApiOperationDescriptor descriptor, object resource)
+    {
+        if (resource is Template { IsArchived: true })
+            return Task.FromResult(ExecutionAllowed.No("Already archived", "state-check"));
+
+        return ExecutionAllowed.YesTask;
+    }
+}
+```
+
 ### 7. Migrate validation
 
 Validation works the same way — use `System.ComponentModel.DataAnnotations` attributes on operation properties. The generator creates compile-time fast paths for supported attributes:
