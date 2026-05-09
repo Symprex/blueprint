@@ -155,6 +155,7 @@ public sealed class AuthenticationModule : IBlueprintSourceGeneratorModule, IDes
     {
         writer.AppendLine(
             "this.SetFeatureData(new global::Blueprint.Model.OperationAuthenticationFeatureData(global::Blueprint.Model.AuthenticationRequirement.Anonymous));");
+        writer.AppendLine("this.AnonymousAccessAllowed = true;");
     }
 
     private static void RenderAuthenticatedFeatureData(CodeWriter.ICodeWriter writer)
