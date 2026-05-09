@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Primitives;
+
 namespace Blueprint.Runtime.Exec;
 
 /// <summary>
@@ -6,6 +8,8 @@ namespace Blueprint.Runtime.Exec;
 /// </summary>
 public class OkResult : OperationResult
 {
+    private Dictionary<string, StringValues>? _headers;
+
     /// <summary>
     /// Initializes a new instance of the <see cref="OkResult" /> class with the given content.
     /// </summary>
@@ -21,6 +25,18 @@ public class OkResult : OperationResult
     /// Gets or sets the content that will be output when this result is executed.
     /// </summary>
     public object Content { get; set; }
+
+    /// <summary>
+    /// Gets a dictionary of additional HTTP response headers to include when this result is written.
+    /// The dictionary is lazily created on first access.
+    /// </summary>
+    public Dictionary<string, StringValues> Headers => this._headers ??= new Dictionary<string, StringValues>();
+
+    /// <summary>
+    /// Gets a value indicating whether any custom headers have been set on this result,
+    /// without triggering lazy allocation.
+    /// </summary>
+    public bool HasHeaders => this._headers is { Count: > 0 };
 
     /// <inheritdoc />
     public override Task ExecuteAsync(ApiOperationContext context)
