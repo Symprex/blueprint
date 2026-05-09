@@ -228,6 +228,7 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
             new TasksHostModule(),
             new AuthenticationModule(),
             new AuthorizationModule(),
+            new ClaimsAuthorizationModule(),
             new ValidationModule(),
             new DefaultExceptionTranslationModule(),
             new FlattenedResultOutcomeModule(),
