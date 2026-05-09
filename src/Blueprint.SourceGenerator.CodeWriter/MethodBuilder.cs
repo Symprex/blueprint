@@ -100,6 +100,12 @@ namespace Blueprint.SourceGenerator.CodeWriter
         public bool IsStatic { get; private set; }
 
         /// <summary>
+        /// Gets a value indicating whether the generated method will be emitted with the extern modifier
+        /// (no body, just a semicolon-terminated signature).
+        /// </summary>
+        public bool IsExtern { get; private set; }
+
+        /// <summary>
         /// Sets the XML summary that will be emitted for the generated method.
         /// </summary>
         /// <param name="summary">The caller-facing description of what the generated method does or when it should be used.</param>
@@ -343,6 +349,16 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
+        /// Marks the generated method as extern (no body, semicolon-terminated signature).
+        /// </summary>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
+        public MethodBuilder MakeExternMethod()
+        {
+            this.IsExtern = true;
+            return this;
+        }
+
+        /// <summary>
         /// Marks the generated method as virtual.
         /// </summary>
         /// <returns>The same builder so fluent configuration can continue.</returns>
@@ -411,6 +427,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
             {
                 output = $"abstract {output}";
             }
+            else if (this.IsStatic && this.IsExtern)
+            {
+                output = $"static extern {output}";
+            }
             else if (this.IsStatic)
             {
                 output = $"static {output}";
@@ -431,7 +451,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
                 writer.AppendLine($"[{attribute}]");
             }
 
-            if (this.IsAbstract)
+            if (this.IsAbstract || this.IsExtern)
             {
                 writer.AppendLine($"{output.Trim()};");
                 return;

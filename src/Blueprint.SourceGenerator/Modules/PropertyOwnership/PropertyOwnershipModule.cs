@@ -103,6 +103,17 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
 
         context.AddRenderStep(PipelineStage.Population, renderContext => RenderPopulation(renderContext, entries));
 
+        // Generate [UnsafeAccessor] setter methods for init-only properties so the pipeline can
+        // assign route/query/header/cookie/body values after construction.
+        var initEntries = entries.Where(static e => e.IsInitOnly).ToList();
+        if (initEntries.Count > 0)
+        {
+            var operationTypeFull = operationType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+            context.AddDeferredClassMember(pipelineClass =>
+                WriteUnsafeAccessorSetters(pipelineClass, operationTypeFull, initEntries));
+        }
+
         if (hasBodyProperties)
         {
             var bodyEntries = entries.Where(static e => e.Source == PropertyOwnershipSource.Body).ToArray();
@@ -268,7 +279,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
 
         foreach (var member in operationType.GetMembers().OfType<IPropertySymbol>())
         {
-            if (member.IsStatic || member.IsReadOnly || member.SetMethod is null || member.SetMethod.IsInitOnly || member.DeclaredAccessibility != Accessibility.Public)
+            if (member.IsStatic || member.IsReadOnly || member.SetMethod is null || member.DeclaredAccessibility != Accessibility.Public)
             {
                 continue;
             }
@@ -277,6 +288,8 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             {
                 continue;
             }
+
+            var isInitOnly = member.SetMethod.IsInitOnly;
 
             // Step 1 — detect explicit [FromX] attributes (namespace-qualified to avoid MVC collisions)
             var fromRoute = FindAttribute(member, "FromRouteAttribute", "Blueprint.Model.Attributes");
@@ -308,23 +321,23 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             {
                 if (fromRoute != null)
                 {
-                    HandleExplicitFromRoute(member, operationType, routePlaceholders, entries, diagnostics);
+                    HandleExplicitFromRoute(member, operationType, routePlaceholders, entries, diagnostics, isInitOnly);
                 }
                 else if (fromQuery != null)
                 {
-                    HandleExplicitFromQuery(member, operationType, fromQuery, entries, diagnostics);
+                    HandleExplicitFromQuery(member, operationType, fromQuery, entries, diagnostics, isInitOnly);
                 }
                 else if (fromBody != null)
                 {
-                    HandleExplicitFromBody(member, operationType, httpMethods, isGetOrDelete, entries, diagnostics);
+                    HandleExplicitFromBody(member, operationType, httpMethods, isGetOrDelete, entries, diagnostics, isInitOnly);
                 }
                 else if (fromHeader != null)
                 {
-                    HandleExplicitFromHeader(member, operationType, fromHeader, entries, diagnostics);
+                    HandleExplicitFromHeader(member, operationType, fromHeader, entries, diagnostics, isInitOnly);
                 }
                 else if (fromCookie != null)
                 {
-                    HandleExplicitFromCookie(member, operationType, fromCookie, entries, diagnostics);
+                    HandleExplicitFromCookie(member, operationType, fromCookie, entries, diagnostics, isInitOnly);
                 }
 
                 continue;
@@ -343,7 +356,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
                     continue;
                 }
 
-                entries.Add(new PropertyOwnershipEntry(member.Name, member.Type, PropertyOwnershipSource.Route, member.Name));
+                entries.Add(new PropertyOwnershipEntry(member.Name, member.Type, PropertyOwnershipSource.Route, member.Name, isInitOnly));
                 continue;
             }
 
@@ -353,7 +366,8 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
                     member.Name,
                     member.Type,
                     PropertyOwnershipSource.Body,
-                    GetCamelCaseName(member.Name)));
+                    GetCamelCaseName(member.Name),
+                    isInitOnly));
             }
             else if (IsQueryMethod(httpMethods))
             {
@@ -371,7 +385,8 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
                     member.Name,
                     member.Type,
                     PropertyOwnershipSource.Query,
-                    GetCamelCaseName(member.Name)));
+                    GetCamelCaseName(member.Name),
+                    isInitOnly));
             }
         }
 
@@ -383,7 +398,8 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         INamedTypeSymbol operationType,
         List<string> routePlaceholders,
         List<PropertyOwnershipEntry> entries,
-        List<DiagnosticInfo>? diagnostics)
+        List<DiagnosticInfo>? diagnostics,
+        bool isInitOnly)
     {
         if (!routePlaceholders.Contains(member.Name, StringComparer.Ordinal))
         {
@@ -404,7 +420,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             return;
         }
 
-        entries.Add(new PropertyOwnershipEntry(member.Name, member.Type, PropertyOwnershipSource.Route, member.Name));
+        entries.Add(new PropertyOwnershipEntry(member.Name, member.Type, PropertyOwnershipSource.Route, member.Name, isInitOnly));
     }
 
     private static void HandleExplicitFromQuery(
@@ -412,7 +428,8 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         INamedTypeSymbol operationType,
         AttributeData attribute,
         List<PropertyOwnershipEntry> entries,
-        List<DiagnosticInfo>? diagnostics)
+        List<DiagnosticInfo>? diagnostics,
+        bool isInitOnly)
     {
         if (!IsSupportedQueryType(member.Type))
         {
@@ -430,7 +447,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
 
         var bindingName = !string.IsNullOrWhiteSpace(nameOverride) ? nameOverride : GetCamelCaseName(member.Name);
 
-        entries.Add(new PropertyOwnershipEntry(member.Name, member.Type, PropertyOwnershipSource.Query, bindingName));
+        entries.Add(new PropertyOwnershipEntry(member.Name, member.Type, PropertyOwnershipSource.Query, bindingName, isInitOnly));
     }
 
     private static void HandleExplicitFromBody(
@@ -439,7 +456,8 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         string[] httpMethods,
         bool isGetOrDelete,
         List<PropertyOwnershipEntry> entries,
-        List<DiagnosticInfo>? diagnostics)
+        List<DiagnosticInfo>? diagnostics,
+        bool isInitOnly)
     {
         if (isGetOrDelete)
         {
@@ -456,7 +474,8 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             member.Name,
             member.Type,
             PropertyOwnershipSource.Body,
-            GetCamelCaseName(member.Name)));
+            GetCamelCaseName(member.Name),
+            isInitOnly));
     }
 
     private static void HandleExplicitFromHeader(
@@ -464,7 +483,8 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         INamedTypeSymbol operationType,
         AttributeData attribute,
         List<PropertyOwnershipEntry> entries,
-        List<DiagnosticInfo>? diagnostics)
+        List<DiagnosticInfo>? diagnostics,
+        bool isInitOnly)
     {
         if (!IsSupportedHeaderOrCookieType(member.Type))
         {
@@ -488,7 +508,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             return;
         }
 
-        entries.Add(new PropertyOwnershipEntry(member.Name, member.Type, PropertyOwnershipSource.Header, headerName));
+        entries.Add(new PropertyOwnershipEntry(member.Name, member.Type, PropertyOwnershipSource.Header, headerName, isInitOnly));
     }
 
     private static void HandleExplicitFromCookie(
@@ -496,7 +516,8 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         INamedTypeSymbol operationType,
         AttributeData attribute,
         List<PropertyOwnershipEntry> entries,
-        List<DiagnosticInfo>? diagnostics)
+        List<DiagnosticInfo>? diagnostics,
+        bool isInitOnly)
     {
         if (!IsSupportedHeaderOrCookieType(member.Type))
         {
@@ -519,7 +540,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             return;
         }
 
-        entries.Add(new PropertyOwnershipEntry(member.Name, member.Type, PropertyOwnershipSource.Cookie, cookieName));
+        entries.Add(new PropertyOwnershipEntry(member.Name, member.Type, PropertyOwnershipSource.Cookie, cookieName, isInitOnly));
     }
 
     /// <summary>
@@ -807,6 +828,38 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         }
     }
 
+    /// <summary>
+    /// Generates <c>[UnsafeAccessor]</c> setter stubs for <c>init</c>-only properties so the pipeline
+    /// can assign values after the operation instance is created by the factory.
+    /// </summary>
+    private static void WriteUnsafeAccessorSetters(
+        ClassBuilder pipelineClass,
+        string operationTypeFull,
+        List<PropertyOwnershipEntry> initEntries)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var entry in initEntries)
+        {
+            if (!seen.Add(entry.PropertyName))
+            {
+                continue;
+            }
+
+            var propertyTypeFull = entry.TypeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            var methodName = $"_SetInit_{entry.PropertyName}";
+
+            pipelineClass.AddMethod(methodName)
+                .MakePrivateMethod()
+                .MakeStaticMethod()
+                .MakeExternMethod()
+                .WithReturnType("void")
+                .AddParameter(operationTypeFull, "instance")
+                .AddParameter(propertyTypeFull, "value")
+                .AddAttribute($"System.Runtime.CompilerServices.UnsafeAccessor(System.Runtime.CompilerServices.UnsafeAccessorKind.Method, Name = \"set_{entry.PropertyName}\")");
+        }
+    }
+
     private static void WritePopulateFromJsonBodyMethod(
         ClassBuilder pipelineClass,
         string operationTypeFull,
@@ -863,44 +916,46 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             : rawType;
         var typeDisplay = unwrappedType.ToDisplayString();
 
+        string readerExpr;
         switch (typeDisplay)
         {
             case "string":
-                writer.AppendLine($"        operation.{entry.PropertyName} = reader.GetString();");
+                readerExpr = "reader.GetString()";
                 break;
             case "int" when !isNullableValueType:
-                writer.AppendLine($"        operation.{entry.PropertyName} = reader.GetInt32();");
+                readerExpr = "reader.GetInt32()";
                 break;
             case "long" when !isNullableValueType:
-                writer.AppendLine($"        operation.{entry.PropertyName} = reader.GetInt64();");
+                readerExpr = "reader.GetInt64()";
                 break;
             case "double" when !isNullableValueType:
-                writer.AppendLine($"        operation.{entry.PropertyName} = reader.GetDouble();");
+                readerExpr = "reader.GetDouble()";
                 break;
             case "float" when !isNullableValueType:
-                writer.AppendLine($"        operation.{entry.PropertyName} = reader.GetSingle();");
+                readerExpr = "reader.GetSingle()";
                 break;
             case "bool" when !isNullableValueType:
-                writer.AppendLine($"        operation.{entry.PropertyName} = reader.GetBoolean();");
+                readerExpr = "reader.GetBoolean()";
                 break;
             case "decimal" when !isNullableValueType:
-                writer.AppendLine($"        operation.{entry.PropertyName} = reader.GetDecimal();");
+                readerExpr = "reader.GetDecimal()";
                 break;
             case "System.Guid" when !isNullableValueType:
-                writer.AppendLine($"        operation.{entry.PropertyName} = reader.GetGuid();");
+                readerExpr = "reader.GetGuid()";
                 break;
             case "System.DateTime" when !isNullableValueType:
-                writer.AppendLine($"        operation.{entry.PropertyName} = reader.GetDateTime();");
+                readerExpr = "reader.GetDateTime()";
                 break;
             case "System.DateTimeOffset" when !isNullableValueType:
-                writer.AppendLine($"        operation.{entry.PropertyName} = reader.GetDateTimeOffset();");
+                readerExpr = "reader.GetDateTimeOffset()";
                 break;
             default:
                 var fullyQualifiedType = rawType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                writer.AppendLine(
-                    $"        operation.{entry.PropertyName} = System.Text.Json.JsonSerializer.Deserialize<{fullyQualifiedType}>(ref reader);");
+                readerExpr = $"System.Text.Json.JsonSerializer.Deserialize<{fullyQualifiedType}>(ref reader)";
                 break;
         }
+
+        writer.AppendLine($"        {FormatPropertyAssignment("operation", entry, readerExpr)}");
     }
 
     private static void WriteRouteExtraction(PipelineRenderContext context, string operationExpr, PropertyOwnershipEntry entry)
@@ -910,7 +965,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
 
         if (typeDisplay == "string")
         {
-            context.WriteStatement($"{operationExpr}.{entry.PropertyName} = (string){routeValueExpr};");
+            context.WriteStatement(FormatPropertyAssignment(operationExpr, entry, $"(string){routeValueExpr}"));
         }
         else
         {
@@ -920,7 +975,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             {
                 ifCtx.If(tryParseExpr, parsedCtx =>
                 {
-                    parsedCtx.WriteStatement($"{operationExpr}.{entry.PropertyName} = _parsed_{entry.PropertyName};");
+                    parsedCtx.WriteStatement(FormatPropertyAssignment(operationExpr, entry, $"_parsed_{entry.PropertyName}"));
                 });
                 ifCtx.WriteStatement("else");
                 ifCtx.WriteStatement("{");
@@ -957,7 +1012,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         {
             context.If($"{queryVar}.Count > 0", ifCtx =>
             {
-                ifCtx.WriteStatement($"{operationExpr}.{entry.PropertyName} = {queryVar}[0];");
+                ifCtx.WriteStatement(FormatPropertyAssignment(operationExpr, entry, $"{queryVar}[0]"));
             });
         }
         else
@@ -968,7 +1023,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             {
                 ifCtx.If(tryParseExpr, parsedCtx =>
                 {
-                    parsedCtx.WriteStatement($"{operationExpr}.{entry.PropertyName} = _parsed_{entry.PropertyName};");
+                    parsedCtx.WriteStatement(FormatPropertyAssignment(operationExpr, entry, $"_parsed_{entry.PropertyName}"));
                 });
                 ifCtx.WriteStatement("else");
                 ifCtx.WriteStatement("{");
@@ -995,7 +1050,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         {
             if (elementDisplay == "string")
             {
-                ifCtx.WriteStatement($"{operationExpr}.{entry.PropertyName} = {queryVar}.ToArray();");
+                ifCtx.WriteStatement(FormatPropertyAssignment(operationExpr, entry, $"{queryVar}.ToArray()"));
             }
             else
             {
@@ -1013,7 +1068,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
                 ifCtx.WriteStatement($"        return new Blueprint.Runtime.Exec.BindingFailureResult(\"Invalid query parameter '{entry.BindingName}'\");");
                 ifCtx.WriteStatement("    }");
                 ifCtx.WriteStatement("}");
-                ifCtx.WriteStatement($"{operationExpr}.{entry.PropertyName} = _arr_{entry.PropertyName};");
+                ifCtx.WriteStatement(FormatPropertyAssignment(operationExpr, entry, $"_arr_{entry.PropertyName}"));
             }
         });
     }
@@ -1033,7 +1088,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         {
             context.If($"{headerVar}.Count > 0", ifCtx =>
             {
-                ifCtx.WriteStatement($"{operationExpr}.{entry.PropertyName} = {headerVar}[0];");
+                ifCtx.WriteStatement(FormatPropertyAssignment(operationExpr, entry, $"{headerVar}[0]"));
             });
         }
         else
@@ -1050,7 +1105,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             {
                 ifCtx.If(tryParseExpr, parsedCtx =>
                 {
-                    parsedCtx.WriteStatement($"{operationExpr}.{entry.PropertyName} = _parsed_{entry.PropertyName};");
+                    parsedCtx.WriteStatement(FormatPropertyAssignment(operationExpr, entry, $"_parsed_{entry.PropertyName}"));
                 });
                 ifCtx.WriteStatement("else");
                 ifCtx.WriteStatement("{");
@@ -1075,7 +1130,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         {
             context.If($"{cookieVar} != null", ifCtx =>
             {
-                ifCtx.WriteStatement($"{operationExpr}.{entry.PropertyName} = {cookieVar};");
+                ifCtx.WriteStatement(FormatPropertyAssignment(operationExpr, entry, cookieVar));
             });
         }
         else
@@ -1092,7 +1147,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             {
                 ifCtx.If(tryParseExpr, parsedCtx =>
                 {
-                    parsedCtx.WriteStatement($"{operationExpr}.{entry.PropertyName} = _parsed_{entry.PropertyName};");
+                    parsedCtx.WriteStatement(FormatPropertyAssignment(operationExpr, entry, $"_parsed_{entry.PropertyName}"));
                 });
                 ifCtx.WriteStatement("else");
                 ifCtx.WriteStatement("{");
@@ -1148,13 +1203,28 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
     }
 
     /// <summary>
+    /// Returns the assignment statement for setting an operation property value. For <c>init</c>-only
+    /// properties, calls the generated <c>[UnsafeAccessor]</c> setter instead of a direct assignment.
+    /// </summary>
+    private static string FormatPropertyAssignment(string operationExpr, PropertyOwnershipEntry entry, string valueExpr)
+    {
+        if (entry.IsInitOnly)
+        {
+            return $"_SetInit_{entry.PropertyName}({operationExpr}, {valueExpr});";
+        }
+
+        return $"{operationExpr}.{entry.PropertyName} = {valueExpr};";
+    }
+
+    /// <summary>
     /// Internal model used during analysis. Not exposed to consumers — the feature data record uses string-based source names.
     /// </summary>
     internal sealed record PropertyOwnershipEntry(
         string PropertyName,
         ITypeSymbol TypeSymbol,
         PropertyOwnershipSource Source,
-        string? BindingName);
+        string? BindingName,
+        bool IsInitOnly = false);
 
     /// <summary>
     /// The binding source for a property during the ownership analysis phase.

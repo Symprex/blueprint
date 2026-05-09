@@ -1306,6 +1306,28 @@ public class HttpEndToEndIntegrationTests
         response.StatusCode.Should().Be(StatusCodes.Status415UnsupportedMediaType);
     }
 
+    [Fact]
+    public async Task When_GET_with_catch_all_path_parameter_then_routes_and_returns_200()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/folder-link-test/{**FolderPath}");
+        endpoint.Should().NotBeNull("catch-all folder route should be registered");
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Path = "/api/folder-link-test/UK/Marketing/Assets";
+            context.Request.RouteValues = new RouteValueDictionary
+            {
+                ["FolderPath"] = "UK/Marketing/Assets",
+            };
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        response.Body.Should().Contain("UK/Marketing/Assets");
+    }
+
     private static async Task<TestHttpResponse> InvokeEndpointAsync(
         RouteEndpoint endpoint,
         IServiceProvider serviceProvider,

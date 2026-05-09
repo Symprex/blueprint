@@ -16,8 +16,14 @@ public class LinkPopulationModuleIntegrationTests
         var app = new IntegrationTestBlueprintApp();
         var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
         var pipeline = executor.GetPipeline(typeof(CreateLinkTestResourceCommand));
-        var context = CreateContext(app, CreateLinkTestResourceCommand.Configure());
-        context.Operation = new CreateLinkTestResourceCommand { Name = "Test" };
+        var httpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        httpContext.Request.RouteValues["Id"] = "res-123";
+
+        var context = new Blueprint.Runtime.Exec.ApiOperationContext(new EmptyServiceProvider(), app, CreateLinkTestResourceCommand.Configure(), CancellationToken.None)
+        {
+            Operation = new CreateLinkTestResourceCommand { Name = "Test" },
+            HttpContext = httpContext,
+        };
 
         var result = await pipeline.ExecuteAsync(context);
 
@@ -154,8 +160,14 @@ public class LinkPopulationModuleIntegrationTests
         var app = new IntegrationTestBlueprintApp();
         var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
         var pipeline = executor.GetPipeline(typeof(GetCatchAllFolderResourceQuery));
-        var context = CreateContext(app, GetCatchAllFolderResourceQuery.Configure());
-        context.Operation = new GetCatchAllFolderResourceQuery { FolderPath = "UK/Marketing" };
+        var httpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        httpContext.Request.RouteValues["FolderPath"] = "UK/Marketing";
+
+        var context = new Blueprint.Runtime.Exec.ApiOperationContext(new EmptyServiceProvider(), app, GetCatchAllFolderResourceQuery.Configure(), CancellationToken.None)
+        {
+            Operation = new GetCatchAllFolderResourceQuery { FolderPath = "UK/Marketing" },
+            HttpContext = httpContext,
+        };
 
         var result = await pipeline.ExecuteAsync(context);
 
@@ -193,9 +205,13 @@ public class LinkPopulationModuleIntegrationTests
         services.AddSingleton<IResourceLinkGenerator, TestResourceLinkGenerator>();
         var serviceProvider = services.BuildServiceProvider();
 
+        var httpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        httpContext.Request.RouteValues["Id"] = "res-123";
+
         var context = new ApiOperationContext(serviceProvider, app, descriptor, CancellationToken.None)
         {
             Operation = new CreateLinkTestResourceCommand { Name = "Test" },
+            HttpContext = httpContext,
         };
 
         var result = await pipeline.ExecuteAsync(context);
@@ -215,9 +231,13 @@ public class LinkPopulationModuleIntegrationTests
         var pipeline = executor.GetPipeline(typeof(CreateLinkTestResourceCommand));
         var descriptor = CreateLinkTestResourceCommand.Configure();
 
+        var httpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        httpContext.Request.RouteValues["Id"] = "res-123";
+
         var context = new ApiOperationContext(new EmptyServiceProvider(), app, descriptor, CancellationToken.None)
         {
             Operation = new CreateLinkTestResourceCommand { Name = "Test" },
+            HttpContext = httpContext,
         };
 
         var result = await pipeline.ExecuteAsync(context);
@@ -230,7 +250,10 @@ public class LinkPopulationModuleIntegrationTests
 
     private static ApiOperationContext CreateContext(BlueprintApp app, ApiOperationDescriptor descriptor)
     {
-        return new ApiOperationContext(new EmptyServiceProvider(), app, descriptor, CancellationToken.None);
+        return new ApiOperationContext(new EmptyServiceProvider(), app, descriptor, CancellationToken.None)
+        {
+            HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext(),
+        };
     }
 
     private sealed class EmptyServiceProvider : IServiceProvider
