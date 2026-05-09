@@ -167,7 +167,11 @@ public class ResourceEvent : OperationResult
             // CamelCase: lowercase the first character
             if (name.Length > 0 && char.IsUpper(name[0]))
             {
-                return string.Concat(char.ToLowerInvariant(name[0]).ToString(), name.AsSpan(1));
+                return string.Create(name.Length, name, static (span, source) =>
+                {
+                    span[0] = char.ToLowerInvariant(source[0]);
+                    source.AsSpan(1).CopyTo(span[1..]);
+                });
             }
 
             return name;

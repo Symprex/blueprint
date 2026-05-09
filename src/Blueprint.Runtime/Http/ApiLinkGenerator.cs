@@ -170,7 +170,7 @@ public class ApiLinkGenerator : IApiLinkGenerator
             first = false;
             sb.Append(Uri.EscapeDataString(name));
             sb.Append('=');
-            sb.Append(Uri.EscapeDataString(value.ToString()!));
+            sb.Append(Uri.EscapeDataString(value is string s ? s : value.ToString()!));
         }
 
         return sb.ToString();

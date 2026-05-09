@@ -73,9 +73,13 @@ public sealed record OpenApiSchemaProjectionContext(
         var typeInfo = serializerContext.GetTypeInfo(bodyType)
             ?? throw new InvalidOperationException($"The serializer context did not expose metadata for covered body type '{bodyTypeName}'.");
         var validationAttributesByJsonPropertyName = CreateValidationAttributesByJsonPropertyName(bodyType, serializerContext);
+
+        // Create once per schema rather than per-property to avoid repeated allocations.
+        var nullabilityContext = new NullabilityInfoContext();
+
         var properties = typeInfo.Kind == JsonTypeInfoKind.Object
             ? typeInfo.Properties
-                .Select(property => CreateProperty(property, bodyTypeName, serializerContext, validationAttributesByJsonPropertyName))
+                .Select(property => CreateProperty(property, bodyTypeName, serializerContext, validationAttributesByJsonPropertyName, nullabilityContext))
                 .OrderBy(static property => property.Name, StringComparer.Ordinal)
                 .ToImmutableArray()
             : ImmutableArray<OpenApiSchemaPropertyModel>.Empty;
@@ -95,7 +99,8 @@ public sealed record OpenApiSchemaProjectionContext(
         JsonPropertyInfo property,
         string bodyTypeName,
         JsonSerializerContext serializerContext,
-        IReadOnlyDictionary<string, IReadOnlyList<ValidationAttribute>> validationAttributesByJsonPropertyName)
+        IReadOnlyDictionary<string, IReadOnlyList<ValidationAttribute>> validationAttributesByJsonPropertyName,
+        NullabilityInfoContext nullabilityContext)
     {
         var propertyTypeInfo = serializerContext.GetTypeInfo(property.PropertyType);
         var propertyKind = propertyTypeInfo is null
@@ -105,7 +110,7 @@ public sealed record OpenApiSchemaProjectionContext(
         ThrowIfUnsupportedCrossPropertyValidationAttribute(bodyTypeName, property.Name, validationAttributes);
         var minimum = GetMinimum(validationAttributes);
         var maximum = GetMaximum(validationAttributes);
-        var isNullable = IsNullableProperty(property);
+        var isNullable = IsNullableProperty(property, nullabilityContext);
         var format = MapFormat(property.PropertyType);
         var enumValues = MapEnumValues(property.PropertyType);
 
@@ -246,7 +251,7 @@ public sealed record OpenApiSchemaProjectionContext(
     /// Determines whether a body property is nullable by checking <c>Nullable&lt;T&gt;</c> for value types
     /// and NRT annotations (via <see cref="NullabilityInfoContext"/>) for reference types.
     /// </summary>
-    private static bool IsNullableProperty(JsonPropertyInfo property)
+    private static bool IsNullableProperty(JsonPropertyInfo property, NullabilityInfoContext nullabilityContext)
     {
         if (Nullable.GetUnderlyingType(property.PropertyType) is not null)
         {
@@ -261,7 +266,6 @@ public sealed record OpenApiSchemaProjectionContext(
         // For reference types, check NRT annotation via the underlying CLR member.
         if (property.AttributeProvider is PropertyInfo clrProperty)
         {
-            var nullabilityContext = new NullabilityInfoContext();
             var nullabilityInfo = nullabilityContext.Create(clrProperty);
 
             return nullabilityInfo.WriteState == NullabilityState.Nullable
