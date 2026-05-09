@@ -500,9 +500,9 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
         var resourceTypeName = binding.ResourceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
         context.WriteBlankLine();
-        context.WriteStatement("// Populate $links.self on the returned resource");
+        context.WriteStatement("// Populate $links.self on the returned resource (skip 304 Not Modified)");
         context.If(
-            $"handlerResult is {binding.GuardTypeName}",
+            $"handlerResult is {binding.GuardTypeName} and not global::Blueprint.Runtime.Exec.INotModifiedResult",
             branch =>
             {
                 branch.DeclareVariable("linkableResource", $"({resourceTypeName}){binding.ContentAccessExpression}");
@@ -524,20 +524,25 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
     private static void RenderFullHateoasLinkPopulation(PipelineRenderContext context)
     {
         context.WriteBlankLine();
-        context.WriteStatement("// Populate full HATEOAS links (all registered operations for this resource type)");
-        context.DeclareVariable(
-            "apiLinkGenerator",
-            context.GetOptionalServiceExpression("Blueprint.Http.IApiLinkGenerator"));
-
+        context.WriteStatement("// Populate full HATEOAS links (skip 304 Not Modified)");
         context.If(
-            "apiLinkGenerator != null",
-            branch =>
+            "handlerResult is not global::Blueprint.Runtime.Exec.INotModifiedResult",
+            hateoasBranch =>
             {
-                branch.DeclareVariable(
-                    "resourceLinkGenerators",
-                    "Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<System.Collections.Generic.IEnumerable<Blueprint.Http.IResourceLinkGenerator>>(context.ServiceProvider)");
+                hateoasBranch.DeclareVariable(
+                    "apiLinkGenerator",
+                    context.GetOptionalServiceExpression("Blueprint.Http.IApiLinkGenerator"));
 
-                branch.WriteStatement("await Blueprint.Http.LinkGeneratorHandler.AddLinksAsync(apiLinkGenerator, resourceLinkGenerators, context, handlerResult);");
+                hateoasBranch.If(
+                    "apiLinkGenerator != null",
+                    branch =>
+                    {
+                        branch.DeclareVariable(
+                            "resourceLinkGenerators",
+                            "Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<System.Collections.Generic.IEnumerable<Blueprint.Http.IResourceLinkGenerator>>(context.ServiceProvider)");
+
+                        branch.WriteStatement("await Blueprint.Http.LinkGeneratorHandler.AddLinksAsync(apiLinkGenerator, resourceLinkGenerators, context, handlerResult);");
+                    });
             });
     }
 

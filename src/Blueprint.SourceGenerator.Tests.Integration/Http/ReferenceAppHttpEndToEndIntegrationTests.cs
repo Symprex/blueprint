@@ -67,6 +67,56 @@ public class ReferenceAppHttpEndToEndIntegrationTests
     }
 
     [Fact]
+    public async Task When_get_template_with_matching_etag_then_returns_304_not_modified()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/templates/{Id}", "GET");
+
+        // First request to get the ETag value
+        var firstResponse = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Get;
+            context.Request.Path = "/api/templates/template-001";
+            context.Request.RouteValues = new RouteValueDictionary
+            {
+                ["Id"] = "template-001",
+            };
+            context.User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "user-1"),
+                ],
+                authenticationType: "test"));
+        });
+
+        firstResponse.StatusCode.Should().Be(StatusCodes.Status200OK);
+        firstResponse.Headers.Should().ContainKey("ETag");
+        var eTag = firstResponse.Headers["ETag"];
+
+        // Second request with If-None-Match header matching the ETag
+        var conditionalResponse = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Get;
+            context.Request.Path = "/api/templates/template-001";
+            context.Request.RouteValues = new RouteValueDictionary
+            {
+                ["Id"] = "template-001",
+            };
+            context.Request.Headers["If-None-Match"] = eTag;
+            context.User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "user-1"),
+                ],
+                authenticationType: "test"));
+        });
+
+        conditionalResponse.StatusCode.Should().Be(StatusCodes.Status304NotModified);
+    }
+
+    [Fact]
     public async Task When_get_template_returns_200_then_response_includes_object_type_and_self_link()
     {
         var endpoints = CreateEndpoints();
