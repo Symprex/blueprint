@@ -101,6 +101,26 @@ public class MessageOutboxModuleIntegrationTests
         outbox.CommitCallCount.Should().Be(0, "outbox should NOT be committed when [DoNotPublishMessages] is applied");
     }
 
+    [Fact]
+    public async Task When_handler_throws_exception_then_message_outbox_does_not_commit()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var outbox = new TestMessageOutbox();
+        var serviceProvider = new MessagingTestServiceProvider(outbox);
+
+        var pipeline = executor.GetPipeline(typeof(ThrowingMessagingCommand));
+        var context = new ApiOperationContext(serviceProvider, app, ThrowingMessagingCommand.Configure(), CancellationToken.None);
+        ((ThrowingMessagingCommand)context.Operation).Name = "will-throw";
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<UnhandledExceptionResult>(
+            "handler exception should be translated to UnhandledExceptionResult");
+        outbox.CommitCallCount.Should().Be(0,
+            "outbox must NOT be committed when handler throws — uncommitted messages are discarded for data consistency");
+    }
+
     private sealed class MessagingTestServiceProvider : IServiceProvider
     {
         private readonly IMessageOutbox? _outbox;
@@ -187,5 +207,24 @@ public partial class DoNotPublishMessagesCommand : ICommand
     public static Task HandleAsync(DoNotPublishMessagesCommand operation)
     {
         return Task.CompletedTask;
+    }
+}
+
+/// <summary>
+/// A command whose handler throws an exception, proving that the generated pipeline
+/// does NOT commit the message outbox when the handler fails with an unhandled exception.
+/// </summary>
+public partial class ThrowingMessagingCommand : ICommand
+{
+    /// <summary>Gets or sets the name field.</summary>
+    [System.ComponentModel.DataAnnotations.Required]
+    public string? Name { get; set; }
+
+    /// <summary>Handles the command by throwing an exception.</summary>
+    /// <param name="operation">The command instance.</param>
+    /// <returns>Never returns — always throws.</returns>
+    public static Task HandleAsync(ThrowingMessagingCommand operation)
+    {
+        throw new InvalidOperationException("Simulated handler failure for outbox rollback test");
     }
 }

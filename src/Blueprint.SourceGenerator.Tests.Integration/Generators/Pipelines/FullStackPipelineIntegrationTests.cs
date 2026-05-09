@@ -145,6 +145,36 @@ public class FullStackPipelineIntegrationTests
             "BackgroundTaskScheduler.Flush");
     }
 
+    [Fact]
+    public async Task When_handler_throws_then_no_post_execution_modules_fire()
+    {
+        var tracker = new ExecutionOrderTracker();
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var serviceProvider = new FullStackTestServiceProvider(tracker);
+
+        var pipeline = executor.GetPipeline(typeof(ThrowingFullStackCommand));
+        var context = new ApiOperationContext(serviceProvider, app, ThrowingFullStackCommand.Configure(), CancellationToken.None);
+        ((ThrowingFullStackCommand)context.Operation).Name = "will-throw";
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<UnhandledExceptionResult>(
+            "handler exception should be caught and translated to UnhandledExceptionResult");
+
+        // NONE of the post-execution modules should fire when handler throws
+        tracker.UnitOfWork.SaveChangesCallCount.Should().Be(0,
+            "UoW should not save when handler throws — data consistency requires rollback");
+        tracker.MessageOutbox.CommitCallCount.Should().Be(0,
+            "outbox should not commit when handler throws — messages must not be published for failed operations");
+        tracker.AuditSink.RecordCallCount.Should().Be(0,
+            "audit should not record when handler throws (exception is logged separately)");
+        tracker.BackgroundTaskScheduler.FlushCallCount.Should().Be(0,
+            "background tasks should not flush when handler throws");
+        tracker.ExecutionLog.Should().BeEmpty(
+            "no post-execution steps should appear in execution log");
+    }
+
     // ─── Service provider ────────────────────────────────────────────────────────
 
     private sealed class FullStackTestServiceProvider(ExecutionOrderTracker tracker) : IServiceProvider
@@ -296,5 +326,24 @@ public partial class FullStackCommand : ICommand
     public static Task HandleAsync(FullStackCommand operation)
     {
         return Task.CompletedTask;
+    }
+}
+
+/// <summary>
+/// A command whose handler throws an exception, used to prove that ALL post-execution
+/// modules (UoW, outbox, audit, background tasks) are skipped when the handler fails.
+/// </summary>
+public partial class ThrowingFullStackCommand : ICommand
+{
+    /// <summary>Gets or sets the required name (triggers validation when null).</summary>
+    [System.ComponentModel.DataAnnotations.Required]
+    public string? Name { get; set; }
+
+    /// <summary>Handles the command by throwing — proves no post-execution modules fire.</summary>
+    /// <param name="operation">The command instance.</param>
+    /// <returns>Never returns — always throws.</returns>
+    public static Task HandleAsync(ThrowingFullStackCommand operation)
+    {
+        throw new InvalidOperationException("Simulated handler failure for full-stack exception test");
     }
 }

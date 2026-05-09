@@ -441,4 +441,148 @@ public class ApiAuthoriserIntegrationTests
             return Task.FromResult(result);
         }
     }
+
+    // ─── Combined authorization tests ─────────────────────────────────────────────
+
+    [Fact]
+    public async Task When_both_api_authoriser_and_operation_authoriser_allow_then_returns_200()
+    {
+        var services = new ServiceCollection()
+            .AddLogging()
+            .AddSingleton<IntegrationTestBlueprintApp>()
+            .AddSingleton<IntegrationTestBlueprintAppExecutor>()
+            .AddSingleton<IApiAuthoriser>(new TestApiAuthoriser(ExecutionAllowed.Yes))
+            .AddSingleton<IOperationAuthoriser>(new TestOperationAuthoriser(ExecutionAllowed.Yes));
+
+        var endpoints = new TestEndpointRouteBuilder(services.BuildServiceProvider());
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/e2e/protected");
+        endpoint.Should().NotBeNull();
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, SetAuthenticatedUser);
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK,
+            "both authorisers allow — request should succeed");
+    }
+
+    [Fact]
+    public async Task When_api_authoriser_allows_but_operation_authoriser_denies_then_returns_403()
+    {
+        var services = new ServiceCollection()
+            .AddLogging()
+            .AddSingleton<IntegrationTestBlueprintApp>()
+            .AddSingleton<IntegrationTestBlueprintAppExecutor>()
+            .AddSingleton<IApiAuthoriser>(new TestApiAuthoriser(ExecutionAllowed.Yes))
+            .AddSingleton<IOperationAuthoriser>(new TestOperationAuthoriser(
+                ExecutionAllowed.No("business rule denied", "biz-denied", ExecutionAllowedFailureType.Authorisation)));
+
+        var endpoints = new TestEndpointRouteBuilder(services.BuildServiceProvider());
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/e2e/protected");
+        endpoint.Should().NotBeNull();
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, SetAuthenticatedUser);
+
+        response.StatusCode.Should().Be(StatusCodes.Status403Forbidden,
+            "IOperationAuthoriser denial should produce 403 even when IApiAuthoriser allows");
+    }
+
+    [Fact]
+    public async Task When_api_authoriser_denies_then_operation_authoriser_is_not_invoked()
+    {
+        var operationAuthoriser = new TrackingOperationAuthoriser();
+
+        var services = new ServiceCollection()
+            .AddLogging()
+            .AddSingleton<IntegrationTestBlueprintApp>()
+            .AddSingleton<IntegrationTestBlueprintAppExecutor>()
+            .AddSingleton<IApiAuthoriser>(new TestApiAuthoriser(
+                ExecutionAllowed.No("api-level denied", "api-denied", ExecutionAllowedFailureType.Authorisation)))
+            .AddSingleton<IOperationAuthoriser>(operationAuthoriser);
+
+        var endpoints = new TestEndpointRouteBuilder(services.BuildServiceProvider());
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/e2e/protected");
+        endpoint.Should().NotBeNull();
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, SetAuthenticatedUser);
+
+        response.StatusCode.Should().Be(StatusCodes.Status403Forbidden);
+        operationAuthoriser.WasInvoked.Should().BeFalse(
+            "when IApiAuthoriser denies, the pipeline should short-circuit before reaching IOperationAuthoriser");
+    }
+
+    [Fact]
+    public async Task When_user_context_with_both_authorisers_then_context_is_available_to_both()
+    {
+        var contextCapturingApiAuthoriser = new ContextInspectingAuthoriser();
+        var contextCapturingOpAuthoriser = new ContextInspectingOperationAuthoriser();
+        var factory = new TestUserContextFactory("combined-user", "combined-acct");
+
+        var services = new ServiceCollection()
+            .AddLogging()
+            .AddSingleton<IntegrationTestBlueprintApp>()
+            .AddSingleton<IntegrationTestBlueprintAppExecutor>()
+            .AddSingleton<IUserAuthorisationContextFactory>(factory)
+            .AddSingleton<IApiAuthoriser>(contextCapturingApiAuthoriser)
+            .AddSingleton<IOperationAuthoriser>(contextCapturingOpAuthoriser);
+
+        var endpoints = new TestEndpointRouteBuilder(services.BuildServiceProvider());
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/e2e/protected");
+        endpoint.Should().NotBeNull();
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, SetAuthenticatedUser);
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+
+        contextCapturingApiAuthoriser.CapturedContext.Should().NotBeNull();
+        contextCapturingApiAuthoriser.CapturedContext!.Id.Should().Be("combined-user");
+
+        contextCapturingOpAuthoriser.CapturedContext.Should().NotBeNull();
+        contextCapturingOpAuthoriser.CapturedContext!.Id.Should().Be("combined-user",
+            "both IApiAuthoriser and IOperationAuthoriser should see the same user context");
+    }
+
+    private sealed class TrackingOperationAuthoriser : IOperationAuthoriser
+    {
+        public bool WasInvoked { get; private set; }
+
+        public bool AppliesTo(ApiOperationDescriptor descriptor)
+        {
+            return true;
+        }
+
+        public Task<ExecutionAllowed> CanExecuteOperationAsync(
+            ApiOperationContext operationContext,
+            ApiOperationDescriptor descriptor,
+            object operation)
+        {
+            this.WasInvoked = true;
+            return ExecutionAllowed.YesTask;
+        }
+    }
+
+    private sealed class ContextInspectingOperationAuthoriser : IOperationAuthoriser
+    {
+        public IUserAuthorisationContext? CapturedContext { get; private set; }
+
+        public bool AppliesTo(ApiOperationDescriptor descriptor)
+        {
+            return true;
+        }
+
+        public Task<ExecutionAllowed> CanExecuteOperationAsync(
+            ApiOperationContext operationContext,
+            ApiOperationDescriptor descriptor,
+            object operation)
+        {
+            this.CapturedContext = operationContext.UserAuthorisationContext;
+            return ExecutionAllowed.YesTask;
+        }
+    }
 }
