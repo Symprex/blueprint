@@ -4,16 +4,11 @@ using Blueprint.Runtime.Exec;
 namespace Blueprint.Authorization;
 
 /// <summary>
-/// Aggregates all registered <see cref="IApiAuthoriser"/> implementations and provides a single
-/// entry point for checking link visibility. This is used by operations that need to expose an
-/// "auth manifest" to clients (listing which operations the current user can access).
+/// Aggregates all registered <see cref="IApiAuthoriser"/> and <see cref="ILinkVisibilityAuthoriser"/>
+/// implementations and provides a single entry point for checking link visibility. This is used by
+/// link generation and auth-manifest operations.
 /// </summary>
 /// <remarks>
-/// <para>
-/// Register this service via DI alongside your <see cref="IApiAuthoriser"/> implementations.
-/// The generated pipeline calls individual authorizers directly for operation execution checks,
-/// but this aggregator is useful for runtime introspection patterns like auth manifests.
-/// </para>
 /// <para>
 /// The aggregator short-circuits on the first denial — if any authorizer denies the link,
 /// the link is hidden.

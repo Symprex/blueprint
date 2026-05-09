@@ -45,7 +45,7 @@ public class Startup
 
             // Business authorization: enforces tenant isolation by comparing the
             // user's AccountId to the operation's TenantId property
-            blueprint.AddApiAuthoriser<TenantIsolationApiAuthoriser>();
+            blueprint.AddOperationAuthoriser<TenantIsolationApiAuthoriser>();
 
             // Claims-based authorization: enforces [Permission] and [PermissionFor]
             // attributes by matching user claims against demanded permissions.
@@ -55,7 +55,7 @@ public class Startup
             blueprint.AddContextMetadataProvider<SampleContextMetadataProvider>();
 
             // State-based link visibility: hide the Archive link on already-archived templates
-            blueprint.AddApiAuthoriser<ArchiveTemplateLinkChecker>();
+            blueprint.AddLinkVisibilityAuthoriser<ArchiveTemplateLinkChecker>();
 
             // Recurring tasks: declares cron-based schedules that a provider (e.g., Hangfire)
             // registers for periodic execution. This proves the recurring task consumer seam.

@@ -382,4 +382,63 @@ public class ApiAuthoriserIntegrationTests
             add("test.user_id", this.Id);
         }
     }
+
+    // ─── IOperationAuthoriser-specific tests ─────────────────────────────────────
+
+    [Fact]
+    public async Task When_operation_authoriser_allows_then_returns_200()
+    {
+        var services = new ServiceCollection()
+            .AddLogging()
+            .AddSingleton<IntegrationTestBlueprintApp>()
+            .AddSingleton<IntegrationTestBlueprintAppExecutor>()
+            .AddSingleton<IOperationAuthoriser>(new TestOperationAuthoriser(ExecutionAllowed.Yes));
+
+        var endpoints = new TestEndpointRouteBuilder(services.BuildServiceProvider());
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/e2e/protected");
+        endpoint.Should().NotBeNull();
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, SetAuthenticatedUser);
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+    }
+
+    [Fact]
+    public async Task When_operation_authoriser_denies_then_returns_403()
+    {
+        var services = new ServiceCollection()
+            .AddLogging()
+            .AddSingleton<IntegrationTestBlueprintApp>()
+            .AddSingleton<IntegrationTestBlueprintAppExecutor>()
+            .AddSingleton<IOperationAuthoriser>(new TestOperationAuthoriser(
+                ExecutionAllowed.No("denied", "reason", ExecutionAllowedFailureType.Authorisation)));
+
+        var endpoints = new TestEndpointRouteBuilder(services.BuildServiceProvider());
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/e2e/protected");
+        endpoint.Should().NotBeNull();
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, SetAuthenticatedUser);
+
+        response.StatusCode.Should().Be(StatusCodes.Status403Forbidden);
+    }
+
+    private sealed class TestOperationAuthoriser(ExecutionAllowed result) : IOperationAuthoriser
+    {
+        public bool AppliesTo(ApiOperationDescriptor descriptor)
+        {
+            return true;
+        }
+
+        public Task<ExecutionAllowed> CanExecuteOperationAsync(
+            ApiOperationContext operationContext,
+            ApiOperationDescriptor descriptor,
+            object operation)
+        {
+            return Task.FromResult(result);
+        }
+    }
 }

@@ -15,15 +15,15 @@ namespace Blueprint.Authorization;
 /// controls whether the link is <em>visible</em> in API responses.
 /// </para>
 /// <para>
-/// Register implementations via DI as <c>IApiAuthoriser</c>:
+/// Register implementations via DI as <c>ILinkVisibilityAuthoriser</c>:
 /// </para>
 /// <code>
-/// services.AddScoped&lt;IApiAuthoriser, DeactivateLinkChecker&gt;();
+/// services.AddScoped&lt;ILinkVisibilityAuthoriser, DeactivateLinkChecker&gt;();
 /// </code>
 /// </remarks>
 /// <typeparam name="TOperation">The operation type whose link visibility is being controlled.</typeparam>
 /// <typeparam name="TResource">The resource type whose state determines link visibility.</typeparam>
-public abstract class StateBasedLinkChecker<TOperation, TResource> : IApiAuthoriser
+public abstract class StateBasedLinkChecker<TOperation, TResource> : ILinkVisibilityAuthoriser
 {
     // ReSharper disable once StaticMemberInGenericType — intentional per-closed-generic caching
     private static readonly Task<ExecutionAllowed> _stateCheckFailed = Task.FromResult(
@@ -39,19 +39,6 @@ public abstract class StateBasedLinkChecker<TOperation, TResource> : IApiAuthori
     public bool AppliesTo(ApiOperationDescriptor descriptor)
     {
         return descriptor.OperationType == typeof(TOperation);
-    }
-
-    /// <inheritdoc />
-    /// <remarks>
-    /// State-based checks apply only to link visibility, not operation execution. This method
-    /// always returns <see cref="ExecutionAllowed.YesTask"/>.
-    /// </remarks>
-    public Task<ExecutionAllowed> CanExecuteOperationAsync(
-        ApiOperationContext operationContext,
-        ApiOperationDescriptor descriptor,
-        object operation)
-    {
-        return ExecutionAllowed.YesTask;
     }
 
     /// <inheritdoc />

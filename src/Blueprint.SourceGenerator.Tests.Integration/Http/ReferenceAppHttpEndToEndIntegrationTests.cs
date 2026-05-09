@@ -2472,7 +2472,7 @@ public class ReferenceAppHttpEndToEndIntegrationTests
             .AddScoped<InMemoryUnitOfWork>()
             .AddScoped<Blueprint.Persistence.IUnitOfWork>(sp => sp.GetRequiredService<InMemoryUnitOfWork>())
             .AddSingleton<Blueprint.Authorization.IUserAuthorisationContextFactory, SampleUserAuthorisationContextFactory>()
-            .AddSingleton<Blueprint.Authorization.IApiAuthoriser, TenantIsolationApiAuthoriser>();
+            .AddSingleton<Blueprint.Authorization.IOperationAuthoriser, TenantIsolationApiAuthoriser>();
 
         return new TestEndpointRouteBuilder(services.BuildServiceProvider());
     }
@@ -2503,7 +2503,7 @@ public class ReferenceAppHttpEndToEndIntegrationTests
             .AddScoped<InMemoryUnitOfWork>()
             .AddScoped<Blueprint.Persistence.IUnitOfWork>(sp => sp.GetRequiredService<InMemoryUnitOfWork>())
             .AddSingleton<Blueprint.Authorization.IUserAuthorisationContextFactory, SampleUserAuthorisationContextFactory>()
-            .AddSingleton<Blueprint.Authorization.IApiAuthoriser, TenantIsolationApiAuthoriser>()
+            .AddSingleton<Blueprint.Authorization.IOperationAuthoriser, TenantIsolationApiAuthoriser>()
             .AddSingleton<Blueprint.Authorization.IApiAuthoriserAggregator, AllowAllApiAuthoriserAggregator>();
 
         return new TestEndpointRouteBuilder(services.BuildServiceProvider());

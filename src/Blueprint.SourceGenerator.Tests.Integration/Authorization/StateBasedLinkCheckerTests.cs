@@ -31,18 +31,6 @@ public class StateBasedLinkCheckerTests
     }
 
     [Fact]
-    public async Task CanExecuteOperationAsync_always_returns_yes()
-    {
-        var checker = new TestDeactivateChecker();
-        var descriptor = CreateDescriptor<DeactivateCommand>();
-        var context = CreateContext(descriptor);
-
-        var result = await checker.CanExecuteOperationAsync(context, descriptor, new DeactivateCommand());
-
-        result.IsAllowed.Should().BeTrue("state-based checks only apply to link visibility, not execution");
-    }
-
-    [Fact]
     public async Task CanShowLinkAsync_when_resource_in_valid_state_returns_yes()
     {
         var checker = new TestDeactivateChecker();

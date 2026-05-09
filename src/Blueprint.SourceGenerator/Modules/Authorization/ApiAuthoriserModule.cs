@@ -152,8 +152,7 @@ public sealed class ApiAuthoriserModule : IBlueprintSourceGeneratorModule, IPipe
             "!context.SkipAuthorisation",
             branch =>
             {
-                // Resolve IEnumerable<IApiAuthoriser> from DI. Uses GetService to gracefully
-                // handle the case where no authorizers are registered.
+                // Resolve IEnumerable<IApiAuthoriser> from DI (combined execution + link-visibility).
                 branch.DeclareVariable(
                     "apiAuthorisers",
                     $"Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Authorization.IApiAuthoriser>>({context.GetServiceProviderExpression()})");
@@ -162,34 +161,34 @@ public sealed class ApiAuthoriserModule : IBlueprintSourceGeneratorModule, IPipe
                     "apiAuthorisers != null",
                     innerBranch =>
                     {
-                        // Use WriteStatement for the foreach since PipelineRenderContext doesn't
-                        // expose ForEach directly. The block structure is managed manually.
                         innerBranch.WriteStatement("foreach (var authoriser in apiAuthorisers)");
                         innerBranch.WriteStatement("{");
                         innerBranch.If(
                             "authoriser.AppliesTo(context.Descriptor)",
                             appliesBody =>
                             {
-                                appliesBody.DeclareVariable(
-                                    "authoriseResult",
-                                    "await authoriser.CanExecuteOperationAsync(context, context.Descriptor, context.Operation)");
+                                RenderDenialCheck(appliesBody, "authoriser");
+                            });
 
-                                appliesBody.If(
-                                    "!authoriseResult.IsAllowed",
-                                    deniedBody =>
-                                    {
-                                        // Authentication failure → 401, Authorisation failure → 403
-                                        deniedBody.If(
-                                            "authoriseResult.FailureType == Blueprint.Authorization.ExecutionAllowedFailureType.Authentication",
-                                            authBranch =>
-                                            {
-                                                authBranch.Return(
-                                                    "new Blueprint.Runtime.Exec.UnauthenticatedResult()");
-                                            });
+                        innerBranch.WriteStatement("}");
+                    });
 
-                                        deniedBody.Return(
-                                            "new Blueprint.Runtime.Exec.ForbiddenResult()");
-                                    });
+                // Resolve IEnumerable<IOperationAuthoriser> from DI (execution-only).
+                branch.DeclareVariable(
+                    "operationAuthorisers",
+                    $"Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Authorization.IOperationAuthoriser>>({context.GetServiceProviderExpression()})");
+
+                branch.If(
+                    "operationAuthorisers != null",
+                    innerBranch =>
+                    {
+                        innerBranch.WriteStatement("foreach (var authoriser in operationAuthorisers)");
+                        innerBranch.WriteStatement("{");
+                        innerBranch.If(
+                            "authoriser.AppliesTo(context.Descriptor)",
+                            appliesBody =>
+                            {
+                                RenderDenialCheck(appliesBody, "authoriser");
                             });
 
                         innerBranch.WriteStatement("}");
@@ -197,5 +196,28 @@ public sealed class ApiAuthoriserModule : IBlueprintSourceGeneratorModule, IPipe
             });
 
         context.WriteBlankLine();
+    }
+
+    private static void RenderDenialCheck(PipelineRenderContext context, string authoriserVar)
+    {
+        context.DeclareVariable(
+            "authoriseResult",
+            $"await {authoriserVar}.CanExecuteOperationAsync(context, context.Descriptor, context.Operation)");
+
+        context.If(
+            "!authoriseResult.IsAllowed",
+            deniedBody =>
+            {
+                deniedBody.If(
+                    "authoriseResult.FailureType == Blueprint.Authorization.ExecutionAllowedFailureType.Authentication",
+                    authBranch =>
+                    {
+                        authBranch.Return(
+                            "new Blueprint.Runtime.Exec.UnauthenticatedResult()");
+                    });
+
+                deniedBody.Return(
+                    "new Blueprint.Runtime.Exec.ForbiddenResult()");
+            });
     }
 }

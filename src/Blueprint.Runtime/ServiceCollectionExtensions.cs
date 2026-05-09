@@ -229,6 +229,7 @@ public sealed class BlueprintServiceBuilder
     /// Registers an API authoriser that performs business-level authorization checks
     /// (e.g., tenant isolation, feature-flag gating, or custom permission logic) during the
     /// Authorisation pipeline stage. Multiple authorisers are supported and evaluated in order.
+    /// Use this for authorisers that participate in both execution and link-visibility checks.
     /// </summary>
     /// <typeparam name="T">The <see cref="Blueprint.Authorization.IApiAuthoriser"/> implementation type.</typeparam>
     /// <returns>This builder for chaining.</returns>
@@ -236,6 +237,38 @@ public sealed class BlueprintServiceBuilder
         where T : class, Blueprint.Authorization.IApiAuthoriser
     {
         this.Services.AddSingleton<Blueprint.Authorization.IApiAuthoriser, T>();
+
+        // Ensure the aggregator is registered (idempotent via TryAdd)
+        this.Services.TryAddSingleton<Blueprint.Authorization.IApiAuthoriserAggregator, Blueprint.Authorization.ApiAuthoriserAggregator>();
+
+        return this;
+    }
+
+    /// <summary>
+    /// Registers an execution-only authoriser that checks whether the current user can execute
+    /// a given operation. The authoriser does not participate in link-visibility decisions.
+    /// </summary>
+    /// <typeparam name="T">The <see cref="Blueprint.Authorization.IOperationAuthoriser"/> implementation type.</typeparam>
+    /// <returns>This builder for chaining.</returns>
+    public BlueprintServiceBuilder AddOperationAuthoriser<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] T>()
+        where T : class, Blueprint.Authorization.IOperationAuthoriser
+    {
+        this.Services.AddSingleton<Blueprint.Authorization.IOperationAuthoriser, T>();
+
+        return this;
+    }
+
+    /// <summary>
+    /// Registers a link-visibility authoriser that controls whether operation links appear in
+    /// API responses. <see cref="Blueprint.Authorization.StateBasedLinkChecker{TOperation,TResource}"/>
+    /// is the recommended base class for state-based visibility checks.
+    /// </summary>
+    /// <typeparam name="T">The <see cref="Blueprint.Authorization.ILinkVisibilityAuthoriser"/> implementation type.</typeparam>
+    /// <returns>This builder for chaining.</returns>
+    public BlueprintServiceBuilder AddLinkVisibilityAuthoriser<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] T>()
+        where T : class, Blueprint.Authorization.ILinkVisibilityAuthoriser
+    {
+        this.Services.AddSingleton<Blueprint.Authorization.ILinkVisibilityAuthoriser, T>();
 
         // Ensure the aggregator is registered (idempotent via TryAdd)
         this.Services.TryAddSingleton<Blueprint.Authorization.IApiAuthoriserAggregator, Blueprint.Authorization.ApiAuthoriserAggregator>();

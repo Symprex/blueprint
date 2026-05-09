@@ -113,6 +113,25 @@ namespace Blueprint.Generated
                     }
                     }
                 }
+                var operationAuthorisers = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Authorization.IOperationAuthoriser>>(context.ServiceProvider);
+                if (operationAuthorisers != null)
+                {
+                    foreach (var authoriser in operationAuthorisers)
+                    {
+                    if (authoriser.AppliesTo(context.Descriptor))
+                    {
+                        var authoriseResult = await authoriser.CanExecuteOperationAsync(context, context.Descriptor, context.Operation);
+                        if (!authoriseResult.IsAllowed)
+                        {
+                            if (authoriseResult.FailureType == Blueprint.Authorization.ExecutionAllowedFailureType.Authentication)
+                            {
+                                return new Blueprint.Runtime.Exec.UnauthenticatedResult();
+                            }
+                            return new Blueprint.Runtime.Exec.ForbiddenResult();
+                        }
+                    }
+                    }
+                }
             }
 
             var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<string>(await global::TestNamespace.GetUserItemsQuery.HandleAsync(operation));
