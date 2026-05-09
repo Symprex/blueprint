@@ -27,9 +27,12 @@ internal sealed class EmailAddressValidationFastPathStrategy : IValidationFastPa
             return false;
         }
 
+        // Use the same attribute type as applied by the consumer for correct error message formatting
+        var qualifiedName = $"global::{attribute.AttributeClass!.ContainingNamespace.ToDisplayString()}.EmailAddressAttribute";
+
         rule = new ValidationFastPathRule(
             $"global::Blueprint.Validation.ValidationRuntime.IsValidEmailAddress({propertyAccess}) == false",
-            "new global::System.ComponentModel.DataAnnotations.EmailAddressAttribute()");
+            $"new {qualifiedName}()");
         return true;
     }
 }

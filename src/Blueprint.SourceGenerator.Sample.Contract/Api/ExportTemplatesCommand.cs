@@ -1,5 +1,4 @@
 using System.ComponentModel;
-using System.ComponentModel.DataAnnotations;
 using Blueprint.Model;
 using Blueprint.Model.Attributes;
 using Blueprint.Runtime.Exec;
@@ -45,7 +44,7 @@ public partial class ExportTemplatesCommand : ICommand<AcceptedResult<ExportJobA
     /// </summary>
     [RequiredIf(nameof(NotifyOnCompletion), true)]
     [NotAllowedIf(nameof(NotifyOnCompletion), false)]
-    [EmailAddress]
+    [Blueprint.Validation.EmailAddress]
     [Description("Email address to notify on export completion. Required when NotifyOnCompletion is true.")]
     public string? NotifyEmail { get; set; }
 }

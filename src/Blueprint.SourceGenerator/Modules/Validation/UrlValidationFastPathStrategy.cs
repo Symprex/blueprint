@@ -28,9 +28,12 @@ internal sealed class UrlValidationFastPathStrategy : IValidationFastPathStrateg
             return false;
         }
 
+        // Use the same attribute type as applied by the consumer for correct error message formatting
+        var qualifiedName = $"global::{attribute.AttributeClass!.ContainingNamespace.ToDisplayString()}.UrlAttribute";
+
         rule = new ValidationFastPathRule(
-            $"new global::System.ComponentModel.DataAnnotations.UrlAttribute().IsValid({propertyAccess}) == false",
-            "new global::System.ComponentModel.DataAnnotations.UrlAttribute()",
+            $"new {qualifiedName}().IsValid({propertyAccess}) == false",
+            $"new {qualifiedName}()",
             GuardCondition: $"{propertyAccess} is not null");
         return true;
     }

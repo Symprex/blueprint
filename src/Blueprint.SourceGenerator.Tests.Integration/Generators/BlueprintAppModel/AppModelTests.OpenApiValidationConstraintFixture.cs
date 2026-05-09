@@ -31,7 +31,7 @@ public sealed class SchemaValidationConstraintsResponse
     [RegularExpression("^[A-Z0-9]+$")]
     public required string Code { get; init; }
 
-    [EmailAddress]
+    [System.ComponentModel.DataAnnotations.EmailAddress]
     public string? Email { get; init; }
 
     [GreaterThan(0)]

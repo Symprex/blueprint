@@ -853,7 +853,7 @@ public partial class EmailAddressValidationOperation : ICommand<string>
     /// <summary>
     /// Gets or sets the email value validated by the benchmark scenario.
     /// </summary>
-    [EmailAddress]
+    [Blueprint.Validation.EmailAddress]
     public string? Email { get; set; }
 
     /// <summary>
@@ -876,7 +876,7 @@ public partial class EmailAddressRuntimeFallbackValidationOperation : ICommand<s
     /// Gets or sets the email value validated by the benchmark scenario.
     /// </summary>
     [Display(Name = "Display name")]
-    [EmailAddress]
+    [Blueprint.Validation.EmailAddress]
     public string? Email { get; set; }
 
     /// <summary>

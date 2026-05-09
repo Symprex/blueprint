@@ -240,7 +240,7 @@ internal static class ValidationSymbolHelpers
     {
         return attributeClass is not null
                && attributeClass.Name == "EmailAddressAttribute"
-               && attributeClass.ContainingNamespace.ToDisplayString() == "System.ComponentModel.DataAnnotations";
+               && attributeClass.ContainingNamespace.ToDisplayString() is "System.ComponentModel.DataAnnotations" or "Blueprint.Validation";
     }
 
     /// <summary>
@@ -288,7 +288,7 @@ internal static class ValidationSymbolHelpers
     {
         return attributeClass is not null
                && attributeClass.Name == "UrlAttribute"
-               && attributeClass.ContainingNamespace.ToDisplayString() == "System.ComponentModel.DataAnnotations";
+               && attributeClass.ContainingNamespace.ToDisplayString() is "System.ComponentModel.DataAnnotations" or "Blueprint.Validation";
     }
 
     /// <summary>

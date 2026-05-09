@@ -267,11 +267,13 @@ internal sealed record OpenApiValidationConstraints(
         {
             switch (attribute)
             {
-                case EmailAddressAttribute:
+                case System.ComponentModel.DataAnnotations.EmailAddressAttribute:
+                case Blueprint.Validation.EmailAddressAttribute:
                     return "email";
                 case PhoneAttribute:
                     return "phone";
-                case UrlAttribute:
+                case System.ComponentModel.DataAnnotations.UrlAttribute:
+                case Blueprint.Validation.UrlAttribute:
                     return "uri";
             }
         }

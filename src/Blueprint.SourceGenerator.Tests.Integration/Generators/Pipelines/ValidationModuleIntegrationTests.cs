@@ -1668,7 +1668,7 @@ public partial class EmailAddressValidationOperation : ICommand<string>
 {
     public static int HandlerCallCount { get; private set; }
 
-    [EmailAddress]
+    [System.ComponentModel.DataAnnotations.EmailAddress]
     public string? Email { get; set; }
 
     public static void Reset()
@@ -2051,7 +2051,7 @@ public partial class UrlValidationOperation : ICommand<string>
 {
     public static int HandlerCallCount { get; private set; }
 
-    [Url]
+    [System.ComponentModel.DataAnnotations.Url]
     public string? Website { get; set; }
 
     public static void Reset()
