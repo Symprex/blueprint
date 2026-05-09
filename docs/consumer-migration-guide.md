@@ -31,7 +31,8 @@ This guide walks through migrating a legacy Blueprint application (such as a Sig
 | `IUnitOfWork` middleware | Built-in `UnitOfWorkModule` via `AddUnitOfWork<T>()` | No change |
 | `IBackgroundTaskScheduler` | Same interface via `AddBackgroundTaskScheduler<T>()` | No change |
 | `IUserAuthorisationContext` | Same interface via `AddUserAuthorisationContextFactory<T>()` | No change |
-| `IApiAuthoriser` | Same interface via `AddApiAuthoriser<T>()` | No change |
+| `IApiAuthoriser` | Same interface via `AddApiAuthoriser<T>()`, or focused `IOperationAuthoriser` / `ILinkVisibilityAuthoriser` | Recommended split |
+| `StateBasedLinkChecker<T,R>` | Now implements `ILinkVisibilityAuthoriser` via `AddLinkVisibilityAuthoriser<T>()` | Registration change |
 
 ## Step-by-step migration
 
@@ -204,10 +205,10 @@ The user context is then available via `operationContext.UserAuthorisationContex
 
 #### Business-level authorisers
 
-Register `IApiAuthoriser` implementations for business-level access control (tenant isolation, feature gates, subscription checks):
+For authorisers that only check **execution** (not link visibility), implement `IOperationAuthoriser`:
 
 ```csharp
-public sealed class TenantIsolationAuthoriser : IApiAuthoriser
+public sealed class TenantIsolationAuthoriser : IOperationAuthoriser
 {
     // Only check operations with a TenantId property
     public bool AppliesTo(ApiOperationDescriptor descriptor)
@@ -224,14 +225,16 @@ public sealed class TenantIsolationAuthoriser : IApiAuthoriser
 
         return ExecutionAllowed.YesTask;
     }
-
-    public Task<ExecutionAllowed> CanShowLinkAsync(
-        ApiOperationContext ctx, ApiOperationDescriptor descriptor, object resource)
-        => ExecutionAllowed.YesTask;
 }
 
 // Register:
-blueprint.AddApiAuthoriser<TenantIsolationAuthoriser>();
+blueprint.AddOperationAuthoriser<TenantIsolationAuthoriser>();
+```
+
+For authorisers that need **both** execution and link visibility, implement `IApiAuthoriser` (which extends both `IOperationAuthoriser` and `ILinkVisibilityAuthoriser`):
+
+```csharp
+blueprint.AddApiAuthoriser<FullAuthoriser>();
 ```
 
 #### Claims-based authorization
@@ -260,28 +263,20 @@ blueprint.AddClaimsAuthorisation();
 
 #### State-based link visibility
 
-To conditionally hide HATEOAS links based on resource state, implement `IApiAuthoriser` with a `CanShowLinkAsync` check:
+Use `StateBasedLinkChecker<TOperation, TResource>` (which implements `ILinkVisibilityAuthoriser`) for state-based link hiding:
 
 ```csharp
-public sealed class ArchiveLinkChecker : IApiAuthoriser
+public sealed class ArchiveLinkChecker : StateBasedLinkChecker<ArchiveTemplateCommand, Template>
 {
-    public bool AppliesTo(ApiOperationDescriptor descriptor)
-        => descriptor.OperationType == typeof(ArchiveTemplateCommand);
-
-    public Task<ExecutionAllowed> CanExecuteOperationAsync(
-        ApiOperationContext ctx, ApiOperationDescriptor descriptor, object operation)
-        => ExecutionAllowed.YesTask;
-
-    public Task<ExecutionAllowed> CanShowLinkAsync(
-        ApiOperationContext ctx, ApiOperationDescriptor descriptor, object resource)
-    {
-        if (resource is Template { IsArchived: true })
-            return Task.FromResult(ExecutionAllowed.No("Already archived", "state-check"));
-
-        return ExecutionAllowed.YesTask;
-    }
+    protected override bool IsLinkAvailableForOperation(ApiOperationContext context, Template resource)
+        => !resource.IsArchived;
 }
+
+// Register as ILinkVisibilityAuthoriser:
+blueprint.AddLinkVisibilityAuthoriser<ArchiveLinkChecker>();
 ```
+
+> **Migration note:** In legacy Blueprint, `StateBasedLinkChecker` implemented `IApiAuthoriser` and was registered via `AddApiAuthoriser<T>()`. In the new stack it implements `ILinkVisibilityAuthoriser` and registers via `AddLinkVisibilityAuthoriser<T>()`. The `CanExecuteOperationAsync` stub is no longer needed. If you used Scrutor scanning for `IApiAuthoriser`, split the scan into `IApiAuthoriser`, `IOperationAuthoriser`, and `ILinkVisibilityAuthoriser` as appropriate.
 
 ### 7. Migrate validation
 
