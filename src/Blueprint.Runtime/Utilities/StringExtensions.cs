@@ -147,6 +147,47 @@ public static partial class StringExtensions
         return sb.ToString();
     }
 
+    /// <summary>
+    /// Converts an underscore-separated string to camelCase by PascalCasing and then lowering
+    /// the first character.
+    /// </summary>
+    /// <remarks>
+    /// This is the inflector-style conversion: <c>"order_id"</c> → <c>"orderId"</c>,
+    /// <c>"first_name"</c> → <c>"firstName"</c>.
+    /// </remarks>
+    /// <param name="lowercaseAndUnderscoredWord">The underscore-separated string to convert.</param>
+    /// <returns>The camelCased representation.</returns>
+    public static string Camelize(this string lowercaseAndUnderscoredWord)
+    {
+        return Uncapitalize(Pascalize(lowercaseAndUnderscoredWord));
+    }
+
+    /// <summary>
+    /// Lowercases the first character of a string, leaving the rest unchanged.
+    /// </summary>
+    /// <param name="word">The word to uncapitalize.</param>
+    /// <returns>The string with a lowercase first character.</returns>
+    public static string Uncapitalize(this string word)
+    {
+        if (string.IsNullOrEmpty(word))
+        {
+            return word;
+        }
+
+        return string.Concat(word[0].ToString().ToLower(), word.AsSpan(1));
+    }
+
+    /// <summary>
+    /// Applies English pluralization rules to the given word, handling regular cases
+    /// (adding -s, -es, -ies) and common irregular nouns (person→people, child→children, etc.).
+    /// </summary>
+    /// <param name="word">The singular word to pluralize.</param>
+    /// <returns>The pluralized form of the word.</returns>
+    public static string Pluralize(this string word)
+    {
+        return Inflector.Pluralize(word);
+    }
+
     [GeneratedRegex("(?:^|_)(.)", RegexOptions.Compiled)]
     private static partial Regex PascalizeRegex();
 }
