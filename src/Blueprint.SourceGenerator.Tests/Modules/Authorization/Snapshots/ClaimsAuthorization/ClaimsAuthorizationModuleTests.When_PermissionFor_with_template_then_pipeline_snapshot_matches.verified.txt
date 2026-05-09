@@ -15,6 +15,9 @@ namespace Blueprint.Generated
 {
     public sealed partial class EditDocCommandExecutorPipeline : Blueprint.OperationExecutorShell
     {
+        static readonly string[] _appliedModuleIds =
+            new string[] { "PropertyOwnershipModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "ClaimsAuthorizationModule", "HandlerExecutionModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
+
         public EditDocCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory)
             : base(loggerFactory, "EditDocCommand")
         {
@@ -156,7 +159,7 @@ namespace Blueprint.Generated
 
         public static System.Collections.Generic.IReadOnlyList<string> GetAppliedModules()
         {
-            return new string[] { "PropertyOwnershipModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "ClaimsAuthorizationModule", "HandlerExecutionModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
+            return _appliedModuleIds;
         }
     }
 }

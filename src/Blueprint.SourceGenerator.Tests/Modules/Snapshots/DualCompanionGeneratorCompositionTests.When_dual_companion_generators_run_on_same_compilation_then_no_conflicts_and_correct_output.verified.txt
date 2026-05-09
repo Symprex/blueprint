@@ -131,6 +131,9 @@ namespace Blueprint.Generated
 {
     public sealed partial class GetOrderStatusExecutorPipeline : Blueprint.OperationExecutorShell
     {
+        static readonly string[] _appliedModuleIds =
+            new string[] { "PropertyPopulationModule", "HandlerExecutionModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
+
         public GetOrderStatusExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory)
             : base(loggerFactory, "GetOrderStatus")
         {
@@ -183,7 +186,7 @@ namespace Blueprint.Generated
 
         public static System.Collections.Generic.IReadOnlyList<string> GetAppliedModules()
         {
-            return new string[] { "PropertyPopulationModule", "HandlerExecutionModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
+            return _appliedModuleIds;
         }
     }
 }
@@ -206,6 +209,9 @@ namespace Blueprint.Generated
 {
     public sealed partial class ProcessOrderMessageExecutorPipeline : Blueprint.OperationExecutorShell
     {
+        static readonly string[] _appliedModuleIds =
+            new string[] { "TestMessagingPipelineModule", "PropertyPopulationModule", "HandlerExecutionModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
+
         public ProcessOrderMessageExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory)
             : base(loggerFactory, "ProcessOrderMessage")
         {
@@ -278,7 +284,7 @@ namespace Blueprint.Generated
 
         public static System.Collections.Generic.IReadOnlyList<string> GetAppliedModules()
         {
-            return new string[] { "TestMessagingPipelineModule", "PropertyPopulationModule", "HandlerExecutionModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
+            return _appliedModuleIds;
         }
     }
 }

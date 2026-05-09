@@ -15,6 +15,9 @@ namespace Blueprint.Generated
 {
     public sealed partial class GetWidgetQueryExecutorPipeline : Blueprint.OperationExecutorShell
     {
+        static readonly string[] _appliedModuleIds =
+            new string[] { "PropertyOwnershipModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "HandlerExecutionModule", "LinkGenerationModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
+
         public GetWidgetQueryExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory)
             : base(loggerFactory, "GetWidgetQuery")
         {
@@ -151,7 +154,7 @@ namespace Blueprint.Generated
 
         public static System.Collections.Generic.IReadOnlyList<string> GetAppliedModules()
         {
-            return new string[] { "PropertyOwnershipModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "HandlerExecutionModule", "LinkGenerationModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
+            return _appliedModuleIds;
         }
     }
 }
@@ -201,6 +204,9 @@ namespace Blueprint.Generated
 {
     public sealed partial class UpdateWidgetCommandExecutorPipeline : Blueprint.OperationExecutorShell
     {
+        static readonly string[] _appliedModuleIds =
+            new string[] { "PropertyOwnershipModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "HandlerExecutionModule", "LinkGenerationModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "ResourceEventAuditModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
+
         public UpdateWidgetCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory)
             : base(loggerFactory, "UpdateWidgetCommand")
         {
@@ -400,7 +406,7 @@ namespace Blueprint.Generated
 
         public static System.Collections.Generic.IReadOnlyList<string> GetAppliedModules()
         {
-            return new string[] { "PropertyOwnershipModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "HandlerExecutionModule", "LinkGenerationModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "ResourceEventAuditModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
+            return _appliedModuleIds;
         }
 
         private static void PopulateFromJsonBody(System.ReadOnlySpan<byte> bodyBytes, global::TestNamespace.UpdateWidgetCommand operation)

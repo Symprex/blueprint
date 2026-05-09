@@ -15,6 +15,9 @@ namespace Blueprint.Generated
 {
     public sealed partial class AllTypesGetQueryExecutorPipeline : Blueprint.OperationExecutorShell
     {
+        static readonly string[] _appliedModuleIds =
+            new string[] { "PropertyOwnershipModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "HandlerExecutionModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
+
         public AllTypesGetQueryExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory)
             : base(loggerFactory, "AllTypesGetQuery")
         {
@@ -292,7 +295,7 @@ namespace Blueprint.Generated
 
         public static System.Collections.Generic.IReadOnlyList<string> GetAppliedModules()
         {
-            return new string[] { "PropertyOwnershipModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "HandlerExecutionModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
+            return _appliedModuleIds;
         }
     }
 }
@@ -315,6 +318,9 @@ namespace Blueprint.Generated
 {
     public sealed partial class AllTypesPostCommandExecutorPipeline : Blueprint.OperationExecutorShell
     {
+        static readonly string[] _appliedModuleIds =
+            new string[] { "PropertyOwnershipModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "HandlerExecutionModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
+
         public AllTypesPostCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory)
             : base(loggerFactory, "AllTypesPostCommand")
         {
@@ -500,7 +506,7 @@ namespace Blueprint.Generated
 
         public static System.Collections.Generic.IReadOnlyList<string> GetAppliedModules()
         {
-            return new string[] { "PropertyOwnershipModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "HandlerExecutionModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
+            return _appliedModuleIds;
         }
 
         private static void PopulateFromJsonBody(System.ReadOnlySpan<byte> bodyBytes, global::TestNamespace.AllTypesPostCommand operation)

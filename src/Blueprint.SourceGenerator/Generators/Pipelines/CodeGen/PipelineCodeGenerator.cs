@@ -100,9 +100,8 @@ internal static class PipelineCodeGenerator
     }
 
     /// <summary>
-    /// Adds a static <c>GetAppliedModules()</c> method that returns the ordered, distinct
-    /// contributor IDs from the pipeline plan. This provides a compile-time inspection
-    /// surface for debugging, diagnostics, and AI-friendly manifest generation.
+    /// Adds a static readonly field of applied module IDs and a static method that returns it.
+    /// The field is allocated once per type load, avoiding per-call array allocation.
     /// </summary>
     private static void AddGetAppliedModulesMethod(ClassBuilder pipelineClass, PipelinePlan plan)
     {
@@ -113,13 +112,15 @@ internal static class PipelineCodeGenerator
 
         var arrayElements = string.Join(", ", contributorIds.Select(static id => $"\"{id}\""));
 
-        // The applied modules list is a diagnostic/inspection-only surface, not a hot path.
-        // A static readonly backing field would be ideal but CodeWriter lacks AddField;
-        // the per-call allocation is acceptable for this cold path.
+        pipelineClass.AddProperty("_appliedModuleIds")
+            .SetType("string[]")
+            .MakeStatic()
+            .WithReadonlyValue($"new string[] {{ {arrayElements} }}");
+
         pipelineClass.AddMethod("GetAppliedModules")
             .MakePublicMethod()
             .MakeStaticMethod()
             .WithReturnType("System.Collections.Generic.IReadOnlyList<string>")
-            .WithBody(writer => writer.Return($"new string[] {{ {arrayElements} }}"));
+            .WithBody(writer => writer.Return("_appliedModuleIds"));
     }
 }

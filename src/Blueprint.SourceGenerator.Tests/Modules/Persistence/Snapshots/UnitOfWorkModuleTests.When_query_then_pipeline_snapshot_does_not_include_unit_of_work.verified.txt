@@ -15,6 +15,9 @@ namespace Blueprint.Generated
 {
     public sealed partial class GetOrdersQueryExecutorPipeline : Blueprint.OperationExecutorShell
     {
+        static readonly string[] _appliedModuleIds =
+            new string[] { "PropertyPopulationModule", "HandlerExecutionModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
+
         public GetOrdersQueryExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory)
             : base(loggerFactory, "GetOrdersQuery")
         {
@@ -67,7 +70,7 @@ namespace Blueprint.Generated
 
         public static System.Collections.Generic.IReadOnlyList<string> GetAppliedModules()
         {
-            return new string[] { "PropertyPopulationModule", "HandlerExecutionModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
+            return _appliedModuleIds;
         }
     }
 }

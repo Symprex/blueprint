@@ -15,6 +15,9 @@ namespace Blueprint.Generated
 {
     public sealed partial class GetAccountQueryExecutorPipeline : Blueprint.OperationExecutorShell
     {
+        static readonly string[] _appliedModuleIds =
+            new string[] { "PropertyOwnershipModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "AuthorizationModule", "HandlerExecutionModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
+
         public GetAccountQueryExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory)
             : base(loggerFactory, "GetAccountQuery")
         {
@@ -156,7 +159,7 @@ namespace Blueprint.Generated
 
         public static System.Collections.Generic.IReadOnlyList<string> GetAppliedModules()
         {
-            return new string[] { "PropertyOwnershipModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "AuthorizationModule", "HandlerExecutionModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
+            return _appliedModuleIds;
         }
     }
 }

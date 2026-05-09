@@ -15,6 +15,9 @@ namespace Blueprint.Generated
 {
     public sealed partial class GetParentQueryExecutorPipeline : Blueprint.OperationExecutorShell
     {
+        static readonly string[] _appliedModuleIds =
+            new string[] { "PropertyPopulationModule", "HandlerExecutionModule", "AuditingModule", "ResourceExpansionModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
+
         public GetParentQueryExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory)
             : base(loggerFactory, "GetParentQuery")
         {
@@ -76,7 +79,7 @@ namespace Blueprint.Generated
 
         public static System.Collections.Generic.IReadOnlyList<string> GetAppliedModules()
         {
-            return new string[] { "PropertyPopulationModule", "HandlerExecutionModule", "AuditingModule", "ResourceExpansionModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
+            return _appliedModuleIds;
         }
     }
 }

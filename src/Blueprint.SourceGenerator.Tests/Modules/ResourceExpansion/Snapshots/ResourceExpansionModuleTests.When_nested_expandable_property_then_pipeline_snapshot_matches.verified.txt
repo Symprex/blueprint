@@ -15,6 +15,9 @@ namespace Blueprint.Generated
 {
     public sealed partial class GetTopQueryExecutorPipeline : Blueprint.OperationExecutorShell
     {
+        static readonly string[] _appliedModuleIds =
+            new string[] { "PropertyPopulationModule", "HandlerExecutionModule", "AuditingModule", "ResourceExpansionModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
+
         public GetTopQueryExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory)
             : base(loggerFactory, "GetTopQuery")
         {
@@ -77,7 +80,7 @@ namespace Blueprint.Generated
 
         public static System.Collections.Generic.IReadOnlyList<string> GetAppliedModules()
         {
-            return new string[] { "PropertyPopulationModule", "HandlerExecutionModule", "AuditingModule", "ResourceExpansionModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
+            return _appliedModuleIds;
         }
     }
 }
