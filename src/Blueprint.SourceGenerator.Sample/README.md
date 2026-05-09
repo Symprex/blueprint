@@ -14,24 +14,29 @@ handlers, registers services, and hosts the generated executor pipeline.
 
 ## Operations
 
-Operations span the `Templates` group (via `[ApiOperations("Templates")]`) and a `System` group for infrastructure:
+Operations span the `Templates` group (via `[ApiOperations("Templates")]`) and supporting groups for authorization, account, and infrastructure:
 
 | Operation | HTTP | Route | Result |
 |-----------|------|-------|--------|
 | `GetTemplatesQuery` | GET | `/templates` | `TemplateApiResource[]` |
 | `GetTemplateQuery` | GET | `/templates/{Id}` | `Results<OkResult<TemplateApiResource>, NotFoundResult<TemplateApiResource>>` |
 | `SearchTemplatesQuery` | GET | `/templates/search` | `TemplateApiResource[]` |
+| `GetPagedTemplatesQuery` | GET | `/templates/paged` | `PagedApiResource<TemplateApiResource>` |
 | `GetTemplateVersionsQuery` | GET | `/templates/{Id}/versions` | `TemplateVersionApiResource[]` |
+| `GetTemplateHistoryQuery` | GET | `/templates/{Id}/history` | `TemplateVersionApiResource[]` |
 | `CreateTemplateCommand` | POST | `/templates` | `ResourceEventResult<TemplateApiResource>` |
 | `UpdateTemplateCommand` | PUT | `/templates/{Id}` | `ResourceEventResult<TemplateApiResource>` |
 | `PatchTemplateSettingsCommand` | PATCH | `/templates/{Id}/settings` | `ResourceEventResult<TemplateApiResource>` |
 | `PublishTemplateCommand` | POST | `/templates/{Id}/publish` | `Results<ResourceEventResult<TemplateApiResource>, ConflictResult<TemplateApiResource>>` |
 | `CloneTemplateCommand` | POST | `/templates/{Id}/clone` | `ResourceEventResult<TemplateApiResource>` |
 | `PreviewTemplateCommand` | POST | `/templates/{Id}/preview` | `TemplatePreviewApiResource` |
+| `ValidateTemplateCommand` | POST | `/templates/{Id}/validate` | `OkResult` |
 | `ArchiveTemplateCommand` | DELETE | `/templates/{Id}` | `KeyOnlyResourceEventResult` |
+| `BulkArchiveTemplatesCommand` | POST | `/templates/bulk-archive` | `StatusCodeResult.Accepted` |
 | `ExportTemplatesCommand` | POST | `/templates/export` | `ExportJobApiResource` |
-| `ChangePasswordCommand` | POST | `/system/change-password` | `OkResult` |
-| `GetTemplateHistoryQuery` | GET | `/templates/{Id}/history` | `TemplateVersionApiResource[]` |
+| `UpdateTemplateSettingsCommand` | PUT | `/tenants/{TenantId}/templates/{Id}/settings` | `OkResult` |
+| `GetMyAuthManifestQuery` | GET | `/me/authManifest` | `AuthManifestApiResource` |
+| `ChangePasswordCommand` | PUT | `/account/password` | `NoResultOperationResult` |
 | `HealthCheckQuery` | GET | `/system/health` | `PlainTextResult` |
 | `DownloadTemplateQuery` | GET | `/templates/{Id}/download` | `FileStreamResult` |
 | `RedirectToTemplateDocsQuery` | GET | `/templates/{Id}/docs` | `RedirectResult` |
@@ -68,6 +73,15 @@ A background task (`SendTemplateSharedNotificationTask`) demonstrates non-HTTP e
 - **Operation grouping** — `[ApiOperations("Templates")]` for explicit OpenAPI tag provenance
 - **Serializer context** — `[BlueprintAppSerializerContext]` with `System.Text.Json` source-generated serialization
 - **Generated executor** — `SampleBlueprintAppExecutor` is entirely source-generated
+- **Paged queries** — `OrderedPagedQuery<T>` on `GetPagedTemplatesQuery` with offset/limit/sort
+- **Compare validation** — `[Compare(nameof(NewPassword))]` on `ChangePasswordCommand` for cross-property equality checks
+- **Length validation** — `[Length(8, 128)]` on `ChangePasswordCommand.NewPassword` for min/max string length
+- **Bulk operations** — `BulkArchiveTemplatesCommand` with `[MinLength(1)]` array validation
+- **Status code results** — `StatusCodeResult.Accepted` for fire-and-forget HTTP 202 patterns
+- **Auth manifest** — `GetMyAuthManifestQuery` with `IApiAuthoriserAggregator` for SPA permission manifests
+- **Tenant-scoped routes** — `/tenants/{TenantId}/templates/{Id}/settings` with multi-segment route binding
+- **Claims authorization** — `[Permission]` and `[PermissionFor]` with claims-based access control
+- **Context metadata** — `IContextMetadataProvider` for enriching resource events with ambient context
 
 ## Consumer seam demonstrations
 
@@ -82,6 +96,7 @@ those libraries as core Blueprint dependencies:
 | **Property population** | `TenantPropertyPopulator` | Signature365's `SetTenantMiddleware` |
 | **Task scheduling** | `SampleHangfireTaskProvider` (`IBackgroundTaskScheduleProvider`) | Hangfire `IBackgroundJobClient.Create()` |
 | **Task execution** | `TaskExecutor` (built-in) | Hangfire `HangfireTaskExecutor` entry point |
+| **Task context** | `SampleTenantContextProvider` (`IBackgroundTaskContextProvider`) | Restore tenant/user context in background jobs |
 | **Trace propagation** | `TraceContextPreprocessor` (built-in) | W3C traceparent/tracestate injection |
 | **Queue routing** | `[Queue("name")]` attribute | Hangfire named queues |
 | **Auditing** | `LoggingAuditSink` | Database or event-store audit sink |
@@ -89,7 +104,10 @@ those libraries as core Blueprint dependencies:
 | **Authorization** | `SampleResourceAuthorizationProvider` | Claims/scope-based ownership checks |
 | **User context** | `SampleUserAuthorisationContextFactory` | JWT→`IUserAuthorisationContext` mapping |
 | **Business auth** | `TenantIsolationApiAuthoriser` | Tenant isolation, role-based access |
+| **Link visibility** | `ArchiveTemplateLinkChecker` | State-based link hiding (e.g. hide archive on archived) |
+| **Claims auth** | `AddClaimsAuthorisation()` | Permission/PermissionFor claims evaluation |
 | **Recurring tasks** | `SampleRecurringTaskScheduler` | Hangfire `RecurringJob.AddOrUpdate` |
+| **Context metadata** | `SampleContextMetadataProvider` | Enrich resource events with tenant/correlation context |
 
 These seams prove that the generated pipeline correctly calls consumer-registered services at the
 right pipeline stages, enabling companion packages to integrate without core framework changes.
