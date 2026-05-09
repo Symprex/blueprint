@@ -828,3 +828,103 @@ The proven recipe for companion generators:
 ```
 
 See `src/Blueprint.SourceGenerator.Tests/Modules/ConsumerModuleCompositionTests.cs` for complete integration proofs covering single-module, dual-module, and host-partitioning scenarios.
+
+## Full migration example: Signature365-style service
+
+This shows the complete before/after for a typical Signature365 service startup.
+
+### Before (legacy Blueprint)
+
+```csharp
+// Startup.cs — Legacy
+using Blueprint.Configuration;
+using NSwag;
+
+public class Startup
+{
+    public static void AddBlueprintApi(IServiceCollection services)
+    {
+        services.AddBlueprintApi(b => b
+            .ConfigureCommon(AppDefinition.Instance)
+            .Http(h => h.Json(j => { /* NodaTime etc */ }))
+            .Executors(e => e.AddScanner<OperationsHandlerScanner>())
+            .Operations(o => o
+                .ScanCallingAssembly()
+                .Scan(typeof(ITemplatesApi).Assembly))
+            .AddOpenApi(o => { o.PostConfigure = d => { d.Info = new OpenApiInfo { Title = "Templates API" }; }; })
+            .AddAuthentication(a => a.UseContextLoader<Sig365UserContextFactory>())
+            .AddAuthorisation()
+            .AddResourceEvents<BusResourceEventAuditRepository>());
+    }
+
+    public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
+    {
+        app.UseRouting();
+        app.UseAuthentication();
+        app.UseEndpoints(endpoints => endpoints.MapBlueprintApi("api/"));
+    }
+}
+```
+
+### After (source-generated Blueprint)
+
+```csharp
+// App root (in contract project)
+[BlueprintAppScan(FromAssemblyOf = typeof(GetTemplatesQuery))]
+[BlueprintAppSerializerContext(JsonSerializerContextType = typeof(TemplatesJsonContext))]
+public partial class TemplatesBlueprintApp : BlueprintApp { }
+
+// Startup.cs — Source-generated
+public class Startup
+{
+    public void ConfigureServices(IServiceCollection services, IWebHostEnvironment env)
+    {
+        services.AddAuthentication("Bearer").AddJwtBearer(/* ... */);
+
+        services.AddBlueprintApi<TemplatesBlueprintApp, TemplatesBlueprintAppExecutor>(blueprint =>
+        {
+            blueprint.AddUserAuthorisationContextFactory<Sig365UserContextFactory>();
+            blueprint.AddResourceEventAuditSink<BusResourceEventAuditSink>();
+            blueprint.AddUnitOfWork<MartenUnitOfWork>();
+            blueprint.AddMessageOutbox<RebusMessageOutbox>();
+            blueprint.AddPropertyPopulator<TenantPropertyPopulator>();
+            blueprint.AddApiAuthoriser<TenantIsolationAuthoriser>();
+            blueprint.AddClaimsAuthorisation();
+
+            blueprint.ConfigureHttp(http =>
+            {
+                http.ExposeExceptionDetailsInErrorResponses = env.IsDevelopment();
+            });
+        });
+    }
+
+    public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
+    {
+        app.UseRouting();
+        app.UseAuthentication();
+        app.UseAuthorization();
+
+        app.UseEndpoints(endpoints =>
+        {
+            endpoints.MapBlueprintApi<TemplatesBlueprintApp, TemplatesBlueprintAppExecutor>(
+                "api/",
+                configureOpenApi: info => { info.Title = "Templates API"; info.Version = "1.0.0"; });
+        });
+    }
+}
+```
+
+### Key differences
+
+| Concern | Legacy | Source-generated |
+|---------|--------|-----------------|
+| Operation scanning | `.Operations(o => o.Scan(...))` | `[BlueprintAppScan(FromAssemblyOf = ...)]` on app class |
+| Handler discovery | `.Executors(e => e.AddScanner<...>())` | Automatic (built-in) |
+| OpenAPI | `.AddOpenApi(o => {...})` | `configureOpenApi:` parameter on `MapBlueprintApi` |
+| Authentication | `.AddAuthentication(a => ...)` | ASP.NET Core `AddAuthentication()` + `AddUserAuthorisationContextFactory<T>()` |
+| Authorization | `.AddAuthorisation()` | Automatic from `[Resource]`/`[MustBeAuthenticated]` attributes |
+| Middleware pipeline | Runtime middleware chain | Generated `IOperationExecutorPipeline` per operation |
+| Serialization | Newtonsoft.Json | System.Text.Json with source-generated context |
+| Persistence | Blueprint middleware | `AddUnitOfWork<T>()` seam |
+| Messaging | Blueprint Rebus middleware | `AddMessageOutbox<T>()` seam |
+| Endpoint mapping | `endpoints.MapBlueprintApi("api/")` | `endpoints.MapBlueprintApi<TApp, TExecutor>("api/")` |
