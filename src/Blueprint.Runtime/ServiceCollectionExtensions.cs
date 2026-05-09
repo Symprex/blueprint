@@ -298,6 +298,32 @@ public sealed class BlueprintServiceBuilder
     }
 
     /// <summary>
+    /// Registers the <see cref="Blueprint.Http.ETagger"/> service that provides ETag-based conditional
+    /// request handling for Blueprint HTTP operations. Requires <c>IHttpContextAccessor</c> to be
+    /// registered (typically via <c>AddHttpContextAccessor()</c>).
+    /// </summary>
+    /// <returns>This builder for chaining.</returns>
+    public BlueprintServiceBuilder AddETagSupport()
+    {
+        this.Services.AddHttpContextAccessor();
+        this.Services.TryAddScoped<Blueprint.Http.ETagger>();
+        return this;
+    }
+
+    /// <summary>
+    /// Registers a resource event audit repository that persists before/after state snapshots
+    /// for resource mutation operations.
+    /// </summary>
+    /// <typeparam name="T">The <see cref="Blueprint.Http.IResourceEventAuditRepository"/> implementation type.</typeparam>
+    /// <returns>This builder for chaining.</returns>
+    public BlueprintServiceBuilder AddResourceEventAuditRepository<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] T>()
+        where T : class, Blueprint.Http.IResourceEventAuditRepository
+    {
+        this.Services.AddScoped<Blueprint.Http.IResourceEventAuditRepository, T>();
+        return this;
+    }
+
+    /// <summary>
     /// Registers a recurring task scheduler that defines cron-based background task schedules.
     /// Multiple schedulers are supported and each will be queried for its set of schedules.
     /// </summary>

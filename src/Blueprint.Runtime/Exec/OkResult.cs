@@ -22,6 +22,15 @@ public class OkResult : OperationResult
     }
 
     /// <summary>
+    /// Initializes a new instance of the <see cref="OkResult" /> class without content,
+    /// for derived types that represent content-less responses (e.g. 304 Not Modified).
+    /// </summary>
+    protected OkResult()
+    {
+        this.Content = null!;
+    }
+
+    /// <summary>
     /// Gets or sets the content that will be output when this result is executed.
     /// </summary>
     public object Content { get; set; }
@@ -37,6 +46,28 @@ public class OkResult : OperationResult
     /// without triggering lazy allocation.
     /// </summary>
     public bool HasHeaders => this._headers is { Count: > 0 };
+
+    /// <summary>
+    /// Creates an <see cref="OkResult{T}"/> wrapping the given content with optional response headers.
+    /// </summary>
+    /// <typeparam name="T">The content type.</typeparam>
+    /// <param name="content">The response content.</param>
+    /// <param name="headers">Optional HTTP response headers to include.</param>
+    /// <returns>A new <see cref="OkResult{T}"/> instance.</returns>
+    public static OkResult<T> For<T>(T content, Dictionary<string, StringValues>? headers = null) where T : notnull
+    {
+        var result = new OkResult<T>(content);
+
+        if (headers != null)
+        {
+            foreach (var kvp in headers)
+            {
+                result.Headers[kvp.Key] = kvp.Value;
+            }
+        }
+
+        return result;
+    }
 
     /// <inheritdoc />
     public override Task ExecuteAsync(ApiOperationContext context)
@@ -76,7 +107,26 @@ public class OkResult<T> : OkResult where T : notnull
     }
 
     /// <summary>
+    /// Initializes a new instance for content-less derived types (e.g. 304 Not Modified).
+    /// </summary>
+    protected OkResult()
+    {
+    }
+
+    /// <summary>
     /// Gets or sets the content that will be output when this result is executed.
     /// </summary>
     public new T Content => (T)base.Content;
+
+    /// <summary>
+    /// Creates a 304 Not Modified result with an ETag header but no body content. The response
+    /// signals the client that its cached representation is still current.
+    /// </summary>
+    /// <param name="eTag">The ETag value confirming the cached representation.</param>
+    /// <param name="headers">Optional additional headers (e.g. <c>Cache-Control</c>).</param>
+    /// <returns>A <see cref="NotModifiedResult{T}"/> that writes a 304 status code.</returns>
+    public static NotModifiedResult<T> NotModified(string eTag, Dictionary<string, StringValues>? headers = null)
+    {
+        return new NotModifiedResult<T>(eTag, headers);
+    }
 }
