@@ -42,6 +42,43 @@ public class ExceptionTranslationIntegrationTests
         ServerApiExceptionOperation.HandlerCallCount.Should().Be(1);
     }
 
+    [Fact]
+    public async Task When_handler_throws_not_found_exception_then_generated_pipeline_returns_unhandled_exception_result_with_404()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(NotFoundExceptionOperation));
+        var context = CreateContext(app, NotFoundExceptionOperation.Configure());
+
+        NotFoundExceptionOperation.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<UnhandledExceptionResult>();
+        var unhandled = (UnhandledExceptionResult)result;
+        unhandled.Exception.Should().BeOfType<NotFoundException>();
+        unhandled.Exception.Should().BeSameAs(NotFoundExceptionOperation.LastThrownException);
+        ((NotFoundException)unhandled.Exception).HttpStatus.Should().Be(404);
+        NotFoundExceptionOperation.HandlerCallCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task When_handler_throws_validation_exception_then_generated_pipeline_returns_validation_failed_result()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(ValidationExceptionOperation));
+        var context = CreateContext(app, ValidationExceptionOperation.Configure());
+
+        ValidationExceptionOperation.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<ValidationFailedResult>();
+        result.WasSuccessful.Should().BeFalse();
+        ValidationExceptionOperation.HandlerCallCount.Should().Be(1);
+    }
+
     private static ApiOperationContext CreateContext(BlueprintApp app, ApiOperationDescriptor descriptor)
     {
         return new ApiOperationContext(new EmptyServiceProvider(), app, descriptor, CancellationToken.None);
@@ -93,5 +130,41 @@ public partial class ServerApiExceptionOperation : ICommand<string>
         HandlerCallCount++;
         LastThrownException = new ApiException("Server failure", 500);
         throw LastThrownException;
+    }
+}
+
+public partial class NotFoundExceptionOperation : ICommand<string>
+{
+    public static int HandlerCallCount { get; private set; }
+
+    public static NotFoundException? LastThrownException { get; private set; }
+
+    public static void Reset()
+    {
+        HandlerCallCount = 0;
+        LastThrownException = null;
+    }
+
+    public static Task<string> HandleAsync(NotFoundExceptionOperation operation)
+    {
+        HandlerCallCount++;
+        LastThrownException = new NotFoundException("Template not found");
+        throw LastThrownException;
+    }
+}
+
+public partial class ValidationExceptionOperation : ICommand<string>
+{
+    public static int HandlerCallCount { get; private set; }
+
+    public static void Reset()
+    {
+        HandlerCallCount = 0;
+    }
+
+    public static Task<string> HandleAsync(ValidationExceptionOperation operation)
+    {
+        HandlerCallCount++;
+        throw new Blueprint.Validation.ValidationException("Name", "Name is required");
     }
 }
