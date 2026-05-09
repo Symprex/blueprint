@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
+using Blueprint.Authorization;
 using Blueprint.Model;
 using Blueprint.Model.Attributes;
 using Blueprint.Runtime.Exec;
@@ -13,10 +14,19 @@ namespace Blueprint.SourceGenerator.Sample.Contract.Api;
 /// Also demonstrates <see cref="IValidatableObject"/> for cross-field validation: at least one
 /// content source (HtmlSource or PlainTextSource) must be provided.
 /// </summary>
+/// <remarks>
+/// Demonstrates <see cref="PermissionForAttribute"/> for resource-scoped claims-based authorization:
+/// the user must hold an "Edit" permission claim scoped to the specific template being modified
+/// (key template <c>"Templates/{Id}"</c> is resolved against the operation's <see cref="Id"/> property
+/// at runtime). This is complementary to the resource-scope authorization from
+/// <see cref="FromResourceAttribute"/> which inherits the parent <see cref="CreateTemplateCommand"/>'s
+/// <c>[Resource("template", "write")]</c> scope pair.
+/// </remarks>
 [ApiOperations("Templates")]
 [RootLink("/templates/{Id}")]
 [HttpPut]
 [FromResource(typeof(CreateTemplateCommand))]
+[PermissionFor("Edit", "Templates/{Id}")]
 [Description("Update an existing template's name and content.")]
 public partial class UpdateTemplateCommand : ICommand<ResourceEventResult<TemplateApiResource>>, IValidatableObject
 {

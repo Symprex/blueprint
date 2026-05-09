@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using Blueprint.Auditing;
+using Blueprint.Authorization;
 using Blueprint.Model;
 using Blueprint.Model.Attributes;
 using Blueprint.Runtime.Exec;
@@ -12,10 +13,17 @@ namespace Blueprint.SourceGenerator.Sample.Contract.Api;
 /// by requiring a name and enforcing length constraints on content fields.
 /// Returns a resource-event result (201 Created with event envelope).
 /// </summary>
+/// <remarks>
+/// Demonstrates <see cref="PermissionAttribute"/> for global (non-scoped) claims-based authorization:
+/// the user must hold the "ManageTemplates" permission claim regardless of which template is being created.
+/// This complements the <see cref="ResourceAttribute"/> scope pair ("template", "write") which controls
+/// resource-level authorization via <see cref="IResourceAuthorizationProvider"/>.
+/// </remarks>
 [ApiOperations("Templates")]
 [RootLink("/templates")]
 [HttpPost]
 [Resource("template", "write")]
+[Permission("ManageTemplates")]
 [Description("Create a new template with name and optional content.")]
 public partial class CreateTemplateCommand : ICommand<ResourceEventResult<TemplateApiResource>>
 {

@@ -53,6 +53,8 @@ A background task (`SendTemplateSharedNotificationTask`) demonstrates non-HTTP e
 - **Resource authorization** — `[Resource("template", "read/write")]` scope-pair model (implies authentication)
 - **Authorization provider** — `IResourceAuthorizationProvider` with claim-based scope evaluation
 - **Scope inheritance** — `[FromResource(typeof(X))]` inherits scope pairs from another operation
+- **Global claims** — `[Permission("ManageTemplates")]` on `CreateTemplateCommand` and `ArchiveTemplateCommand` for global permission checks
+- **Scoped claims** — `[PermissionFor("Edit", "Templates/{Id}")]` on `UpdateTemplateCommand` for resource-scoped permission with template token resolution
 - **Anonymous access** — `[AllowAnonymous]` on `SearchTemplatesQuery` for public endpoints
 - **Header binding** — `[FromHeader("X-Correlation-Id")]` on `SearchTemplatesQuery` for cross-system trace correlation
 - **Cookie binding** — `[FromCookie("session-id")]` on `SearchTemplatesQuery` for cookie-sourced values

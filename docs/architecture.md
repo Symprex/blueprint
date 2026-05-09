@@ -179,7 +179,7 @@ A module typically implements one or two contributors. For example:
 - `AuthenticationModule` implements `IDescriptorContributor` (projects auth metadata) and `IPipelineContributor` (renders identity checks)
 - `OperationDiscoveryManifestModule` implements `IDebugManifestContributor` (emits per-operation discovery entries)
 
-The repository currently has 43 modules covering validation, persistence, auditing, authentication, authorization, performance metrics, link generation, resource events, property ownership, background tasks, messaging, OpenAPI metadata, debug manifests, and host dispatch.
+The repository currently has 44 module classes across 19 capability areas covering validation, persistence, auditing, authentication, authorization, performance metrics, link generation, resource events, resource expansion, property ownership, background tasks, messaging, OpenAPI metadata, debug manifests, and host dispatch.
 
 If a new feature needs compile-time metadata or diagnostics, adding or extending a module is usually the right place to start.
 

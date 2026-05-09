@@ -12,7 +12,7 @@
   "current": {
     "activeWorkstream": "authorization-and-parity-alignment",
     "frameworkStatus": "production-ready",
-    "frameworkStatusDetail": "Full S365 feature parity confirmed. All consumer seams (Hangfire, Rebus, Marten) implemented and demonstrated in sample app. Authorization pipeline, resource expansion, background tasks, OpenAPI, HATEOAS links all complete. Source-gen optimization analysis done: resource key expansion already compiled, IApiAuthoriser already split. ResourceCreated/Updated/Deleted marked [Obsolete] in favor of [ResourceEventFamily]. All 1260 tests pass.",
+    "frameworkStatusDetail": "Full S365 feature parity confirmed. All consumer seams (Hangfire, Rebus, Marten) implemented and demonstrated in sample app. Authorization pipeline, resource expansion, background tasks, OpenAPI, HATEOAS links all complete. Source-gen optimization audits done: resource key expansion already compiled (ResourceKeyTemplateParser generates direct property access), IApiAuthoriser already split into IOperationAuthoriser+ILinkVisibilityAuthoriser, CompiledUrlBuilder eliminates URL reflection, ApiAuthoriserAggregator caches AppliesTo. ResourceCreated/Updated/Deleted marked [Obsolete] in favor of [ResourceEventFamily]. 304 Not Modified link guard fix committed. All 1272 tests pass.",
     "nextReadySlice": null,
     "lastCompletedSlice": {
       "id": "sourcegen-optimization-analysis",

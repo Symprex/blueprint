@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using Blueprint.Authorization;
 using Blueprint.Model;
 using Blueprint.Model.Attributes;
 using Blueprint.Runtime.Exec;
@@ -9,10 +10,16 @@ namespace Blueprint.SourceGenerator.Sample.Contract.Api;
 /// Archives a template by its identifier. Demonstrates a key-only resource-event command
 /// that produces an HTTP 201 Created with no body (identity-only event).
 /// </summary>
+/// <remarks>
+/// Demonstrates <see cref="PermissionAttribute"/> combined with <see cref="ResourceAttribute"/>:
+/// the user must hold the global "ManageTemplates" permission claim <em>and</em> satisfy the
+/// resource-scope "template:write" authorization check.
+/// </remarks>
 [ApiOperations("Templates")]
 [RootLink("/templates/{Id}")]
 [HttpDelete]
 [Resource("template", "write")]
+[Permission("ManageTemplates")]
 [Description("Archive (soft-delete) a template.")]
 public partial class ArchiveTemplateCommand : ICommand<KeyOnlyResourceEventResult>
 {
