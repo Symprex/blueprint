@@ -75,6 +75,90 @@ public class ApiOperationLink
     /// </summary>
     public Type ResourceType { get; } = null!;
 
+    /// <summary>
+    /// Returns <see langword="true"/> when <see cref="UrlFormat"/> contains at least one
+    /// <c>{placeholder}</c> that must be filled at runtime.
+    /// </summary>
+    /// <returns><see langword="true"/> if the URL format has placeholders; otherwise <see langword="false"/>.</returns>
+    public bool HasPlaceholders()
+    {
+        return this.UrlFormat.Contains('{');
+    }
+
+    /// <summary>
+    /// Creates a relative URL by substituting <c>{Placeholder}</c> tokens in <see cref="UrlFormat"/>
+    /// with property values from <paramref name="values"/>.
+    /// </summary>
+    /// <param name="values">
+    /// An object whose public properties are used to fill URL placeholders by name (case-insensitive).
+    /// Pass <see langword="null"/> only when <see cref="HasPlaceholders"/> returns <see langword="false"/>.
+    /// </param>
+    /// <returns>
+    /// A relative URL string (without leading slash removed from the format), or <see langword="null"/>
+    /// if a required placeholder value is missing or <see langword="null"/>.
+    /// </returns>
+    public string? CreateRelativeUrl(object? values)
+    {
+        if (!this.HasPlaceholders())
+        {
+            return this.UrlFormat;
+        }
+
+        if (values is null)
+        {
+            return null;
+        }
+
+        var result = this.UrlFormat;
+        var valueType = values.GetType();
+        var startIndex = 0;
+
+        while (true)
+        {
+            var openBrace = result.IndexOf('{', startIndex);
+
+            if (openBrace < 0)
+            {
+                break;
+            }
+
+            var closeBrace = result.IndexOf('}', openBrace);
+
+            if (closeBrace < 0)
+            {
+                break;
+            }
+
+            var placeholder = result.Substring(openBrace + 1, closeBrace - openBrace - 1);
+
+            // Strip any format specifier (e.g. {Id:UserId} → just use "Id")
+            var colonIndex = placeholder.IndexOf(':');
+            var propertyName = colonIndex >= 0 ? placeholder[..colonIndex] : placeholder;
+
+            var property = valueType.GetProperty(
+                propertyName,
+                System.Reflection.BindingFlags.IgnoreCase | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public);
+
+            if (property is null)
+            {
+                return null;
+            }
+
+            var value = property.GetValue(values);
+
+            if (value is null)
+            {
+                return null;
+            }
+
+            var encoded = Uri.EscapeDataString(value.ToString()!);
+            result = string.Concat(result.AsSpan(0, openBrace), encoded, result.AsSpan(closeBrace + 1));
+            startIndex = openBrace + encoded.Length;
+        }
+
+        return result;
+    }
+
     /// <inheritdoc />
     public override string ToString()
     {

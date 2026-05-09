@@ -204,6 +204,19 @@ public sealed class BlueprintServiceBuilder
     }
 
     /// <summary>
+    /// Registers a resource link generator that dynamically adds links to resources at runtime.
+    /// Multiple generators are supported and all will be invoked on matching resource types.
+    /// </summary>
+    /// <typeparam name="T">The <see cref="Blueprint.Http.IResourceLinkGenerator"/> implementation type.</typeparam>
+    /// <returns>This builder for chaining.</returns>
+    public BlueprintServiceBuilder AddResourceLinkGenerator<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] T>()
+        where T : class, Blueprint.Http.IResourceLinkGenerator
+    {
+        this.Services.AddSingleton<Blueprint.Http.IResourceLinkGenerator, T>();
+        return this;
+    }
+
+    /// <summary>
     /// Registers a recurring task scheduler that defines cron-based background task schedules.
     /// Multiple schedulers are supported and each will be queried for its set of schedules.
     /// </summary>
