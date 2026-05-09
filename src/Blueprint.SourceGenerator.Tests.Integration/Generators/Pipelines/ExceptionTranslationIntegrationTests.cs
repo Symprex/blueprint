@@ -79,6 +79,44 @@ public class ExceptionTranslationIntegrationTests
         ValidationExceptionOperation.HandlerCallCount.Should().Be(1);
     }
 
+    [Fact]
+    public async Task When_handler_throws_forbidden_exception_then_generated_pipeline_returns_unhandled_exception_with_403()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(ForbiddenExceptionOperation));
+        var context = CreateContext(app, ForbiddenExceptionOperation.Configure());
+
+        ForbiddenExceptionOperation.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<UnhandledExceptionResult>();
+        var unhandled = (UnhandledExceptionResult)result;
+        unhandled.Exception.Should().BeOfType<ForbiddenException>();
+        ((ForbiddenException)unhandled.Exception).HttpStatus.Should().Be(403);
+        ForbiddenExceptionOperation.HandlerCallCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task When_handler_throws_conflict_exception_then_generated_pipeline_returns_unhandled_exception_with_409()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(ConflictExceptionOperation));
+        var context = CreateContext(app, ConflictExceptionOperation.Configure());
+
+        ConflictExceptionOperation.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<UnhandledExceptionResult>();
+        var unhandled = (UnhandledExceptionResult)result;
+        unhandled.Exception.Should().BeOfType<ConflictException>();
+        ((ConflictException)unhandled.Exception).HttpStatus.Should().Be(409);
+        ConflictExceptionOperation.HandlerCallCount.Should().Be(1);
+    }
+
     private static ApiOperationContext CreateContext(BlueprintApp app, ApiOperationDescriptor descriptor)
     {
         return new ApiOperationContext(new EmptyServiceProvider(), app, descriptor, CancellationToken.None);
@@ -166,5 +204,45 @@ public partial class ValidationExceptionOperation : ICommand<string>
     {
         HandlerCallCount++;
         throw new Blueprint.Validation.ValidationException("Name", "Name is required");
+    }
+}
+
+public partial class ForbiddenExceptionOperation : ICommand<string>
+{
+    public static int HandlerCallCount { get; private set; }
+
+    public static ForbiddenException? LastThrownException { get; private set; }
+
+    public static void Reset()
+    {
+        HandlerCallCount = 0;
+        LastThrownException = null;
+    }
+
+    public static Task<string> HandleAsync(ForbiddenExceptionOperation operation)
+    {
+        HandlerCallCount++;
+        LastThrownException = new ForbiddenException("Access denied");
+        throw LastThrownException;
+    }
+}
+
+public partial class ConflictExceptionOperation : ICommand<string>
+{
+    public static int HandlerCallCount { get; private set; }
+
+    public static ConflictException? LastThrownException { get; private set; }
+
+    public static void Reset()
+    {
+        HandlerCallCount = 0;
+        LastThrownException = null;
+    }
+
+    public static Task<string> HandleAsync(ConflictExceptionOperation operation)
+    {
+        HandlerCallCount++;
+        LastThrownException = new ConflictException("Resource already exists");
+        throw LastThrownException;
     }
 }

@@ -62,7 +62,8 @@ public class ReferenceAppHttpEndToEndIntegrationTests
         response.Body.Should().Contain("template-002");
         response.Body.Should().Contain("Formal Greeting");
         response.Headers.Should().ContainKey("Cache-Control");
-        response.Headers["Cache-Control"].Should().Contain("max-age=300");
+        response.Headers["Cache-Control"].Should().Contain("max-age=3600");
+        response.Headers.Should().ContainKey("ETag");
     }
 
     [Fact]
@@ -2423,6 +2424,13 @@ public class ReferenceAppHttpEndToEndIntegrationTests
 
         configureRequest?.Invoke(context);
 
+        // ETagger and other HTTP services resolve the current context from IHttpContextAccessor
+        var httpContextAccessor = serviceProvider.GetService<IHttpContextAccessor>();
+        if (httpContextAccessor is not null)
+        {
+            httpContextAccessor.HttpContext = context;
+        }
+
         await endpoint.RequestDelegate!(context);
         body.Position = 0;
 
@@ -2451,12 +2459,14 @@ public class ReferenceAppHttpEndToEndIntegrationTests
     {
         var services = new ServiceCollection()
             .AddLogging()
+            .AddHttpContextAccessor()
             .AddSingleton<TemplateStore>()
             .AddSingleton<SampleBlueprintApp>()
             .AddSingleton<SampleBlueprintAppExecutor>()
             .AddScoped<Blueprint.Tasks.IBackgroundTaskScheduler, InProcessBackgroundTaskScheduler>()
             .AddScoped<InMemoryUnitOfWork>()
-            .AddScoped<Blueprint.Persistence.IUnitOfWork>(sp => sp.GetRequiredService<InMemoryUnitOfWork>());
+            .AddScoped<Blueprint.Persistence.IUnitOfWork>(sp => sp.GetRequiredService<InMemoryUnitOfWork>())
+            .AddScoped<Blueprint.Http.ETagger>();
 
         return new TestEndpointRouteBuilder(services.BuildServiceProvider());
     }
