@@ -32,6 +32,7 @@ public class ApiOperationDescriptor
         this.OperationType = operationType;
         this.Source = source;
         this._propertyAttributes = CreatePropertyAttributes(operationType);
+        this.TypeAttributes = System.Attribute.GetCustomAttributes(operationType);
 
         this.Name = name;
     }
@@ -57,6 +58,13 @@ public class ApiOperationDescriptor
     public string Source { get; }
 
     /// <summary>
+    /// Gets the custom attributes declared on the operation type. Consumers can use this to inspect
+    /// declarative metadata (e.g., custom authorization attributes, feature flags) at runtime without
+    /// needing to call reflection APIs directly.
+    /// </summary>
+    public IReadOnlyList<Attribute> TypeAttributes { get; }
+
+    /// <summary>
     /// Gets all registered <see cref="ApiOperationLink" />s for this descriptor.
     /// </summary>
     public IReadOnlyList<ApiOperationLink> Links => this._links;
@@ -65,6 +73,22 @@ public class ApiOperationDescriptor
     /// Gets all registered <see cref="ApiOperationUrl" />s for this descriptor.
     /// </summary>
     public IReadOnlyList<ApiOperationUrl> Urls => this._urls;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether this operation is exposed via HTTP endpoints.
+    /// Operations without registered URLs are not exposed. This property can also be set to
+    /// <see langword="false"/> explicitly to hide an operation from link generation and OpenAPI
+    /// documentation while keeping it available for internal dispatch.
+    /// </summary>
+    public bool IsExposed { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether this operation allows anonymous (unauthenticated) access.
+    /// Set to <see langword="true"/> by the generated descriptor when <c>[AllowAnonymous]</c> is present
+    /// on the operation type. Consumers can read this at runtime for auth manifest generation or
+    /// link visibility decisions.
+    /// </summary>
+    public bool AnonymousAccessAllowed { get; set; }
 
     /// <summary>
     /// Adds a link for this descriptor.
