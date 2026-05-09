@@ -42,7 +42,7 @@
           },
           "OperationDescriptorSourceGenerator": {
             "generatedOutputCount": 102,
-            "generatedOutputLineCount": 3235,
+            "generatedOutputLineCount": 3335,
             "trackedStages": {
               "CombineWithCompilation": 100,
               "Configuration": 100,

@@ -40,6 +40,7 @@ namespace TestNamespace
                 this.SetFeatureData(new global::Blueprint.Model.OperationDiscoveryFeatureData("query", "TestNamespace", "GetDocumentedWidgetQuery"));
                 this.SetFeatureData(global::Blueprint.Model.WellKnownFeatureData.HttpHostExposure);
                 this.SetFeatureData(new global::Blueprint.Model.OperationGroupMetadataFeatureData("TestNamespace"));
+                this.InstanceFactory = static () => new GetDocumentedWidgetQuery();
             }
         }
     }

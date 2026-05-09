@@ -68,6 +68,7 @@ namespace TestNamespace
             {
                 this.SetFeatureData(global::Blueprint.Model.WellKnownFeatureData.DefaultFailureOutcomes);
                 this.SetFeatureData(new global::Blueprint.Model.OperationDiscoveryFeatureData("operation", "TestNamespace", "IncludedOperation"));
+                this.InstanceFactory = static () => new IncludedOperation();
             }
         }
     }

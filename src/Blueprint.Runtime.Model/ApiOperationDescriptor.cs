@@ -91,6 +91,14 @@ public class ApiOperationDescriptor
     public bool AnonymousAccessAllowed { get; set; }
 
     /// <summary>
+    /// Gets or sets an optional compiled factory that creates new instances of the operation type without
+    /// <see cref="Activator.CreateInstance(Type)"/> reflection. Source-generated descriptor code sets this
+    /// to a <c>static () =&gt; new TOperation()</c> lambda so the per-request allocation avoids the
+    /// activator overhead entirely.
+    /// </summary>
+    public Func<object>? InstanceFactory { get; set; }
+
+    /// <summary>
     /// Adds a link for this descriptor.
     /// </summary>
     /// <param name="apiOperationUrl">The URL to add.</param>
@@ -215,6 +223,11 @@ public class ApiOperationDescriptor
     /// <exception cref="InvalidOperationException">If the operation type does not have a public parameterless constructor.</exception>
     public object CreateInstance()
     {
+        if (this.InstanceFactory is { } factory)
+        {
+            return factory();
+        }
+
         var instance = Activator.CreateInstance(this.OperationType);
 
         return instance is null ? throw new InvalidOperationException($"Could not create instance of type {this.OperationType}") : instance;

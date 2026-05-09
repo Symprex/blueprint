@@ -28,6 +28,7 @@ namespace TestNamespace
                 this.SetFeatureData(global::Blueprint.Model.WellKnownFeatureData.DefaultFailureOutcomes);
                 this.SetFeatureData(new global::Blueprint.Model.OperationDiscoveryFeatureData("command", "TestNamespace", "ProcessOrderMessage"));
                 this.SetFeatureData(new global::Blueprint.Model.OperationHostExposureFeatureData(global::System.Collections.Immutable.ImmutableArray.Create("messaging")));
+                this.InstanceFactory = static () => new ProcessOrderMessage();
             }
         }
     }

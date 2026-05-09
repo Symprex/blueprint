@@ -204,7 +204,21 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
             .SetBaseClass("global::Blueprint.Model.ApiOperationDescriptor")
             .AddConstructor(Accessibility.Public)
             .WithBaseCall(baseParameters)
-            .WithBody(plan.Render);
+            .WithBody(c =>
+            {
+                plan.Render(c);
+
+                // Emit a compiled instance factory to avoid Activator.CreateInstance on every request.
+                // For types with `required` members, fall back to Activator which bypasses the requirement.
+                if (HasRequiredMembers(plan.Operation.TypeSymbol))
+                {
+                    c.AppendLine($"this.InstanceFactory = static () => System.Activator.CreateInstance(typeof({plan.Operation.TypeName}))!;");
+                }
+                else
+                {
+                    c.AppendLine($"this.InstanceFactory = static () => new {plan.Operation.TypeName}();");
+                }
+            });
 
         // The keys do not matter, they are not used when generating the base call
         baseParameters.Add("type", "typeof(" + plan.Operation.TypeName + ")");
@@ -259,6 +273,22 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
             new OperationGroupManifestModule(),
             .. additionalModules,
         ]);
+    }
+
+    private static bool HasRequiredMembers(INamedTypeSymbol type)
+    {
+        for (var current = type; current is not null; current = current.BaseType)
+        {
+            foreach (var member in current.GetMembers())
+            {
+                if (member is IPropertySymbol { IsRequired: true } or IFieldSymbol { IsRequired: true })
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /// <summary>

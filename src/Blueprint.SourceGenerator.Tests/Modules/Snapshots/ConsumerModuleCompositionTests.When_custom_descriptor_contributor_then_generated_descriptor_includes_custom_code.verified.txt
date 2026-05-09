@@ -69,6 +69,7 @@ namespace TestNamespace
                 this.SetFeatureData(global::Blueprint.Model.WellKnownFeatureData.DefaultFailureOutcomes);
                 this.SetFeatureData(new global::Blueprint.Model.OperationDiscoveryFeatureData("query", "TestNamespace", "TaggedQuery"));
                 this.SetFeatureData(new global::Blueprint.Model.OperationDiscoveryFeatureData("consumer-tagged", "TestNamespace", "TaggedQuery"));
+                this.InstanceFactory = static () => new TaggedQuery();
             }
         }
     }
