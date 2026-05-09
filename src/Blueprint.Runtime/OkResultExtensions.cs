@@ -5,12 +5,12 @@ namespace Blueprint;
 
 /// <summary>
 /// Extension methods for <see cref="OkResult"/> to enable fluent HTTP response configuration
-/// such as setting cache control or custom response headers.
+/// such as setting cache control, ETag, or custom response headers.
 /// </summary>
 public static class OkResultExtensions
 {
     /// <summary>
-    /// Sets the Cache-Control header on the result.
+    /// Sets the <c>Cache-Control</c> response header on the result.
     /// </summary>
     /// <typeparam name="T">The result type (must derive from <see cref="OkResult"/>).</typeparam>
     /// <param name="result">The result to configure.</param>
@@ -19,7 +19,25 @@ public static class OkResultExtensions
     public static T WithCacheControl<T>(this T result, CacheControlHeaderValue cacheControl)
         where T : OkResult
     {
+        ArgumentNullException.ThrowIfNull(cacheControl);
+
         result.Headers["Cache-Control"] = cacheControl.ToString();
+        return result;
+    }
+
+    /// <summary>
+    /// Sets the <c>ETag</c> response header on the result.
+    /// </summary>
+    /// <typeparam name="T">The result type (must derive from <see cref="OkResult"/>).</typeparam>
+    /// <param name="result">The result to configure.</param>
+    /// <param name="eTag">The ETag value (with or without surrounding quotes).</param>
+    /// <returns>The same result for chaining.</returns>
+    public static T WithETag<T>(this T result, string eTag)
+        where T : OkResult
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(eTag);
+
+        result.Headers["ETag"] = eTag;
         return result;
     }
 
@@ -34,6 +52,8 @@ public static class OkResultExtensions
     public static T WithHeader<T>(this T result, string name, string value)
         where T : OkResult
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+
         result.Headers[name] = value;
         return result;
     }
