@@ -144,8 +144,48 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
 
         foreach (var r in linkRegistrations)
         {
-            codeWriter.AppendLine($"this.AddLink(new global::Blueprint.Model.ApiOperationLink(this, \"{r.Url}\", \"{r.Url}\", \"{r.Rel}\", typeof({r.ResourceType})));");
+            if (r.PlaceholderMappings.Count > 0)
+            {
+                // Generate a link with a compiled URL builder that uses direct property access
+                var resourceTypeFqn = r.ResourceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                var urlBuilder = BuildCompiledUrlBuilderLambda(r.Url, r.PlaceholderMappings, resourceTypeFqn);
+
+                codeWriter.AppendLine($"var link_{r.Rel} = new global::Blueprint.Model.ApiOperationLink(this, \"{r.Url}\", \"{r.Url}\", \"{r.Rel}\", typeof({r.ResourceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}));");
+                codeWriter.AppendLine($"link_{r.Rel}.CompiledUrlBuilder = {urlBuilder};");
+                codeWriter.AppendLine($"this.AddLink(link_{r.Rel});");
+            }
+            else
+            {
+                codeWriter.AppendLine($"this.AddLink(new global::Blueprint.Model.ApiOperationLink(this, \"{r.Url}\", \"{r.Url}\", \"{r.Rel}\", typeof({r.ResourceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)})));");
+            }
         }
+    }
+
+    /// <summary>
+    /// Generates a lambda expression that builds a URL from a resource object using direct
+    /// property access instead of reflection. Returns <see langword="null"/> when any required
+    /// property value is <see langword="null"/>.
+    /// </summary>
+    private static string BuildCompiledUrlBuilderLambda(
+        string urlFormat,
+        EquatableList<LinkPlaceholderMapping> mappings,
+        string resourceTypeFqn)
+    {
+        // Build an interpolated string expression replacing each {Placeholder} with typed access
+        var interpolated = urlFormat;
+        foreach (var mapping in mappings)
+        {
+            interpolated = interpolated.Replace(
+                $"{{{mapping.RouteName}}}",
+                $"{{System.Uri.EscapeDataString(r.{mapping.ResourcePropertyName}?.ToString() ?? \"\")}}");
+        }
+
+        // Build null-guard conditions: return null if any required property is null
+        var nullChecks = string.Join(
+            " || ",
+            mappings.Select(static m => $"r.{m.ResourcePropertyName} == null"));
+
+        return $"static (obj) => {{ var r = ({resourceTypeFqn})obj; return ({nullChecks}) ? null : $\"{interpolated}\"; }}";
     }
 
     private static void LookForRootLinks(DescriptorContributorContext context)
@@ -205,6 +245,7 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
             }
 
             var normalisedUrl = url;
+            var placeholderMappings = new List<LinkPlaceholderMapping>();
 
             // We have a placeholder. We need to find all of these placeholders and ensure that they point to a
             // property of the operation. If they do not, we must register a diagnostic error.
@@ -238,6 +279,8 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
                                     routePropertyName,
                                     argumentLocationInfo,
                                     context);
+
+                                placeholderMappings.Add(new LinkPlaceholderMapping(routePropertyName, routePropertyName));
                             }
                             else
                             {
@@ -247,6 +290,8 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
                                     resourcePropertyName!,
                                     argumentLocationInfo,
                                     context);
+
+                                placeholderMappings.Add(new LinkPlaceholderMapping(routePropertyName, resourcePropertyName!));
                             }
                         }
 
@@ -260,7 +305,7 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
             }
 
             var urlRegistration = new UrlRegistration(normalisedUrl, urlLocation);
-            var linkRegistration = new LinkRegistration(normalisedUrl, "self", resourceTypeSymbol, urlLocation);
+            var linkRegistration = new LinkRegistration(normalisedUrl, "self", resourceTypeSymbol, urlLocation, new EquatableList<LinkPlaceholderMapping>(placeholderMappings.ToArray()));
 
             context.AddMetadata(urlRegistration);
             context.AddMetadata(linkRegistration);

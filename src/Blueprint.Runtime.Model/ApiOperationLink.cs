@@ -86,6 +86,18 @@ public class ApiOperationLink
     }
 
     /// <summary>
+    /// An optional compiled URL builder that bypasses reflection-based placeholder resolution.
+    /// When set, <see cref="CreateRelativeUrl"/> delegates to this function for URL construction
+    /// using direct property access, eliminating per-request <see cref="System.Reflection.PropertyInfo"/>
+    /// lookups.
+    /// </summary>
+    /// <remarks>
+    /// Source generators populate this delegate at app registration time with a lambda that
+    /// uses typed property access on the known resource type.
+    /// </remarks>
+    public Func<object, string?>? CompiledUrlBuilder { get; set; }
+
+    /// <summary>
     /// Creates a relative URL by substituting <c>{Placeholder}</c> tokens in <see cref="UrlFormat"/>
     /// with property values from <paramref name="values"/>.
     /// </summary>
@@ -109,6 +121,18 @@ public class ApiOperationLink
             return null;
         }
 
+        // Fast path: use source-generated compiled builder when available
+        if (this.CompiledUrlBuilder is not null)
+        {
+            return this.CompiledUrlBuilder(values);
+        }
+
+        // Fallback: reflection-based placeholder resolution
+        return this.CreateRelativeUrlViaReflection(values);
+    }
+
+    private string? CreateRelativeUrlViaReflection(object values)
+    {
         var result = this.UrlFormat;
         var valueType = values.GetType();
         var startIndex = 0;

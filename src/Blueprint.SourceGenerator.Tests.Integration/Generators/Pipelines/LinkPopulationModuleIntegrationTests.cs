@@ -75,6 +75,79 @@ public class LinkPopulationModuleIntegrationTests
         okResult.Content.Links["self"].Href.Should().Be("/mapped-resources/mapped-id-99");
     }
 
+    [Fact]
+    public void When_self_link_has_placeholders_then_compiled_url_builder_is_set()
+    {
+        var descriptor = CreateLinkTestResourceCommand.Configure();
+
+        var link = descriptor.Links.Single(static l => l.Rel == "self");
+        link.CompiledUrlBuilder.Should().NotBeNull("links with placeholders should have a compiled URL builder");
+    }
+
+    [Fact]
+    public void When_compiled_url_builder_is_set_then_creates_url_without_reflection()
+    {
+        var descriptor = CreateLinkTestResourceCommand.Configure();
+        var link = descriptor.Links.Single(static l => l.Rel == "self");
+
+        var resource = new LinkTestApiResource { Id = "abc-123", Name = "Test" };
+        var url = link.CompiledUrlBuilder!(resource);
+
+        url.Should().Be("/link-test-resources/abc-123");
+    }
+
+    [Fact]
+    public void When_compiled_url_builder_receives_null_property_then_returns_null()
+    {
+        var descriptor = CreateLinkTestResourceCommand.Configure();
+        var link = descriptor.Links.Single(static l => l.Rel == "self");
+
+        var resource = new LinkTestApiResource { Id = null!, Name = "Test" };
+        var url = link.CompiledUrlBuilder!(resource);
+
+        url.Should().BeNull("null properties should cause compiled builder to return null");
+    }
+
+    [Fact]
+    public void When_compiled_url_builder_with_mapped_placeholder_then_uses_resource_property()
+    {
+        var descriptor = GetMappedLinkResourceQuery.Configure();
+        var link = descriptor.Links.Single(static l => l.Rel == "self");
+
+        link.CompiledUrlBuilder.Should().NotBeNull();
+
+        var resource = new MappedLinkApiResource { MappedId = "mapped-42", Title = "Test" };
+        var url = link.CompiledUrlBuilder!(resource);
+
+        url.Should().Be("/mapped-resources/mapped-42");
+    }
+
+    [Fact]
+    public void When_compiled_url_builder_encodes_special_characters_then_uri_escaped()
+    {
+        var descriptor = CreateLinkTestResourceCommand.Configure();
+        var link = descriptor.Links.Single(static l => l.Rel == "self");
+
+        var resource = new LinkTestApiResource { Id = "has spaces/and+more", Name = "Test" };
+        var url = link.CompiledUrlBuilder!(resource);
+
+        url.Should().Be("/link-test-resources/has%20spaces%2Fand%2Bmore");
+    }
+
+    [Fact]
+    public void When_CreateRelativeUrl_called_with_compiled_builder_then_uses_fast_path()
+    {
+        var descriptor = CreateLinkTestResourceCommand.Configure();
+        var link = descriptor.Links.Single(static l => l.Rel == "self");
+
+        var resource = new LinkTestApiResource { Id = "fast-path-42", Name = "Test" };
+
+        // CreateRelativeUrl should delegate to CompiledUrlBuilder
+        var url = link.CreateRelativeUrl(resource);
+
+        url.Should().Be("/link-test-resources/fast-path-42");
+    }
+
     private static ApiOperationContext CreateContext(BlueprintApp app, ApiOperationDescriptor descriptor)
     {
         return new ApiOperationContext(new EmptyServiceProvider(), app, descriptor, CancellationToken.None);
