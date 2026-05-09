@@ -2109,6 +2109,59 @@ public class ReferenceAppHttpEndToEndIntegrationTests
     }
 
     [Fact]
+    public async Task When_search_templates_with_empty_query_string_returns_422()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/templates/search", "GET");
+        endpoint.Should().NotBeNull();
+
+        // Q has [Required] + [MinLength(1)] — empty string should fail MinLength
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Get;
+            context.Request.Path = "/api/templates/search";
+            context.Request.QueryString = new QueryString("?q=");
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status422UnprocessableEntity,
+            "[MinLength(1)] should reject empty string for search query");
+        response.Body.Should().Contain("Q");
+    }
+
+    [Fact]
+    public async Task When_bulk_archive_with_empty_ids_array_returns_422()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/templates/bulk-archive", "POST");
+        endpoint.Should().NotBeNull();
+
+        // Ids has [Required] + [MinLength(1)] — empty array should fail
+        var bodyJson = """{"ids":[]}"""u8.ToArray();
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Post;
+            context.Request.Path = "/api/templates/bulk-archive";
+            context.Request.ContentType = "application/json; charset=utf-8";
+            context.Request.ContentLength = bodyJson.Length;
+            context.Request.Body = new MemoryStream(bodyJson);
+            context.User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "user-1"),
+                ],
+                authenticationType: "test"));
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status422UnprocessableEntity,
+            "[MinLength(1)] on array should reject empty Ids collection");
+        response.Body.Should().Contain("Ids");
+    }
+
+    [Fact]
     public async Task When_create_template_with_range_above_maximum_returns_422()
     {
         var endpoints = CreateEndpoints();
