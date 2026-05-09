@@ -969,3 +969,92 @@ Some operations are inherently runtime because they depend on per-request state:
 - **`IPropertyPopulator`** execution — populating operation properties from request context
 
 The `ApiAuthoriserAggregator` already caches `AppliesTo()` results per operation type using `ConcurrentDictionary`, so the "does this authorizer apply" check only runs once per operation type lifetime.
+
+## Authorization architecture (split interfaces)
+
+Blueprint provides three authorization interfaces with clear separation of concerns:
+
+| Interface | Purpose | When to use |
+|-----------|---------|-------------|
+| `IOperationAuthoriser` | Guards operation **execution** only | Tenant isolation, feature flags, subscription checks |
+| `ILinkVisibilityAuthoriser` | Guards **link visibility** only | State-based link hiding (e.g. can't delete if already deleted) |
+| `IApiAuthoriser` | Combined: both execution and link visibility | When the same authorizer needs to control both |
+
+### StateBasedLinkChecker
+
+Use `StateBasedLinkChecker<TOperation, TResource>` for link-visibility decisions based on
+resource state. It implements `ILinkVisibilityAuthoriser` and provides a typed `IsLinkAvailableForOperation` method:
+
+```csharp
+public class DeactivateLinkChecker : StateBasedLinkChecker<DeactivateUser, UserResource>
+{
+    protected override bool IsLinkAvailableForOperation(
+        ApiOperationContext context, UserResource resource)
+    {
+        return resource.IsActive; // Only show "deactivate" link on active users
+    }
+}
+
+// Register in DI:
+services.AddScoped<ILinkVisibilityAuthoriser, DeactivateLinkChecker>();
+```
+
+### Generated authorization pipeline
+
+The source generator emits per-operation authorization checks that avoid reflection:
+
+```csharp
+// For [Resource("user", "update", "/Tenants/{Auth:TenantId}/Users/{UserId}")]
+// the generator produces inline property access:
+var expandedKey = $"/Tenants/{principal.FindFirst("TenantId")?.Value}/Users/{operation.UserId}";
+var isAuthorized = await resolvedAuthProvider.IsAuthorizedAsync(
+    context, principal,
+    new ResolvedScopePair[] { new("user", "update", template, expandedKey) },
+    cancellationToken);
+```
+
+This replaces the legacy `ResourceKeyTemplateExpander` which used `GetProperty()` + `GetValue()` reflection per token per request.
+
+## Migrating from ResourceCreated/Updated/Deleted convenience types
+
+The `ResourceCreated<T>`, `ResourceUpdated<T>`, and `ResourceDeleted<T>` convenience types
+are now marked `[Obsolete]`. They still work but should be migrated to the source-generated
+`[ResourceEventFamily]` pattern for compile-time safe event IDs.
+
+### Before (convenience types)
+
+```csharp
+// Convention-based event ID derived from type name at runtime
+return new ResourceDeleted<UserResource>(user.Id.ToString(), user);
+// Event ID: "UserResource.deleted" (string, unchecked)
+```
+
+### After (source-generated events)
+
+```csharp
+// 1. Define the event family in your contract project:
+[ResourceEventFamily(typeof(UserResource), ResourceObject = "user")]
+public static partial class UserResourceEvents
+{
+    [ResourceEventReason(ChangeType.Created, "created")]
+    public sealed partial record Created(UserResource Resource);
+
+    [ResourceEventReason(ChangeType.Updated, "updated")]
+    public sealed partial record Updated(UserResource Resource);
+
+    [ResourceEventReason(ChangeType.Deleted, "archived")]
+    public sealed partial record Archived([ResourceEventKey] string Key);
+}
+
+// 2. Use in handlers — implicit conversion to OperationResult:
+return new UserResourceEvents.Archived(user.Id.ToString());
+// Event ID: "user.archived" (const, compile-time validated)
+```
+
+### Key benefits of the source-generated pattern
+
+- **Compile-time validated event IDs** — `const string EventId` prevents typos
+- **Implicit conversion operators** — records convert directly to `OperationResult`
+- **Custom event reasons** — "archived" instead of generic "deleted"
+- **Key-only events** — `[ResourceEventKey]` for events without full resource body
+- **Diagnostics** — BPRE001–BPRE006 catch invalid shapes at build time
