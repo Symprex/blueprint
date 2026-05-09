@@ -2306,7 +2306,10 @@
             "type": "string"
           },
           "errors": {
-            "type": "object"
+            "type": "object",
+            "additionalProperties": {
+              "type": "array"
+            }
           },
           "instance": {
             "type": "string"

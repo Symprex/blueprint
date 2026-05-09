@@ -118,8 +118,9 @@ public sealed record OpenApiSchemaProjectionContext(
 
         // Extract element type metadata for collection/dictionary properties so schema rendering
         // can emit "items" (arrays) or "additionalProperties" (dictionaries).
-        var (itemsKind, itemsFormat) = ResolveElementSchema(propertyTypeInfo, JsonTypeInfoKind.Enumerable);
-        var (additionalPropertiesKind, additionalPropertiesFormat) = ResolveElementSchema(propertyTypeInfo, JsonTypeInfoKind.Dictionary);
+        // When JsonTypeInfo is available, use its Kind; otherwise fall back to CLR interface inspection.
+        var (itemsKind, itemsFormat) = ResolveElementSchema(propertyTypeInfo, property.PropertyType, JsonTypeInfoKind.Enumerable);
+        var (additionalPropertiesKind, additionalPropertiesFormat) = ResolveElementSchema(propertyTypeInfo, property.PropertyType, JsonTypeInfoKind.Dictionary);
 
         return new OpenApiSchemaPropertyModel(
             property.Name,
@@ -145,26 +146,33 @@ public sealed record OpenApiSchemaProjectionContext(
 
     /// <summary>
     /// Resolves the schema kind and format for element types of collections and dictionaries.
-    /// For enumerables, the element type (e.g. <c>string</c> in <c>List&lt;string&gt;</c>) is used for <c>items</c>.
-    /// For dictionaries, the value type (e.g. <c>string</c> in <c>Dictionary&lt;string, string&gt;</c>) is used for <c>additionalProperties</c>.
+    /// Prefers <see cref="JsonTypeInfo.Kind"/> when available; falls back to CLR interface
+    /// inspection so that properties whose type the serializer context does not cover
+    /// (e.g. <c>IDictionary&lt;string, Link&gt;</c> exposed as an interface) still emit
+    /// accurate <c>items</c> or <c>additionalProperties</c> schemas.
     /// </summary>
+    [UnconditionalSuppressMessage("Trimming", "IL2070", Justification = "Type interfaces are preserved by the serializer context for types it covers.")]
     private static (OpenApiSchemaKind? Kind, string? Format) ResolveElementSchema(
         JsonTypeInfo? typeInfo,
+        Type propertyType,
         JsonTypeInfoKind expectedKind)
     {
-        if (typeInfo is null || typeInfo.Kind != expectedKind)
+        // When STJ has type info and the kind matches, use it directly.
+        if (typeInfo is not null && typeInfo.Kind == expectedKind)
         {
-            return (null, null);
+            var elementType = ExtractElementType(typeInfo.Type, expectedKind);
+            return elementType is null ? (null, null) : (MapKind(elementType, JsonTypeInfoKind.None), MapFormat(elementType));
         }
 
-        // STJ's JsonTypeInfo.Type gives us the CLR type; extract element/value types from generic arguments.
-        var elementType = ExtractElementType(typeInfo.Type, expectedKind);
-        if (elementType is null)
+        // Fallback: inspect the CLR type for collection/dictionary interfaces.
+        // string implements IEnumerable<char> — exclude it to avoid spurious items schemas.
+        if (typeInfo is null && propertyType != typeof(string))
         {
-            return (null, null);
+            var elementType = ExtractElementType(propertyType, expectedKind);
+            return elementType is null ? (null, null) : (MapKind(elementType, JsonTypeInfoKind.None), MapFormat(elementType));
         }
 
-        return (MapKind(elementType, JsonTypeInfoKind.None), MapFormat(elementType));
+        return (null, null);
     }
 
     /// <summary>
@@ -177,7 +185,12 @@ public sealed record OpenApiSchemaProjectionContext(
     {
         if (kind == JsonTypeInfoKind.Dictionary)
         {
-            // Look for IDictionary<TKey, TValue> — value type is the second generic argument.
+            // Check the type itself first (e.g. IDictionary<string, Link>), then its implemented interfaces.
+            if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(IDictionary<,>))
+            {
+                return type.GetGenericArguments()[1];
+            }
+
             var dictInterface = type.GetInterfaces()
                 .FirstOrDefault(static i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IDictionary<,>));
             return dictInterface?.GetGenericArguments()[1];
@@ -185,7 +198,12 @@ public sealed record OpenApiSchemaProjectionContext(
 
         if (kind == JsonTypeInfoKind.Enumerable)
         {
-            // Look for IEnumerable<T> — element type is the single generic argument.
+            // Check the type itself first (e.g. IEnumerable<string>), then its implemented interfaces.
+            if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(IEnumerable<>))
+            {
+                return type.GetGenericArguments()[0];
+            }
+
             var enumInterface = type.GetInterfaces()
                 .FirstOrDefault(static i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IEnumerable<>));
             return enumInterface?.GetGenericArguments()[0];
@@ -587,6 +605,7 @@ public sealed record OpenApiSchemaProjectionContext(
         }
     }
 
+    [UnconditionalSuppressMessage("Trimming", "IL2070", Justification = "Type interfaces are preserved by the serializer context for types it covers.")]
     private static OpenApiSchemaKind MapKind(Type bodyType, JsonTypeInfoKind kind)
     {
         var nonNullableType = Nullable.GetUnderlyingType(bodyType) ?? bodyType;
@@ -625,6 +644,23 @@ public sealed record OpenApiSchemaProjectionContext(
             || nonNullableType == typeof(decimal))
         {
             return OpenApiSchemaKind.Number;
+        }
+
+        // When STJ has no metadata (kind == None), infer the shape from CLR interfaces.
+        if (kind == JsonTypeInfoKind.None)
+        {
+            if ((nonNullableType.IsGenericType && nonNullableType.GetGenericTypeDefinition() == typeof(IDictionary<,>))
+                || nonNullableType.GetInterfaces().Any(static i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IDictionary<,>)))
+            {
+                return OpenApiSchemaKind.Object;
+            }
+
+            if (nonNullableType != typeof(string)
+                && ((nonNullableType.IsGenericType && nonNullableType.GetGenericTypeDefinition() == typeof(IEnumerable<>))
+                    || nonNullableType.GetInterfaces().Any(static i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IEnumerable<>))))
+            {
+                return OpenApiSchemaKind.Array;
+            }
         }
 
         return kind switch
