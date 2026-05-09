@@ -46,6 +46,10 @@ public class Startup
             // user's AccountId to the operation's TenantId property
             blueprint.AddApiAuthoriser<TenantIsolationApiAuthoriser>();
 
+            // Claims-based authorization: enforces [Permission] and [PermissionFor]
+            // attributes by matching user claims against demanded permissions.
+            blueprint.AddClaimsAuthorisation();
+
             // State-based link visibility: hide the Archive link on already-archived templates
             blueprint.AddApiAuthoriser<ArchiveTemplateLinkChecker>();
 
