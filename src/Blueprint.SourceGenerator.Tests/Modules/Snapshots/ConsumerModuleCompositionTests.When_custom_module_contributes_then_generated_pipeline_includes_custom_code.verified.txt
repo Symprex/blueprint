@@ -13,7 +13,7 @@ using Blueprint;
 
 namespace Blueprint.Generated
 {
-    public partial class EnrichedCommandExecutorPipeline : Blueprint.OperationExecutorShell
+    public sealed partial class EnrichedCommandExecutorPipeline : Blueprint.OperationExecutorShell
     {
         public EnrichedCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory)
             : base(loggerFactory, "EnrichedCommand")
@@ -102,7 +102,7 @@ using Blueprint;
 
 namespace TestNamespace
 {
-    public partial class TestAppExecutor : Blueprint.BlueprintAppExecutor
+    public sealed partial class TestAppExecutor : Blueprint.BlueprintAppExecutor
     {
         public TestAppExecutor(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, TestNamespace.TestApp app)
             : base(app)

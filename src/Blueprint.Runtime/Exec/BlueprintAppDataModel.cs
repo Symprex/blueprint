@@ -78,8 +78,7 @@ public class BlueprintAppExecutor
         ArgumentNullException.ThrowIfNull(serviceProvider);
 
         var operationType = operation.GetType();
-        var descriptor = this.App.Operations
-            .FirstOrDefault(d => d.OperationType == operationType)
+        var descriptor = this.App.FindOperation(operationType)
             ?? throw new InvalidOperationException(
                 $"No operation descriptor found for type '{operationType.FullName}'. " +
                 $"Ensure the operation is registered in the BlueprintApp.");

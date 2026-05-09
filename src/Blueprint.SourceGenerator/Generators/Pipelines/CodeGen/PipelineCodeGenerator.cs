@@ -24,6 +24,7 @@ internal static class PipelineCodeGenerator
 
         var pipelineClass = codeBuilder.AddClass(handler.PipelineClassName)
             .MakePublicClass()
+            .Sealed()
             .SetBaseClass("Blueprint.OperationExecutorShell");
 
         AddConstructor(pipelineClass, handler, plan);
@@ -112,6 +113,9 @@ internal static class PipelineCodeGenerator
 
         var arrayElements = string.Join(", ", contributorIds.Select(static id => $"\"{id}\""));
 
+        // The applied modules list is a diagnostic/inspection-only surface, not a hot path.
+        // A static readonly backing field would be ideal but CodeWriter lacks AddField;
+        // the per-call allocation is acceptable for this cold path.
         pipelineClass.AddMethod("GetAppliedModules")
             .MakePublicMethod()
             .MakeStaticMethod()

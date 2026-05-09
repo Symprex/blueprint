@@ -13,7 +13,7 @@ using Blueprint;
 
 namespace Blueprint.Generated
 {
-    public partial class SearchAllQueryExecutorPipeline : Blueprint.OperationExecutorShell
+    public sealed partial class SearchAllQueryExecutorPipeline : Blueprint.OperationExecutorShell
     {
         public SearchAllQueryExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory)
             : base(loggerFactory, "SearchAllQuery")
@@ -170,7 +170,7 @@ using Blueprint;
 
 namespace TestNamespace
 {
-    public partial class TestAppExecutor : Blueprint.BlueprintAppExecutor
+    public sealed partial class TestAppExecutor : Blueprint.BlueprintAppExecutor
     {
         public TestAppExecutor(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, TestNamespace.TestApp app)
             : base(app)

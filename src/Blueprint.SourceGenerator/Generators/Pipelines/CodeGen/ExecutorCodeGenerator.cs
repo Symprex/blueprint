@@ -18,6 +18,7 @@ internal static class ExecutorCodeGenerator
 
         var classBuilder = codeBuilder.AddClass($"{model.AppTypeName}Executor")
             .MakePublicClass()
+            .Sealed()
             .SetBaseClass("Blueprint.BlueprintAppExecutor");
 
         classBuilder.AddConstructor()

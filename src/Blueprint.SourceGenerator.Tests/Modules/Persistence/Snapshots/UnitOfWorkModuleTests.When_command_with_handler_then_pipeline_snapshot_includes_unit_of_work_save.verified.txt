@@ -13,7 +13,7 @@ using Blueprint;
 
 namespace Blueprint.Generated
 {
-    public partial class SaveOrderCommandExecutorPipeline : Blueprint.OperationExecutorShell
+    public sealed partial class SaveOrderCommandExecutorPipeline : Blueprint.OperationExecutorShell
     {
         public SaveOrderCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory)
             : base(loggerFactory, "SaveOrderCommand")
@@ -100,7 +100,7 @@ using Blueprint;
 
 namespace TestNamespace
 {
-    public partial class TestAppExecutor : Blueprint.BlueprintAppExecutor
+    public sealed partial class TestAppExecutor : Blueprint.BlueprintAppExecutor
     {
         public TestAppExecutor(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, TestNamespace.TestApp app)
             : base(app)

@@ -13,7 +13,7 @@ using Blueprint;
 
 namespace Blueprint.Generated
 {
-    public partial class AllTypesGetQueryExecutorPipeline : Blueprint.OperationExecutorShell
+    public sealed partial class AllTypesGetQueryExecutorPipeline : Blueprint.OperationExecutorShell
     {
         public AllTypesGetQueryExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory)
             : base(loggerFactory, "AllTypesGetQuery")
@@ -313,7 +313,7 @@ using Blueprint;
 
 namespace Blueprint.Generated
 {
-    public partial class AllTypesPostCommandExecutorPipeline : Blueprint.OperationExecutorShell
+    public sealed partial class AllTypesPostCommandExecutorPipeline : Blueprint.OperationExecutorShell
     {
         public AllTypesPostCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory)
             : base(loggerFactory, "AllTypesPostCommand")
@@ -598,7 +598,7 @@ using Blueprint;
 
 namespace TestNamespace
 {
-    public partial class TestAppExecutor : Blueprint.BlueprintAppExecutor
+    public sealed partial class TestAppExecutor : Blueprint.BlueprintAppExecutor
     {
         public TestAppExecutor(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, TestNamespace.TestApp app)
             : base(app)

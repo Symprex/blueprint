@@ -129,7 +129,7 @@ using Blueprint;
 
 namespace Blueprint.Generated
 {
-    public partial class GetOrderStatusExecutorPipeline : Blueprint.OperationExecutorShell
+    public sealed partial class GetOrderStatusExecutorPipeline : Blueprint.OperationExecutorShell
     {
         public GetOrderStatusExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory)
             : base(loggerFactory, "GetOrderStatus")
@@ -204,7 +204,7 @@ using Blueprint;
 
 namespace Blueprint.Generated
 {
-    public partial class ProcessOrderMessageExecutorPipeline : Blueprint.OperationExecutorShell
+    public sealed partial class ProcessOrderMessageExecutorPipeline : Blueprint.OperationExecutorShell
     {
         public ProcessOrderMessageExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory)
             : base(loggerFactory, "ProcessOrderMessage")
@@ -299,7 +299,7 @@ using Blueprint;
 
 namespace TestNamespace
 {
-    public partial class TestAppExecutor : Blueprint.BlueprintAppExecutor
+    public sealed partial class TestAppExecutor : Blueprint.BlueprintAppExecutor
     {
         public TestAppExecutor(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, TestNamespace.TestApp app)
             : base(app)
