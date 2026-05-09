@@ -1276,6 +1276,82 @@ public class ReferenceAppHttpEndToEndIntegrationTests
         response.StatusCode.Should().Be(StatusCodes.Status200OK);
     }
 
+    [Fact]
+    public async Task When_tenant_scoped_operation_with_matching_account_then_returns_200()
+    {
+        var endpoints = CreateEndpointsWithTenantIsolation();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/tenants/{TenantId}/templates/{Id}/settings", "PUT");
+        endpoint.Should().NotBeNull("the tenant-scoped settings route should be registered");
+
+        var bodyJson = """{"displayName":"Updated Settings"}"""u8.ToArray();
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Put;
+            context.Request.Path = "/api/tenants/tenant-A/templates/template-001/settings";
+            context.Request.RouteValues = new RouteValueDictionary
+            {
+                ["TenantId"] = "tenant-A",
+                ["Id"] = "template-001",
+            };
+            context.Request.ContentType = "application/json; charset=utf-8";
+            context.Request.ContentLength = bodyJson.Length;
+            context.Request.Body = new MemoryStream(bodyJson);
+
+            // User belongs to tenant-A — should pass tenant isolation
+            context.User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "user-1"),
+                    new Claim("account_id", "tenant-A"),
+                ],
+                authenticationType: "test"));
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK,
+            "user with matching account_id should pass tenant isolation");
+    }
+
+    [Fact]
+    public async Task When_tenant_scoped_operation_with_mismatched_account_then_returns_403()
+    {
+        var endpoints = CreateEndpointsWithTenantIsolation();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/tenants/{TenantId}/templates/{Id}/settings", "PUT");
+        endpoint.Should().NotBeNull("the tenant-scoped settings route should be registered");
+
+        var bodyJson = """{"displayName":"Cross-tenant attack"}"""u8.ToArray();
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Put;
+            context.Request.Path = "/api/tenants/tenant-B/templates/template-001/settings";
+            context.Request.RouteValues = new RouteValueDictionary
+            {
+                ["TenantId"] = "tenant-B",
+                ["Id"] = "template-001",
+            };
+            context.Request.ContentType = "application/json; charset=utf-8";
+            context.Request.ContentLength = bodyJson.Length;
+            context.Request.Body = new MemoryStream(bodyJson);
+
+            // User belongs to tenant-A but is trying to access tenant-B
+            context.User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "user-1"),
+                    new Claim("account_id", "tenant-A"),
+                ],
+                authenticationType: "test"));
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status403Forbidden,
+            "user with mismatched account_id should be blocked by tenant isolation");
+        response.ContentType.Should().StartWith("application/problem+json");
+        response.Body.Should().Contain("Forbidden");
+    }
+
     private static async Task<TestHttpResponse> InvokeEndpointAsync(
         RouteEndpoint endpoint,
         IServiceProvider serviceProvider,
@@ -1324,6 +1400,22 @@ public class ReferenceAppHttpEndToEndIntegrationTests
             .AddScoped<Blueprint.Tasks.IBackgroundTaskScheduler, InProcessBackgroundTaskScheduler>()
             .AddScoped<InMemoryUnitOfWork>()
             .AddScoped<Blueprint.Persistence.IUnitOfWork>(sp => sp.GetRequiredService<InMemoryUnitOfWork>());
+
+        return new TestEndpointRouteBuilder(services.BuildServiceProvider());
+    }
+
+    private static TestEndpointRouteBuilder CreateEndpointsWithTenantIsolation()
+    {
+        var services = new ServiceCollection()
+            .AddLogging()
+            .AddSingleton<TemplateStore>()
+            .AddSingleton<SampleBlueprintApp>()
+            .AddSingleton<SampleBlueprintAppExecutor>()
+            .AddScoped<Blueprint.Tasks.IBackgroundTaskScheduler, InProcessBackgroundTaskScheduler>()
+            .AddScoped<InMemoryUnitOfWork>()
+            .AddScoped<Blueprint.Persistence.IUnitOfWork>(sp => sp.GetRequiredService<InMemoryUnitOfWork>())
+            .AddSingleton<Blueprint.Authorization.IUserAuthorisationContextFactory, SampleUserAuthorisationContextFactory>()
+            .AddSingleton<Blueprint.Authorization.IApiAuthoriser, TenantIsolationApiAuthoriser>();
 
         return new TestEndpointRouteBuilder(services.BuildServiceProvider());
     }
