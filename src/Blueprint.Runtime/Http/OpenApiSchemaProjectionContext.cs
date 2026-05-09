@@ -107,6 +107,7 @@ public sealed record OpenApiSchemaProjectionContext(
         var maximum = GetMaximum(validationAttributes);
         var isNullable = IsNullableProperty(property);
         var format = MapFormat(property.PropertyType);
+        var enumValues = MapEnumValues(property.PropertyType);
 
         return new OpenApiSchemaPropertyModel(
             property.Name,
@@ -115,6 +116,7 @@ public sealed record OpenApiSchemaProjectionContext(
             property.IsExtensionData,
             isNullable,
             format,
+            enumValues,
             GetMinLength(validationAttributes),
             GetMaxLength(validationAttributes),
             GetPattern(validationAttributes),
@@ -218,6 +220,26 @@ public sealed record OpenApiSchemaProjectionContext(
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Returns the enum member names when a property's CLR type is an enum (unwrapping <c>Nullable&lt;T&gt;</c>),
+    /// or an empty array when the type is not an enum.
+    /// </summary>
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2067",
+        Justification = "Enum types used in STJ-serializable operations are preserved by the generated serializer context.")]
+    private static ImmutableArray<string> MapEnumValues(Type propertyType)
+    {
+        var underlying = Nullable.GetUnderlyingType(propertyType) ?? propertyType;
+
+        if (!underlying.IsEnum)
+        {
+            return ImmutableArray<string>.Empty;
+        }
+
+        return Enum.GetNames(underlying).ToImmutableArray();
     }
 
     /// <summary>
@@ -560,6 +582,7 @@ public sealed record OpenApiSchemaModel(
 /// <param name="IsExtensionData">Whether the property acts as JSON extension data.</param>
 /// <param name="IsNullable">Whether this property is nullable (NRT-annotated reference type or <c>Nullable&lt;T&gt;</c>).</param>
 /// <param name="Format">The OpenAPI format hint (e.g. <c>int32</c>, <c>date-time</c>, <c>uuid</c>) when the CLR type has a standard mapping.</param>
+/// <param name="EnumValues">The enum member names when the property is an enum type, or empty when not an enum.</param>
 /// <param name="MinLength">The inclusive minimum string/collection length when validation attributes expose one.</param>
 /// <param name="MaxLength">The inclusive maximum string/collection length when validation attributes expose one.</param>
 /// <param name="Pattern">The regular-expression pattern when validation attributes expose one.</param>
@@ -574,6 +597,7 @@ public sealed record OpenApiSchemaPropertyModel(
     bool IsExtensionData,
     bool IsNullable,
     string? Format,
+    ImmutableArray<string> EnumValues,
     int? MinLength = null,
     int? MaxLength = null,
     string? Pattern = null,

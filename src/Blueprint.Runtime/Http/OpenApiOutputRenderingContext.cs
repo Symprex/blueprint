@@ -764,6 +764,8 @@ public sealed record OpenApiOutputRenderingContext(
             writer.WriteString("format", property.Format);
         }
 
+        WriteEnumValues(writer, property.EnumValues);
+
         if (property.MinLength.HasValue)
         {
             writer.WriteNumber("minLength", property.MinLength.Value);

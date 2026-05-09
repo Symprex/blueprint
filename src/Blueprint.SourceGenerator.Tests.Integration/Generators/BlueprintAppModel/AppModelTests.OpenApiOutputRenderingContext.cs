@@ -191,6 +191,45 @@ public class AppModelOpenApiOutputRenderingContextTests
     }
 
     [Fact]
+    public void When_schema_component_property_has_enum_values_then_output_emits_enum_array()
+    {
+        var context = CreateSyntheticOutputContext(
+            [],
+            [
+                new OpenApiSchemaComponentModel(
+                    "Sample.ResponseDto",
+                    "object",
+                    [],
+                    [
+                        new OpenApiSchemaComponentPropertyModel(
+                            "Status",
+                            "string",
+                            false,
+                            false,
+                            EnumValues: ["Active", "Inactive", "Pending"]),
+                        new OpenApiSchemaComponentPropertyModel("Name", "string", false, false),
+                    ]),
+            ]);
+
+        var doc = JsonDocument.Parse(context.Json);
+
+        var properties = doc.RootElement
+            .GetProperty("components")
+            .GetProperty("schemas")
+            .GetProperty("Sample_ResponseDto")
+            .GetProperty("properties");
+
+        var statusEnum = properties.GetProperty("Status").GetProperty("enum");
+        statusEnum.GetArrayLength().Should().Be(3);
+        statusEnum[0].GetString().Should().Be("Active");
+        statusEnum[1].GetString().Should().Be("Inactive");
+        statusEnum[2].GetString().Should().Be("Pending");
+
+        properties.GetProperty("Name").TryGetProperty("enum", out _).Should().BeFalse(
+            "non-enum properties should not emit enum array");
+    }
+
+    [Fact]
     public void When_schema_processors_are_configured_then_they_transform_components_in_registration_order()
     {
         var context = CreateSyntheticOutputContext(
