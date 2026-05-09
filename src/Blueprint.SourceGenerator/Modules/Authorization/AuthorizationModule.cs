@@ -28,7 +28,6 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
     private const string ResourceAttributeName = "ResourceAttribute";
     private const string FromResourceAttributeName = "FromResourceAttribute";
     private const string AllowAnonymousAttributeName = "AllowAnonymousAttribute";
-    private const string MustBeAuthenticatedAttributeName = "MustBeAuthenticatedAttribute";
     private const string AttributeNamespace = "Blueprint.Model.Attributes";
 
     /// <inheritdoc />
@@ -274,13 +273,8 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
             }
         }
 
-        // Only add our own identity check if AuthenticationModule isn't already doing it
-        if (!HasAttribute(operationType, MustBeAuthenticatedAttributeName))
-        {
-            context.AddRenderStep(
-                PipelineStage.Authentication,
-                RenderAuthenticationCheck);
-        }
+        // AuthenticationModule handles identity checks for all HTTP operations (default-on).
+        // AuthorizationModule only needs to add its authorization check after that.
 
         // Add authorization check after authentication
         context.RequireAsync();
@@ -293,21 +287,6 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
     {
         return operationType.GetAttributes()
             .Any(static a => a.AttributeClass?.Name is "RootLinkAttribute" or "SelfLinkAttribute");
-    }
-
-    private static void RenderAuthenticationCheck(PipelineRenderContext context)
-    {
-        context.If(
-            "((Blueprint.Runtime.Http.IHttpOperationContext)context).HttpContext.User.Identity?.IsAuthenticated != true",
-            branch =>
-            {
-                branch.Return(
-                    context.IsPipelineAsync()
-                        ? "new Blueprint.Runtime.Exec.UnauthenticatedResult()"
-                        : "System.Threading.Tasks.Task.FromResult<Blueprint.OperationResult>(new Blueprint.Runtime.Exec.UnauthenticatedResult())");
-            });
-
-        context.WriteBlankLine();
     }
 
     private static void RenderAuthorizationCheck(

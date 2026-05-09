@@ -42,11 +42,6 @@ namespace Blueprint.Generated
                 return new Blueprint.Runtime.Exec.UnauthenticatedResult();
             }
 
-            if (((Blueprint.Runtime.Http.IHttpOperationContext)context).HttpContext.User.Identity?.IsAuthenticated != true)
-            {
-                return new Blueprint.Runtime.Exec.UnauthenticatedResult();
-            }
-
             var userContextFactory = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Authorization.IUserAuthorisationContextFactory>(context.ServiceProvider);
             if (userContextFactory != null)
             {
@@ -142,7 +137,7 @@ namespace Blueprint.Generated
 
         public static System.Collections.Generic.IReadOnlyList<string> GetAppliedModules()
         {
-            return new string[] { "PropertyOwnershipModule", "PropertyPopulationModule", "AuthenticationModule", "AuthorizationModule", "ApiAuthoriserModule", "HandlerExecutionModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
+            return new string[] { "PropertyOwnershipModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "AuthorizationModule", "HandlerExecutionModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
         }
     }
 }

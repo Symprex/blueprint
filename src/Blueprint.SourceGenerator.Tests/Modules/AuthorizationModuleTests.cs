@@ -316,7 +316,7 @@ public class AuthorizationModuleTests
     // ── Pipeline plan tests ──────────────────────────────────────────
 
     [Fact]
-    public void When_Resource_on_http_operation_then_pipeline_has_authentication_stage()
+    public void When_Resource_on_http_operation_then_pipeline_has_authorisation_stage()
     {
         var compilation = CreateCompilation(
             """
@@ -345,10 +345,16 @@ public class AuthorizationModuleTests
         result.Diagnostics.Should().BeEmpty();
         result.Value.Should().NotBeNull();
 
-        // Permissioned operations implicitly require identity → authentication stage
+        // AuthorizationModule contributes at the Authorisation stage (not Authentication —
+        // AuthenticationModule handles identity checks for all HTTP operations)
         result.Value!.Contributions.Should().Contain(
-            new PipelineContribution(PipelineStage.Authentication, nameof(AuthorizationModule)),
-            "[Resource] operations require identity check in the pipeline");
+            new PipelineContribution(PipelineStage.Authorisation, nameof(AuthorizationModule)),
+            "[Resource] operations get authorization check in the pipeline");
+
+        // Identity check comes from AuthenticationModule, not AuthorizationModule
+        result.Value!.Contributions.Should().Contain(
+            new PipelineContribution(PipelineStage.Authentication, nameof(AuthenticationModule)),
+            "AuthenticationModule handles identity for all HTTP operations");
     }
 
     [Fact]
@@ -662,8 +668,12 @@ public class AuthorizationModuleTests
         result.Value.Should().NotBeNull();
 
         result.Value!.Contributions.Should().Contain(
-            new PipelineContribution(PipelineStage.Authentication, nameof(AuthorizationModule)),
-            "[FromResource] operations require identity check in the pipeline");
+            new PipelineContribution(PipelineStage.Authorisation, nameof(AuthorizationModule)),
+            "[FromResource] operations get authorization check in the pipeline");
+
+        result.Value!.Contributions.Should().Contain(
+            new PipelineContribution(PipelineStage.Authentication, nameof(AuthenticationModule)),
+            "AuthenticationModule handles identity for all HTTP operations");
     }
 
     [Fact]
