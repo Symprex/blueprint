@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using Blueprint.Model;
 
 namespace Blueprint.SourceGenerator.Sample.Contract.Api;
@@ -14,15 +15,18 @@ public partial class OwnerApiResource : ApiResource
     /// <summary>
     /// Gets or sets the owner's unique identifier.
     /// </summary>
+    [Description("The unique identifier of the owner.")]
     public string Id { get; set; } = null!;
 
     /// <summary>
     /// Gets or sets the owner's display name.
     /// </summary>
+    [Description("The owner's display name.")]
     public string DisplayName { get; set; } = null!;
 
     /// <summary>
     /// Gets or sets the owner's email address.
     /// </summary>
+    [Description("The owner's email address.")]
     public string Email { get; set; } = null!;
 }
