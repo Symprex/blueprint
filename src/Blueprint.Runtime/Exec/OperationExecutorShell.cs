@@ -31,6 +31,7 @@ public abstract class OperationExecutorShell : IOperationExecutorPipeline
 
     private readonly ILogger _logger;
     private readonly string _operationTypeName;
+    private readonly string _activityName;
     private readonly bool _suppressActivity;
 
     /// <summary>
@@ -50,6 +51,7 @@ public abstract class OperationExecutorShell : IOperationExecutorPipeline
 
         this._logger = loggerFactory.CreateLogger(operationTypeName + "ExecutorPipeline");
         this._operationTypeName = operationTypeName;
+        this._activityName = operationTypeName + "Pipeline";
         this._suppressActivity = suppressActivity;
     }
 
@@ -59,7 +61,7 @@ public abstract class OperationExecutorShell : IOperationExecutorPipeline
         using var activity = this._suppressActivity
             ? null
             : BlueprintActivitySource.ActivitySource.StartActivity(
-                this._operationTypeName + "Pipeline",
+                this._activityName,
                 ActivityKind.Internal);
 
         try
