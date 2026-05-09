@@ -224,6 +224,8 @@ public class HttpOperationResultExecutor
             });
     }
 
+    private static readonly ConcurrentDictionary<Type, HashSet<string>> _resultTypeNamesCache = new();
+
     private static bool DescriptorSupportsFailureResult(ApiOperationDescriptor descriptor, OperationResult result)
     {
         if (descriptor.TryGetFeatureData<OperationFailureOutcomesFeatureData>(out var failureOutcomes) == false)
@@ -231,22 +233,21 @@ public class HttpOperationResultExecutor
             return false;
         }
 
-        var runtimeResultTypeNames = GetResultTypeNames(result.GetType());
-        return failureOutcomes.Outcomes.Any(outcome => runtimeResultTypeNames.Contains(outcome.ResultTypeName));
-    }
-
-    private static HashSet<string> GetResultTypeNames(Type resultType)
-    {
-        var names = new HashSet<string>(StringComparer.Ordinal);
-        for (var current = resultType; current is not null; current = current.BaseType)
+        var runtimeResultTypeNames = _resultTypeNamesCache.GetOrAdd(result.GetType(), static resultType =>
         {
-            if (current.FullName is { } fullName)
+            var names = new HashSet<string>(StringComparer.Ordinal);
+            for (var current = resultType; current is not null; current = current.BaseType)
             {
-                names.Add(fullName);
+                if (current.FullName is { } fullName)
+                {
+                    names.Add(fullName);
+                }
             }
-        }
 
-        return names;
+            return names;
+        });
+
+        return failureOutcomes.Outcomes.Any(outcome => runtimeResultTypeNames.Contains(outcome.ResultTypeName));
     }
 
     private static async Task WriteValidationFailureAsync(HttpContext httpContext, ApiOperationContext operationContext, ValidationFailedResult validationFailedResult)

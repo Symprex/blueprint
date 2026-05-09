@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Reflection;
 using System.Text.Json.Serialization;
 using JetBrains.Annotations;
@@ -13,6 +14,9 @@ namespace Blueprint.Tasks;
 [PublicAPI]
 public sealed class BackgroundTaskEnvelope
 {
+    private static readonly ConcurrentDictionary<Type, string?> _queueNameCache = new();
+    private static readonly ConcurrentDictionary<Type, int?> _retryAttemptsCache = new();
+
     /// <summary>
     /// Initializes a new instance of the <see cref="BackgroundTaskEnvelope"/> class wrapping the specified task.
     /// </summary>
@@ -42,7 +46,9 @@ public sealed class BackgroundTaskEnvelope
     /// <returns>The queue name, or <c>null</c> for the default queue.</returns>
     public string? GetQueueName()
     {
-        return this.Task.GetType().GetCustomAttribute<QueueAttribute>()?.Name;
+        return _queueNameCache.GetOrAdd(
+            this.Task.GetType(),
+            static t => t.GetCustomAttribute<QueueAttribute>()?.Name);
     }
 
     /// <summary>
@@ -52,6 +58,8 @@ public sealed class BackgroundTaskEnvelope
     /// <returns>The maximum retry attempts, or <c>null</c> for the default from <see cref="BlueprintTaskOptions"/>.</returns>
     public int? GetRetryAttempts()
     {
-        return this.Task.GetType().GetCustomAttribute<AutomaticRetryAttribute>()?.Attempts;
+        return _retryAttemptsCache.GetOrAdd(
+            this.Task.GetType(),
+            static t => t.GetCustomAttribute<AutomaticRetryAttribute>()?.Attempts);
     }
 }
