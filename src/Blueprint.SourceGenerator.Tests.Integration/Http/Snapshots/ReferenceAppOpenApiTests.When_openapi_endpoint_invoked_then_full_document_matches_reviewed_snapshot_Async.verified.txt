@@ -105,6 +105,62 @@
         ]
       }
     },
+    "/me/authManifest": {
+      "get": {
+        "operationId": "GetMyAuthManifestQuery",
+        "summary": "Returns the authorization manifest listing accessible operations for the current user.",
+        "tags": [
+          "Authorization"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Blueprint_SourceGenerator_Sample_Contract_Api_AuthManifestApiResource"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/system/health": {
       "get": {
         "operationId": "HealthCheckQuery",
@@ -1945,6 +2001,29 @@
   },
   "components": {
     "schemas": {
+      "Blueprint_SourceGenerator_Sample_Contract_Api_AuthManifestApiResource": {
+        "type": "object",
+        "properties": {
+          "$links": {
+            "type": "object"
+          },
+          "$object": {
+            "type": "string"
+          },
+          "$partial": {
+            "type": "boolean"
+          },
+          "AccessibleOperations": {
+            "type": "array"
+          },
+          "Object": {
+            "type": "string"
+          },
+          "ResourceKey": {
+            "type": "string"
+          }
+        }
+      },
       "Blueprint_SourceGenerator_Sample_Contract_Api_ExportJobApiResource": {
         "type": "object",
         "required": [
@@ -1976,6 +2055,9 @@
           },
           "Id": {
             "type": "string"
+          },
+          "IsArchived": {
+            "type": "boolean"
           },
           "Name": {
             "type": "string"
@@ -2113,6 +2195,9 @@
     },
     {
       "name": "Api"
+    },
+    {
+      "name": "Authorization"
     },
     {
       "name": "System"

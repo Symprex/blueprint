@@ -165,6 +165,27 @@
     - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
     - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
 
+### GetMyAuthManifestQuery
+  Type: GetMyAuthManifestQuery
+  Source: Source Generated
+  HTTP Methods: GET
+  URL: /me/authManifest
+  Hosts: http
+  Auth: Authenticated
+  Discovery: query (Blueprint.SourceGenerator.Sample.Contract.Api.GetMyAuthManifestQuery)
+  Group: Authorization
+  Failure Outcomes:
+    - legacy-validation-exception: Blueprint.Validation.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
+    - data-annotations-validation-exception: System.ComponentModel.DataAnnotations.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
+    - default-unhandled-exception: System.Exception -> Blueprint.Runtime.Exec.UnhandledExceptionResult
+  HTTP Responses:
+    - 200: hasBody=True types=[Blueprint.SourceGenerator.Sample.Contract.Api.AuthManifestApiResource]
+    - 401: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+    - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
+    - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+  Links:
+    - rel=self url=/me/authManifest resource=AuthManifestApiResource
+
 ### GetPagedTemplatesQuery
   Type: GetPagedTemplatesQuery
   Source: Source Generated
@@ -460,6 +481,7 @@
 
 ## Resource Links
 
+  AuthManifestApiResource [self] -> /me/authManifest (GetMyAuthManifestQuery)
   TemplateApiResource [self] -> /templates/{Id} (GetTemplateQuery)
   TemplateListApiResource [self] -> /templates (GetTemplatesQuery)
 

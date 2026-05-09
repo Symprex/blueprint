@@ -46,4 +46,9 @@ public partial class TemplateApiResource : ApiResource
     /// The plain text source of this template.
     /// </summary>
     public string PlainTextSource { get; private set; } = null!;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the template is archived (soft-deleted).
+    /// </summary>
+    public bool IsArchived { get; set; }
 }
