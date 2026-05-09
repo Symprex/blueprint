@@ -2286,6 +2286,63 @@ public class ReferenceAppHttpEndToEndIntegrationTests
     }
 
     [Fact]
+    public async Task When_get_history_with_start_date_after_end_date_returns_422()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/templates/{Id}/history", "GET");
+        endpoint.Should().NotBeNull();
+
+        // StartDate has [LessThanProperty(nameof(EndDate))] — StartDate after EndDate should fail
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Get;
+            context.Request.Path = "/api/templates/template-001/history";
+            context.Request.QueryString = new QueryString("?startDate=2024-12-31&endDate=2024-01-01");
+            context.Request.RouteValues = new RouteValueDictionary { ["Id"] = "template-001" };
+            context.User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "user-1"),
+                ],
+                authenticationType: "test"));
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status422UnprocessableEntity,
+            "[LessThanProperty(EndDate)] should reject StartDate that is after EndDate");
+        response.Body.Should().Contain("StartDate");
+    }
+
+    [Fact]
+    public async Task When_get_history_with_valid_date_range_returns_200()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/templates/{Id}/history", "GET");
+        endpoint.Should().NotBeNull();
+
+        // Valid: StartDate before EndDate, both provided
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Get;
+            context.Request.Path = "/api/templates/template-001/history";
+            context.Request.QueryString = new QueryString("?startDate=2024-01-01&endDate=2024-12-31");
+            context.Request.RouteValues = new RouteValueDictionary { ["Id"] = "template-001" };
+            context.User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "user-1"),
+                ],
+                authenticationType: "test"));
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK,
+            "valid date range should pass all validation and return history");
+    }
+
+    [Fact]
     public async Task When_create_template_with_range_above_maximum_returns_422()
     {
         var endpoints = CreateEndpoints();
