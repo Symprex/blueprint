@@ -366,6 +366,35 @@ public sealed record OpenApiOutputRenderingContext(
                 }
 
                 WriteEnumValues(writer, property.EnumValues);
+
+                if (property.ItemsType is not null)
+                {
+                    writer.WritePropertyName("items");
+                    writer.WriteStartObject();
+                    writer.WriteString("type", property.ItemsType);
+
+                    if (property.ItemsFormat is not null)
+                    {
+                        writer.WriteString("format", property.ItemsFormat);
+                    }
+
+                    writer.WriteEndObject();
+                }
+
+                if (property.AdditionalPropertiesType is not null)
+                {
+                    writer.WritePropertyName("additionalProperties");
+                    writer.WriteStartObject();
+                    writer.WriteString("type", property.AdditionalPropertiesType);
+
+                    if (property.AdditionalPropertiesFormat is not null)
+                    {
+                        writer.WriteString("format", property.AdditionalPropertiesFormat);
+                    }
+
+                    writer.WriteEndObject();
+                }
+
                 WriteNumericConstraints(writer, property.Minimum, property.Maximum, property.ExclusiveMinimum, property.ExclusiveMaximum);
                 WriteStringConstraints(writer, property.MinLength, property.MaxLength, property.Pattern);
 
@@ -770,6 +799,34 @@ public sealed record OpenApiOutputRenderingContext(
         }
 
         WriteEnumValues(writer, property.EnumValues);
+
+        if (property.ItemsType is not null)
+        {
+            writer.WritePropertyName("items");
+            writer.WriteStartObject();
+            writer.WriteString("type", property.ItemsType);
+
+            if (property.ItemsFormat is not null)
+            {
+                writer.WriteString("format", property.ItemsFormat);
+            }
+
+            writer.WriteEndObject();
+        }
+
+        if (property.AdditionalPropertiesType is not null)
+        {
+            writer.WritePropertyName("additionalProperties");
+            writer.WriteStartObject();
+            writer.WriteString("type", property.AdditionalPropertiesType);
+
+            if (property.AdditionalPropertiesFormat is not null)
+            {
+                writer.WriteString("format", property.AdditionalPropertiesFormat);
+            }
+
+            writer.WriteEndObject();
+        }
 
         if (property.MinLength.HasValue)
         {

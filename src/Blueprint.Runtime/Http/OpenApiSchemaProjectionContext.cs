@@ -116,6 +116,11 @@ public sealed record OpenApiSchemaProjectionContext(
         var enumValues = MapEnumValues(property.PropertyType);
         var description = GetPropertyDescription(property);
 
+        // Extract element type metadata for collection/dictionary properties so schema rendering
+        // can emit "items" (arrays) or "additionalProperties" (dictionaries).
+        var (itemsKind, itemsFormat) = ResolveElementSchema(propertyTypeInfo, JsonTypeInfoKind.Enumerable);
+        var (additionalPropertiesKind, additionalPropertiesFormat) = ResolveElementSchema(propertyTypeInfo, JsonTypeInfoKind.Dictionary);
+
         return new OpenApiSchemaPropertyModel(
             property.Name,
             propertyKind,
@@ -131,7 +136,62 @@ public sealed record OpenApiSchemaProjectionContext(
             minimum.Value,
             maximum.Value,
             minimum.IsExclusive,
-            maximum.IsExclusive);
+            maximum.IsExclusive,
+            itemsKind,
+            itemsFormat,
+            additionalPropertiesKind,
+            additionalPropertiesFormat);
+    }
+
+    /// <summary>
+    /// Resolves the schema kind and format for element types of collections and dictionaries.
+    /// For enumerables, the element type (e.g. <c>string</c> in <c>List&lt;string&gt;</c>) is used for <c>items</c>.
+    /// For dictionaries, the value type (e.g. <c>string</c> in <c>Dictionary&lt;string, string&gt;</c>) is used for <c>additionalProperties</c>.
+    /// </summary>
+    private static (OpenApiSchemaKind? Kind, string? Format) ResolveElementSchema(
+        JsonTypeInfo? typeInfo,
+        JsonTypeInfoKind expectedKind)
+    {
+        if (typeInfo is null || typeInfo.Kind != expectedKind)
+        {
+            return (null, null);
+        }
+
+        // STJ's JsonTypeInfo.Type gives us the CLR type; extract element/value types from generic arguments.
+        var elementType = ExtractElementType(typeInfo.Type, expectedKind);
+        if (elementType is null)
+        {
+            return (null, null);
+        }
+
+        return (MapKind(elementType, JsonTypeInfoKind.None), MapFormat(elementType));
+    }
+
+    /// <summary>
+    /// Extracts the element type from a collection or dictionary CLR type by inspecting generic interfaces.
+    /// For enumerables, returns the <c>T</c> in <c>IEnumerable&lt;T&gt;</c>.
+    /// For dictionaries, returns the <c>TValue</c> in <c>IDictionary&lt;TKey, TValue&gt;</c>.
+    /// </summary>
+    [UnconditionalSuppressMessage("Trimming", "IL2070", Justification = "Type interfaces are preserved by the serializer context for types it covers.")]
+    private static Type? ExtractElementType(Type type, JsonTypeInfoKind kind)
+    {
+        if (kind == JsonTypeInfoKind.Dictionary)
+        {
+            // Look for IDictionary<TKey, TValue> — value type is the second generic argument.
+            var dictInterface = type.GetInterfaces()
+                .FirstOrDefault(static i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IDictionary<,>));
+            return dictInterface?.GetGenericArguments()[1];
+        }
+
+        if (kind == JsonTypeInfoKind.Enumerable)
+        {
+            // Look for IEnumerable<T> — element type is the single generic argument.
+            var enumInterface = type.GetInterfaces()
+                .FirstOrDefault(static i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IEnumerable<>));
+            return enumInterface?.GetGenericArguments()[0];
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -618,6 +678,10 @@ public sealed record OpenApiSchemaModel(
 /// <param name="Maximum">The numeric upper bound when validation attributes expose one.</param>
 /// <param name="IsMinimumExclusive">Whether the numeric lower bound is exclusive.</param>
 /// <param name="IsMaximumExclusive">Whether the numeric upper bound is exclusive.</param>
+/// <param name="ItemsKind">The schema kind for array element items when the property is an array/enumerable.</param>
+/// <param name="ItemsFormat">The OpenAPI format of array element items when they have a standard format mapping.</param>
+/// <param name="AdditionalPropertiesKind">The schema kind for dictionary values when the property is a dictionary/map.</param>
+/// <param name="AdditionalPropertiesFormat">The OpenAPI format of dictionary values when they have a standard format mapping.</param>
 public sealed record OpenApiSchemaPropertyModel(
     string Name,
     OpenApiSchemaKind Kind,
@@ -633,7 +697,11 @@ public sealed record OpenApiSchemaPropertyModel(
     decimal? Minimum = null,
     decimal? Maximum = null,
     bool IsMinimumExclusive = false,
-    bool IsMaximumExclusive = false);
+    bool IsMaximumExclusive = false,
+    OpenApiSchemaKind? ItemsKind = null,
+    string? ItemsFormat = null,
+    OpenApiSchemaKind? AdditionalPropertiesKind = null,
+    string? AdditionalPropertiesFormat = null);
 
 /// <summary>
 /// Describes the broad schema shape currently projected from serializer metadata.

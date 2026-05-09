@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
+using System.Diagnostics.CodeAnalysis;
 using Blueprint.Model;
 
 namespace Blueprint.Runtime.Http;
@@ -152,10 +153,14 @@ public sealed record OpenApiOperationRenderingContext(
 
         foreach (var entry in ownershipData.Entries)
         {
-            var (schemaType, schemaFormat) = MapClrTypeToOpenApiSchema(entry.PropertyTypeName);
             var clrProperty = descriptor.OperationType.GetProperty(
                 entry.PropertyName,
                 System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+
+            // Prefer CLR type-based mapping when property info is available for accurate collection/dictionary support.
+            var (schemaType, schemaFormat) = clrProperty is not null
+                ? MapClrTypeToOpenApiSchema(clrProperty.PropertyType)
+                : MapClrTypeToOpenApiSchema(entry.PropertyTypeName);
             var constraints = OpenApiValidationConstraints.ExtractFromProperty(clrProperty);
             var description = GetPropertyDescription(clrProperty, entry.PropertyName, docData);
             var enumValues = GetEnumValues(clrProperty);
@@ -250,6 +255,8 @@ public sealed record OpenApiOperationRenderingContext(
                     break;
 
                 case PropertyBindingSource.Body:
+                    var (bodyItemsType, bodyItemsFormat, bodyAdditionalType, bodyAdditionalFormat) = ResolveCollectionSchema(clrProperty);
+
                     bodyProperties.Add(new OpenApiRequestBodyPropertyModel(
                         entry.BindingName ?? entry.PropertyName,
                         schemaType,
@@ -266,6 +273,10 @@ public sealed record OpenApiOperationRenderingContext(
                         ExclusiveMaximum = constraints.ExclusiveMaximum,
                         EnumValues = enumValues,
                         IsNullable = entry.IsNullable,
+                        ItemsType = bodyItemsType,
+                        ItemsFormat = bodyItemsFormat,
+                        AdditionalPropertiesType = bodyAdditionalType,
+                        AdditionalPropertiesFormat = bodyAdditionalFormat,
                     });
                     break;
             }
@@ -380,6 +391,139 @@ public sealed record OpenApiOperationRenderingContext(
         }
 
         return ImmutableArray<string>.Empty;
+    }
+
+    /// <summary>
+    /// Resolves collection/dictionary element schema information from a CLR property for OpenAPI rendering.
+    /// Returns typed items info for arrays/lists and additionalProperties info for dictionaries.
+    /// </summary>
+    [UnconditionalSuppressMessage("Trimming", "IL2070", Justification = "Type interfaces are preserved for operation types registered with the serializer context.")]
+    [UnconditionalSuppressMessage("Trimming", "IL2075", Justification = "Type interfaces are preserved for operation types registered with the serializer context.")]
+    private static (string? ItemsType, string? ItemsFormat, string? AdditionalPropertiesType, string? AdditionalPropertiesFormat) ResolveCollectionSchema(
+        System.Reflection.PropertyInfo? property)
+    {
+        if (property is null)
+        {
+            return (null, null, null, null);
+        }
+
+        var propertyType = property.PropertyType;
+
+        // Check for IDictionary<TKey, TValue> first (dictionaries also implement IEnumerable).
+        var dictInterface = propertyType.GetInterfaces()
+            .FirstOrDefault(static i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IDictionary<,>));
+        if (dictInterface is not null)
+        {
+            var valueType = dictInterface.GetGenericArguments()[1];
+            var (additionalType, additionalFormat) = MapClrTypeToOpenApiSchema(valueType);
+            return (null, null, additionalType, additionalFormat);
+        }
+
+        // Check for IEnumerable<T>.
+        var enumInterface = propertyType.GetInterfaces()
+            .FirstOrDefault(static i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IEnumerable<>));
+        if (enumInterface is not null)
+        {
+            var elementType = enumInterface.GetGenericArguments()[0];
+            var (itemType, itemFormat) = MapClrTypeToOpenApiSchema(elementType);
+            return (itemType, itemFormat, null, null);
+        }
+
+        return (null, null, null, null);
+    }
+
+    /// <summary>
+    /// Maps a CLR <see cref="Type"/> to its OpenAPI schema type and optional format.
+    /// Uses the actual type object rather than a type name string for accurate collection support.
+    /// </summary>
+    [UnconditionalSuppressMessage("Trimming", "IL2070", Justification = "Type interfaces are preserved for operation types registered with the serializer context.")]
+    private static (string SchemaType, string? SchemaFormat) MapClrTypeToOpenApiSchema(Type clrType)
+    {
+        var underlying = Nullable.GetUnderlyingType(clrType) ?? clrType;
+
+        if (underlying == typeof(string))
+        {
+            return ("string", null);
+        }
+
+        if (underlying == typeof(int))
+        {
+            return ("integer", "int32");
+        }
+
+        if (underlying == typeof(long))
+        {
+            return ("integer", "int64");
+        }
+
+        if (underlying == typeof(short) || underlying == typeof(byte) || underlying == typeof(sbyte) || underlying == typeof(ushort))
+        {
+            return ("integer", "int32");
+        }
+
+        if (underlying == typeof(uint))
+        {
+            return ("integer", "int64");
+        }
+
+        if (underlying == typeof(ulong))
+        {
+            return ("integer", "int64");
+        }
+
+        if (underlying == typeof(bool))
+        {
+            return ("boolean", null);
+        }
+
+        if (underlying == typeof(decimal) || underlying == typeof(double))
+        {
+            return ("number", "double");
+        }
+
+        if (underlying == typeof(float))
+        {
+            return ("number", "float");
+        }
+
+        if (underlying == typeof(Guid))
+        {
+            return ("string", "uuid");
+        }
+
+        if (underlying == typeof(DateTime) || underlying == typeof(DateTimeOffset))
+        {
+            return ("string", "date-time");
+        }
+
+        if (underlying == typeof(DateOnly))
+        {
+            return ("string", "date");
+        }
+
+        if (underlying == typeof(TimeOnly))
+        {
+            return ("string", "time");
+        }
+
+        if (underlying == typeof(Uri))
+        {
+            return ("string", "uri");
+        }
+
+        // Check for dictionary (renders as object with additionalProperties).
+        if (underlying.GetInterfaces().Any(static i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IDictionary<,>)))
+        {
+            return ("object", null);
+        }
+
+        // Check for enumerable (renders as array with items).
+        if (underlying != typeof(string) && underlying.GetInterfaces().Any(static i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IEnumerable<>)))
+        {
+            return ("array", null);
+        }
+
+        return ("string", null);
     }
 }
 

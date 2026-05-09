@@ -108,4 +108,16 @@ public sealed record OpenApiRequestBodyPropertyModel(
 
     /// <summary>Gets whether this property is nullable (reference type with <c>?</c> or <c>Nullable&lt;T&gt;</c>).</summary>
     public bool IsNullable { get; init; }
+
+    /// <summary>Gets the OpenAPI type of array element items (e.g. <c>string</c>, <c>integer</c>) when the property is a collection.</summary>
+    public string? ItemsType { get; init; }
+
+    /// <summary>Gets the OpenAPI format of array element items when the items have a standard format mapping.</summary>
+    public string? ItemsFormat { get; init; }
+
+    /// <summary>Gets the OpenAPI type of dictionary values (e.g. <c>string</c>) when the property is a dictionary/map.</summary>
+    public string? AdditionalPropertiesType { get; init; }
+
+    /// <summary>Gets the OpenAPI format of dictionary values when the values have a standard format mapping.</summary>
+    public string? AdditionalPropertiesFormat { get; init; }
 }

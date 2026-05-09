@@ -266,6 +266,102 @@ public class AppModelOpenApiOutputRenderingContextTests
     }
 
     [Fact]
+    public void When_schema_component_property_is_array_then_output_emits_items_schema()
+    {
+        var context = CreateSyntheticOutputContext(
+            [],
+            [
+                new OpenApiSchemaComponentModel(
+                    "Sample.ResponseDto",
+                    "object",
+                    [],
+                    [
+                        new OpenApiSchemaComponentPropertyModel(
+                            "Tags",
+                            "array",
+                            false,
+                            false,
+                            ItemsType: "string"),
+                        new OpenApiSchemaComponentPropertyModel(
+                            "Counts",
+                            "array",
+                            false,
+                            false,
+                            ItemsType: "integer",
+                            ItemsFormat: "int32"),
+                        new OpenApiSchemaComponentPropertyModel("Name", "string", false, false),
+                    ]),
+            ]);
+
+        var doc = JsonDocument.Parse(context.Json);
+
+        var properties = doc.RootElement
+            .GetProperty("components")
+            .GetProperty("schemas")
+            .GetProperty("Sample_ResponseDto")
+            .GetProperty("properties");
+
+        var tagsItems = properties.GetProperty("Tags").GetProperty("items");
+        tagsItems.GetProperty("type").GetString().Should().Be("string");
+        tagsItems.TryGetProperty("format", out _).Should().BeFalse();
+
+        var countsItems = properties.GetProperty("Counts").GetProperty("items");
+        countsItems.GetProperty("type").GetString().Should().Be("integer");
+        countsItems.GetProperty("format").GetString().Should().Be("int32");
+
+        properties.GetProperty("Name").TryGetProperty("items", out _).Should().BeFalse(
+            "non-array properties should not emit items schema");
+    }
+
+    [Fact]
+    public void When_schema_component_property_is_dictionary_then_output_emits_additional_properties_schema()
+    {
+        var context = CreateSyntheticOutputContext(
+            [],
+            [
+                new OpenApiSchemaComponentModel(
+                    "Sample.ResponseDto",
+                    "object",
+                    [],
+                    [
+                        new OpenApiSchemaComponentPropertyModel(
+                            "Metadata",
+                            "object",
+                            false,
+                            false,
+                            AdditionalPropertiesType: "string"),
+                        new OpenApiSchemaComponentPropertyModel(
+                            "Scores",
+                            "object",
+                            false,
+                            false,
+                            AdditionalPropertiesType: "number",
+                            AdditionalPropertiesFormat: "double"),
+                        new OpenApiSchemaComponentPropertyModel("Name", "string", false, false),
+                    ]),
+            ]);
+
+        var doc = JsonDocument.Parse(context.Json);
+
+        var properties = doc.RootElement
+            .GetProperty("components")
+            .GetProperty("schemas")
+            .GetProperty("Sample_ResponseDto")
+            .GetProperty("properties");
+
+        var metaAdditional = properties.GetProperty("Metadata").GetProperty("additionalProperties");
+        metaAdditional.GetProperty("type").GetString().Should().Be("string");
+        metaAdditional.TryGetProperty("format", out _).Should().BeFalse();
+
+        var scoresAdditional = properties.GetProperty("Scores").GetProperty("additionalProperties");
+        scoresAdditional.GetProperty("type").GetString().Should().Be("number");
+        scoresAdditional.GetProperty("format").GetString().Should().Be("double");
+
+        properties.GetProperty("Name").TryGetProperty("additionalProperties", out _).Should().BeFalse(
+            "non-dictionary properties should not emit additionalProperties schema");
+    }
+
+    [Fact]
     public void When_schema_processors_are_configured_then_they_transform_components_in_registration_order()
     {
         var context = CreateSyntheticOutputContext(

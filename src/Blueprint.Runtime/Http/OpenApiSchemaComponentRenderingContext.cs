@@ -63,7 +63,11 @@ public sealed record OpenApiSchemaComponentRenderingContext(
             property.Minimum,
             property.Maximum,
             property.IsMinimumExclusive,
-            property.IsMaximumExclusive);
+            property.IsMaximumExclusive,
+            property.ItemsKind.HasValue ? MapType(property.ItemsKind.Value) : null,
+            property.ItemsFormat,
+            property.AdditionalPropertiesKind.HasValue ? MapType(property.AdditionalPropertiesKind.Value) : null,
+            property.AdditionalPropertiesFormat);
     }
 
     private static string? MapType(OpenApiSchemaKind kind)
@@ -112,6 +116,10 @@ public sealed record OpenApiSchemaComponentModel(
 /// <param name="Maximum">The numeric upper bound when validation attributes expose one.</param>
 /// <param name="ExclusiveMinimum">Whether the numeric lower bound is exclusive.</param>
 /// <param name="ExclusiveMaximum">Whether the numeric upper bound is exclusive.</param>
+/// <param name="ItemsType">The OpenAPI type of array element items (e.g. <c>string</c>, <c>integer</c>) when the property is an array.</param>
+/// <param name="ItemsFormat">The OpenAPI format of array element items (e.g. <c>int32</c>, <c>uuid</c>) when the items have a standard format.</param>
+/// <param name="AdditionalPropertiesType">The OpenAPI type of dictionary values (e.g. <c>string</c>) when the property is a dictionary/map.</param>
+/// <param name="AdditionalPropertiesFormat">The OpenAPI format of dictionary values when the values have a standard format.</param>
 public sealed record OpenApiSchemaComponentPropertyModel(
     string Name,
     string? Type,
@@ -126,4 +134,8 @@ public sealed record OpenApiSchemaComponentPropertyModel(
     decimal? Minimum = null,
     decimal? Maximum = null,
     bool ExclusiveMinimum = false,
-    bool ExclusiveMaximum = false);
+    bool ExclusiveMaximum = false,
+    string? ItemsType = null,
+    string? ItemsFormat = null,
+    string? AdditionalPropertiesType = null,
+    string? AdditionalPropertiesFormat = null);

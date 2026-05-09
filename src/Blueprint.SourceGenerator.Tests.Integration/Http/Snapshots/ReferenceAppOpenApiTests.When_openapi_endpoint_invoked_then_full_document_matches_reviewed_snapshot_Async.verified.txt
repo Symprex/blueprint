@@ -21,17 +21,26 @@
                 "properties": {
                   "currentPassword": {
                     "type": "string",
-                    "description": "The current password."
+                    "description": "The current password.",
+                    "items": {
+                      "type": "string"
+                    }
                   },
                   "newPassword": {
                     "type": "string",
                     "description": "The new password.",
+                    "items": {
+                      "type": "string"
+                    },
                     "minLength": 8,
                     "maxLength": 128
                   },
                   "confirmNewPassword": {
                     "type": "string",
-                    "description": "Re-enter the new password for confirmation."
+                    "description": "Re-enter the new password for confirmation.",
+                    "items": {
+                      "type": "string"
+                    }
                   }
                 },
                 "required": [
@@ -286,12 +295,18 @@
                   "name": {
                     "type": "string",
                     "description": "The display name for the template.",
+                    "items": {
+                      "type": "string"
+                    },
                     "maxLength": 200
                   },
                   "slug": {
                     "type": "string",
                     "nullable": true,
                     "description": "URL-safe slug for the template (lowercase letters, digits, hyphens). Reserved values: admin, api, system, health.",
+                    "items": {
+                      "type": "string"
+                    },
                     "maxLength": 100,
                     "pattern": "^[a-z0-9]\u002B(?:-[a-z0-9]\u002B)*$"
                   },
@@ -303,7 +318,10 @@
                       "public",
                       "internal",
                       "private"
-                    ]
+                    ],
+                    "items": {
+                      "type": "string"
+                    }
                   },
                   "priority": {
                     "type": "integer",
@@ -316,25 +334,37 @@
                     "type": "string",
                     "nullable": true,
                     "description": "The HTML source content of the template.",
+                    "items": {
+                      "type": "string"
+                    },
                     "maxLength": 50000
                   },
                   "plainTextSource": {
                     "type": "string",
                     "nullable": true,
                     "description": "The plain text fallback content of the template.",
+                    "items": {
+                      "type": "string"
+                    },
                     "maxLength": 10000
                   },
                   "authorEmail": {
                     "type": "string",
                     "format": "email",
                     "nullable": true,
-                    "description": "Email address of the template author."
+                    "description": "Email address of the template author.",
+                    "items": {
+                      "type": "string"
+                    }
                   },
                   "callbackUrl": {
                     "type": "string",
                     "format": "uri",
                     "nullable": true,
-                    "description": "Callback URL for template lifecycle events."
+                    "description": "Callback URL for template lifecycle events.",
+                    "items": {
+                      "type": "string"
+                    }
                   }
                 },
                 "required": [
@@ -438,14 +468,20 @@
                 "type": "object",
                 "properties": {
                   "ids": {
-                    "type": "string",
+                    "type": "array",
                     "description": "Template IDs to archive.",
+                    "items": {
+                      "type": "string"
+                    },
                     "minLength": 1
                   },
                   "reason": {
                     "type": "string",
                     "nullable": true,
                     "description": "Optional reason for the bulk archive.",
+                    "items": {
+                      "type": "string"
+                    },
                     "maxLength": 500
                   }
                 },
@@ -545,7 +581,10 @@
                   "nameFilter": {
                     "type": "string",
                     "nullable": true,
-                    "description": "Optional name filter to restrict exported templates."
+                    "description": "Optional name filter to restrict exported templates.",
+                    "items": {
+                      "type": "string"
+                    }
                   },
                   "notifyOnCompletion": {
                     "type": "boolean",
@@ -555,7 +594,10 @@
                     "type": "string",
                     "format": "email",
                     "nullable": true,
-                    "description": "Email address to notify on export completion. Required when NotifyOnCompletion is true."
+                    "description": "Email address to notify on export completion. Required when NotifyOnCompletion is true.",
+                    "items": {
+                      "type": "string"
+                    }
                   }
                 }
               }
@@ -1019,18 +1061,27 @@
                   "name": {
                     "type": "string",
                     "description": "The new display name for the template.",
+                    "items": {
+                      "type": "string"
+                    },
                     "maxLength": 200
                   },
                   "htmlSource": {
                     "type": "string",
                     "nullable": true,
                     "description": "The updated HTML source content.",
+                    "items": {
+                      "type": "string"
+                    },
                     "maxLength": 50000
                   },
                   "plainTextSource": {
                     "type": "string",
                     "nullable": true,
                     "description": "The updated plain text content.",
+                    "items": {
+                      "type": "string"
+                    },
                     "maxLength": 10000
                   }
                 },
@@ -1148,6 +1199,9 @@
                   "newName": {
                     "type": "string",
                     "description": "The display name for the new cloned template.",
+                    "items": {
+                      "type": "string"
+                    },
                     "maxLength": 200
                   }
                 },
@@ -1421,6 +1475,7 @@
             "description": "The end of the date range filter (inclusive). Required when StartDate is provided.",
             "schema": {
               "type": "string",
+              "format": "date-time",
               "nullable": true
             }
           },
@@ -1431,6 +1486,7 @@
             "description": "The start of the date range filter (inclusive).",
             "schema": {
               "type": "string",
+              "format": "date-time",
               "nullable": true
             }
           }
@@ -1513,8 +1569,11 @@
                 "type": "object",
                 "properties": {
                   "mergeFields": {
-                    "type": "string",
-                    "description": "Merge-field name/value pairs for template rendering."
+                    "type": "object",
+                    "description": "Merge-field name/value pairs for template rendering.",
+                    "additionalProperties": {
+                      "type": "string"
+                    }
                   }
                 },
                 "required": [
@@ -1716,21 +1775,24 @@
                 "type": "object",
                 "properties": {
                   "opacity": {
-                    "type": "string",
+                    "type": "number",
+                    "format": "double",
                     "nullable": true,
                     "description": "Display opacity for the template preview (0.0 = fully transparent, 1.0 = fully opaque).",
                     "minimum": 0,
                     "maximum": 1
                   },
                   "minWeight": {
-                    "type": "string",
+                    "type": "integer",
+                    "format": "int32",
                     "nullable": true,
                     "description": "Minimum display weight (0-100).",
                     "minimum": 0,
                     "maximum": 100
                   },
                   "maxWeight": {
-                    "type": "string",
+                    "type": "integer",
+                    "format": "int32",
                     "nullable": true,
                     "description": "Maximum display weight (0-100). Must be greater than MinWeight.",
                     "minimum": 0,
@@ -1740,6 +1802,9 @@
                     "type": "string",
                     "nullable": true,
                     "description": "Optional CSS class name for custom template styling.",
+                    "items": {
+                      "type": "string"
+                    },
                     "maxLength": 50,
                     "pattern": "^[a-zA-Z][a-zA-Z0-9\\-_]*$"
                   }
@@ -1855,7 +1920,10 @@
                   "name": {
                     "type": "string",
                     "nullable": true,
-                    "description": "Gets or sets the template name to validate. \u0022INVALID\u0022 triggers a validation exception, \u0022BAD\u0022 triggers a bad-request exception."
+                    "description": "Gets or sets the template name to validate. \u0022INVALID\u0022 triggers a validation exception, \u0022BAD\u0022 triggers a bad-request exception.",
+                    "items": {
+                      "type": "string"
+                    }
                   }
                 }
               }
@@ -2039,7 +2107,10 @@
                   "displayName": {
                     "type": "string",
                     "nullable": true,
-                    "description": "The new display name."
+                    "description": "The new display name.",
+                    "items": {
+                      "type": "string"
+                    }
                   }
                 }
               }
@@ -2134,7 +2205,10 @@
             "type": "boolean"
           },
           "AccessibleOperations": {
-            "type": "array"
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "Object": {
             "type": "string"
