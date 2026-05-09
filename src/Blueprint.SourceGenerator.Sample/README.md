@@ -177,3 +177,27 @@ Blueprint delegates standard ASP.NET Core concerns to the consumer:
 - **Rate limiting** — `services.AddRateLimiter()` + `app.UseRateLimiter()`
 - **Authentication** — `services.AddAuthentication()` + `app.UseAuthentication()` before `UseAuthorization()`
 - **JSON naming** — Control via `[JsonSourceGenerationOptions]` on your `JsonSerializerContext`
+
+## OpenAPI customisation
+
+Blueprint's OpenAPI document is pre-rendered at startup. Use hooks on `MapBlueprintApi` to customise
+the document:
+
+```csharp
+endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>(
+    "api/",
+    configureOpenApi: info => { info.Title = "My API"; info.Version = "1.0.0"; },
+    configureOpenApiOperations: ops =>
+    {
+        // Remove auto-populated TenantId parameters from the public spec
+        ops.Processors.Add(static (operation, descriptor) =>
+        {
+            var filtered = operation.Parameters
+                .Where(static p => !string.Equals(p.Name, "tenantId", StringComparison.OrdinalIgnoreCase))
+                .ToImmutableArray();
+            return filtered.Length != operation.Parameters.Length
+                ? operation with { Parameters = filtered }
+                : operation;
+        });
+    });
+```
