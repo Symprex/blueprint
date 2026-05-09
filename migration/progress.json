@@ -12,12 +12,12 @@
   "current": {
     "activeWorkstream": "authorization-and-parity-alignment",
     "frameworkStatus": "production-ready",
-    "frameworkStatusDetail": "Core Blueprint source-generator framework is at full feature parity with legacy Blueprint for Signature365 migration. Authorization pipeline (IApiAuthoriser, IUserAuthorisationContextFactory), background task scheduling (IScheduledBackgroundTask, ContinueWith, Schedule), and sample app demonstrations are complete.",
+    "frameworkStatusDetail": "Core Blueprint source-generator framework is at full feature parity with legacy Blueprint for Signature365 migration. Authorization pipeline, background task scheduling, OpenAPI per-operation customization hook (configureOpenApiOperations), and all consumer seams are complete. All 1196 tests pass. Performance benchmarks validated across all hot paths.",
     "nextReadySlice": null,
     "lastCompletedSlice": {
-      "id": "messaging/message-outbox-pipeline-module",
-      "workstream": "messaging-and-integration-hosts",
-      "title": "IMessageOutbox pipeline module with transactional outbox commit, DoNotPublishMessages opt-out, and sample app integration"
+      "id": "openapi/operation-processor-hook",
+      "workstream": "authorization-and-parity-alignment",
+      "title": "OpenAPI per-operation customization hook (configureOpenApiOperations) with parameter stripping and summary override"
     },
     "openReviewGate": null,
     "openReviewGateRationale": null,
@@ -526,6 +526,18 @@
       "workstream": "messaging-and-integration-hosts",
       "title": "IMessageOutbox pipeline module with transactional outbox commit, DoNotPublishMessages opt-out, and sample app integration",
       "commit": "9994a7c"
+    },
+    {
+      "id": "openapi/operation-processor-hook",
+      "workstream": "authorization-and-parity-alignment",
+      "title": "OpenAPI per-operation customization hook (configureOpenApiOperations) with parameter stripping and summary override",
+      "commit": "43f4abc"
+    },
+    {
+      "id": "benchmarks/infrastructure-and-validation",
+      "workstream": "authorization-and-parity-alignment",
+      "title": "Benchmark infrastructure fix (InProcess toolchain) and comprehensive performance validation across all hot paths",
+      "commit": "26603df"
     }
   ],
   "decisions": [
