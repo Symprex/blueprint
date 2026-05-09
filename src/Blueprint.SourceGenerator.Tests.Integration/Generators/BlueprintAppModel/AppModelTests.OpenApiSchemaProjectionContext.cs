@@ -18,6 +18,8 @@ public class AppModelOpenApiSchemaProjectionContextTests
         var problemDetailsSchema = schemaContext.Schemas.Single(static schema => schema.BodyTypeName == "Microsoft.AspNetCore.Mvc.ProblemDetails");
 
         schemaContext.Schemas.Select(static schema => schema.BodyTypeName).Should().Equal(
+            "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.AlwaysExpandTestEmployee",
+            "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.ExpandableTestEmployee",
             "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.LinkTestApiResource",
             "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.MappedLinkApiResource",
             "Blueprint.SourceGenerator.Tests.Integration.Http.E2EConflictDetail",

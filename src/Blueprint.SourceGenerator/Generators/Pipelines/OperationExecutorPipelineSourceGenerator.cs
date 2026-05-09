@@ -161,6 +161,7 @@ public partial class OperationExecutorPipelineSourceGenerator : IIncrementalGene
             new AuditingManifestModule(),
             new BackgroundTaskFlushModule(),
             new LinkGenerationModule(),
+            new ResourceExpansionModule(),
             new PipelineReturnModule(),
             new DefaultExceptionTranslationModule(),
             .. additionalModules,

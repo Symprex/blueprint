@@ -28,4 +28,6 @@ public partial class IntegrationTestBlueprintApp : BlueprintApp;
 [JsonSerializable(typeof(E2EWidgetResponse))]
 [JsonSerializable(typeof(E2EJobAcceptedPayload))]
 [JsonSerializable(typeof(E2EConflictDetail))]
+[JsonSerializable(typeof(ExpandableTestEmployee))]
+[JsonSerializable(typeof(AlwaysExpandTestEmployee))]
 public partial class IntegrationTestAppJsonContext : JsonSerializerContext;

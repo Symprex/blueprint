@@ -18,6 +18,8 @@ public class AppModelOpenApiSchemaComponentRenderingContextTests
         var componentContext = OpenApiSchemaComponentRenderingContext.Create(schemaContext);
 
         componentContext.Components.Select(static component => component.BodyTypeName).Should().Equal(
+            "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.AlwaysExpandTestEmployee",
+            "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.ExpandableTestEmployee",
             "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.LinkTestApiResource",
             "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.MappedLinkApiResource",
             "Blueprint.SourceGenerator.Tests.Integration.Http.E2EConflictDetail",
