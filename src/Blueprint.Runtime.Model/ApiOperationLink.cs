@@ -1,3 +1,6 @@
+using System.Collections.Concurrent;
+using System.Reflection;
+
 namespace Blueprint.Model;
 
 /// <summary>
@@ -22,6 +25,12 @@ public class OperationLinkFormatException : Exception
 /// <seealso cref="ILinkableResource" />
 public class ApiOperationLink
 {
+    /// <summary>
+    /// Cached property lookups for reflection-based URL building, keyed by (type, propertyName).
+    /// Eliminates repeated <see cref="Type.GetProperty(string)"/> calls on the same anonymous-object type.
+    /// </summary>
+    private static readonly ConcurrentDictionary<(Type, string), PropertyInfo?> _propertyCache = new();
+
     private readonly string _description;
 
     /// <summary>
@@ -159,9 +168,11 @@ public class ApiOperationLink
             var colonIndex = placeholder.IndexOf(':');
             var propertyName = colonIndex >= 0 ? placeholder[..colonIndex] : placeholder;
 
-            var property = valueType.GetProperty(
-                propertyName,
-                System.Reflection.BindingFlags.IgnoreCase | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public);
+            var property = _propertyCache.GetOrAdd(
+                (valueType, propertyName),
+                static key => key.Item1.GetProperty(
+                    key.Item2,
+                    BindingFlags.IgnoreCase | BindingFlags.Instance | BindingFlags.Public));
 
             if (property is null)
             {

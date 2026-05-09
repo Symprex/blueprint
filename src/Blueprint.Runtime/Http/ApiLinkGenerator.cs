@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Text;
 using Blueprint.Model;
@@ -10,6 +12,12 @@ namespace Blueprint.Http;
 /// </summary>
 public class ApiLinkGenerator : IApiLinkGenerator
 {
+    /// <summary>
+    /// Cached property accessors per query-string type, avoiding repeated reflection on hot paths.
+    /// Each entry is an array of (name, getter) pairs for non-null public instance properties.
+    /// </summary>
+    private static readonly ConcurrentDictionary<Type, (string Name, Func<object, object?> Getter)[]> _queryStringAccessors = new();
+
     private readonly BlueprintApp _app;
     private readonly string _baseUri;
 
@@ -127,15 +135,31 @@ public class ApiLinkGenerator : IApiLinkGenerator
             return this._baseUri + relativeUrl;
         }
 
+        var accessors = _queryStringAccessors.GetOrAdd(
+            queryString.GetType(),
+            static ([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] Type type) =>
+            {
+                var props = type.GetProperties(BindingFlags.Instance | BindingFlags.Public);
+                var result = new (string Name, Func<object, object?> Getter)[props.Length];
+
+                for (var i = 0; i < props.Length; i++)
+                {
+                    var prop = props[i];
+                    result[i] = (prop.Name, prop.GetValue);
+                }
+
+                return result;
+            });
+
         var sb = new StringBuilder(this._baseUri.Length + relativeUrl.Length + 64);
         sb.Append(this._baseUri);
         sb.Append(relativeUrl);
 
         var first = true;
 
-        foreach (var property in queryString.GetType().GetProperties(BindingFlags.Instance | BindingFlags.Public))
+        foreach (var (name, getter) in accessors)
         {
-            var value = property.GetValue(queryString);
+            var value = getter(queryString);
 
             if (value is null)
             {
@@ -144,7 +168,7 @@ public class ApiLinkGenerator : IApiLinkGenerator
 
             sb.Append(first ? '?' : '&');
             first = false;
-            sb.Append(Uri.EscapeDataString(property.Name));
+            sb.Append(Uri.EscapeDataString(name));
             sb.Append('=');
             sb.Append(Uri.EscapeDataString(value.ToString()!));
         }
