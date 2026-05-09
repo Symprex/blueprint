@@ -210,3 +210,42 @@ Key files:
 Large API surfaces become dangerous when the only way to understand them is to read source and mentally simulate multiple generators.
 
 If a feature makes the surface larger or harder to inspect, it should also improve the diagnostics, manifests, tooling, or endpoints that explain that surface.
+
+## Performance benchmarks
+
+The `Blueprint.SourceGenerator.Benchmarks` project provides micro-benchmarks for hot-path operations. All benchmarks use `InProcessEmitToolchain` (the source generator prevents BDN's out-of-process build from succeeding).
+
+Run benchmarks with:
+
+```bash
+dotnet run --project src/Blueprint.SourceGenerator.Benchmarks -c Release -- --filter "*BenchmarkName*"
+```
+
+### Executor dispatch (per-request hot path)
+
+| Scenario | Operations | Mean | Allocated |
+|---|---|---|---|
+| Pipeline lookup | 10–500 | ~13 ns | 0 B |
+| Direct pipeline execution | 10–500 | ~52–67 ns | 216 B |
+| Full executor shell dispatch | 10–500 | ~65–89 ns | 216 B |
+
+Pipeline lookup is O(1) with zero allocations regardless of registered operation count. The executor shell adds ~20 ns overhead over direct pipeline execution.
+
+### Validation (per-request)
+
+| Scenario | Mean | Allocated |
+|---|---|---|
+| Fast-path (compile-time generated) | 2.3–4.5 μs | 2.0–3.1 KB |
+| Runtime fallback (DataAnnotations) | 4.4–7.4 μs | 3.0–4.0 KB |
+
+Compile-time validation fast paths are 40–60 % faster than the DataAnnotations runtime fallback and allocate less memory.
+
+### App registration (startup)
+
+| Operations | Mean | Allocated |
+|---|---|---|
+| 10 | ~2 μs | ~4 KB |
+| 100 | ~25 μs | ~45 KB |
+| 500 | ~103 μs | ~219 KB |
+
+Registration scales linearly with operation count.
