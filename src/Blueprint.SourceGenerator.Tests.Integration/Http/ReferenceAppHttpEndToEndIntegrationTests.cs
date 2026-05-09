@@ -1352,6 +1352,132 @@ public class ReferenceAppHttpEndToEndIntegrationTests
         response.Body.Should().Contain("Forbidden");
     }
 
+    [Fact]
+    public async Task When_bulk_archive_invoked_with_valid_ids_then_returns_202_accepted()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/templates/bulk-archive", "POST");
+        endpoint.Should().NotBeNull("the bulk archive route should be registered");
+
+        var bodyJson = """{"ids":["template-001","template-002"],"reason":"Quarterly cleanup"}"""u8.ToArray();
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Post;
+            context.Request.Path = "/api/templates/bulk-archive";
+            context.Request.ContentType = "application/json; charset=utf-8";
+            context.Request.ContentLength = bodyJson.Length;
+            context.Request.Body = new MemoryStream(bodyJson);
+
+            context.User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "user-1"),
+                ],
+                authenticationType: "test"));
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status202Accepted,
+            "bulk archive should return 202 Accepted for fire-and-forget pattern");
+    }
+
+    [Fact]
+    public async Task When_bulk_archive_invoked_with_empty_ids_then_returns_422_validation_error()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/templates/bulk-archive", "POST");
+        endpoint.Should().NotBeNull();
+
+        var bodyJson = """{"ids":[]}"""u8.ToArray();
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Post;
+            context.Request.Path = "/api/templates/bulk-archive";
+            context.Request.ContentType = "application/json; charset=utf-8";
+            context.Request.ContentLength = bodyJson.Length;
+            context.Request.Body = new MemoryStream(bodyJson);
+
+            context.User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "user-1"),
+                ],
+                authenticationType: "test"));
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status422UnprocessableEntity,
+            "empty ids array should fail MinLength(1) validation");
+        response.Body.Should().Contain("Ids");
+    }
+
+    [Fact]
+    public async Task When_template_history_invoked_then_returns_version_array()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/templates/{Id}/history", "GET");
+        endpoint.Should().NotBeNull("the template history route should be registered");
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Get;
+            context.Request.Path = "/api/templates/template-001/history";
+            context.Request.RouteValues = new RouteValueDictionary
+            {
+                ["Id"] = "template-001",
+            };
+
+            context.User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "user-1"),
+                ],
+                authenticationType: "test"));
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        response.ContentType.Should().Be("application/json; charset=utf-8");
+        response.Body.Should().Contain("Version");
+    }
+
+    [Fact]
+    public async Task When_template_history_invoked_with_invalid_date_range_then_returns_422()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/templates/{Id}/history", "GET");
+        endpoint.Should().NotBeNull();
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Get;
+            context.Request.Path = "/api/templates/template-001/history";
+            context.Request.RouteValues = new RouteValueDictionary
+            {
+                ["Id"] = "template-001",
+            };
+
+            // StartDate > EndDate should fail LessThanProperty validation
+            context.Request.QueryString = new QueryString("?StartDate=2025-06-01&EndDate=2024-01-01");
+
+            context.User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "user-1"),
+                ],
+                authenticationType: "test"));
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status422UnprocessableEntity,
+            "StartDate > EndDate should fail LessThanProperty cross-property validation");
+        response.Body.Should().Contain("StartDate");
+    }
+
     private static async Task<TestHttpResponse> InvokeEndpointAsync(
         RouteEndpoint endpoint,
         IServiceProvider serviceProvider,
