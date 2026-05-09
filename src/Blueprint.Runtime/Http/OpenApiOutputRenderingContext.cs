@@ -759,6 +759,11 @@ public sealed record OpenApiOutputRenderingContext(
             writer.WriteBoolean("nullable", true);
         }
 
+        if (property.Format is not null)
+        {
+            writer.WriteString("format", property.Format);
+        }
+
         if (property.MinLength.HasValue)
         {
             writer.WriteNumber("minLength", property.MinLength.Value);

@@ -2151,7 +2151,8 @@
         ],
         "properties": {
           "EstimatedSeconds": {
-            "type": "integer"
+            "type": "integer",
+            "format": "int32"
           },
           "JobId": {
             "type": "string"
@@ -2241,7 +2242,8 @@
             "type": "string"
           },
           "PublishedAt": {
-            "type": "string"
+            "type": "string",
+            "format": "date-time"
           },
           "ResourceKey": {
             "type": "string"
@@ -2250,7 +2252,8 @@
             "type": "string"
           },
           "Version": {
-            "type": "integer"
+            "type": "integer",
+            "format": "int32"
           }
         }
       },
@@ -2268,7 +2271,8 @@
           },
           "status": {
             "type": "integer",
-            "nullable": true
+            "nullable": true,
+            "format": "int32"
           },
           "title": {
             "type": "string"
@@ -2295,7 +2299,8 @@
           },
           "status": {
             "type": "integer",
-            "nullable": true
+            "nullable": true,
+            "format": "int32"
           },
           "title": {
             "type": "string"

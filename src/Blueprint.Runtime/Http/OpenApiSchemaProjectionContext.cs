@@ -106,6 +106,7 @@ public sealed record OpenApiSchemaProjectionContext(
         var minimum = GetMinimum(validationAttributes);
         var maximum = GetMaximum(validationAttributes);
         var isNullable = IsNullableProperty(property);
+        var format = MapFormat(property.PropertyType);
 
         return new OpenApiSchemaPropertyModel(
             property.Name,
@@ -113,6 +114,7 @@ public sealed record OpenApiSchemaProjectionContext(
             property.IsRequired,
             property.IsExtensionData,
             isNullable,
+            format,
             GetMinLength(validationAttributes),
             GetMaxLength(validationAttributes),
             GetPattern(validationAttributes),
@@ -120,6 +122,102 @@ public sealed record OpenApiSchemaProjectionContext(
             maximum.Value,
             minimum.IsExclusive,
             maximum.IsExclusive);
+    }
+
+    /// <summary>
+    /// Maps a CLR property type to its OpenAPI <c>format</c> hint (e.g. <c>int32</c>, <c>date-time</c>, <c>uuid</c>).
+    /// Returns <c>null</c> when no standard format applies.
+    /// </summary>
+    private static string? MapFormat(Type propertyType)
+    {
+        var underlying = Nullable.GetUnderlyingType(propertyType) ?? propertyType;
+
+        if (underlying == typeof(int))
+        {
+            return "int32";
+        }
+
+        if (underlying == typeof(long))
+        {
+            return "int64";
+        }
+
+        if (underlying == typeof(float))
+        {
+            return "float";
+        }
+
+        if (underlying == typeof(double))
+        {
+            return "double";
+        }
+
+        if (underlying == typeof(decimal))
+        {
+            return "double";
+        }
+
+        if (underlying == typeof(DateTime))
+        {
+            return "date-time";
+        }
+
+        if (underlying == typeof(DateTimeOffset))
+        {
+            return "date-time";
+        }
+
+        if (underlying == typeof(DateOnly))
+        {
+            return "date";
+        }
+
+        if (underlying == typeof(TimeOnly))
+        {
+            return "time";
+        }
+
+        if (underlying == typeof(Guid))
+        {
+            return "uuid";
+        }
+
+        if (underlying == typeof(Uri))
+        {
+            return "uri";
+        }
+
+        if (underlying == typeof(byte))
+        {
+            return "int32";
+        }
+
+        if (underlying == typeof(short))
+        {
+            return "int32";
+        }
+
+        if (underlying == typeof(sbyte))
+        {
+            return "int32";
+        }
+
+        if (underlying == typeof(ushort))
+        {
+            return "int32";
+        }
+
+        if (underlying == typeof(uint))
+        {
+            return "int64";
+        }
+
+        if (underlying == typeof(ulong))
+        {
+            return "int64";
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -461,6 +559,7 @@ public sealed record OpenApiSchemaModel(
 /// <param name="IsRequired">Whether serializer metadata marks the property as required.</param>
 /// <param name="IsExtensionData">Whether the property acts as JSON extension data.</param>
 /// <param name="IsNullable">Whether this property is nullable (NRT-annotated reference type or <c>Nullable&lt;T&gt;</c>).</param>
+/// <param name="Format">The OpenAPI format hint (e.g. <c>int32</c>, <c>date-time</c>, <c>uuid</c>) when the CLR type has a standard mapping.</param>
 /// <param name="MinLength">The inclusive minimum string/collection length when validation attributes expose one.</param>
 /// <param name="MaxLength">The inclusive maximum string/collection length when validation attributes expose one.</param>
 /// <param name="Pattern">The regular-expression pattern when validation attributes expose one.</param>
@@ -474,6 +573,7 @@ public sealed record OpenApiSchemaPropertyModel(
     bool IsRequired,
     bool IsExtensionData,
     bool IsNullable,
+    string? Format,
     int? MinLength = null,
     int? MaxLength = null,
     string? Pattern = null,

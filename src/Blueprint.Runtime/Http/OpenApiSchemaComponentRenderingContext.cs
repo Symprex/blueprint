@@ -54,6 +54,7 @@ public sealed record OpenApiSchemaComponentRenderingContext(
             MapType(property.Kind),
             property.IsExtensionData,
             property.IsNullable,
+            property.Format,
             property.MinLength,
             property.MaxLength,
             property.Pattern,
@@ -99,6 +100,7 @@ public sealed record OpenApiSchemaComponentModel(
 /// <param name="Type">The OpenAPI-style schema type when the current projection can determine one.</param>
 /// <param name="IsExtensionData">Whether the property acts as serializer extension data.</param>
 /// <param name="IsNullable">Whether this property is nullable (NRT-annotated reference type or <c>Nullable&lt;T&gt;</c>).</param>
+/// <param name="Format">The OpenAPI format hint (e.g. <c>int32</c>, <c>date-time</c>, <c>uuid</c>) when the CLR type has a standard mapping.</param>
 /// <param name="MinLength">The inclusive minimum string/collection length when validation attributes expose one.</param>
 /// <param name="MaxLength">The inclusive maximum string/collection length when validation attributes expose one.</param>
 /// <param name="Pattern">The regular-expression pattern when validation attributes expose one.</param>
@@ -111,6 +113,7 @@ public sealed record OpenApiSchemaComponentPropertyModel(
     string? Type,
     bool IsExtensionData,
     bool IsNullable,
+    string? Format = null,
     int? MinLength = null,
     int? MaxLength = null,
     string? Pattern = null,

@@ -160,6 +160,37 @@ public class AppModelOpenApiOutputRenderingContextTests
     }
 
     [Fact]
+    public void When_schema_component_property_has_format_then_output_emits_format()
+    {
+        var context = CreateSyntheticOutputContext(
+            [],
+            [
+                new OpenApiSchemaComponentModel(
+                    "Sample.ResponseDto",
+                    "object",
+                    [],
+                    [
+                        new OpenApiSchemaComponentPropertyModel("Count", "integer", false, false, "int32"),
+                        new OpenApiSchemaComponentPropertyModel("Created", "string", false, false, "date-time"),
+                        new OpenApiSchemaComponentPropertyModel("Name", "string", false, false),
+                    ]),
+            ]);
+
+        var doc = JsonDocument.Parse(context.Json);
+
+        var properties = doc.RootElement
+            .GetProperty("components")
+            .GetProperty("schemas")
+            .GetProperty("Sample_ResponseDto")
+            .GetProperty("properties");
+
+        properties.GetProperty("Count").GetProperty("format").GetString().Should().Be("int32");
+        properties.GetProperty("Created").GetProperty("format").GetString().Should().Be("date-time");
+        properties.GetProperty("Name").TryGetProperty("format", out _).Should().BeFalse(
+            "properties without a CLR type format mapping should not emit format");
+    }
+
+    [Fact]
     public void When_schema_processors_are_configured_then_they_transform_components_in_registration_order()
     {
         var context = CreateSyntheticOutputContext(
