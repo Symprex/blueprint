@@ -7,9 +7,9 @@ using Microsoft.CodeAnalysis.Diagnostics;
 namespace Blueprint.Migration.Analyzers.Analyzers;
 
 /// <summary>
-/// Detects <c>using Blueprint.Http;</c>, <c>using Blueprint.Authorisation;</c>,
-/// <c>using Blueprint.Errors;</c>, and <c>using Blueprint.ThirdParty;</c> directives
-/// that should be renamed for the source-generated Blueprint framework.
+/// Detects legacy Blueprint using directives that should be renamed for the
+/// source-generated Blueprint framework. Covers namespace renames, sub-namespace
+/// consolidation, and the <c>Blueprint.Configuration</c> → DI extension migration.
 /// </summary>
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class LegacyNamespaceAnalyzer : DiagnosticAnalyzer
@@ -22,9 +22,15 @@ public sealed class LegacyNamespaceAnalyzer : DiagnosticAnalyzer
         ImmutableDictionary.CreateRange(new[]
         {
             new KeyValuePair<string, ImmutableArray<string>>("Blueprint.Http", ImmutableArray.Create("Blueprint.Model", "Blueprint.Runtime.Http")),
+            new KeyValuePair<string, ImmutableArray<string>>("Blueprint.Http.Formatters", ImmutableArray.Create("Blueprint.Runtime.Http")),
+            new KeyValuePair<string, ImmutableArray<string>>("Blueprint.Http.Infrastructure", ImmutableArray.Create("Blueprint.Runtime.Http")),
+            new KeyValuePair<string, ImmutableArray<string>>("Blueprint.Http.MessagePopulation", ImmutableArray.Create("Blueprint.Runtime.Http")),
+            new KeyValuePair<string, ImmutableArray<string>>("Blueprint.Http.Middleware", ImmutableArray.Create("Blueprint.Runtime.Middleware")),
             new KeyValuePair<string, ImmutableArray<string>>("Blueprint.Authorisation", ImmutableArray.Create("Blueprint.Authorization")),
             new KeyValuePair<string, ImmutableArray<string>>("Blueprint.Errors", ImmutableArray.Create("Blueprint")),
             new KeyValuePair<string, ImmutableArray<string>>("Blueprint.ThirdParty", ImmutableArray.Create("Blueprint.Utilities")),
+            new KeyValuePair<string, ImmutableArray<string>>("Blueprint.Configuration", ImmutableArray.Create("Microsoft.Extensions.DependencyInjection")),
+            new KeyValuePair<string, ImmutableArray<string>>("Blueprint.Properties", ImmutableArray.Create("Blueprint.Model")),
         });
 
     /// <inheritdoc />

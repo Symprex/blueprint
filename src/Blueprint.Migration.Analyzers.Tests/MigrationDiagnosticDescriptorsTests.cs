@@ -82,4 +82,22 @@ public sealed class MigrationDiagnosticDescriptorsTests
         Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.LegacyNamespaceUsing.IsEnabledByDefault.Should().BeTrue();
         Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.LegacyNamespaceUsing.MessageFormat.ToString().Should().Contain("using");
     }
+
+    [Xunit.Fact]
+    public void When_loading_migration_diagnostic_descriptors_then_legacy_middleware_builder_uses_bpmig301()
+    {
+        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.LegacyMiddlewareBuilderUsage.Id.Should().Be("BPMIG301");
+        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.LegacyMiddlewareBuilderUsage.DefaultSeverity.Should().Be(Microsoft.CodeAnalysis.DiagnosticSeverity.Warning);
+        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.LegacyMiddlewareBuilderUsage.IsEnabledByDefault.Should().BeTrue();
+        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.LegacyMiddlewareBuilderUsage.MessageFormat.ToString().Should().Contain("IMiddlewareBuilder");
+    }
+
+    [Xunit.Fact]
+    public void When_loading_migration_diagnostic_descriptors_then_legacy_api_builder_uses_bpmig302()
+    {
+        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.LegacyBlueprintApiBuilderUsage.Id.Should().Be("BPMIG302");
+        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.LegacyBlueprintApiBuilderUsage.DefaultSeverity.Should().Be(Microsoft.CodeAnalysis.DiagnosticSeverity.Warning);
+        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.LegacyBlueprintApiBuilderUsage.IsEnabledByDefault.Should().BeTrue();
+        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.LegacyBlueprintApiBuilderUsage.MessageFormat.ToString().Should().Contain("BlueprintApiBuilder");
+    }
 }

@@ -14,9 +14,15 @@ public sealed class LegacyNamespaceAnalyzerTests
 {
     [Xunit.Theory]
     [Xunit.InlineData("Blueprint.Http", "Blueprint.Model, Blueprint.Runtime.Http")]
+    [Xunit.InlineData("Blueprint.Http.Formatters", "Blueprint.Runtime.Http")]
+    [Xunit.InlineData("Blueprint.Http.Infrastructure", "Blueprint.Runtime.Http")]
+    [Xunit.InlineData("Blueprint.Http.MessagePopulation", "Blueprint.Runtime.Http")]
+    [Xunit.InlineData("Blueprint.Http.Middleware", "Blueprint.Runtime.Middleware")]
     [Xunit.InlineData("Blueprint.Authorisation", "Blueprint.Authorization")]
     [Xunit.InlineData("Blueprint.Errors", "Blueprint")]
     [Xunit.InlineData("Blueprint.ThirdParty", "Blueprint.Utilities")]
+    [Xunit.InlineData("Blueprint.Configuration", "Microsoft.Extensions.DependencyInjection")]
+    [Xunit.InlineData("Blueprint.Properties", "Blueprint.Model")]
     public async Task When_legacy_namespace_using_exists_then_reports_bpmig300(string legacyNamespace, string expectedReplacement)
     {
         var source =
@@ -37,6 +43,13 @@ public sealed class LegacyNamespaceAnalyzerTests
     [Xunit.InlineData("Blueprint.Utilities")]
     [Xunit.InlineData("Blueprint.Validation")]
     [Xunit.InlineData("Blueprint")]
+    [Xunit.InlineData("Blueprint.Runtime.Http")]
+    [Xunit.InlineData("Blueprint.Runtime.Middleware")]
+    [Xunit.InlineData("Blueprint.Runtime.Tasks")]
+    [Xunit.InlineData("Blueprint.Tasks")]
+    [Xunit.InlineData("Blueprint.Diagnostics")]
+    [Xunit.InlineData("Blueprint.Middleware")]
+    [Xunit.InlineData("Microsoft.Extensions.DependencyInjection")]
     [Xunit.InlineData("System.ComponentModel.DataAnnotations")]
     public async Task When_current_namespace_using_exists_then_no_diagnostic(string currentNamespace)
     {

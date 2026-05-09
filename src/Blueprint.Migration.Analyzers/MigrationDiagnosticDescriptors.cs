@@ -102,4 +102,30 @@ public static class MigrationDiagnosticDescriptors
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
         description: "Legacy Blueprint namespaces have been reorganised in the source-generated framework. Update using directives to the new namespace locations.");
+
+    /// <summary>
+    /// Gets the diagnostic emitted when code implements or references <c>IMiddlewareBuilder</c>,
+    /// which has been replaced by the source-generator module system.
+    /// </summary>
+    public static DiagnosticDescriptor LegacyMiddlewareBuilderUsage { get; } = new(
+        id: "BPMIG301",
+        title: "IMiddlewareBuilder replaced by source-generator modules",
+        messageFormat: "'{0}' implements IMiddlewareBuilder, which is replaced by IBlueprintSourceGeneratorModule in the source-generated framework. See the consumer migration guide for companion generator patterns.",
+        category: "BlueprintMigration",
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "Legacy Blueprint's IMiddlewareBuilder compile-time middleware pattern has been replaced by IBlueprintSourceGeneratorModule. Custom middleware should be migrated to companion generator packages or runtime ASP.NET Core middleware.");
+
+    /// <summary>
+    /// Gets the diagnostic emitted when code references <c>BlueprintApiBuilder</c>,
+    /// which has been replaced by <c>AddBlueprintApi&lt;TApp, TExec&gt;</c> and <c>BlueprintServiceBuilder</c>.
+    /// </summary>
+    public static DiagnosticDescriptor LegacyBlueprintApiBuilderUsage { get; } = new(
+        id: "BPMIG302",
+        title: "BlueprintApiBuilder replaced by AddBlueprintApi<TApp, TExec>",
+        messageFormat: "'{0}' references BlueprintApiBuilder, which is replaced by 'AddBlueprintApi<TApp, TExec>(...)' with BlueprintServiceBuilder in the source-generated framework.",
+        category: "BlueprintMigration",
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "Legacy Blueprint's BlueprintApiBuilder configuration pattern has been replaced by the source-generated AddBlueprintApi<TApp, TExec>() registration and BlueprintServiceBuilder for infrastructure services.");
 }

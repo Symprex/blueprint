@@ -14,6 +14,8 @@ This guide walks through migrating a legacy Blueprint application (such as a Sig
 | Legacy concept | New equivalent | Migration type |
 |---|---|---|
 | `BlueprintApiBuilder` feature toggles | Source-generated pipeline modules | Auto-fixable / configuration-required |
+| `BlueprintApiBuilder` references | `AddBlueprintApi<TApp, TExec>()` + `BlueprintServiceBuilder` | Consumer rewrite (BPMIG302) |
+| `IMiddlewareBuilder` implementations | `IBlueprintSourceGeneratorModule` companion generators | Consumer rewrite (BPMIG301) |
 | `AddOpenApi()` | Automatic with HTTP host | Auto-fixable (BPMIG001) |
 | `AddHateoasLinks()` | Automatic when `[SelfLink]`/`[RootLink]` exist | Auto-fixable (BPMIG002) |
 | `AddAuthorisation()` | Automatic when `[Resource]`/`[MustBeAuthenticated]` exist | Auto-fixable (BPMIG003) |
@@ -21,6 +23,7 @@ This guide walks through migrating a legacy Blueprint application (such as a Sig
 | `AddAuthentication(...)` | ASP.NET Core `AddAuthentication()` + `UseAuthentication()` | Configuration-required (BPMIG101) |
 | `[FromResource(...)]` attribute | `[Resource("noun", "verb")]` + `[FromResource(typeof(X))]` | Consumer rewrite (BPMIG200) |
 | `{Auth:...}` placeholders | Source-generated auth metadata | Consumer rewrite (BPMIG201) |
+| Legacy namespace usings | Updated namespaces | Auto-fixable (BPMIG300) |
 | Runtime middleware pipeline | Generated `IOperationExecutorPipeline` per operation | Automatic |
 | `IApiOperationHandler<T>` | Same interface, same registration | No change |
 | `ICommand` / `IQuery` | Same interfaces | No change |
@@ -28,11 +31,14 @@ This guide walks through migrating a legacy Blueprint application (such as a Sig
 | `IAuditSink` | Same interface, registered via `BlueprintServiceBuilder` | No change |
 | `SetTenantMiddleware` | `IPropertyPopulator` via `AddPropertyPopulator<T>()` | Consumer rewrite |
 | `StartRebusTransactionScope` | `IMessageOutbox` via `AddMessageOutbox<T>()` | Consumer rewrite |
+| `SaveMartenChanges` middleware | `IUnitOfWork` via `AddUnitOfWork<T>()` | Registration change |
 | `IUnitOfWork` middleware | Built-in `UnitOfWorkModule` via `AddUnitOfWork<T>()` | No change |
 | `IBackgroundTaskScheduler` | Same interface via `AddBackgroundTaskScheduler<T>()` | No change |
 | `IUserAuthorisationContext` | Same interface via `AddUserAuthorisationContextFactory<T>()` | No change |
 | `IApiAuthoriser` | Same interface via `AddApiAuthoriser<T>()`, or focused `IOperationAuthoriser` / `ILinkVisibilityAuthoriser` | Recommended split |
 | `StateBasedLinkChecker<T,R>` | Now implements `ILinkVisibilityAuthoriser` via `AddLinkVisibilityAuthoriser<T>()` | Registration change |
+| `Blueprint.Tasks.Hangfire` | Consumer-provided `IBackgroundTaskScheduler` implementation | Consumer rewrite |
+| `IAuditor` / `AuditItem` | `IResourceEventAuditSink` | Consumer rewrite |
 
 ## Step-by-step migration
 
@@ -304,11 +310,25 @@ Blueprint-specific validators are also available:
 |---|---|
 | `GreaterThanAttribute` | Value must be greater than a constant |
 | `LessThanAttribute` | Value must be less than a constant |
+| `GreaterThanOrEqualToAttribute` | Value must be greater than or equal to a constant |
+| `LessThanOrEqualToAttribute` | Value must be less than or equal to a constant |
 | `GreaterThanPropertyAttribute` | Value must be greater than another property |
 | `LessThanPropertyAttribute` | Value must be less than another property |
+| `MustBeGreaterThanOrEqualAttribute` | Cross-property >= comparison |
 | `RequiredIfAttribute` | Conditionally required when another property equals a value |
 | `RequiredIfNotAttribute` | Conditionally required when another property does not equal a value |
 | `NotAllowedIfAttribute` | Forbidden when another property equals a value |
+| `MustBeTrueAttribute` | Boolean must be true (consent/terms validation) |
+| `NotEmptyListAttribute` | Collection must not be empty |
+| `MaxItemsListAttribute` | Collection must not exceed max items |
+| `InFutureAttribute` | DateTime must be in the future |
+| `InPastAttribute` | DateTime must be in the past |
+| `NotInFutureAttribute` | DateTime must not be in the future (inclusive of now) |
+| `NotInPastAttribute` | DateTime must not be in the past (inclusive of now) |
+| `PhoneNumberAttribute` | Phone number format validation |
+| `UkPostcodeAttribute` | UK postcode format validation |
+| `PasswordAttribute` | Strong password complexity requirements |
+| `ResourceKeyAttribute` | type/GUID resource key format |
 
 Invalid property references in cross-property validators are caught at build time (BPV001–BPV006).
 
@@ -1204,3 +1224,120 @@ return new UserResourceEvents.Archived(user.Id.ToString());
 - **Custom event reasons** — "archived" instead of generic "deleted"
 - **Key-only events** — `[ResourceEventKey]` for events without full resource body
 - **Diagnostics** — BPRE001–BPRE006 catch invalid shapes at build time
+
+### 16. Migrate custom middleware (IMiddlewareBuilder)
+
+**Legacy:** Custom pipeline steps used IMiddlewareBuilder with the Lamar-based code-generation system:
+
+```csharp
+// Legacy: Compile-time middleware using the Lamar codegen model
+public class SetTenantMiddleware : IMiddlewareBuilder
+{
+    public bool Matches(ApiOperationDescriptor descriptor) => true;
+
+    public void Build(MiddlewareBuilderContext context)
+    {
+        context.AppendFrame(new SetTenantFrame());
+    }
+}
+
+// Registered via BlueprintApiBuilder:
+builder.Pipeline(p => p.AddMiddleware<SetTenantMiddleware>(MiddlewareStage.Setup));
+```
+
+**New:** For cross-cutting concerns like tenant isolation, use IPropertyPopulator:
+
+```csharp
+// Property populator runs for every operation that has a matching property
+public sealed class TenantPropertyPopulator : IPropertyPopulator
+{
+    private readonly ITenantAccessor _tenantAccessor;
+
+    public TenantPropertyPopulator(ITenantAccessor tenantAccessor)
+    {
+        _tenantAccessor = tenantAccessor;
+    }
+
+    public Task PopulateAsync(object operation, ApiOperationContext context)
+    {
+        if (operation is ITenantScoped scoped)
+            scoped.TenantId = _tenantAccessor.CurrentTenantId;
+
+        return Task.CompletedTask;
+    }
+}
+
+// Register:
+blueprint.AddPropertyPopulator<TenantPropertyPopulator>();
+```
+
+For persistence concerns (transaction scopes, outbox patterns), the built-in modules handle them:
+
+| Legacy middleware | New equivalent | Registration |
+|---|---|---|
+| `SaveMartenChangesMiddleware` | `IUnitOfWork` implementation | `blueprint.AddUnitOfWork<MartenUnitOfWork>()` |
+| `StartRebusTransactionScopeMiddleware` | `IMessageOutbox` implementation | `blueprint.AddMessageOutbox<RebusMessageOutbox>()` |
+| `ResourceExpandMiddleware` | Built-in `ResourceExpansionModule` | `blueprint.AddResourceExpander<T>()` |
+
+For truly custom pipeline stages (e.g., domain-specific enrichment that must run at a specific pipeline position), create a companion source-generator package. See the [companion generator composition docs](architecture.md) for the `IBlueprintSourceGeneratorModule` pattern.
+
+### 17. Migrate Hangfire task scheduling
+
+**Legacy:** Blueprint provided `Blueprint.Tasks.Hangfire` with Hangfire-specific adapters.
+
+**New:** Blueprint defines the `IBackgroundTaskScheduler` interface; you provide a Hangfire implementation:
+
+```csharp
+public sealed class HangfireBackgroundTaskScheduler : IBackgroundTaskScheduler
+{
+    private readonly IBackgroundJobClient _jobClient;
+
+    public HangfireBackgroundTaskScheduler(IBackgroundJobClient jobClient)
+    {
+        _jobClient = jobClient;
+    }
+
+    public Task<string> EnqueueAsync(BackgroundTaskEnvelope envelope)
+    {
+        var jobId = _jobClient.Enqueue<ITaskExecutor>(
+            executor => executor.ExecuteAsync(envelope, CancellationToken.None));
+        return Task.FromResult(jobId);
+    }
+
+    public Task ScheduleAsync(BackgroundTaskEnvelope envelope, DateTimeOffset scheduledAt)
+    {
+        _jobClient.Schedule<ITaskExecutor>(
+            executor => executor.ExecuteAsync(envelope, CancellationToken.None),
+            scheduledAt);
+        return Task.CompletedTask;
+    }
+
+    public Task RunNowAsync()
+    {
+        // Flush pending tasks — Hangfire handles this via its internal queue
+        return Task.CompletedTask;
+    }
+}
+
+// Register:
+blueprint.AddBackgroundTaskScheduler<HangfireBackgroundTaskScheduler>();
+```
+
+### 18. Namespace migration
+
+The BPMIG300 analyzer automatically detects legacy namespace using directives and the BPMIG300 code fix replaces them:
+
+| Legacy namespace | New namespace(s) |
+|---|---|
+| `Blueprint.Http` | `Blueprint.Model` + `Blueprint.Runtime.Http` |
+| `Blueprint.Http.Formatters` | `Blueprint.Runtime.Http` |
+| `Blueprint.Http.Infrastructure` | `Blueprint.Runtime.Http` |
+| `Blueprint.Http.MessagePopulation` | `Blueprint.Runtime.Http` |
+| `Blueprint.Http.Middleware` | `Blueprint.Runtime.Middleware` |
+| `Blueprint.Authorisation` | `Blueprint.Authorization` |
+| `Blueprint.Errors` | `Blueprint` |
+| `Blueprint.ThirdParty` | `Blueprint.Utilities` |
+| `Blueprint.Configuration` | `Microsoft.Extensions.DependencyInjection` |
+| `Blueprint.Properties` | `Blueprint.Model` |
+
+Namespaces that remain unchanged: `Blueprint.Tasks`, `Blueprint.Middleware`, `Blueprint.Diagnostics`, `Blueprint.Validation`, `Blueprint.Utilities`.

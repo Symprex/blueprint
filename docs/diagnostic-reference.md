@@ -168,3 +168,6 @@ See also [consumer-migration-guide.md](consumer-migration-guide.md).
 | BPMIG101 | Warning | Config required | Migrate configured `AddAuthentication(...)` usage |
 | BPMIG200 | Warning | Consumer rewrite | Migrate `[FromResource]` usage |
 | BPMIG201 | Warning | Consumer rewrite | Migrate `{Auth:...}` placeholder usage |
+| BPMIG300 | Warning | Namespace rename | Update legacy Blueprint namespace using directive |
+| BPMIG301 | Warning | Consumer rewrite | `IMiddlewareBuilder` replaced by source-generator modules |
+| BPMIG302 | Warning | Consumer rewrite | `BlueprintApiBuilder` replaced by `AddBlueprintApi<TApp, TExec>` |
