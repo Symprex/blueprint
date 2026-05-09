@@ -256,6 +256,55 @@ Available result types:
 | `RedirectResult` | 301/302 | HTTP redirect |
 | `ResourceEventResult<T>` | 200/201/204 | Domain event with audit trail |
 | `KeyOnlyResourceEventResult` | 200/204 | Domain event without body |
+| `StatusCodeResult.*` | Various | Bodyless status code responses |
+| `NotModifiedResult<T>` | 304 | Conditional request matched (via `ETagger`) |
+
+#### Response header extensions
+
+`OkResult` supports fluent response header configuration via extension methods:
+
+```csharp
+using System.Net.Http.Headers;
+
+// Cache-Control header (replaces legacy WithCacheControl)
+return new OkResult<Template>(template)
+    .WithCacheControl(new CacheControlHeaderValue { Private = true, MaxAge = TimeSpan.FromHours(1) });
+
+// ETag header
+return new OkResult<Template>(template)
+    .WithETag("\"abc123\"");
+
+// Arbitrary custom headers
+return new OkResult<Template>(template)
+    .WithHeader("X-Custom", "value");
+
+// Fluent chaining
+return new OkResult<Template>(template)
+    .WithCacheControl(cacheControl)
+    .WithETag(eTag)
+    .WithHeader("X-Request-Id", requestId);
+```
+
+#### ETag / conditional requests
+
+For full conditional request support (If-None-Match → 304), inject `ETagger` into your handler:
+
+```csharp
+public class GetTemplateHandler(TemplateStore store, ETagger etagger)
+{
+    public OkResult<Template> Handle(GetTemplateQuery query)
+    {
+        var template = store.GetById(query.Id);
+        var eTag = $"\"{template.Version}\"";
+
+        // Returns OkResult<T> with ETag + Cache-Control on cache miss,
+        // or NotModifiedResult<T> (304) on cache hit — skipping factory call
+        return etagger.WithETag(eTag, () => template);
+    }
+}
+```
+
+`ETagger` is auto-registered when you call `AddBlueprintApi`. No additional setup is needed.
 
 ### 9. Migrate links
 
