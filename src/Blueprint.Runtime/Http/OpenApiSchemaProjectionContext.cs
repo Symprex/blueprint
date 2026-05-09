@@ -105,12 +105,14 @@ public sealed record OpenApiSchemaProjectionContext(
         ThrowIfUnsupportedCrossPropertyValidationAttribute(bodyTypeName, property.Name, validationAttributes);
         var minimum = GetMinimum(validationAttributes);
         var maximum = GetMaximum(validationAttributes);
+        var isNullable = IsNullableProperty(property);
 
         return new OpenApiSchemaPropertyModel(
             property.Name,
             propertyKind,
             property.IsRequired,
             property.IsExtensionData,
+            isNullable,
             GetMinLength(validationAttributes),
             GetMaxLength(validationAttributes),
             GetPattern(validationAttributes),
@@ -118,6 +120,37 @@ public sealed record OpenApiSchemaProjectionContext(
             maximum.Value,
             minimum.IsExclusive,
             maximum.IsExclusive);
+    }
+
+    /// <summary>
+    /// Determines whether a body property is nullable by checking <c>Nullable&lt;T&gt;</c> for value types
+    /// and NRT annotations (via <see cref="NullabilityInfoContext"/>) for reference types.
+    /// </summary>
+    private static bool IsNullableProperty(JsonPropertyInfo property)
+    {
+        if (Nullable.GetUnderlyingType(property.PropertyType) is not null)
+        {
+            return true;
+        }
+
+        if (property.PropertyType.IsValueType)
+        {
+            return false;
+        }
+
+        // For reference types, check NRT annotation via the underlying CLR member.
+        if (property.AttributeProvider is PropertyInfo clrProperty)
+        {
+            var nullabilityContext = new NullabilityInfoContext();
+            var nullabilityInfo = nullabilityContext.Create(clrProperty);
+
+            return nullabilityInfo.WriteState == NullabilityState.Nullable
+                   || nullabilityInfo.ReadState == NullabilityState.Nullable;
+        }
+
+        // When no CLR property info is available, default to non-nullable to match the OpenAPI 3.0
+        // convention that properties without "nullable: true" are non-nullable.
+        return false;
     }
 
     private static int? GetMinLength(IEnumerable<ValidationAttribute> validationAttributes)
@@ -427,6 +460,7 @@ public sealed record OpenApiSchemaModel(
 /// <param name="Kind">The broad schema shape for the property payload.</param>
 /// <param name="IsRequired">Whether serializer metadata marks the property as required.</param>
 /// <param name="IsExtensionData">Whether the property acts as JSON extension data.</param>
+/// <param name="IsNullable">Whether this property is nullable (NRT-annotated reference type or <c>Nullable&lt;T&gt;</c>).</param>
 /// <param name="MinLength">The inclusive minimum string/collection length when validation attributes expose one.</param>
 /// <param name="MaxLength">The inclusive maximum string/collection length when validation attributes expose one.</param>
 /// <param name="Pattern">The regular-expression pattern when validation attributes expose one.</param>
@@ -439,6 +473,7 @@ public sealed record OpenApiSchemaPropertyModel(
     OpenApiSchemaKind Kind,
     bool IsRequired,
     bool IsExtensionData,
+    bool IsNullable,
     int? MinLength = null,
     int? MaxLength = null,
     string? Pattern = null,

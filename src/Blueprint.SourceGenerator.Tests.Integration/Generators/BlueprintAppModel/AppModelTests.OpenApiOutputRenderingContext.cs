@@ -112,7 +112,7 @@ public class AppModelOpenApiOutputRenderingContextTests
                     "Sample.ResponseDto",
                     "object",
                     ["RequiredProp"],
-                    [new OpenApiSchemaComponentPropertyModel("RequiredProp", "string", false)]),
+                    [new OpenApiSchemaComponentPropertyModel("RequiredProp", "string", false, false)]),
             ]);
 
         var doc = JsonDocument.Parse(context.Json);
@@ -128,6 +128,38 @@ public class AppModelOpenApiOutputRenderingContextTests
     }
 
     [Fact]
+    public void When_schema_component_property_is_nullable_then_output_emits_nullable_true()
+    {
+        var context = CreateSyntheticOutputContext(
+            [],
+            [
+                new OpenApiSchemaComponentModel(
+                    "Sample.ResponseDto",
+                    "object",
+                    [],
+                    [
+                        new OpenApiSchemaComponentPropertyModel("NullableProp", "string", false, true),
+                        new OpenApiSchemaComponentPropertyModel("NonNullableProp", "string", false, false),
+                    ]),
+            ]);
+
+        var doc = JsonDocument.Parse(context.Json);
+
+        var properties = doc.RootElement
+            .GetProperty("components")
+            .GetProperty("schemas")
+            .GetProperty("Sample_ResponseDto")
+            .GetProperty("properties");
+
+        properties.GetProperty("NullableProp").TryGetProperty("nullable", out var nullableVal).Should().BeTrue(
+            "nullable body properties should emit nullable: true in schema components");
+        nullableVal.GetBoolean().Should().BeTrue();
+
+        properties.GetProperty("NonNullableProp").TryGetProperty("nullable", out _).Should().BeFalse(
+            "non-nullable body properties should not emit nullable in schema components");
+    }
+
+    [Fact]
     public void When_schema_processors_are_configured_then_they_transform_components_in_registration_order()
     {
         var context = CreateSyntheticOutputContext(
@@ -137,7 +169,7 @@ public class AppModelOpenApiOutputRenderingContextTests
                     "Sample.ResponseDto",
                     "object",
                     ["RequiredProp"],
-                    [new OpenApiSchemaComponentPropertyModel("RequiredProp", "string", false)]),
+                    [new OpenApiSchemaComponentPropertyModel("RequiredProp", "string", false, false)]),
             ],
             options =>
             {

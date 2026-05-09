@@ -2267,7 +2267,8 @@
             "type": "string"
           },
           "status": {
-            "type": "integer"
+            "type": "integer",
+            "nullable": true
           },
           "title": {
             "type": "string"
@@ -2293,7 +2294,8 @@
             "type": "string"
           },
           "status": {
-            "type": "integer"
+            "type": "integer",
+            "nullable": true
           },
           "title": {
             "type": "string"
