@@ -214,19 +214,15 @@ public class HttpOperationResultExecutor
             new TypeInfoCacheKey(serializerContext, contentType),
             static key => key.Context?.GetTypeInfo(key.ContentType));
 
-        string json;
-
         if (jsonTypeInfo is not null)
         {
-            json = JsonSerializer.Serialize(content, jsonTypeInfo);
+            await JsonSerializer.SerializeAsync(httpContext.Response.Body, content, jsonTypeInfo, httpContext.RequestAborted);
         }
         else
         {
             var serializerOptions = serializerContext?.Options ?? new JsonSerializerOptions();
-            json = JsonSerializer.Serialize(content, contentType, CreateFallbackSerializerOptions(serializerOptions));
+            await JsonSerializer.SerializeAsync(httpContext.Response.Body, content, contentType, CreateFallbackSerializerOptions(serializerOptions), httpContext.RequestAborted);
         }
-
-        await httpContext.Response.WriteAsync(json, httpContext.RequestAborted);
     }
 
     private static readonly ConcurrentDictionary<JsonSerializerOptions, JsonSerializerOptions> _fallbackOptionsCache = new();
