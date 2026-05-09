@@ -800,7 +800,14 @@ public sealed record OpenApiOutputRenderingContext(
 
         WriteEnumValues(writer, property.EnumValues);
 
-        if (property.ItemsType is not null)
+        if (property.ItemsSchemaRef is not null)
+        {
+            writer.WritePropertyName("items");
+            writer.WriteStartObject();
+            writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(property.ItemsSchemaRef)}");
+            writer.WriteEndObject();
+        }
+        else if (property.ItemsType is not null)
         {
             writer.WritePropertyName("items");
             writer.WriteStartObject();
@@ -814,7 +821,14 @@ public sealed record OpenApiOutputRenderingContext(
             writer.WriteEndObject();
         }
 
-        if (property.AdditionalPropertiesType is not null)
+        if (property.AdditionalPropertiesSchemaRef is not null)
+        {
+            writer.WritePropertyName("additionalProperties");
+            writer.WriteStartObject();
+            writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(property.AdditionalPropertiesSchemaRef)}");
+            writer.WriteEndObject();
+        }
+        else if (property.AdditionalPropertiesType is not null)
         {
             writer.WritePropertyName("additionalProperties");
             writer.WriteStartObject();

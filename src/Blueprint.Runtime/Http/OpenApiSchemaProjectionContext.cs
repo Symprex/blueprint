@@ -119,8 +119,8 @@ public sealed record OpenApiSchemaProjectionContext(
         // Extract element type metadata for collection/dictionary properties so schema rendering
         // can emit "items" (arrays) or "additionalProperties" (dictionaries).
         // When JsonTypeInfo is available, use its Kind; otherwise fall back to CLR interface inspection.
-        var (itemsKind, itemsFormat) = ResolveElementSchema(propertyTypeInfo, property.PropertyType, JsonTypeInfoKind.Enumerable);
-        var (additionalPropertiesKind, additionalPropertiesFormat) = ResolveElementSchema(propertyTypeInfo, property.PropertyType, JsonTypeInfoKind.Dictionary);
+        var (itemsKind, itemsFormat, itemsSchemaName) = ResolveElementSchema(propertyTypeInfo, property.PropertyType, JsonTypeInfoKind.Enumerable, serializerContext);
+        var (additionalPropertiesKind, additionalPropertiesFormat, additionalPropertiesSchemaName) = ResolveElementSchema(propertyTypeInfo, property.PropertyType, JsonTypeInfoKind.Dictionary, serializerContext);
 
         return new OpenApiSchemaPropertyModel(
             property.Name,
@@ -141,27 +141,43 @@ public sealed record OpenApiSchemaProjectionContext(
             itemsKind,
             itemsFormat,
             additionalPropertiesKind,
-            additionalPropertiesFormat);
+            additionalPropertiesFormat,
+            itemsSchemaName,
+            additionalPropertiesSchemaName);
     }
 
     /// <summary>
-    /// Resolves the schema kind and format for element types of collections and dictionaries.
+    /// Resolves the schema kind, format, and optional element type name for element types of
+    /// collections and dictionaries. The element type name is the <see cref="FormatTypeName"/>
+    /// representation and is present only when the element type is a complex object that is also
+    /// covered by the app-owned serializer context (i.e. has a reusable schema component).
     /// Prefers <see cref="JsonTypeInfo.Kind"/> when available; falls back to CLR interface
     /// inspection so that properties whose type the serializer context does not cover
     /// (e.g. <c>IDictionary&lt;string, Link&gt;</c> exposed as an interface) still emit
     /// accurate <c>items</c> or <c>additionalProperties</c> schemas.
     /// </summary>
     [UnconditionalSuppressMessage("Trimming", "IL2070", Justification = "Type interfaces are preserved by the serializer context for types it covers.")]
-    private static (OpenApiSchemaKind? Kind, string? Format) ResolveElementSchema(
+    private static (OpenApiSchemaKind? Kind, string? Format, string? SchemaName) ResolveElementSchema(
         JsonTypeInfo? typeInfo,
         Type propertyType,
-        JsonTypeInfoKind expectedKind)
+        JsonTypeInfoKind expectedKind,
+        JsonSerializerContext serializerContext)
     {
         // When STJ has type info and the kind matches, use it directly.
         if (typeInfo is not null && typeInfo.Kind == expectedKind)
         {
             var elementType = ExtractElementType(typeInfo.Type, expectedKind);
-            return elementType is null ? (null, null) : (MapKind(elementType, JsonTypeInfoKind.None), MapFormat(elementType));
+            if (elementType is null)
+            {
+                return (null, null, null);
+            }
+
+            var kind = MapKind(elementType, JsonTypeInfoKind.None);
+            var format = MapFormat(elementType);
+            var schemaName = IsComplexElementType(kind) && IsSerializerContextCovered(elementType, serializerContext)
+                ? FormatTypeName(elementType)
+                : null;
+            return (kind, format, schemaName);
         }
 
         // Fallback: inspect the CLR type for collection/dictionary interfaces.
@@ -169,10 +185,46 @@ public sealed record OpenApiSchemaProjectionContext(
         if (typeInfo is null && propertyType != typeof(string))
         {
             var elementType = ExtractElementType(propertyType, expectedKind);
-            return elementType is null ? (null, null) : (MapKind(elementType, JsonTypeInfoKind.None), MapFormat(elementType));
+            if (elementType is null)
+            {
+                return (null, null, null);
+            }
+
+            var kind = MapKind(elementType, JsonTypeInfoKind.None);
+            var format = MapFormat(elementType);
+            var schemaName = IsComplexElementType(kind) && IsSerializerContextCovered(elementType, serializerContext)
+                ? FormatTypeName(elementType)
+                : null;
+            return (kind, format, schemaName);
         }
 
-        return (null, null);
+        return (null, null, null);
+    }
+
+    /// <summary>
+    /// Returns <c>true</c> when an element type should be rendered via <c>$ref</c> to a
+    /// component schema rather than inline <c>type</c>. Primitive and already-typed elements
+    /// (string, integer, number, boolean) are rendered inline.
+    /// </summary>
+    private static bool IsComplexElementType(OpenApiSchemaKind? kind)
+    {
+        return kind is null or OpenApiSchemaKind.None or OpenApiSchemaKind.Object;
+    }
+
+    /// <summary>
+    /// Checks whether the serializer context can resolve metadata for the given type,
+    /// which means it will have a corresponding schema component in the OpenAPI output.
+    /// </summary>
+    private static bool IsSerializerContextCovered(Type elementType, JsonSerializerContext serializerContext)
+    {
+        try
+        {
+            return serializerContext.GetTypeInfo(elementType) is not null;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     /// <summary>
@@ -718,6 +770,8 @@ public sealed record OpenApiSchemaModel(
 /// <param name="ItemsFormat">The OpenAPI format of array element items when they have a standard format mapping.</param>
 /// <param name="AdditionalPropertiesKind">The schema kind for dictionary values when the property is a dictionary/map.</param>
 /// <param name="AdditionalPropertiesFormat">The OpenAPI format of dictionary values when they have a standard format mapping.</param>
+/// <param name="ItemsSchemaName">The component schema name for complex array element types, enabling <c>$ref</c> rendering.</param>
+/// <param name="AdditionalPropertiesSchemaName">The component schema name for complex dictionary value types, enabling <c>$ref</c> rendering.</param>
 public sealed record OpenApiSchemaPropertyModel(
     string Name,
     OpenApiSchemaKind Kind,
@@ -737,7 +791,9 @@ public sealed record OpenApiSchemaPropertyModel(
     OpenApiSchemaKind? ItemsKind = null,
     string? ItemsFormat = null,
     OpenApiSchemaKind? AdditionalPropertiesKind = null,
-    string? AdditionalPropertiesFormat = null);
+    string? AdditionalPropertiesFormat = null,
+    string? ItemsSchemaName = null,
+    string? AdditionalPropertiesSchemaName = null);
 
 /// <summary>
 /// Describes the broad schema shape currently projected from serializer metadata.

@@ -67,7 +67,9 @@ public sealed record OpenApiSchemaComponentRenderingContext(
             property.ItemsKind.HasValue ? MapType(property.ItemsKind.Value) : null,
             property.ItemsFormat,
             property.AdditionalPropertiesKind.HasValue ? MapType(property.AdditionalPropertiesKind.Value) : null,
-            property.AdditionalPropertiesFormat);
+            property.AdditionalPropertiesFormat,
+            property.ItemsSchemaName,
+            property.AdditionalPropertiesSchemaName);
     }
 
     private static string? MapType(OpenApiSchemaKind kind)
@@ -120,6 +122,8 @@ public sealed record OpenApiSchemaComponentModel(
 /// <param name="ItemsFormat">The OpenAPI format of array element items (e.g. <c>int32</c>, <c>uuid</c>) when the items have a standard format.</param>
 /// <param name="AdditionalPropertiesType">The OpenAPI type of dictionary values (e.g. <c>string</c>) when the property is a dictionary/map.</param>
 /// <param name="AdditionalPropertiesFormat">The OpenAPI format of dictionary values when the values have a standard format.</param>
+/// <param name="ItemsSchemaRef">The schema component name for complex array element types, enabling <c>$ref</c> rendering instead of inline <c>type</c>.</param>
+/// <param name="AdditionalPropertiesSchemaRef">The schema component name for complex dictionary value types, enabling <c>$ref</c> rendering instead of inline <c>type</c>.</param>
 public sealed record OpenApiSchemaComponentPropertyModel(
     string Name,
     string? Type,
@@ -138,4 +142,6 @@ public sealed record OpenApiSchemaComponentPropertyModel(
     string? ItemsType = null,
     string? ItemsFormat = null,
     string? AdditionalPropertiesType = null,
-    string? AdditionalPropertiesFormat = null);
+    string? AdditionalPropertiesFormat = null,
+    string? ItemsSchemaRef = null,
+    string? AdditionalPropertiesSchemaRef = null);
