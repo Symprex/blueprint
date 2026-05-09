@@ -25,14 +25,27 @@ public static class LinkGeneratorHandler
         ApiOperationContext context,
         OperationResult result)
     {
-        if (result is not OkResult okResult)
+        var content = result switch
+        {
+            OkResult okResult => okResult.Content,
+            ResourceEventResult resourceEventResult => resourceEventResult.Content,
+            _ => null,
+        };
+
+        if (content is null)
         {
             return;
         }
 
         var logger = context.ServiceProvider.GetRequiredService<ILogger<EntityOperationResourceLinkGenerator>>();
 
-        okResult.Content = await AddResourceLinksAsync(logger, apiLinkGenerator, registeredGenerators, context, okResult.Content);
+        var enriched = await AddResourceLinksAsync(logger, apiLinkGenerator, registeredGenerators, context, content);
+
+        // OkResult allows content replacement (e.g. when materialising IQueryable)
+        if (result is OkResult ok && !ReferenceEquals(ok.Content, enriched))
+        {
+            ok.Content = enriched;
+        }
     }
 
     private static async ValueTask<object> AddResourceLinksAsync(

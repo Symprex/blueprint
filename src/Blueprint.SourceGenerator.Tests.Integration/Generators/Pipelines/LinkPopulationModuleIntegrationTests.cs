@@ -1,7 +1,9 @@
+using Blueprint.Http;
 using Blueprint.Model;
 using Blueprint.Runtime.Exec;
 using Blueprint.SourceGenerator.Tests.Integration.Generators.OperationDescriptors;
 using FluentAssertions;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines;
@@ -148,6 +150,55 @@ public class LinkPopulationModuleIntegrationTests
         url.Should().Be("/link-test-resources/fast-path-42");
     }
 
+    [Fact]
+    public async Task When_IApiLinkGenerator_registered_then_hateoas_link_generators_are_invoked()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(CreateLinkTestResourceCommand));
+        var descriptor = CreateLinkTestResourceCommand.Configure();
+
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton<IApiLinkGenerator, StubApiLinkGenerator>();
+        services.AddSingleton<IResourceLinkGenerator, TestResourceLinkGenerator>();
+        var serviceProvider = services.BuildServiceProvider();
+
+        var context = new ApiOperationContext(serviceProvider, app, descriptor, CancellationToken.None)
+        {
+            Operation = new CreateLinkTestResourceCommand { Name = "Test" },
+        };
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<ResourceEventResult<LinkTestApiResource>>();
+        var resourceResult = (ResourceEventResult<LinkTestApiResource>)result;
+        resourceResult.Content.Links.Should().ContainKey("self", "inline self-link should still be populated");
+        resourceResult.Content.Links.Should().ContainKey("edit", "HATEOAS link generator should have added the edit link");
+        resourceResult.Content.Links["edit"].Href.Should().Be("/link-test-resources/res-123/edit");
+    }
+
+    [Fact]
+    public async Task When_no_IApiLinkGenerator_registered_then_hateoas_block_is_skipped()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(CreateLinkTestResourceCommand));
+        var descriptor = CreateLinkTestResourceCommand.Configure();
+
+        var context = new ApiOperationContext(new EmptyServiceProvider(), app, descriptor, CancellationToken.None)
+        {
+            Operation = new CreateLinkTestResourceCommand { Name = "Test" },
+        };
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<ResourceEventResult<LinkTestApiResource>>();
+        var resourceResult = (ResourceEventResult<LinkTestApiResource>)result;
+        resourceResult.Content.Links.Should().ContainKey("self", "inline self-link should still work");
+        resourceResult.Content.Links.Should().NotContainKey("edit", "no link generator registered so no HATEOAS links");
+    }
+
     private static ApiOperationContext CreateContext(BlueprintApp app, ApiOperationDescriptor descriptor)
     {
         return new ApiOperationContext(new EmptyServiceProvider(), app, descriptor, CancellationToken.None);
@@ -241,5 +292,59 @@ public partial class GetMappedLinkResourceQuery : IQuery<MappedLinkApiResource>
     public static Task<MappedLinkApiResource> HandleAsync(GetMappedLinkResourceQuery operation)
     {
         return Task.FromResult(new MappedLinkApiResource { MappedId = "mapped-id-99", Title = "Mapped" });
+    }
+}
+
+/// <summary>
+/// A test <see cref="IResourceLinkGenerator"/> that adds an "edit" link to any
+/// <see cref="LinkTestApiResource"/> — proving the HATEOAS link generation pipeline works.
+/// </summary>
+internal sealed class TestResourceLinkGenerator : IResourceLinkGenerator
+{
+    public ValueTask AddLinksAsync(IApiLinkGenerator apiLinkGenerator, ApiOperationContext context, ILinkableResource linkableResource)
+    {
+        if (linkableResource is LinkTestApiResource resource)
+        {
+            resource.AddLink("edit", new Link { Href = $"/link-test-resources/{resource.Id}/edit" });
+        }
+
+        return ValueTask.CompletedTask;
+    }
+}
+
+/// <summary>
+/// Minimal <see cref="IApiLinkGenerator"/> stub that satisfies the DI requirement
+/// without needing the full ApiLinkGenerator infrastructure.
+/// </summary>
+internal sealed class StubApiLinkGenerator : IApiLinkGenerator
+{
+    public Link CreateSelfLink<T>(object idDefinition, object? queryString = null) where T : ApiResource
+    {
+        return new() { Href = string.Empty };
+    }
+
+    public Link CreateSelfLink<T>(string id, object? queryString = null) where T : ApiResource
+    {
+        return new() { Href = string.Empty };
+    }
+
+    public Link CreateSelfLink<T>(int id, object? queryString = null) where T : ApiResource
+    {
+        return new() { Href = string.Empty };
+    }
+
+    public Link CreateSelfLink<T>(Guid id, object? queryString = null) where T : ApiResource
+    {
+        return new() { Href = string.Empty };
+    }
+
+    public string? CreateUrl(ApiOperationLink link, object? result = null)
+    {
+        return null;
+    }
+
+    public string CreateUrl(object operation)
+    {
+        return string.Empty;
     }
 }
