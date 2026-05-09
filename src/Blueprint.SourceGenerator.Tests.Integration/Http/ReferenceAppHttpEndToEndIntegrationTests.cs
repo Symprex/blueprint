@@ -61,6 +61,8 @@ public class ReferenceAppHttpEndToEndIntegrationTests
         response.ContentType.Should().Be("application/json; charset=utf-8");
         response.Body.Should().Contain("template-002");
         response.Body.Should().Contain("Formal Greeting");
+        response.Headers.Should().ContainKey("Cache-Control");
+        response.Headers["Cache-Control"].Should().Contain("max-age=300");
     }
 
     [Fact]
@@ -2428,7 +2430,10 @@ public class ReferenceAppHttpEndToEndIntegrationTests
             context.Response.StatusCode,
             context.Response.ContentType,
             Encoding.UTF8.GetString(body.ToArray()),
-            context.Response.Headers.Location.ToString() is { Length: > 0 } loc ? loc : null);
+            context.Response.Headers.Location.ToString() is { Length: > 0 } loc ? loc : null,
+            context.Response.Headers.ToDictionary(
+                static h => h.Key,
+                static h => h.Value.ToString()));
     }
 
     private static RouteEndpoint? FindEndpoint(TestEndpointRouteBuilder builder, string routePattern, string httpMethod)
@@ -2532,7 +2537,7 @@ public class ReferenceAppHttpEndToEndIntegrationTests
         }
     }
 
-    private sealed record TestHttpResponse(int StatusCode, string? ContentType, string Body, string? LocationHeader);
+    private sealed record TestHttpResponse(int StatusCode, string? ContentType, string Body, string? LocationHeader, Dictionary<string, string> Headers);
 
     private sealed class AllowAllApiAuthoriserAggregator : Blueprint.Authorization.IApiAuthoriserAggregator
     {

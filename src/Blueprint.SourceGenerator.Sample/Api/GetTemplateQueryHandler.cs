@@ -1,3 +1,4 @@
+using System.Net.Http.Headers;
 using Blueprint.Model;
 using Blueprint.Runtime.Exec;
 using Blueprint.SourceGenerator.Sample.Contract.Api;
@@ -12,6 +13,12 @@ namespace Blueprint.SourceGenerator.Sample.Api;
 /// </summary>
 public class GetTemplateQueryHandler(TemplateStore store)
 {
+    private static readonly CacheControlHeaderValue CacheControl = new()
+    {
+        Private = true,
+        MaxAge = TimeSpan.FromMinutes(5),
+    };
+
     /// <summary>
     /// Retrieves a template by its identifier, or signals not-found when the identifier is unknown.
     /// </summary>
@@ -23,7 +30,8 @@ public class GetTemplateQueryHandler(TemplateStore store)
 
         if (template is not null)
         {
-            return new OkResult<TemplateApiResource>(template);
+            return new OkResult<TemplateApiResource>(template)
+                .WithCacheControl(CacheControl);
         }
 
         return new NotFoundResult<TemplateApiResource>(
