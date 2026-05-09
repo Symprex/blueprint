@@ -878,6 +878,98 @@ public class ReferenceAppHttpEndToEndIntegrationTests
     }
 
     [Fact]
+    public async Task When_export_templates_with_notify_true_but_no_email_then_returns_422()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/templates/export", "POST");
+        endpoint.Should().NotBeNull();
+
+        // NotifyOnCompletion=true makes NotifyEmail required via [RequiredIf]
+        var bodyJson = """{"notifyOnCompletion":true}"""u8.ToArray();
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Post;
+            context.Request.Path = "/api/templates/export";
+            context.Request.ContentType = "application/json; charset=utf-8";
+            context.Request.ContentLength = bodyJson.Length;
+            context.Request.Body = new MemoryStream(bodyJson);
+            context.User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "user-1"),
+                ],
+                authenticationType: "test"));
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status422UnprocessableEntity,
+            "[RequiredIf(NotifyOnCompletion, true)] should reject missing NotifyEmail");
+        response.Body.Should().Contain("NotifyEmail");
+    }
+
+    [Fact]
+    public async Task When_export_templates_with_notify_false_but_email_set_then_returns_422()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/templates/export", "POST");
+        endpoint.Should().NotBeNull();
+
+        // NotifyOnCompletion=false makes NotifyEmail not allowed via [NotAllowedIf]
+        var bodyJson = """{"notifyOnCompletion":false,"notifyEmail":"test@example.com"}"""u8.ToArray();
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Post;
+            context.Request.Path = "/api/templates/export";
+            context.Request.ContentType = "application/json; charset=utf-8";
+            context.Request.ContentLength = bodyJson.Length;
+            context.Request.Body = new MemoryStream(bodyJson);
+            context.User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "user-1"),
+                ],
+                authenticationType: "test"));
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status422UnprocessableEntity,
+            "[NotAllowedIf(NotifyOnCompletion, false)] should reject NotifyEmail when notify is off");
+        response.Body.Should().Contain("NotifyEmail");
+    }
+
+    [Fact]
+    public async Task When_export_templates_with_notify_true_and_valid_email_then_returns_202()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/templates/export", "POST");
+        endpoint.Should().NotBeNull();
+
+        // Valid: notify=true with a proper email address
+        var bodyJson = """{"notifyOnCompletion":true,"notifyEmail":"admin@example.com"}"""u8.ToArray();
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Post;
+            context.Request.Path = "/api/templates/export";
+            context.Request.ContentType = "application/json; charset=utf-8";
+            context.Request.ContentLength = bodyJson.Length;
+            context.Request.Body = new MemoryStream(bodyJson);
+            context.User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "user-1"),
+                ],
+                authenticationType: "test"));
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status202Accepted,
+            "valid export request with notification should return 202 Accepted");
+    }
+
+    [Fact]
     public async Task When_health_check_invoked_anonymously_then_returns_200_plain_text()
     {
         var endpoints = CreateEndpoints();
