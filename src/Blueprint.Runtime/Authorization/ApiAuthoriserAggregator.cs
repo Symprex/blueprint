@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Blueprint.Model;
 using Blueprint.Runtime.Exec;
 
@@ -8,11 +9,20 @@ namespace Blueprint.Authorization;
 /// <see cref="IApiAuthoriser"/> and <see cref="ILinkVisibilityAuthoriser"/> implementations
 /// and short-circuits on the first denial.
 /// </summary>
+/// <remarks>
+/// Caches the result of <see cref="IOperationAuthoriser.AppliesTo"/> per operation type so the
+/// O(links × authorisers) loop only evaluates applicable authorisers, skipping the per-request
+/// filtering cost after the first call for each descriptor.
+/// </remarks>
 internal sealed class ApiAuthoriserAggregator : IApiAuthoriserAggregator
 {
-    private readonly IEnumerable<IApiAuthoriser> _apiAuthorisers;
-    private readonly IEnumerable<ILinkVisibilityAuthoriser> _linkVisibilityAuthorisers;
+    private readonly IApiAuthoriser[] _apiAuthorisers;
+    private readonly ILinkVisibilityAuthoriser[] _linkVisibilityAuthorisers;
     private readonly ILogger<ApiAuthoriserAggregator> _logger;
+
+    // Cache keyed by OperationType → applicable authorisers for that operation.
+    // AppliesTo is deterministic for a given descriptor, so caching is safe.
+    private readonly ConcurrentDictionary<Type, (IApiAuthoriser[] Api, ILinkVisibilityAuthoriser[] Link)> _applicableCache = new();
 
     /// <summary>
     /// Initialises a new instance of the <see cref="ApiAuthoriserAggregator"/> class.
@@ -25,8 +35,9 @@ internal sealed class ApiAuthoriserAggregator : IApiAuthoriserAggregator
         IEnumerable<ILinkVisibilityAuthoriser> linkVisibilityAuthorisers,
         ILogger<ApiAuthoriserAggregator> logger)
     {
-        this._apiAuthorisers = apiAuthorisers;
-        this._linkVisibilityAuthorisers = linkVisibilityAuthorisers;
+        // Materialize once to avoid repeated enumeration
+        this._apiAuthorisers = apiAuthorisers.ToArray();
+        this._linkVisibilityAuthorisers = linkVisibilityAuthorisers.ToArray();
         this._logger = logger;
     }
 
@@ -36,15 +47,21 @@ internal sealed class ApiAuthoriserAggregator : IApiAuthoriserAggregator
         ApiOperationDescriptor descriptor,
         object? resource)
     {
+        var (applicableApi, applicableLink) = this._applicableCache.GetOrAdd(
+            descriptor.OperationType,
+            static (_, state) =>
+            {
+                var (desc, api, link) = state;
+                return (
+                    api.Where(a => a.AppliesTo(desc)).ToArray(),
+                    link.Where(l => l.AppliesTo(desc)).ToArray());
+            },
+            (descriptor, this._apiAuthorisers, this._linkVisibilityAuthorisers));
+
         var traceLogEnabled = this._logger.IsEnabled(LogLevel.Trace);
 
-        foreach (var checker in this._apiAuthorisers)
+        foreach (var checker in applicableApi)
         {
-            if (!checker.AppliesTo(descriptor))
-            {
-                continue;
-            }
-
             var result = await checker.CanShowLinkAsync(operationContext, descriptor, resource!);
 
             if (!result.IsAllowed)
@@ -63,13 +80,8 @@ internal sealed class ApiAuthoriserAggregator : IApiAuthoriserAggregator
             }
         }
 
-        foreach (var checker in this._linkVisibilityAuthorisers)
+        foreach (var checker in applicableLink)
         {
-            if (!checker.AppliesTo(descriptor))
-            {
-                continue;
-            }
-
             var result = await checker.CanShowLinkAsync(operationContext, descriptor, resource!);
 
             if (!result.IsAllowed)
