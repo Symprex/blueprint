@@ -85,4 +85,15 @@ internal static class PropertyOwnershipDiagnosticDescriptors
         category: "PropertyOwnership",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
+
+    /// <summary>
+    /// BPPO008: A route template contains a malformed placeholder (unbalanced braces or empty name).
+    /// </summary>
+    public static readonly DiagnosticDescriptor MalformedRoutePlaceholder = new(
+        id: "BPPO008",
+        title: "Malformed route placeholder",
+        messageFormat: "Route template '{0}' on operation '{1}' contains a malformed placeholder: {2}",
+        category: "PropertyOwnership",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
 }

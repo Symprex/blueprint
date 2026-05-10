@@ -43,6 +43,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
 
         var operationType = context.GetOperationTypeSymbol();
         var routePlaceholders = ExtractRoutePlaceholders(operationType);
+        ValidateRoutePlaceholderSyntax(operationType, context);
         var httpMethods = ResolveHttpMethods(context, operationType);
 
         var diagnostics = new List<DiagnosticInfo>();
@@ -167,6 +168,67 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         }
 
         return placeholders;
+    }
+
+    /// <summary>
+    /// Validates route template syntax for unbalanced braces and empty placeholder names,
+    /// reporting BPPO008 for each malformed segment.
+    /// </summary>
+    private static void ValidateRoutePlaceholderSyntax(INamedTypeSymbol operationType, DescriptorContributorContext context)
+    {
+        foreach (var attribute in operationType.GetAttributes())
+        {
+            var url = attribute.AttributeClass?.Name switch
+            {
+                "RootLinkAttribute" when attribute.ConstructorArguments.Length > 0 => attribute.ConstructorArguments[0].Value as string,
+                "SelfLinkAttribute" when attribute.ConstructorArguments.Length > 1 => attribute.ConstructorArguments[1].Value as string,
+                _ => null,
+            };
+
+            if (string.IsNullOrWhiteSpace(url))
+            {
+                continue;
+            }
+
+            var openCount = 0;
+
+            for (var i = 0; i < url!.Length; i++)
+            {
+                switch (url[i])
+                {
+                    case '{':
+                        openCount++;
+                        if (openCount > 1)
+                        {
+                            context.AddDiagnostic(CreateRouteDiagnostic(operationType, url, "nested or consecutive opening braces"));
+                            return;
+                        }
+
+                        break;
+
+                    case '}':
+                        if (openCount == 0)
+                        {
+                            context.AddDiagnostic(CreateRouteDiagnostic(operationType, url, "closing brace without matching opening brace"));
+                            return;
+                        }
+
+                        openCount--;
+                        break;
+                }
+            }
+
+            if (openCount > 0)
+            {
+                context.AddDiagnostic(CreateRouteDiagnostic(operationType, url, "opening brace without matching closing brace"));
+            }
+
+            // Check for empty placeholders: "{}" with nothing inside.
+            if (url.Contains("{}", StringComparison.Ordinal))
+            {
+                context.AddDiagnostic(CreateRouteDiagnostic(operationType, url, "empty placeholder name"));
+            }
+        }
     }
 
     private static string[] ResolveHttpMethods(DescriptorContributorContext context, INamedTypeSymbol operationType)
@@ -571,6 +633,22 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             descriptor,
             location is not null ? LocationInfo.CreateFrom(location) : null,
             new EquatableList<string>(args.ToArray()));
+    }
+
+    /// <summary>
+    /// Creates a <see cref="DiagnosticInfo"/> for a route template diagnostic, locating
+    /// the error on the operation type declaration.
+    /// </summary>
+    private static DiagnosticInfo CreateRouteDiagnostic(
+        INamedTypeSymbol operationType,
+        string url,
+        string reason)
+    {
+        var location = operationType.Locations.FirstOrDefault(static l => l.IsInSource);
+        return new DiagnosticInfo(
+            PropertyOwnershipDiagnosticDescriptors.MalformedRoutePlaceholder,
+            location is not null ? LocationInfo.CreateFrom(location) : null,
+            new EquatableList<string>([url, operationType.Name, reason]));
     }
 
     /// <summary>

@@ -1446,6 +1446,112 @@ public class PropertyOwnershipModuleTests
         descriptorSource.Should().Contain("ItemId");
     }
 
+    [Fact]
+    public void When_route_has_unclosed_brace_then_reports_BPPO008()
+    {
+        var result = CompileDescriptor(
+            """
+            [global::Blueprint.Model.Attributes.RootLink("/items/{Id")]
+            public partial class UnclosedBraceCommand : ICommand<string>
+            {
+                public string Id { get; set; }
+
+                public static Task<string> HandleAsync(UnclosedBraceCommand operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Select(static d => d.Id)
+            .Should().Contain("BPPO008");
+    }
+
+    [Fact]
+    public void When_route_has_unmatched_closing_brace_then_reports_BPPO008()
+    {
+        var result = CompileDescriptor(
+            """
+            [global::Blueprint.Model.Attributes.RootLink("/items/Id}")]
+            public partial class UnmatchedClosingBraceCommand : ICommand<string>
+            {
+                public string Id { get; set; }
+
+                public static Task<string> HandleAsync(UnmatchedClosingBraceCommand operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Select(static d => d.Id)
+            .Should().Contain("BPPO008");
+    }
+
+    [Fact]
+    public void When_route_has_empty_placeholder_then_reports_BPPO008()
+    {
+        var result = CompileDescriptor(
+            """
+            [global::Blueprint.Model.Attributes.RootLink("/items/{}")]
+            public partial class EmptyPlaceholderCommand : ICommand<string>
+            {
+                public string Id { get; set; }
+
+                public static Task<string> HandleAsync(EmptyPlaceholderCommand operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Select(static d => d.Id)
+            .Should().Contain("BPPO008");
+    }
+
+    [Fact]
+    public void When_route_has_nested_braces_then_reports_BPPO008()
+    {
+        var result = CompileDescriptor(
+            """
+            [global::Blueprint.Model.Attributes.RootLink("/items/{{Id}}")]
+            public partial class NestedBracesCommand : ICommand<string>
+            {
+                public string Id { get; set; }
+
+                public static Task<string> HandleAsync(NestedBracesCommand operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Select(static d => d.Id)
+            .Should().Contain("BPPO008");
+    }
+
+    [Fact]
+    public void When_route_has_well_formed_placeholders_then_no_BPPO008()
+    {
+        var result = CompileDescriptor(
+            """
+            [global::Blueprint.Model.Attributes.RootLink("/users/{UserId}/items/{ItemId}")]
+            public partial class WellFormedRouteCommand : ICommand<string>
+            {
+                public string UserId { get; set; }
+                public string ItemId { get; set; }
+
+                public static Task<string> HandleAsync(WellFormedRouteCommand operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Where(static d => d.Id == "BPPO008")
+            .Should().BeEmpty();
+    }
+
     private static GenerationResult CompileDescriptor(string source)
     {
         return TestHelpers.Compile<OperationDescriptorSourceGenerator>(
