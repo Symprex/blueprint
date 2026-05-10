@@ -154,14 +154,19 @@ public sealed class TypedHttpClientExtensionsGenerator : IIncrementalGenerator, 
     {
         var operationFqn = operationType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
+        // Skip operations explicitly marked as unexposed (not HTTP-accessible)
+        if (operationType.GetAttributes().Any(static a => a.AttributeClass?.Name == "UnexposedOperationAttribute"))
+        {
+            return null;
+        }
+
         // Determine the result type from IQuery<T> or ICommand<T>
         var (resultTypeFqn, isResultValueType) = GetResultTypeInfo(operationType);
 
-        // Get the HTTP method from [Route] attribute
+        // Get the HTTP method from explicit attributes or interface convention
         var httpMethod = GetHttpMethod(operationType);
         if (httpMethod is null)
         {
-            // No route attribute — cannot generate HTTP client method
             return null;
         }
 
@@ -246,20 +251,26 @@ public sealed class TypedHttpClientExtensionsGenerator : IIncrementalGenerator, 
 
     private static string? GetHttpMethod(INamedTypeSymbol operationType)
     {
+        // Check for explicit HTTP method attributes (same as OperationHttpMethodMetadataModule)
         foreach (var attr in operationType.GetAttributes())
         {
-            var attrName = attr.AttributeClass?.Name;
-            if (attrName is "RouteAttribute" or "Route")
-            {
-                // Check named argument HttpMethod or the convention (IQuery=GET, ICommand=POST)
-                var httpMethodArg = attr.NamedArguments
-                    .FirstOrDefault(static kv => kv.Key == "HttpMethod");
-                if (httpMethodArg.Value.Value is string explicitMethod)
-                {
-                    return explicitMethod.ToUpperInvariant();
-                }
+            var attrFqn = attr.AttributeClass?.ToDisplayString();
 
-                break;
+            switch (attrFqn)
+            {
+                case "Blueprint.Model.Attributes.HttpGetAttribute":
+                    return "GET";
+                case "Blueprint.Model.Attributes.HttpPostAttribute":
+                    return "POST";
+                case "Blueprint.Model.Attributes.HttpPutAttribute":
+                    return "PUT";
+                case "Blueprint.Model.Attributes.HttpPatchAttribute":
+                    return "PATCH";
+                case "Blueprint.Model.Attributes.HttpDeleteAttribute":
+                    return "DELETE";
+                case "Blueprint.Model.Attributes.HttpMethodAttribute"
+                    when attr.ConstructorArguments.Length > 0 && attr.ConstructorArguments[0].Value is string method:
+                    return method.ToUpperInvariant();
             }
         }
 
