@@ -398,6 +398,77 @@ public class PropertyOwnershipModuleIntegrationTests
         ((Blueprint.Runtime.Exec.OkResult<string>)result).Content.Should().Be("init-body:7");
     }
 
+    [Fact]
+    public async Task When_post_inherits_route_property_from_base_class_then_pipeline_binds_inherited_route_and_body()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(CreateTenantItemPopulationCommand));
+        var json = """{"itemName":"widget"}""";
+        var bytes = System.Text.Encoding.UTF8.GetBytes(json);
+        var httpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        httpContext.Request.Method = "POST";
+        httpContext.Request.ContentType = "application/json";
+        httpContext.Request.ContentLength = bytes.Length;
+        httpContext.Request.Body = new MemoryStream(bytes);
+        httpContext.Request.RouteValues["TenantId"] = "tenant-42";
+
+        var context = CreateContext(app, CreateTenantItemPopulationCommand.Configure(), new CreateTenantItemPopulationCommand(), httpContext);
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<Blueprint.Runtime.Exec.OkResult<string>>();
+        ((Blueprint.Runtime.Exec.OkResult<string>)result).Content.Should().Be("tenant-42:widget");
+    }
+
+    [Fact]
+    public async Task When_get_inherits_pagination_from_base_class_then_pipeline_binds_inherited_query_params()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(SearchItemsPagedPopulationQuery));
+        var httpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        httpContext.Request.Method = "GET";
+        httpContext.Request.QueryString = new Microsoft.AspNetCore.Http.QueryString("?term=hello&page=3&pageSize=25");
+
+        var context = CreateContext(app, SearchItemsPagedPopulationQuery.Configure(), new SearchItemsPagedPopulationQuery(), httpContext);
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<Blueprint.Runtime.Exec.OkResult<string>>();
+        ((Blueprint.Runtime.Exec.OkResult<string>)result).Content.Should().Be("hello:p3:s25");
+    }
+
+    [Fact]
+    public void When_post_inherits_route_property_then_descriptor_has_route_and_body_entries()
+    {
+        var descriptor = CreateTenantItemPopulationCommand.Configure();
+
+        descriptor.TryGetFeatureData<OperationPropertyOwnershipFeatureData>(out var ownershipData)
+            .Should().BeTrue();
+
+        ownershipData!.Entries.Should().Contain(
+            static e => e.PropertyName == "TenantId" && e.Source == PropertyBindingSource.Route);
+        ownershipData.Entries.Should().Contain(
+            static e => e.PropertyName == "ItemName" && e.Source == PropertyBindingSource.Body);
+    }
+
+    [Fact]
+    public void When_get_inherits_pagination_then_descriptor_has_query_entries_for_inherited_properties()
+    {
+        var descriptor = SearchItemsPagedPopulationQuery.Configure();
+
+        descriptor.TryGetFeatureData<OperationPropertyOwnershipFeatureData>(out var ownershipData)
+            .Should().BeTrue();
+
+        ownershipData!.Entries.Should().Contain(
+            static e => e.PropertyName == "Term" && e.Source == PropertyBindingSource.Query);
+        ownershipData.Entries.Should().Contain(
+            static e => e.PropertyName == "Page" && e.Source == PropertyBindingSource.Query);
+        ownershipData.Entries.Should().Contain(
+            static e => e.PropertyName == "PageSize" && e.Source == PropertyBindingSource.Query);
+    }
+
     private static Blueprint.Runtime.Exec.ApiOperationContext CreateContext(BlueprintApp app, ApiOperationDescriptor descriptor, object operation, Microsoft.AspNetCore.Http.HttpContext httpContext)
     {
         return new Blueprint.Runtime.Exec.ApiOperationContext(new EmptyServiceProvider(), app, descriptor, CancellationToken.None)
@@ -779,5 +850,58 @@ internal sealed class EmptyServiceProvider : IServiceProvider
     public object? GetService(Type serviceType)
     {
         return null;
+    }
+}
+
+// --- Inherited property binding test operations ---
+
+/// <summary>
+/// Abstract base class providing common properties, simulating S365 patterns like
+/// <c>DisclaimerCommand</c> or <c>TenantScopedCommand</c>.
+/// </summary>
+public abstract class TenantScopedOperation
+{
+    public string TenantId { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Operation inheriting route-bound property from <see cref="TenantScopedOperation"/>.
+/// Proves that inherited properties are bound from route values at runtime.
+/// </summary>
+[Blueprint.Model.Attributes.AllowAnonymous]
+[Blueprint.Model.Attributes.RootLink("/population-test/tenants/{TenantId}/items")]
+public partial class CreateTenantItemPopulationCommand : TenantScopedOperation, ICommand<string>
+{
+    public string ItemName { get; set; } = string.Empty;
+
+    public static Task<string> HandleAsync(CreateTenantItemPopulationCommand operation)
+    {
+        return Task.FromResult($"{operation.TenantId}:{operation.ItemName}");
+    }
+}
+
+/// <summary>
+/// Abstract paged query base with pagination properties, simulating <see cref="Blueprint.Model.OrderedPagedQuery"/>.
+/// </summary>
+public abstract class SimplifiedPagedQuery
+{
+    public int? Page { get; set; } = 1;
+
+    public int? PageSize { get; set; } = 50;
+}
+
+/// <summary>
+/// GET query inheriting pagination properties from <see cref="SimplifiedPagedQuery"/>.
+/// Proves inherited properties on GET are query-bound at runtime.
+/// </summary>
+[Blueprint.Model.Attributes.AllowAnonymous]
+[Blueprint.Model.Attributes.RootLink("/population-test/items/search")]
+public partial class SearchItemsPagedPopulationQuery : SimplifiedPagedQuery, IQuery<string>
+{
+    public string? Term { get; set; }
+
+    public static Task<string> HandleAsync(SearchItemsPagedPopulationQuery operation)
+    {
+        return Task.FromResult($"{operation.Term}:p{operation.Page}:s{operation.PageSize}");
     }
 }
