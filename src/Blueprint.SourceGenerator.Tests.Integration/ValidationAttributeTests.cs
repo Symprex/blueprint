@@ -874,4 +874,121 @@ public class ValidationAttributeTests
             attr.GetValidationResult(null, context).Should().Be(ValidationResult.Success);
         }
     }
+
+    public class PasswordAttributeTests
+    {
+        [Theory]
+        [InlineData("Passw0rd!")]
+        [InlineData("Str0ng!Pass")]
+        [InlineData("C0mpl3x#Password")]
+        public void When_strong_password_then_passes(string password)
+        {
+            new PasswordAttribute().IsValid(password).Should().BeTrue();
+        }
+
+        [Theory]
+        [InlineData("short1!")]
+        [InlineData("nouppercase1!")]
+        [InlineData("NOLOWERCASE1!")]
+        [InlineData("NoDigits!!")]
+        [InlineData("NoSpecial1a")]
+        public void When_weak_password_then_fails(string password)
+        {
+            new PasswordAttribute().IsValid(password).Should().BeFalse();
+        }
+
+        [Fact]
+        public void Null_passes()
+        {
+            new PasswordAttribute().IsValid(null).Should().BeTrue();
+        }
+
+        [Fact]
+        public void Empty_passes()
+        {
+            new PasswordAttribute().IsValid(string.Empty).Should().BeTrue();
+        }
+    }
+
+    public class PhoneNumberAttributeTests
+    {
+        [Theory]
+        [InlineData("+447911123456")]
+        [InlineData("07911123456")]
+        [InlineData("+1 555 1234567")]
+        public void When_valid_phone_then_passes(string phone)
+        {
+            new PhoneNumberAttribute().IsValid(phone).Should().BeTrue();
+        }
+
+        [Theory]
+        [InlineData("not-a-phone")]
+        [InlineData("abc")]
+        public void When_invalid_phone_then_fails(string phone)
+        {
+            new PhoneNumberAttribute().IsValid(phone).Should().BeFalse();
+        }
+
+        [Fact]
+        public void Null_passes()
+        {
+            new PhoneNumberAttribute().IsValid(null).Should().BeTrue();
+        }
+    }
+
+    public class UkPostcodeAttributeTests
+    {
+        [Theory]
+        [InlineData("SW1A 1AA")]
+        [InlineData("EC2A 3AR")]
+        [InlineData("M1 1AA")]
+        [InlineData("B33 8TH")]
+        public void When_valid_uk_postcode_then_passes(string postcode)
+        {
+            new UkPostcodeAttribute().IsValid(postcode).Should().BeTrue();
+        }
+
+        [Theory]
+        [InlineData("INVALID")]
+        [InlineData("12345")]
+        [InlineData("ABC DEF")]
+        public void When_invalid_uk_postcode_then_fails(string postcode)
+        {
+            new UkPostcodeAttribute().IsValid(postcode).Should().BeFalse();
+        }
+
+        [Fact]
+        public void Null_passes()
+        {
+            new UkPostcodeAttribute().IsValid(null).Should().BeTrue();
+        }
+    }
+
+    public class ResourceKeyAttributeTests
+    {
+        [Theory]
+        [InlineData("Tenant/5C65D124-F856-46A4-BB3F-19764429BA1F")]
+        [InlineData("user/00000000-0000-0000-0000-000000000000")]
+        [InlineData("template123/a1b2c3d4-e5f6-7890-abcd-ef1234567890")]
+        public void When_valid_resource_key_then_passes(string key)
+        {
+            new ResourceKeyAttribute().IsValid(key).Should().BeTrue();
+        }
+
+        [Theory]
+        [InlineData("invalid")]
+        [InlineData("/missing-prefix")]
+        [InlineData("Tenant/not-a-guid")]
+        [InlineData("1starts-with-digit/5C65D124-F856-46A4-BB3F-19764429BA1F")]
+        public void When_invalid_resource_key_then_fails(string key)
+        {
+            new ResourceKeyAttribute().IsValid(key).Should().BeFalse();
+        }
+
+        [Fact]
+        public void Null_passes()
+        {
+            new ResourceKeyAttribute().IsValid(null).Should().BeTrue();
+        }
+    }
 }
