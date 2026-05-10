@@ -101,6 +101,54 @@ public class AppModelOpenApiSchemaProjectionContextPropertyMetadataTests
     }
 
     private sealed class PropertyMetadataOperationShell;
+
+    [Fact]
+    public void When_property_has_no_setter_then_schema_projection_context_projects_IsReadOnly_true()
+    {
+        var app = new ReadOnlyMetadataBlueprintApp();
+        var documentContext = OpenApiDocumentBuilderContext.Create(app);
+
+        var schemaContext = OpenApiSchemaProjectionContext.Create(documentContext);
+        var schema = schemaContext.Schemas.Single(static schema => schema.BodyTypeName == typeof(ReadOnlyPropertyResponse).FullName);
+
+        var readOnlyProperty = schema.Properties.Single(static property => property.Name == "ComputedValue");
+        readOnlyProperty.IsReadOnly.Should().BeTrue("getter-only properties should be marked read-only");
+
+        var writableProperty = schema.Properties.Single(static property => property.Name == "Name");
+        writableProperty.IsReadOnly.Should().BeFalse("properties with a setter should not be marked read-only");
+    }
+
+    [Fact]
+    public void When_property_has_ReadOnly_attribute_then_schema_projection_context_projects_IsReadOnly_true()
+    {
+        var app = new ReadOnlyMetadataBlueprintApp();
+        var documentContext = OpenApiDocumentBuilderContext.Create(app);
+
+        var schemaContext = OpenApiSchemaProjectionContext.Create(documentContext);
+        var schema = schemaContext.Schemas.Single(static schema => schema.BodyTypeName == typeof(ReadOnlyPropertyResponse).FullName);
+
+        var attributeReadOnly = schema.Properties.Single(static property => property.Name == "Slug");
+        attributeReadOnly.IsReadOnly.Should().BeTrue("[ReadOnly(true)] properties should be marked read-only");
+    }
+
+    private sealed class ReadOnlyMetadataBlueprintApp : BlueprintApp
+    {
+        public ReadOnlyMetadataBlueprintApp()
+        {
+            var descriptor = new ApiOperationDescriptor(typeof(ReadOnlyOperationShell), "ReadOnlyPropertyMetadata", "test-fixture");
+            descriptor.SetFeatureData(new OperationHostExposureFeatureData(["http"]));
+            descriptor.SetFeatureData(new OperationSerializerContextCoverageFeatureData([typeof(ReadOnlyPropertyResponse).FullName!]));
+
+            this.AppOwnedSerializerContext = new ReadOnlyPropertyJsonContext(new JsonSerializerOptions());
+            this.AppOwnedSerializerContextType = typeof(ReadOnlyPropertyJsonContext);
+            this.AppOwnedSerializerContextBodyTypes = [typeof(ReadOnlyPropertyResponse)];
+            this.AppOwnedSerializerContextBodyTypeNames = [typeof(ReadOnlyPropertyResponse).FullName!];
+
+            this.Register(descriptor);
+        }
+    }
+
+    private sealed class ReadOnlyOperationShell;
 }
 
 public sealed class SchemaPropertyMetadataResponse
@@ -128,3 +176,16 @@ public sealed class SchemaPropertyMetadataChild
 
 [JsonSerializable(typeof(SchemaPropertyMetadataResponse))]
 public partial class SchemaPropertyMetadataJsonContext : JsonSerializerContext;
+
+public sealed class ReadOnlyPropertyResponse
+{
+    public string Name { get; set; } = string.Empty;
+
+    public string ComputedValue { get; } = string.Empty;
+
+    [System.ComponentModel.ReadOnly(true)]
+    public string Slug { get; set; } = string.Empty;
+}
+
+[JsonSerializable(typeof(ReadOnlyPropertyResponse))]
+public partial class ReadOnlyPropertyJsonContext : JsonSerializerContext;

@@ -73,7 +73,7 @@ public sealed record OpenApiSchemaProjectionContext(
 
     private static OpenApiSchemaModel CreateSchema(
         string bodyTypeName,
-        Type bodyType,
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] Type bodyType,
         JsonSerializerContext serializerContext,
         Dictionary<string, Type> coveredTypesByName)
     {
@@ -86,7 +86,7 @@ public sealed record OpenApiSchemaProjectionContext(
 
         var properties = typeInfo.Kind == JsonTypeInfoKind.Object
             ? typeInfo.Properties
-                .Select(property => CreateProperty(property, bodyTypeName, serializerContext, validationAttributesByJsonPropertyName, nullabilityContext, coveredTypesByName))
+                .Select(property => CreateProperty(property, bodyType, bodyTypeName, serializerContext, validationAttributesByJsonPropertyName, nullabilityContext, coveredTypesByName))
                 .OrderBy(static property => property.Name, StringComparer.Ordinal)
                 .ToImmutableArray()
             : ImmutableArray<OpenApiSchemaPropertyModel>.Empty;
@@ -107,6 +107,7 @@ public sealed record OpenApiSchemaProjectionContext(
 
     private static OpenApiSchemaPropertyModel CreateProperty(
         JsonPropertyInfo property,
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] Type bodyType,
         string bodyTypeName,
         JsonSerializerContext serializerContext,
         IReadOnlyDictionary<string, IReadOnlyList<ValidationAttribute>> validationAttributesByJsonPropertyName,
@@ -133,6 +134,7 @@ public sealed record OpenApiSchemaProjectionContext(
         var defaultValue = property.AttributeProvider is MemberInfo defaultMember
             ? defaultMember.GetCustomAttribute<System.ComponentModel.DefaultValueAttribute>()?.Value
             : null;
+        var isReadOnly = IsReadOnlyProperty(property, bodyType);
 
         // Extract element type metadata for collection/dictionary properties so schema rendering
         // can emit "items" (arrays) or "additionalProperties" (dictionaries).
@@ -164,7 +166,8 @@ public sealed record OpenApiSchemaProjectionContext(
             additionalPropertiesSchemaName,
             isDeprecated,
             deprecationReason,
-            defaultValue);
+            defaultValue,
+            isReadOnly);
     }
 
     /// <summary>
@@ -470,6 +473,35 @@ public sealed record OpenApiSchemaProjectionContext(
         }
 
         return member.GetCustomAttribute<DescriptionAttribute>()?.Description;
+    }
+
+    /// <summary>
+    /// Determines whether a property is read-only — either because the CLR property has no public setter or
+    /// because it carries <c>[ReadOnly(true)]</c>. Read-only properties are surfaced as <c>"readOnly": true</c>
+    /// in the OpenAPI schema so client generators produce immutable DTOs.
+    /// </summary>
+    private static bool IsReadOnlyProperty(JsonPropertyInfo property, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] Type bodyType)
+    {
+        // Prefer the explicit CLR property info from the AttributeProvider; fall back to
+        // looking up by name from the declaring type (necessary for source-generated
+        // serializer contexts where AttributeProvider may be null).
+        var clrProperty = property.AttributeProvider as PropertyInfo
+            ?? bodyType.GetProperty(property.Name, BindingFlags.Public | BindingFlags.Instance);
+
+        if (clrProperty is null)
+        {
+            return false;
+        }
+
+        // Explicit [ReadOnly(true)] attribute takes precedence.
+        var readOnlyAttr = clrProperty.GetCustomAttribute<System.ComponentModel.ReadOnlyAttribute>();
+        if (readOnlyAttr is { IsReadOnly: true })
+        {
+            return true;
+        }
+
+        // No public setter means the property is read-only from the consumer's perspective.
+        return clrProperty.GetSetMethod() is null;
     }
 
     /// <summary>
@@ -858,6 +890,7 @@ public sealed record OpenApiSchemaModel(
 /// <param name="IsDeprecated">Whether the property is deprecated (mapped from <see cref="ObsoleteAttribute"/>).</param>
 /// <param name="DeprecationReason">The deprecation reason from <see cref="ObsoleteAttribute.Message"/>, or null.</param>
 /// <param name="DefaultValue">The default value from <see cref="System.ComponentModel.DefaultValueAttribute"/>, or null.</param>
+/// <param name="IsReadOnly">Whether this property is read-only (no public setter or annotated with <c>[ReadOnly(true)]</c>).</param>
 public sealed record OpenApiSchemaPropertyModel(
     string Name,
     OpenApiSchemaKind Kind,
@@ -882,7 +915,8 @@ public sealed record OpenApiSchemaPropertyModel(
     string? AdditionalPropertiesSchemaName = null,
     bool IsDeprecated = false,
     string? DeprecationReason = null,
-    object? DefaultValue = null);
+    object? DefaultValue = null,
+    bool IsReadOnly = false);
 
 /// <summary>
 /// Describes the broad schema shape currently projected from serializer metadata.

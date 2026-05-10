@@ -476,6 +476,38 @@ public class AppModelOpenApiOutputRenderingContextTests
         quantity.GetProperty("maximum").GetDecimal().Should().Be(10m);
     }
 
+    [Fact]
+    public void When_schema_component_property_is_readOnly_then_output_emits_readOnly_true()
+    {
+        var context = CreateSyntheticOutputContext(
+            [],
+            [
+                new OpenApiSchemaComponentModel(
+                    "Sample.ResponseDto",
+                    "object",
+                    [],
+                    [
+                        new OpenApiSchemaComponentPropertyModel("ComputedValue", "string", false, false, IsReadOnly: true),
+                        new OpenApiSchemaComponentPropertyModel("Name", "string", false, false),
+                    ]),
+            ]);
+
+        var doc = JsonDocument.Parse(context.Json);
+
+        var properties = doc.RootElement
+            .GetProperty("components")
+            .GetProperty("schemas")
+            .GetProperty("Sample_ResponseDto")
+            .GetProperty("properties");
+
+        properties.GetProperty("ComputedValue").TryGetProperty("readOnly", out var readOnlyVal).Should().BeTrue(
+            "read-only properties should emit readOnly: true in schema components");
+        readOnlyVal.GetBoolean().Should().BeTrue();
+
+        properties.GetProperty("Name").TryGetProperty("readOnly", out _).Should().BeFalse(
+            "writable properties should not emit readOnly in schema components");
+    }
+
     private static OpenApiOutputRenderingContext CreateOutputContext(BlueprintApp app)
     {
         var documentBuilderContext = OpenApiDocumentBuilderContext.Create(app);

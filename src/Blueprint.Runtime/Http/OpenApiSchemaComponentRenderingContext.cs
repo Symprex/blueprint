@@ -73,7 +73,8 @@ public sealed record OpenApiSchemaComponentRenderingContext(
             property.AdditionalPropertiesSchemaName,
             property.IsDeprecated,
             property.DeprecationReason,
-            property.DefaultValue);
+            property.DefaultValue,
+            property.IsReadOnly);
     }
 
     private static string? MapType(OpenApiSchemaKind kind)
@@ -133,6 +134,7 @@ public sealed record OpenApiSchemaComponentModel(
 /// <param name="IsDeprecated">Whether the property is deprecated (mapped from <see cref="ObsoleteAttribute"/>).</param>
 /// <param name="DeprecationReason">The deprecation reason from <see cref="ObsoleteAttribute.Message"/>, or null.</param>
 /// <param name="DefaultValue">The default value from <see cref="System.ComponentModel.DefaultValueAttribute"/>, or null.</param>
+/// <param name="IsReadOnly">Whether this property is read-only (no public setter or <c>[ReadOnly(true)]</c>).</param>
 public sealed record OpenApiSchemaComponentPropertyModel(
     string Name,
     string? Type,
@@ -156,4 +158,5 @@ public sealed record OpenApiSchemaComponentPropertyModel(
     string? AdditionalPropertiesSchemaRef = null,
     bool IsDeprecated = false,
     string? DeprecationReason = null,
-    object? DefaultValue = null);
+    object? DefaultValue = null,
+    bool IsReadOnly = false);

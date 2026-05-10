@@ -2309,13 +2309,16 @@
             "type": "array",
             "items": {
               "type": "string"
-            }
+            },
+            "readOnly": true
           },
           "Object": {
-            "type": "string"
+            "type": "string",
+            "readOnly": true
           },
           "ResourceKey": {
-            "type": "string"
+            "type": "string",
+            "readOnly": true
           }
         }
       },
@@ -2349,28 +2352,34 @@
             "type": "boolean"
           },
           "HtmlSource": {
-            "type": "string"
+            "type": "string",
+            "readOnly": true
           },
           "Id": {
-            "type": "string"
+            "type": "string",
+            "readOnly": true
           },
           "IsArchived": {
             "type": "boolean"
           },
           "Name": {
-            "type": "string"
+            "type": "string",
+            "readOnly": true
           },
           "Object": {
-            "type": "string"
+            "type": "string",
+            "readOnly": true
           },
           "Owner": {
             "type": "object"
           },
           "PlainTextSource": {
-            "type": "string"
+            "type": "string",
+            "readOnly": true
           },
           "ResourceKey": {
-            "type": "string"
+            "type": "string",
+            "readOnly": true
           }
         }
       },
@@ -2388,19 +2397,24 @@
             "type": "boolean"
           },
           "Object": {
-            "type": "string"
+            "type": "string",
+            "readOnly": true
           },
           "RenderedHtml": {
-            "type": "string"
+            "type": "string",
+            "readOnly": true
           },
           "RenderedPlainText": {
-            "type": "string"
+            "type": "string",
+            "readOnly": true
           },
           "ResourceKey": {
-            "type": "string"
+            "type": "string",
+            "readOnly": true
           },
           "TemplateId": {
-            "type": "string"
+            "type": "string",
+            "readOnly": true
           }
         }
       },
@@ -2418,21 +2432,26 @@
             "type": "boolean"
           },
           "Object": {
-            "type": "string"
+            "type": "string",
+            "readOnly": true
           },
           "PublishedAt": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "readOnly": true
           },
           "ResourceKey": {
-            "type": "string"
+            "type": "string",
+            "readOnly": true
           },
           "TemplateId": {
-            "type": "string"
+            "type": "string",
+            "readOnly": true
           },
           "Version": {
             "type": "integer",
-            "format": "int32"
+            "format": "int32",
+            "readOnly": true
           }
         }
       },

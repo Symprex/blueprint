@@ -979,6 +979,11 @@ public sealed record OpenApiOutputRenderingContext(
             }
         }
 
+        if (property.IsReadOnly)
+        {
+            writer.WriteBoolean("readOnly", true);
+        }
+
         if (property.DefaultValue is not null)
         {
             WriteDefaultValue(writer, property.DefaultValue);
