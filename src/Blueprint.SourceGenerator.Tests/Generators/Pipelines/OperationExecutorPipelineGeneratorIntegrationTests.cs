@@ -971,6 +971,44 @@ public class OperationExecutorPipelineGeneratorIntegrationTests
     }
 
     [Fact]
+    public void When_results_union_has_duplicate_member_types_then_generates_bp114_diagnostic()
+    {
+        var source = """
+                     using Blueprint;
+                     using Blueprint.Model;
+                     using Blueprint.Runtime.Exec;
+
+                     namespace TestNamespace;
+
+                     [BlueprintAppScan]
+                     public partial class TestApp : BlueprintApp
+                     {
+                         public TestApp()
+                         {
+                             this.Register(TestQuery.Configure());
+                         }
+                     }
+
+                     public class TestQuery : IQuery<Results<OkResult<string>, OkResult<string>>>
+                     {
+                         public static ApiOperationDescriptor Configure()
+                         {
+                             return new ApiOperationDescriptor(typeof(TestQuery), nameof(TestQuery), "Tests");
+                         }
+
+                         public static Results<OkResult<string>, OkResult<string>> Invoke()
+                         {
+                             return new OkResult<string>("Hello");
+                         }
+                     }
+                     """;
+
+        var result = TestHelpers.Compile<OperationExecutorPipelineSourceGenerator>(source, assertCacheability: false);
+
+        result.Diagnostics.Should().ContainSingle(static diagnostic => diagnostic.Id == "BP114");
+    }
+
+    [Fact]
     public void Plain_value_handler_with_incompatible_declared_contract_generates_diagnostic()
     {
         var source = """

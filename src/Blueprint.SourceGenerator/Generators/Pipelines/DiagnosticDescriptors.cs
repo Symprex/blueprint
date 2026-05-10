@@ -179,6 +179,18 @@ internal static class DiagnosticDescriptors
         isEnabledByDefault: true,
         description: "Pipeline exception translator ownership must stay deterministic so the generated catch shell does not depend on incidental registration order.");
 
+    /// <summary>
+    /// BP114: Results union contains the same member type more than once.
+    /// </summary>
+    public static readonly DiagnosticDescriptor DuplicateResultsUnionMember = new(
+        id: "BP114",
+        title: "Duplicate Results union member",
+        messageFormat: "The Results union on handler '{1}' contains duplicate member type '{0}'",
+        category: Category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "Each member type in a Results<T1, T2> union must be unique. Duplicate members are almost certainly a copy-paste mistake.");
+
     // Warning diagnostics (BP200-BP299)
 
     /// <summary>

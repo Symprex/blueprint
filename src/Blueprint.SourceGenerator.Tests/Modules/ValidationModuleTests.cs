@@ -2613,6 +2613,42 @@ public class ValidationModuleTests
     }
 
     [Fact]
+    public void When_RegularExpression_has_empty_pattern_then_reports_BPV011()
+    {
+        var source = """
+                     using System.ComponentModel.DataAnnotations;
+
+                     public partial class IncludedOperation : IOperation
+                     {
+                         [RegularExpression("")]
+                         public string? Code { get; set; }
+                     }
+                     """;
+
+        var result = CompileDescriptor(source);
+
+        result.Diagnostics.Select(static d => d.Id).Should().Contain("BPV011");
+    }
+
+    [Fact]
+    public void When_RegularExpression_has_non_empty_pattern_then_no_BPV011()
+    {
+        var source = """
+                     using System.ComponentModel.DataAnnotations;
+
+                     public partial class IncludedOperation : IOperation
+                     {
+                         [RegularExpression(@"^[A-Z]+$")]
+                         public string? Code { get; set; }
+                     }
+                     """;
+
+        var result = CompileDescriptor(source);
+
+        result.Diagnostics.Where(static d => d.Id == "BPV011").Should().BeEmpty();
+    }
+
+    [Fact]
     public void Inline_handler_with_additional_blueprint_validation_attributes_generates_fast_property_checks_before_handler_invocation()
     {
         var source = """

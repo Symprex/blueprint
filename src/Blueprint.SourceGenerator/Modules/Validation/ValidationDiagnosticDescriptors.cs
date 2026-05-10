@@ -129,4 +129,16 @@ internal static class ValidationDiagnosticDescriptors
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
         description: "When a StringLengthAttribute is applied, the MinimumLength must not exceed the maximum length.");
+
+    /// <summary>
+    /// Gets the diagnostic emitted when a <c>RegularExpressionAttribute</c> has an empty or whitespace-only pattern.
+    /// </summary>
+    public static readonly DiagnosticDescriptor EmptyRegularExpressionPattern = new(
+        id: "BPV011",
+        title: "RegularExpression has empty pattern",
+        messageFormat: "Property '{0}' on operation '{1}' has a RegularExpressionAttribute with an empty or whitespace-only pattern",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "A RegularExpressionAttribute with an empty pattern will match everything and is almost certainly a mistake.");
 }

@@ -302,16 +302,30 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
     private static bool TryValidateResultsUnionMembers(PipelineContributorContext context, IMethodSymbol handlerMethod, ImmutableArray<ITypeSymbol> memberTypes, INamedTypeSymbol operationResultType)
     {
         var isValid = true;
+        var seen = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (var memberType in memberTypes)
         {
+            var displayName = memberType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
+
+            if (!seen.Add(displayName))
+            {
+                context.AddDiagnostic(
+                    new DiagnosticInfo(
+                        DiagnosticDescriptors.DuplicateResultsUnionMember,
+                        GetReturnTypeLocation(handlerMethod),
+                        [displayName, handlerMethod.Name]));
+                isValid = false;
+                continue;
+            }
+
             if (OperationResultContractHelper.IsSupportedResultsUnionMember(memberType, operationResultType) == false)
             {
                 context.AddDiagnostic(
                     new DiagnosticInfo(
                         DiagnosticDescriptors.UnsupportedResultsUnionMember,
                         GetReturnTypeLocation(handlerMethod),
-                        [memberType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat), handlerMethod.Name]));
+                        [displayName, handlerMethod.Name]));
                 isValid = false;
             }
         }

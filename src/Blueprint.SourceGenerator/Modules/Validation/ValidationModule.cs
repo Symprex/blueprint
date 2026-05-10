@@ -119,6 +119,7 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
                 ValidationDiagnosticDescriptors.MissingNotAllowedIfProperty);
 
             ValidateConflictingRanges(context, operationType.Name, property);
+            ValidateEmptyRegexPattern(context, operationType.Name, property);
         }
     }
 
@@ -253,6 +254,38 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
                     ValidationDiagnosticDescriptors.ConflictingStringLength,
                     location,
                     [property.Name, operationTypeName, strMax.ToString(), strMin.ToString()]));
+        }
+    }
+
+    /// <summary>
+    /// Detects <c>[RegularExpression("")]</c> where the pattern is empty or whitespace-only,
+    /// which always matches and is almost certainly unintentional.
+    /// </summary>
+    private static void ValidateEmptyRegexPattern(
+        DescriptorContributorContext context,
+        string operationTypeName,
+        IPropertySymbol property)
+    {
+        foreach (var attr in property.GetAttributes())
+        {
+            if (!ValidationSymbolHelpers.IsRegularExpressionAttribute(attr.AttributeClass)
+                || attr.ConstructorArguments.Length < 1
+                || attr.ConstructorArguments[0].Value is not string pattern)
+            {
+                continue;
+            }
+
+            if (!string.IsNullOrWhiteSpace(pattern))
+            {
+                continue;
+            }
+
+            var location = attr.ApplicationSyntaxReference?.GetSyntax().GetLocation() ?? property.Locations.FirstOrDefault();
+            context.AddDiagnostic(
+                new DiagnosticInfo(
+                    ValidationDiagnosticDescriptors.EmptyRegularExpressionPattern,
+                    location,
+                    [property.Name, operationTypeName]));
         }
     }
 
