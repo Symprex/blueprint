@@ -40,6 +40,7 @@ Operations span the `Templates` group (via `[ApiOperations("Templates")]`) and s
 | `HealthCheckQuery` | GET | `/system/health` | `PlainTextResult` |
 | `DownloadTemplateQuery` | GET | `/templates/{Id}/download` | `FileStreamResult` |
 | `RedirectToTemplateDocsQuery` | GET | `/templates/{Id}/docs` | `RedirectResult` |
+| `GetFolderContentsQuery` | GET | `/folders/{**FolderPath}` | `OkResult` |
 
 A background task (`SendTemplateSharedNotificationTask`) demonstrates non-HTTP execution.
 
@@ -87,6 +88,7 @@ A background task (`SendTemplateSharedNotificationTask`) demonstrates non-HTTP e
 - **Resource expansion** — `Expandable<T>` properties with `?expand=` query parameter support (comma-separated, repeated keys, array syntax)
 - **Always-expand** — `[AlwaysExpand]` for properties that load unconditionally
 - **ETag / conditional requests** — `ETagger.WithETag()` for `If-None-Match` → 304 Not Modified
+- **Catch-all route parameters** — `{**FolderPath}` on `GetFolderContentsQuery` for path-like IDs containing slashes (e.g. `UK/Marketing/Templates`)
 
 ## Consumer seam demonstrations
 
