@@ -16,6 +16,8 @@ namespace TestNamespace
         public TestBlueprintApp()
         {
             this.Register(TestNamespace.IncludedOperation.Configure());
+            
+            this.Freeze();
         }
     }
 }

@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Serialization;
@@ -10,8 +11,8 @@ namespace Blueprint.Model;
 /// </summary>
 public class BlueprintApp
 {
-    private static readonly List<ApiOperationLink> _emptyLinkList = new(0);
-    private static readonly List<ApiOperationDescriptor> _emptyOperationList = new(0);
+    private static readonly IReadOnlyList<ApiOperationLink> _emptyLinkList = [];
+    private static readonly IReadOnlyList<ApiOperationDescriptor> _emptyOperationList = [];
 
     private readonly Dictionary<Type, ApiOperationDescriptor> _allOperations = new();
     private readonly Dictionary<string, List<(ApiOperationDescriptor Descriptor, IReadOnlyList<string> Methods)>> _urlToOperations = new(StringComparer.Ordinal);
@@ -23,6 +24,12 @@ public class BlueprintApp
     private readonly Dictionary<Type, List<ApiOperationLink>> _operationTypeToLinks = new();
     private readonly Dictionary<Type, List<ApiOperationLink>> _resourceTypeToLinks = new();
 
+    // Frozen read-optimized versions, populated by Freeze()
+    private FrozenDictionary<Type, ApiOperationDescriptor>? _frozenOperations;
+    private FrozenDictionary<Type, IReadOnlyList<ApiOperationLink>>? _frozenOperationTypeToLinks;
+    private FrozenDictionary<Type, IReadOnlyList<ApiOperationLink>>? _frozenResourceTypeToLinks;
+    private FrozenDictionary<string, IReadOnlyList<ApiOperationDescriptor>>? _frozenHostToOperations;
+
     /// <summary>
     /// Gets all registered links for this model, with a link representing the association between a resource and a different
     /// operation (for example a link between the resource 'Jobs' and the operation 'Apply').
@@ -32,7 +39,10 @@ public class BlueprintApp
     /// <summary>
     /// Gets all registered operations.
     /// </summary>
-    public IEnumerable<ApiOperationDescriptor> Operations => this._allOperations.Values;
+    public IEnumerable<ApiOperationDescriptor> Operations =>
+        this._frozenOperations is not null
+            ? this._frozenOperations.Values
+            : this._allOperations.Values;
 
     /// <summary>
     /// Gets the app-owned serializer context instance that later OpenAPI/schema work can interrogate for generated JSON
@@ -171,6 +181,20 @@ public class BlueprintApp
     /// <exception cref="InvalidOperationException">If no operation of the specified type has been registered.</exception>
     public IEnumerable<ApiOperationLink> GetLinksForOperation(Type operationType)
     {
+        if (this._frozenOperations is not null)
+        {
+            if (!this._frozenOperations.TryGetValue(operationType, out _))
+            {
+                throw new InvalidOperationException(
+                    $"Cannot get links for operation '{operationType.Name}' as it has not been registered.");
+            }
+
+            return this._frozenOperationTypeToLinks is not null &&
+                   this._frozenOperationTypeToLinks.TryGetValue(operationType, out var frozenLinks)
+                ? frozenLinks
+                : [];
+        }
+
         return !this._allOperations.TryGetValue(operationType, out var operationDescriptor)
             ? throw new InvalidOperationException(
                 $"Cannot get links for operation '{operationType.Name}' as it has not been registered.")
@@ -187,7 +211,12 @@ public class BlueprintApp
     /// <returns>The (potentially empty) enumeration of registered links.</returns>
     public IReadOnlyList<ApiOperationLink> GetLinksForResource(Type resourceType)
     {
-        return this._resourceTypeToLinks.GetValueOrDefault(resourceType, _emptyLinkList);
+        if (this._frozenResourceTypeToLinks is not null)
+        {
+            return this._frozenResourceTypeToLinks.GetValueOrDefault(resourceType, _emptyLinkList);
+        }
+
+        return this._resourceTypeToLinks.TryGetValue(resourceType, out var links) ? links : _emptyLinkList;
     }
 
     /// <summary>
@@ -198,7 +227,13 @@ public class BlueprintApp
     public IReadOnlyList<ApiOperationDescriptor> GetOperationsForHost(string hostName)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(hostName);
-        return this._hostToOperations.GetValueOrDefault(hostName, _emptyOperationList);
+
+        if (this._frozenHostToOperations is not null)
+        {
+            return this._frozenHostToOperations.GetValueOrDefault(hostName, _emptyOperationList);
+        }
+
+        return this._hostToOperations.TryGetValue(hostName, out var ops) ? ops : _emptyOperationList;
     }
 
     /// <summary>
@@ -210,9 +245,22 @@ public class BlueprintApp
     /// <returns>The associated link, or <c>null</c> if no such link exists.</returns>
     public ApiOperationLink? GetLinkFor(Type resourceType, string rel)
     {
-        if (!this._resourceTypeToLinks.TryGetValue(resourceType, out var links))
+        IReadOnlyList<ApiOperationLink>? links;
+
+        if (this._frozenResourceTypeToLinks is not null)
+        {
+            if (!this._frozenResourceTypeToLinks.TryGetValue(resourceType, out links))
+            {
+                return null;
+            }
+        }
+        else if (!this._resourceTypeToLinks.TryGetValue(resourceType, out var mutableLinks))
         {
             return null;
+        }
+        else
+        {
+            links = mutableLinks;
         }
 
         foreach (var link in links)
@@ -253,12 +301,38 @@ Operations will be found polymorphically, meaning an operation could be register
     /// <returns>Whether an operation was found.</returns>
     public bool TryFindOperation(Type operationType, [NotNullWhen(true)] out ApiOperationDescriptor? descriptor)
     {
-        if (!this._allOperations.TryGetValue(operationType, out descriptor))
+        if (this._frozenOperations is not null)
         {
-            return false;
+            return this._frozenOperations.TryGetValue(operationType, out descriptor);
         }
 
-        return true;
+        return this._allOperations.TryGetValue(operationType, out descriptor);
+    }
+
+    /// <summary>
+    /// Freezes the registration data into read-optimized frozen collections for faster runtime lookup.
+    /// Call this after all operations and links have been registered. The generated app registration
+    /// code calls this automatically.
+    /// </summary>
+    public void Freeze()
+    {
+        this._frozenOperations = this._allOperations.ToFrozenDictionary();
+
+        this._frozenOperationTypeToLinks = this._operationTypeToLinks
+            .ToFrozenDictionary(
+                static kvp => kvp.Key,
+                static kvp => (IReadOnlyList<ApiOperationLink>)kvp.Value);
+
+        this._frozenResourceTypeToLinks = this._resourceTypeToLinks
+            .ToFrozenDictionary(
+                static kvp => kvp.Key,
+                static kvp => (IReadOnlyList<ApiOperationLink>)kvp.Value);
+
+        this._frozenHostToOperations = this._hostToOperations
+            .ToFrozenDictionary(
+                static kvp => kvp.Key,
+                static kvp => (IReadOnlyList<ApiOperationDescriptor>)kvp.Value,
+                StringComparer.Ordinal);
     }
 
     private void RegisterHostExposure(ApiOperationDescriptor descriptor)

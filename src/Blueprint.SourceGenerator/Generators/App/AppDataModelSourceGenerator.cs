@@ -179,6 +179,9 @@ public sealed partial class AppDataModelSourceGenerator : IIncrementalGenerator,
                 {
                     c.AppendLine($"this.Register({registration}.Configure());");
                 }
+
+                c.AppendLine(string.Empty);
+                c.AppendLine("this.Freeze();");
             });
 
         return codeBuilder.Build();

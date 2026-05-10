@@ -17,6 +17,8 @@ namespace TestNamespace
         {
             this.Register(TestNamespace.IncludedOperation.Configure());
             this.Register(TestNamespace.AnotherIncludedOperation.Configure());
+            
+            this.Freeze();
         }
     }
 }
