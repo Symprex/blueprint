@@ -105,4 +105,65 @@ public class ResourceKeyTemplateParserTests
         expression.Should().Contain("/tenants/");
         expression.Should().Contain("/users/");
     }
+
+    // ── Property path token tests ─────────────────────────────────────
+
+    [Fact]
+    public void ParseTokens_with_property_path_token_extracts_property_and_sub_property()
+    {
+        var tokens = ResourceKeyTemplateParser.ParseTokens("/tenants/{TenantId:Id}");
+
+        tokens.Should().HaveCount(1);
+        tokens[0].Name.Should().Be("TenantId");
+        tokens[0].IsClaimToken.Should().BeFalse();
+        tokens[0].SubPropertyName.Should().Be("Id");
+        tokens[0].RawToken.Should().Be("{TenantId:Id}");
+    }
+
+    [Fact]
+    public void ParseTokens_simple_property_has_null_sub_property()
+    {
+        var tokens = ResourceKeyTemplateParser.ParseTokens("/tenants/{TenantId}");
+
+        tokens.Should().HaveCount(1);
+        tokens[0].SubPropertyName.Should().BeNull();
+    }
+
+    [Fact]
+    public void ParseTokens_auth_token_has_null_sub_property()
+    {
+        var tokens = ResourceKeyTemplateParser.ParseTokens("/tenants/{Auth:AccountId}");
+
+        tokens.Should().HaveCount(1);
+        tokens[0].IsClaimToken.Should().BeTrue();
+        tokens[0].SubPropertyName.Should().BeNull();
+    }
+
+    [Fact]
+    public void GenerateExpansionExpression_with_property_path_uses_sub_property_access()
+    {
+        var template = "/tenants/{TenantId:Id}";
+        var tokens = ResourceKeyTemplateParser.ParseTokens(template);
+
+        var expression = ResourceKeyTemplateParser.GenerateExpansionExpression(
+            template, tokens, "operation", "principal");
+
+        // Should access operation.TenantId.Id (the sub-property), not operation.TenantId:Id
+        expression.Should().Contain("operation.TenantId?.Id");
+        expression.Should().NotContain("TenantId:Id");
+        expression.Should().StartWith("$\"");
+    }
+
+    [Fact]
+    public void GenerateExpansionExpression_with_mixed_path_and_claim_tokens()
+    {
+        var template = "/tenants/{Auth:AccountId}/products/{TenantId:Id}";
+        var tokens = ResourceKeyTemplateParser.ParseTokens(template);
+
+        var expression = ResourceKeyTemplateParser.GenerateExpansionExpression(
+            template, tokens, "operation", "principal");
+
+        expression.Should().Contain("principal.FindFirst(\"AccountId\")?.Value ?? \"\"");
+        expression.Should().Contain("operation.TenantId?.Id");
+    }
 }

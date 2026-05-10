@@ -19,6 +19,12 @@ internal sealed record ResourceKeyToken
     /// For claim tokens: the claim type (e.g., "AccountId").
     /// </summary>
     public required string Name { get; init; }
+
+    /// <summary>
+    /// For property path tokens like <c>{TenantId:Id}</c>, the sub-property name (e.g., "Id").
+    /// Null for simple property tokens and claim tokens.
+    /// </summary>
+    public string? SubPropertyName { get; init; }
 }
 
 /// <summary>
@@ -43,6 +49,7 @@ internal static class ResourceKeyTemplateParser
             var tokenContent = match.Groups[1].Value;
             bool isClaimToken;
             string name;
+            string? subPropertyName = null;
 
             if (tokenContent.StartsWith("Auth:", StringComparison.OrdinalIgnoreCase))
             {
@@ -52,7 +59,19 @@ internal static class ResourceKeyTemplateParser
             else
             {
                 isClaimToken = false;
-                name = tokenContent;
+
+                // Handle property path syntax: {PropertyName:SubProperty}
+                var colonIndex = tokenContent.IndexOf(':');
+
+                if (colonIndex >= 0)
+                {
+                    name = tokenContent[..colonIndex];
+                    subPropertyName = tokenContent[(colonIndex + 1)..];
+                }
+                else
+                {
+                    name = tokenContent;
+                }
             }
 
             tokens.Add(new ResourceKeyToken
@@ -60,6 +79,7 @@ internal static class ResourceKeyTemplateParser
                 RawToken = match.Value,
                 IsClaimToken = isClaimToken,
                 Name = name,
+                SubPropertyName = subPropertyName,
             });
         }
 
@@ -104,7 +124,15 @@ internal static class ResourceKeyTemplateParser
             }
             else
             {
-                replacement = $"{{{operationExpression}.{token.Name}?.ToString() ?? \"\"}}";
+                if (token.SubPropertyName != null)
+                {
+                    // Property path: {TenantId:Id} → operation.TenantId?.Id?.ToString() ?? ""
+                    replacement = $"{{{operationExpression}.{token.Name}?.{token.SubPropertyName}?.ToString() ?? \"\"}}";
+                }
+                else
+                {
+                    replacement = $"{{{operationExpression}.{token.Name}?.ToString() ?? \"\"}}";
+                }
             }
 
             result = result.Replace(token.RawToken, replacement);
