@@ -117,6 +117,8 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
                 property,
                 property.GetAttributes().Where(static attribute => ValidationSymbolHelpers.IsNotAllowedIfAttribute(attribute.AttributeClass)),
                 ValidationDiagnosticDescriptors.MissingNotAllowedIfProperty);
+
+            ValidateConflictingRanges(context, operationType.Name, property);
         }
     }
 
@@ -150,6 +152,107 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
                         property.Name,
                         operationTypeName,
                     ]));
+        }
+    }
+
+    /// <summary>
+    /// Detects conflicting validation range constraints on a single property, such as
+    /// MinLength exceeding MaxLength or a Range where the minimum exceeds the maximum.
+    /// </summary>
+    private static void ValidateConflictingRanges(
+        DescriptorContributorContext context,
+        string operationTypeName,
+        IPropertySymbol property)
+    {
+        var attributes = property.GetAttributes();
+
+        // MinLength vs MaxLength conflict
+        int? minLength = null;
+        int? maxLength = null;
+        Location? minLengthLocation = null;
+
+        foreach (var attr in attributes)
+        {
+            if (ValidationSymbolHelpers.IsMinLengthAttribute(attr.AttributeClass)
+                && attr.ConstructorArguments.Length == 1
+                && attr.ConstructorArguments[0].Value is int min)
+            {
+                minLength = min;
+                minLengthLocation = attr.ApplicationSyntaxReference?.GetSyntax().GetLocation() ?? property.Locations.FirstOrDefault();
+            }
+
+            if (ValidationSymbolHelpers.IsMaxLengthAttribute(attr.AttributeClass)
+                && attr.ConstructorArguments.Length == 1
+                && attr.ConstructorArguments[0].Value is int max)
+            {
+                maxLength = max;
+            }
+        }
+
+        if (minLength.HasValue && maxLength.HasValue && minLength.Value > maxLength.Value)
+        {
+            context.AddDiagnostic(
+                new DiagnosticInfo(
+                    ValidationDiagnosticDescriptors.ConflictingLengthRange,
+                    minLengthLocation ?? property.Locations.FirstOrDefault(),
+                    [property.Name, operationTypeName, minLength.Value.ToString(), maxLength.Value.ToString()]));
+        }
+
+        // Range(min, max) conflict
+        foreach (var attr in attributes)
+        {
+            if (!ValidationSymbolHelpers.IsRangeAttribute(attr.AttributeClass)
+                || attr.ConstructorArguments.Length != 2)
+            {
+                continue;
+            }
+
+            var location = attr.ApplicationSyntaxReference?.GetSyntax().GetLocation() ?? property.Locations.FirstOrDefault();
+
+            if (attr.ConstructorArguments[0].Value is int intMin
+                && attr.ConstructorArguments[1].Value is int intMax
+                && intMin > intMax)
+            {
+                context.AddDiagnostic(
+                    new DiagnosticInfo(
+                        ValidationDiagnosticDescriptors.ConflictingRange,
+                        location,
+                        [property.Name, operationTypeName, intMin.ToString(), intMax.ToString()]));
+            }
+            else if (attr.ConstructorArguments[0].Value is double dblMin
+                     && attr.ConstructorArguments[1].Value is double dblMax
+                     && dblMin > dblMax)
+            {
+                context.AddDiagnostic(
+                    new DiagnosticInfo(
+                        ValidationDiagnosticDescriptors.ConflictingRange,
+                        location,
+                        [property.Name, operationTypeName, dblMin.ToString(), dblMax.ToString()]));
+            }
+        }
+
+        // StringLength(max, MinimumLength=min) conflict
+        foreach (var attr in attributes)
+        {
+            if (!ValidationSymbolHelpers.IsStringLengthAttribute(attr.AttributeClass)
+                || attr.ConstructorArguments.Length != 1
+                || attr.ConstructorArguments[0].Value is not int strMax)
+            {
+                continue;
+            }
+
+            var minArg = attr.NamedArguments.FirstOrDefault(static na => na.Key == "MinimumLength");
+            if (minArg.Key is null || minArg.Value.Value is not int strMin || strMin <= strMax)
+            {
+                continue;
+            }
+
+            var location = attr.ApplicationSyntaxReference?.GetSyntax().GetLocation() ?? property.Locations.FirstOrDefault();
+            context.AddDiagnostic(
+                new DiagnosticInfo(
+                    ValidationDiagnosticDescriptors.ConflictingStringLength,
+                    location,
+                    [property.Name, operationTypeName, strMax.ToString(), strMin.ToString()]));
         }
     }
 

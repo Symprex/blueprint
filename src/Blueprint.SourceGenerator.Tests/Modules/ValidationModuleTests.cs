@@ -2485,6 +2485,134 @@ public class ValidationModuleTests
     }
 
     [Fact]
+    public void When_MinLength_exceeds_MaxLength_then_reports_BPV008()
+    {
+        var source = """
+                     using System.ComponentModel.DataAnnotations;
+
+                     public partial class IncludedOperation : IOperation
+                     {
+                         [MinLength(10)]
+                         [MaxLength(5)]
+                         public string? Name { get; set; }
+                     }
+                     """;
+
+        var result = CompileDescriptor(source);
+
+        result.Diagnostics.Select(static d => d.Id).Should().Contain("BPV008");
+    }
+
+    [Fact]
+    public void When_MinLength_does_not_exceed_MaxLength_then_no_BPV008()
+    {
+        var source = """
+                     using System.ComponentModel.DataAnnotations;
+
+                     public partial class IncludedOperation : IOperation
+                     {
+                         [MinLength(3)]
+                         [MaxLength(50)]
+                         public string? Name { get; set; }
+                     }
+                     """;
+
+        var result = CompileDescriptor(source);
+
+        result.Diagnostics.Where(static d => d.Id == "BPV008").Should().BeEmpty();
+    }
+
+    [Fact]
+    public void When_Range_minimum_exceeds_maximum_then_reports_BPV009()
+    {
+        var source = """
+                     using System.ComponentModel.DataAnnotations;
+
+                     public partial class IncludedOperation : IOperation
+                     {
+                         [Range(100, 10)]
+                         public int Priority { get; set; }
+                     }
+                     """;
+
+        var result = CompileDescriptor(source);
+
+        result.Diagnostics.Select(static d => d.Id).Should().Contain("BPV009");
+    }
+
+    [Fact]
+    public void When_Range_minimum_does_not_exceed_maximum_then_no_BPV009()
+    {
+        var source = """
+                     using System.ComponentModel.DataAnnotations;
+
+                     public partial class IncludedOperation : IOperation
+                     {
+                         [Range(1, 100)]
+                         public int Priority { get; set; }
+                     }
+                     """;
+
+        var result = CompileDescriptor(source);
+
+        result.Diagnostics.Where(static d => d.Id == "BPV009").Should().BeEmpty();
+    }
+
+    [Fact]
+    public void When_Range_double_minimum_exceeds_maximum_then_reports_BPV009()
+    {
+        var source = """
+                     using System.ComponentModel.DataAnnotations;
+
+                     public partial class IncludedOperation : IOperation
+                     {
+                         [Range(99.9, 1.5)]
+                         public double Score { get; set; }
+                     }
+                     """;
+
+        var result = CompileDescriptor(source);
+
+        result.Diagnostics.Select(static d => d.Id).Should().Contain("BPV009");
+    }
+
+    [Fact]
+    public void When_StringLength_MinimumLength_exceeds_maximum_then_reports_BPV010()
+    {
+        var source = """
+                     using System.ComponentModel.DataAnnotations;
+
+                     public partial class IncludedOperation : IOperation
+                     {
+                         [StringLength(5, MinimumLength = 10)]
+                         public string? Code { get; set; }
+                     }
+                     """;
+
+        var result = CompileDescriptor(source);
+
+        result.Diagnostics.Select(static d => d.Id).Should().Contain("BPV010");
+    }
+
+    [Fact]
+    public void When_StringLength_MinimumLength_does_not_exceed_maximum_then_no_BPV010()
+    {
+        var source = """
+                     using System.ComponentModel.DataAnnotations;
+
+                     public partial class IncludedOperation : IOperation
+                     {
+                         [StringLength(50, MinimumLength = 3)]
+                         public string? Code { get; set; }
+                     }
+                     """;
+
+        var result = CompileDescriptor(source);
+
+        result.Diagnostics.Where(static d => d.Id == "BPV010").Should().BeEmpty();
+    }
+
+    [Fact]
     public void Inline_handler_with_additional_blueprint_validation_attributes_generates_fast_property_checks_before_handler_invocation()
     {
         var source = """

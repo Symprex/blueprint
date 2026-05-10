@@ -92,4 +92,41 @@ internal static class ValidationDiagnosticDescriptors
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
         description: "MustBeGreaterThanOrEqualAttribute must reference a real operation property so generated validation and runtime behavior stay deterministic.");
+
+    /// <summary>
+    /// Gets the diagnostic emitted when MinLength exceeds MaxLength on the same property,
+    /// making the constraint unsatisfiable.
+    /// </summary>
+    public static readonly DiagnosticDescriptor ConflictingLengthRange = new(
+        id: "BPV008",
+        title: "MinLength exceeds MaxLength",
+        messageFormat: "Property '{0}' on operation '{1}' has MinLength({2}) > MaxLength({3}), making the constraint unsatisfiable",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "When both MinLengthAttribute and MaxLengthAttribute are applied to a property, the minimum must not exceed the maximum.");
+
+    /// <summary>
+    /// Gets the diagnostic emitted when a RangeAttribute has minimum greater than maximum.
+    /// </summary>
+    public static readonly DiagnosticDescriptor ConflictingRange = new(
+        id: "BPV009",
+        title: "Range minimum exceeds maximum",
+        messageFormat: "Property '{0}' on operation '{1}' has Range({2}, {3}) where the minimum exceeds the maximum, making the constraint unsatisfiable",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "When a RangeAttribute is applied, the minimum must not exceed the maximum value.");
+
+    /// <summary>
+    /// Gets the diagnostic emitted when a StringLengthAttribute has MinimumLength greater than maximumLength.
+    /// </summary>
+    public static readonly DiagnosticDescriptor ConflictingStringLength = new(
+        id: "BPV010",
+        title: "StringLength minimum exceeds maximum",
+        messageFormat: "Property '{0}' on operation '{1}' has StringLength({2}) with MinimumLength={3}, where the minimum exceeds the maximum",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "When a StringLengthAttribute is applied, the MinimumLength must not exceed the maximum length.");
 }
