@@ -577,6 +577,51 @@ public class ReferenceAppHttpEndToEndIntegrationTests
     }
 
     [Fact]
+    public async Task When_catch_all_folder_path_with_slashes_then_returns_200_with_path()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/folders/{**FolderPath}", "GET");
+        endpoint.Should().NotBeNull("the catch-all folder route should be registered");
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Get;
+            context.Request.Path = "/api/folders/UK/Marketing/Templates";
+            context.Request.RouteValues = new RouteValueDictionary
+            {
+                ["FolderPath"] = "UK/Marketing/Templates",
+            };
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        response.Body.Should().Contain("UK/Marketing/Templates");
+    }
+
+    [Fact]
+    public async Task When_catch_all_folder_path_with_deeply_nested_slashes_then_preserves_full_path()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/folders/{**FolderPath}", "GET");
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Get;
+            context.Request.Path = "/api/folders/A/B/C/D/E/F";
+            context.Request.RouteValues = new RouteValueDictionary
+            {
+                ["FolderPath"] = "A/B/C/D/E/F",
+            };
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        response.Body.Should().Contain("A/B/C/D/E/F");
+    }
+
+    [Fact]
     public async Task When_clone_template_with_auth_and_body_then_returns_resource_event()
     {
         var endpoints = CreateEndpoints();
