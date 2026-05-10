@@ -469,6 +469,48 @@ public class PropertyOwnershipModuleIntegrationTests
             static e => e.PropertyName == "PageSize" && e.Source == PropertyBindingSource.Query);
     }
 
+    [Fact]
+    public async Task When_3_level_inheritance_then_pipeline_binds_all_ancestor_properties()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(GetTenantReportsPopulationQuery));
+        var httpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        httpContext.Request.Method = "GET";
+        httpContext.Request.RouteValues["TenantId"] = "acme-corp";
+        httpContext.Request.QueryString = new Microsoft.AspNetCore.Http.QueryString("?category=finance&page=2&pageSize=10");
+
+        var context = CreateContext(app, GetTenantReportsPopulationQuery.Configure(), new GetTenantReportsPopulationQuery(), httpContext);
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<Blueprint.Runtime.Exec.OkResult<string>>();
+        ((Blueprint.Runtime.Exec.OkResult<string>)result).Content.Should().Be("acme-corp:finance:p2:s10");
+    }
+
+    [Fact]
+    public void When_3_level_inheritance_then_descriptor_has_all_ancestor_property_entries()
+    {
+        var descriptor = GetTenantReportsPopulationQuery.Configure();
+
+        descriptor.TryGetFeatureData<OperationPropertyOwnershipFeatureData>(out var ownershipData)
+            .Should().BeTrue();
+
+        // Level 3 (declared) — query-bound
+        ownershipData!.Entries.Should().Contain(
+            static e => e.PropertyName == "Category" && e.Source == PropertyBindingSource.Query);
+
+        // Level 2 (TenantPagedOperation) — route-bound
+        ownershipData.Entries.Should().Contain(
+            static e => e.PropertyName == "TenantId" && e.Source == PropertyBindingSource.Route);
+
+        // Level 1 (BasePagedOperation) — query-bound
+        ownershipData.Entries.Should().Contain(
+            static e => e.PropertyName == "Page" && e.Source == PropertyBindingSource.Query);
+        ownershipData.Entries.Should().Contain(
+            static e => e.PropertyName == "PageSize" && e.Source == PropertyBindingSource.Query);
+    }
+
     private static Blueprint.Runtime.Exec.ApiOperationContext CreateContext(BlueprintApp app, ApiOperationDescriptor descriptor, object operation, Microsoft.AspNetCore.Http.HttpContext httpContext)
     {
         return new Blueprint.Runtime.Exec.ApiOperationContext(new EmptyServiceProvider(), app, descriptor, CancellationToken.None)
@@ -903,5 +945,41 @@ public partial class SearchItemsPagedPopulationQuery : SimplifiedPagedQuery, IQu
     public static Task<string> HandleAsync(SearchItemsPagedPopulationQuery operation)
     {
         return Task.FromResult($"{operation.Term}:p{operation.Page}:s{operation.PageSize}");
+    }
+}
+
+// --- Multi-level inheritance (3+ levels) test operations ---
+
+/// <summary>
+/// Level 1: Base paged query with pagination.
+/// </summary>
+public abstract class BasePagedOperation
+{
+    public int? Page { get; set; } = 1;
+
+    public int? PageSize { get; set; } = 50;
+}
+
+/// <summary>
+/// Level 2: Adds tenant scoping on top of paging.
+/// </summary>
+public abstract class TenantPagedOperation : BasePagedOperation
+{
+    public string TenantId { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Level 3: Concrete operation with its own properties plus two inherited levels.
+/// Proves GetAllMembers() walks the entire 3-level type hierarchy.
+/// </summary>
+[Blueprint.Model.Attributes.AllowAnonymous]
+[Blueprint.Model.Attributes.RootLink("/population-test/tenants/{TenantId}/reports")]
+public partial class GetTenantReportsPopulationQuery : TenantPagedOperation, IQuery<string>
+{
+    public string? Category { get; set; }
+
+    public static Task<string> HandleAsync(GetTenantReportsPopulationQuery operation)
+    {
+        return Task.FromResult($"{operation.TenantId}:{operation.Category}:p{operation.Page}:s{operation.PageSize}");
     }
 }
