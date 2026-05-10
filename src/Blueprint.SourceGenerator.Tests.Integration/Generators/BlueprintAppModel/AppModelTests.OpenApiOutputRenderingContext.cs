@@ -122,9 +122,33 @@ public class AppModelOpenApiOutputRenderingContextTests
             .GetProperty("schemas")
             .GetProperty("Sample_ResponseDto");
 
+        schema.GetProperty("title").GetString().Should().Be("ResponseDto", "schema title should be the short CLR type name without namespace");
         schema.GetProperty("type").GetString().Should().Be("object");
         schema.GetProperty("required").EnumerateArray().Select(static e => e.GetString()).Should().Equal("RequiredProp");
         schema.GetProperty("properties").GetProperty("RequiredProp").GetProperty("type").GetString().Should().Be("string");
+    }
+
+    [Fact]
+    public void When_schema_component_type_has_no_namespace_then_title_equals_full_name()
+    {
+        var context = CreateSyntheticOutputContext(
+            [],
+            [
+                new OpenApiSchemaComponentModel(
+                    "SimpleDto",
+                    "object",
+                    [],
+                    []),
+            ]);
+
+        var doc = JsonDocument.Parse(context.Json);
+
+        var schema = doc.RootElement
+            .GetProperty("components")
+            .GetProperty("schemas")
+            .GetProperty("SimpleDto");
+
+        schema.GetProperty("title").GetString().Should().Be("SimpleDto");
     }
 
     [Fact]

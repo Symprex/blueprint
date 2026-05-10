@@ -798,6 +798,18 @@ public sealed record OpenApiOutputRenderingContext(
         writer.WritePropertyName(SanitiseSchemaKey(component.BodyTypeName));
         writer.WriteStartObject();
 
+        // The title gives API tooling (Swagger UI, openapi-generator, etc.) a human-readable label
+        // derived from the short CLR type name, stripping namespace prefixes for readability.
+        var shortTitle = component.BodyTypeName;
+        var lastDot = shortTitle.LastIndexOf('.');
+
+        if (lastDot >= 0)
+        {
+            shortTitle = shortTitle[(lastDot + 1)..];
+        }
+
+        writer.WriteString("title", shortTitle);
+
         if (component.Type is not null)
         {
             writer.WriteString("type", component.Type);
