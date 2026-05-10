@@ -12,6 +12,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         private SwitchBuilder _parent { get; }
         private string _case { get; }
         private Action<ICodeWriter>? _content;
+        private string _expressionValue = "null";
 
         /// <summary>
         /// Initializes a new instance of the <see cref="SwitchCaseBuilder"/> class.
@@ -42,7 +43,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The same builder so fluent configuration can continue.</returns>
         public SwitchBuilder WithExpression(string returnValue = "null")
         {
-            this._content = w => w.Append($"{this._case} => {returnValue}");
+            this._expressionValue = returnValue;
             return this._parent;
         }
 
@@ -61,6 +62,16 @@ namespace Blueprint.SourceGenerator.CodeWriter
                 writer.AppendLine("break;");
                 writer.DecreaseIndent();
             }
+        }
+
+        /// <summary>
+        /// Writes this case as a switch-expression arm line with an optional trailing suffix (comma).
+        /// </summary>
+        /// <param name="writer">The code writer to emit to.</param>
+        /// <param name="suffix">A trailing suffix such as "," to append after the arm.</param>
+        internal void WriteExpressionArm(CodeWriter writer, string suffix)
+        {
+            writer.AppendLine($"{this._case} => {this._expressionValue}{suffix}");
         }
 
         private static void EmptyBody(ICodeWriter writer) { }

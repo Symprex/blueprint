@@ -66,10 +66,17 @@ namespace Blueprint.SourceGenerator.CodeWriter
             return new SwitchBuilder(writer, switchOn, false);
         }
 
-        //public static SwitchBuilder SwitchExpression(this ICodeWriter writer, string switchOn)
-        //{
-        //    return new SwitchBuilder(writer, switchOn, true);
-        //}
+        /// <summary>
+        /// Starts building a C# switch expression against the specified value expression.
+        /// Use <see cref="SwitchCaseBuilder.WithExpression"/> on each arm.
+        /// </summary>
+        /// <param name="writer">The writer that receives the generated output.</param>
+        /// <param name="switchOn">The expression to evaluate for each generated switch arm.</param>
+        /// <returns>A builder for adding switch expression arms.</returns>
+        public static SwitchBuilder SwitchExpression(this ICodeWriter writer, string switchOn)
+        {
+            return new SwitchBuilder(writer, switchOn, true);
+        }
 
         /// <summary>
         /// Emits one generated line per item in the supplied collection.

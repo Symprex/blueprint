@@ -73,7 +73,24 @@ namespace Blueprint.SourceGenerator.CodeWriter
 
         private void WriterExpressionSwitchCase()
         {
-            throw new NotImplementedException();
+            if (this._writer is not CodeWriter codeWriter)
+            {
+                return;
+            }
+
+            codeWriter.AppendLine($"{this._switchOn} switch");
+            codeWriter.AppendLine("{");
+            codeWriter.IncreaseIndent();
+
+            for (var i = 0; i < this._switchCases.Count; i++)
+            {
+                var caseBuilder = this._switchCases[i];
+                var suffix = i < this._switchCases.Count - 1 ? "," : string.Empty;
+                caseBuilder.WriteExpressionArm(codeWriter, suffix);
+            }
+
+            codeWriter.DecreaseIndent();
+            codeWriter.AppendLine("}");
         }
     }
 }

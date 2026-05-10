@@ -110,4 +110,54 @@ public class CodeWriterTests
         var rendered = writer.Render();
         Assert.Equal(expected, rendered);
     }
+
+    /// <summary>
+    /// Verifies that the switch statement builder renders classic switch/case/break.
+    /// </summary>
+    [Fact]
+    public void SwitchStatement_renders_classic_cases()
+    {
+        var writer = new CodeWriter(IndentStyle.Tabs);
+
+        writer.Switch("status")
+            .AddCase("\"active\"").WithContent(w => w.AppendLine("HandleActive();"))
+            .AddCase("\"inactive\"").WithContent(w => w.AppendLine("HandleInactive();"))
+            .Close();
+
+        var expected = "switch(status)" + NewLine +
+                       "{" + NewLine +
+                       "\tcase \"active\":" + NewLine +
+                       "\t\tHandleActive();" + NewLine +
+                       "\t\tbreak;" + NewLine +
+                       "\tcase \"inactive\":" + NewLine +
+                       "\t\tHandleInactive();" + NewLine +
+                       "\t\tbreak;" + NewLine +
+                       "}" + NewLine;
+
+        Assert.Equal(expected, writer.Render());
+    }
+
+    /// <summary>
+    /// Verifies that the switch expression builder renders C# 8+ switch expression arms.
+    /// </summary>
+    [Fact]
+    public void SwitchExpression_renders_expression_arms()
+    {
+        var writer = new CodeWriter(IndentStyle.Tabs);
+
+        writer.SwitchExpression("status")
+            .AddCase("\"active\"").WithExpression("1")
+            .AddCase("\"inactive\"").WithExpression("2")
+            .AddCase("_").WithExpression("0")
+            .Close();
+
+        var expected = "status switch" + NewLine +
+                       "{" + NewLine +
+                       "\t\"active\" => 1," + NewLine +
+                       "\t\"inactive\" => 2," + NewLine +
+                       "\t_ => 0" + NewLine +
+                       "}" + NewLine;
+
+        Assert.Equal(expected, writer.Render());
+    }
 }
