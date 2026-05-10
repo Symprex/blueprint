@@ -258,7 +258,7 @@ public sealed record OpenApiOperationRenderingContext(
                     break;
 
                 case PropertyBindingSource.Body:
-                    var (bodyItemsType, bodyItemsFormat, bodyAdditionalType, bodyAdditionalFormat) = ResolveCollectionSchema(clrProperty);
+                    var (bodyItemsType, bodyItemsFormat, bodyItemsSchemaRef, bodyAdditionalType, bodyAdditionalFormat, bodyAdditionalSchemaRef) = ResolveCollectionSchema(clrProperty);
 
                     bodyProperties.Add(new OpenApiRequestBodyPropertyModel(
                         entry.BindingName ?? entry.PropertyName,
@@ -278,8 +278,10 @@ public sealed record OpenApiOperationRenderingContext(
                         IsNullable = entry.IsNullable,
                         ItemsType = bodyItemsType,
                         ItemsFormat = bodyItemsFormat,
+                        ItemsSchemaRef = bodyItemsSchemaRef,
                         AdditionalPropertiesType = bodyAdditionalType,
                         AdditionalPropertiesFormat = bodyAdditionalFormat,
+                        AdditionalPropertiesSchemaRef = bodyAdditionalSchemaRef,
                         IsDeprecated = isDeprecated,
                         DefaultValue = defaultValueAttr?.Value,
                     });
@@ -404,12 +406,12 @@ public sealed record OpenApiOperationRenderingContext(
     /// </summary>
     [UnconditionalSuppressMessage("Trimming", "IL2070", Justification = "Type interfaces are preserved for operation types registered with the serializer context.")]
     [UnconditionalSuppressMessage("Trimming", "IL2075", Justification = "Type interfaces are preserved for operation types registered with the serializer context.")]
-    private static (string? ItemsType, string? ItemsFormat, string? AdditionalPropertiesType, string? AdditionalPropertiesFormat) ResolveCollectionSchema(
+    private static (string? ItemsType, string? ItemsFormat, string? ItemsSchemaRef, string? AdditionalPropertiesType, string? AdditionalPropertiesFormat, string? AdditionalPropertiesSchemaRef) ResolveCollectionSchema(
         System.Reflection.PropertyInfo? property)
     {
         if (property is null)
         {
-            return (null, null, null, null);
+            return (null, null, null, null, null, null);
         }
 
         var propertyType = property.PropertyType;
@@ -417,7 +419,7 @@ public sealed record OpenApiOperationRenderingContext(
         // string implements IEnumerable<char> — skip it to avoid emitting a spurious items schema.
         if (propertyType == typeof(string))
         {
-            return (null, null, null, null);
+            return (null, null, null, null, null, null);
         }
 
         // Check for IDictionary<TKey, TValue> first (dictionaries also implement IEnumerable).
@@ -427,7 +429,10 @@ public sealed record OpenApiOperationRenderingContext(
         {
             var valueType = dictInterface.GetGenericArguments()[1];
             var (additionalType, additionalFormat) = MapClrTypeToOpenApiSchema(valueType);
-            return (null, null, additionalType, additionalFormat);
+
+            // When the value type maps to "object", it's a complex type that should use $ref.
+            var additionalSchemaRef = additionalType == "object" ? valueType.Name : null;
+            return (null, null, null, additionalType, additionalFormat, additionalSchemaRef);
         }
 
         // Check for IEnumerable<T>.
@@ -437,10 +442,13 @@ public sealed record OpenApiOperationRenderingContext(
         {
             var elementType = enumInterface.GetGenericArguments()[0];
             var (itemType, itemFormat) = MapClrTypeToOpenApiSchema(elementType);
-            return (itemType, itemFormat, null, null);
+
+            // When the element type maps to "object", it's a complex type that should use $ref.
+            var itemSchemaRef = itemType == "object" ? elementType.Name : null;
+            return (itemType, itemFormat, itemSchemaRef, null, null, null);
         }
 
-        return (null, null, null, null);
+        return (null, null, null, null, null, null);
     }
 
     /// <summary>
@@ -532,6 +540,12 @@ public sealed record OpenApiOperationRenderingContext(
         if (underlying != typeof(string) && underlying.GetInterfaces().Any(static i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IEnumerable<>)))
         {
             return ("array", null);
+        }
+
+        // Complex types (classes/structs with no known primitive mapping) render as "object".
+        if (underlying.IsClass || (underlying.IsValueType && !underlying.IsPrimitive && !underlying.IsEnum))
+        {
+            return ("object", null);
         }
 
         return ("string", null);

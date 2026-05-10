@@ -126,4 +126,10 @@ public sealed record OpenApiRequestBodyPropertyModel(
 
     /// <summary>Gets the default value for this property, sourced from <c>[DefaultValue]</c> attribute, or null when unset.</summary>
     public object? DefaultValue { get; init; }
+
+    /// <summary>Gets the component schema name for complex array element items, rendered as a <c>$ref</c> instead of an inline type.</summary>
+    public string? ItemsSchemaRef { get; init; }
+
+    /// <summary>Gets the component schema name for complex dictionary values, rendered as a <c>$ref</c> instead of an inline type.</summary>
+    public string? AdditionalPropertiesSchemaRef { get; init; }
 }

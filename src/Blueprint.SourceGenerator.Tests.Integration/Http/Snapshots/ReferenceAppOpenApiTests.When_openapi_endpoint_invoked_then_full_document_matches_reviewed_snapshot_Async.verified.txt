@@ -387,6 +387,14 @@
                     "nullable": true,
                     "description": "Legacy category \u2014 use Tags instead.",
                     "deprecated": true
+                  },
+                  "tags": {
+                    "type": "array",
+                    "nullable": true,
+                    "description": "Freeform tags for categorizing the template.",
+                    "items": {
+                      "type": "string"
+                    }
                   }
                 },
                 "required": [

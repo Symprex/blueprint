@@ -574,6 +574,24 @@ public class ReferenceAppOpenApiTests
             .Should().BeFalse("properties without [DefaultValue] should not emit default");
     }
 
+    [Fact]
+    public async Task When_body_property_is_array_of_primitives_then_items_schema_uses_inline_type()
+    {
+        var (json, _) = await InvokeOpenApiEndpointAsync();
+        using var doc = JsonDocument.Parse(json);
+
+        // CreateTemplateCommand (POST /templates) has List<string> Tags
+        var templatesPath = doc.RootElement.GetProperty("paths").GetProperty("/templates");
+        var requestBody = templatesPath.GetProperty("post").GetProperty("requestBody");
+        var properties = requestBody.GetProperty("content").GetProperty("application/json")
+            .GetProperty("schema").GetProperty("properties");
+
+        var tagsProperty = properties.GetProperty("tags");
+        tagsProperty.GetProperty("type").GetString().Should().Be("array");
+        tagsProperty.GetProperty("items").GetProperty("type").GetString().Should().Be("string",
+            "primitive array element types should render with inline type, not $ref");
+    }
+
     private static async Task<(string Json, int StatusCode)> InvokeOpenApiEndpointAsync(
         Action<OpenApiInfoOptions>? configureOpenApi = null,
         Action<OpenApiOperationProcessorOptions>? configureOperationProcessors = null)

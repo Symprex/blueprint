@@ -106,4 +106,11 @@ public partial class CreateTemplateCommand : ICommand<ResourceEventResult<Templa
     [Obsolete("Use Tags instead.")]
     [Description("Legacy category — use Tags instead.")]
     public string? LegacyCategory { get; set; }
+
+    /// <summary>
+    /// Freeform tags for categorizing the template. Demonstrates OpenAPI array rendering
+    /// with inline <c>items</c> schema for primitive element types.
+    /// </summary>
+    [Description("Freeform tags for categorizing the template.")]
+    public List<string>? Tags { get; set; }
 }
