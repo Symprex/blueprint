@@ -52,9 +52,26 @@ internal sealed class ApiAuthoriserAggregator : IApiAuthoriserAggregator
             static (_, state) =>
             {
                 var (desc, api, link) = state;
-                return (
-                    api.Where(a => a.AppliesTo(desc)).ToArray(),
-                    link.Where(l => l.AppliesTo(desc)).ToArray());
+
+                var apiList = new List<IApiAuthoriser>(api.Length);
+                foreach (var a in api)
+                {
+                    if (a.AppliesTo(desc))
+                    {
+                        apiList.Add(a);
+                    }
+                }
+
+                var linkList = new List<ILinkVisibilityAuthoriser>(link.Length);
+                foreach (var l in link)
+                {
+                    if (l.AppliesTo(desc))
+                    {
+                        linkList.Add(l);
+                    }
+                }
+
+                return (apiList.ToArray(), linkList.ToArray());
             },
             (descriptor, this._apiAuthorisers, this._linkVisibilityAuthorisers));
 

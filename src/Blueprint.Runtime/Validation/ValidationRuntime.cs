@@ -79,18 +79,30 @@ public static class ValidationRuntime
     [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = "DisplayAttribute.GetName preserves property display-name formatting for runtime validation fallback paths.")]
     private static string GetDisplayName(IReadOnlyList<Attribute> propertyAttributes, string memberName)
     {
-        var displayName = propertyAttributes.OfType<DisplayAttribute>()
-            .Select(static attribute => attribute.GetName())
-            .FirstOrDefault(static name => string.IsNullOrWhiteSpace(name) == false);
-
-        if (displayName is not null)
+        for (var i = 0; i < propertyAttributes.Count; i++)
         {
-            return displayName;
+            if (propertyAttributes[i] is DisplayAttribute displayAttr)
+            {
+                var name = displayAttr.GetName();
+                if (!string.IsNullOrWhiteSpace(name))
+                {
+                    return name;
+                }
+            }
         }
 
-        return propertyAttributes.OfType<DisplayNameAttribute>()
-            .Select(static attribute => attribute.DisplayName)
-            .FirstOrDefault(static name => string.IsNullOrWhiteSpace(name) == false)
-            ?? memberName;
+        for (var i = 0; i < propertyAttributes.Count; i++)
+        {
+            if (propertyAttributes[i] is DisplayNameAttribute displayNameAttr)
+            {
+                var name = displayNameAttr.DisplayName;
+                if (!string.IsNullOrWhiteSpace(name))
+                {
+                    return name;
+                }
+            }
+        }
+
+        return memberName;
     }
 }

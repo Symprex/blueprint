@@ -515,10 +515,19 @@ public sealed record OpenApiSchemaProjectionContext(
 
     private static string? GetPattern(IEnumerable<ValidationAttribute> validationAttributes)
     {
-        return validationAttributes
-            .OfType<RegularExpressionAttribute>()
-            .Select(static attribute => attribute.Pattern)
-            .FirstOrDefault(static pattern => string.IsNullOrWhiteSpace(pattern) == false);
+        foreach (var attr in validationAttributes)
+        {
+            if (attr is RegularExpressionAttribute regex)
+            {
+                var pattern = regex.Pattern;
+                if (!string.IsNullOrWhiteSpace(pattern))
+                {
+                    return pattern;
+                }
+            }
+        }
+
+        return null;
     }
 
     private static (decimal? Value, bool IsExclusive) GetMinimum(IEnumerable<ValidationAttribute> validationAttributes)

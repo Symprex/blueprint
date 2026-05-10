@@ -186,7 +186,7 @@ public static class RecursiveDataAnnotationValidator
             {
                 yield return new ValidationResult(
                     result.ErrorMessage,
-                    memberNames.Select(n => string.Concat(path, ".", ToCamelCasePath(n))));
+                    memberNames.Select(n => $"{path}.{ToCamelCasePath(n)}"));
             }
         }
 
@@ -229,7 +229,7 @@ public static class RecursiveDataAnnotationValidator
                     {
                         foreach (var result in ValidateObject(
                             item,
-                            string.Concat(childPath, "[", index.ToString(), "]"),
+                            $"{childPath}[{index}]",
                             parentContext,
                             remainingDepth - 1,
                             visited))
