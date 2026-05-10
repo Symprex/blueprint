@@ -60,7 +60,7 @@ public sealed record OpenApiSchemaProjectionContext(
 
         var schemas = coveredBodyTypeNames
             .Where(coveredTypesByName.ContainsKey)
-            .Select(bodyTypeName => CreateSchema(bodyTypeName, coveredTypesByName[bodyTypeName], serializerContext))
+            .Select(bodyTypeName => CreateSchema(bodyTypeName, coveredTypesByName[bodyTypeName], serializerContext, coveredTypesByName))
             .ToImmutableArray();
 
         return new OpenApiSchemaProjectionContext(document, schemas);
@@ -69,7 +69,8 @@ public sealed record OpenApiSchemaProjectionContext(
     private static OpenApiSchemaModel CreateSchema(
         string bodyTypeName,
         Type bodyType,
-        JsonSerializerContext serializerContext)
+        JsonSerializerContext serializerContext,
+        Dictionary<string, Type> coveredTypesByName)
     {
         var typeInfo = serializerContext.GetTypeInfo(bodyType)
             ?? throw new InvalidOperationException($"The serializer context did not expose metadata for covered body type '{bodyTypeName}'.");
@@ -80,7 +81,7 @@ public sealed record OpenApiSchemaProjectionContext(
 
         var properties = typeInfo.Kind == JsonTypeInfoKind.Object
             ? typeInfo.Properties
-                .Select(property => CreateProperty(property, bodyTypeName, serializerContext, validationAttributesByJsonPropertyName, nullabilityContext))
+                .Select(property => CreateProperty(property, bodyTypeName, serializerContext, validationAttributesByJsonPropertyName, nullabilityContext, coveredTypesByName))
                 .OrderBy(static property => property.Name, StringComparer.Ordinal)
                 .ToImmutableArray()
             : ImmutableArray<OpenApiSchemaPropertyModel>.Empty;
@@ -101,7 +102,8 @@ public sealed record OpenApiSchemaProjectionContext(
         string bodyTypeName,
         JsonSerializerContext serializerContext,
         IReadOnlyDictionary<string, IReadOnlyList<ValidationAttribute>> validationAttributesByJsonPropertyName,
-        NullabilityInfoContext nullabilityContext)
+        NullabilityInfoContext nullabilityContext,
+        Dictionary<string, Type> coveredTypesByName)
     {
         var propertyTypeInfo = serializerContext.GetTypeInfo(property.PropertyType);
         var propertyKind = propertyTypeInfo is null
@@ -121,8 +123,8 @@ public sealed record OpenApiSchemaProjectionContext(
         // Extract element type metadata for collection/dictionary properties so schema rendering
         // can emit "items" (arrays) or "additionalProperties" (dictionaries).
         // When JsonTypeInfo is available, use its Kind; otherwise fall back to CLR interface inspection.
-        var (itemsKind, itemsFormat, itemsSchemaName) = ResolveElementSchema(propertyTypeInfo, property.PropertyType, JsonTypeInfoKind.Enumerable, serializerContext);
-        var (additionalPropertiesKind, additionalPropertiesFormat, additionalPropertiesSchemaName) = ResolveElementSchema(propertyTypeInfo, property.PropertyType, JsonTypeInfoKind.Dictionary, serializerContext);
+        var (itemsKind, itemsFormat, itemsSchemaName) = ResolveElementSchema(propertyTypeInfo, property.PropertyType, JsonTypeInfoKind.Enumerable, coveredTypesByName);
+        var (additionalPropertiesKind, additionalPropertiesFormat, additionalPropertiesSchemaName) = ResolveElementSchema(propertyTypeInfo, property.PropertyType, JsonTypeInfoKind.Dictionary, coveredTypesByName);
 
         return new OpenApiSchemaPropertyModel(
             property.Name,
@@ -152,8 +154,8 @@ public sealed record OpenApiSchemaProjectionContext(
     /// <summary>
     /// Resolves the schema kind, format, and optional element type name for element types of
     /// collections and dictionaries. The element type name is the <see cref="FormatTypeName"/>
-    /// representation and is present only when the element type is a complex object that is also
-    /// covered by the app-owned serializer context (i.e. has a reusable schema component).
+    /// representation and is present only when the element type is a complex object that also
+    /// appears as a covered schema component (i.e. has a reusable schema in the output).
     /// Prefers <see cref="JsonTypeInfo.Kind"/> when available; falls back to CLR interface
     /// inspection so that properties whose type the serializer context does not cover
     /// (e.g. <c>IDictionary&lt;string, Link&gt;</c> exposed as an interface) still emit
@@ -164,7 +166,7 @@ public sealed record OpenApiSchemaProjectionContext(
         JsonTypeInfo? typeInfo,
         Type propertyType,
         JsonTypeInfoKind expectedKind,
-        JsonSerializerContext serializerContext)
+        Dictionary<string, Type> coveredTypesByName)
     {
         // When STJ has type info and the kind matches, use it directly.
         if (typeInfo is not null && typeInfo.Kind == expectedKind)
@@ -177,9 +179,7 @@ public sealed record OpenApiSchemaProjectionContext(
 
             var kind = MapKind(elementType, JsonTypeInfoKind.None);
             var format = MapFormat(elementType);
-            var schemaName = IsComplexElementType(kind) && IsSerializerContextCovered(elementType, serializerContext)
-                ? FormatTypeName(elementType)
-                : null;
+            var schemaName = ResolveSchemaRef(elementType, kind, coveredTypesByName);
             return (kind, format, schemaName);
         }
 
@@ -195,9 +195,7 @@ public sealed record OpenApiSchemaProjectionContext(
 
             var kind = MapKind(elementType, JsonTypeInfoKind.None);
             var format = MapFormat(elementType);
-            var schemaName = IsComplexElementType(kind) && IsSerializerContextCovered(elementType, serializerContext)
-                ? FormatTypeName(elementType)
-                : null;
+            var schemaName = ResolveSchemaRef(elementType, kind, coveredTypesByName);
             return (kind, format, schemaName);
         }
 
@@ -205,29 +203,19 @@ public sealed record OpenApiSchemaProjectionContext(
     }
 
     /// <summary>
-    /// Returns <c>true</c> when an element type should be rendered via <c>$ref</c> to a
-    /// component schema rather than inline <c>type</c>. Primitive and already-typed elements
-    /// (string, integer, number, boolean) are rendered inline.
+    /// Returns the schema component name when an element type is complex (not a primitive) AND
+    /// appears in the covered body types set (so the <c>$ref</c> target actually exists).
+    /// Primitive elements (string, integer, number, boolean) are rendered inline.
     /// </summary>
-    private static bool IsComplexElementType(OpenApiSchemaKind? kind)
+    private static string? ResolveSchemaRef(Type elementType, OpenApiSchemaKind? kind, Dictionary<string, Type> coveredTypesByName)
     {
-        return kind is null or OpenApiSchemaKind.None or OpenApiSchemaKind.Object;
-    }
+        if (kind is not (null or OpenApiSchemaKind.None or OpenApiSchemaKind.Object))
+        {
+            return null;
+        }
 
-    /// <summary>
-    /// Checks whether the serializer context can resolve metadata for the given type,
-    /// which means it will have a corresponding schema component in the OpenAPI output.
-    /// </summary>
-    private static bool IsSerializerContextCovered(Type elementType, JsonSerializerContext serializerContext)
-    {
-        try
-        {
-            return serializerContext.GetTypeInfo(elementType) is not null;
-        }
-        catch
-        {
-            return false;
-        }
+        var typeName = FormatTypeName(elementType);
+        return coveredTypesByName.ContainsKey(typeName) ? typeName : null;
     }
 
     /// <summary>
