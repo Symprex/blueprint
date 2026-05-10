@@ -2830,9 +2830,14 @@ public class ValidationModuleTests
         pipelineSource.Should().Contain("operation.MaximumValue is not null && operation.MinimumValue is not null");
         pipelineSource.Should().Contain("operation.MaximumValue.Value < operation.MinimumValue.Value");
         pipelineSource.Should().Contain("new global::Blueprint.Validation.MustBeGreaterThanOrEqualAttribute(\"MinimumValue\")");
-        pipelineSource.Should().Contain("new global::Blueprint.Validation.PasswordAttribute(\"Weak password.\").IsValid(operation.Password) == false");
-        pipelineSource.Should().Contain("new global::Blueprint.Validation.ResourceKeyAttribute(\"Bad resource key.\").IsValid(operation.ResourceKey) == false");
-        pipelineSource.Should().Contain("new global::Blueprint.Validation.UkPostcodeAttribute(\"Bad postcode.\").IsValid(operation.Postcode) == false");
+        pipelineSource.Should().Contain("_va_Password.IsValid(operation.Password) == false");
+        pipelineSource.Should().Contain("_va_ResourceKey.IsValid(operation.ResourceKey) == false");
+        pipelineSource.Should().Contain("_va_Postcode.IsValid(operation.Postcode) == false");
+
+        // Verify static readonly fields are emitted for cached validation attributes
+        pipelineSource.Should().Contain("private static readonly Blueprint.Validation.PasswordAttribute _va_Password");
+        pipelineSource.Should().Contain("private static readonly Blueprint.Validation.ResourceKeyAttribute _va_ResourceKey");
+        pipelineSource.Should().Contain("private static readonly Blueprint.Validation.UkPostcodeAttribute _va_Postcode");
         pipelineSource.IndexOf("operation.AcceptedTerms == false", StringComparison.Ordinal)
             .Should()
             .BeLessThan(pipelineSource.IndexOf("var handlerResult", StringComparison.Ordinal));

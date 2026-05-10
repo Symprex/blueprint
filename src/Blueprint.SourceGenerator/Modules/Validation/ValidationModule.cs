@@ -51,7 +51,11 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
             return;
         }
 
-        context.AddRenderStep(PipelineStage.Validation, renderContext => RenderPropertyValidation(renderContext, validationPlan.Properties));
+        // Hoist validation attributes that are used in FailureCondition checks to static readonly fields.
+        // This eliminates per-request allocation for attributes whose IsValid() call runs on the success path.
+        var cachedAttributeFields = EmitCachedAttributeFields(context, validationPlan.Properties);
+
+        context.AddRenderStep(PipelineStage.Validation, renderContext => RenderPropertyValidation(renderContext, validationPlan.Properties, cachedAttributeFields));
     }
 
     private static void ValidateReferencedPropertyAttributes(DescriptorContributorContext context)
@@ -320,7 +324,74 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
         }
     }
 
-    private static void RenderPropertyValidation(PipelineRenderContext context, IReadOnlyList<PropertyValidationPlan> properties)
+    /// <summary>
+    /// Scans validation rules for attributes that need to be cached as static readonly fields. Attributes
+    /// with <see cref="ValidationFastPathRule.CachedAttributeTypeName"/> set have their <c>IsValid</c> call
+    /// on the success path, so hoisting them avoids per-request allocation.
+    /// </summary>
+    private static Dictionary<string, string> EmitCachedAttributeFields(
+        PipelineContributorContext context,
+        IReadOnlyList<PropertyValidationPlan> properties)
+    {
+        var fieldMap = new Dictionary<string, string>();
+
+        foreach (var property in properties)
+        {
+            if (property is not FastPathPropertyValidationPlan fastPath)
+            {
+                continue;
+            }
+
+            CacheRuleIfNeeded(context, fastPath.MemberName, fastPath.RequiredRule, fieldMap);
+
+            foreach (var rule in fastPath.OtherRules)
+            {
+                CacheRuleIfNeeded(context, fastPath.MemberName, rule, fieldMap);
+            }
+        }
+
+        return fieldMap;
+
+        static void CacheRuleIfNeeded(
+            PipelineContributorContext context,
+            string memberName,
+            ValidationFastPathRule? rule,
+            Dictionary<string, string> fieldMap)
+        {
+            if (rule?.CachedAttributeTypeName is null)
+            {
+                return;
+            }
+
+            var expression = rule.ValidationAttributeExpression;
+
+            if (fieldMap.ContainsKey(expression))
+            {
+                return;
+            }
+
+            var fieldName = $"_va_{memberName}";
+
+            // Disambiguate if the same property somehow has multiple cached attributes
+            if (fieldMap.ContainsValue(fieldName))
+            {
+                fieldName = $"_va_{memberName}_{fieldMap.Count}";
+            }
+
+            fieldMap[expression] = fieldName;
+
+            var typeName = rule.CachedAttributeTypeName;
+            context.AddDeferredClassMember(classBuilder =>
+            {
+                classBuilder.AddProperty(fieldName, Accessibility.Private)
+                    .SetType(typeName)
+                    .MakeStatic()
+                    .WithReadonlyValue(expression);
+            });
+        }
+    }
+
+    private static void RenderPropertyValidation(PipelineRenderContext context, IReadOnlyList<PropertyValidationPlan> properties, Dictionary<string, string> cachedAttributeFields)
     {
         context.DeclareVariable(
             "validationResults",
@@ -331,7 +402,7 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
             switch (property)
             {
                 case FastPathPropertyValidationPlan fastPathProperty:
-                    RenderFastPathValidation(context, fastPathProperty);
+                    RenderFastPathValidation(context, fastPathProperty, cachedAttributeFields);
                     break;
                 case RuntimeFallbackPropertyValidationPlan runtimeFallbackProperty:
                     RenderRuntimeFallbackValidation(context, runtimeFallbackProperty);
@@ -353,22 +424,22 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
         context.WriteBlankLine();
     }
 
-    private static void RenderFastPathValidation(PipelineRenderContext context, FastPathPropertyValidationPlan property)
+    private static void RenderFastPathValidation(PipelineRenderContext context, FastPathPropertyValidationPlan property, Dictionary<string, string> cachedAttributeFields)
     {
         if (property.RequiredRule is not null)
         {
-            RenderValidationFailure(context, property.RequiredRule.FailureCondition, property.RequiredRule, property);
+            RenderValidationFailure(context, ResolveFailureCondition(property.RequiredRule, cachedAttributeFields), property.RequiredRule, property, cachedAttributeFields);
         }
 
         foreach (var rule in property.OtherRules)
         {
-            var failureOperand = WrapConditionOperand(rule.FailureCondition);
+            var failureOperand = WrapConditionOperand(ResolveFailureCondition(rule, cachedAttributeFields));
             var failureCondition = property.RequiredRule?.SuccessCondition is string successCondition
                 ? $"{WrapConditionOperand(successCondition)} && {failureOperand}"
                 : rule.GuardCondition is string guardCondition
                     ? $"{WrapConditionOperand(guardCondition)} && {failureOperand}"
-                    : rule.FailureCondition;
-            RenderValidationFailure(context, failureCondition, rule, property);
+                    : ResolveFailureCondition(rule, cachedAttributeFields);
+            RenderValidationFailure(context, failureCondition, rule, property, cachedAttributeFields);
         }
 
         static string WrapConditionOperand(string condition)
@@ -405,7 +476,8 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
         PipelineRenderContext context,
         string failureCondition,
         ValidationFastPathRule rule,
-        FastPathPropertyValidationPlan property)
+        FastPathPropertyValidationPlan property,
+        Dictionary<string, string> cachedAttributeFields)
     {
         context.If(
             failureCondition,
@@ -414,12 +486,39 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
                 branch.Assign(
                     "validationResults",
                     "validationResults ?? new global::System.Collections.Generic.List<global::System.ComponentModel.DataAnnotations.ValidationResult>()");
+
+                var attrExpression = ResolveAttributeExpression(rule, cachedAttributeFields);
                 var validationAttributeExpression = rule.WrapValidationAttributeExpression
-                    ? $"({rule.ValidationAttributeExpression})"
-                    : rule.ValidationAttributeExpression;
+                    ? $"({attrExpression})"
+                    : attrExpression;
                 branch.WriteStatement(
                     $"validationResults.Add(new global::System.ComponentModel.DataAnnotations.ValidationResult({validationAttributeExpression}.FormatErrorMessage(\"{property.DisplayName}\"), [\"{property.MemberName}\"]));");
             });
+    }
+
+    /// <summary>
+    /// Returns the attribute reference to use in generated code. When the rule has a cached static field,
+    /// returns the field name; otherwise returns the inline constructor expression.
+    /// </summary>
+    private static string ResolveAttributeExpression(ValidationFastPathRule rule, Dictionary<string, string> cachedAttributeFields)
+    {
+        return cachedAttributeFields.TryGetValue(rule.ValidationAttributeExpression, out var fieldName)
+            ? fieldName
+            : rule.ValidationAttributeExpression;
+    }
+
+    /// <summary>
+    /// Returns the failure condition with any cached attribute expression replaced by its static field reference.
+    /// </summary>
+    private static string ResolveFailureCondition(ValidationFastPathRule rule, Dictionary<string, string> cachedAttributeFields)
+    {
+        if (rule.CachedAttributeTypeName is null
+            || !cachedAttributeFields.TryGetValue(rule.ValidationAttributeExpression, out var fieldName))
+        {
+            return rule.FailureCondition;
+        }
+
+        return rule.FailureCondition.Replace(rule.ValidationAttributeExpression, fieldName, StringComparison.Ordinal);
     }
 
     private static void RenderGenericValidation(PipelineRenderContext context)

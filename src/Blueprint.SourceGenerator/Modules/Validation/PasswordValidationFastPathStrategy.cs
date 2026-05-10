@@ -28,7 +28,8 @@ internal sealed class PasswordValidationFastPathStrategy : IValidationFastPathSt
 
         rule = new ValidationFastPathRule(
             $"{attributeExpression}.IsValid({propertyAccess}) == false",
-            attributeExpression);
+            attributeExpression,
+            CachedAttributeTypeName: "Blueprint.Validation.PasswordAttribute");
         return true;
     }
 

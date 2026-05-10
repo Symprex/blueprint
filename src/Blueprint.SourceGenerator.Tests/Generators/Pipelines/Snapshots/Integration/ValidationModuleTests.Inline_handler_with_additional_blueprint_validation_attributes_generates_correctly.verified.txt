@@ -19,6 +19,12 @@ namespace Blueprint.Generated
             new string[] { "PropertyPopulationModule", "ValidationModule", "HandlerExecutionModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
         private static readonly System.Diagnostics.ActivityTagsCollection _auditTags_CreateUserCommand =
             new System.Diagnostics.ActivityTagsCollection { { "blueprint.operation.type", "CreateUserCommand" } };
+        private static readonly Blueprint.Validation.PasswordAttribute _va_Password =
+            new global::Blueprint.Validation.PasswordAttribute("Weak password.");
+        private static readonly Blueprint.Validation.UkPostcodeAttribute _va_Postcode =
+            new global::Blueprint.Validation.UkPostcodeAttribute("Bad postcode.");
+        private static readonly Blueprint.Validation.ResourceKeyAttribute _va_ResourceKey =
+            new global::Blueprint.Validation.ResourceKeyAttribute("Bad resource key.");
 
         public CreateUserCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory)
             : base(loggerFactory, "CreateUserCommand")
@@ -89,20 +95,20 @@ namespace Blueprint.Generated
                 validationResults = validationResults ?? new global::System.Collections.Generic.List<global::System.ComponentModel.DataAnnotations.ValidationResult>();
                 validationResults.Add(new global::System.ComponentModel.DataAnnotations.ValidationResult(new global::Blueprint.Validation.MustBeGreaterThanOrEqualAttribute("MinimumValue").FormatErrorMessage("MaximumValue"), ["MaximumValue"]));
             }
-            if (new global::Blueprint.Validation.PasswordAttribute("Weak password.").IsValid(operation.Password) == false)
+            if (_va_Password.IsValid(operation.Password) == false)
             {
                 validationResults = validationResults ?? new global::System.Collections.Generic.List<global::System.ComponentModel.DataAnnotations.ValidationResult>();
-                validationResults.Add(new global::System.ComponentModel.DataAnnotations.ValidationResult(new global::Blueprint.Validation.PasswordAttribute("Weak password.").FormatErrorMessage("Password"), ["Password"]));
+                validationResults.Add(new global::System.ComponentModel.DataAnnotations.ValidationResult(_va_Password.FormatErrorMessage("Password"), ["Password"]));
             }
-            if (new global::Blueprint.Validation.ResourceKeyAttribute("Bad resource key.").IsValid(operation.ResourceKey) == false)
+            if (_va_ResourceKey.IsValid(operation.ResourceKey) == false)
             {
                 validationResults = validationResults ?? new global::System.Collections.Generic.List<global::System.ComponentModel.DataAnnotations.ValidationResult>();
-                validationResults.Add(new global::System.ComponentModel.DataAnnotations.ValidationResult(new global::Blueprint.Validation.ResourceKeyAttribute("Bad resource key.").FormatErrorMessage("ResourceKey"), ["ResourceKey"]));
+                validationResults.Add(new global::System.ComponentModel.DataAnnotations.ValidationResult(_va_ResourceKey.FormatErrorMessage("ResourceKey"), ["ResourceKey"]));
             }
-            if (new global::Blueprint.Validation.UkPostcodeAttribute("Bad postcode.").IsValid(operation.Postcode) == false)
+            if (_va_Postcode.IsValid(operation.Postcode) == false)
             {
                 validationResults = validationResults ?? new global::System.Collections.Generic.List<global::System.ComponentModel.DataAnnotations.ValidationResult>();
-                validationResults.Add(new global::System.ComponentModel.DataAnnotations.ValidationResult(new global::Blueprint.Validation.UkPostcodeAttribute("Bad postcode.").FormatErrorMessage("Postcode"), ["Postcode"]));
+                validationResults.Add(new global::System.ComponentModel.DataAnnotations.ValidationResult(_va_Postcode.FormatErrorMessage("Postcode"), ["Postcode"]));
             }
             if (validationResults is not null)
             {

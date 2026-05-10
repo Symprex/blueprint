@@ -28,7 +28,8 @@ internal sealed class ResourceKeyValidationFastPathStrategy : IValidationFastPat
 
         rule = new ValidationFastPathRule(
             $"{attributeExpression}.IsValid({propertyAccess}) == false",
-            attributeExpression);
+            attributeExpression,
+            CachedAttributeTypeName: "Blueprint.Validation.ResourceKeyAttribute");
         return true;
     }
 

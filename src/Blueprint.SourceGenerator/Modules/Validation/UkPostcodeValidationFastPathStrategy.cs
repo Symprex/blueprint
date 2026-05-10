@@ -28,7 +28,8 @@ internal sealed class UkPostcodeValidationFastPathStrategy : IValidationFastPath
 
         rule = new ValidationFastPathRule(
             $"{attributeExpression}.IsValid({propertyAccess}) == false",
-            attributeExpression);
+            attributeExpression,
+            CachedAttributeTypeName: "Blueprint.Validation.UkPostcodeAttribute");
         return true;
     }
 
