@@ -50,7 +50,7 @@
           "400": {
             "description": "Bad Request",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -60,7 +60,7 @@
           "401": {
             "description": "Unauthorized",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -70,7 +70,7 @@
           "415": {
             "description": "Unsupported Media Type",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -80,7 +80,7 @@
           "422": {
             "description": "Unprocessable Entity",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ValidationProblemDetails"
                 }
@@ -90,7 +90,7 @@
           "500": {
             "description": "Internal Server Error",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -130,7 +130,7 @@
           "422": {
             "description": "Unprocessable Entity",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ValidationProblemDetails"
                 }
@@ -140,7 +140,7 @@
           "500": {
             "description": "Internal Server Error",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -171,7 +171,7 @@
           "401": {
             "description": "Unauthorized",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -181,7 +181,7 @@
           "422": {
             "description": "Unprocessable Entity",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ValidationProblemDetails"
                 }
@@ -191,7 +191,7 @@
           "500": {
             "description": "Internal Server Error",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -227,7 +227,7 @@
           "422": {
             "description": "Unprocessable Entity",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ValidationProblemDetails"
                 }
@@ -237,7 +237,7 @@
           "500": {
             "description": "Internal Server Error",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -271,7 +271,7 @@
           "401": {
             "description": "Unauthorized",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -281,7 +281,7 @@
           "403": {
             "description": "Forbidden",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -291,7 +291,7 @@
           "422": {
             "description": "Unprocessable Entity",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ValidationProblemDetails"
                 }
@@ -301,7 +301,7 @@
           "500": {
             "description": "Internal Server Error",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -428,7 +428,7 @@
           "400": {
             "description": "Bad Request",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -438,7 +438,7 @@
           "401": {
             "description": "Unauthorized",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -448,7 +448,7 @@
           "403": {
             "description": "Forbidden",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -458,7 +458,7 @@
           "415": {
             "description": "Unsupported Media Type",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -468,7 +468,7 @@
           "422": {
             "description": "Unprocessable Entity",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ValidationProblemDetails"
                 }
@@ -478,7 +478,7 @@
           "500": {
             "description": "Internal Server Error",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -536,7 +536,7 @@
           "400": {
             "description": "Bad Request",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -546,7 +546,7 @@
           "401": {
             "description": "Unauthorized",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -556,7 +556,7 @@
           "403": {
             "description": "Forbidden",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -566,7 +566,7 @@
           "415": {
             "description": "Unsupported Media Type",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -576,7 +576,7 @@
           "422": {
             "description": "Unprocessable Entity",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ValidationProblemDetails"
                 }
@@ -586,7 +586,7 @@
           "500": {
             "description": "Internal Server Error",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -656,7 +656,7 @@
           "422": {
             "description": "Unprocessable Entity",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ValidationProblemDetails"
                 }
@@ -666,7 +666,7 @@
           "500": {
             "description": "Internal Server Error",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -724,7 +724,7 @@
           "400": {
             "description": "Bad Request",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -734,7 +734,7 @@
           "401": {
             "description": "Unauthorized",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -744,7 +744,7 @@
           "403": {
             "description": "Forbidden",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -754,7 +754,7 @@
           "415": {
             "description": "Unsupported Media Type",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -764,7 +764,7 @@
           "422": {
             "description": "Unprocessable Entity",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ValidationProblemDetails"
                 }
@@ -774,7 +774,7 @@
           "500": {
             "description": "Internal Server Error",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -827,7 +827,7 @@
           "401": {
             "description": "Unauthorized",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -837,7 +837,7 @@
           "403": {
             "description": "Forbidden",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -847,7 +847,7 @@
           "422": {
             "description": "Unprocessable Entity",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ValidationProblemDetails"
                 }
@@ -857,7 +857,7 @@
           "500": {
             "description": "Internal Server Error",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -968,7 +968,7 @@
           "400": {
             "description": "Bad Request",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -978,7 +978,7 @@
           "422": {
             "description": "Unprocessable Entity",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ValidationProblemDetails"
                 }
@@ -988,7 +988,7 @@
           "500": {
             "description": "Internal Server Error",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -1024,7 +1024,7 @@
           "401": {
             "description": "Unauthorized",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -1034,7 +1034,7 @@
           "403": {
             "description": "Forbidden",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -1044,7 +1044,7 @@
           "422": {
             "description": "Unprocessable Entity",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ValidationProblemDetails"
                 }
@@ -1054,7 +1054,7 @@
           "500": {
             "description": "Internal Server Error",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -1099,7 +1099,7 @@
           "401": {
             "description": "Unauthorized",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -1109,7 +1109,7 @@
           "403": {
             "description": "Forbidden",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -1129,7 +1129,7 @@
           "422": {
             "description": "Unprocessable Entity",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ValidationProblemDetails"
                 }
@@ -1139,7 +1139,7 @@
           "500": {
             "description": "Internal Server Error",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -1217,7 +1217,7 @@
           "400": {
             "description": "Bad Request",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -1227,7 +1227,7 @@
           "401": {
             "description": "Unauthorized",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -1237,7 +1237,7 @@
           "403": {
             "description": "Forbidden",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -1247,7 +1247,7 @@
           "415": {
             "description": "Unsupported Media Type",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -1257,7 +1257,7 @@
           "422": {
             "description": "Unprocessable Entity",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ValidationProblemDetails"
                 }
@@ -1267,7 +1267,7 @@
           "500": {
             "description": "Internal Server Error",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -1334,7 +1334,7 @@
           "400": {
             "description": "Bad Request",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -1344,7 +1344,7 @@
           "401": {
             "description": "Unauthorized",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -1354,7 +1354,7 @@
           "403": {
             "description": "Forbidden",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -1364,7 +1364,7 @@
           "415": {
             "description": "Unsupported Media Type",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -1374,7 +1374,7 @@
           "422": {
             "description": "Unprocessable Entity",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ValidationProblemDetails"
                 }
@@ -1384,7 +1384,7 @@
           "500": {
             "description": "Internal Server Error",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -1424,7 +1424,7 @@
           "401": {
             "description": "Unauthorized",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -1434,7 +1434,7 @@
           "403": {
             "description": "Forbidden",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -1444,7 +1444,7 @@
           "422": {
             "description": "Unprocessable Entity",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ValidationProblemDetails"
                 }
@@ -1454,7 +1454,7 @@
           "500": {
             "description": "Internal Server Error",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -1502,7 +1502,7 @@
           "401": {
             "description": "Unauthorized",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -1512,7 +1512,7 @@
           "403": {
             "description": "Forbidden",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -1522,7 +1522,7 @@
           "422": {
             "description": "Unprocessable Entity",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ValidationProblemDetails"
                 }
@@ -1532,7 +1532,7 @@
           "500": {
             "description": "Internal Server Error",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -1616,7 +1616,7 @@
           "401": {
             "description": "Unauthorized",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -1626,7 +1626,7 @@
           "422": {
             "description": "Unprocessable Entity",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ValidationProblemDetails"
                 }
@@ -1636,7 +1636,7 @@
           "500": {
             "description": "Internal Server Error",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -1705,7 +1705,7 @@
           "400": {
             "description": "Bad Request",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -1715,7 +1715,7 @@
           "401": {
             "description": "Unauthorized",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -1725,7 +1725,7 @@
           "403": {
             "description": "Forbidden",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -1735,7 +1735,7 @@
           "415": {
             "description": "Unsupported Media Type",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -1745,7 +1745,7 @@
           "422": {
             "description": "Unprocessable Entity",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ValidationProblemDetails"
                 }
@@ -1755,7 +1755,7 @@
           "500": {
             "description": "Internal Server Error",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -1802,7 +1802,7 @@
           "401": {
             "description": "Unauthorized",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -1812,7 +1812,7 @@
           "403": {
             "description": "Forbidden",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -1832,7 +1832,7 @@
           "422": {
             "description": "Unprocessable Entity",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ValidationProblemDetails"
                 }
@@ -1842,7 +1842,7 @@
           "500": {
             "description": "Internal Server Error",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -1932,7 +1932,7 @@
           "400": {
             "description": "Bad Request",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -1942,7 +1942,7 @@
           "401": {
             "description": "Unauthorized",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -1952,7 +1952,7 @@
           "403": {
             "description": "Forbidden",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -1962,7 +1962,7 @@
           "415": {
             "description": "Unsupported Media Type",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -1972,7 +1972,7 @@
           "422": {
             "description": "Unprocessable Entity",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ValidationProblemDetails"
                 }
@@ -1982,7 +1982,7 @@
           "500": {
             "description": "Internal Server Error",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -2036,7 +2036,7 @@
           "400": {
             "description": "Bad Request",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -2046,7 +2046,7 @@
           "401": {
             "description": "Unauthorized",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -2056,7 +2056,7 @@
           "415": {
             "description": "Unsupported Media Type",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -2066,7 +2066,7 @@
           "422": {
             "description": "Unprocessable Entity",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ValidationProblemDetails"
                 }
@@ -2076,7 +2076,7 @@
           "500": {
             "description": "Internal Server Error",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -2126,7 +2126,7 @@
           "401": {
             "description": "Unauthorized",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -2136,7 +2136,7 @@
           "403": {
             "description": "Forbidden",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -2146,7 +2146,7 @@
           "422": {
             "description": "Unprocessable Entity",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ValidationProblemDetails"
                 }
@@ -2156,7 +2156,7 @@
           "500": {
             "description": "Internal Server Error",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -2224,7 +2224,7 @@
           "400": {
             "description": "Bad Request",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -2234,7 +2234,7 @@
           "401": {
             "description": "Unauthorized",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -2244,7 +2244,7 @@
           "403": {
             "description": "Forbidden",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -2254,7 +2254,7 @@
           "415": {
             "description": "Unsupported Media Type",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }
@@ -2264,7 +2264,7 @@
           "422": {
             "description": "Unprocessable Entity",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ValidationProblemDetails"
                 }
@@ -2274,7 +2274,7 @@
           "500": {
             "description": "Internal Server Error",
             "content": {
-              "application/json": {
+              "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
                 }

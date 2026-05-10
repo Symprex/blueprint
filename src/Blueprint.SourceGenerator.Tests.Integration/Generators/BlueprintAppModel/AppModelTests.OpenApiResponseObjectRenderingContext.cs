@@ -29,7 +29,7 @@ public class AppModelOpenApiResponseObjectRenderingContextTests
         var validationResponse = operationContext.Responses[1];
         validationResponse.HasResponseBody.Should().BeTrue();
         validationResponse.ResultTypeNames.Should().Equal("Blueprint.Runtime.Exec.ValidationFailedResult");
-        validationResponse.Content.Select(static content => content.MediaType).Should().Equal("application/json");
+        validationResponse.Content.Select(static content => content.MediaType).Should().Equal("application/problem+json");
         validationResponse.Content[0].SchemaComponents.Select(static component => component.BodyTypeName)
             .Should()
             .Equal("Microsoft.AspNetCore.Mvc.ValidationProblemDetails");
@@ -40,7 +40,7 @@ public class AppModelOpenApiResponseObjectRenderingContextTests
         var errorResponse = operationContext.Responses[2];
         errorResponse.HasResponseBody.Should().BeTrue();
         errorResponse.ResultTypeNames.Should().Equal("Blueprint.Runtime.Exec.UnhandledExceptionResult");
-        errorResponse.Content.Select(static content => content.MediaType).Should().Equal("application/json");
+        errorResponse.Content.Select(static content => content.MediaType).Should().Equal("application/problem+json");
         errorResponse.Content[0].SchemaComponents.Select(static component => component.BodyTypeName)
             .Should()
             .Equal("Microsoft.AspNetCore.Mvc.ProblemDetails");

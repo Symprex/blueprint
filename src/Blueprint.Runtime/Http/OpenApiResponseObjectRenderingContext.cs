@@ -17,10 +17,13 @@ public sealed record OpenApiResponseObjectRenderingContext(
     ImmutableArray<OpenApiResponseObjectOperationContext> Operations)
 {
     private const string JsonMediaType = "application/json";
+    private const string ProblemJsonMediaType = "application/problem+json";
     private const string PlainTextMediaType = "text/plain";
     private const string OctetStreamMediaType = "application/octet-stream";
     private const string PlainTextResultTypeName = "Blueprint.Runtime.Exec.PlainTextResult";
     private const string FileStreamResultTypeName = "Blueprint.Runtime.Exec.FileStreamResult";
+    private const string ProblemDetailsTypeName = "Microsoft.AspNetCore.Mvc.ProblemDetails";
+    private const string ValidationProblemDetailsTypeName = "Microsoft.AspNetCore.Mvc.ValidationProblemDetails";
 
     /// <summary>
     /// Creates deterministic OpenAPI-style response objects from the supplied response-schema reference projection.
@@ -83,7 +86,7 @@ public sealed record OpenApiResponseObjectRenderingContext(
 
         return schemaComponents.IsEmpty
             ? TryCreateNonJsonContent(response.Response)
-            : [new OpenApiResponseContentModel(JsonMediaType, schemaComponents, discriminator)];
+            : [new OpenApiResponseContentModel(SelectMediaType(schemaComponents), schemaComponents, discriminator)];
     }
 
     /// <summary>
@@ -120,6 +123,30 @@ public sealed record OpenApiResponseObjectRenderingContext(
         }
 
         return ImmutableArray<OpenApiResponseContentModel>.Empty;
+    }
+
+    /// <summary>
+    /// Selects <c>application/problem+json</c> when every schema component in the response is a
+    /// ProblemDetails or ValidationProblemDetails body (RFC 9457), otherwise <c>application/json</c>.
+    /// </summary>
+    private static string SelectMediaType(ImmutableArray<OpenApiResponseContentSchemaComponent> schemaComponents)
+    {
+        if (schemaComponents.IsEmpty)
+        {
+            return JsonMediaType;
+        }
+
+        foreach (var component in schemaComponents)
+        {
+            var bodyType = component.BodyTypeName;
+            if (!string.Equals(bodyType, ProblemDetailsTypeName, StringComparison.Ordinal)
+                && !string.Equals(bodyType, ValidationProblemDetailsTypeName, StringComparison.Ordinal))
+            {
+                return JsonMediaType;
+            }
+        }
+
+        return ProblemJsonMediaType;
     }
 
     private static OpenApiResponseContentSchemaComponent? TryCreateContentSchemaComponent(
