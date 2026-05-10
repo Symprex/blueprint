@@ -232,6 +232,11 @@ public sealed record OpenApiOutputRenderingContext(
             if (primaryOperation.Deprecated)
             {
                 writer.WriteBoolean("deprecated", true);
+
+                if (primaryOperation.DeprecationReason is not null)
+                {
+                    writer.WriteString("x-deprecated-reason", primaryOperation.DeprecationReason);
+                }
             }
 
             if (primaryOperation.RequiresAuthentication)
@@ -415,6 +420,11 @@ public sealed record OpenApiOutputRenderingContext(
                 if (property.IsDeprecated)
                 {
                     writer.WriteBoolean("deprecated", true);
+
+                    if (property.DeprecationReason is not null)
+                    {
+                        writer.WriteString("x-deprecated-reason", property.DeprecationReason);
+                    }
                 }
 
                 if (property.DefaultValue is not null)
@@ -935,6 +945,11 @@ public sealed record OpenApiOutputRenderingContext(
         if (property.IsDeprecated)
         {
             writer.WriteBoolean("deprecated", true);
+
+            if (property.DeprecationReason is not null)
+            {
+                writer.WriteString("x-deprecated-reason", property.DeprecationReason);
+            }
         }
 
         if (property.DefaultValue is not null)

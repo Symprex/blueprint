@@ -124,6 +124,9 @@ public sealed record OpenApiRequestBodyPropertyModel(
     /// <summary>Gets whether this property is deprecated (mapped from <see cref="System.ObsoleteAttribute"/>).</summary>
     public bool IsDeprecated { get; init; }
 
+    /// <summary>Gets the deprecation reason extracted from the <see cref="System.ObsoleteAttribute.Message"/>, or null when unset.</summary>
+    public string? DeprecationReason { get; init; }
+
     /// <summary>Gets the default value for this property, sourced from <c>[DefaultValue]</c> attribute, or null when unset.</summary>
     public object? DefaultValue { get; init; }
 

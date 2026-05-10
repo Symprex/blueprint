@@ -113,7 +113,9 @@ public sealed record OpenApiOperationRenderingContext(
             operationDescription = docData.Summary;
         }
 
-        var isDeprecated = operation.Operation.OperationType.IsDefined(typeof(ObsoleteAttribute), inherit: false);
+        var obsoleteAttr = operation.Operation.OperationType.GetCustomAttribute<ObsoleteAttribute>(inherit: false);
+        var isDeprecated = obsoleteAttr is not null;
+        var deprecationReason = obsoleteAttr?.Message;
 
         var requiresAuthentication = operation.Operation.TryGetFeatureData<OperationAuthenticationFeatureData>(out var authData)
             && authData.Requirement == AuthenticationRequirement.Authenticated;
@@ -130,6 +132,7 @@ public sealed record OpenApiOperationRenderingContext(
         {
             Summary = operationDescription,
             Deprecated = isDeprecated,
+            DeprecationReason = deprecationReason,
             RequiresAuthentication = requiresAuthentication,
             TagDescriptions = tagDescriptions,
         };
@@ -168,7 +171,9 @@ public sealed record OpenApiOperationRenderingContext(
 
             // Validation-derived format (email, uri, phone) takes precedence over CLR type format.
             var effectiveFormat = constraints.Format ?? schemaFormat;
-            var isDeprecated = clrProperty?.GetCustomAttribute<System.ObsoleteAttribute>() is not null;
+            var obsoletePropertyAttr = clrProperty?.GetCustomAttribute<System.ObsoleteAttribute>();
+            var isDeprecated = obsoletePropertyAttr is not null;
+            var propertyDeprecationReason = obsoletePropertyAttr?.Message;
             var defaultValueAttr = clrProperty?.GetCustomAttribute<System.ComponentModel.DefaultValueAttribute>();
 
             switch (entry.Source)
@@ -283,6 +288,7 @@ public sealed record OpenApiOperationRenderingContext(
                         AdditionalPropertiesFormat = bodyAdditionalFormat,
                         AdditionalPropertiesSchemaRef = bodyAdditionalSchemaRef,
                         IsDeprecated = isDeprecated,
+                        DeprecationReason = propertyDeprecationReason,
                         DefaultValue = defaultValueAttr?.Value,
                     });
                     break;
@@ -584,6 +590,9 @@ public sealed record OpenApiOperationModel(
 
     /// <summary>Gets whether this operation is deprecated in the OpenAPI output (maps from <see cref="ObsoleteAttribute"/>).</summary>
     public bool Deprecated { get; init; }
+
+    /// <summary>Gets the deprecation reason extracted from the <see cref="ObsoleteAttribute.Message"/>, or null when unset.</summary>
+    public string? DeprecationReason { get; init; }
 
     /// <summary>Gets the tag descriptions for this operation's tags, keyed by tag name.</summary>
     public ImmutableDictionary<string, string> TagDescriptions { get; init; } = ImmutableDictionary<string, string>.Empty;

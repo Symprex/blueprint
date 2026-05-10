@@ -614,6 +614,24 @@ public class ReferenceAppOpenApiTests
             .Should().BeFalse("request body complex types should not reference component schemas");
     }
 
+    [Fact]
+    public async Task When_property_has_obsolete_with_message_then_x_deprecated_reason_rendered()
+    {
+        var (json, _) = await InvokeOpenApiEndpointAsync();
+        using var doc = JsonDocument.Parse(json);
+
+        // CreateTemplateCommand has [Obsolete("Use Tags instead.")] on LegacyCategory
+        var templatesPath = doc.RootElement.GetProperty("paths").GetProperty("/templates");
+        var requestBody = templatesPath.GetProperty("post").GetProperty("requestBody");
+        var properties = requestBody.GetProperty("content").GetProperty("application/json")
+            .GetProperty("schema").GetProperty("properties");
+
+        var legacyCategoryProperty = properties.GetProperty("legacyCategory");
+        legacyCategoryProperty.GetProperty("deprecated").GetBoolean().Should().BeTrue();
+        legacyCategoryProperty.GetProperty("x-deprecated-reason").GetString()
+            .Should().Be("Use Tags instead.");
+    }
+
     private static async Task<(string Json, int StatusCode)> InvokeOpenApiEndpointAsync(
         Action<OpenApiInfoOptions>? configureOpenApi = null,
         Action<OpenApiOperationProcessorOptions>? configureOperationProcessors = null)

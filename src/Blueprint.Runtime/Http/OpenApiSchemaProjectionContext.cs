@@ -117,8 +117,11 @@ public sealed record OpenApiSchemaProjectionContext(
         var format = MapFormatFromValidationAttributes(validationAttributes) ?? MapFormat(property.PropertyType);
         var enumValues = MapEnumValues(property.PropertyType);
         var description = GetPropertyDescription(property);
-        var isDeprecated = property.AttributeProvider is MemberInfo deprecatedMember
-            && deprecatedMember.IsDefined(typeof(ObsoleteAttribute), inherit: true);
+        var obsoleteAttr = property.AttributeProvider is MemberInfo deprecatedMember
+            ? deprecatedMember.GetCustomAttribute<ObsoleteAttribute>(inherit: true)
+            : null;
+        var isDeprecated = obsoleteAttr is not null;
+        var deprecationReason = obsoleteAttr?.Message;
         var defaultValue = property.AttributeProvider is MemberInfo defaultMember
             ? defaultMember.GetCustomAttribute<System.ComponentModel.DefaultValueAttribute>()?.Value
             : null;
@@ -152,6 +155,7 @@ public sealed record OpenApiSchemaProjectionContext(
             itemsSchemaName,
             additionalPropertiesSchemaName,
             isDeprecated,
+            deprecationReason,
             defaultValue);
     }
 
@@ -796,6 +800,7 @@ public sealed record OpenApiSchemaModel(
 /// <param name="ItemsSchemaName">The component schema name for complex array element types, enabling <c>$ref</c> rendering.</param>
 /// <param name="AdditionalPropertiesSchemaName">The component schema name for complex dictionary value types, enabling <c>$ref</c> rendering.</param>
 /// <param name="IsDeprecated">Whether the property is deprecated (mapped from <see cref="ObsoleteAttribute"/>).</param>
+/// <param name="DeprecationReason">The deprecation reason from <see cref="ObsoleteAttribute.Message"/>, or null.</param>
 /// <param name="DefaultValue">The default value from <see cref="System.ComponentModel.DefaultValueAttribute"/>, or null.</param>
 public sealed record OpenApiSchemaPropertyModel(
     string Name,
@@ -820,6 +825,7 @@ public sealed record OpenApiSchemaPropertyModel(
     string? ItemsSchemaName = null,
     string? AdditionalPropertiesSchemaName = null,
     bool IsDeprecated = false,
+    string? DeprecationReason = null,
     object? DefaultValue = null);
 
 /// <summary>
