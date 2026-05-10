@@ -7,6 +7,7 @@ namespace Blueprint.SourceGenerator.Sample.Contract.Api;
 /// <summary>
 /// Represents a single template.
 /// </summary>
+[DisplayName("Email Template")]
 public partial class TemplateApiResource : ApiResource
 {
     // For JSON

@@ -45,7 +45,8 @@ public sealed record OpenApiSchemaComponentRenderingContext(
             MapType(schema.Kind),
             requiredPropertyNames,
             properties,
-            schema.Description);
+            schema.Description,
+            schema.Title);
     }
 
     private static OpenApiSchemaComponentPropertyModel CreateProperty(OpenApiSchemaPropertyModel property)
@@ -103,12 +104,14 @@ public sealed record OpenApiSchemaComponentRenderingContext(
 /// <param name="RequiredPropertyNames">The ordered required property names for object schemas.</param>
 /// <param name="Properties">The ordered rendered property contracts for object schemas.</param>
 /// <param name="Description">The schema-level description from <see cref="System.ComponentModel.DescriptionAttribute"/> when specified.</param>
+/// <param name="Title">The schema-level title from <see cref="System.ComponentModel.DisplayNameAttribute"/> when specified.</param>
 public sealed record OpenApiSchemaComponentModel(
     string BodyTypeName,
     string? Type,
     ImmutableArray<string> RequiredPropertyNames,
     ImmutableArray<OpenApiSchemaComponentPropertyModel> Properties,
-    string? Description = null);
+    string? Description = null,
+    string? Title = null);
 
 /// <summary>
 /// Captures one rendered property within a reusable OpenAPI schema component.

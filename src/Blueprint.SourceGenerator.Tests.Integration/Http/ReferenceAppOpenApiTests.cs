@@ -683,6 +683,32 @@ public class ReferenceAppOpenApiTests
     }
 
     [Fact]
+    public async Task When_array_body_property_has_length_constraints_then_schema_emits_minItems_maxItems()
+    {
+        var (json, _) = await InvokeOpenApiEndpointAsync();
+        using var doc = JsonDocument.Parse(json);
+
+        // BulkArchiveTemplatesCommand (POST /templates/bulk-archive) has string[] Ids with [MinLength(1)] [MaxLength(100)]
+        var bulkArchivePath = doc.RootElement.GetProperty("paths").GetProperty("/templates/bulk-archive");
+        var requestBody = bulkArchivePath.GetProperty("post").GetProperty("requestBody");
+        var properties = requestBody.GetProperty("content").GetProperty("application/json")
+            .GetProperty("schema").GetProperty("properties");
+
+        var idsProperty = properties.GetProperty("ids");
+        idsProperty.GetProperty("type").GetString().Should().Be("array");
+        idsProperty.GetProperty("minItems").GetInt32().Should().Be(1,
+            "[MinLength(1)] on array should map to minItems, not minLength");
+        idsProperty.GetProperty("maxItems").GetInt32().Should().Be(100,
+            "[MaxLength(100)] on array should map to maxItems, not maxLength");
+
+        // Ensure minLength/maxLength are NOT present (they are string-only constraints)
+        idsProperty.TryGetProperty("minLength", out _).Should().BeFalse(
+            "array properties should not emit minLength");
+        idsProperty.TryGetProperty("maxLength", out _).Should().BeFalse(
+            "array properties should not emit maxLength");
+    }
+
+    [Fact]
     public async Task When_body_property_is_array_of_primitives_then_items_schema_uses_inline_type()
     {
         var (json, _) = await InvokeOpenApiEndpointAsync();
@@ -754,6 +780,20 @@ public class ReferenceAppOpenApiTests
         postOperation.TryGetProperty("description", out var descriptionElement).Should().BeTrue(
             "operations with XML <remarks> should emit an OpenAPI description field");
         descriptionElement.GetString().Should().NotBeNullOrWhiteSpace();
+    }
+
+    [Fact]
+    public async Task When_type_has_display_name_attribute_then_schema_title_uses_display_name()
+    {
+        var (json, _) = await InvokeOpenApiEndpointAsync();
+        using var doc = JsonDocument.Parse(json);
+
+        var schemas = doc.RootElement.GetProperty("components").GetProperty("schemas");
+
+        // TemplateApiResource has [DisplayName("Email Template")] — should override default CLR short name
+        var templateSchema = schemas.GetProperty("Blueprint_SourceGenerator_Sample_Contract_Api_TemplateApiResource");
+        templateSchema.GetProperty("title").GetString().Should().Be("Email Template",
+            "[DisplayName(\"Email Template\")] should override the default CLR type name in the schema title");
     }
 
     private static async Task<(string Json, int StatusCode)> InvokeOpenApiEndpointAsync(

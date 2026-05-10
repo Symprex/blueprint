@@ -518,7 +518,8 @@
                     "items": {
                       "type": "string"
                     },
-                    "minLength": 1
+                    "minItems": 1,
+                    "maxItems": 100
                   },
                   "reason": {
                     "type": "string",
@@ -2345,7 +2346,7 @@
         }
       },
       "Blueprint_SourceGenerator_Sample_Contract_Api_TemplateApiResource": {
-        "title": "TemplateApiResource",
+        "title": "Email Template",
         "type": "object",
         "properties": {
           "$links": {

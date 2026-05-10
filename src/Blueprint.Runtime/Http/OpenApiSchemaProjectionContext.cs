@@ -96,6 +96,7 @@ public sealed record OpenApiSchemaProjectionContext(
             .ToImmutableArray();
 
         var schemaDescription = bodyType.GetCustomAttribute<DescriptionAttribute>()?.Description;
+        var schemaTitle = bodyType.GetCustomAttribute<System.ComponentModel.DisplayNameAttribute>()?.DisplayName;
 
         return new OpenApiSchemaModel(
             bodyTypeName,
@@ -103,7 +104,8 @@ public sealed record OpenApiSchemaProjectionContext(
             true,
             propertyNames,
             properties,
-            schemaDescription);
+            schemaDescription,
+            schemaTitle);
     }
 
     private static OpenApiSchemaPropertyModel CreateProperty(
@@ -863,13 +865,15 @@ public sealed record OpenApiSchemaProjectionContext(
 /// <param name="PropertyNames">The ordered JSON-visible property names when the serializer metadata exposes an object shape.</param>
 /// <param name="Properties">The ordered JSON-visible property metadata projected from serializer metadata.</param>
 /// <param name="Description">The schema-level description from <see cref="System.ComponentModel.DescriptionAttribute"/> when specified.</param>
+/// <param name="Title">The schema-level title from <see cref="System.ComponentModel.DisplayNameAttribute"/> when specified.</param>
 public sealed record OpenApiSchemaModel(
     string BodyTypeName,
     OpenApiSchemaKind Kind,
     bool IsCoveredBySerializerContext,
     ImmutableArray<string> PropertyNames,
     ImmutableArray<OpenApiSchemaPropertyModel> Properties,
-    string? Description = null);
+    string? Description = null,
+    string? Title = null);
 
 /// <summary>
 /// Captures one JSON-visible property projected from serializer metadata for a covered schema.

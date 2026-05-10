@@ -431,7 +431,16 @@ public sealed record OpenApiOutputRenderingContext(
                 }
 
                 WriteNumericConstraints(writer, property.Minimum, property.Maximum, property.ExclusiveMinimum, property.ExclusiveMaximum);
-                WriteStringConstraints(writer, property.MinLength, property.MaxLength, property.Pattern);
+
+                // For array types, [MinLength]/[MaxLength]/[Length] map to minItems/maxItems rather than minLength/maxLength.
+                if (string.Equals(property.SchemaType, "array", StringComparison.Ordinal))
+                {
+                    WriteArrayItemConstraints(writer, property.MinLength, property.MaxLength);
+                }
+                else
+                {
+                    WriteStringConstraints(writer, property.MinLength, property.MaxLength, property.Pattern);
+                }
 
                 if (property.IsDeprecated)
                 {
@@ -544,6 +553,23 @@ public sealed record OpenApiOutputRenderingContext(
         if (!string.IsNullOrWhiteSpace(pattern))
         {
             writer.WriteString("pattern", pattern);
+        }
+    }
+
+    /// <summary>
+    /// Writes <c>minItems</c> / <c>maxItems</c> constraints for array-typed properties where
+    /// <c>[MinLength]</c>/<c>[MaxLength]</c>/<c>[Length]</c> apply to element count rather than string length.
+    /// </summary>
+    private static void WriteArrayItemConstraints(Utf8JsonWriter writer, int? minItems, int? maxItems)
+    {
+        if (minItems.HasValue)
+        {
+            writer.WriteNumber("minItems", minItems.Value);
+        }
+
+        if (maxItems.HasValue)
+        {
+            writer.WriteNumber("maxItems", maxItems.Value);
         }
     }
 
@@ -830,12 +856,11 @@ public sealed record OpenApiOutputRenderingContext(
         writer.WritePropertyName(SanitiseSchemaKey(component.BodyTypeName));
         writer.WriteStartObject();
 
-        // The title gives API tooling (Swagger UI, openapi-generator, etc.) a human-readable label
-        // derived from the short CLR type name, stripping namespace prefixes for readability.
-        var shortTitle = component.BodyTypeName;
+        // Prefer an explicit [DisplayName] title; fall back to the short CLR type name.
+        var shortTitle = component.Title ?? component.BodyTypeName;
         var lastDot = shortTitle.LastIndexOf('.');
 
-        if (lastDot >= 0)
+        if (lastDot >= 0 && component.Title is null)
         {
             shortTitle = shortTitle[(lastDot + 1)..];
         }

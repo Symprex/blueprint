@@ -27,6 +27,7 @@ public partial class BulkArchiveTemplatesCommand : ICommand<StatusCodeResult.Acc
     /// </summary>
     [Required]
     [MinLength(1)]
+    [MaxLength(100)]
     [Description("Template IDs to archive.")]
     public string[] Ids { get; set; } = [];
 
