@@ -40,7 +40,7 @@ public static class StreamExtensions
     /// </summary>
     /// <param name="input">The stream to read.</param>
     /// <returns>The full string content of the stream.</returns>
-    public static Task<string> ReadFullyAsStringAsync(this Stream input)
+    public static async Task<string> ReadFullyAsStringAsync(this Stream input)
     {
         Guard.NotNull(input);
 
@@ -49,8 +49,9 @@ public static class StreamExtensions
             input.Seek(0, SeekOrigin.Begin);
         }
 
-        var streamReader = new StreamReader(input);
-        return streamReader.ReadToEndAsync();
+        // leaveOpen: true so the caller retains ownership of the underlying stream
+        using var streamReader = new StreamReader(input, leaveOpen: true);
+        return await streamReader.ReadToEndAsync();
     }
 
     /// <summary>
@@ -71,11 +72,6 @@ public static class StreamExtensions
     /// <returns>A new stream with the given bytes as content.</returns>
     public static Stream AsStream(this byte[] bytes)
     {
-        var stream = new MemoryStream();
-
-        stream.Write(bytes, 0, bytes.Length);
-        stream.Seek(0, SeekOrigin.Begin);
-
-        return stream;
+        return new MemoryStream(bytes, writable: false);
     }
 }
