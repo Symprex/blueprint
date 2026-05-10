@@ -88,12 +88,29 @@ public sealed class BlueprintHttpClient<TApp>
                 $"Ensure the operation is registered in the BlueprintApp '{typeof(TApp).Name}'.");
 
         var httpMethod = ResolveHttpMethod(descriptor);
-        var url = ResolveUrl(descriptor, operation);
 
-        // For GET requests, append non-URL properties as query string parameters
-        if (httpMethod == HttpMethod.Get)
+        // Prefer source-generated URL builder (zero reflection) when available
+        string url;
+        if (descriptor.TryGetFeatureData<CompiledHttpRequestFeatureData>(out var compiled))
         {
-            url = AppendQueryString(url, descriptor, operation);
+            url = compiled.BuildUrl(operation)
+                ?? throw new InvalidOperationException(
+                    $"Compiled URL builder returned null for '{operationType.FullName}'. " +
+                    $"A required route parameter is likely null.");
+
+            if (httpMethod == HttpMethod.Get && compiled.AppendQueryString is not null)
+            {
+                url = compiled.AppendQueryString(operation, url);
+            }
+        }
+        else
+        {
+            url = ResolveUrl(descriptor, operation);
+
+            if (httpMethod == HttpMethod.Get)
+            {
+                url = AppendQueryString(url, descriptor, operation);
+            }
         }
 
         var request = new HttpRequestMessage(httpMethod, url);
