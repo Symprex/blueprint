@@ -63,7 +63,7 @@ public static class BlueprintLoadTestScenarios
             .Build();
     }
 
-    private static NBomber.Contracts.ScenarioProps CreateGetTemplatesScenario(HttpClient httpClient)
+    private static NBomber.Contracts.ScenarioProps CreateGetTemplatesScenario(global::System.Net.Http.HttpClient httpClient)
     {
         return Scenario.Create("get_templates_list", async context =>
             {
@@ -77,7 +77,7 @@ public static class BlueprintLoadTestScenarios
                 Simulation.Inject(rate: 100, interval: TimeSpan.FromSeconds(1), during: TimeSpan.FromSeconds(30)));
     }
 
-    private static NBomber.Contracts.ScenarioProps CreateGetTemplateByIdScenario(HttpClient httpClient)
+    private static NBomber.Contracts.ScenarioProps CreateGetTemplateByIdScenario(global::System.Net.Http.HttpClient httpClient)
     {
         return Scenario.Create("get_template_by_id", async context =>
             {
@@ -92,7 +92,7 @@ public static class BlueprintLoadTestScenarios
                 Simulation.Inject(rate: 200, interval: TimeSpan.FromSeconds(1), during: TimeSpan.FromSeconds(30)));
     }
 
-    private static NBomber.Contracts.ScenarioProps CreateCreateTemplateScenario(HttpClient httpClient)
+    private static NBomber.Contracts.ScenarioProps CreateCreateTemplateScenario(global::System.Net.Http.HttpClient httpClient)
     {
         return Scenario.Create("create_template_command", async context =>
             {
@@ -118,7 +118,7 @@ public static class BlueprintLoadTestScenarios
                 Simulation.Inject(rate: 50, interval: TimeSpan.FromSeconds(1), during: TimeSpan.FromSeconds(30)));
     }
 
-    private static NBomber.Contracts.ScenarioProps CreateValidationFailureScenario(HttpClient httpClient)
+    private static NBomber.Contracts.ScenarioProps CreateValidationFailureScenario(global::System.Net.Http.HttpClient httpClient)
     {
         return Scenario.Create("validation_failure_fast_path", async context =>
             {
@@ -135,7 +135,7 @@ public static class BlueprintLoadTestScenarios
                 Simulation.Inject(rate: 300, interval: TimeSpan.FromSeconds(1), during: TimeSpan.FromSeconds(30)));
     }
 
-    private static NBomber.Contracts.ScenarioProps CreateOpenApiScenario(HttpClient httpClient)
+    private static NBomber.Contracts.ScenarioProps CreateOpenApiScenario(global::System.Net.Http.HttpClient httpClient)
     {
         return Scenario.Create("openapi_spec_fetch", async context =>
             {
@@ -149,7 +149,7 @@ public static class BlueprintLoadTestScenarios
                 Simulation.Inject(rate: 10, interval: TimeSpan.FromSeconds(1), during: TimeSpan.FromSeconds(30)));
     }
 
-    private static NBomber.Contracts.ScenarioProps CreateHealthCheckScenario(HttpClient httpClient)
+    private static NBomber.Contracts.ScenarioProps CreateHealthCheckScenario(global::System.Net.Http.HttpClient httpClient)
     {
         return Scenario.Create("health_check", async context =>
             {

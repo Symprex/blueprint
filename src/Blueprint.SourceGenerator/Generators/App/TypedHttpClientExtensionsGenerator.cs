@@ -1,0 +1,551 @@
+using System.Text;
+using Blueprint.SourceGenerator.Helpers;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Text;
+
+namespace Blueprint.SourceGenerator.Generators.App;
+
+/// <summary>
+/// Incremental source generator that emits strongly-typed extension methods on
+/// <c>BlueprintHttpClient&lt;TApp&gt;</c> for every operation registered through
+/// a <c>[BlueprintAppScan]</c> app class. Each generated method constructs the
+/// operation, populates its properties from method parameters, and calls the
+/// underlying typed <c>SendAsync</c> — giving consumers IntelliSense-driven,
+/// compile-time-safe service-to-service calls with zero runtime overhead beyond
+/// the existing <c>BlueprintHttpClient</c> infrastructure.
+/// </summary>
+[Generator(LanguageNames.CSharp)]
+public sealed class TypedHttpClientExtensionsGenerator : IIncrementalGenerator, ITrackedSourceGenerator
+{
+    /// <inheritdoc />
+    public string[] StageNames { get; } = StageHelpers.FindAll(typeof(Stages));
+
+    /// <inheritdoc />
+    public void Initialize(IncrementalGeneratorInitializationContext context)
+    {
+        var classProvider = context.SyntaxProvider.ForAttributeWithMetadataName(
+                "Blueprint.Model.BlueprintAppScanAttribute",
+                predicate: static (syntaxNode, _) => syntaxNode is ClassDeclarationSyntax,
+                transform: static (ctx, ct) => ExtractAppAndOperations(ctx, ct))
+            .Where(static model => model is not null)
+            .WithTrackingName(Stages.InitialExtraction);
+
+        context.RegisterSourceOutput(
+            classProvider,
+            static (spc, model) =>
+            {
+                if (model is null || model.Operations.Count == 0)
+                {
+                    return;
+                }
+
+                spc.AddSource(
+                    $"{model.AppClassName}_HttpClientExtensions.g.cs",
+                    SourceText.From(GenerateExtensions(model), Encoding.UTF8));
+            });
+    }
+
+    private static TypedClientModel? ExtractAppAndOperations(
+        GeneratorAttributeSyntaxContext context,
+        System.Threading.CancellationToken ct)
+    {
+        if (context.TargetSymbol is not INamedTypeSymbol appType)
+        {
+            return null;
+        }
+
+        // Must be partial
+        if (context.TargetNode is ClassDeclarationSyntax classDecl
+            && !classDecl.Modifiers.Any(Microsoft.CodeAnalysis.CSharp.SyntaxKind.PartialKeyword))
+        {
+            return null;
+        }
+
+        var appNamespace = appType.ContainingNamespace.IsGlobalNamespace
+            ? null
+            : appType.ContainingNamespace.ToDisplayString();
+        var appClassName = appType.Name;
+        var appFqn = appType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+        // Check if Blueprint.HttpClient assembly is referenced
+        var httpClientType = context.SemanticModel.Compilation.GetTypeByMetadataName(
+            "Blueprint.HttpClient.BlueprintHttpClient`1");
+        if (httpClientType is null)
+        {
+            // BlueprintHttpClient not referenced — skip generation
+            return null;
+        }
+
+        var operationInterface = context.SemanticModel.Compilation.GetTypeByMetadataName("Blueprint.Model.IOperation");
+        if (operationInterface is null)
+        {
+            return null;
+        }
+
+        // Scan for operations using the same logic as AppDataModelSourceGenerator
+        var operations = new List<TypedClientOperationModel>();
+
+        foreach (var attr in appType.GetAttributes())
+        {
+            ct.ThrowIfCancellationRequested();
+
+            if (attr.AttributeClass?.ToDisplayString() != "Blueprint.Model.BlueprintAppScanAttribute")
+            {
+                continue;
+            }
+
+            IAssemblySymbol? targetAssembly;
+            if (attr.NamedArguments.Any(static kv => kv.Key == "FromAssemblyOf"))
+            {
+                var fromAssemblyOf = attr.NamedArguments
+                    .First(static kv => kv.Key == "FromAssemblyOf").Value;
+                if (fromAssemblyOf.Value is INamedTypeSymbol externalType)
+                {
+                    targetAssembly = externalType.ContainingAssembly;
+                }
+                else
+                {
+                    continue;
+                }
+            }
+            else
+            {
+                targetAssembly = appType.ContainingAssembly;
+            }
+
+            if (targetAssembly is null)
+            {
+                continue;
+            }
+
+            foreach (var type in GetAllTypesFromAssembly(targetAssembly))
+            {
+                ct.ThrowIfCancellationRequested();
+
+                if (type.IsAbstract || type.IsStatic || !type.CanBeReferencedByName
+                    || type.TypeKind != TypeKind.Class || type.IsGenericType)
+                {
+                    continue;
+                }
+
+                if (!IsAssignableTo(type, operationInterface))
+                {
+                    continue;
+                }
+
+                var operationModel = BuildOperationModel(type);
+                if (operationModel is not null)
+                {
+                    operations.Add(operationModel);
+                }
+            }
+        }
+
+        if (operations.Count == 0)
+        {
+            return null;
+        }
+
+        return new TypedClientModel(appNamespace, appClassName, appFqn, new EquatableList<TypedClientOperationModel>(operations.ToArray()));
+    }
+
+    private static TypedClientOperationModel? BuildOperationModel(INamedTypeSymbol operationType)
+    {
+        var operationFqn = operationType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+        // Determine the result type from IQuery<T> or ICommand<T>
+        var (resultTypeFqn, isResultValueType) = GetResultTypeInfo(operationType);
+
+        // Get the HTTP method from [Route] attribute
+        var httpMethod = GetHttpMethod(operationType);
+        if (httpMethod is null)
+        {
+            // No route attribute — cannot generate HTTP client method
+            return null;
+        }
+
+        // Get public settable properties as parameters
+        var parameters = new List<TypedClientParameterModel>();
+        foreach (var prop in operationType.GetAllMembers().OfType<IPropertySymbol>())
+        {
+            if (prop.DeclaredAccessibility != Accessibility.Public || prop.IsStatic)
+            {
+                continue;
+            }
+
+            if (prop.SetMethod is null || prop.SetMethod.DeclaredAccessibility != Accessibility.Public)
+            {
+                // Check for init-only
+                if (prop.SetMethod is null || !prop.SetMethod.IsInitOnly)
+                {
+                    continue;
+                }
+            }
+
+            if (prop.GetAttributes().Any(static a => a.AttributeClass?.Name is "ObsoleteAttribute" or "JsonIgnoreAttribute"))
+            {
+                continue;
+            }
+
+            var typeFqn = prop.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            var isNullable = prop.Type.NullableAnnotation == NullableAnnotation.Annotated;
+            var isRequired = prop.IsRequired
+                || prop.GetAttributes().Any(static a => a.AttributeClass?.Name is "RequiredAttribute");
+
+            // FullyQualifiedFormat omits the `?` suffix for nullable reference types — add it
+            if (isNullable && !typeFqn.EndsWith("?", StringComparison.Ordinal))
+            {
+                typeFqn += "?";
+            }
+
+            parameters.Add(new TypedClientParameterModel(
+                prop.Name,
+                typeFqn,
+                isNullable,
+                isRequired,
+                prop.Type.IsValueType));
+        }
+
+        // Generate a clean method name from the operation type name
+        var methodName = GenerateMethodName(operationType.Name, httpMethod);
+
+        return new TypedClientOperationModel(
+            operationFqn,
+            operationType.Name,
+            methodName,
+            resultTypeFqn,
+            isResultValueType,
+            httpMethod,
+            new EquatableList<TypedClientParameterModel>(parameters.ToArray()));
+    }
+
+    private static (string? Fqn, bool IsValueType) GetResultTypeInfo(INamedTypeSymbol operationType)
+    {
+        foreach (var iface in operationType.AllInterfaces)
+        {
+            if (iface.TypeArguments.Length == 1
+                && iface.ContainingNamespace.ToDisplayString() == "Blueprint.Model"
+                && iface.Name is "ICommand" or "IQuery" or "IOperation")
+            {
+                var resultType = iface.TypeArguments[0];
+
+                // Skip OperationResult base — means no typed result
+                if (resultType.Name == "OperationResult"
+                    && resultType.ContainingNamespace.ToDisplayString() == "Blueprint.Runtime.Exec")
+                {
+                    return (null, false);
+                }
+
+                return (resultType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), resultType.IsValueType);
+            }
+        }
+
+        return (null, false);
+    }
+
+    private static string? GetHttpMethod(INamedTypeSymbol operationType)
+    {
+        foreach (var attr in operationType.GetAttributes())
+        {
+            var attrName = attr.AttributeClass?.Name;
+            if (attrName is "RouteAttribute" or "Route")
+            {
+                // Check named argument HttpMethod or the convention (IQuery=GET, ICommand=POST)
+                var httpMethodArg = attr.NamedArguments
+                    .FirstOrDefault(static kv => kv.Key == "HttpMethod");
+                if (httpMethodArg.Value.Value is string explicitMethod)
+                {
+                    return explicitMethod.ToUpperInvariant();
+                }
+
+                break;
+            }
+        }
+
+        // Fall back to interface convention
+        foreach (var iface in operationType.AllInterfaces)
+        {
+            if (iface.ContainingNamespace.ToDisplayString() == "Blueprint.Model")
+            {
+                if (iface.Name == "IQuery")
+                {
+                    return "GET";
+                }
+
+                if (iface.Name == "ICommand")
+                {
+                    return "POST";
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static string GenerateMethodName(string operationTypeName, string httpMethod)
+    {
+        // Remove common suffixes
+        var name = operationTypeName;
+        if (name.EndsWith("Query", StringComparison.Ordinal))
+        {
+            name = name[..^5];
+        }
+        else if (name.EndsWith("Command", StringComparison.Ordinal))
+        {
+            name = name[..^7];
+        }
+        else if (name.EndsWith("Task", StringComparison.Ordinal))
+        {
+            name = name[..^4];
+        }
+
+        return name + "Async";
+    }
+
+    private static string GenerateExtensions(TypedClientModel model)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("//------------------------------------------------------------------------------");
+        sb.AppendLine("// <auto-generated>");
+        sb.AppendLine("//     This code was generated by the Blueprint source generator.");
+        sb.AppendLine("//");
+        sb.AppendLine("//     Changes to this file may cause incorrect behavior and will be lost if");
+        sb.AppendLine("//     the code is regenerated.");
+        sb.AppendLine("// </auto-generated>");
+        sb.AppendLine("//------------------------------------------------------------------------------");
+        sb.AppendLine();
+        sb.AppendLine("#nullable enable");
+        sb.AppendLine();
+
+        var extensionNamespace = model.AppNamespace is not null
+            ? model.AppNamespace
+            : "Blueprint.Generated";
+
+        sb.AppendLine($"namespace {extensionNamespace}");
+        sb.AppendLine("{");
+        sb.AppendLine("    /// <summary>");
+        sb.AppendLine($"    /// Provides strongly-typed extension methods for calling operations registered with");
+        sb.AppendLine($"    /// <see cref=\"{model.AppFqn.Replace("global::", string.Empty, StringComparison.Ordinal)}\"/>");
+        sb.AppendLine($"    /// via <see cref=\"global::Blueprint.HttpClient.BlueprintHttpClient{{TApp}}\"/>.");
+        sb.AppendLine("    /// </summary>");
+        sb.AppendLine($"    [global::System.CodeDom.Compiler.GeneratedCodeAttribute(\"Blueprint.SourceGenerator\", \"1.0.0\")]");
+        sb.AppendLine($"    public static class {model.AppClassName}HttpClientExtensions");
+        sb.AppendLine("    {");
+
+        var first = true;
+        foreach (var op in model.Operations)
+        {
+            if (!first)
+            {
+                sb.AppendLine();
+            }
+
+            first = false;
+            GenerateMethod(sb, model, op);
+        }
+
+        sb.AppendLine("    }");
+        sb.AppendLine("}");
+
+        return sb.ToString();
+    }
+
+    private static void GenerateMethod(StringBuilder sb, TypedClientModel model, TypedClientOperationModel op)
+    {
+        // Determine which params are positional (no default) vs optional (= default)
+        // A param is positional if: [Required] OR (non-nullable - neither reference ? nor value ?)
+        bool IsPositional(TypedClientParameterModel p) =>
+            p.IsRequired || !p.IsNullable;
+
+        var positionalParams = op.Parameters.Where(IsPositional)
+            .OrderBy(static p => p.Name, StringComparer.Ordinal).ToList();
+        var optionalParams = op.Parameters.Where(p => !IsPositional(p))
+            .OrderBy(static p => p.Name, StringComparer.Ordinal).ToList();
+
+        // Build parameter list
+        var paramParts = new List<string>
+        {
+            $"this global::Blueprint.HttpClient.BlueprintHttpClient<{model.AppFqn}> client",
+        };
+
+        foreach (var param in positionalParams)
+        {
+            var paramName = ToCamelCase(param.Name);
+            paramParts.Add($"{param.TypeFqn} {paramName}");
+        }
+
+        foreach (var param in optionalParams)
+        {
+            var paramName = ToCamelCase(param.Name);
+            paramParts.Add($"{param.TypeFqn} {paramName} = default");
+        }
+
+        paramParts.Add("global::System.Threading.CancellationToken cancellationToken = default");
+
+        // Determine return type - SendAsync<T> returns Task<T?> but for value types T? is just T (no Nullable wrapper without struct constraint)
+        var hasTypedResult = op.ResultTypeFqn is not null;
+        string returnType;
+        if (hasTypedResult)
+        {
+            returnType = op.IsResultValueType
+                ? $"global::System.Threading.Tasks.Task<{op.ResultTypeFqn}>"
+                : $"global::System.Threading.Tasks.Task<{op.ResultTypeFqn}?>";
+        }
+        else
+        {
+            returnType = "global::System.Threading.Tasks.Task";
+        }
+
+        // XML doc
+        sb.AppendLine("        /// <summary>");
+        sb.AppendLine($"        /// Sends a <see cref=\"{op.OperationFqn.Replace("global::", string.Empty, StringComparison.Ordinal)}\"/> ({op.HttpMethod}) to the remote API.");
+        sb.AppendLine("        /// </summary>");
+        sb.AppendLine($"        /// <param name=\"client\">The Blueprint HTTP client.</param>");
+        foreach (var param in positionalParams.Concat(optionalParams))
+        {
+            sb.AppendLine($"        /// <param name=\"{ToCamelCase(param.Name)}\">Maps to {op.OperationTypeName}.{param.Name}.</param>");
+        }
+
+        sb.AppendLine($"        /// <param name=\"cancellationToken\">Cancellation token.</param>");
+        if (hasTypedResult)
+        {
+            sb.AppendLine($"        /// <returns>The deserialized response.</returns>");
+        }
+
+        // Method signature
+        sb.Append($"        public static {returnType} {op.MethodName}(");
+        sb.Append(string.Join(", ", paramParts));
+        sb.AppendLine(")");
+        sb.AppendLine("        {");
+
+        // Body: construct operation and call SendAsync
+        sb.AppendLine($"            var operation = new {op.OperationFqn}");
+        sb.AppendLine("            {");
+
+        foreach (var param in positionalParams)
+        {
+            var paramName = ToCamelCase(param.Name);
+            sb.AppendLine($"                {param.Name} = {paramName},");
+        }
+
+        foreach (var param in optionalParams)
+        {
+            var paramName = ToCamelCase(param.Name);
+            sb.AppendLine($"                {param.Name} = {paramName},");
+        }
+
+        sb.AppendLine("            };");
+        sb.AppendLine();
+
+        if (hasTypedResult)
+        {
+            sb.AppendLine($"            return client.SendAsync<{op.ResultTypeFqn}>(operation, cancellationToken);");
+        }
+        else
+        {
+            sb.AppendLine("            return client.SendAsync(operation, cancellationToken);");
+        }
+
+        sb.AppendLine("        }");
+    }
+
+    private static string ToCamelCase(string name)
+    {
+        if (string.IsNullOrEmpty(name))
+        {
+            return name;
+        }
+
+        if (char.IsLower(name[0]))
+        {
+            return name;
+        }
+
+        // Handle acronyms (e.g. "ID" → "id", "URL" → "url")
+        if (name.Length > 1 && char.IsUpper(name[1]))
+        {
+            var i = 0;
+            while (i < name.Length && char.IsUpper(name[i]))
+            {
+                i++;
+            }
+
+            if (i == name.Length)
+            {
+                return name.ToLowerInvariant();
+            }
+
+            return name[..(i - 1)].ToLowerInvariant() + name[(i - 1)..];
+        }
+
+        return char.ToLowerInvariant(name[0]) + name[1..];
+    }
+
+    private static bool IsAssignableTo(INamedTypeSymbol type, INamedTypeSymbol targetInterface)
+    {
+        return type.AllInterfaces.Any(i =>
+            SymbolEqualityComparer.Default.Equals(i, targetInterface)
+            || (i.IsGenericType && SymbolEqualityComparer.Default.Equals(i.OriginalDefinition, targetInterface)));
+    }
+
+    private static IEnumerable<INamedTypeSymbol> GetAllTypesFromAssembly(IAssemblySymbol assembly)
+    {
+        return GetAllTypes(assembly.GlobalNamespace);
+    }
+
+    private static IEnumerable<INamedTypeSymbol> GetAllTypes(INamespaceSymbol ns)
+    {
+        foreach (var type in ns.GetTypeMembers())
+        {
+            yield return type;
+        }
+
+        foreach (var child in ns.GetNamespaceMembers())
+        {
+            foreach (var type in GetAllTypes(child))
+            {
+                yield return type;
+            }
+        }
+    }
+
+    private static class Stages
+    {
+        /// <summary>
+        /// Tracks the initial extraction of app class and operation metadata for typed client generation.
+        /// </summary>
+        public const string InitialExtraction = nameof(InitialExtraction);
+    }
+}
+
+/// <summary>
+/// Compact model for a Blueprint app's typed HTTP client extension generation.
+/// </summary>
+internal sealed record TypedClientModel(
+    string? AppNamespace,
+    string AppClassName,
+    string AppFqn,
+    EquatableList<TypedClientOperationModel> Operations);
+
+/// <summary>
+/// Per-operation metadata for typed client method generation.
+/// </summary>
+internal sealed record TypedClientOperationModel(
+    string OperationFqn,
+    string OperationTypeName,
+    string MethodName,
+    string? ResultTypeFqn,
+    bool IsResultValueType,
+    string HttpMethod,
+    EquatableList<TypedClientParameterModel> Parameters);
+
+/// <summary>
+/// Per-parameter metadata for typed client method generation.
+/// </summary>
+internal sealed record TypedClientParameterModel(
+    string Name,
+    string TypeFqn,
+    bool IsNullable,
+    bool IsRequired,
+    bool IsValueType);
