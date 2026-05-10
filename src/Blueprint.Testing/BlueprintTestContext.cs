@@ -111,4 +111,83 @@ public sealed class BlueprintTestContext
         this._context.Data[key] = value;
         return this;
     }
+
+    /// <summary>
+    /// Convenience method that creates an authenticated user with the specified permission claims.
+    /// This matches the S365 pattern where permissions are stored as claims with a configurable
+    /// claim type (defaulting to <c>"permission"</c>).
+    /// <para>
+    /// Use this when testing authorization flows that depend on <c>[Permission]</c> or
+    /// <c>[PermissionFor]</c> attributes. Each permission string becomes a separate claim.
+    /// </para>
+    /// </summary>
+    /// <param name="permissions">The permission identifiers to grant the test user.</param>
+    /// <returns>This context for chaining.</returns>
+    public BlueprintTestContext WithPermissions(params string[] permissions)
+    {
+        return this.WithPermissions("permission", permissions);
+    }
+
+    /// <summary>
+    /// Convenience method that creates an authenticated user with permissions stored under a custom claim type.
+    /// </summary>
+    /// <param name="claimType">The claim type used for permission storage (e.g., <c>"permission"</c>, <c>"scope"</c>).</param>
+    /// <param name="permissions">The permission identifiers to grant the test user.</param>
+    /// <returns>This context for chaining.</returns>
+    public BlueprintTestContext WithPermissions(string claimType, params string[] permissions)
+    {
+        var claims = new List<System.Security.Claims.Claim>(permissions.Length + 1)
+        {
+            new("sub", "test-user-" + Guid.NewGuid().ToString("N")[..8]),
+        };
+
+        foreach (var permission in permissions)
+        {
+            claims.Add(new System.Security.Claims.Claim(claimType, permission));
+        }
+
+        var identity = new ClaimsIdentity(claims, "TestAuth");
+        return this.WithUser(new ClaimsPrincipal(identity));
+    }
+
+    /// <summary>
+    /// Convenience method that creates an authenticated user with a tenant claim and optional permissions.
+    /// This matches the S365 pattern where every user belongs to a tenant identified by an account/tenant ID.
+    /// <para>
+    /// The generated user will have <c>sub</c>, <c>tenant_id</c> (or custom claim type), and
+    /// optional permission claims. Property populators that read tenant context from JWT claims
+    /// will see the tenant claim automatically.
+    /// </para>
+    /// </summary>
+    /// <param name="tenantId">The tenant identifier to assign.</param>
+    /// <param name="permissions">Optional permissions to include.</param>
+    /// <returns>This context for chaining.</returns>
+    public BlueprintTestContext WithTenant(string tenantId, params string[] permissions)
+    {
+        return this.WithTenant("tenant_id", tenantId, permissions);
+    }
+
+    /// <summary>
+    /// Convenience method that creates an authenticated user with a custom tenant claim type and optional permissions.
+    /// </summary>
+    /// <param name="tenantClaimType">The claim type for the tenant identifier (e.g., <c>"tenant_id"</c>, <c>"account_id"</c>).</param>
+    /// <param name="tenantId">The tenant identifier value.</param>
+    /// <param name="permissions">Optional permissions to include.</param>
+    /// <returns>This context for chaining.</returns>
+    public BlueprintTestContext WithTenant(string tenantClaimType, string tenantId, params string[] permissions)
+    {
+        var claims = new List<System.Security.Claims.Claim>(permissions.Length + 2)
+        {
+            new("sub", "test-user-" + Guid.NewGuid().ToString("N")[..8]),
+            new(tenantClaimType, tenantId),
+        };
+
+        foreach (var permission in permissions)
+        {
+            claims.Add(new System.Security.Claims.Claim("permission", permission));
+        }
+
+        var identity = new ClaimsIdentity(claims, "TestAuth");
+        return this.WithUser(new ClaimsPrincipal(identity));
+    }
 }

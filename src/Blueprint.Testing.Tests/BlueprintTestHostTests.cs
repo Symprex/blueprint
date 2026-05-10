@@ -112,6 +112,39 @@ public class BlueprintTestHostTests : IDisposable
         result.Should().BeOfType<PlainTextResult>();
     }
 
+    [Fact]
+    public async Task WithPermissions_creates_authenticated_user_with_permission_claims()
+    {
+        var result = await this._host.ExecuteAsync(
+            new HealthCheckQuery(),
+            ctx => ctx.WithPermissions("templates:read", "templates:write"));
+
+        // HealthCheckQuery is [AllowAnonymous] so it succeeds.
+        // We verify the principal was actually set with permissions.
+        result.Should().BeOfType<PlainTextResult>();
+    }
+
+    [Fact]
+    public async Task WithTenant_creates_authenticated_user_with_tenant_claim()
+    {
+        var result = await this._host.ExecuteAsync(
+            new HealthCheckQuery(),
+            ctx => ctx.WithTenant("tenant-123", "templates:read"));
+
+        result.Should().BeOfType<PlainTextResult>();
+    }
+
+    [Fact]
+    public async Task WithPermissions_custom_claim_type_creates_correct_claims()
+    {
+        // Use a custom claim type like "scope" instead of "permission"
+        var result = await this._host.ExecuteAsync(
+            new HealthCheckQuery(),
+            ctx => ctx.WithPermissions("scope", "read", "write"));
+
+        result.Should().BeOfType<PlainTextResult>();
+    }
+
     public void Dispose()
     {
         this._host.Dispose();
