@@ -226,6 +226,28 @@
     - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
     - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
 
+### GetTemplateByStrongIdQuery
+  Type: GetTemplateByStrongIdQuery
+  Source: Source Generated
+  HTTP Methods: GET
+  URL: /templates/by-id/{Id}
+  Hosts: http
+  Auth: Anonymous
+  Discovery: query (Blueprint.SourceGenerator.Sample.Contract.Api.GetTemplateByStrongIdQuery)
+  Group: Templates
+  Result Outcomes:
+    - OkResult`1
+    - NotFoundResult`1
+  Failure Outcomes:
+    - legacy-validation-exception: Blueprint.Validation.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
+    - data-annotations-validation-exception: System.ComponentModel.DataAnnotations.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
+    - default-unhandled-exception: System.Exception -> Blueprint.Runtime.Exec.UnhandledExceptionResult
+  HTTP Responses:
+    - 200: hasBody=True types=[Blueprint.SourceGenerator.Sample.Contract.Api.TemplateApiResource]
+    - 404: hasBody=True types=[Blueprint.SourceGenerator.Sample.Contract.Api.TemplateApiResource]
+    - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
+    - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+
 ### GetTemplateHistoryQuery
   Type: GetTemplateHistoryQuery
   Source: Source Generated

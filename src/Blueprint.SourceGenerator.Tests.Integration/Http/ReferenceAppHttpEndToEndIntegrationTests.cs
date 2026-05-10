@@ -2544,6 +2544,49 @@ public class ReferenceAppHttpEndToEndIntegrationTests
         response.Body.Should().Contain("template.created");
     }
 
+    [Fact]
+    public async Task When_get_template_by_strong_id_with_valid_guid_returns_200_or_404()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/templates/by-id/{Id}", "GET");
+        endpoint.Should().NotBeNull("the IParsable route should be registered");
+
+        // Use a GUID that doesn't match any template — handler returns 404
+        var testGuid = Guid.NewGuid().ToString();
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Get;
+            context.Request.Path = $"/api/templates/by-id/{testGuid}";
+            context.Request.RouteValues = new RouteValueDictionary { ["Id"] = testGuid };
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status404NotFound,
+            "unknown GUID should produce 404 from handler, proving IParsable route binding succeeded");
+    }
+
+    [Fact]
+    public async Task When_get_template_by_strong_id_with_malformed_guid_returns_400()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/templates/by-id/{Id}", "GET");
+        endpoint.Should().NotBeNull();
+
+        // Malformed GUID — IParsable TryParse returns false → BindingFailureResult → 400
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Get;
+            context.Request.Path = "/api/templates/by-id/not-a-guid";
+            context.Request.RouteValues = new RouteValueDictionary { ["Id"] = "not-a-guid" };
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status400BadRequest,
+            "malformed GUID should trigger IParsable binding failure → 400 Bad Request");
+    }
+
     private static async Task<TestHttpResponse> InvokeEndpointAsync(
         RouteEndpoint endpoint,
         IServiceProvider serviceProvider,

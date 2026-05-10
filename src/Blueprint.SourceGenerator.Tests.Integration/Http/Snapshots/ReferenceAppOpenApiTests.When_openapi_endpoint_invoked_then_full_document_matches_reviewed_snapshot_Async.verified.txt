@@ -601,6 +601,79 @@
         ]
       }
     },
+    "/templates/by-id/{Id}": {
+      "get": {
+        "operationId": "GetTemplateByStrongIdQuery",
+        "summary": "Get a template by its strongly-typed identifier.",
+        "description": "Also demonstrates with a nullable IParsable type (TemplateId?) for optional query-parameter filtering.",
+        "tags": [
+          "Templates"
+        ],
+        "parameters": [
+          {
+            "name": "Id",
+            "in": "path",
+            "required": true,
+            "description": "The strongly-typed template identifier (GUID format).",
+            "schema": {
+              "type": "object"
+            }
+          },
+          {
+            "name": "parentId",
+            "in": "query",
+            "required": false,
+            "description": "Optional parent template ID for inheritance resolution.",
+            "schema": {
+              "type": "object",
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Blueprint_SourceGenerator_Sample_Contract_Api_TemplateApiResource"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Blueprint_SourceGenerator_Sample_Contract_Api_TemplateApiResource"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/templates/export": {
       "post": {
         "operationId": "ExportTemplatesCommand",
