@@ -166,8 +166,10 @@ public sealed class AuthenticationModule : IBlueprintSourceGeneratorModule, IDes
 
     private static void RenderAuthenticationCheck(PipelineRenderContext context)
     {
+        var httpContextExpr = context.GetHttpContextExpression();
+
         context.If(
-            "((Blueprint.Runtime.Http.IHttpOperationContext)context).HttpContext.User.Identity?.IsAuthenticated != true",
+            $"{httpContextExpr}.User.Identity?.IsAuthenticated != true",
             branch =>
             {
                 branch.Return(

@@ -317,7 +317,8 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
         List<(string Noun, string Verb, string? ResourceKeyTemplate)> scopePairs)
     {
         var operationExpr = context.GetOperationExpression();
-        var principalExpr = "((Blueprint.Runtime.Http.IHttpOperationContext)context).HttpContext.User";
+        var httpContextExpr = context.GetHttpContextExpression();
+        var principalExpr = $"{httpContextExpr}.User";
 
         // Try resolved provider first
         context.DeclareVariable(
@@ -347,7 +348,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
 
                 resolvedBranch.DeclareVariable(
                     "isAuthorized",
-                    $"await resolvedAuthProvider.IsAuthorizedAsync(context, {principalExpr}, new Blueprint.Model.ResolvedScopePair[] {{ {resolvedElements} }}, ((Blueprint.Runtime.Http.IHttpOperationContext)context).HttpContext.RequestAborted)");
+                    $"await resolvedAuthProvider.IsAuthorizedAsync(context, {principalExpr}, new Blueprint.Model.ResolvedScopePair[] {{ {resolvedElements} }}, {httpContextExpr}.RequestAborted)");
 
                 resolvedBranch.If(
                     "!isAuthorized",
@@ -408,7 +409,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
 
                 branch.DeclareVariable(
                     "isAuthorized",
-                    $"await legacyAuthProvider.IsAuthorizedAsync(context, ((Blueprint.Runtime.Http.IHttpOperationContext)context).HttpContext.User, new Blueprint.Model.ScopePair[] {{ {scopePairElements} }}, ((Blueprint.Runtime.Http.IHttpOperationContext)context).HttpContext.RequestAborted)");
+                    $"await legacyAuthProvider.IsAuthorizedAsync(context, {context.GetHttpContextExpression()}.User, new Blueprint.Model.ScopePair[] {{ {scopePairElements} }}, {context.GetHttpContextExpression()}.RequestAborted)");
 
                 branch.If(
                     "!isAuthorized",
@@ -431,7 +432,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
 
         branch.DeclareVariable(
             "isAuthorized",
-            $"await authorizationProvider.IsAuthorizedAsync(context, ((Blueprint.Runtime.Http.IHttpOperationContext)context).HttpContext.User, new Blueprint.Model.ScopePair[] {{ {scopePairElements} }}, ((Blueprint.Runtime.Http.IHttpOperationContext)context).HttpContext.RequestAborted)");
+            $"await authorizationProvider.IsAuthorizedAsync(context, {context.GetHttpContextExpression()}.User, new Blueprint.Model.ScopePair[] {{ {scopePairElements} }}, {context.GetHttpContextExpression()}.RequestAborted)");
 
         branch.If(
             "!isAuthorized",

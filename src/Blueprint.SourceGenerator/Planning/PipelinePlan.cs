@@ -16,6 +16,20 @@ public sealed record PipelinePlan(OperationModel Operation, VariableRegistry Var
     private readonly List<PipelineContribution> _contributions = [];
     private readonly List<PipelineRenderStep> _renderSteps = [];
     private readonly List<Action<ClassBuilder>> _deferredClassMembers = [];
+    private readonly HashSet<string> _declaredSharedVariables = [];
+
+    /// <summary>
+    /// Declares a shared pipeline variable so that multiple modules can emit the same variable
+    /// declaration exactly once. Returns <c>true</c> the first time a given name is declared,
+    /// and <c>false</c> on subsequent calls — callers should only emit the declaration when
+    /// this method returns <c>true</c>.
+    /// </summary>
+    /// <param name="variableName">The shared variable name.</param>
+    /// <returns><c>true</c> if this is the first declaration; <c>false</c> if already declared.</returns>
+    public bool TryDeclareSharedVariable(string variableName)
+    {
+        return this._declaredSharedVariables.Add(variableName);
+    }
 
     /// <summary>
     /// Gets or sets a value indicating whether the generated pipeline must be async
@@ -251,6 +265,22 @@ public sealed class PipelineRenderContext
     public string GetContextPropertyExpression(string propertyName)
     {
         return $"{this.GetContextExpression()}.{propertyName}";
+    }
+
+    /// <summary>
+    /// Gets the expression for the current HTTP context. On first call this emits a
+    /// <c>var httpContext = ...</c> declaration; subsequent calls (even from different modules)
+    /// return the cached variable name without re-declaring.
+    /// </summary>
+    /// <returns>The <c>httpContext</c> variable expression.</returns>
+    public string GetHttpContextExpression()
+    {
+        if (this._plan.TryDeclareSharedVariable("httpContext"))
+        {
+            this.DeclareVariable("httpContext", "((Blueprint.Runtime.Http.IHttpOperationContext)context).HttpContext");
+        }
+
+        return "httpContext";
     }
 
     /// <summary>

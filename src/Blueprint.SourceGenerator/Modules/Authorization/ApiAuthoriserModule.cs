@@ -118,7 +118,7 @@ public sealed class ApiAuthoriserModule : IBlueprintSourceGeneratorModule, IPipe
             {
                 branch.DeclareVariable(
                     "userIdentity",
-                    "((Blueprint.Runtime.Http.IHttpOperationContext)context).HttpContext.User.Identity as System.Security.Claims.ClaimsIdentity");
+                    $"{context.GetHttpContextExpression()}.User.Identity as System.Security.Claims.ClaimsIdentity");
 
                 branch.If(
                     "userIdentity != null && userIdentity.IsAuthenticated",

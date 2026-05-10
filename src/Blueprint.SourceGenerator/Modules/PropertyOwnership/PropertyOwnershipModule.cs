@@ -761,7 +761,8 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         var cookieEntries = entries.Where(static e => e.Source == PropertyOwnershipSource.Cookie).ToArray();
         var operationExpr = context.GetOperationExpression();
 
-        context.WriteStatement("var httpContext = ((Blueprint.Runtime.Http.IHttpOperationContext)context).HttpContext;");
+        // Ensure httpContext variable is declared (shared across modules via GetHttpContextExpression).
+        context.GetHttpContextExpression();
         context.WriteBlankLine();
 
         // Body binding: buffer stream async, then parse with Utf8JsonReader

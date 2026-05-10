@@ -224,7 +224,7 @@ public sealed class ClaimsAuthorizationModule : IBlueprintSourceGeneratorModule,
                     {
                         // Dynamic resource key — must allocate per-request
                         var resourceKeyExpr = GenerateResourceKeyExpression(
-                            demand, operationExpr);
+                            demand, operationExpr, context);
 
                         branch.DeclareVariable(
                             $"claimDemand_{demand.Index}",
@@ -247,7 +247,7 @@ public sealed class ClaimsAuthorizationModule : IBlueprintSourceGeneratorModule,
     }
 
     private static string GenerateResourceKeyExpression(
-        ClaimDemand demand, string operationExpr)
+        ClaimDemand demand, string operationExpr, PipelineRenderContext context)
     {
         if (demand.ResourceKeyTemplate is null or "*")
         {
@@ -266,7 +266,7 @@ public sealed class ClaimsAuthorizationModule : IBlueprintSourceGeneratorModule,
             demand.ResourceKeyTemplate,
             tokens,
             operationExpr,
-            "((Blueprint.Runtime.Http.IHttpOperationContext)context).HttpContext.User");
+            $"{context.GetHttpContextExpression()}.User");
     }
 
     /// <summary>

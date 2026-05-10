@@ -100,7 +100,7 @@ namespace Blueprint.Generated
                     await populator.PopulateAsync(context, context.OperationCancelled);
                 }
             }
-            if (((Blueprint.Runtime.Http.IHttpOperationContext)context).HttpContext.User.Identity?.IsAuthenticated != true)
+            if (httpContext.User.Identity?.IsAuthenticated != true)
             {
                 return new Blueprint.Runtime.Exec.UnauthenticatedResult();
             }
@@ -108,7 +108,7 @@ namespace Blueprint.Generated
             var userContextFactory = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Authorization.IUserAuthorisationContextFactory>(context.ServiceProvider);
             if (userContextFactory != null)
             {
-                var userIdentity = ((Blueprint.Runtime.Http.IHttpOperationContext)context).HttpContext.User.Identity as System.Security.Claims.ClaimsIdentity;
+                var userIdentity = httpContext.User.Identity as System.Security.Claims.ClaimsIdentity;
                 if (userIdentity != null && userIdentity.IsAuthenticated)
                 {
                     context.UserAuthorisationContext = await userContextFactory.CreateContextAsync(userIdentity, context.OperationCancelled);
