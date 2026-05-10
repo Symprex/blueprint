@@ -72,6 +72,7 @@ public class ManifestInspectionEndpointStressTests
             .AddLogging()
             .AddSingleton<IWebHostEnvironment>(new StressTestWebHostEnvironment(environmentName))
             .AddSingleton<IOptions<BlueprintHttpOptions>>(Options.Create(httpOptions))
+            .AddSingleton<BlueprintAppExecutor>(sp => new BlueprintAppExecutor(new SharedSyntheticManifestInspectionBlueprintApp()))
             .BuildServiceProvider();
 
         return new StressTestEndpointRouteBuilder(services);

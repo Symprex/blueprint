@@ -15,7 +15,7 @@ public class LinkPopulationModuleIntegrationTests
     public async Task When_handler_returns_resource_event_result_and_self_link_is_declared_then_links_self_is_populated()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(CreateLinkTestResourceCommand));
         var httpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext();
         httpContext.Request.RouteValues["Id"] = "res-123";
@@ -38,7 +38,7 @@ public class LinkPopulationModuleIntegrationTests
     public async Task When_handler_returns_ok_result_with_linkable_resource_and_self_link_declared_then_links_self_is_populated()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(GetLinkTestResourceQuery));
         var context = CreateContext(app, GetLinkTestResourceQuery.Configure());
         context.Operation = new GetLinkTestResourceQuery { Id = "query-456" };
@@ -55,7 +55,7 @@ public class LinkPopulationModuleIntegrationTests
     public async Task When_handler_returns_resource_without_self_link_declared_then_no_links_populated()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(GetResourceWithoutSelfLinkQuery));
         var context = CreateContext(app, GetResourceWithoutSelfLinkQuery.Configure());
         context.Operation = new GetResourceWithoutSelfLinkQuery();
@@ -71,7 +71,7 @@ public class LinkPopulationModuleIntegrationTests
     public async Task When_self_link_has_mapped_placeholder_then_resource_property_is_used_in_href()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(GetMappedLinkResourceQuery));
         var context = CreateContext(app, GetMappedLinkResourceQuery.Configure());
         context.Operation = new GetMappedLinkResourceQuery { Slug = "my-slug" };
@@ -159,7 +159,7 @@ public class LinkPopulationModuleIntegrationTests
     public async Task When_self_link_uses_catch_all_then_links_self_preserves_path_separators()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(GetCatchAllFolderResourceQuery));
         var httpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext();
         httpContext.Request.RouteValues["FolderPath"] = "UK/Marketing";
@@ -196,7 +196,7 @@ public class LinkPopulationModuleIntegrationTests
     public async Task When_IApiLinkGenerator_registered_then_hateoas_link_generators_are_invoked()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(CreateLinkTestResourceCommand));
         var descriptor = CreateLinkTestResourceCommand.Configure();
 
@@ -228,7 +228,7 @@ public class LinkPopulationModuleIntegrationTests
     public async Task When_no_IApiLinkGenerator_registered_then_hateoas_block_is_skipped()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(CreateLinkTestResourceCommand));
         var descriptor = CreateLinkTestResourceCommand.Configure();
 

@@ -169,6 +169,22 @@ public sealed class PipelineContributorContext
     }
 
     /// <summary>
+    /// Registers a singleton service to be pre-resolved from the root <c>IServiceProvider</c>
+    /// in the pipeline constructor and cached as a private readonly field. Use this to eliminate
+    /// per-request <c>GetService</c> calls for services that are guaranteed singletons.
+    /// </summary>
+    /// <param name="fieldName">The private field name (e.g. <c>_propertyPopulators</c>).</param>
+    /// <param name="serviceTypeName">The fully-qualified service type for the field declaration.</param>
+    /// <param name="resolutionExpression">
+    /// The C# expression to resolve the service. May reference <c>serviceProvider</c>.
+    /// </param>
+    /// <param name="isNullable">Whether the resolved service may be null.</param>
+    public void CacheService(string fieldName, string serviceTypeName, string resolutionExpression, bool isNullable = false)
+    {
+        this._plan.CacheService(fieldName, serviceTypeName, resolutionExpression, isNullable);
+    }
+
+    /// <summary>
     /// Finds all self-link URL templates declared for the given resource type across the compilation.
     /// </summary>
     /// <param name="resourceType">The resource type symbol to look up self-link templates for.</param>

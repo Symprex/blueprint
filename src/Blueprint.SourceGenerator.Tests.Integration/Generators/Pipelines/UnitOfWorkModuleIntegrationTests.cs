@@ -18,7 +18,7 @@ public class UnitOfWorkModuleIntegrationTests
     public async Task When_command_handler_succeeds_then_unit_of_work_saves_changes()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var unitOfWork = new TestUnitOfWork();
         var serviceProvider = new PersistenceTestServiceProvider(unitOfWork);
 
@@ -36,7 +36,7 @@ public class UnitOfWorkModuleIntegrationTests
     public async Task When_command_fails_validation_then_unit_of_work_does_not_save()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var unitOfWork = new TestUnitOfWork();
         var serviceProvider = new PersistenceTestServiceProvider(unitOfWork);
 
@@ -54,7 +54,7 @@ public class UnitOfWorkModuleIntegrationTests
     public async Task When_no_unit_of_work_registered_then_command_pipeline_completes_without_error()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var serviceProvider = new PersistenceTestServiceProvider(unitOfWork: null);
 
         var pipeline = executor.GetPipeline(typeof(PersistableCommand));
@@ -70,7 +70,7 @@ public class UnitOfWorkModuleIntegrationTests
     public async Task When_query_operation_succeeds_then_unit_of_work_is_not_invoked()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var unitOfWork = new TestUnitOfWork();
         var serviceProvider = new PersistenceTestServiceProvider(unitOfWork);
 
@@ -87,7 +87,7 @@ public class UnitOfWorkModuleIntegrationTests
     public async Task When_command_has_DoNotSaveChanges_then_unit_of_work_is_not_invoked()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var unitOfWork = new TestUnitOfWork();
         var serviceProvider = new PersistenceTestServiceProvider(unitOfWork);
 

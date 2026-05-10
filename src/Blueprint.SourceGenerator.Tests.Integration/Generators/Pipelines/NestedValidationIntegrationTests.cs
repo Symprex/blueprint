@@ -17,7 +17,7 @@ public class NestedValidationIntegrationTests
     public async Task When_child_object_property_has_invalid_nested_fields_then_pipeline_returns_validation_failure()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(NestedChildObjectValidationOperation));
         var context = CreateContext(app, NestedChildObjectValidationOperation.Configure());
 
@@ -40,7 +40,7 @@ public class NestedValidationIntegrationTests
     public async Task When_child_object_property_is_valid_then_pipeline_runs_handler()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(NestedChildObjectValidationOperation));
         var context = CreateContext(app, NestedChildObjectValidationOperation.Configure());
 
@@ -59,7 +59,7 @@ public class NestedValidationIntegrationTests
     public async Task When_child_object_property_is_null_then_pipeline_skips_nested_validation_and_runs_handler()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(NestedChildObjectValidationOperation));
         var context = CreateContext(app, NestedChildObjectValidationOperation.Configure());
 
@@ -78,7 +78,7 @@ public class NestedValidationIntegrationTests
     public async Task When_child_list_property_has_invalid_items_then_pipeline_returns_validation_failure_with_indexed_paths()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(NestedChildListValidationOperation));
         var context = CreateContext(app, NestedChildListValidationOperation.Configure());
 
@@ -105,7 +105,7 @@ public class NestedValidationIntegrationTests
     public async Task When_child_list_property_is_null_then_pipeline_skips_nested_validation_and_runs_handler()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(NestedChildListValidationOperation));
         var context = CreateContext(app, NestedChildListValidationOperation.Configure());
 

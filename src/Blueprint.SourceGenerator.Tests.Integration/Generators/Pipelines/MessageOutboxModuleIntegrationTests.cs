@@ -18,7 +18,7 @@ public class MessageOutboxModuleIntegrationTests
     public async Task When_command_handler_succeeds_then_message_outbox_commits()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var outbox = new TestMessageOutbox();
         var serviceProvider = new MessagingTestServiceProvider(outbox);
 
@@ -36,7 +36,7 @@ public class MessageOutboxModuleIntegrationTests
     public async Task When_command_fails_validation_then_message_outbox_does_not_commit()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var outbox = new TestMessageOutbox();
         var serviceProvider = new MessagingTestServiceProvider(outbox);
 
@@ -54,7 +54,7 @@ public class MessageOutboxModuleIntegrationTests
     public async Task When_no_message_outbox_registered_then_command_pipeline_completes_without_error()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var serviceProvider = new MessagingTestServiceProvider(outbox: null);
 
         var pipeline = executor.GetPipeline(typeof(MessagingCommand));
@@ -70,7 +70,7 @@ public class MessageOutboxModuleIntegrationTests
     public async Task When_query_operation_succeeds_then_message_outbox_is_not_invoked()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var outbox = new TestMessageOutbox();
         var serviceProvider = new MessagingTestServiceProvider(outbox);
 
@@ -87,7 +87,7 @@ public class MessageOutboxModuleIntegrationTests
     public async Task When_command_has_DoNotPublishMessages_then_message_outbox_is_not_invoked()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var outbox = new TestMessageOutbox();
         var serviceProvider = new MessagingTestServiceProvider(outbox);
 
@@ -105,7 +105,7 @@ public class MessageOutboxModuleIntegrationTests
     public async Task When_handler_throws_exception_then_message_outbox_does_not_commit()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var outbox = new TestMessageOutbox();
         var serviceProvider = new MessagingTestServiceProvider(outbox);
 

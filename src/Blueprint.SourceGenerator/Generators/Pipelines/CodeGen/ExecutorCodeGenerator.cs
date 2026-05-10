@@ -24,6 +24,7 @@ internal static class ExecutorCodeGenerator
         classBuilder.AddConstructor()
             .AddParameter("Microsoft.Extensions.Logging.ILoggerFactory", "loggerFactory")
             .AddParameter($"{model.AppNamespace}.{model.AppTypeName}", "app")
+            .AddParameter("System.IServiceProvider", "serviceProvider")
             .WithBaseCallArguments("app")
             .WithBody(
                 writer =>
@@ -31,7 +32,7 @@ internal static class ExecutorCodeGenerator
                     foreach (var handler in model.Handlers)
                     {
                         var pipelineType = $"Blueprint.Generated.{handler.PipelineClassName}";
-                        writer.AppendLine($"this.Register(typeof({handler.OperationTypeFullName}), new {pipelineType}(loggerFactory));");
+                        writer.AppendLine($"this.Register(typeof({handler.OperationTypeFullName}), new {pipelineType}(loggerFactory, serviceProvider));");
                     }
 
                     // Freeze the pipeline dictionary after all registrations for optimal dispatch performance

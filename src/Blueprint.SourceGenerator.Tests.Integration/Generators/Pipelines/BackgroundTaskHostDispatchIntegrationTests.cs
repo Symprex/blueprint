@@ -19,7 +19,7 @@ public class BackgroundTaskHostDispatchIntegrationTests
     public async Task When_task_operation_dispatched_then_handler_executes_through_generated_pipeline()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
 
         var taskOperations = app.GetOperationsForHost("tasks");
         var descriptor = taskOperations.First(static op => op.OperationType == typeof(DispatchableBackgroundTask));
@@ -41,7 +41,7 @@ public class BackgroundTaskHostDispatchIntegrationTests
     public async Task When_task_operation_has_validation_attributes_and_input_is_invalid_then_validation_short_circuits()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
 
         var descriptor = app.GetOperationsForHost("tasks")
             .First(static op => op.OperationType == typeof(ValidatedBackgroundTask));
@@ -64,7 +64,7 @@ public class BackgroundTaskHostDispatchIntegrationTests
     public async Task When_task_operation_has_validation_attributes_and_input_is_valid_then_handler_executes()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
 
         var descriptor = app.GetOperationsForHost("tasks")
             .First(static op => op.OperationType == typeof(ValidatedBackgroundTask));

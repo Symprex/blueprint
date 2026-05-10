@@ -19,10 +19,12 @@ namespace Blueprint.Generated
             new string[] { "TestTenantEnrichmentModule", "PropertyPopulationModule", "HandlerExecutionModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
         private static readonly System.Diagnostics.ActivityTagsCollection _auditTags_EnrichedCommand =
             new System.Diagnostics.ActivityTagsCollection { { "blueprint.operation.type", "EnrichedCommand" } };
+        readonly Blueprint.Runtime.Middleware.IPropertyPopulator[] _propertyPopulators;
 
-        public EnrichedCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory)
+        public EnrichedCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, System.IServiceProvider serviceProvider)
             : base(loggerFactory, "EnrichedCommand")
         {
+            this._propertyPopulators = (Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Runtime.Middleware.IPropertyPopulator>>(serviceProvider) is { } populators ? System.Linq.Enumerable.ToArray(populators) : System.Array.Empty<Blueprint.Runtime.Middleware.IPropertyPopulator>());
         }
 
         protected override async System.Threading.Tasks.Task<Blueprint.OperationResult> ExecuteCoreAsync(Blueprint.Runtime.Exec.ApiOperationContext context)
@@ -32,10 +34,9 @@ namespace Blueprint.Generated
             // Tenant enrichment contributed by consumer companion module
             var tenantId = context.Descriptor.OperationType.Name;
 
-            var propertyPopulators = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Runtime.Middleware.IPropertyPopulator>>(context.ServiceProvider);
-            if (propertyPopulators != null)
+            if (this._propertyPopulators.Length > 0)
             {
-                foreach (var populator in propertyPopulators)
+                foreach (var populator in this._propertyPopulators)
                 {
                     await populator.PopulateAsync(context, context.OperationCancelled);
                 }
@@ -107,10 +108,10 @@ namespace TestNamespace
 {
     public sealed partial class TestAppExecutor : Blueprint.BlueprintAppExecutor
     {
-        public TestAppExecutor(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, TestNamespace.TestApp app)
+        public TestAppExecutor(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, TestNamespace.TestApp app, System.IServiceProvider serviceProvider)
             : base(app)
         {
-            this.Register(typeof(global::TestNamespace.EnrichedCommand), new Blueprint.Generated.EnrichedCommandExecutorPipeline(loggerFactory));
+            this.Register(typeof(global::TestNamespace.EnrichedCommand), new Blueprint.Generated.EnrichedCommandExecutorPipeline(loggerFactory, serviceProvider));
             this.Freeze();
         }
     }

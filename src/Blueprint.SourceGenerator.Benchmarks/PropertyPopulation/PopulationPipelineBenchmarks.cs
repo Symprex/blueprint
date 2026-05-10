@@ -43,7 +43,7 @@ public class PopulationPipelineBenchmarks
     /// </summary>
     public PopulationPipelineBenchmarks()
     {
-        this._executor = new ValidationBenchmarksAppExecutor(NullLoggerFactory.Instance, this._app);
+        this._executor = new ValidationBenchmarksAppExecutor(NullLoggerFactory.Instance, this._app, new PopulationEmptyServiceProvider());
     }
 
     /// <summary>

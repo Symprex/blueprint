@@ -232,6 +232,8 @@ public class ManifestInspectionEndpointTests
             .AddLogging()
             .AddSingleton<IWebHostEnvironment>(new TestWebHostEnvironment(environmentName))
             .AddSingleton<IOptions<BlueprintHttpOptions>>(Options.Create(httpOptions))
+            .AddSingleton(new ManifestInspectionBlueprintApp())
+            .AddSingleton<BlueprintAppExecutor>(sp => new BlueprintAppExecutor(sp.GetRequiredService<ManifestInspectionBlueprintApp>()))
             .BuildServiceProvider();
 
         return new TestEndpointRouteBuilder(services);

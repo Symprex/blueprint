@@ -12,7 +12,7 @@ public class ExceptionTranslationIntegrationTests
     public async Task When_handler_throws_non_server_api_exception_then_generated_pipeline_returns_unhandled_exception_result()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(NonServerApiExceptionOperation));
         var context = CreateContext(app, NonServerApiExceptionOperation.Configure());
 
@@ -30,7 +30,7 @@ public class ExceptionTranslationIntegrationTests
     public async Task When_handler_throws_server_api_exception_then_generated_pipeline_returns_unhandled_exception_result()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(ServerApiExceptionOperation));
         var context = CreateContext(app, ServerApiExceptionOperation.Configure());
 
@@ -48,7 +48,7 @@ public class ExceptionTranslationIntegrationTests
     public async Task When_handler_throws_not_found_exception_then_generated_pipeline_returns_unhandled_exception_result_with_404()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(NotFoundExceptionOperation));
         var context = CreateContext(app, NotFoundExceptionOperation.Configure());
 
@@ -68,7 +68,7 @@ public class ExceptionTranslationIntegrationTests
     public async Task When_handler_throws_validation_exception_then_generated_pipeline_returns_validation_failed_result()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(ValidationExceptionOperation));
         var context = CreateContext(app, ValidationExceptionOperation.Configure());
 
@@ -85,7 +85,7 @@ public class ExceptionTranslationIntegrationTests
     public async Task When_handler_throws_data_annotations_validation_exception_then_generated_pipeline_returns_validation_failed_result()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(ExTranslationDataAnnotationsOperation));
         var context = CreateContext(app, ExTranslationDataAnnotationsOperation.Configure());
 
@@ -105,7 +105,7 @@ public class ExceptionTranslationIntegrationTests
     public async Task When_handler_throws_generic_exception_then_generated_pipeline_returns_unhandled_exception_result()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(GenericExceptionOperation));
         var context = CreateContext(app, GenericExceptionOperation.Configure());
 
@@ -124,7 +124,7 @@ public class ExceptionTranslationIntegrationTests
     public async Task When_handler_throws_forbidden_exception_then_generated_pipeline_returns_unhandled_exception_with_403()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(ForbiddenExceptionOperation));
         var context = CreateContext(app, ForbiddenExceptionOperation.Configure());
 
@@ -143,7 +143,7 @@ public class ExceptionTranslationIntegrationTests
     public async Task When_handler_throws_conflict_exception_then_generated_pipeline_returns_unhandled_exception_with_409()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(ConflictExceptionOperation));
         var context = CreateContext(app, ConflictExceptionOperation.Configure());
 

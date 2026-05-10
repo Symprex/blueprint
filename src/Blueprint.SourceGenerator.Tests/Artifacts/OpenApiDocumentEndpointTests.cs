@@ -240,6 +240,8 @@ public class OpenApiDocumentEndpointTests
             .AddLogging()
             .AddSingleton<IWebHostEnvironment>(new TestWebHostEnvironment(environmentName))
             .AddSingleton<IOptions<BlueprintHttpOptions>>(Options.Create(new BlueprintHttpOptions()))
+            .AddSingleton(new OpenApiTestBlueprintApp())
+            .AddSingleton<BlueprintAppExecutor>(sp => new BlueprintAppExecutor(sp.GetRequiredService<OpenApiTestBlueprintApp>()))
             .BuildServiceProvider();
 
         return new TestEndpointRouteBuilder(services);

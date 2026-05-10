@@ -8,18 +8,17 @@ namespace Blueprint.SourceGenerator.Modules;
 /// from ambient context (e.g., JWT claims, tenant accessor, correlation state) without writing
 /// custom companion generators.
 /// <para>
-/// The generated code resolves all <c>IPropertyPopulator</c> registrations from DI and calls
-/// <c>PopulateAsync</c> on each in registration order. When no populators are registered, the
-/// generated code short-circuits with a null check, adding no overhead.
-/// </para>
-/// <para>
-/// This is the compile-time equivalent of Signature365's <c>SetTenantMiddleware</c> pattern
-/// where tenant IDs, correlation identifiers, and other ambient state were injected into
-/// operation properties via a middleware builder.
+/// The generated code resolves all <c>IPropertyPopulator</c> registrations from the root
+/// <c>IServiceProvider</c> once at pipeline construction time (property populators are singletons)
+/// and invokes <c>PopulateAsync</c> on each in registration order during execution.
+/// When no populators are registered, the null check short-circuits with no overhead.
 /// </para>
 /// </summary>
 public sealed class PropertyPopulationModule : IBlueprintSourceGeneratorModule, IPipelineContributor
 {
+    private const string FieldName = "_propertyPopulators";
+    private const string ServiceType = "Blueprint.Runtime.Middleware.IPropertyPopulator[]";
+
     /// <inheritdoc />
     public string ModuleId => nameof(PropertyPopulationModule);
 
@@ -41,27 +40,26 @@ public sealed class PropertyPopulationModule : IBlueprintSourceGeneratorModule, 
     /// <inheritdoc />
     public void ContributeToPipeline(PipelineContributorContext context)
     {
-        // Always participate — the generated code gracefully handles zero registrations.
-        // PropertyPopulationModule runs at the Population stage after PropertyOwnership
-        // has bound HTTP request data, so populators see route/body/query values.
+        // Resolve populators once at construction time — they are registered as singletons.
+        // Uses GetService<IEnumerable<T>> (nullable) rather than GetServices (throws when empty).
+        context.CacheService(
+            FieldName,
+            ServiceType,
+            "(Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Runtime.Middleware.IPropertyPopulator>>(serviceProvider) is { } populators ? System.Linq.Enumerable.ToArray(populators) : System.Array.Empty<Blueprint.Runtime.Middleware.IPropertyPopulator>())",
+            isNullable: false);
+
         context.RequireAsync();
         context.AddRenderStep(PipelineStage.Population, RenderPopulation);
     }
 
     private static void RenderPopulation(PipelineRenderContext context)
     {
-        var serviceProvider = context.GetServiceProviderExpression();
-
         context.WriteBlankLine();
-        context.DeclareVariable(
-            "propertyPopulators",
-            $"Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Runtime.Middleware.IPropertyPopulator>>({serviceProvider})");
-
         context.If(
-            "propertyPopulators != null",
+            $"this.{FieldName}.Length > 0",
             branch =>
             {
-                branch.ForEach("var populator", "propertyPopulators", foreachBody =>
+                branch.ForEach("var populator", $"this.{FieldName}", foreachBody =>
                 {
                     foreachBody.WriteStatement("await populator.PopulateAsync(context, context.OperationCancelled);");
                 });

@@ -19,7 +19,7 @@ public class AuditingModuleIntegrationTests
     public async Task When_handler_succeeds_then_audit_sink_is_called()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var auditSink = new TestAuditSink();
         var serviceProvider = new AuditTestServiceProvider(auditSink);
 
@@ -38,7 +38,7 @@ public class AuditingModuleIntegrationTests
     public async Task When_handler_fails_validation_then_audit_sink_is_not_called()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var auditSink = new TestAuditSink();
         var serviceProvider = new AuditTestServiceProvider(auditSink);
 
@@ -56,7 +56,7 @@ public class AuditingModuleIntegrationTests
     public async Task When_no_audit_sink_registered_then_pipeline_completes_without_error()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var serviceProvider = new AuditTestServiceProvider(auditSink: null);
 
         var pipeline = executor.GetPipeline(typeof(AuditableQuery));
@@ -71,7 +71,7 @@ public class AuditingModuleIntegrationTests
     public async Task When_audit_sink_throws_then_pipeline_still_returns_success()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var auditSink = new ThrowingAuditSink();
         var serviceProvider = new AuditTestServiceProvider(auditSink);
 
@@ -88,7 +88,7 @@ public class AuditingModuleIntegrationTests
     public async Task When_operation_has_DoNotAudit_then_audit_sink_is_not_called()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var auditSink = new TestAuditSink();
         var serviceProvider = new AuditTestServiceProvider(auditSink);
 
@@ -108,7 +108,7 @@ public class AuditingModuleIntegrationTests
         activity.Start();
 
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var auditSink = new TestAuditSink();
         var serviceProvider = new AuditTestServiceProvider(auditSink);
 
@@ -143,7 +143,7 @@ public class AuditingModuleIntegrationTests
         activity.Start();
 
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var auditSink = new ThrowingAuditSink();
         var serviceProvider = new AuditTestServiceProvider(auditSink);
 
@@ -185,7 +185,7 @@ public class AuditingModuleIntegrationTests
     public async Task When_operation_has_DoNotRecordPerformanceMetrics_then_no_activity_is_created()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var serviceProvider = new AuditTestServiceProvider(null);
 
         var pipeline = executor.GetPipeline(typeof(NoMetricsQuery));

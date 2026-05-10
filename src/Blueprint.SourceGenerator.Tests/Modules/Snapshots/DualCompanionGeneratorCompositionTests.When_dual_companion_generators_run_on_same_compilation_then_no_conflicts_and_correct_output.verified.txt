@@ -137,10 +137,12 @@ namespace Blueprint.Generated
             new string[] { "PropertyPopulationModule", "HandlerExecutionModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
         private static readonly System.Diagnostics.ActivityTagsCollection _auditTags_GetOrderStatus =
             new System.Diagnostics.ActivityTagsCollection { { "blueprint.operation.type", "GetOrderStatus" } };
+        readonly Blueprint.Runtime.Middleware.IPropertyPopulator[] _propertyPopulators;
 
-        public GetOrderStatusExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory)
+        public GetOrderStatusExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, System.IServiceProvider serviceProvider)
             : base(loggerFactory, "GetOrderStatus")
         {
+            this._propertyPopulators = (Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Runtime.Middleware.IPropertyPopulator>>(serviceProvider) is { } populators ? System.Linq.Enumerable.ToArray(populators) : System.Array.Empty<Blueprint.Runtime.Middleware.IPropertyPopulator>());
         }
 
         protected override async System.Threading.Tasks.Task<Blueprint.OperationResult> ExecuteCoreAsync(Blueprint.Runtime.Exec.ApiOperationContext context)
@@ -148,10 +150,9 @@ namespace Blueprint.Generated
             var operation = (global::TestNamespace.GetOrderStatus)context.Operation;
 
 
-            var propertyPopulators = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Runtime.Middleware.IPropertyPopulator>>(context.ServiceProvider);
-            if (propertyPopulators != null)
+            if (this._propertyPopulators.Length > 0)
             {
-                foreach (var populator in propertyPopulators)
+                foreach (var populator in this._propertyPopulators)
                 {
                     await populator.PopulateAsync(context, context.OperationCancelled);
                 }
@@ -215,10 +216,12 @@ namespace Blueprint.Generated
             new string[] { "TestMessagingPipelineModule", "PropertyPopulationModule", "HandlerExecutionModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
         private static readonly System.Diagnostics.ActivityTagsCollection _auditTags_ProcessOrderMessage =
             new System.Diagnostics.ActivityTagsCollection { { "blueprint.operation.type", "ProcessOrderMessage" } };
+        readonly Blueprint.Runtime.Middleware.IPropertyPopulator[] _propertyPopulators;
 
-        public ProcessOrderMessageExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory)
+        public ProcessOrderMessageExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, System.IServiceProvider serviceProvider)
             : base(loggerFactory, "ProcessOrderMessage")
         {
+            this._propertyPopulators = (Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Runtime.Middleware.IPropertyPopulator>>(serviceProvider) is { } populators ? System.Linq.Enumerable.ToArray(populators) : System.Array.Empty<Blueprint.Runtime.Middleware.IPropertyPopulator>());
         }
 
         protected override async System.Threading.Tasks.Task<Blueprint.OperationResult> ExecuteCoreAsync(Blueprint.Runtime.Exec.ApiOperationContext context)
@@ -228,10 +231,9 @@ namespace Blueprint.Generated
             // [MessagingPipeline] Deserialize message envelope
             context.Activity?.AddTag("messaging.deserialized", true);
 
-            var propertyPopulators = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Runtime.Middleware.IPropertyPopulator>>(context.ServiceProvider);
-            if (propertyPopulators != null)
+            if (this._propertyPopulators.Length > 0)
             {
-                foreach (var populator in propertyPopulators)
+                foreach (var populator in this._propertyPopulators)
                 {
                     await populator.PopulateAsync(context, context.OperationCancelled);
                 }
@@ -309,11 +311,11 @@ namespace TestNamespace
 {
     public sealed partial class TestAppExecutor : Blueprint.BlueprintAppExecutor
     {
-        public TestAppExecutor(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, TestNamespace.TestApp app)
+        public TestAppExecutor(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, TestNamespace.TestApp app, System.IServiceProvider serviceProvider)
             : base(app)
         {
-            this.Register(typeof(global::TestNamespace.ProcessOrderMessage), new Blueprint.Generated.ProcessOrderMessageExecutorPipeline(loggerFactory));
-            this.Register(typeof(global::TestNamespace.GetOrderStatus), new Blueprint.Generated.GetOrderStatusExecutorPipeline(loggerFactory));
+            this.Register(typeof(global::TestNamespace.ProcessOrderMessage), new Blueprint.Generated.ProcessOrderMessageExecutorPipeline(loggerFactory, serviceProvider));
+            this.Register(typeof(global::TestNamespace.GetOrderStatus), new Blueprint.Generated.GetOrderStatusExecutorPipeline(loggerFactory, serviceProvider));
             this.Freeze();
         }
     }

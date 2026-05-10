@@ -26,7 +26,7 @@ public class ResourceExpansionModuleIntegrationTests
     public async Task When_expand_query_param_matches_then_expandable_value_is_populated()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(GetExpandableResourceQuery));
         var descriptor = GetExpandableResourceQuery.Configure();
 
@@ -51,7 +51,7 @@ public class ResourceExpansionModuleIntegrationTests
     public async Task When_expand_query_param_not_present_then_expandable_value_is_not_populated()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(GetExpandableResourceQuery));
         var descriptor = GetExpandableResourceQuery.Configure();
 
@@ -76,7 +76,7 @@ public class ResourceExpansionModuleIntegrationTests
     public async Task When_always_expand_property_then_value_is_populated_without_query_param()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(GetAlwaysExpandResourceQuery));
         var descriptor = GetAlwaysExpandResourceQuery.Configure();
 
@@ -101,7 +101,7 @@ public class ResourceExpansionModuleIntegrationTests
     public async Task When_no_expander_registered_then_pipeline_completes_without_error()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(GetExpandableResourceQuery));
         var descriptor = GetExpandableResourceQuery.Configure();
 
@@ -125,7 +125,7 @@ public class ResourceExpansionModuleIntegrationTests
     public async Task When_multiple_expand_params_then_each_property_expanded_by_matching_expander()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(GetMultiExpandableResourceQuery));
         var descriptor = GetMultiExpandableResourceQuery.Configure();
 
@@ -153,7 +153,7 @@ public class ResourceExpansionModuleIntegrationTests
     public async Task When_expand_array_syntax_used_then_expandable_value_is_populated()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(GetExpandableResourceQuery));
         var descriptor = GetExpandableResourceQuery.Configure();
 

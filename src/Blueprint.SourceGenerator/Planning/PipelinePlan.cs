@@ -17,6 +17,7 @@ public sealed record PipelinePlan(OperationModel Operation, VariableRegistry Var
     private readonly List<PipelineRenderStep> _renderSteps = [];
     private readonly List<Action<ClassBuilder>> _deferredClassMembers = [];
     private readonly HashSet<string> _declaredSharedVariables = [];
+    private readonly Dictionary<string, CachedServiceRegistration> _cachedServices = new(StringComparer.Ordinal);
 
     /// <summary>
     /// Declares a shared pipeline variable so that multiple modules can emit the same variable
@@ -60,6 +61,35 @@ public sealed record PipelinePlan(OperationModel Operation, VariableRegistry Var
     /// Gets the ordered pipeline render steps.
     /// </summary>
     public IReadOnlyList<PipelineRenderStep> RenderSteps => this._renderSteps;
+
+    /// <summary>
+    /// Gets the cached service registrations that should be resolved once in the pipeline constructor
+    /// and stored as private readonly fields. Modules use this for services that are guaranteed to be
+    /// singletons (e.g. <c>IPropertyPopulator[]</c>, <c>IBackgroundTaskScheduler</c>) to eliminate
+    /// per-request <c>GetService</c> calls.
+    /// </summary>
+    public IReadOnlyDictionary<string, CachedServiceRegistration> CachedServices => this._cachedServices;
+
+    /// <summary>
+    /// Registers a service to be pre-resolved from the root <c>IServiceProvider</c> at pipeline
+    /// construction time and cached as a private readonly field. The field is available to render
+    /// steps via its <paramref name="fieldName"/>. Duplicate registrations (same field name) are
+    /// silently ignored — allowing multiple modules to depend on the same cached service safely.
+    /// </summary>
+    /// <param name="fieldName">The private field name (e.g. <c>_propertyPopulators</c>).</param>
+    /// <param name="serviceTypeName">The fully-qualified service type to resolve (e.g. <c>Blueprint.Runtime.Middleware.IPropertyPopulator[]</c>).</param>
+    /// <param name="resolutionExpression">
+    /// The C# expression used to resolve the service from <c>serviceProvider</c>. The expression
+    /// can reference <c>serviceProvider</c> which will be in scope in the constructor.
+    /// </param>
+    /// <param name="isNullable">Whether the resolved service may be null (affects field type annotation).</param>
+    public void CacheService(string fieldName, string serviceTypeName, string resolutionExpression, bool isNullable = false)
+    {
+        if (!this._cachedServices.ContainsKey(fieldName))
+        {
+            this._cachedServices[fieldName] = new CachedServiceRegistration(fieldName, serviceTypeName, resolutionExpression, isNullable);
+        }
+    }
 
     /// <summary>
     /// Adds a diagnostic to the pipeline plan.
@@ -490,3 +520,19 @@ public sealed class PipelineRenderStep(
         this._render(context);
     }
 }
+
+/// <summary>
+/// Describes a service that should be resolved from the root <c>IServiceProvider</c> at pipeline
+/// construction time and cached as a private readonly field for zero-cost per-request access.
+/// </summary>
+/// <param name="FieldName">The private field name on the generated pipeline class.</param>
+/// <param name="ServiceTypeName">The fully-qualified CLR type for the field declaration.</param>
+/// <param name="ResolutionExpression">
+/// The C# expression to resolve the value in the constructor (may reference <c>serviceProvider</c>).
+/// </param>
+/// <param name="IsNullable">Whether the resolved value may be null.</param>
+public sealed record CachedServiceRegistration(
+    string FieldName,
+    string ServiceTypeName,
+    string ResolutionExpression,
+    bool IsNullable);

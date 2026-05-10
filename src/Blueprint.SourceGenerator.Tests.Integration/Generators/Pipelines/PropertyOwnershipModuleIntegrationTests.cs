@@ -73,7 +73,7 @@ public class PropertyOwnershipModuleIntegrationTests
     public async Task When_route_uses_catch_all_then_pipeline_populates_full_path_from_route_values()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(GetFolderByPathPopulationQuery));
         var descriptor = GetFolderByPathPopulationQuery.Configure();
         var httpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext();
@@ -107,7 +107,7 @@ public class PropertyOwnershipModuleIntegrationTests
     public async Task When_route_parameter_is_IParsable_type_then_pipeline_parses_from_route_value()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(GetItemByStrongIdPopulationQuery));
         var descriptor = GetItemByStrongIdPopulationQuery.Configure();
         var httpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext();
@@ -129,7 +129,7 @@ public class PropertyOwnershipModuleIntegrationTests
     public async Task When_route_parameter_is_IParsable_type_and_value_is_invalid_then_binding_failure()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(GetItemByStrictIdPopulationQuery));
         var descriptor = GetItemByStrictIdPopulationQuery.Configure();
         var httpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext();
@@ -162,7 +162,7 @@ public class PropertyOwnershipModuleIntegrationTests
     public async Task When_query_parameter_type_implements_IParsable_and_value_provided_then_parses_correctly()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(SearchItemsByStrongIdPopulationQuery));
         var descriptor = SearchItemsByStrongIdPopulationQuery.Configure();
 
@@ -329,7 +329,7 @@ public class PropertyOwnershipModuleIntegrationTests
     public async Task When_route_binding_targets_init_only_property_then_pipeline_populates_init_value()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(RouteInitOnlyPopulationQuery));
         var httpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext();
         httpContext.Request.RouteValues["Id"] = "route-init-123";
@@ -346,7 +346,7 @@ public class PropertyOwnershipModuleIntegrationTests
     public async Task When_query_binding_targets_init_only_property_then_pipeline_populates_init_value()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(QueryInitOnlyPopulationQuery));
         var httpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext();
         httpContext.Request.QueryString = new Microsoft.AspNetCore.Http.QueryString("?term=blueprint-init");
@@ -363,7 +363,7 @@ public class PropertyOwnershipModuleIntegrationTests
     public async Task When_operation_has_mixed_init_and_set_properties_then_pipeline_populates_both()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(MixedInitAndSetPopulationQuery));
         var httpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext();
         httpContext.Request.RouteValues["Id"] = "mixed-init-456";
@@ -381,7 +381,7 @@ public class PropertyOwnershipModuleIntegrationTests
     public async Task When_body_binding_targets_init_only_properties_then_pipeline_populates_init_values()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(BodyInitOnlyPopulationCommand));
         var json = "{\"title\":\"init-body\",\"count\":7}";
         var bytes = System.Text.Encoding.UTF8.GetBytes(json);
@@ -402,7 +402,7 @@ public class PropertyOwnershipModuleIntegrationTests
     public async Task When_post_inherits_route_property_from_base_class_then_pipeline_binds_inherited_route_and_body()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(CreateTenantItemPopulationCommand));
         var json = """{"itemName":"widget"}""";
         var bytes = System.Text.Encoding.UTF8.GetBytes(json);
@@ -425,7 +425,7 @@ public class PropertyOwnershipModuleIntegrationTests
     public async Task When_get_inherits_pagination_from_base_class_then_pipeline_binds_inherited_query_params()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(SearchItemsPagedPopulationQuery));
         var httpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext();
         httpContext.Request.Method = "GET";
@@ -473,7 +473,7 @@ public class PropertyOwnershipModuleIntegrationTests
     public async Task When_3_level_inheritance_then_pipeline_binds_all_ancestor_properties()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(GetTenantReportsPopulationQuery));
         var httpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext();
         httpContext.Request.Method = "GET";

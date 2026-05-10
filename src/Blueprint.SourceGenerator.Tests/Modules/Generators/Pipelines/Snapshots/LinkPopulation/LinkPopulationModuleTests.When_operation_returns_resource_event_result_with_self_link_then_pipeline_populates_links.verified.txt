@@ -19,10 +19,12 @@ namespace Blueprint.Generated
             new string[] { "PropertyOwnershipModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "HandlerExecutionModule", "LinkGenerationModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "ResourceEventAuditModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
         private static readonly System.Diagnostics.ActivityTagsCollection _auditTags_CreateResourceCommand =
             new System.Diagnostics.ActivityTagsCollection { { "blueprint.operation.type", "CreateResourceCommand" } };
+        readonly Blueprint.Runtime.Middleware.IPropertyPopulator[] _propertyPopulators;
 
-        public CreateResourceCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory)
+        public CreateResourceCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, System.IServiceProvider serviceProvider)
             : base(loggerFactory, "CreateResourceCommand")
         {
+            this._propertyPopulators = (Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Runtime.Middleware.IPropertyPopulator>>(serviceProvider) is { } populators ? System.Linq.Enumerable.ToArray(populators) : System.Array.Empty<Blueprint.Runtime.Middleware.IPropertyPopulator>());
         }
 
         protected override async System.Threading.Tasks.Task<Blueprint.OperationResult> ExecuteCoreAsync(Blueprint.Runtime.Exec.ApiOperationContext context)
@@ -66,10 +68,9 @@ namespace Blueprint.Generated
 
             operation.Id = (string)httpContext.Request.RouteValues["Id"];
 
-            var propertyPopulators = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Runtime.Middleware.IPropertyPopulator>>(context.ServiceProvider);
-            if (propertyPopulators != null)
+            if (this._propertyPopulators.Length > 0)
             {
-                foreach (var populator in propertyPopulators)
+                foreach (var populator in this._propertyPopulators)
                 {
                     await populator.PopulateAsync(context, context.OperationCancelled);
                 }
@@ -262,10 +263,10 @@ namespace TestNamespace
 {
     public sealed partial class TestAppExecutor : Blueprint.BlueprintAppExecutor
     {
-        public TestAppExecutor(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, TestNamespace.TestApp app)
+        public TestAppExecutor(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, TestNamespace.TestApp app, System.IServiceProvider serviceProvider)
             : base(app)
         {
-            this.Register(typeof(global::TestNamespace.CreateResourceCommand), new Blueprint.Generated.CreateResourceCommandExecutorPipeline(loggerFactory));
+            this.Register(typeof(global::TestNamespace.CreateResourceCommand), new Blueprint.Generated.CreateResourceCommandExecutorPipeline(loggerFactory, serviceProvider));
             this.Freeze();
         }
     }

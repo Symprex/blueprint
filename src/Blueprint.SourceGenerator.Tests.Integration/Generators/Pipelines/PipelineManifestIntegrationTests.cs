@@ -15,7 +15,7 @@ public class PipelineManifestIntegrationTests
     public void GetAppliedModules_returns_expected_modules_for_standard_query()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
 
         var pipeline = executor.GetPipeline(typeof(ManifestTestQuery));
         var pipelineType = pipeline.GetType();
@@ -35,7 +35,7 @@ public class PipelineManifestIntegrationTests
     public void GetAppliedModules_excludes_AuditingModule_when_DoNotAudit_applied()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
 
         var pipeline = executor.GetPipeline(typeof(ManifestNonAuditableQuery));
         var pipelineType = pipeline.GetType();
@@ -54,7 +54,7 @@ public class PipelineManifestIntegrationTests
     public void GetAppliedModules_preserves_pipeline_contribution_order()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
 
         var pipeline = executor.GetPipeline(typeof(ManifestTestQuery));
         var pipelineType = pipeline.GetType();

@@ -16,7 +16,7 @@ public class ConcurrentExecutorDispatchIntegrationTests
     public async Task When_dispatching_same_operation_concurrently_then_stress_harness_reports_all_dispatches_completed()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var descriptor = ConcurrentDispatchOperation.Configure();
 
         ConcurrentDispatchOperation.Reset();

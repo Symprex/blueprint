@@ -14,7 +14,7 @@ public class HandlerExecutionModuleIntegrationTests
     public async Task When_static_handler_method_returns_typed_result_then_generated_pipeline_returns_it()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(StaticTypedHandlerQuery));
         var context = CreateContext(app, StaticTypedHandlerQuery.Configure(), new StaticTypedHandlerQuery { Message = "typed-result" });
 
@@ -35,7 +35,7 @@ public class HandlerExecutionModuleIntegrationTests
             .AddSingleton<IHandlerExecutionFormatter>(formatter)
             .BuildServiceProvider();
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(DependencyInjectedHandlerQuery));
         var context = CreateContext(app, DependencyInjectedHandlerQuery.Configure(), new DependencyInjectedHandlerQuery { Message = "value" }, serviceProvider);
 
@@ -54,7 +54,7 @@ public class HandlerExecutionModuleIntegrationTests
     public async Task When_synchronous_handler_returns_result_then_generated_pipeline_returns_it()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(SynchronousHandlerQuery));
         var context = CreateContext(app, SynchronousHandlerQuery.Configure(), new SynchronousHandlerQuery { Message = "sync-result" });
 
@@ -71,7 +71,7 @@ public class HandlerExecutionModuleIntegrationTests
     public async Task When_handler_returns_task_then_generated_pipeline_completes_successfully()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(TaskOnlyHandlerCommand));
         var context = CreateContext(app, TaskOnlyHandlerCommand.Configure(), new TaskOnlyHandlerCommand());
 
@@ -87,7 +87,7 @@ public class HandlerExecutionModuleIntegrationTests
     public async Task When_handler_returns_ok_result_then_generated_pipeline_preserves_wrapped_result()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(ExplicitOkResultHandlerQuery));
         var context = CreateContext(app, ExplicitOkResultHandlerQuery.Configure(), new ExplicitOkResultHandlerQuery());
 
@@ -104,7 +104,7 @@ public class HandlerExecutionModuleIntegrationTests
     public async Task When_handler_accepts_api_operation_context_then_generated_pipeline_passes_current_context()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(ContextAwareHandlerQuery));
         var context = CreateContext(app, ContextAwareHandlerQuery.Configure(), new ContextAwareHandlerQuery { Message = "context-result" });
 

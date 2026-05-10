@@ -15,7 +15,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_required_validation_fails_then_generated_pipeline_returns_validation_failure_and_skips_handler()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(RequiredValidationOperation));
         var context = CreateContext(app, RequiredValidationOperation.Configure());
 
@@ -36,7 +36,7 @@ public class ValidationModuleIntegrationTests
         activity.Start();
 
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(RequiredValidationOperation));
         var context = CreateContext(app, RequiredValidationOperation.Configure());
         context.Activity = activity;
@@ -58,7 +58,7 @@ public class ValidationModuleIntegrationTests
         activity.Start();
 
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(LegacyValidationExceptionOperation));
         var context = CreateContext(app, LegacyValidationExceptionOperation.Configure());
         context.Activity = activity;
@@ -83,7 +83,7 @@ public class ValidationModuleIntegrationTests
         activity.Start();
 
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(DataAnnotationsValidationExceptionOperation));
         var context = CreateContext(app, DataAnnotationsValidationExceptionOperation.Configure());
         context.Activity = activity;
@@ -105,7 +105,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_required_validation_passes_then_generated_pipeline_runs_handler_and_returns_ok()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(RequiredValidationOperation));
         var context = CreateContext(app, RequiredValidationOperation.Configure());
         ((RequiredValidationOperation)context.Operation).Name = "Blueprint";
@@ -123,7 +123,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_required_validation_fails_for_whitespace_then_generated_pipeline_returns_validation_failure_and_skips_handler()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(RequiredValidationOperation));
         var context = CreateContext(app, RequiredValidationOperation.Configure());
         ((RequiredValidationOperation)context.Operation).Name = "   ";
@@ -142,7 +142,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_multi_property_required_validation_fails_then_generated_pipeline_returns_all_failures_and_skips_handler()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(MultiRequiredValidationOperation));
         var context = CreateContext(app, MultiRequiredValidationOperation.Configure());
 
@@ -161,7 +161,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_required_and_max_length_validation_fails_for_whitespace_then_generated_pipeline_returns_required_failure_and_skips_handler()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(RequiredMaxLengthValidationOperation));
         var context = CreateContext(app, RequiredMaxLengthValidationOperation.Configure());
         ((RequiredMaxLengthValidationOperation)context.Operation).Name = "    ";
@@ -181,7 +181,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_required_and_max_length_validation_fails_for_too_long_value_then_generated_pipeline_returns_max_length_failure_and_skips_handler()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(RequiredMaxLengthValidationOperation));
         var context = CreateContext(app, RequiredMaxLengthValidationOperation.Configure());
         ((RequiredMaxLengthValidationOperation)context.Operation).Name = "abcd";
@@ -201,7 +201,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_required_and_max_length_validation_passes_then_generated_pipeline_runs_handler_and_returns_ok()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(RequiredMaxLengthValidationOperation));
         var context = CreateContext(app, RequiredMaxLengthValidationOperation.Configure());
         ((RequiredMaxLengthValidationOperation)context.Operation).Name = "abc";
@@ -219,7 +219,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_required_allow_empty_strings_is_used_then_generated_pipeline_allows_empty_string_and_runs_handler()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(RequiredAllowEmptyStringsOperation));
         var context = CreateContext(app, RequiredAllowEmptyStringsOperation.Configure());
         ((RequiredAllowEmptyStringsOperation)context.Operation).Name = string.Empty;
@@ -237,7 +237,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_required_validation_uses_custom_error_message_then_generated_pipeline_preserves_message_and_skips_handler()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(RequiredCustomMessageOperation));
         var context = CreateContext(app, RequiredCustomMessageOperation.Configure());
 
@@ -289,7 +289,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_min_length_validation_fails_then_generated_pipeline_returns_validation_failure_and_skips_handler()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(MinLengthValidationOperation));
         var context = CreateContext(app, MinLengthValidationOperation.Configure());
         ((MinLengthValidationOperation)context.Operation).Name = "ab";
@@ -309,7 +309,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_min_length_validation_passes_then_generated_pipeline_runs_handler_and_returns_ok()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(MinLengthValidationOperation));
         var context = CreateContext(app, MinLengthValidationOperation.Configure());
         ((MinLengthValidationOperation)context.Operation).Name = "abc";
@@ -327,7 +327,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_string_length_validation_fails_for_too_short_value_then_generated_pipeline_returns_validation_failure_and_skips_handler()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(StringLengthValidationOperation));
         var context = CreateContext(app, StringLengthValidationOperation.Configure());
         ((StringLengthValidationOperation)context.Operation).Name = "ab";
@@ -347,7 +347,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_string_length_validation_fails_for_too_long_value_then_generated_pipeline_returns_validation_failure_and_skips_handler()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(StringLengthValidationOperation));
         var context = CreateContext(app, StringLengthValidationOperation.Configure());
         ((StringLengthValidationOperation)context.Operation).Name = "abcdef";
@@ -367,7 +367,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_string_length_validation_passes_then_generated_pipeline_runs_handler_and_returns_ok()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(StringLengthValidationOperation));
         var context = CreateContext(app, StringLengthValidationOperation.Configure());
         ((StringLengthValidationOperation)context.Operation).Name = "abcd";
@@ -385,7 +385,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_email_address_validation_fails_then_generated_pipeline_returns_validation_failure_and_skips_handler()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(EmailAddressValidationOperation));
         var context = CreateContext(app, EmailAddressValidationOperation.Configure());
         ((EmailAddressValidationOperation)context.Operation).Email = "invalid";
@@ -405,7 +405,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_email_address_validation_passes_then_generated_pipeline_runs_handler_and_returns_ok()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(EmailAddressValidationOperation));
         var context = CreateContext(app, EmailAddressValidationOperation.Configure());
         ((EmailAddressValidationOperation)context.Operation).Email = "hello@example.com";
@@ -423,7 +423,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_greater_than_property_validation_fails_then_generated_pipeline_returns_validation_failure_and_skips_handler()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(GreaterThanPropertyValidationOperation));
         var context = CreateContext(app, GreaterThanPropertyValidationOperation.Configure());
         var operation = (GreaterThanPropertyValidationOperation)context.Operation;
@@ -444,7 +444,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_greater_than_property_validation_passes_then_generated_pipeline_runs_handler_and_returns_ok()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(GreaterThanPropertyValidationOperation));
         var context = CreateContext(app, GreaterThanPropertyValidationOperation.Configure());
         var operation = (GreaterThanPropertyValidationOperation)context.Operation;
@@ -464,7 +464,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_greater_than_validation_fails_then_generated_pipeline_returns_validation_failure_and_skips_handler()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(GreaterThanValidationOperation));
         var context = CreateContext(app, GreaterThanValidationOperation.Configure());
         var operation = (GreaterThanValidationOperation)context.Operation;
@@ -485,7 +485,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_greater_than_validation_passes_then_generated_pipeline_runs_handler_and_returns_ok()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(GreaterThanValidationOperation));
         var context = CreateContext(app, GreaterThanValidationOperation.Configure());
         var operation = (GreaterThanValidationOperation)context.Operation;
@@ -504,7 +504,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_less_than_property_validation_fails_then_generated_pipeline_returns_validation_failure_and_skips_handler()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(LessThanPropertyValidationOperation));
         var context = CreateContext(app, LessThanPropertyValidationOperation.Configure());
         var operation = (LessThanPropertyValidationOperation)context.Operation;
@@ -525,7 +525,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_less_than_property_validation_passes_then_generated_pipeline_runs_handler_and_returns_ok()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(LessThanPropertyValidationOperation));
         var context = CreateContext(app, LessThanPropertyValidationOperation.Configure());
         var operation = (LessThanPropertyValidationOperation)context.Operation;
@@ -545,7 +545,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_less_than_validation_fails_then_generated_pipeline_returns_validation_failure_and_skips_handler()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(LessThanValidationOperation));
         var context = CreateContext(app, LessThanValidationOperation.Configure());
         var operation = (LessThanValidationOperation)context.Operation;
@@ -566,7 +566,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_less_than_validation_passes_then_generated_pipeline_runs_handler_and_returns_ok()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(LessThanValidationOperation));
         var context = CreateContext(app, LessThanValidationOperation.Configure());
         var operation = (LessThanValidationOperation)context.Operation;
@@ -585,7 +585,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_compare_validation_fails_then_generated_pipeline_returns_validation_failure_and_skips_handler()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(CompareValidationOperation));
         var context = CreateContext(app, CompareValidationOperation.Configure());
         var operation = (CompareValidationOperation)context.Operation;
@@ -606,7 +606,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_compare_validation_passes_then_generated_pipeline_runs_handler_and_returns_ok()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(CompareValidationOperation));
         var context = CreateContext(app, CompareValidationOperation.Configure());
         var operation = (CompareValidationOperation)context.Operation;
@@ -625,7 +625,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_compare_validation_both_null_then_generated_pipeline_runs_handler_and_returns_ok()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(CompareValidationOperation));
         var context = CreateContext(app, CompareValidationOperation.Configure());
 
@@ -641,7 +641,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_required_if_validation_fails_then_generated_pipeline_returns_validation_failure_and_skips_handler()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(RequiredIfValidationOperation));
         var context = CreateContext(app, RequiredIfValidationOperation.Configure());
         var operation = (RequiredIfValidationOperation)context.Operation;
@@ -662,7 +662,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_required_if_validation_passes_then_generated_pipeline_runs_handler_and_returns_ok()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(RequiredIfValidationOperation));
         var context = CreateContext(app, RequiredIfValidationOperation.Configure());
         var operation = (RequiredIfValidationOperation)context.Operation;
@@ -682,7 +682,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_required_if_not_validation_fails_then_generated_pipeline_returns_validation_failure_and_skips_handler()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(RequiredIfNotValidationOperation));
         var context = CreateContext(app, RequiredIfNotValidationOperation.Configure());
         var operation = (RequiredIfNotValidationOperation)context.Operation;
@@ -703,7 +703,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_required_if_not_validation_passes_then_generated_pipeline_runs_handler_and_returns_ok()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(RequiredIfNotValidationOperation));
         var context = CreateContext(app, RequiredIfNotValidationOperation.Configure());
 
@@ -720,7 +720,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_not_allowed_if_validation_fails_then_generated_pipeline_returns_validation_failure_and_skips_handler()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(NotAllowedIfValidationOperation));
         var context = CreateContext(app, NotAllowedIfValidationOperation.Configure());
         var operation = (NotAllowedIfValidationOperation)context.Operation;
@@ -742,7 +742,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_not_allowed_if_validation_passes_then_generated_pipeline_runs_handler_and_returns_ok()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(NotAllowedIfValidationOperation));
         var context = CreateContext(app, NotAllowedIfValidationOperation.Configure());
         var operation = (NotAllowedIfValidationOperation)context.Operation;
@@ -761,7 +761,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_not_allowed_if_validation_uses_null_dependent_value_then_runtime_fallback_returns_validation_failure_and_skips_handler()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(NotAllowedIfNullDependentValueValidationOperation));
         var context = CreateContext(app, NotAllowedIfNullDependentValueValidationOperation.Configure());
         var operation = (NotAllowedIfNullDependentValueValidationOperation)context.Operation;
@@ -782,7 +782,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_mixed_fast_and_runtime_property_validation_fails_then_generated_pipeline_returns_validation_failure_and_skips_handler()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(MixedFastAndRuntimeValidationOperation));
         var context = CreateContext(app, MixedFastAndRuntimeValidationOperation.Configure());
         var operation = (MixedFastAndRuntimeValidationOperation)context.Operation;
@@ -803,7 +803,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_mixed_fast_and_runtime_property_validation_passes_then_generated_pipeline_runs_handler_and_returns_ok()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(MixedFastAndRuntimeValidationOperation));
         var context = CreateContext(app, MixedFastAndRuntimeValidationOperation.Configure());
         var operation = (MixedFastAndRuntimeValidationOperation)context.Operation;
@@ -823,7 +823,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_IValidatableObject_validation_fails_then_generated_pipeline_returns_validation_failure_and_skips_handler()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(ValidatableOperation));
         var context = CreateContext(app, ValidatableOperation.Configure());
 
@@ -842,7 +842,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_range_validation_fails_below_minimum_then_generated_pipeline_returns_validation_failure()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(RangeValidationOperation));
         var context = CreateContext(app, RangeValidationOperation.Configure());
 
@@ -861,7 +861,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_range_validation_fails_above_maximum_then_generated_pipeline_returns_validation_failure()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(RangeValidationOperation));
         var context = CreateContext(app, RangeValidationOperation.Configure());
 
@@ -880,7 +880,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_range_validation_passes_then_generated_pipeline_executes_handler()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(RangeValidationOperation));
         var context = CreateContext(app, RangeValidationOperation.Configure());
 
@@ -897,7 +897,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_double_range_validation_fails_below_minimum_then_generated_pipeline_returns_validation_failure()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(DoubleRangeValidationOperation));
         var context = CreateContext(app, DoubleRangeValidationOperation.Configure());
 
@@ -916,7 +916,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_double_range_validation_fails_above_maximum_then_generated_pipeline_returns_validation_failure()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(DoubleRangeValidationOperation));
         var context = CreateContext(app, DoubleRangeValidationOperation.Configure());
 
@@ -935,7 +935,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_double_range_validation_passes_then_generated_pipeline_executes_handler()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(DoubleRangeValidationOperation));
         var context = CreateContext(app, DoubleRangeValidationOperation.Configure());
 
@@ -952,7 +952,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_nullable_range_validation_value_is_null_then_generated_pipeline_skips_validation_and_executes_handler()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(NullableRangeValidationOperation));
         var context = CreateContext(app, NullableRangeValidationOperation.Configure());
 
@@ -969,7 +969,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_nullable_range_validation_value_is_out_of_range_then_generated_pipeline_returns_validation_failure()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(NullableRangeValidationOperation));
         var context = CreateContext(app, NullableRangeValidationOperation.Configure());
 
@@ -986,7 +986,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_nullable_range_validation_value_is_in_range_then_generated_pipeline_executes_handler()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(NullableRangeValidationOperation));
         var context = CreateContext(app, NullableRangeValidationOperation.Configure());
 
@@ -1003,7 +1003,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_nullable_greater_than_validation_value_is_null_then_generated_pipeline_skips_and_executes_handler()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(NullableGreaterThanValidationOperation));
         var context = CreateContext(app, NullableGreaterThanValidationOperation.Configure());
 
@@ -1020,7 +1020,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_nullable_greater_than_validation_value_fails_then_generated_pipeline_returns_validation_failure()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(NullableGreaterThanValidationOperation));
         var context = CreateContext(app, NullableGreaterThanValidationOperation.Configure());
 
@@ -1037,7 +1037,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_nullable_less_than_validation_value_is_null_then_generated_pipeline_skips_and_executes_handler()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(NullableLessThanValidationOperation));
         var context = CreateContext(app, NullableLessThanValidationOperation.Configure());
 
@@ -1054,7 +1054,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_nullable_less_than_validation_value_fails_then_generated_pipeline_returns_validation_failure()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(NullableLessThanValidationOperation));
         var context = CreateContext(app, NullableLessThanValidationOperation.Configure());
 
@@ -1071,7 +1071,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_nullable_greater_than_property_both_null_then_generated_pipeline_skips_and_executes_handler()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(NullableGreaterThanPropertyValidationOperation));
         var context = CreateContext(app, NullableGreaterThanPropertyValidationOperation.Configure());
 
@@ -1089,7 +1089,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_nullable_greater_than_property_fails_then_generated_pipeline_returns_validation_failure()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(NullableGreaterThanPropertyValidationOperation));
         var context = CreateContext(app, NullableGreaterThanPropertyValidationOperation.Configure());
 
@@ -1107,7 +1107,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_nullable_greater_than_property_passes_then_generated_pipeline_executes_handler()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(NullableGreaterThanPropertyValidationOperation));
         var context = CreateContext(app, NullableGreaterThanPropertyValidationOperation.Configure());
 
@@ -1125,7 +1125,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_nullable_less_than_property_both_null_then_generated_pipeline_skips_and_executes_handler()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(NullableLessThanPropertyValidationOperation));
         var context = CreateContext(app, NullableLessThanPropertyValidationOperation.Configure());
 
@@ -1143,7 +1143,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_nullable_less_than_property_fails_then_generated_pipeline_returns_validation_failure()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(NullableLessThanPropertyValidationOperation));
         var context = CreateContext(app, NullableLessThanPropertyValidationOperation.Configure());
 
@@ -1161,7 +1161,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_nullable_less_than_property_passes_then_generated_pipeline_executes_handler()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(NullableLessThanPropertyValidationOperation));
         var context = CreateContext(app, NullableLessThanPropertyValidationOperation.Configure());
 
@@ -1179,7 +1179,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_regex_validation_fails_then_generated_pipeline_returns_validation_failure()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(RegularExpressionValidationOperation));
         var context = CreateContext(app, RegularExpressionValidationOperation.Configure());
 
@@ -1198,7 +1198,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_regex_validation_passes_then_generated_pipeline_executes_handler()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(RegularExpressionValidationOperation));
         var context = CreateContext(app, RegularExpressionValidationOperation.Configure());
 
@@ -1215,7 +1215,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_regex_validation_property_is_null_then_skips_regex_check_and_executes_handler()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(RegularExpressionValidationOperation));
         var context = CreateContext(app, RegularExpressionValidationOperation.Configure());
 
@@ -1232,7 +1232,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_phone_validation_fails_then_generated_pipeline_returns_validation_failure()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(PhoneValidationOperation));
         var context = CreateContext(app, PhoneValidationOperation.Configure());
 
@@ -1251,7 +1251,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_phone_validation_passes_then_generated_pipeline_executes_handler()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(PhoneValidationOperation));
         var context = CreateContext(app, PhoneValidationOperation.Configure());
 
@@ -1268,7 +1268,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_phone_validation_property_is_null_then_skips_phone_check_and_executes_handler()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(PhoneValidationOperation));
         var context = CreateContext(app, PhoneValidationOperation.Configure());
 
@@ -1285,7 +1285,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_url_validation_fails_then_generated_pipeline_returns_validation_failure()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(UrlValidationOperation));
         var context = CreateContext(app, UrlValidationOperation.Configure());
 
@@ -1304,7 +1304,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_url_validation_passes_then_generated_pipeline_executes_handler()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(UrlValidationOperation));
         var context = CreateContext(app, UrlValidationOperation.Configure());
 
@@ -1321,7 +1321,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_url_validation_property_is_null_then_skips_url_check_and_executes_handler()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(UrlValidationOperation));
         var context = CreateContext(app, UrlValidationOperation.Configure());
 
@@ -1338,7 +1338,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_allowed_values_validation_fails_then_generated_pipeline_returns_validation_failure_and_skips_handler()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(AllowedValuesValidationOperation));
         var context = CreateContext(app, AllowedValuesValidationOperation.Configure());
         var operation = (AllowedValuesValidationOperation)context.Operation;
@@ -1356,7 +1356,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_allowed_values_validation_passes_then_generated_pipeline_runs_handler_and_returns_ok()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(AllowedValuesValidationOperation));
         var context = CreateContext(app, AllowedValuesValidationOperation.Configure());
         var operation = (AllowedValuesValidationOperation)context.Operation;
@@ -1374,7 +1374,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_allowed_values_property_is_null_then_generated_pipeline_runs_handler_and_returns_ok()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(AllowedValuesValidationOperation));
         var context = CreateContext(app, AllowedValuesValidationOperation.Configure());
 
@@ -1390,7 +1390,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_denied_values_validation_fails_then_generated_pipeline_returns_validation_failure_and_skips_handler()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(DeniedValuesValidationOperation));
         var context = CreateContext(app, DeniedValuesValidationOperation.Configure());
         var operation = (DeniedValuesValidationOperation)context.Operation;
@@ -1408,7 +1408,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_denied_values_validation_passes_then_generated_pipeline_runs_handler_and_returns_ok()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(DeniedValuesValidationOperation));
         var context = CreateContext(app, DeniedValuesValidationOperation.Configure());
         var operation = (DeniedValuesValidationOperation)context.Operation;
@@ -1426,7 +1426,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_denied_values_property_is_null_then_generated_pipeline_runs_handler_and_returns_ok()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(DeniedValuesValidationOperation));
         var context = CreateContext(app, DeniedValuesValidationOperation.Configure());
 
@@ -1442,7 +1442,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_length_validation_too_short_then_generated_pipeline_returns_validation_failure_and_skips_handler()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(LengthValidationOperation));
         var context = CreateContext(app, LengthValidationOperation.Configure());
         var operation = (LengthValidationOperation)context.Operation;
@@ -1460,7 +1460,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_length_validation_passes_then_generated_pipeline_runs_handler_and_returns_ok()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(LengthValidationOperation));
         var context = CreateContext(app, LengthValidationOperation.Configure());
         var operation = (LengthValidationOperation)context.Operation;
@@ -1478,7 +1478,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_IValidatableObject_with_property_attributes_and_property_valid_but_ivalidatable_fails_then_returns_failure()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(HybridValidatableOperation));
         var context = CreateContext(app, HybridValidatableOperation.Configure());
         var operation = (HybridValidatableOperation)context.Operation;
@@ -1502,7 +1502,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_IValidatableObject_with_property_attributes_and_property_fails_then_returns_property_failure_without_calling_ivalidatable()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(HybridValidatableOperation));
         var context = CreateContext(app, HybridValidatableOperation.Configure());
         var operation = (HybridValidatableOperation)context.Operation;
@@ -1526,7 +1526,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_IValidatableObject_with_property_attributes_and_all_valid_then_handler_executes()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(HybridValidatableOperation));
         var context = CreateContext(app, HybridValidatableOperation.Configure());
         var operation = (HybridValidatableOperation)context.Operation;
@@ -1551,7 +1551,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_additional_blueprint_validation_fast_paths_fail_then_generated_pipeline_returns_all_validation_failures_and_skips_handler()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(AdditionalBlueprintValidationFastPathOperation));
         var context = CreateContext(app, AdditionalBlueprintValidationFastPathOperation.Configure());
         var operation = (AdditionalBlueprintValidationFastPathOperation)context.Operation;
@@ -1601,7 +1601,7 @@ public class ValidationModuleIntegrationTests
     public async Task When_additional_blueprint_validation_fast_paths_pass_then_generated_pipeline_runs_handler_and_returns_ok()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(AdditionalBlueprintValidationFastPathOperation));
         var context = CreateContext(app, AdditionalBlueprintValidationFastPathOperation.Configure());
         var operation = (AdditionalBlueprintValidationFastPathOperation)context.Operation;

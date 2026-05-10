@@ -35,7 +35,7 @@ public class ValidationPipelineBenchmarks
     /// </summary>
     public ValidationPipelineBenchmarks()
     {
-        this._executor = new ValidationBenchmarksAppExecutor(NullLoggerFactory.Instance, this._app);
+        this._executor = new ValidationBenchmarksAppExecutor(NullLoggerFactory.Instance, this._app, new EmptyServiceProvider());
     }
 
     /// <summary>

@@ -12,7 +12,7 @@ public class HandlerReturnNormalizationIntegrationTests
     public async Task When_handler_returns_plain_value_then_generated_pipeline_returns_typed_ok_result()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(PlainValueHandlerOperation));
         var context = CreateContext(app, PlainValueHandlerOperation.Configure());
 
@@ -29,7 +29,7 @@ public class HandlerReturnNormalizationIntegrationTests
     public async Task When_handler_returns_task_without_payload_then_generated_pipeline_returns_no_result()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(NoResultHandlerOperation));
         var context = CreateContext(app, NoResultHandlerOperation.Configure());
 
@@ -45,7 +45,7 @@ public class HandlerReturnNormalizationIntegrationTests
     public async Task When_handler_returns_results_union_then_generated_pipeline_returns_selected_union_member()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(UnionHandlerOperation));
         var context = CreateContext(app, UnionHandlerOperation.Configure());
 
@@ -62,7 +62,7 @@ public class HandlerReturnNormalizationIntegrationTests
     public async Task When_handler_returns_explicit_ok_result_with_plain_contract_then_generated_pipeline_returns_same_result()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(ExplicitResultPlainContractOperation));
         var context = CreateContext(app, ExplicitResultPlainContractOperation.Configure());
 
@@ -79,7 +79,7 @@ public class HandlerReturnNormalizationIntegrationTests
     public async Task When_handler_throws_then_generated_pipeline_returns_canonical_unhandled_exception_result()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(ThrowingHandlerOperation));
         var context = CreateContext(app, ThrowingHandlerOperation.Configure());
 

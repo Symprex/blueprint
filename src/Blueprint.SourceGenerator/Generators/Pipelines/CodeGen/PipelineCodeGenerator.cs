@@ -45,9 +45,34 @@ internal static class PipelineCodeGenerator
             ? new[] { "loggerFactory", $"\"{handler.OperationTypeName}\"", "suppressActivity: true" }
             : new[] { "loggerFactory", $"\"{handler.OperationTypeName}\"" };
 
-        pipelineClass.AddConstructor()
+        var ctor = pipelineClass.AddConstructor()
             .AddParameter("Microsoft.Extensions.Logging.ILoggerFactory", "loggerFactory")
-            .WithBaseCallArguments(baseCallArgs);
+            .AddParameter("System.IServiceProvider", "serviceProvider");
+
+        if (plan.CachedServices.Count > 0)
+        {
+            // Emit private readonly fields for each cached service
+            foreach (var cached in plan.CachedServices.Values)
+            {
+                var fieldType = cached.IsNullable ? cached.ServiceTypeName + "?" : cached.ServiceTypeName;
+                pipelineClass.AddProperty(cached.FieldName)
+                    .SetType(fieldType)
+                    .WithReadonlyValue();
+            }
+
+            ctor.WithBaseCallArguments(baseCallArgs)
+                .WithBody(writer =>
+                {
+                    foreach (var cached in plan.CachedServices.Values)
+                    {
+                        writer.AppendLine($"this.{cached.FieldName} = {cached.ResolutionExpression};");
+                    }
+                });
+        }
+        else
+        {
+            ctor.WithBaseCallArguments(baseCallArgs);
+        }
     }
 
     private static void AddExecuteCoreAsyncMethod(

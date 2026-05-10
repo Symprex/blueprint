@@ -16,7 +16,7 @@ public class BackgroundTaskFlushIntegrationTests
     public async Task When_handler_enqueues_task_and_succeeds_then_scheduler_flushes_after_execution()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
 
         var descriptor = app.GetOperationsForHost("tasks")
             .First(static op => op.OperationType == typeof(TaskThatEnqueuesWork));
@@ -39,7 +39,7 @@ public class BackgroundTaskFlushIntegrationTests
     public async Task When_handler_succeeds_but_no_scheduler_registered_then_pipeline_completes_without_error()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
 
         var descriptor = app.GetOperationsForHost("tasks")
             .First(static op => op.OperationType == typeof(DispatchableBackgroundTask));
@@ -60,7 +60,7 @@ public class BackgroundTaskFlushIntegrationTests
     public async Task When_handler_fails_validation_then_scheduler_is_not_flushed()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
 
         var descriptor = app.GetOperationsForHost("tasks")
             .First(static op => op.OperationType == typeof(ValidatedTaskThatEnqueuesWork));

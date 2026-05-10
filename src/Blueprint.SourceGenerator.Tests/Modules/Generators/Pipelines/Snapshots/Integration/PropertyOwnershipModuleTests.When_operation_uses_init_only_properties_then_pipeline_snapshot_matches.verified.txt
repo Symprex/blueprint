@@ -15,10 +15,10 @@ namespace TestNamespace
 {
     public sealed partial class TestAppExecutor : Blueprint.BlueprintAppExecutor
     {
-        public TestAppExecutor(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, TestNamespace.TestApp app)
+        public TestAppExecutor(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, TestNamespace.TestApp app, System.IServiceProvider serviceProvider)
             : base(app)
         {
-            this.Register(typeof(global::TestNamespace.UpdateInitCommand), new Blueprint.Generated.UpdateInitCommandExecutorPipeline(loggerFactory));
+            this.Register(typeof(global::TestNamespace.UpdateInitCommand), new Blueprint.Generated.UpdateInitCommandExecutorPipeline(loggerFactory, serviceProvider));
             this.Freeze();
         }
     }
@@ -46,10 +46,12 @@ namespace Blueprint.Generated
             new string[] { "PropertyOwnershipModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "HandlerExecutionModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
         private static readonly System.Diagnostics.ActivityTagsCollection _auditTags_UpdateInitCommand =
             new System.Diagnostics.ActivityTagsCollection { { "blueprint.operation.type", "UpdateInitCommand" } };
+        readonly Blueprint.Runtime.Middleware.IPropertyPopulator[] _propertyPopulators;
 
-        public UpdateInitCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory)
+        public UpdateInitCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, System.IServiceProvider serviceProvider)
             : base(loggerFactory, "UpdateInitCommand")
         {
+            this._propertyPopulators = (Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Runtime.Middleware.IPropertyPopulator>>(serviceProvider) is { } populators ? System.Linq.Enumerable.ToArray(populators) : System.Array.Empty<Blueprint.Runtime.Middleware.IPropertyPopulator>());
         }
 
         [System.Runtime.CompilerServices.UnsafeAccessor(System.Runtime.CompilerServices.UnsafeAccessorKind.Method, Name = "set_Id")]
@@ -102,10 +104,9 @@ namespace Blueprint.Generated
 
             _SetInit_Id(operation, (string)httpContext.Request.RouteValues["Id"]);
 
-            var propertyPopulators = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Runtime.Middleware.IPropertyPopulator>>(context.ServiceProvider);
-            if (propertyPopulators != null)
+            if (this._propertyPopulators.Length > 0)
             {
-                foreach (var populator in propertyPopulators)
+                foreach (var populator in this._propertyPopulators)
                 {
                     await populator.PopulateAsync(context, context.OperationCancelled);
                 }

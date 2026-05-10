@@ -16,7 +16,7 @@ public class PropertyPopulationModuleIntegrationTests
     public async Task When_property_population_reads_query_string_then_value_is_bound()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(QueryStringPopulationQuery));
         var httpContext = new DefaultHttpContext();
         httpContext.Request.QueryString = new QueryString("?searchTerm=blueprint");
@@ -32,7 +32,7 @@ public class PropertyPopulationModuleIntegrationTests
     public async Task When_property_population_reads_complex_body_then_payload_is_deserialized()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(BodyPopulationCommand));
         var json = "{\"payload\":{\"Name\":\"tenant\",\"Count\":3}}";
         var bytes = Encoding.UTF8.GetBytes(json);
@@ -52,7 +52,7 @@ public class PropertyPopulationModuleIntegrationTests
     public async Task When_property_population_reads_route_values_then_value_is_bound()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var pipeline = executor.GetPipeline(typeof(RoutePopulationQuery));
         var httpContext = new DefaultHttpContext();
         httpContext.Request.RouteValues["ItemId"] = "item-42";

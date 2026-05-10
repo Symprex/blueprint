@@ -19,7 +19,7 @@ public class ResourceEventAuditModuleIntegrationTests
     public async Task When_handler_returns_resource_event_result_then_audit_sink_is_called_with_event_and_resource_ids()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var auditSink = new TestResourceEventAuditSink();
         var serviceProvider = new ResourceEventAuditTestServiceProvider(auditSink);
 
@@ -39,7 +39,7 @@ public class ResourceEventAuditModuleIntegrationTests
     public async Task When_no_resource_event_audit_sink_registered_then_pipeline_completes_without_error()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var serviceProvider = new ResourceEventAuditTestServiceProvider(resourceEventAuditSink: null);
 
         var pipeline = executor.GetPipeline(typeof(ResourceEventAuditTestCommand));
@@ -54,7 +54,7 @@ public class ResourceEventAuditModuleIntegrationTests
     public async Task When_resource_event_audit_sink_throws_then_pipeline_still_returns_success()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var auditSink = new ThrowingResourceEventAuditSink();
         var serviceProvider = new ResourceEventAuditTestServiceProvider(auditSink);
 
@@ -73,7 +73,7 @@ public class ResourceEventAuditModuleIntegrationTests
         activity.Start();
 
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var auditSink = new TestResourceEventAuditSink();
         var serviceProvider = new ResourceEventAuditTestServiceProvider(auditSink);
 
@@ -106,7 +106,7 @@ public class ResourceEventAuditModuleIntegrationTests
     public async Task When_operation_does_not_return_resource_event_then_audit_sink_is_not_called()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var auditSink = new TestResourceEventAuditSink();
         var serviceProvider = new ResourceEventAuditTestServiceProvider(auditSink);
 
@@ -123,7 +123,7 @@ public class ResourceEventAuditModuleIntegrationTests
     public async Task When_handler_returns_key_only_resource_event_result_then_audit_sink_is_called()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var auditSink = new TestResourceEventAuditSink();
         var serviceProvider = new ResourceEventAuditTestServiceProvider(auditSink);
 

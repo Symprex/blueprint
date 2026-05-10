@@ -96,7 +96,7 @@ public class PropertyPopulationModuleTests
     }
 
     [Fact]
-    public void When_pipeline_generated_then_populators_guarded_by_null_check()
+    public void When_pipeline_generated_then_populators_guarded_by_length_check()
     {
         const string source = """
             using Blueprint;
@@ -131,7 +131,7 @@ public class PropertyPopulationModuleTests
         var pipelineSources = result.GetGeneratedSources(nameof(OperationExecutorPipelineSourceGenerator));
         var pipelineSource = string.Join("\n", pipelineSources.Select(static s => s.SourceText));
 
-        // The generated code should null-check before iterating populators
-        pipelineSource.Should().Contain("propertyPopulators != null");
+        // The generated code caches populators at construction time and guards with a length check
+        pipelineSource.Should().Contain("_propertyPopulators.Length > 0");
     }
 }

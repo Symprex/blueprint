@@ -89,7 +89,7 @@ public class NestedExecutionIntegrationTests
     {
         // Arrange
         var app = new SampleBlueprintApp();
-        var executor = new SampleBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new SampleBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
 
         var services = new ServiceCollection();
         services.AddLogging();

@@ -25,7 +25,7 @@ public class FullStackPipelineIntegrationTests
     {
         var tracker = new ExecutionOrderTracker();
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var serviceProvider = new FullStackTestServiceProvider(tracker);
 
         var pipeline = executor.GetPipeline(typeof(FullStackCommand));
@@ -67,7 +67,7 @@ public class FullStackPipelineIntegrationTests
     {
         var tracker = new ExecutionOrderTracker();
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var serviceProvider = new FullStackTestServiceProvider(tracker);
 
         var pipeline = executor.GetPipeline(typeof(FullStackCommand));
@@ -90,7 +90,7 @@ public class FullStackPipelineIntegrationTests
     {
         var tracker = new ExecutionOrderTracker(throwOnAudit: true);
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var serviceProvider = new FullStackTestServiceProvider(tracker);
 
         var pipeline = executor.GetPipeline(typeof(FullStackCommand));
@@ -124,7 +124,7 @@ public class FullStackPipelineIntegrationTests
     {
         var tracker = new ExecutionOrderTracker();
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var serviceProvider = new FullStackTestServiceProvider(tracker);
 
         var pipeline = executor.GetPipeline(typeof(FullStackCommand));
@@ -150,7 +150,7 @@ public class FullStackPipelineIntegrationTests
     {
         var tracker = new ExecutionOrderTracker();
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var serviceProvider = new FullStackTestServiceProvider(tracker);
 
         var pipeline = executor.GetPipeline(typeof(ThrowingFullStackCommand));
