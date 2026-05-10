@@ -43,14 +43,6 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
-    private static readonly DiagnosticDescriptor _duplicateUrlError = new(
-        id: "BPLG002",
-        title: "Duplicate URL",
-        messageFormat: "The URL '{0}' has already been registered with other operations: '{1}'",
-        category: "OperationLinks",
-        DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
-
     private static readonly DiagnosticDescriptor _notLinkableResourceError = new(
         id: "BPLG003",
         title: "Resource type is not ILinkableResource",
