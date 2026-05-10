@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.Reflection;
 using Marten;
 
 namespace Blueprint.Marten;
@@ -23,6 +25,10 @@ namespace Blueprint.Marten;
 /// </remarks>
 public sealed class DomainEventDispatchingSessionListener : DocumentSessionListenerBase
 {
+    // Cache the constructed generic types and method info per event type to avoid
+    // repeated MakeGenericType/GetMethod reflection on every SaveChangesAsync call.
+    private static readonly ConcurrentDictionary<Type, EventDispatchInfo> _dispatchCache = new();
+
     /// <inheritdoc />
     public override async Task BeforeSaveChangesAsync(IDocumentSession session, CancellationToken token)
     {
@@ -54,10 +60,15 @@ public sealed class DomainEventDispatchingSessionListener : DocumentSessionListe
     private static async Task DispatchEventAsync(IServiceProvider serviceProvider, IDomainEvent domainEvent, CancellationToken token)
     {
         var eventType = domainEvent.GetType();
-        var handlerType = typeof(IDomainEventHandler<>).MakeGenericType(eventType);
+        var dispatchInfo = _dispatchCache.GetOrAdd(eventType, static type =>
+        {
+            var handlerType = typeof(IDomainEventHandler<>).MakeGenericType(type);
+            var enumerableType = typeof(IEnumerable<>).MakeGenericType(handlerType);
+            var method = handlerType.GetMethod(nameof(IDomainEventHandler<IDomainEvent>.HandleAsync))!;
+            return new EventDispatchInfo(handlerType, enumerableType, method);
+        });
 
-        var handlers = serviceProvider.GetService(
-            typeof(IEnumerable<>).MakeGenericType(handlerType));
+        var handlers = serviceProvider.GetService(dispatchInfo.EnumerableHandlerType);
 
         if (handlers is null)
         {
@@ -66,9 +77,13 @@ public sealed class DomainEventDispatchingSessionListener : DocumentSessionListe
 
         foreach (var handler in (System.Collections.IEnumerable)handlers)
         {
-            var method = handlerType.GetMethod(nameof(IDomainEventHandler<IDomainEvent>.HandleAsync));
-            var task = (ValueTask)(method!.Invoke(handler, [domainEvent, token]) ?? default(ValueTask));
+            var task = (ValueTask)(dispatchInfo.HandleMethod.Invoke(handler, [domainEvent, token]) ?? default(ValueTask));
             await task;
         }
     }
+
+    /// <summary>
+    /// Cached reflection metadata for dispatching domain events of a specific type.
+    /// </summary>
+    private sealed record EventDispatchInfo(Type HandlerType, Type EnumerableHandlerType, MethodInfo HandleMethod);
 }
