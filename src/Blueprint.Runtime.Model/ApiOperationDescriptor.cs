@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Diagnostics.CodeAnalysis;
 
 namespace Blueprint.Model;
@@ -9,7 +10,7 @@ namespace Blueprint.Model;
 public class ApiOperationDescriptor
 {
     private readonly Dictionary<Type, object> _featureData = new();
-    private readonly Dictionary<string, IReadOnlyList<Attribute>> _propertyAttributes;
+    private readonly FrozenDictionary<string, IReadOnlyList<Attribute>> _propertyAttributes;
 
     private readonly List<ApiOperationUrl> _urls = new();
     private readonly List<ApiOperationLink> _links = new();
@@ -201,10 +202,10 @@ public class ApiOperationDescriptor
         throw new InvalidOperationException($"Could not find property '{propertyName}' on operation type {this.OperationType}.");
     }
 
-    private static Dictionary<string, IReadOnlyList<Attribute>> CreatePropertyAttributes(Type operationType)
+    private static FrozenDictionary<string, IReadOnlyList<Attribute>> CreatePropertyAttributes(Type operationType)
     {
         return operationType.GetProperties()
-            .ToDictionary(
+            .ToFrozenDictionary(
                 static property => property.Name,
                 static property => (IReadOnlyList<Attribute>)property.GetCustomAttributes(inherit: true).OfType<Attribute>().ToArray(),
                 StringComparer.Ordinal);

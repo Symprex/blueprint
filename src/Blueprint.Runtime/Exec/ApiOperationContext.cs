@@ -164,14 +164,12 @@ public class ApiOperationContext : IHttpOperationContext
             UserAuthorisationContext = this.UserAuthorisationContext,
             HttpContext = this.HttpContext,
             BaseUri = this.BaseUri,
-        };
 
-        // Share mutable state dictionary with the parent only when one has already been
-        // created, avoiding a Dictionary allocation when no pipeline has used Data yet.
-        if (this._data is not null)
-        {
-            nested._data = this._data;
-        }
+            // Always share the mutable state dictionary with the parent so nested contexts
+            // see the same data store. This triggers lazy creation if the parent hasn't used
+            // Data yet, but nested operations are comparatively rare.
+            _data = this.Data,
+        };
 
         return nested;
     }
