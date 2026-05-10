@@ -133,29 +133,32 @@ public class BlueprintApp
     {
         this._allLinks.Add(link);
 
-        if (!this._resourceTypeToLinks.ContainsKey(link.ResourceType))
+        if (!this._resourceTypeToLinks.TryGetValue(link.ResourceType, out var resourceLinks))
         {
-            this._resourceTypeToLinks[link.ResourceType] = [];
+            resourceLinks = [];
+            this._resourceTypeToLinks[link.ResourceType] = resourceLinks;
         }
 
-        var existingLink = this._resourceTypeToLinks[link.ResourceType].SingleOrDefault(l => l.Rel == link.Rel);
-
-        if (existingLink != null)
+        foreach (var existingLink in resourceLinks)
         {
-            throw new InvalidOperationException(
-                $"Duplicate link found for resource type {link.ResourceType.Name} with rel {link.Rel}. Existing link is for the operation: \n\n" +
-                $" {existingLink.OperationDescriptor.OperationType.FullName}: {existingLink.UrlFormat}\n\n" +
-                "Every link must be a unique pairing of resource type (i.e. UserApiResource) and rel (i.e. \"self\" or \"activate\")");
+            if (existingLink.Rel == link.Rel)
+            {
+                throw new InvalidOperationException(
+                    $"Duplicate link found for resource type {link.ResourceType.Name} with rel {link.Rel}. Existing link is for the operation: \n\n" +
+                    $" {existingLink.OperationDescriptor.OperationType.FullName}: {existingLink.UrlFormat}\n\n" +
+                    "Every link must be a unique pairing of resource type (i.e. UserApiResource) and rel (i.e. \"self\" or \"activate\")");
+            }
         }
 
-        this._resourceTypeToLinks[link.ResourceType].Add(link);
+        resourceLinks.Add(link);
 
-        if (!this._operationTypeToLinks.ContainsKey(link.OperationDescriptor.OperationType))
+        if (!this._operationTypeToLinks.TryGetValue(link.OperationDescriptor.OperationType, out var operationLinks))
         {
-            this._operationTypeToLinks[link.OperationDescriptor.OperationType] = [];
+            operationLinks = [];
+            this._operationTypeToLinks[link.OperationDescriptor.OperationType] = operationLinks;
         }
 
-        this._operationTypeToLinks[link.OperationDescriptor.OperationType].Add(link);
+        operationLinks.Add(link);
     }
 
     /// <summary>
@@ -212,7 +215,15 @@ public class BlueprintApp
             return null;
         }
 
-        return links.FirstOrDefault(link => link.Rel == rel);
+        foreach (var link in links)
+        {
+            if (link.Rel == rel)
+            {
+                return link;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>
