@@ -350,7 +350,9 @@ public sealed record OpenApiOperationRenderingContext(
             "global::System.DateTimeOffset" => ("string", "date-time"),
             "global::System.DateOnly" => ("string", "date"),
             "global::System.TimeOnly" => ("string", "time"),
+            "global::System.TimeSpan" => ("string", "duration"),
             "global::System.Uri" => ("string", "uri"),
+            "global::System.Half" => ("number", "float"),
             _ => ("string", null),
         };
     }
@@ -555,6 +557,24 @@ public sealed record OpenApiOperationRenderingContext(
             return ("string", "uri");
         }
 
+        if (underlying == typeof(TimeSpan))
+        {
+            return ("string", "duration");
+        }
+
+        if (underlying == typeof(Half))
+        {
+            return ("number", "float");
+        }
+
+        // IParsable<T> types serialize as strings; try to infer their format from a single
+        // wrapped field (e.g. a readonly record struct wrapping Guid → format "uuid").
+        var parsableFormat = InferIParsableFormat(underlying);
+        if (parsableFormat is not null)
+        {
+            return parsableFormat.Value;
+        }
+
         // Check for dictionary (renders as object with additionalProperties).
         if (underlying.GetInterfaces().Any(static i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IDictionary<,>)))
         {
@@ -573,6 +593,49 @@ public sealed record OpenApiOperationRenderingContext(
             return ("object", null);
         }
 
+        return ("string", null);
+    }
+
+    /// <summary>
+    /// Detects whether a type implements <c>IParsable&lt;T&gt;</c> and, if so, infers the OpenAPI
+    /// schema type and format by examining the type's instance fields. When the type wraps a single
+    /// field whose format is well-known (e.g. a <see cref="Guid"/> field → <c>"uuid"</c>), the
+    /// inferred format propagates to the OpenAPI parameter schema so consumers see the correct
+    /// constraint instead of a generic <c>"object"</c>.
+    /// </summary>
+    [UnconditionalSuppressMessage("Trimming", "IL2070", Justification = "IParsable types are preserved by the source generator's generated pipeline code.")]
+    private static (string SchemaType, string? SchemaFormat)? InferIParsableFormat(Type type)
+    {
+        var isParsable = type.GetInterfaces().Any(
+            static i => i.IsGenericType && i.Name.StartsWith("IParsable`", StringComparison.Ordinal));
+
+        if (!isParsable)
+        {
+            return null;
+        }
+
+        // Try to infer a richer format from the type's single backing field (e.g. Guid → "uuid").
+        var instanceFields = type.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+        if (instanceFields.Length == 1)
+        {
+            var wrappedType = instanceFields[0].FieldType;
+            if (wrappedType == typeof(Guid))
+            {
+                return ("string", "uuid");
+            }
+
+            if (wrappedType == typeof(int))
+            {
+                return ("integer", "int32");
+            }
+
+            if (wrappedType == typeof(long))
+            {
+                return ("integer", "int64");
+            }
+        }
+
+        // IParsable without a recognisable wrapped field still serialises as a string.
         return ("string", null);
     }
 }

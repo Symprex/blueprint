@@ -270,8 +270,10 @@ public sealed record OpenApiSchemaProjectionContext(
 
     /// <summary>
     /// Maps a CLR property type to its OpenAPI <c>format</c> hint (e.g. <c>int32</c>, <c>date-time</c>, <c>uuid</c>).
-    /// Returns <c>null</c> when no standard format applies.
+    /// Returns <c>null</c> when no standard format applies. For <c>IParsable&lt;T&gt;</c> types, infers
+    /// format from the single backing field when present (e.g. a wrapper around <see cref="Guid"/> → <c>"uuid"</c>).
     /// </summary>
+    [UnconditionalSuppressMessage("Trimming", "IL2070", Justification = "IParsable types used in operation properties are preserved by the serializer context registration.")]
     private static string? MapFormat(Type propertyType)
     {
         // byte[] maps to base64-encoded binary before Nullable unwrapping.
@@ -365,6 +367,41 @@ public sealed record OpenApiSchemaProjectionContext(
         if (underlying == typeof(ulong))
         {
             return "int64";
+        }
+
+        if (underlying == typeof(TimeSpan))
+        {
+            return "duration";
+        }
+
+        if (underlying == typeof(Half))
+        {
+            return "float";
+        }
+
+        // IParsable<T> types serialise as strings; infer format from a single wrapped field.
+        if (underlying.GetInterfaces().Any(
+                static i => i.IsGenericType && i.Name.StartsWith("IParsable`", StringComparison.Ordinal)))
+        {
+            var instanceFields = underlying.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            if (instanceFields.Length == 1)
+            {
+                var wrappedType = instanceFields[0].FieldType;
+                if (wrappedType == typeof(Guid))
+                {
+                    return "uuid";
+                }
+
+                if (wrappedType == typeof(int))
+                {
+                    return "int32";
+                }
+
+                if (wrappedType == typeof(long))
+                {
+                    return "int64";
+                }
+            }
         }
 
         return null;

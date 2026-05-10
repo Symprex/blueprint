@@ -616,7 +616,8 @@
             "required": true,
             "description": "The strongly-typed template identifier (GUID format).",
             "schema": {
-              "type": "object"
+              "type": "string",
+              "format": "uuid"
             }
           },
           {
@@ -625,7 +626,8 @@
             "required": false,
             "description": "Optional parent template ID for inheritance resolution.",
             "schema": {
-              "type": "object",
+              "type": "string",
+              "format": "uuid",
               "nullable": true
             }
           }
