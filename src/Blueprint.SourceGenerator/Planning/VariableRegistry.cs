@@ -51,37 +51,57 @@ public sealed class VariableRegistry
 
     /// <summary>
     /// Gets the required variables that have no matching registration or are only available after the consumer stage.
+    /// Uses a single pass to avoid intermediate LINQ allocations.
     /// </summary>
     /// <returns>The unsatisfied requirements.</returns>
     public IReadOnlyList<UnsatisfiedVariableRequirement> GetUnsatisfiedRequirements()
     {
-        return this._requirements
-            .Where(requirement => requirement.IsRequired)
-            .Select(this.GetUnsatisfiedRequirement)
-            .Where(result => result is not null)
-            .Select(result => result!)
-            .ToArray();
+        List<UnsatisfiedVariableRequirement>? results = null;
+
+        foreach (var requirement in this._requirements)
+        {
+            if (!requirement.IsRequired)
+            {
+                continue;
+            }
+
+            var unsatisfied = this.GetUnsatisfiedRequirement(requirement);
+
+            if (unsatisfied is not null)
+            {
+                results ??= [];
+                results.Add(unsatisfied);
+            }
+        }
+
+        return results ?? (IReadOnlyList<UnsatisfiedVariableRequirement>)Array.Empty<UnsatisfiedVariableRequirement>();
     }
 
     private UnsatisfiedVariableRequirement? GetUnsatisfiedRequirement(VariableRequirement requirement)
     {
-        var matchingRegistrations = this._registrations
-            .Where(registration => registration.Key == requirement.Key)
-            .OrderBy(registration => registration.AvailableFrom)
-            .ToArray();
+        PipelineStage? earliestAvailableFrom = null;
 
-        if (matchingRegistrations.Length == 0)
+        foreach (var registration in this._registrations)
+        {
+            if (registration.Key != requirement.Key)
+            {
+                continue;
+            }
+
+            if (!earliestAvailableFrom.HasValue || registration.AvailableFrom < earliestAvailableFrom.Value)
+            {
+                earliestAvailableFrom = registration.AvailableFrom;
+            }
+        }
+
+        if (!earliestAvailableFrom.HasValue)
         {
             return new UnsatisfiedVariableRequirement(requirement, EarliestAvailableFrom: null);
         }
 
-        var earliestRegistration = matchingRegistrations[0];
-
-        if (earliestRegistration.AvailableFrom > requirement.RequiredBy)
+        if (earliestAvailableFrom.Value > requirement.RequiredBy)
         {
-            return new UnsatisfiedVariableRequirement(
-                requirement,
-                earliestRegistration.AvailableFrom);
+            return new UnsatisfiedVariableRequirement(requirement, earliestAvailableFrom.Value);
         }
 
         return null;
