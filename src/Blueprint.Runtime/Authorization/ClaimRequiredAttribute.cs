@@ -1,7 +1,5 @@
-using System.Collections.Concurrent;
-using System.Diagnostics.CodeAnalysis;
-using System.Reflection;
 using System.Text.RegularExpressions;
+using Blueprint.Runtime.Utilities;
 using JetBrains.Annotations;
 
 namespace Blueprint.Authorization;
@@ -86,21 +84,18 @@ public class ClaimRequiredAttribute : Attribute
         return new Claim(this.ClaimType, resolvedValue, this.ValueType);
     }
 
-    private static readonly ConcurrentDictionary<(Type, string), PropertyInfo?> _propertyCache = new();
-
-    [UnconditionalSuppressMessage("Trimming", "IL2080", Justification = "Blueprint operation types are preserved; property lookups are cached for performance.")]
     private static object? GetPropertyValue(object resource, string propertyName)
     {
         var type = resource.GetType();
-        var property = _propertyCache.GetOrAdd((type, propertyName), static key => key.Item1.GetProperty(key.Item2));
+        var getter = CompiledPropertyAccessor.GetGetter(type, propertyName);
 
-        if (property == null)
+        if (getter == null)
         {
             throw new InvalidOperationException(
                 $"Property '{propertyName}' not found on type '{type.FullName}'. " +
                 $"Ensure the operation has a public property matching the claim template token.");
         }
 
-        return property.GetValue(resource);
+        return getter(resource);
     }
 }

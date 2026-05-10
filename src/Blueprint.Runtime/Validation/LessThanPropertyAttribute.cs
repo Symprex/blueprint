@@ -42,15 +42,15 @@ public sealed class LessThanPropertyAttribute : ValidationAttribute
     {
         ArgumentNullException.ThrowIfNull(validationContext);
 
-        var otherProperty = CrossPropertyAccessorCache.GetProperty(validationContext.ObjectType, this.OtherPropertyName);
-        if (otherProperty is null)
+        var otherGetter = CrossPropertyAccessorCache.GetGetter(validationContext.ObjectType, this.OtherPropertyName);
+        if (otherGetter is null)
         {
             return new ValidationResult(
                 $"The property '{this.OtherPropertyName}' referenced by LessThanPropertyAttribute on '{validationContext.MemberName}' does not exist on '{validationContext.ObjectType.Name}'.",
                 validationContext.MemberName is null ? null : [validationContext.MemberName]);
         }
 
-        var otherValue = otherProperty.GetValue(validationContext.ObjectInstance);
+        var otherValue = otherGetter(validationContext.ObjectInstance!);
         if (value is null || otherValue is null)
         {
             return ValidationResult.Success;

@@ -59,15 +59,15 @@ public sealed class RequiredIfNotAttribute : ValidationAttribute
     {
         ArgumentNullException.ThrowIfNull(validationContext);
 
-        var dependentProperty = CrossPropertyAccessorCache.GetProperty(validationContext.ObjectType, this.DependentProperty);
-        if (dependentProperty is null)
+        var dependentGetter = CrossPropertyAccessorCache.GetGetter(validationContext.ObjectType, this.DependentProperty);
+        if (dependentGetter is null)
         {
             return new ValidationResult(
                 $"The property '{this.DependentProperty}' referenced by RequiredIfNotAttribute on '{validationContext.MemberName}' does not exist on '{validationContext.ObjectType.Name}'.",
                 validationContext.MemberName is null ? null : [validationContext.MemberName]);
         }
 
-        var dependentValue = dependentProperty.GetValue(validationContext.ObjectInstance);
+        var dependentValue = dependentGetter(validationContext.ObjectInstance!);
         if (this.MatchesDependentValue(dependentValue) || HasRequiredValue(value))
         {
             return ValidationResult.Success;

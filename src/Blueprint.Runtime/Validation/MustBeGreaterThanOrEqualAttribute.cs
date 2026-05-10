@@ -44,16 +44,16 @@ public sealed class MustBeGreaterThanOrEqualAttribute : ValidationAttribute
     {
         ArgumentNullException.ThrowIfNull(validationContext);
 
-        var property = CrossPropertyAccessorCache.GetProperty(validationContext.ObjectType, this.DependentProperty);
+        var getter = CrossPropertyAccessorCache.GetGetter(validationContext.ObjectType, this.DependentProperty);
 
-        if (property is null)
+        if (getter is null)
         {
             return new ValidationResult(
                 $"The property '{this.DependentProperty}' referenced by MustBeGreaterThanOrEqualAttribute on '{validationContext.MemberName}' does not exist on '{validationContext.ObjectType.Name}'.",
                 validationContext.MemberName is null ? null : [validationContext.MemberName]);
         }
 
-        var otherValue = property.GetValue(validationContext.ObjectInstance);
+        var otherValue = getter(validationContext.ObjectInstance!);
 
         if (value is null || otherValue is null)
         {

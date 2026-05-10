@@ -1,9 +1,7 @@
-using System.Collections.Concurrent;
-using System.Diagnostics.CodeAnalysis;
-using System.Reflection;
 using System.Security.Claims;
 using System.Text.RegularExpressions;
 using Blueprint.Runtime.Exec;
+using Blueprint.Runtime.Utilities;
 
 namespace Blueprint.Authorization;
 
@@ -20,7 +18,7 @@ namespace Blueprint.Authorization;
 /// Token resolution rules:
 /// <list type="bullet">
 ///   <item><c>{Auth:ClaimType}</c> — resolved from the first matching claim on the principal</item>
-///   <item><c>{PropertyName}</c> — resolved from a public property on the operation instance via reflection</item>
+///   <item><c>{PropertyName}</c> — resolved from a public property on the operation instance via compiled delegates</item>
 /// </list>
 /// Unresolvable tokens are left as-is (the authorization provider should reject the key).
 /// </para>
@@ -28,7 +26,6 @@ namespace Blueprint.Authorization;
 public static class ResourceKeyTemplateExpander
 {
     private static readonly Regex TokenRegex = new(@"\{([^}]+)\}", RegexOptions.Compiled);
-    private static readonly ConcurrentDictionary<(Type, string), PropertyInfo?> _propertyCache = new();
 
     /// <summary>
     /// Expands a resource key template by substituting tokens from the operation and principal.
@@ -37,7 +34,6 @@ public static class ResourceKeyTemplateExpander
     /// <param name="operation">The operation instance whose properties supply <c>{PropertyName}</c> values.</param>
     /// <param name="principal">The authenticated principal whose claims supply <c>{Auth:ClaimType}</c> values.</param>
     /// <returns>The expanded resource key with all resolvable tokens substituted.</returns>
-    [UnconditionalSuppressMessage("Trimming", "IL2080", Justification = "Blueprint operation types are preserved; property lookups are cached for performance.")]
     public static string Expand(string template, object operation, ClaimsPrincipal principal)
     {
         ArgumentNullException.ThrowIfNull(template);
@@ -56,10 +52,9 @@ public static class ResourceKeyTemplateExpander
                 return claim?.Value ?? match.Value;
             }
 
-            // {PropertyName} pattern — resolve from operation instance, caching the PropertyInfo
-            var opType = operation.GetType();
-            var property = _propertyCache.GetOrAdd((opType, token), static key => key.Item1.GetProperty(key.Item2));
-            return property?.GetValue(operation)?.ToString() ?? match.Value;
+            // {PropertyName} pattern — resolve from operation instance via compiled delegate
+            var getter = CompiledPropertyAccessor.GetGetter(operation.GetType(), token);
+            return getter?.Invoke(operation)?.ToString() ?? match.Value;
         });
     }
 
