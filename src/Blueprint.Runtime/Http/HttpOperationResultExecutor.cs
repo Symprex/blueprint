@@ -163,9 +163,9 @@ public class HttpOperationResultExecutor
                 return true;
             case PlainTextResult plainTextResult:
                 httpContext.Response.StatusCode = (int)plainTextResult.StatusCode;
-                httpContext.Response.ContentType = plainTextResult.ContentType == "text/plain"
+                httpContext.Response.ContentType = string.Equals(plainTextResult.ContentType, "text/plain", StringComparison.Ordinal)
                     ? "text/plain; charset=utf-8"
-                    : plainTextResult.ContentType + "; charset=utf-8";
+                    : string.Concat(plainTextResult.ContentType, "; charset=utf-8");
                 await httpContext.Response.WriteAsync(plainTextResult.Content, httpContext.RequestAborted);
                 return true;
             case RedirectResult redirectResult:
