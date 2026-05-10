@@ -49,6 +49,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Blueprint.HttpClient", "src
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Blueprint.HttpClient.Tests", "src\Blueprint.HttpClient.Tests\Blueprint.HttpClient.Tests.csproj", "{61CF9822-DE00-44F9-BE00-EE1E87CA66BB}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Blueprint.Tasks.Hangfire", "src\Blueprint.Tasks.Hangfire\Blueprint.Tasks.Hangfire.csproj", "{4DD00D29-A413-41C5-A7AF-FC57D20444C0}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -131,6 +133,10 @@ Global
 		{61CF9822-DE00-44F9-BE00-EE1E87CA66BB}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{61CF9822-DE00-44F9-BE00-EE1E87CA66BB}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{61CF9822-DE00-44F9-BE00-EE1E87CA66BB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4DD00D29-A413-41C5-A7AF-FC57D20444C0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4DD00D29-A413-41C5-A7AF-FC57D20444C0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4DD00D29-A413-41C5-A7AF-FC57D20444C0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4DD00D29-A413-41C5-A7AF-FC57D20444C0}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{AF948AAE-4F61-4D9C-942E-A8F318C61E9D} = {6A6D0D4D-3EAE-4F88-94AD-9ABE41050A24}
@@ -145,5 +151,6 @@ Global
 		{517CDA88-F976-4797-9289-08E7B6E88334} = {6A6D0D4D-3EAE-4F88-94AD-9ABE41050A24}
 		{14644D96-6C75-4ADA-8D69-F3CE94331664} = {6A6D0D4D-3EAE-4F88-94AD-9ABE41050A24}
 		{61CF9822-DE00-44F9-BE00-EE1E87CA66BB} = {6A6D0D4D-3EAE-4F88-94AD-9ABE41050A24}
+		{4DD00D29-A413-41C5-A7AF-FC57D20444C0} = {6A6D0D4D-3EAE-4F88-94AD-9ABE41050A24}
 	EndGlobalSection
 EndGlobal
