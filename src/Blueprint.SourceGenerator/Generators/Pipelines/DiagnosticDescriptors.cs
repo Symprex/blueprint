@@ -35,29 +35,7 @@ internal static class DiagnosticDescriptors
         isEnabledByDefault: true,
         description: "Each operation can have only one handler method. Remove the duplicate handlers or consolidate them into a single method.");
 
-    /// <summary>
-    /// BP102: Invalid handler signature.
-    /// </summary>
-    public static readonly DiagnosticDescriptor InvalidHandlerSignature = new(
-        id: "BP102",
-        title: "Invalid handler signature",
-        messageFormat: "The handler method '{0}' has an invalid signature: {1}",
-        category: Category,
-        DiagnosticSeverity.Error,
-        isEnabledByDefault: true,
-        description: "Handler methods must have a valid signature with resolvable parameters.");
-
-    /// <summary>
-    /// BP103: Handler parameter cannot be resolved.
-    /// </summary>
-    public static readonly DiagnosticDescriptor UnresolvableParameter = new(
-        id: "BP103",
-        title: "Handler parameter cannot be resolved",
-        messageFormat: "The parameter '{0}' of type '{1}' in handler '{2}' cannot be resolved",
-        category: Category,
-        DiagnosticSeverity.Warning,
-        isEnabledByDefault: true,
-        description: "Handler parameters must be resolvable from the ApiOperationContext, its properties, or the dependency injection container. Ensure the parameter type is available in ApiOperationContext or registered in DI.");
+    // BP102 and BP103 are reserved for future handler signature / parameter diagnostics.
 
     /// <summary>
     /// BP104: Handler class must be partial if generating pipeline.
@@ -216,42 +194,4 @@ internal static class DiagnosticDescriptors
         DiagnosticSeverity.Info,
         isEnabledByDefault: true,
         description: "Handler methods should be async to prevent blocking the thread pool and support async operations.");
-
-    /// <summary>
-    /// BP201: Consider making inline handler static.
-    /// </summary>
-    public static readonly DiagnosticDescriptor ConsiderStaticHandler = new(
-        id: "BP201",
-        title: "Consider making inline handler static",
-        messageFormat: "The inline handler '{0}' doesn't use instance state",
-        category: Category,
-        DiagnosticSeverity.Info,
-        isEnabledByDefault: true,
-        description: "Static handlers avoid allocating the operation instance when not needed, improving performance. Consider making it static for better performance.");
-
-    /// <summary>
-    /// BP202: External handler class not found in current compilation.
-    /// </summary>
-    public static readonly DiagnosticDescriptor HandlerClassNotFound = new(
-        id: "BP202",
-        title: "Handler class not accessible",
-        messageFormat: "The handler class '{0}' for operation '{1}' could not be found or is not accessible",
-        category: Category,
-        DiagnosticSeverity.Error,
-        isEnabledByDefault: true,
-        description: "Handler classes must be accessible to the generator. Ensure the handler class is public and in the same compilation.");
-
-    // Informational diagnostics (BP300-BP399)
-
-    /// <summary>
-    /// BP300: Generated pipeline for operation.
-    /// </summary>
-    public static readonly DiagnosticDescriptor PipelineGenerated = new(
-        id: "BP300",
-        title: "Pipeline generated",
-        messageFormat: "Generated executor pipeline for operation '{0}' using {1} handler '{2}'",
-        category: Category,
-        DiagnosticSeverity.Info,
-        isEnabledByDefault: false, // Disabled by default, can be enabled for debugging
-        description: "Information about the generated pipeline for an operation.");
 }

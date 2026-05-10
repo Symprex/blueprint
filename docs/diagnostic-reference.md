@@ -23,8 +23,6 @@ For detailed explanations, see [compile-time-validation.md](compile-time-validat
 |----|----------|-------|
 | BP100 | Error | No handler found for operation |
 | BP101 | Error | Multiple handlers found for operation |
-| BP102 | Error | Invalid handler signature |
-| BP103 | Warning | Handler parameter cannot be resolved from context or DI |
 | BP104 | Error | Operation class must be partial |
 | BP105 | Error | Nullable plain-value handler return is not supported |
 | BP106 | Error | `Results<>` union member is not supported |
@@ -41,14 +39,6 @@ For detailed explanations, see [compile-time-validation.md](compile-time-validat
 | ID | Severity | Title |
 |----|----------|-------|
 | BP200 | Info | Handler method should be async |
-| BP201 | Info | Consider making inline handler static |
-| BP202 | Error | Handler class not accessible |
-
-### Informational (BP300+)
-
-| ID | Severity | Title |
-|----|----------|-------|
-| BP300 | Info | Pipeline generated |
 
 ## Authentication and authorisation (BPAU)
 

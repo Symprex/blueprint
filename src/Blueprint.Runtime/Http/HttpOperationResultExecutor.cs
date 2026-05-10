@@ -114,9 +114,12 @@ public class HttpOperationResultExecutor
                 if (okResult is INotModifiedResult notModifiedResult)
                 {
                     httpContext.Response.StatusCode = StatusCodes.Status304NotModified;
-                    foreach (var header in okResult.Headers)
+                    if (okResult.HasHeaders)
                     {
-                        httpContext.Response.Headers[header.Key] = header.Value;
+                        foreach (var header in okResult.Headers)
+                        {
+                            httpContext.Response.Headers[header.Key] = header.Value;
+                        }
                     }
 
                     return true;
@@ -129,9 +132,12 @@ public class HttpOperationResultExecutor
 
                 httpContext.Response.StatusCode = StatusCodes.Status200OK;
                 httpContext.Response.ContentType = "application/json; charset=utf-8";
-                foreach (var header in okResult.Headers)
+                if (okResult.HasHeaders)
                 {
-                    httpContext.Response.Headers[header.Key] = header.Value;
+                    foreach (var header in okResult.Headers)
+                    {
+                        httpContext.Response.Headers[header.Key] = header.Value;
+                    }
                 }
 
                 await WriteJsonAsync(httpContext, operationContext, okResult.Content);
@@ -165,7 +171,7 @@ public class HttpOperationResultExecutor
                 httpContext.Response.StatusCode = (int)plainTextResult.StatusCode;
                 httpContext.Response.ContentType = string.Equals(plainTextResult.ContentType, "text/plain", StringComparison.Ordinal)
                     ? "text/plain; charset=utf-8"
-                    : string.Concat(plainTextResult.ContentType, "; charset=utf-8");
+                    : $"{plainTextResult.ContentType}; charset=utf-8";
                 await httpContext.Response.WriteAsync(plainTextResult.Content, httpContext.RequestAborted);
                 return true;
             case RedirectResult redirectResult:
