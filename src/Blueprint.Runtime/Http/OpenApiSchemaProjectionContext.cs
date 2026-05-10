@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Collections.Immutable;
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
@@ -38,7 +39,7 @@ public sealed record OpenApiSchemaProjectionContext(
 
         var coveredTypesByName = document.App.AppOwnedSerializerContextBodyTypes
             .Select(static bodyType => new KeyValuePair<string, Type>(FormatTypeName(bodyType), bodyType))
-            .ToDictionary(static pair => pair.Key, static pair => pair.Value, StringComparer.Ordinal);
+            .ToFrozenDictionary(static pair => pair.Key, static pair => pair.Value, StringComparer.Ordinal);
 
         var rawBodyTypeNames = document.Operations
             .Where(static operation => operation.IsSerializerContextCoverageSatisfied)
@@ -75,7 +76,7 @@ public sealed record OpenApiSchemaProjectionContext(
         string bodyTypeName,
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] Type bodyType,
         JsonSerializerContext serializerContext,
-        Dictionary<string, Type> coveredTypesByName)
+        FrozenDictionary<string, Type> coveredTypesByName)
     {
         var typeInfo = serializerContext.GetTypeInfo(bodyType)
             ?? throw new InvalidOperationException($"The serializer context did not expose metadata for covered body type '{bodyTypeName}'.");
@@ -112,7 +113,7 @@ public sealed record OpenApiSchemaProjectionContext(
         JsonSerializerContext serializerContext,
         IReadOnlyDictionary<string, IReadOnlyList<ValidationAttribute>> validationAttributesByJsonPropertyName,
         NullabilityInfoContext nullabilityContext,
-        Dictionary<string, Type> coveredTypesByName)
+        FrozenDictionary<string, Type> coveredTypesByName)
     {
         var propertyTypeInfo = serializerContext.GetTypeInfo(property.PropertyType);
         var propertyKind = propertyTypeInfo is null
@@ -185,7 +186,7 @@ public sealed record OpenApiSchemaProjectionContext(
         JsonTypeInfo? typeInfo,
         Type propertyType,
         JsonTypeInfoKind expectedKind,
-        Dictionary<string, Type> coveredTypesByName)
+        FrozenDictionary<string, Type> coveredTypesByName)
     {
         // When STJ has type info and the kind matches, use it directly.
         if (typeInfo is not null && typeInfo.Kind == expectedKind)
@@ -226,7 +227,7 @@ public sealed record OpenApiSchemaProjectionContext(
     /// appears in the covered body types set (so the <c>$ref</c> target actually exists).
     /// Primitive elements (string, integer, number, boolean) are rendered inline.
     /// </summary>
-    private static string? ResolveSchemaRef(Type elementType, OpenApiSchemaKind? kind, Dictionary<string, Type> coveredTypesByName)
+    private static string? ResolveSchemaRef(Type elementType, OpenApiSchemaKind? kind, FrozenDictionary<string, Type> coveredTypesByName)
     {
         if (kind is not (null or OpenApiSchemaKind.None or OpenApiSchemaKind.Object))
         {
@@ -692,7 +693,7 @@ public sealed record OpenApiSchemaProjectionContext(
     {
         return bodyType.GetProperties(BindingFlags.Public | BindingFlags.Instance)
             .Where(static property => property.GetMethod is not null && property.GetIndexParameters().Length == 0)
-            .ToDictionary(
+            .ToFrozenDictionary(
                 property => GetJsonPropertyName(property, serializerContext.Options),
                 static property => (IReadOnlyList<ValidationAttribute>)property.GetCustomAttributes(inherit: true).OfType<ValidationAttribute>().ToArray(),
                 StringComparer.Ordinal);

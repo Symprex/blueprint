@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Collections.Frozen;
 using System.ComponentModel.DataAnnotations;
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
@@ -242,7 +243,7 @@ public class HttpOperationResultExecutor
             });
     }
 
-    private static readonly ConcurrentDictionary<Type, HashSet<string>> _resultTypeNamesCache = new();
+    private static readonly ConcurrentDictionary<Type, FrozenSet<string>> _resultTypeNamesCache = new();
 
     private static bool DescriptorSupportsFailureResult(ApiOperationDescriptor descriptor, OperationResult result)
     {
@@ -262,7 +263,7 @@ public class HttpOperationResultExecutor
                 }
             }
 
-            return names;
+            return names.ToFrozenSet(StringComparer.Ordinal);
         });
 
         var outcomes = failureOutcomes.Outcomes;

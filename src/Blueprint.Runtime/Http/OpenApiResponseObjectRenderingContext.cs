@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Collections.Immutable;
 using Blueprint.Model;
 
@@ -38,7 +39,7 @@ public sealed record OpenApiResponseObjectRenderingContext(
 
         var schemaComponents = OpenApiSchemaComponentRenderingContext.Create(responseSchemaProjection.SchemaProjection);
         var componentsByBodyTypeName = schemaComponents.Components
-            .ToDictionary(static component => component.BodyTypeName, StringComparer.Ordinal);
+            .ToFrozenDictionary(static component => component.BodyTypeName, StringComparer.Ordinal);
         var operations = responseSchemaProjection.Operations
             .Select(operation => CreateOperationContext(operation, componentsByBodyTypeName))
             .ToImmutableArray();
@@ -48,7 +49,7 @@ public sealed record OpenApiResponseObjectRenderingContext(
 
     private static OpenApiResponseObjectOperationContext CreateOperationContext(
         OpenApiResponseSchemaReferenceOperationContext operation,
-        Dictionary<string, OpenApiSchemaComponentModel> componentsByBodyTypeName)
+        FrozenDictionary<string, OpenApiSchemaComponentModel> componentsByBodyTypeName)
     {
         var responses = operation.Responses
             .Select(response => CreateResponseObject(operation.Operation, response, componentsByBodyTypeName))
@@ -60,7 +61,7 @@ public sealed record OpenApiResponseObjectRenderingContext(
     private static OpenApiResponseObjectModel CreateResponseObject(
         ApiOperationDescriptor operation,
         OpenApiResponseSchemaReferenceResponseContext response,
-        Dictionary<string, OpenApiSchemaComponentModel> componentsByBodyTypeName)
+        FrozenDictionary<string, OpenApiSchemaComponentModel> componentsByBodyTypeName)
     {
         var content = response.Response.HasResponseBody
             ? CreateContent(operation, response, componentsByBodyTypeName)
@@ -76,7 +77,7 @@ public sealed record OpenApiResponseObjectRenderingContext(
     private static ImmutableArray<OpenApiResponseContentModel> CreateContent(
         ApiOperationDescriptor operation,
         OpenApiResponseSchemaReferenceResponseContext response,
-        Dictionary<string, OpenApiSchemaComponentModel> componentsByBodyTypeName)
+        FrozenDictionary<string, OpenApiSchemaComponentModel> componentsByBodyTypeName)
     {
         var schemaComponents = response.SchemaReferences
             .Select(reference => TryCreateContentSchemaComponent(reference, componentsByBodyTypeName))
@@ -151,7 +152,7 @@ public sealed record OpenApiResponseObjectRenderingContext(
 
     private static OpenApiResponseContentSchemaComponent? TryCreateContentSchemaComponent(
         OpenApiResponseSchemaReference reference,
-        Dictionary<string, OpenApiSchemaComponentModel> componentsByBodyTypeName)
+        FrozenDictionary<string, OpenApiSchemaComponentModel> componentsByBodyTypeName)
     {
         if (reference.IsArrayWrapper)
         {
@@ -179,7 +180,7 @@ public sealed record OpenApiResponseObjectRenderingContext(
         }
 
         var schemaComponentsByBodyTypeName = schemaComponents
-            .ToDictionary(static component => component.BodyTypeName, StringComparer.Ordinal);
+            .ToFrozenDictionary(static component => component.BodyTypeName, StringComparer.Ordinal);
         var distinctEventIds = new HashSet<string>(StringComparer.Ordinal);
         var cases = new List<OpenApiResponseDiscriminatorCaseModel>(response.ResultTypeNames.Length);
         foreach (var resultTypeName in response.ResultTypeNames)

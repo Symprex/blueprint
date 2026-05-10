@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Collections.Immutable;
 using Blueprint.Model;
 
@@ -31,7 +32,7 @@ public sealed record OpenApiDocumentBuilderContext(
         ArgumentNullException.ThrowIfNull(app);
 
         var declaredBodyTypeNames = app.AppOwnedSerializerContextBodyTypeNames;
-        var declaredBodyTypeNameSet = new HashSet<string>(declaredBodyTypeNames, StringComparer.Ordinal);
+        var declaredBodyTypeNameSet = declaredBodyTypeNames.ToFrozenSet(StringComparer.Ordinal);
         var operations = app.GetOperationsForHost(HttpHostName)
             .OrderBy(static operation => operation.Name, StringComparer.Ordinal)
             .Select(operation => CreateOperationContext(operation, declaredBodyTypeNameSet))
@@ -46,7 +47,7 @@ public sealed record OpenApiDocumentBuilderContext(
 
     private static OpenApiDocumentOperationContext CreateOperationContext(
         ApiOperationDescriptor operation,
-        HashSet<string> declaredBodyTypeNameSet)
+        FrozenSet<string> declaredBodyTypeNameSet)
     {
         var responses = operation.TryGetFeatureData<OperationHttpResponseMetadataFeatureData>(out var responseMetadata)
             ? responseMetadata.Responses

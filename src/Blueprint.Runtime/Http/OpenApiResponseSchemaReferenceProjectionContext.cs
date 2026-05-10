@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Collections.Immutable;
 using Blueprint.Model;
 
@@ -26,7 +27,7 @@ public sealed record OpenApiResponseSchemaReferenceProjectionContext(
         ArgumentNullException.ThrowIfNull(schemaProjection);
 
         var schemasByBodyTypeName = schemaProjection.Schemas
-            .ToDictionary(static schema => schema.BodyTypeName, StringComparer.Ordinal);
+            .ToFrozenDictionary(static schema => schema.BodyTypeName, StringComparer.Ordinal);
         var operations = schemaProjection.Document.Operations
             .Select(operation => CreateOperationContext(operation, schemasByBodyTypeName))
             .ToImmutableArray();
@@ -36,7 +37,7 @@ public sealed record OpenApiResponseSchemaReferenceProjectionContext(
 
     private static OpenApiResponseSchemaReferenceOperationContext CreateOperationContext(
         OpenApiDocumentOperationContext operation,
-        Dictionary<string, OpenApiSchemaModel> schemasByBodyTypeName)
+        FrozenDictionary<string, OpenApiSchemaModel> schemasByBodyTypeName)
     {
         var responses = operation.Responses
             .Select(response => CreateResponseContext(response, schemasByBodyTypeName))
@@ -47,7 +48,7 @@ public sealed record OpenApiResponseSchemaReferenceProjectionContext(
 
     private static OpenApiResponseSchemaReferenceResponseContext CreateResponseContext(
         OperationHttpResponseMetadata response,
-        Dictionary<string, OpenApiSchemaModel> schemasByBodyTypeName)
+        FrozenDictionary<string, OpenApiSchemaModel> schemasByBodyTypeName)
     {
         var schemaReferences = response.BodyTypeNames
             .Distinct(StringComparer.Ordinal)
@@ -60,7 +61,7 @@ public sealed record OpenApiResponseSchemaReferenceProjectionContext(
 
     private static OpenApiResponseSchemaReference? TryCreateSchemaReference(
         string bodyTypeName,
-        Dictionary<string, OpenApiSchemaModel> schemasByBodyTypeName)
+        FrozenDictionary<string, OpenApiSchemaModel> schemasByBodyTypeName)
     {
         // Array body types (e.g. "Namespace.Type[]") resolve to the element type's schema with array wrapping.
         // Check this first so array types render as inline "type: array, items: { $ref: ... }" rather than
