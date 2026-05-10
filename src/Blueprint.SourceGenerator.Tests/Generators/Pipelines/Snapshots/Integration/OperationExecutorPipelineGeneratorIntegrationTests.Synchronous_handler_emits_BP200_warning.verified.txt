@@ -1,0 +1,28 @@
+﻿File: Input0.cs
+using Blueprint;
+using Blueprint.Model;
+
+namespace TestNamespace;
+
+[BlueprintAppScan]
+public partial class TestApp : BlueprintApp
+{
+    public TestApp()
+    {
+        this.Register(TestQuery.Configure());
+    }
+}
+
+public class TestQuery : IQuery<int>
+             ^^^^^^^^^ [Info:BP200] The handler method 'Invoke' should return Task or Task<T> for better performance
+{
+    public static ApiOperationDescriptor Configure()
+    {
+        return new ApiOperationDescriptor(typeof(TestQuery), nameof(TestQuery), "Tests");
+    }
+
+    public static int Invoke()
+    {
+        return 42;
+    }
+}

@@ -1198,6 +1198,79 @@ public class OperationExecutorPipelineGeneratorIntegrationTests
             .VerifyCompilationFailedAsync(SnapshotsFolder);
     }
 
+    [Fact]
+    public async Task Synchronous_handler_emits_BP200_warning()
+    {
+        var source = """
+                     using Blueprint;
+                     using Blueprint.Model;
+
+                     namespace TestNamespace;
+
+                     [BlueprintAppScan]
+                     public partial class TestApp : BlueprintApp
+                     {
+                         public TestApp()
+                         {
+                             this.Register(TestQuery.Configure());
+                         }
+                     }
+
+                     public class TestQuery : IQuery<int>
+                     {
+                         public static ApiOperationDescriptor Configure()
+                         {
+                             return new ApiOperationDescriptor(typeof(TestQuery), nameof(TestQuery), "Tests");
+                         }
+
+                         public static int Invoke()
+                         {
+                             return 42;
+                         }
+                     }
+                     """;
+
+        await Compile(source)
+            .VerifySuccessWithDiagnosticsAsync(SnapshotsFolder, "BP200");
+    }
+
+    [Fact]
+    public void Async_handler_does_not_emit_BP200_warning()
+    {
+        var source = """
+                     using Blueprint;
+                     using Blueprint.Model;
+                     using System.Threading.Tasks;
+
+                     namespace TestNamespace;
+
+                     [BlueprintAppScan]
+                     public partial class TestApp : BlueprintApp
+                     {
+                         public TestApp()
+                         {
+                             this.Register(TestQuery.Configure());
+                         }
+                     }
+
+                     public class TestQuery : IQuery<int>
+                     {
+                         public static ApiOperationDescriptor Configure()
+                         {
+                             return new ApiOperationDescriptor(typeof(TestQuery), nameof(TestQuery), "Tests");
+                         }
+
+                         public static Task<int> InvokeAsync()
+                         {
+                             return Task.FromResult(42);
+                         }
+                     }
+                     """;
+
+        var result = Compile(source);
+        result.Diagnostics.Where(static d => d.Id == "BP200").Should().BeEmpty("async handlers should not trigger BP200");
+    }
+
     private static GenerationResult Compile(string source)
     {
         return TestHelpers.Compile<OperationExecutorPipelineSourceGenerator>(source, assertCacheability: false);

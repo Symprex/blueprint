@@ -213,7 +213,7 @@ internal static class DiagnosticDescriptors
         title: "Handler method should be async",
         messageFormat: "The handler method '{0}' should return Task or Task<T> for better performance",
         category: Category,
-        DiagnosticSeverity.Warning,
+        DiagnosticSeverity.Info,
         isEnabledByDefault: true,
         description: "Handler methods should be async to prevent blocking the thread pool and support async operations.");
 

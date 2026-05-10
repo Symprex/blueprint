@@ -45,6 +45,16 @@ internal static class PipelinePlanBuilder
             return Result<PipelinePlan>.Failure(resolvedHandler.Diagnostics);
         }
 
+        // BP200: Warn when a handler method is synchronous — async handlers prevent thread-pool blocking.
+        if (resolvedHandler is { Value.IsHandlerAsync: false })
+        {
+            var handlerLocation = operationImplementationType!.Locations.FirstOrDefault(static l => l.IsInSource);
+            pipelinePlan.AddDiagnostic(new DiagnosticInfo(
+                DiagnosticDescriptors.HandlerShouldBeAsync,
+                handlerLocation is not null ? LocationInfo.CreateFrom(handlerLocation) : null,
+                [resolvedHandler.Value.HandlerMethodName]));
+        }
+
         foreach (var contributor in executionPlanResult.Value.PipelineContributors)
         {
             contributor.ContributeToPipeline(new PipelineContributorContext(contributor.ContributorId, operationModel, pipelinePlan, operationLookup, resolvedHandler?.Value));

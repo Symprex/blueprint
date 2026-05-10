@@ -27,7 +27,7 @@ public record GenerationResult(SyntaxTree[] Inputs, Diagnostic[] Diagnostics, Sy
     /// <returns>A task that completes once the reviewed snapshot assertion has finished.</returns>
     public async Task VerifySuccessAsync(string snapshotsFolder, bool includeMarkerAttributes = false)
     {
-        if (this.Diagnostics.Length != 0)
+        if (this.Diagnostics.Any(static d => d.Severity == DiagnosticSeverity.Error))
         {
             throw new InvalidOperationException("The compilation failed with diagnostics:\n\n" + this.FormatErrors());
         }
@@ -66,7 +66,27 @@ public record GenerationResult(SyntaxTree[] Inputs, Diagnostic[] Diagnostics, Sy
             .UseDirectory(snapshotsFolder);
     }
 
-    private string FormatErrors()
+    /// <summary>
+    /// Verifies the generation produces informational or warning diagnostics (but no errors) and snapshot-matches them.
+    /// </summary>
+    /// <param name="snapshotsFolder">The snapshot folder that owns the reviewed baseline for this scenario.</param>
+    /// <param name="expectedDiagnosticIds">One or more diagnostic IDs that must appear in the output.</param>
+    /// <returns>A task that completes once the reviewed snapshot assertion has finished.</returns>
+    public async Task VerifySuccessWithDiagnosticsAsync(string snapshotsFolder, params string[] expectedDiagnosticIds)
+    {
+        this.Diagnostics.Should().NotBeEmpty("we expected the input to generate diagnostics");
+        this.Diagnostics.Where(static d => d.Severity == DiagnosticSeverity.Error).Should().BeEmpty("errors should not be present");
+
+        foreach (var expectedId in expectedDiagnosticIds)
+        {
+            this.Diagnostics.Should().Contain(d => d.Id == expectedId, $"expected diagnostic {expectedId} to be emitted");
+        }
+
+        await Verify(this.FormatErrors(DiagnosticSeverity.Info))
+            .UseDirectory(snapshotsFolder);
+    }
+
+    private string FormatErrors(DiagnosticSeverity minimumSeverity = DiagnosticSeverity.Error)
     {
         var allSources = this.Inputs.Concat(this.Output)
             .ToDictionary(
@@ -74,9 +94,10 @@ public record GenerationResult(SyntaxTree[] Inputs, Diagnostic[] Diagnostics, Sy
                 s => s.ToString().Split(["\r\n", "\n"], StringSplitOptions.None));
 
         var result = new List<string>();
-        var filesWithErrors = this.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).Select(GetFilePath).Distinct().ToArray();
+        var matchingDiagnostics = this.Diagnostics.Where(d => d.Severity >= minimumSeverity).ToArray();
+        var filesWithDiagnostics = matchingDiagnostics.Select(GetFilePath).Distinct().ToArray();
 
-        foreach (var file in filesWithErrors)
+        foreach (var file in filesWithDiagnostics)
         {
             if (!allSources.TryGetValue(file!, out var lines))
             {
