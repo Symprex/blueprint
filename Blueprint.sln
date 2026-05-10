@@ -63,6 +63,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Blueprint.Marten.Tests", "s
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Blueprint.Hangfire.Tests", "src\Blueprint.Hangfire.Tests\Blueprint.Hangfire.Tests.csproj", "{6DC5CA4F-FB62-4949-A751-887D45BF5712}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Blueprint.Rebus.Tests", "src\Blueprint.Rebus.Tests\Blueprint.Rebus.Tests.csproj", "{B8ADB158-07FB-4409-87ED-B9D3776BEA92}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -173,6 +175,10 @@ Global
 		{6DC5CA4F-FB62-4949-A751-887D45BF5712}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{6DC5CA4F-FB62-4949-A751-887D45BF5712}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{6DC5CA4F-FB62-4949-A751-887D45BF5712}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B8ADB158-07FB-4409-87ED-B9D3776BEA92}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B8ADB158-07FB-4409-87ED-B9D3776BEA92}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B8ADB158-07FB-4409-87ED-B9D3776BEA92}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B8ADB158-07FB-4409-87ED-B9D3776BEA92}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{AF948AAE-4F61-4D9C-942E-A8F318C61E9D} = {6A6D0D4D-3EAE-4F88-94AD-9ABE41050A24}
@@ -194,5 +200,6 @@ Global
 		{2028C2F2-040F-430C-9C85-1E49A769286D} = {6A6D0D4D-3EAE-4F88-94AD-9ABE41050A24}
 		{25B3995E-76D7-40DB-B925-D6B216649810} = {6A6D0D4D-3EAE-4F88-94AD-9ABE41050A24}
 		{6DC5CA4F-FB62-4949-A751-887D45BF5712} = {6A6D0D4D-3EAE-4F88-94AD-9ABE41050A24}
+		{B8ADB158-07FB-4409-87ED-B9D3776BEA92} = {6A6D0D4D-3EAE-4F88-94AD-9ABE41050A24}
 	EndGlobalSection
 EndGlobal
