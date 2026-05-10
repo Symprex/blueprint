@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using System.Xml;
 using Blueprint.SourceGenerator.CodeWriter;
+using Blueprint.SourceGenerator.Helpers;
 using Blueprint.SourceGenerator.Planning;
 using Microsoft.CodeAnalysis;
 using CSharpSymbolDisplay = Microsoft.CodeAnalysis.CSharp.SymbolDisplay;
@@ -65,7 +66,7 @@ public sealed class OperationDocumentationModule : IBlueprintSourceGeneratorModu
     {
         var summaries = new Dictionary<string, string>(StringComparer.Ordinal);
 
-        foreach (var member in operationType.GetMembers().OfType<IPropertySymbol>())
+        foreach (var member in operationType.GetAllMembers().OfType<IPropertySymbol>())
         {
             if (member.IsStatic || member.DeclaredAccessibility != Accessibility.Public)
             {

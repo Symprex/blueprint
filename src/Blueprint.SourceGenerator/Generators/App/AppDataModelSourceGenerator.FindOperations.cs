@@ -270,7 +270,7 @@ public sealed partial class AppDataModelSourceGenerator
                 continue;
             }
 
-            foreach (var property in bodyType.GetMembers().OfType<IPropertySymbol>())
+            foreach (var property in bodyType.GetAllMembers().OfType<IPropertySymbol>())
             {
                 foreach (var attribute in property.GetAttributes())
                 {

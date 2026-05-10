@@ -246,7 +246,7 @@ public sealed class ResourceExpansionModule : IBlueprintSourceGeneratorModule, I
 
         var results = new List<ExpandablePropertyInfo>();
 
-        foreach (var member in type.GetMembers())
+        foreach (var member in type.GetAllMembers())
         {
             if (member is not IPropertySymbol property)
             {

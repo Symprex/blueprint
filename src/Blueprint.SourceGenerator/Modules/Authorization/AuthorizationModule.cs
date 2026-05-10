@@ -257,7 +257,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
                 }
 
                 // Property tokens must exist on the operation type
-                var hasProperty = operationType.GetMembers()
+                var hasProperty = operationType.GetAllMembers()
                     .Any(m => m is IPropertySymbol && m.Name == token.Name);
 
                 if (!hasProperty)

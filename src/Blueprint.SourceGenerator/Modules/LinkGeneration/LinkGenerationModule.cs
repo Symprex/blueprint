@@ -231,7 +231,7 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
             {
                 var placeholderName = placeholder.Value.Trim('{', '}', '*');
 
-                if (operationType.GetMembers().Any(m => m.Name == placeholderName) == false)
+                if (operationType.GetAllMembers().Any(m => m.Name == placeholderName) == false)
                 {
                     var argumentLocationInfo = locationInfo.WithSubRange(placeholder.Index + 2, placeholder.Length - 2);
                     context.AddDiagnostic(CreatePlaceholderMissingDiagnostic(operationType, placeholderName, argumentLocationInfo));
@@ -347,7 +347,7 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
 
     private static bool TryFindMember(INamedTypeSymbol namedTypeSymbol, string placeholderName, LocationInfo argumentLocationInfo, DescriptorContributorContext context)
     {
-        var memberExists = namedTypeSymbol.GetMembers().Any(m => m.Name == placeholderName);
+        var memberExists = namedTypeSymbol.GetAllMembers().Any(m => m.Name == placeholderName);
 
         if (!memberExists)
         {

@@ -1606,4 +1606,128 @@ public class PropertyOwnershipModuleTests
             references: references,
             options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
     }
+
+    [Fact]
+    public async Task When_operation_inherits_from_abstract_base_then_base_class_properties_are_bound()
+    {
+        const string source = """
+            using Blueprint;
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace
+            {
+                [BlueprintAppScan]
+                public partial class TestApp : BlueprintApp { }
+
+                public abstract class DisclaimerCommand
+                {
+                    public string Name { get; set; }
+                    public string Description { get; set; }
+                }
+
+                [RootLink("/disclaimers")]
+                public partial class CreateDisclaimerCommand : DisclaimerCommand, ICommand<string>
+                {
+                    public int Priority { get; set; }
+
+                    public static Task<string> HandleAsync(CreateDisclaimerCommand operation)
+                    {
+                        return Task.FromResult("ok");
+                    }
+                }
+            }
+            """;
+
+        var generators = new[]
+        {
+            TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>(),
+            TestHelpers.CreateTrackedGenerator<OperationExecutorPipelineSourceGenerator>(),
+        };
+
+        var result = TestHelpers.CompileWithTrackedGenerators(
+            generators,
+            [source],
+            ["Input0.cs"]);
+
+        result.Diagnostics.Should().BeEmpty("the compilation should have no diagnostics");
+
+        var pipelineSources = result.GetGeneratedSources(nameof(OperationExecutorPipelineSourceGenerator));
+        pipelineSources.Should().NotBeEmpty("a pipeline should be generated for the derived command");
+
+        var outputText = new StringBuilder();
+        foreach (var s in pipelineSources)
+        {
+            outputText.AppendLine(s.HintName + ":");
+            outputText.AppendLine();
+            outputText.AppendLine(s.SourceText);
+            outputText.AppendLine();
+        }
+
+        await Verify(outputText)
+            .UseDirectory("Generators/Pipelines/Snapshots/Integration/");
+    }
+
+    [Fact]
+    public async Task When_operation_inherits_route_properties_from_base_then_route_params_are_bound()
+    {
+        const string source = """
+            using Blueprint;
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace
+            {
+                [BlueprintAppScan]
+                public partial class TestApp : BlueprintApp { }
+
+                public abstract class TenantScopedCommand
+                {
+                    public string TenantId { get; set; }
+                }
+
+                [RootLink("/tenants/{TenantId}/users")]
+                public partial class CreateTenantUserCommand : TenantScopedCommand, ICommand<string>
+                {
+                    public string UserName { get; set; }
+                    public string Email { get; set; }
+
+                    public static Task<string> HandleAsync(CreateTenantUserCommand operation)
+                    {
+                        return Task.FromResult("ok");
+                    }
+                }
+            }
+            """;
+
+        var generators = new[]
+        {
+            TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>(),
+            TestHelpers.CreateTrackedGenerator<OperationExecutorPipelineSourceGenerator>(),
+        };
+
+        var result = TestHelpers.CompileWithTrackedGenerators(
+            generators,
+            [source],
+            ["Input0.cs"]);
+
+        result.Diagnostics.Where(static d => d.Severity == DiagnosticSeverity.Error)
+            .Should().BeEmpty("the compilation should have no error diagnostics");
+        var pipelineSources = result.GetGeneratedSources(nameof(OperationExecutorPipelineSourceGenerator));
+        pipelineSources.Should().NotBeEmpty("a pipeline should be generated for the derived command");
+
+        var outputText = new StringBuilder();
+        foreach (var s in pipelineSources)
+        {
+            outputText.AppendLine(s.HintName + ":");
+            outputText.AppendLine();
+            outputText.AppendLine(s.SourceText);
+            outputText.AppendLine();
+        }
+
+        await Verify(outputText)
+            .UseDirectory("Generators/Pipelines/Snapshots/Integration/");
+    }
 }

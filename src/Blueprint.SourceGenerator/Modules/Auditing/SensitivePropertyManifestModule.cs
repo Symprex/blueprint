@@ -1,3 +1,4 @@
+using Blueprint.SourceGenerator.Helpers;
 using Blueprint.SourceGenerator.Planning;
 using Microsoft.CodeAnalysis;
 using Newtonsoft.Json.Linq;
@@ -55,7 +56,7 @@ internal sealed class SensitivePropertyManifestModule : IBlueprintSourceGenerato
     {
         var result = new List<string>();
 
-        foreach (var member in operationType.GetMembers())
+        foreach (var member in operationType.GetAllMembers())
         {
             if (member is not IPropertySymbol property)
             {

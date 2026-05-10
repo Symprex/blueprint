@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using Blueprint.SourceGenerator.CodeWriter;
+using Blueprint.SourceGenerator.Helpers;
 using Blueprint.SourceGenerator.Modules.LinkGeneration;
 using Blueprint.SourceGenerator.Planning;
 using Microsoft.CodeAnalysis;
@@ -64,7 +65,7 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
 
         // Collect all public instance properties from the operation
         var properties = operationSymbol
-            .GetMembers()
+            .GetAllMembers()
             .OfType<IPropertySymbol>()
             .Where(static p => p.DeclaredAccessibility == Accessibility.Public
                 && !p.IsStatic

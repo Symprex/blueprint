@@ -142,7 +142,7 @@ public sealed class ClaimsAuthorizationModule : IBlueprintSourceGeneratorModule,
                     continue;
                 }
 
-                var hasProperty = operationType.GetMembers()
+                var hasProperty = operationType.GetAllMembers()
                     .Any(m => m is IPropertySymbol && m.Name == token.Name);
 
                 if (!hasProperty)

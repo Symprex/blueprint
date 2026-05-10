@@ -338,8 +338,9 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
     {
         var entries = new List<PropertyOwnershipEntry>();
         var isGetOrDelete = IsGetOrDeleteMethod(httpMethods);
+        var seenNames = new HashSet<string>(StringComparer.Ordinal);
 
-        foreach (var member in operationType.GetMembers().OfType<IPropertySymbol>())
+        foreach (var member in operationType.GetAllMembers().OfType<IPropertySymbol>())
         {
             if (member.IsStatic || member.IsReadOnly || member.SetMethod is null || member.DeclaredAccessibility != Accessibility.Public)
             {
@@ -347,6 +348,12 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             }
 
             if (IsSystemProperty(member))
+            {
+                continue;
+            }
+
+            // Skip properties already seen in a derived type (handles new/override hiding)
+            if (!seenNames.Add(member.Name))
             {
                 continue;
             }
