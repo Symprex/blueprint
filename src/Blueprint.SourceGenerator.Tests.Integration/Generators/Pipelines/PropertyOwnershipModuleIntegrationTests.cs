@@ -147,6 +147,43 @@ public class PropertyOwnershipModuleIntegrationTests
     }
 
     [Fact]
+    public void When_query_parameter_type_implements_IParsable_then_descriptor_has_query_ownership()
+    {
+        var descriptor = SearchItemsByStrongIdPopulationQuery.Configure();
+
+        descriptor.TryGetFeatureData<OperationPropertyOwnershipFeatureData>(out var ownershipData)
+            .Should().BeTrue();
+
+        ownershipData!.Entries.Should()
+            .Contain(static b => b.PropertyName == "FilterId" && b.Source == PropertyBindingSource.Query);
+    }
+
+    [Fact]
+    public async Task When_query_parameter_type_implements_IParsable_and_value_provided_then_parses_correctly()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(SearchItemsByStrongIdPopulationQuery));
+        var descriptor = SearchItemsByStrongIdPopulationQuery.Configure();
+
+        var httpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        httpContext.Request.Method = "GET";
+        httpContext.Request.QueryString = new Microsoft.AspNetCore.Http.QueryString("?FilterId=custom-id-42");
+
+        var context = new Blueprint.Runtime.Exec.ApiOperationContext(new EmptyServiceProvider(), app, descriptor, CancellationToken.None)
+        {
+            Operation = new SearchItemsByStrongIdPopulationQuery(),
+            HttpContext = httpContext,
+        };
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        var query = (SearchItemsByStrongIdPopulationQuery)context.Operation;
+        query.FilterId.Should().NotBeNull();
+        query.FilterId!.Value.Should().Be("custom-id-42");
+    }
+
+    [Fact]
     public void When_http_method_metadata_set_then_descriptor_reports_correct_methods()
     {
         var descriptor = UpdateUserPopulationCommand.Configure();
@@ -718,6 +755,22 @@ public partial class GetItemByStrictIdPopulationQuery : IQuery<string>
     public static Task<string> HandleAsync(GetItemByStrictIdPopulationQuery operation)
     {
         return Task.FromResult(operation.ItemId.Value.ToString());
+    }
+}
+
+/// <summary>
+/// GET with IParsable query parameter — tests that source-gen accepts IParsable types as query params.
+/// </summary>
+[Blueprint.Model.Attributes.AllowAnonymous]
+[Blueprint.Model.Attributes.RootLink("/population-test/search-items")]
+public partial class SearchItemsByStrongIdPopulationQuery : IQuery<string>
+{
+    [Blueprint.Model.Attributes.FromQuery]
+    public StrongItemId? FilterId { get; set; }
+
+    public static Task<string> HandleAsync(SearchItemsByStrongIdPopulationQuery operation)
+    {
+        return Task.FromResult(operation.FilterId?.Value ?? "none");
     }
 }
 

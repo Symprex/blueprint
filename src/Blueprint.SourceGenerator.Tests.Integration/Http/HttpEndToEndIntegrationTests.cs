@@ -1371,6 +1371,25 @@ public class HttpEndToEndIntegrationTests
         response.StatusCode.Should().Be(StatusCodes.Status400BadRequest);
     }
 
+    [Fact]
+    public async Task When_GET_with_IParsable_query_parameter_then_value_is_bound()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/population-test/search-items");
+        endpoint.Should().NotBeNull("IParsable query parameter endpoint should be registered");
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Path = "/api/population-test/search-items";
+            context.Request.QueryString = new QueryString("?FilterId=typed-id-99");
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        response.Body.Should().Contain("typed-id-99");
+    }
+
     private static async Task<TestHttpResponse> InvokeEndpointAsync(
         RouteEndpoint endpoint,
         IServiceProvider serviceProvider,
