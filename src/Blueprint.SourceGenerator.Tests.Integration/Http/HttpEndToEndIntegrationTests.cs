@@ -1328,6 +1328,49 @@ public class HttpEndToEndIntegrationTests
         response.Body.Should().Contain("UK/Marketing/Assets");
     }
 
+    [Fact]
+    public async Task When_GET_with_IParsable_route_parameter_then_routes_and_returns_200()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/population-test/items/{ItemId}");
+        endpoint.Should().NotBeNull("IParsable route parameter endpoint should be registered");
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Path = "/api/population-test/items/my-item-99";
+            context.Request.RouteValues = new RouteValueDictionary
+            {
+                ["ItemId"] = "my-item-99",
+            };
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        response.Body.Should().Contain("my-item-99");
+    }
+
+    [Fact]
+    public async Task When_GET_with_strict_IParsable_route_parameter_and_invalid_value_then_returns_400()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/population-test/strict-items/{ItemId}");
+        endpoint.Should().NotBeNull("strict IParsable route parameter endpoint should be registered");
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Path = "/api/population-test/strict-items/NOT_A_NUMBER";
+            context.Request.RouteValues = new RouteValueDictionary
+            {
+                ["ItemId"] = "NOT_A_NUMBER",
+            };
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status400BadRequest);
+    }
+
     private static async Task<TestHttpResponse> InvokeEndpointAsync(
         RouteEndpoint endpoint,
         IServiceProvider serviceProvider,
