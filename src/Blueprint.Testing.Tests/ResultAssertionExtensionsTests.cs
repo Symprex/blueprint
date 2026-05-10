@@ -1,5 +1,7 @@
 using System.ComponentModel.DataAnnotations;
+using Blueprint.Http;
 using Blueprint.Runtime.Exec;
+using Blueprint.SourceGenerator.Sample.Contract.Api;
 using FluentAssertions;
 
 namespace Blueprint.Testing.Tests;
@@ -118,5 +120,118 @@ public class ResultAssertionExtensionsTests
 
         act.Should().Throw<BlueprintTestExecutionException>()
             .WithMessage("*Expected PlainTextResult*OkResult*");
+    }
+
+    [Fact]
+    public void ShouldBeResourceEvent_typed_returns_event_for_correct_type()
+    {
+        var resource = new TemplateApiResource("t1", "test-template", "<html/>", "text");
+        var result = new ResourceEvent<TemplateApiResource>(
+            ResourceEventChangeType.Updated,
+            "template.updated",
+            resource);
+
+        var resourceEvent = ((OperationResult)result).ShouldBeResourceEvent<TemplateApiResource>();
+        resourceEvent.Data.Should().BeSameAs(resource);
+        resourceEvent.EventId.Should().Be("template.updated");
+    }
+
+    [Fact]
+    public void ShouldBeResourceEvent_typed_throws_for_validation_failure_with_error_details()
+    {
+        var result = new ValidationFailedResult(new[]
+        {
+            new ValidationResult("Name is required", ["Name"]),
+        });
+
+        var act = () => ((OperationResult)result).ShouldBeResourceEvent<TemplateApiResource>();
+
+        act.Should().Throw<BlueprintTestExecutionException>()
+            .WithMessage("*ResourceEvent<TemplateApiResource>*ValidationFailedResult*Name is required*");
+    }
+
+    [Fact]
+    public void ShouldBeResourceEvent_typed_throws_for_wrong_result_type()
+    {
+        var result = new OkResult<string>("hello");
+
+        var act = () => ((OperationResult)result).ShouldBeResourceEvent<TemplateApiResource>();
+
+        act.Should().Throw<BlueprintTestExecutionException>()
+            .WithMessage("*Expected ResourceEvent<TemplateApiResource>*OkResult*");
+    }
+
+    [Fact]
+    public void ShouldBeResourceEvent_untyped_returns_event()
+    {
+        var resource = new TemplateApiResource("t2", "test-template", "<html/>", "text");
+        var result = new ResourceEvent<TemplateApiResource>(
+            ResourceEventChangeType.Created,
+            "template.created",
+            resource);
+
+        var resourceEvent = ((OperationResult)result).ShouldBeResourceEvent();
+        resourceEvent.EventId.Should().Be("template.created");
+    }
+
+    [Fact]
+    public void ShouldBeResourceEvent_untyped_throws_for_ok_result()
+    {
+        var result = new OkResult<string>("hello");
+
+        var act = () => ((OperationResult)result).ShouldBeResourceEvent();
+
+        act.Should().Throw<BlueprintTestExecutionException>()
+            .WithMessage("*Expected ResourceEvent*OkResult*");
+    }
+
+    [Fact]
+    public void ShouldBeStatusCode_returns_result_for_matching_code()
+    {
+        OperationResult result = StatusCodeResult.Accepted.Instance;
+
+        var statusResult = result.ShouldBeStatusCode(202);
+        statusResult.StatusCode.Should().Be(202);
+    }
+
+    [Fact]
+    public void ShouldBeStatusCode_throws_for_wrong_status_code()
+    {
+        OperationResult result = StatusCodeResult.NoContent.Instance;
+
+        var act = () => result.ShouldBeStatusCode(202);
+
+        act.Should().Throw<BlueprintTestExecutionException>()
+            .WithMessage("*Expected status code 202 but got 204*");
+    }
+
+    [Fact]
+    public void ShouldBeStatusCode_throws_for_non_status_code_result()
+    {
+        var result = new OkResult<string>("hello");
+
+        var act = () => ((OperationResult)result).ShouldBeStatusCode(200);
+
+        act.Should().Throw<BlueprintTestExecutionException>()
+            .WithMessage("*Expected StatusCodeResult(200)*OkResult*");
+    }
+
+    [Fact]
+    public void ShouldNotBeSuccessful_passes_for_validation_failure()
+    {
+        var result = new ValidationFailedResult(Array.Empty<ValidationResult>());
+        var returned = ((OperationResult)result).ShouldNotBeSuccessful();
+        returned.Should().BeSameAs(result);
+    }
+
+    [Fact]
+    public void ShouldNotBeSuccessful_throws_for_ok_result()
+    {
+        var result = new OkResult<string>("hello");
+
+        var act = () => ((OperationResult)result).ShouldNotBeSuccessful();
+
+        act.Should().Throw<BlueprintTestExecutionException>()
+            .WithMessage("*WasSuccessful=true*");
     }
 }

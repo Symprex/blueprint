@@ -1,3 +1,5 @@
+using Blueprint.Http;
+using Blueprint.Model;
 using Blueprint.Runtime.Exec;
 
 namespace Blueprint.Testing;
@@ -38,6 +40,97 @@ public static class ResultAssertionExtensions
 
         throw new BlueprintTestExecutionException(
             $"Expected OkResult<{typeof(T).Name}> but got {result.GetType().Name}.",
+            result);
+    }
+
+    /// <summary>
+    /// Asserts the result is a <see cref="ResourceEvent{TResource}"/> and returns it for further assertions.
+    /// Provides a descriptive error when the result is a validation failure or other type.
+    /// </summary>
+    /// <typeparam name="TResource">The expected resource type.</typeparam>
+    /// <param name="result">The operation result.</param>
+    /// <returns>The resource event result.</returns>
+    public static ResourceEvent<TResource> ShouldBeResourceEvent<TResource>(this OperationResult result)
+        where TResource : ApiResource
+    {
+        ArgumentNullException.ThrowIfNull(result);
+
+        if (result is ResourceEvent<TResource> resourceEvent)
+        {
+            return resourceEvent;
+        }
+
+        if (result is ValidationFailedResult validationFailed)
+        {
+            string errors;
+
+            if (validationFailed.Errors is { Count: > 0 })
+            {
+                errors = string.Join("; ", validationFailed.Errors.Select(static e => $"[{e.Key}] {string.Join(", ", e.Value)}"));
+            }
+            else if (validationFailed.ValidationResults is { Count: > 0 })
+            {
+                errors = string.Join("; ", validationFailed.ValidationResults.Select(static vr =>
+                {
+                    var members = vr.MemberNames.Any() ? string.Join(",", vr.MemberNames) : "(none)";
+                    return $"[{members}] {vr.ErrorMessage}";
+                }));
+            }
+            else
+            {
+                errors = "(no errors)";
+            }
+
+            throw new BlueprintTestExecutionException(
+                $"Expected ResourceEvent<{typeof(TResource).Name}> but got ValidationFailedResult. Errors: {errors}",
+                result);
+        }
+
+        throw new BlueprintTestExecutionException(
+            $"Expected ResourceEvent<{typeof(TResource).Name}> but got {result.GetType().Name}.",
+            result);
+    }
+
+    /// <summary>
+    /// Asserts the result is a <see cref="ResourceEvent"/> (non-generic) and returns it.
+    /// Use this when the resource type doesn't matter or for untyped assertions.
+    /// </summary>
+    /// <param name="result">The operation result.</param>
+    /// <returns>The resource event result.</returns>
+    public static ResourceEvent ShouldBeResourceEvent(this OperationResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+
+        return result as ResourceEvent
+            ?? throw new BlueprintTestExecutionException(
+                $"Expected ResourceEvent but got {result.GetType().Name}.",
+                result);
+    }
+
+    /// <summary>
+    /// Asserts the result is a <see cref="StatusCodeResult"/> with the specified HTTP status code.
+    /// </summary>
+    /// <param name="result">The operation result.</param>
+    /// <param name="expectedStatusCode">The expected HTTP status code (e.g. 204, 202, 404).</param>
+    /// <returns>The status code result for further assertions.</returns>
+    public static StatusCodeResult ShouldBeStatusCode(this OperationResult result, int expectedStatusCode)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+
+        if (result is StatusCodeResult statusCodeResult)
+        {
+            if (statusCodeResult.StatusCode != expectedStatusCode)
+            {
+                throw new BlueprintTestExecutionException(
+                    $"Expected status code {expectedStatusCode} but got {statusCodeResult.StatusCode}.",
+                    result);
+            }
+
+            return statusCodeResult;
+        }
+
+        throw new BlueprintTestExecutionException(
+            $"Expected StatusCodeResult({expectedStatusCode}) but got {result.GetType().Name}.",
             result);
     }
 
@@ -123,6 +216,25 @@ public static class ResultAssertionExtensions
         {
             throw new BlueprintTestExecutionException(
                 $"Expected successful result but got {result.GetType().Name} (WasSuccessful=false).",
+                result);
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Asserts the result was not successful (i.e., <see cref="OperationResult.WasSuccessful"/> is <c>false</c>).
+    /// </summary>
+    /// <param name="result">The operation result.</param>
+    /// <returns>The same result for chaining.</returns>
+    public static OperationResult ShouldNotBeSuccessful(this OperationResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+
+        if (result.WasSuccessful)
+        {
+            throw new BlueprintTestExecutionException(
+                $"Expected unsuccessful result but got {result.GetType().Name} (WasSuccessful=true).",
                 result);
         }
 
