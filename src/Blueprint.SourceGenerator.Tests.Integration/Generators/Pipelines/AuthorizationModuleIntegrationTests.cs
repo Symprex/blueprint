@@ -147,6 +147,90 @@ public class AuthorizationModuleIntegrationTests
         countingAuthoriser.CallCount.Should().Be(0);
     }
 
+    [Fact]
+    public async Task When_resource_with_claim_token_then_expanded_key_uses_principal_claim()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(GetMyAccountAuthorizationQuery));
+        var serviceProvider = new ServiceCollection()
+            .AddSingleton<IResolvedResourceAuthorizationProvider, MatchingClaimResolvedResourceAuthorizationProvider>()
+            .BuildServiceProvider();
+
+        // The {Auth:AccountId} token should be expanded from the principal's "AccountId" claim
+        var context = CreateHttpContext(
+            app,
+            GetMyAccountAuthorizationQuery.Configure(),
+            new GetMyAccountAuthorizationQuery(),
+            CreateAuthenticatedPrincipal(
+                new System.Security.Claims.Claim("AccountId", "acct-99"),
+                new System.Security.Claims.Claim("resource-access", "account:read:/accounts/acct-99")),
+            serviceProvider);
+
+        GetMyAccountAuthorizationQuery.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<OkResult<string>>();
+        GetMyAccountAuthorizationQuery.HandlerCallCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task When_resource_with_claim_token_and_wrong_claim_then_forbidden()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(GetMyAccountAuthorizationQuery));
+        var serviceProvider = new ServiceCollection()
+            .AddSingleton<IResolvedResourceAuthorizationProvider, MatchingClaimResolvedResourceAuthorizationProvider>()
+            .BuildServiceProvider();
+
+        // Wrong AccountId claim should fail resource authorization
+        var context = CreateHttpContext(
+            app,
+            GetMyAccountAuthorizationQuery.Configure(),
+            new GetMyAccountAuthorizationQuery(),
+            CreateAuthenticatedPrincipal(
+                new System.Security.Claims.Claim("AccountId", "acct-99"),
+                new System.Security.Claims.Claim("resource-access", "account:read:/accounts/acct-WRONG")),
+            serviceProvider);
+
+        GetMyAccountAuthorizationQuery.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<ForbiddenResult>();
+        GetMyAccountAuthorizationQuery.HandlerCallCount.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task When_resource_with_property_path_token_then_sub_property_is_expanded()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(GetBillingAuthorizationQuery));
+        var serviceProvider = new ServiceCollection()
+            .AddSingleton<IResolvedResourceAuthorizationProvider, MatchingClaimResolvedResourceAuthorizationProvider>()
+            .BuildServiceProvider();
+
+        // The {TenantId:Id} should expand to the .Id sub-property of TenantId
+        var context = CreateHttpContext(
+            app,
+            GetBillingAuthorizationQuery.Configure(),
+            new GetBillingAuthorizationQuery { TenantId = new TypedId { Id = "billing-77" } },
+            CreateAuthenticatedPrincipal(
+                new System.Security.Claims.Claim("resource-access", "billing:read:/tenants/billing-77")),
+            serviceProvider);
+
+        GetBillingAuthorizationQuery.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<OkResult<string>>();
+        ((OkResult<string>)result).Content.Should().Be("billing-billing-77");
+        GetBillingAuthorizationQuery.HandlerCallCount.Should().Be(1);
+    }
+
     private static ApiOperationContext CreateHttpContext(
         BlueprintApp app,
         ApiOperationDescriptor descriptor,
@@ -326,5 +410,79 @@ public partial class AllowAnonymousAuthorizationQuery : IQuery<string>
     {
         HandlerCallCount++;
         return Task.FromResult("anonymous");
+    }
+}
+
+/// <summary>
+/// Tests resource authorization with Auth: claim token in the resource key template.
+/// The {Auth:AccountId} token is expanded from the principal's claims, not from operation properties.
+/// </summary>
+[Resource("account", "read", "/accounts/{Auth:AccountId}")]
+[RootLink("/authorization/accounts/me")]
+public partial class GetMyAccountAuthorizationQuery : IQuery<string>
+{
+    public static int HandlerCallCount { get; private set; }
+
+    public static void Reset()
+    {
+        HandlerCallCount = 0;
+    }
+
+    public static Task<string> HandleAsync(GetMyAccountAuthorizationQuery operation)
+    {
+        HandlerCallCount++;
+        return Task.FromResult("my-account");
+    }
+}
+
+/// <summary>
+/// Tests resource authorization with a property path token ({TenantId:Id})
+/// where TenantId is a complex type and .Id accesses its sub-property.
+/// </summary>
+[Resource("billing", "read", "/tenants/{TenantId:Id}")]
+[RootLink("/authorization/billing/{TenantId}")]
+public partial class GetBillingAuthorizationQuery : IQuery<string>
+{
+    public TypedId TenantId { get; set; } = new();
+
+    public static int HandlerCallCount { get; private set; }
+
+    public static void Reset()
+    {
+        HandlerCallCount = 0;
+    }
+
+    public static Task<string> HandleAsync(GetBillingAuthorizationQuery operation)
+    {
+        HandlerCallCount++;
+        return Task.FromResult($"billing-{operation.TenantId.Id}");
+    }
+}
+
+/// <summary>
+/// Simple complex-type wrapper to exercise property path tokens in resource key templates.
+/// Implements <see cref="IParsable{T}"/> so Blueprint can bind it from route/query string values.
+/// </summary>
+public class TypedId : IParsable<TypedId>
+{
+    public string Id { get; set; } = string.Empty;
+
+    /// <inheritdoc />
+    public override string ToString()
+    {
+        return this.Id;
+    }
+
+    /// <inheritdoc />
+    public static TypedId Parse(string s, IFormatProvider? provider)
+    {
+        return new TypedId { Id = s };
+    }
+
+    /// <inheritdoc />
+    public static bool TryParse(string? s, IFormatProvider? provider, out TypedId result)
+    {
+        result = new TypedId { Id = s ?? string.Empty };
+        return true;
     }
 }

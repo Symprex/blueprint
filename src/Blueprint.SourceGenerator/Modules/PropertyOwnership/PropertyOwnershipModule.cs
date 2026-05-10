@@ -642,7 +642,8 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             or "System.DateTimeOffset"
             or "bool"
             or "decimal"
-            || type.TypeKind == TypeKind.Enum;
+            || type.TypeKind == TypeKind.Enum
+            || ImplementsIParsable(type);
     }
 
     private static bool IsSupportedQueryType(ITypeSymbol type)
@@ -704,6 +705,16 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         }
 
         return char.ToLowerInvariant(name[0]) + name.Substring(1);
+    }
+
+    /// <summary>
+    /// Checks whether a type implements <c>IParsable&lt;T&gt;</c> (System.IParsable),
+    /// which ASP.NET Core uses for binding route/query values from strings.
+    /// </summary>
+    private static bool ImplementsIParsable(ITypeSymbol type)
+    {
+        return type.AllInterfaces.Any(
+            static i => i is { IsGenericType: true, MetadataName: "IParsable`1", ContainingNamespace.Name: "System" });
     }
 
     private static void RenderDescriptorFeatureData(ICodeWriter writer, List<PropertyOwnershipEntry> entries)
@@ -1178,6 +1189,8 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             "System.DateTimeOffset" => $"System.DateTimeOffset.TryParse({stringExpression}, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var {outVariable})",
             _ when typeSymbol.TypeKind == TypeKind.Enum =>
                 $"System.Enum.TryParse<{typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}>({stringExpression}, out var {outVariable})",
+            _ when ImplementsIParsable(typeSymbol) =>
+                $"{typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}.TryParse({stringExpression}, null, out var {outVariable})",
             _ => $"int.TryParse({stringExpression}, out var {outVariable})", // fallback — should not be reached for supported types
         };
     }
