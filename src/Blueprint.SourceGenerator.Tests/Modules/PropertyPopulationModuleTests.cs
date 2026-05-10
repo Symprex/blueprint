@@ -47,7 +47,7 @@ public class PropertyPopulationModuleTests
         var pipelineSources = result.GetGeneratedSources(nameof(OperationExecutorPipelineSourceGenerator));
         pipelineSources.Should().NotBeEmpty();
 
-        var pipelineSource = pipelineSources.First().SourceText;
+        var pipelineSource = string.Join("\n", pipelineSources.Select(static s => s.SourceText));
 
         // PropertyPopulationModule resolves all IPropertyPopulator registrations from DI
         pipelineSource.Should().Contain("IPropertyPopulator");
@@ -89,7 +89,7 @@ public class PropertyPopulationModuleTests
         result.Diagnostics.Should().BeEmpty();
 
         var pipelineSources = result.GetGeneratedSources(nameof(OperationExecutorPipelineSourceGenerator));
-        var pipelineSource = pipelineSources.First().SourceText;
+        var pipelineSource = string.Join("\n", pipelineSources.Select(static s => s.SourceText));
 
         pipelineSource.Should().Contain("IPropertyPopulator");
         pipelineSource.Should().Contain("PopulateAsync");
@@ -129,7 +129,7 @@ public class PropertyPopulationModuleTests
         result.Diagnostics.Should().BeEmpty();
 
         var pipelineSources = result.GetGeneratedSources(nameof(OperationExecutorPipelineSourceGenerator));
-        var pipelineSource = pipelineSources.First().SourceText;
+        var pipelineSource = string.Join("\n", pipelineSources.Select(static s => s.SourceText));
 
         // The generated code should null-check before iterating populators
         pipelineSource.Should().Contain("propertyPopulators != null");
