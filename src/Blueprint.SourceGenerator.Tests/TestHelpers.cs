@@ -386,6 +386,7 @@ public static class TestHelpers
         references.Add(MetadataReference.CreateFromFile(typeof(Microsoft.AspNetCore.Http.HttpContext).Assembly.Location));
         references.Add(MetadataReference.CreateFromFile(typeof(global::Rebus.Transport.RebusTransactionScope).Assembly.Location));
         references.Add(MetadataReference.CreateFromFile(typeof(Blueprint.Marten.MartenScopeAccessor).Assembly.Location));
+        references.Add(MetadataReference.CreateFromFile(typeof(Blueprint.HttpClient.BlueprintHttpClient<>).Assembly.Location));
 
         return references;
     }

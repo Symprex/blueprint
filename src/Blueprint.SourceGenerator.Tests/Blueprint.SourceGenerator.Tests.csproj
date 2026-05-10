@@ -28,6 +28,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Blueprint.SourceGenerator.Benchmarks\Blueprint.SourceGenerator.Benchmarks.csproj" />
     <ProjectReference Include="..\Blueprint.SourceGenerator\Blueprint.SourceGenerator.csproj" OutputItemType="Analyzer" />
+    <ProjectReference Include="..\Blueprint.HttpClient\Blueprint.HttpClient.csproj" />
     <ProjectReference Include="..\Blueprint.Rebus\Blueprint.Rebus.csproj" />
     <ProjectReference Include="..\Blueprint.Marten\Blueprint.Marten.csproj" />
     <ProjectReference Include="..\Blueprint.Runtime\Blueprint.Runtime.csproj" />
