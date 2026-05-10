@@ -97,4 +97,12 @@ public partial class CreateTemplateCommand : ICommand<ResourceEventResult<Templa
     [Url]
     [Description("Callback URL for template lifecycle events.")]
     public string? CallbackUrl { get; set; }
+
+    /// <summary>
+    /// Legacy template category. Superseded by Tags.
+    /// Demonstrates property-level <c>deprecated: true</c> in OpenAPI schema.
+    /// </summary>
+    [Obsolete("Use Tags instead.")]
+    [Description("Legacy category — use Tags instead.")]
+    public string? LegacyCategory { get; set; }
 }

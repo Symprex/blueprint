@@ -120,4 +120,7 @@ public sealed record OpenApiRequestBodyPropertyModel(
 
     /// <summary>Gets the OpenAPI format of dictionary values when the values have a standard format mapping.</summary>
     public string? AdditionalPropertiesFormat { get; init; }
+
+    /// <summary>Gets whether this property is deprecated (mapped from <see cref="System.ObsoleteAttribute"/>).</summary>
+    public bool IsDeprecated { get; init; }
 }

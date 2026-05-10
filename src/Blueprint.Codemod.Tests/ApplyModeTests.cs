@@ -32,7 +32,7 @@ public sealed class ApplyModeTests
 
             report.Findings.Select(static finding => finding.DiagnosticId)
                 .Should()
-                .Equal("BPMIG100", "BPMIG101", "BPMIG200", "BPMIG201");
+                .Equal("BPMIG100", "BPMIG101", "BPMIG200", "BPMIG201", "BPMIG302");
         }
         finally
         {

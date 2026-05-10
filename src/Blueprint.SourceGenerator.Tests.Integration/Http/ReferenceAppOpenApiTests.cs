@@ -515,6 +515,45 @@ public class ReferenceAppOpenApiTests
         getOp.GetProperty("summary").GetString().Should().Be("Custom override summary");
     }
 
+    [Fact]
+    public async Task When_body_property_has_validation_format_attribute_then_schema_emits_format()
+    {
+        var (json, _) = await InvokeOpenApiEndpointAsync();
+        using var doc = JsonDocument.Parse(json);
+
+        // CreateTemplateCommand (POST /templates) has [EmailAddress] on AuthorEmail and [Url] on CallbackUrl
+        var templatesPath = doc.RootElement.GetProperty("paths").GetProperty("/templates");
+        var requestBody = templatesPath.GetProperty("post").GetProperty("requestBody");
+        var properties = requestBody.GetProperty("content").GetProperty("application/json")
+            .GetProperty("schema").GetProperty("properties");
+
+        properties.GetProperty("authorEmail").GetProperty("format").GetString()
+            .Should().Be("email");
+        properties.GetProperty("callbackUrl").GetProperty("format").GetString()
+            .Should().Be("uri");
+    }
+
+    [Fact]
+    public async Task When_body_property_is_obsolete_then_schema_emits_deprecated()
+    {
+        var (json, _) = await InvokeOpenApiEndpointAsync();
+        using var doc = JsonDocument.Parse(json);
+
+        // CreateTemplateCommand (POST /templates) has [Obsolete] on LegacyCategory
+        var templatesPath = doc.RootElement.GetProperty("paths").GetProperty("/templates");
+        var requestBody = templatesPath.GetProperty("post").GetProperty("requestBody");
+        var properties = requestBody.GetProperty("content").GetProperty("application/json")
+            .GetProperty("schema").GetProperty("properties");
+
+        // LegacyCategory is marked [Obsolete]
+        properties.GetProperty("legacyCategory").GetProperty("deprecated").GetBoolean()
+            .Should().BeTrue();
+
+        // AuthorEmail is NOT obsolete — deprecated should be absent
+        properties.GetProperty("authorEmail").TryGetProperty("deprecated", out _)
+            .Should().BeFalse("non-obsolete properties should not emit deprecated");
+    }
+
     private static async Task<(string Json, int StatusCode)> InvokeOpenApiEndpointAsync(
         Action<OpenApiInfoOptions>? configureOpenApi = null,
         Action<OpenApiOperationProcessorOptions>? configureOperationProcessors = null)

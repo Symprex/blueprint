@@ -82,7 +82,7 @@ public sealed class CodemodArtifactWriterTests
             document!["Findings"]!.AsArray()
                 .Select(static node => node!["DiagnosticId"]!.GetValue<string>())
                 .Should()
-                .Equal("BPMIG100", "BPMIG101", "BPMIG200", "BPMIG201");
+                .Equal("BPMIG100", "BPMIG101", "BPMIG200", "BPMIG201", "BPMIG302");
 
             var markdown = await File.ReadAllTextAsync(markdownPath);
             markdown.Should().NotContain("### BPMIG001");
@@ -90,6 +90,7 @@ public sealed class CodemodArtifactWriterTests
             markdown.Should().Contain("### BPMIG101");
             markdown.Should().Contain("### BPMIG200");
             markdown.Should().Contain("### BPMIG201");
+            markdown.Should().Contain("### BPMIG302");
         }
         finally
         {

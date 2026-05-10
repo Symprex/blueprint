@@ -398,6 +398,11 @@ public sealed record OpenApiOutputRenderingContext(
                 WriteNumericConstraints(writer, property.Minimum, property.Maximum, property.ExclusiveMinimum, property.ExclusiveMaximum);
                 WriteStringConstraints(writer, property.MinLength, property.MaxLength, property.Pattern);
 
+                if (property.IsDeprecated)
+                {
+                    writer.WriteBoolean("deprecated", true);
+                }
+
                 writer.WriteEndObject();
             }
 

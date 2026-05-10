@@ -16,7 +16,7 @@ public sealed class ActivationDiagnosticsReportCollectionTests
 
         report.SchemaVersion.Should().Be(1);
         report.ReportType.Should().Be("migration-diagnostics");
-        report.Findings.Should().HaveCount(5);
+        report.Findings.Should().HaveCount(6);
         report.Findings.Select(static finding => (finding.DiagnosticId, finding.Category))
             .Should()
             .Equal(
@@ -24,7 +24,8 @@ public sealed class ActivationDiagnosticsReportCollectionTests
                 ("BPMIG100", "configuration required"),
                 ("BPMIG101", "configuration required"),
                 ("BPMIG200", "consumer-extension rewrite required"),
-                ("BPMIG201", "consumer-extension rewrite required"));
+                ("BPMIG201", "consumer-extension rewrite required"),
+                ("BPMIG302", "manual design review required"));
     }
 
     [Xunit.Fact]

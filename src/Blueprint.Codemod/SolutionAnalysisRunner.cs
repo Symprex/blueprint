@@ -174,6 +174,9 @@ public sealed class SolutionAnalysisRunner
             "BPMIG101" => MigrationDiagnosticDescriptors.ConfiguredAddAuthenticationRequiresMigration,
             "BPMIG200" => MigrationDiagnosticDescriptors.LegacyFromResourceUsageRequiresMigration,
             "BPMIG201" => MigrationDiagnosticDescriptors.LegacyAuthPlaceholderUsageRequiresMigration,
+            "BPMIG300" => MigrationDiagnosticDescriptors.LegacyNamespaceUsing,
+            "BPMIG301" => MigrationDiagnosticDescriptors.LegacyMiddlewareBuilderUsage,
+            "BPMIG302" => MigrationDiagnosticDescriptors.LegacyBlueprintApiBuilderUsage,
             _ => throw new InvalidOperationException($"The codemod dry run does not yet know how to project '{diagnosticId}' into the migration report."),
         };
     }

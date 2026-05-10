@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 using Blueprint.Model;
 
 namespace Blueprint.Runtime.Http;
@@ -155,7 +156,7 @@ public sealed record OpenApiOperationRenderingContext(
         {
             var clrProperty = descriptor.OperationType.GetProperty(
                 entry.PropertyName,
-                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+                BindingFlags.Public | BindingFlags.Instance);
 
             // Prefer CLR type-based mapping when property info is available for accurate collection/dictionary support.
             var (schemaType, schemaFormat) = clrProperty is not null
@@ -167,6 +168,7 @@ public sealed record OpenApiOperationRenderingContext(
 
             // Validation-derived format (email, uri, phone) takes precedence over CLR type format.
             var effectiveFormat = constraints.Format ?? schemaFormat;
+            var isDeprecated = clrProperty?.GetCustomAttribute<System.ObsoleteAttribute>() is not null;
 
             switch (entry.Source)
             {
@@ -277,6 +279,7 @@ public sealed record OpenApiOperationRenderingContext(
                         ItemsFormat = bodyItemsFormat,
                         AdditionalPropertiesType = bodyAdditionalType,
                         AdditionalPropertiesFormat = bodyAdditionalFormat,
+                        IsDeprecated = isDeprecated,
                     });
                     break;
             }
