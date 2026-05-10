@@ -39,6 +39,10 @@ public sealed class SchemaValidationConstraintsResponse
 
     [Range(1, 10)]
     public int Quantity { get; init; }
+
+    [MinLength(1)]
+    [MaxLength(20)]
+    public List<string> Tags { get; init; } = [];
 }
 
 [JsonSerializable(typeof(SchemaValidationConstraintsResponse))]

@@ -936,12 +936,15 @@ public sealed record OpenApiOutputRenderingContext(
 
         if (property.MinLength.HasValue)
         {
-            writer.WriteNumber("minLength", property.MinLength.Value);
+            // For array types, [MinLength] / [Length] maps to minItems; for strings it maps to minLength.
+            var keyword = string.Equals(property.Type, "array", StringComparison.Ordinal) ? "minItems" : "minLength";
+            writer.WriteNumber(keyword, property.MinLength.Value);
         }
 
         if (property.MaxLength.HasValue)
         {
-            writer.WriteNumber("maxLength", property.MaxLength.Value);
+            var keyword = string.Equals(property.Type, "array", StringComparison.Ordinal) ? "maxItems" : "maxLength";
+            writer.WriteNumber(keyword, property.MaxLength.Value);
         }
 
         if (!string.IsNullOrWhiteSpace(property.Pattern))

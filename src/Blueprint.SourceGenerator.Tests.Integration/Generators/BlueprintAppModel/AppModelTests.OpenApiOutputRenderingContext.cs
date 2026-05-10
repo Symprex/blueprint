@@ -474,6 +474,11 @@ public class AppModelOpenApiOutputRenderingContextTests
         var quantity = schema.GetProperty("properties").GetProperty("Quantity");
         quantity.GetProperty("minimum").GetDecimal().Should().Be(1m);
         quantity.GetProperty("maximum").GetDecimal().Should().Be(10m);
+
+        var tags = schema.GetProperty("properties").GetProperty("Tags");
+        tags.GetProperty("minItems").GetInt32().Should().Be(1, "array [MinLength] should map to minItems");
+        tags.GetProperty("maxItems").GetInt32().Should().Be(20, "array [MaxLength] should map to maxItems");
+        tags.TryGetProperty("minLength", out _).Should().BeFalse("array properties must not emit minLength");
     }
 
     [Fact]
@@ -506,6 +511,43 @@ public class AppModelOpenApiOutputRenderingContextTests
 
         properties.GetProperty("Name").TryGetProperty("readOnly", out _).Should().BeFalse(
             "writable properties should not emit readOnly in schema components");
+    }
+
+    [Fact]
+    public void When_schema_component_array_property_has_length_constraints_then_output_emits_minItems_and_maxItems()
+    {
+        var context = CreateSyntheticOutputContext(
+            [],
+            [
+                new OpenApiSchemaComponentModel(
+                    "Sample.ResponseDto",
+                    "object",
+                    [],
+                    [
+                        new OpenApiSchemaComponentPropertyModel("Tags", "array", false, false, MinLength: 1, MaxLength: 10),
+                        new OpenApiSchemaComponentPropertyModel("Code", "string", false, false, MinLength: 4, MaxLength: 12),
+                    ]),
+            ]);
+
+        var doc = JsonDocument.Parse(context.Json);
+
+        var properties = doc.RootElement
+            .GetProperty("components")
+            .GetProperty("schemas")
+            .GetProperty("Sample_ResponseDto")
+            .GetProperty("properties");
+
+        var tags = properties.GetProperty("Tags");
+        tags.GetProperty("minItems").GetInt32().Should().Be(1, "array properties should use minItems, not minLength");
+        tags.GetProperty("maxItems").GetInt32().Should().Be(10, "array properties should use maxItems, not maxLength");
+        tags.TryGetProperty("minLength", out _).Should().BeFalse("array properties should not emit minLength");
+        tags.TryGetProperty("maxLength", out _).Should().BeFalse("array properties should not emit maxLength");
+
+        var code = properties.GetProperty("Code");
+        code.GetProperty("minLength").GetInt32().Should().Be(4, "string properties should still use minLength");
+        code.GetProperty("maxLength").GetInt32().Should().Be(12, "string properties should still use maxLength");
+        code.TryGetProperty("minItems", out _).Should().BeFalse("string properties should not emit minItems");
+        code.TryGetProperty("maxItems", out _).Should().BeFalse("string properties should not emit maxItems");
     }
 
     private static OpenApiOutputRenderingContext CreateOutputContext(BlueprintApp app)
