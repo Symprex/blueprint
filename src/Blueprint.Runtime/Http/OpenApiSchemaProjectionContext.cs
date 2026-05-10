@@ -112,9 +112,11 @@ public sealed record OpenApiSchemaProjectionContext(
         var minimum = GetMinimum(validationAttributes);
         var maximum = GetMaximum(validationAttributes);
         var isNullable = IsNullableProperty(property, nullabilityContext);
-        var format = MapFormat(property.PropertyType);
+        var format = MapFormatFromValidationAttributes(validationAttributes) ?? MapFormat(property.PropertyType);
         var enumValues = MapEnumValues(property.PropertyType);
         var description = GetPropertyDescription(property);
+        var isDeprecated = property.AttributeProvider is MemberInfo deprecatedMember
+            && deprecatedMember.IsDefined(typeof(ObsoleteAttribute), inherit: true);
 
         // Extract element type metadata for collection/dictionary properties so schema rendering
         // can emit "items" (arrays) or "additionalProperties" (dictionaries).
@@ -143,7 +145,8 @@ public sealed record OpenApiSchemaProjectionContext(
             additionalPropertiesKind,
             additionalPropertiesFormat,
             itemsSchemaName,
-            additionalPropertiesSchemaName);
+            additionalPropertiesSchemaName,
+            isDeprecated);
     }
 
     /// <summary>
@@ -361,6 +364,34 @@ public sealed record OpenApiSchemaProjectionContext(
         if (underlying == typeof(ulong))
         {
             return "int64";
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Extracts an OpenAPI format hint from well-known validation attributes. These override the
+    /// CLR type-based format when present, enabling <c>string</c> properties annotated with
+    /// <c>[EmailAddress]</c>, <c>[Phone]</c>, <c>[Url]</c>, or <c>[CreditCard]</c> to carry the
+    /// correct semantic format in the generated schema.
+    /// </summary>
+    private static string? MapFormatFromValidationAttributes(IReadOnlyList<ValidationAttribute> validationAttributes)
+    {
+        foreach (var attribute in validationAttributes)
+        {
+            switch (attribute)
+            {
+                case System.ComponentModel.DataAnnotations.EmailAddressAttribute:
+                case Blueprint.Validation.EmailAddressAttribute:
+                    return "email";
+                case PhoneAttribute:
+                    return "phone";
+                case System.ComponentModel.DataAnnotations.UrlAttribute:
+                case Blueprint.Validation.UrlAttribute:
+                    return "uri";
+                case CreditCardAttribute:
+                    return "credit-card";
+            }
         }
 
         return null;
@@ -772,6 +803,7 @@ public sealed record OpenApiSchemaModel(
 /// <param name="AdditionalPropertiesFormat">The OpenAPI format of dictionary values when they have a standard format mapping.</param>
 /// <param name="ItemsSchemaName">The component schema name for complex array element types, enabling <c>$ref</c> rendering.</param>
 /// <param name="AdditionalPropertiesSchemaName">The component schema name for complex dictionary value types, enabling <c>$ref</c> rendering.</param>
+/// <param name="IsDeprecated">Whether the property is deprecated (mapped from <see cref="ObsoleteAttribute"/>).</param>
 public sealed record OpenApiSchemaPropertyModel(
     string Name,
     OpenApiSchemaKind Kind,
@@ -793,7 +825,8 @@ public sealed record OpenApiSchemaPropertyModel(
     OpenApiSchemaKind? AdditionalPropertiesKind = null,
     string? AdditionalPropertiesFormat = null,
     string? ItemsSchemaName = null,
-    string? AdditionalPropertiesSchemaName = null);
+    string? AdditionalPropertiesSchemaName = null,
+    bool IsDeprecated = false);
 
 /// <summary>
 /// Describes the broad schema shape currently projected from serializer metadata.

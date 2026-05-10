@@ -877,6 +877,11 @@ public sealed record OpenApiOutputRenderingContext(
             writer.WriteBoolean("exclusiveMaximum", true);
         }
 
+        if (property.IsDeprecated)
+        {
+            writer.WriteBoolean("deprecated", true);
+        }
+
         writer.WriteEndObject();
     }
 
