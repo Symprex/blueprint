@@ -1447,6 +1447,35 @@ public class PropertyOwnershipModuleTests
     }
 
     [Fact]
+    public void When_route_has_catch_all_parameter_then_binds_correctly()
+    {
+        var result = CompileDescriptor(
+            """
+            [global::Blueprint.Model.Attributes.RootLink("/folders/{**FolderPath}/clone")]
+            public partial class CloneFolderCommand : ICommand<string>
+            {
+                public string FolderPath { get; set; }
+
+                public static Task<string> HandleAsync(CloneFolderCommand operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Where(static d => d.Id == "BPPO008")
+            .Should().BeEmpty("catch-all {**param} is valid route syntax");
+
+        var descriptorSource = result.Output
+            .Select(static t => t.ToString())
+            .FirstOrDefault(static s => s.Contains("CloneFolderCommandDescriptor") || s.Contains("OperationPropertyOwnershipFeatureData"));
+
+        descriptorSource.Should().NotBeNull();
+        descriptorSource!.Should().Contain("PropertyBindingSource.Route");
+        descriptorSource.Should().Contain("FolderPath");
+    }
+
+    [Fact]
     public void When_route_has_unclosed_brace_then_reports_BPPO008()
     {
         var result = CompileDescriptor(
