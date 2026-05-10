@@ -395,6 +395,14 @@
                     "items": {
                       "type": "string"
                     }
+                  },
+                  "mergeFields": {
+                    "type": "array",
+                    "nullable": true,
+                    "description": "Merge field definitions available in the template.",
+                    "items": {
+                      "type": "object"
+                    }
                   }
                 },
                 "required": [

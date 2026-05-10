@@ -113,4 +113,34 @@ public partial class CreateTemplateCommand : ICommand<ResourceEventResult<Templa
     /// </summary>
     [Description("Freeform tags for categorizing the template.")]
     public List<string>? Tags { get; set; }
+
+    /// <summary>
+    /// Optional merge field definitions for the template. Demonstrates OpenAPI array rendering
+    /// with <c>$ref</c> for complex element types — each item references the
+    /// <c>TemplateMergeFieldDto</c> component schema instead of inlining properties.
+    /// </summary>
+    [Description("Merge field definitions available in the template.")]
+    public List<TemplateMergeFieldDto>? MergeFields { get; set; }
+}
+
+/// <summary>
+/// A merge field definition for a template. Used to demonstrate OpenAPI <c>$ref</c>
+/// rendering for complex items inside a request body array property.
+/// </summary>
+public class TemplateMergeFieldDto
+{
+    /// <summary>
+    /// The placeholder key used in the template source (e.g. "FirstName").
+    /// </summary>
+    [Required]
+    [MaxLength(100)]
+    [Description("The placeholder key used in the template source.")]
+    public string? Key { get; set; }
+
+    /// <summary>
+    /// An optional default value to use when the merge field is not supplied at render time.
+    /// </summary>
+    [MaxLength(500)]
+    [Description("Default value when the merge field is not supplied.")]
+    public string? DefaultValue { get; set; }
 }

@@ -430,9 +430,10 @@ public sealed record OpenApiOperationRenderingContext(
             var valueType = dictInterface.GetGenericArguments()[1];
             var (additionalType, additionalFormat) = MapClrTypeToOpenApiSchema(valueType);
 
-            // When the value type maps to "object", it's a complex type that should use $ref.
-            var additionalSchemaRef = additionalType == "object" ? valueType.Name : null;
-            return (null, null, null, additionalType, additionalFormat, additionalSchemaRef);
+            // When the value type maps to "object", it's a complex type. We render as
+            // type: "object" inline rather than $ref because the component schemas section
+            // is populated from response projections and the type may not appear there.
+            return (null, null, null, additionalType, additionalFormat, null);
         }
 
         // Check for IEnumerable<T>.
@@ -443,9 +444,10 @@ public sealed record OpenApiOperationRenderingContext(
             var elementType = enumInterface.GetGenericArguments()[0];
             var (itemType, itemFormat) = MapClrTypeToOpenApiSchema(elementType);
 
-            // When the element type maps to "object", it's a complex type that should use $ref.
-            var itemSchemaRef = itemType == "object" ? elementType.Name : null;
-            return (itemType, itemFormat, itemSchemaRef, null, null, null);
+            // When the element type maps to "object", it's a complex type. We render as
+            // type: "object" inline rather than $ref because the component schemas section
+            // is populated from response projections and the type may not appear there.
+            return (itemType, itemFormat, null, null, null, null);
         }
 
         return (null, null, null, null, null, null);

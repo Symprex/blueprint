@@ -592,6 +592,28 @@ public class ReferenceAppOpenApiTests
             "primitive array element types should render with inline type, not $ref");
     }
 
+    [Fact]
+    public async Task When_body_property_is_array_of_complex_type_then_items_schema_renders_as_object()
+    {
+        var (json, _) = await InvokeOpenApiEndpointAsync();
+        using var doc = JsonDocument.Parse(json);
+
+        // CreateTemplateCommand (POST /templates) has List<TemplateMergeFieldDto> MergeFields
+        var templatesPath = doc.RootElement.GetProperty("paths").GetProperty("/templates");
+        var requestBody = templatesPath.GetProperty("post").GetProperty("requestBody");
+        var properties = requestBody.GetProperty("content").GetProperty("application/json")
+            .GetProperty("schema").GetProperty("properties");
+
+        var mergeFieldsProperty = properties.GetProperty("mergeFields");
+        mergeFieldsProperty.GetProperty("type").GetString().Should().Be("array");
+        mergeFieldsProperty.GetProperty("items").GetProperty("type").GetString().Should().Be("object",
+            "complex array element types should render as inline object type");
+
+        // Verify it does NOT have a $ref (no component schema for request-only types)
+        mergeFieldsProperty.GetProperty("items").TryGetProperty("$ref", out _)
+            .Should().BeFalse("request body complex types should not reference component schemas");
+    }
+
     private static async Task<(string Json, int StatusCode)> InvokeOpenApiEndpointAsync(
         Action<OpenApiInfoOptions>? configureOpenApi = null,
         Action<OpenApiOperationProcessorOptions>? configureOperationProcessors = null)
