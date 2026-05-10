@@ -178,6 +178,8 @@ public static class EndpointRouteBuilderExtensions
         private readonly ILogger<BlueprintApiRouter<TExec>> _logger;
         private readonly BlueprintHttpOptions _httpOptions;
         private readonly PathString _normalizedBasePath;
+        private readonly TExec _executor;
+        private readonly HttpOperationResultExecutor? _resultExecutor;
 
         public BlueprintApiRouter(
             IServiceProvider rootServiceProvider,
@@ -191,6 +193,10 @@ public static class EndpointRouteBuilderExtensions
             this._logger = logger;
             this._httpOptions = httpOptions;
             this._normalizedBasePath = new PathString("/" + basePath.TrimStart('/'));
+
+            // Cache singleton services that are resolved on every request
+            this._executor = rootServiceProvider.GetRequiredService<TExec>();
+            this._resultExecutor = rootServiceProvider.GetService<HttpOperationResultExecutor>();
         }
 
         public async Task RouteAsync(HttpContext httpContext)
@@ -226,9 +232,9 @@ public static class EndpointRouteBuilderExtensions
             var basePath = httpRequest.PathBase.Add(this._normalizedBasePath);
             apiContext.BaseUri = $"{httpRequest.Scheme}://{host}{basePath}";
 
-            var result = await nestedContainer.ServiceProvider.GetRequiredService<TExec>().GetPipeline(operation.OperationType).ExecuteAsync(apiContext);
+            var result = await this._executor.GetPipeline(operation.OperationType).ExecuteAsync(apiContext);
 
-            var operationResultExecutor = nestedContainer.ServiceProvider.GetService<HttpOperationResultExecutor>() ?? DefaultOperationResultExecutor;
+            var operationResultExecutor = this._resultExecutor ?? DefaultOperationResultExecutor;
             if (await operationResultExecutor.TryExecuteAsync(httpContext, apiContext, result, this._httpOptions) == false)
             {
                 // Legacy self-executing results still flow through the old path until the broader host-translation workstream lands.
