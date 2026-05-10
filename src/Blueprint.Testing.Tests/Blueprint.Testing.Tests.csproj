@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <Nullable>enable</Nullable>
+    <LangVersion>preview</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FluentAssertions" Version="7.2.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="NSubstitute" Version="5.3.0" />
+    <PackageReference Include="xunit" Version="2.9.3"/>
+    <PackageReference Include="xunit.runner.console" Version="2.9.3"/>
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2"/>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Blueprint.Testing\Blueprint.Testing.csproj" />
+    <ProjectReference Include="..\Blueprint.SourceGenerator.Sample\Blueprint.SourceGenerator.Sample.csproj" />
+    <ProjectReference Include="..\Blueprint.SourceGenerator\Blueprint.SourceGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\Blueprint.Runtime\Blueprint.Runtime.csproj" />
+  </ItemGroup>
+</Project>

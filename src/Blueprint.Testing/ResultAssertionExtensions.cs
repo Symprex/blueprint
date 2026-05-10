@@ -1,0 +1,131 @@
+using Blueprint.Runtime.Exec;
+
+namespace Blueprint.Testing;
+
+/// <summary>
+/// Provides assertion helper methods for <see cref="OperationResult"/> instances in test code.
+/// These are framework-agnostic (no dependency on FluentAssertions or xUnit) so any test
+/// framework can use them.
+/// </summary>
+public static class ResultAssertionExtensions
+{
+    /// <summary>
+    /// Asserts the result is an <see cref="OkResult{T}"/> and returns the unwrapped content.
+    /// Throws a descriptive exception if the result is a different type.
+    /// </summary>
+    /// <typeparam name="T">The expected content type.</typeparam>
+    /// <param name="result">The operation result to unwrap.</param>
+    /// <returns>The content value from the <see cref="OkResult{T}"/>.</returns>
+    public static T ShouldBeOk<T>(this OperationResult result) where T : notnull
+    {
+        ArgumentNullException.ThrowIfNull(result);
+
+        if (result is OkResult<T> okResult)
+        {
+            return okResult.Content;
+        }
+
+        if (result is ValidationFailedResult validationFailed)
+        {
+            var errors = validationFailed.Errors is { Count: > 0 }
+                ? string.Join("; ", validationFailed.Errors.Select(static e => $"[{e.Key}] {string.Join(", ", e.Value)}"))
+                : "(no errors)";
+
+            throw new BlueprintTestExecutionException(
+                $"Expected OkResult<{typeof(T).Name}> but got ValidationFailedResult. Errors: {errors}",
+                result);
+        }
+
+        throw new BlueprintTestExecutionException(
+            $"Expected OkResult<{typeof(T).Name}> but got {result.GetType().Name}.",
+            result);
+    }
+
+    /// <summary>
+    /// Asserts the result is a <see cref="ValidationFailedResult"/> and returns it for further assertions.
+    /// </summary>
+    /// <param name="result">The operation result.</param>
+    /// <returns>The validation failure result.</returns>
+    public static ValidationFailedResult ShouldBeValidationFailed(this OperationResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+
+        return result as ValidationFailedResult
+            ?? throw new BlueprintTestExecutionException(
+                $"Expected ValidationFailedResult but got {result.GetType().Name}.",
+                result);
+    }
+
+    /// <summary>
+    /// Asserts the result is a <see cref="ValidationFailedResult"/> that contains an error for the
+    /// specified property name. Checks both the <see cref="ValidationFailedResult.Errors"/> dictionary
+    /// and the <see cref="ValidationFailedResult.ValidationResults"/> member names.
+    /// </summary>
+    /// <param name="result">The operation result.</param>
+    /// <param name="propertyName">The property name expected in the validation errors.</param>
+    /// <returns>The validation failure result for further assertions.</returns>
+    public static ValidationFailedResult ShouldBeValidationFailedFor(
+        this OperationResult result,
+        string propertyName)
+    {
+        var validationFailed = result.ShouldBeValidationFailed();
+
+        // Check the Errors dictionary first (used when constructed from ValidationException)
+        if (validationFailed.Errors is { Count: > 0 } errors && errors.ContainsKey(propertyName))
+        {
+            return validationFailed;
+        }
+
+        // Fall back to checking ValidationResults member names (DataAnnotations path)
+        if (validationFailed.ValidationResults.Any(vr => vr.MemberNames.Contains(propertyName)))
+        {
+            return validationFailed;
+        }
+
+        var actualErrors = validationFailed.Errors is { Count: > 0 }
+            ? string.Join(", ", validationFailed.Errors.Keys)
+            : validationFailed.ValidationResults.Count > 0
+                ? string.Join(", ", validationFailed.ValidationResults.SelectMany(static vr => vr.MemberNames).Distinct())
+                : "(no errors)";
+
+        throw new BlueprintTestExecutionException(
+            $"Expected validation error for property '{propertyName}' but actual error properties are: {actualErrors}.",
+            result);
+    }
+
+    /// <summary>
+    /// Asserts the result is of the exact specified type and returns it cast.
+    /// </summary>
+    /// <typeparam name="TResult">The expected result type.</typeparam>
+    /// <param name="result">The operation result.</param>
+    /// <returns>The result cast to the expected type.</returns>
+    public static TResult ShouldBeResultType<TResult>(this OperationResult result)
+        where TResult : OperationResult
+    {
+        ArgumentNullException.ThrowIfNull(result);
+
+        return result as TResult
+            ?? throw new BlueprintTestExecutionException(
+                $"Expected {typeof(TResult).Name} but got {result.GetType().Name}.",
+                result);
+    }
+
+    /// <summary>
+    /// Asserts the result was successful (i.e., <see cref="OperationResult.WasSuccessful"/> is <c>true</c>).
+    /// </summary>
+    /// <param name="result">The operation result.</param>
+    /// <returns>The same result for chaining.</returns>
+    public static OperationResult ShouldBeSuccessful(this OperationResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+
+        if (!result.WasSuccessful)
+        {
+            throw new BlueprintTestExecutionException(
+                $"Expected successful result but got {result.GetType().Name} (WasSuccessful=false).",
+                result);
+        }
+
+        return result;
+    }
+}

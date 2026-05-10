@@ -1,0 +1,627 @@
+# Signature365 → Source-Generated Blueprint: Migration Playbook
+
+This document is the step-by-step guide for migrating all 22 Signature365 services from the legacy in-tree Blueprint framework to the new source-generated Blueprint.
+
+## Table of Contents
+
+1. [Migration Strategy](#migration-strategy)
+2. [Proof-of-Compatibility Approach](#proof-of-compatibility-approach)
+3. [Pre-Migration: Framework Gaps to Close](#pre-migration-framework-gaps-to-close)
+4. [Service-by-Service Migration Steps](#service-by-service-migration-steps)
+5. [OpenAPI & TypeScript Client Generation](#openapi--typescript-client-generation)
+6. [BlueprintHttpClient Migration](#blueprinthttpclient-migration)
+7. [Testing Infrastructure](#testing-infrastructure)
+8. [Rebus Integration](#rebus-integration)
+9. [Hangfire Integration](#hangfire-integration)
+10. [Marten Integration](#marten-integration)
+11. [Performance Validation](#performance-validation)
+12. [Rollback Strategy](#rollback-strategy)
+
+---
+
+## Migration Strategy
+
+### Approach: Worktree Playground + Incremental Service Migration
+
+We use a **Git worktree** of Signature365 as a migration playground. This avoids touching the main branch while giving us a real compilation target.
+
+```powershell
+# Create a migration worktree
+cd D:\Projects\Signature365
+git worktree add D:\Projects\Signature365-BlueprintMigration main -b blueprint-sourcegen-migration
+```
+
+### Migration Order (by dependency risk, lowest first)
+
+| Phase | Services | Rationale |
+|-------|----------|-----------|
+| **Phase 0** | Isolated contract project compilation test | Prove operations compile against new Blueprint |
+| **Phase 1** | HealthCheck / Analytics (simplest) | Fewest operations, minimal auth, no Rebus |
+| **Phase 2** | Templates, VCard, Partners (medium) | Moderate operation count, standard auth |
+| **Phase 3** | Portal, Billing, Import (complex) | Many operations, Rebus, Hangfire |
+| **Phase 4** | IdentityServer, AdminPortal (highest risk) | OAuth2 integration, job orchestration |
+| **Phase 5** | Gateway services | Depend on contract projects already migrated |
+| **Phase 6** | SMTP services | Domain-specific, may keep legacy Blueprint |
+
+---
+
+## Proof-of-Compatibility Approach
+
+### Step 1: Copy a Contract Project and Compile
+
+```powershell
+# Copy a small contract project to a temp location
+Copy-Item -Recurse D:\Projects\Signature365\src\Apps\Analytics\Symprex.Signature365.Analytics.Contract `
+  D:\Projects\blueprint-source-gen\.scratch\compat-test\Analytics.Contract
+
+# Create a minimal .csproj that references new Blueprint
+# Build and check for compile errors
+```
+
+**What we're testing:**
+- `ICommand<T>` / `IQuery<T>` interfaces compile
+- `[RootLink]`, `[SelfLink]`, `[Link]` attributes compile
+- `[Resource]`, `[FromResource]` attributes compile
+- `[HttpGet]`, `[HttpPost]` etc. compile
+- Return types (`OkResult<T>`, `ResourceEvent<T>`, `StatusCodeResult`, etc.) compile
+- `ApiResource` base class compiles
+
+### Step 2: Compile a Service Project
+
+Copy the simplest service (Analytics) alongside its contract, add new Blueprint references, and compile:
+
+```powershell
+# Check: does the generated executor compile?
+# Check: do handlers resolve correctly?
+# Check: does Startup.cs wire up with AddBlueprintApi<T, TExec>()?
+```
+
+### Step 3: Run Existing Tests Against New Blueprint
+
+```powershell
+# Copy the test project too
+# Re-target to new Blueprint
+# Run: do existing unit tests pass?
+```
+
+### Step 4: OpenAPI Shape Comparison
+
+```powershell
+# Start old service, capture OpenAPI JSON
+# Start new service, capture OpenAPI JSON
+# Diff the two — document breaking changes for TS client
+```
+
+---
+
+## Pre-Migration: Framework Gaps to Close
+
+Based on S365 analysis, these gaps need closing in `blueprint-source-gen` before migration:
+
+### Critical (Must Fix)
+
+| Gap | Description | Status |
+|-----|-------------|--------|
+| **InvokeAsync handler pattern** | S365 operations use `InvokeAsync()` instance methods with DI parameters, not separate `IApiOperationHandler<T>` classes. The source generator must support this "inline handler" pattern. | ✅ Already supported |
+| **`IReturn<T>` marker interface** | Used by `BlueprintHttpClient` to associate operations with response types. Need to confirm this compiles. | ⚠️ Verify |
+| **`{Auth:PropertyName}` resource key placeholders** | S365 uses `{Auth:AccountId}` in resource templates. Source gen must expand these from `IUserAuthorisationContext`. | ✅ Implemented (BPAU007/BPAU009) |
+| **`ResourceEvent<T>` return type** | S365 operations return `ResourceEvent<T>` extensively. Source gen must handle this as a valid result type. | ✅ Implemented |
+| **`ApiResource` base class** | S365 resources extend `ApiResource`. Must be available in new Blueprint. | ✅ Available in Runtime.Model |
+| **`StatusCodeResult` (legacy)** | S365 uses `StatusCodeResult` for non-content responses. Map to new `HttpStatusCodeResult`. | ⚠️ Verify/alias |
+| **`PlainTextResult`** | Used for proxied responses. | ✅ Implemented |
+| **`BlueprintHttpClient`** | Inter-service HTTP calls using operation metadata. Needs new implementation. | 🔴 Needs implementation |
+| **`TestApiOperationExecutor`** | In-memory test executor. Needs new equivalent. | 🔴 Needs implementation |
+
+### Important (Should Fix)
+
+| Gap | Description | Status |
+|-----|-------------|--------|
+| **Rebus integration package** | `Blueprint.Rebus` — message subscription, outbox pattern | 🔴 Needs package |
+| **Hangfire integration package** | `Blueprint.Tasks.Hangfire` — background task scheduling | 🔴 Needs package |
+| **`OperationsHandlerScanner`** | S365 convention: scan `ApiOperations` base classes for handler methods | ⚠️ May need migration guidance |
+| **NSwag → Built-in OpenAPI** | S365 uses NSwag for OpenAPI. New Blueprint has built-in OpenAPI. TypeScript client gen needs testing. | ⚠️ Compatibility check |
+| **`FromResourceAttribute` with path** | `[FromResource(typeof(X), "/Tenants/{Auth:AccountId}")]` — path override variant | ⚠️ Verify |
+| **`Link` attribute (non-self, non-root)** | `[Link(typeof(Resource), "/path", Rel = "name")]` — arbitrary HATEOAS links | ✅ Implemented |
+
+### Nice to Have
+
+| Gap | Description | Status |
+|-----|-------------|--------|
+| **`AppDefinition` pattern** | S365 uses `AppDefinition.Instance` for service-level configuration | Consumer-side pattern, no framework change needed |
+| **Convention test infrastructure** | `MustHaveResourceAttributesConventionSpecification` etc. | Consumer-side, document migration |
+| **`IRegistry` modular DI** | S365 uses `IRegistry` pattern for service discovery | Consumer-side, no framework change needed |
+
+---
+
+## Service-by-Service Migration Steps
+
+### Per-Service Checklist
+
+For each service, follow these steps:
+
+#### 1. Create the BlueprintApp Root
+
+```csharp
+// Before (legacy Startup.cs)
+services.AddBlueprintApi(b => b
+    .ConfigureCommon(AppDefinition.Instance)
+    .Http(h => { /* ... */ })
+    .Operations(o => o.ScanCallingAssembly())
+    .Executors(e => e.AddScanner<OperationsHandlerScanner>())
+);
+
+// After (new)
+// In a new file: AnalyticsBlueprintApp.cs
+[BlueprintAppScan(FromAssemblyOf = typeof(FindSentEmailsQuery))]
+public partial class AnalyticsBlueprintApp : BlueprintApp { }
+```
+
+#### 2. Make Operations Partial
+
+All operation classes need the `partial` keyword:
+
+```csharp
+// Before
+public class FindSentEmailsQuery : IQuery<FindSentEmailsQuery.Result> { ... }
+
+// After
+public partial class FindSentEmailsQuery : IQuery<FindSentEmailsQuery.Result> { ... }
+```
+
+**Automation:** The migration analyzer `BPMIG300` flags non-partial operations.
+
+#### 3. Update Attribute Namespaces
+
+```csharp
+// Before
+using Blueprint.Configuration;
+using Blueprint.Authorisation;
+
+// After
+using Blueprint.Model;
+using Blueprint.Model.Attributes;
+using Blueprint.Runtime.Model;
+```
+
+**Automation:** The codemod CLI handles namespace migration automatically.
+
+#### 4. Update Service Registration
+
+```csharp
+// Before
+services.AddBlueprintApi(b => { ... });
+app.UseBlueprintApi();
+
+// After
+services.AddBlueprintApi<AnalyticsBlueprintApp, AnalyticsBlueprintAppExecutor>(blueprint =>
+{
+    blueprint.AddAuditSink<S365AuditSink>();
+    blueprint.AddResourceAuthorizationProvider<S365ResourceAuthorizationProvider>();
+    blueprint.AddUserAuthorisationContextFactory<S365UserContextFactory>();
+    blueprint.AddBackgroundTaskScheduler<HangfireTaskScheduler>();
+    blueprint.AddUnitOfWork<MartenUnitOfWork>(); // if applicable
+});
+
+app.UseEndpoints(endpoints =>
+{
+    endpoints.MapBlueprintApi<AnalyticsBlueprintApp, AnalyticsBlueprintAppExecutor>(
+        "api/",
+        configureOpenApi: info =>
+        {
+            info.Title = "Analytics API";
+            info.Version = "1.0";
+        });
+});
+```
+
+#### 5. Update Project References
+
+```xml
+<!-- Before -->
+<ProjectReference Include="..\..\Blueprint\Blueprint\Blueprint.csproj" />
+<ProjectReference Include="..\..\Blueprint\Blueprint.Http\Blueprint.Http.csproj" />
+<ProjectReference Include="..\..\Blueprint\Blueprint.OpenApi\Blueprint.OpenApi.csproj" />
+
+<!-- After -->
+<ProjectReference Include="..\..\..\..\blueprint-source-gen\src\Blueprint.Runtime\Blueprint.Runtime.csproj" />
+<ProjectReference Include="..\..\..\..\blueprint-source-gen\src\Blueprint.Runtime.Model\Blueprint.Runtime.Model.csproj" />
+<ProjectReference Include="..\..\..\..\blueprint-source-gen\src\Blueprint.Validation\Blueprint.Validation.csproj" />
+<ProjectReference Include="..\..\..\..\blueprint-source-gen\src\Blueprint.SourceGenerator\Blueprint.SourceGenerator.csproj"
+                  OutputItemType="Analyzer"
+                  ReferenceOutputAssembly="false" />
+```
+
+#### 6. Migrate Handler Pattern
+
+S365 uses two handler patterns:
+
+**Pattern A: Inline `InvokeAsync`** (most common — ~600+ operations)
+```csharp
+// Already supported by source generator — no change needed
+public partial class LoadAnalyticsQuery : IQuery<ProxyResult>
+{
+    public async Task<ProxyResult> InvokeAsync(
+        IUserAuthorisationContext identity,
+        HttpRequest request,
+        CancellationToken token)
+    {
+        // Implementation unchanged
+    }
+}
+```
+
+**Pattern B: Separate handler class** (used via `OperationsHandlerScanner`)
+```csharp
+// Before: ApiOperations base class with convention-matched methods
+public class AnalyticsOperations : ApiOperations
+{
+    public async Task<Result> Handle(FindSentEmailsQuery query, ...) { ... }
+}
+
+// After: Implement IApiOperationHandler<T> explicitly
+public class AnalyticsOperations : IApiOperationHandler<FindSentEmailsQuery>
+{
+    public async ValueTask<object> Handle(
+        FindSentEmailsQuery operation,
+        ApiOperationContext context)
+    {
+        // Implementation adapted
+    }
+}
+```
+
+#### 7. Verify and Run Tests
+
+```powershell
+# Build the service
+dotnet build
+
+# Run unit tests
+dotnet test
+
+# Compare OpenAPI output
+# Run integration tests
+```
+
+---
+
+## OpenAPI & TypeScript Client Generation
+
+### Current S365 Setup
+- Uses NSwag (`NSwag.AspNetCore`, `NSwag.CodeGeneration.TypeScript`)
+- 23+ projects reference NSwag
+- TypeScript API clients are generated from OpenAPI specs
+- Custom `BlueprintLinkSchemaProcessor` for HATEOAS link schemas
+
+### Migration Path
+
+1. **Keep NSwag for TS generation**: New Blueprint's built-in OpenAPI replaces NSwag's *server-side* doc generation, but NSwag CLI can still consume the OpenAPI JSON to generate TypeScript clients.
+
+2. **Verify OpenAPI shape compatibility**:
+   ```powershell
+   # Start old service, save spec
+   curl http://localhost:5000/openapi -o old-spec.json
+
+   # Start new service, save spec
+   curl http://localhost:5000/api/.blueprint/openapi.json -o new-spec.json
+
+   # Compare with openapi-diff or manual review
+   npx openapi-diff old-spec.json new-spec.json
+   ```
+
+3. **Key differences to document**:
+   - Endpoint path: `/openapi` → `/api/.blueprint/openapi.json`
+   - HATEOAS link schemas: New Blueprint renders `_links` in schema definitions differently
+   - `operationId` format: May differ (new uses C# type name directly)
+   - Response shapes: `200 OK` vs `201 Created` — new Blueprint infers from result types
+   - Security scheme: New Blueprint writes `bearerAuth` with document-level hoisting
+
+4. **TS client generation command** (post-migration):
+   ```powershell
+   # Use NSwag CLI to generate from new Blueprint's OpenAPI
+   nswag openapi2tsclient /input:http://localhost:5000/api/.blueprint/openapi.json /output:api-client.ts
+   ```
+
+### Action Items
+- [ ] Create an OpenAPI comparison test that captures old vs new specs
+- [ ] Document any breaking changes for frontend team
+- [ ] Test NSwag TS generation against new OpenAPI output
+
+---
+
+## BlueprintHttpClient Migration
+
+### Current Architecture
+- `BlueprintHttpClient` wraps `HttpClient` for typed inter-service calls
+- Operations implement `IReturn<TResponse>` marker interface
+- Client reads operation metadata (`ApiDataModel`) to build HTTP requests
+- Handles JSON serialization, validation errors (422), and API errors (4xx+)
+- 238 lines of implementation in `Symprex.Signature365.Common.Core`
+
+### New Architecture
+
+**Option A: Source-Generated HTTP Client** (preferred)
+The source generator can emit a typed HTTP client per `BlueprintApp`:
+
+```csharp
+// Generated: AnalyticsBlueprintAppHttpClient
+public sealed class AnalyticsBlueprintAppHttpClient
+{
+    // Generated per-operation methods with typed input/output
+    public Task<FindSentEmailsQuery.Result> CallAsync(
+        FindSentEmailsQuery query,
+        CallOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        // Generated: knows the HTTP method, URL template, and response type at compile time
+        // No reflection, no ApiDataModel lookup
+    }
+}
+```
+
+**Option B: Runtime Client with Generated Metadata** (simpler migration)
+Keep `BlueprintHttpClient` but feed it source-generated metadata instead of runtime-discovered metadata. The client reads from `BlueprintApp.Operations` instead of `ApiDataModel`.
+
+### Action Items
+- [ ] Create `Blueprint.HttpClient` project in blueprint-source-gen
+- [ ] Add second sample project (`Blueprint.SourceGenerator.Sample.Client`) for integration testing
+- [ ] Implement typed HTTP client that uses generated descriptors
+- [ ] Test with inter-service call scenarios
+- [ ] Benchmark against legacy client
+
+---
+
+## Testing Infrastructure
+
+### Current S365 Testing
+- `TestApiOperationExecutor`: In-memory executor for unit tests
+- `ApiOperationContextSetup`: Fluent context builder
+- `ResultTestingExtensions`: Result type assertions
+- 42 test projects, xUnit + FluentAssertions + NSubstitute
+
+### New Testing Infrastructure
+
+We need to provide:
+
+1. **`BlueprintTestExecutor<TApp, TExec>`** — In-memory executor
+   ```csharp
+   var executor = BlueprintTestExecutor.Create<MyApp, MyAppExecutor>(
+       services => { /* register test doubles */ });
+
+   var result = await executor.ExecuteAsync(new GetTemplateQuery { Id = "123" });
+   result.Should().BeOfType<OkResult<Template>>();
+   ```
+
+2. **`BlueprintTestContext`** — Test context builder
+   ```csharp
+   var context = executor.CreateContext(new GetTemplateQuery { Id = "123" })
+       .WithUser(claims => claims.AddClaim("sub", "user-1"))
+       .WithService<ITemplateStore>(mockStore);
+   ```
+
+3. **Assertion extensions** — For result types
+   ```csharp
+   result.ShouldBeOk<Template>(t => t.Id.Should().Be("123"));
+   result.ShouldBeNotFound();
+   result.ShouldBeValidationFailed("Name", "Name is required");
+   ```
+
+### Action Items
+- [ ] Create `Blueprint.Testing` project in blueprint-source-gen
+- [ ] Implement `BlueprintTestExecutor` using generated pipelines
+- [ ] Implement context builder with user/service configuration
+- [ ] Implement result assertion extensions
+- [ ] Port key S365 test patterns to validate infrastructure
+
+---
+
+## Rebus Integration
+
+### Current S365 Pattern
+```csharp
+// Startup
+.RebusConsumer(c =>
+{
+    c.Subscribe<TenantSignedUpEvent>();
+    c.Subscribe<ImportRunStartedEvent>();
+    // ... 17+ subscriptions per service
+})
+
+// BlueprintRebusConfiguration registers Rebus message types as Blueprint operations
+// Messages are dispatched through the Blueprint pipeline (validation, auth, etc.)
+```
+
+### New Blueprint Integration
+
+Create `Blueprint.Rebus` package:
+
+```csharp
+// New registration
+services.AddBlueprintApi<MyApp, MyAppExecutor>(blueprint =>
+{
+    blueprint.AddRebus(rebus =>
+    {
+        rebus.Subscribe<TenantSignedUpEvent>();
+        rebus.Subscribe<ImportRunStartedEvent>();
+    });
+});
+```
+
+**Implementation:**
+- Rebus message handler that dispatches to Blueprint pipeline
+- Message types registered as Blueprint operations
+- Outbox pattern integration with `IMessageOutbox`
+- Transaction coordination with UnitOfWork
+
+### Action Items
+- [ ] Create `Blueprint.Rebus` project
+- [ ] Implement `BlueprintRebusMessageHandler`
+- [ ] Implement `AddRebus()` extension on `BlueprintServiceBuilder`
+- [ ] Add Rebus integration tests to sample app
+- [ ] Test with Azure Service Bus transport
+
+---
+
+## Hangfire Integration
+
+### Current S365 Pattern
+```csharp
+// BlueprintTasksBuilder.UseHangfire() registers:
+// - IBackgroundTaskScheduleProvider (HangfireBackgroundTaskScheduleProvider)
+// - IRecurringTaskProvider (HangfireRecurringTaskProvider)
+```
+
+### New Blueprint Integration
+
+Create `Blueprint.Tasks.Hangfire` package:
+
+```csharp
+services.AddBlueprintApi<MyApp, MyAppExecutor>(blueprint =>
+{
+    blueprint.AddBackgroundTaskScheduler<HangfireBackgroundTaskScheduler>();
+    blueprint.AddRecurringTaskProvider<HangfireRecurringTaskProvider>();
+});
+```
+
+### Action Items
+- [ ] Create `Blueprint.Tasks.Hangfire` project
+- [ ] Implement `HangfireBackgroundTaskScheduler : IBackgroundTaskScheduler`
+- [ ] Implement recurring task support
+- [ ] Add Hangfire integration to sample app
+- [ ] Test job scheduling and execution
+
+---
+
+## Marten Integration
+
+### Current S365 Pattern
+- Marten used for event sourcing in Portal/EventStore
+- Not directly integrated with Blueprint pipeline
+- Uses standard DI + `IDocumentSession`
+
+### New Blueprint Integration
+- Implement `MartenUnitOfWork : IUnitOfWork` that calls `SaveChangesAsync`
+- Register via `blueprint.AddUnitOfWork<MartenUnitOfWork>()`
+- Pipeline automatically commits after successful handler execution
+
+### Action Items
+- [ ] Create `Blueprint.Marten` project (or document inline pattern)
+- [ ] Implement `MartenUnitOfWork : IUnitOfWork`
+- [ ] Test with sample event store scenario
+
+---
+
+## Performance Validation
+
+### Comparison Testing Strategy
+
+Use **NBomber** for load testing and **BenchmarkDotNet** for micro-benchmarks.
+
+#### NBomber Load Tests
+
+```
+tests/Blueprint.Performance.LoadTests/
+├── Scenarios/
+│   ├── SimpleQueryScenario.cs      # GET /health — baseline
+│   ├── AuthenticatedQueryScenario.cs # GET /templates/{id} — with JWT
+│   ├── CommandScenario.cs          # POST /templates — with body + validation
+│   ├── ValidationFailureScenario.cs # POST with invalid body
+│   └── InterServiceCallScenario.cs  # BlueprintHttpClient call
+├── LegacyBaseline/                  # Same scenarios against old Blueprint
+│   └── ...
+└── Reports/                         # Auto-generated comparison reports
+```
+
+#### BenchmarkDotNet Micro-Benchmarks
+
+```
+tests/Blueprint.Performance.Benchmarks/
+├── PipelineExecutionBenchmark.cs   # Execute pipeline directly
+├── ValidationBenchmark.cs          # Validation fast-path vs runtime
+├── SerializationBenchmark.cs       # JSON response serialization
+├── OpenApiRenderingBenchmark.cs    # OpenAPI document generation
+├── DescriptorLookupBenchmark.cs    # Operation descriptor resolution
+├── SourceGeneratorBenchmark.cs     # Generator compilation time
+└── Results/                        # Saved benchmark results
+```
+
+#### Profiling
+
+```powershell
+# CPU profiling with dotnet-trace
+dotnet-trace collect --process-id <pid> --providers Microsoft-DotNETCore-SampleProfiler
+
+# Allocation profiling
+dotnet-trace collect --process-id <pid> --providers Microsoft-Windows-DotNETRuntime:0x1:5
+
+# Generator compilation profiling
+dotnet build -bl  # binary log
+dotnet-trace collect -- dotnet build src/Blueprint.SourceGenerator.Sample/...
+```
+
+### Key Metrics to Compare
+
+| Metric | Legacy Blueprint | New Blueprint | Target |
+|--------|-----------------|---------------|--------|
+| Requests/sec (simple query) | TBD | TBD | ≥ legacy |
+| P99 latency (query) | TBD | TBD | ≤ legacy |
+| P99 latency (command) | TBD | TBD | ≤ legacy |
+| Memory per request | TBD | TBD | < legacy |
+| Startup time | TBD | TBD | ≤ legacy |
+| Compilation time (generator) | N/A | TBD | < 5s for 100 ops |
+| Validation failure (no exception) | TBD | TBD | 10x faster (no throw) |
+
+### Action Items
+- [ ] Create `Blueprint.Performance.LoadTests` project with NBomber
+- [ ] Create `Blueprint.Performance.Benchmarks` project with BenchmarkDotNet
+- [ ] Run baseline benchmarks against legacy Blueprint
+- [ ] Run benchmarks against new Blueprint
+- [ ] Document comparison in `docs/performance/`
+- [ ] Profile generator compilation with dotnet-trace
+- [ ] Profile runtime pipeline execution
+
+---
+
+## Rollback Strategy
+
+Since migration uses a Git worktree:
+- Main S365 branch is untouched until migration is proven
+- Each service migration is a separate PR
+- If a service has issues, revert its PR independently
+- Legacy Blueprint source stays in-tree until all services are migrated
+- Both old and new Blueprint can coexist temporarily (different namespace prefixes if needed)
+
+---
+
+## Appendix: File Inventory
+
+### S365 Operation Counts by Service
+
+| Service | Queries | Commands | Total |
+|---------|---------|----------|-------|
+| Portal | ~80 | ~100 | ~180 |
+| Billing | ~15 | ~25 | ~40 |
+| Templates | ~20 | ~15 | ~35 |
+| IdentityServer | ~15 | ~20 | ~35 |
+| Import | ~10 | ~15 | ~25 |
+| Analytics | ~8 | ~5 | ~13 |
+| Microsoft365 | ~10 | ~10 | ~20 |
+| VCard | ~5 | ~8 | ~13 |
+| Partners | ~5 | ~8 | ~13 |
+| EventStore | ~5 | ~5 | ~10 |
+| ExchangeTransportAgent | ~5 | ~5 | ~10 |
+| Outlook | ~5 | ~5 | ~10 |
+| Subscriptions | ~5 | ~5 | ~10 |
+| AdminPortal | ~10 | ~15 | ~25 |
+| **Total** | **~198** | **~241** | **~648** |
+
+### Key S365 Files to Reference
+
+| File | Purpose |
+|------|---------|
+| `src/Core/Symprex.Signature365.Common.Core/Api/BlueprintHttpClient.cs` | Inter-service HTTP client |
+| `src/Core/Symprex.Signature365.Common/Configuration/BlueprintApiBuilderExtensions.cs` | Common Blueprint config |
+| `src/Core/Symprex.Signature365.BlueprintRebus/BlueprintRebusConfiguration.cs` | Rebus integration |
+| `src/Blueprint/Blueprint.Tasks.Hangfire/BlueprintTasksBuilderExtensions.cs` | Hangfire integration |
+| `src/Blueprint/Blueprint.Testing/TestApiOperationExecutor.cs` | Test executor |
+| `src/Core/Symprex.Signature365.Common.Core/Authorisation/ResourceAttribute.cs` | Auth attributes |
