@@ -663,7 +663,8 @@ public sealed record OpenApiSchemaProjectionContext(
         JsonPropertyInfo property,
         IReadOnlyDictionary<string, IReadOnlyList<ValidationAttribute>> validationAttributesByJsonPropertyName)
     {
-        if (property.AttributeProvider?.GetCustomAttributes(inherit: true).OfType<ValidationAttribute>().ToArray() is { Length: > 0 } attributes)
+        if (property.AttributeProvider?.GetCustomAttributes(inherit: true) is { } allAttrs
+            && OpenApiValidationConstraints.FilterValidationAttributes(allAttrs) is { Count: > 0 } attributes)
         {
             return attributes;
         }
@@ -704,7 +705,7 @@ public sealed record OpenApiSchemaProjectionContext(
             .Where(static property => property.GetMethod is not null && property.GetIndexParameters().Length == 0)
             .ToFrozenDictionary(
                 property => GetJsonPropertyName(property, serializerContext.Options),
-                static property => (IReadOnlyList<ValidationAttribute>)property.GetCustomAttributes(inherit: true).OfType<ValidationAttribute>().ToArray(),
+                static property => (IReadOnlyList<ValidationAttribute>)OpenApiValidationConstraints.FilterValidationAttributes(property.GetCustomAttributes(inherit: true)),
                 StringComparer.Ordinal);
     }
 

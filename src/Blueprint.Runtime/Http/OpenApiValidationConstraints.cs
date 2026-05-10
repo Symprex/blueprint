@@ -70,8 +70,9 @@ internal sealed record OpenApiValidationConstraints(
             return None;
         }
 
-        var attributes = property.GetCustomAttributes(inherit: true).OfType<ValidationAttribute>().ToArray();
-        if (attributes.Length == 0)
+        var allAttributes = property.GetCustomAttributes(inherit: true);
+        var attributes = FilterValidationAttributes(allAttributes);
+        if (attributes.Count == 0)
         {
             return None;
         }
@@ -292,5 +293,28 @@ internal sealed record OpenApiValidationConstraints(
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Filters an <see cref="Attribute.GetCustomAttributes(MemberInfo, bool)"/> result array to only
+    /// <see cref="ValidationAttribute"/> instances without the intermediate LINQ <c>OfType</c> + <c>ToArray</c>
+    /// allocation on the hot path.
+    /// </summary>
+    /// <param name="allAttributes">The raw attribute array from reflection.</param>
+    /// <returns>A read-only list containing only the <see cref="ValidationAttribute"/> instances, or an empty list.</returns>
+    internal static IReadOnlyList<ValidationAttribute> FilterValidationAttributes(object[] allAttributes)
+    {
+        List<ValidationAttribute>? result = null;
+
+        for (var i = 0; i < allAttributes.Length; i++)
+        {
+            if (allAttributes[i] is ValidationAttribute va)
+            {
+                result ??= new List<ValidationAttribute>(allAttributes.Length - i);
+                result.Add(va);
+            }
+        }
+
+        return result ?? (IReadOnlyList<ValidationAttribute>)[];
     }
 }

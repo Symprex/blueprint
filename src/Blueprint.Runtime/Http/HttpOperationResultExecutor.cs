@@ -264,7 +264,9 @@ public class HttpOperationResultExecutor
 
         var runtimeResultTypeNames = _resultTypeNamesCache.GetOrAdd(result.GetType(), static resultType =>
         {
-            var names = new HashSet<string>(4, StringComparer.Ordinal);
+            // Build a small array of ancestor type names, then freeze directly
+            // to avoid the intermediate HashSet allocation.
+            var names = new List<string>(4);
             for (var current = resultType; current is not null; current = current.BaseType)
             {
                 if (current.FullName is { } fullName)

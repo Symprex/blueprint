@@ -20,7 +20,9 @@ public class ValidationFailedResult : OperationResult
     {
         ArgumentNullException.ThrowIfNull(validationResults);
 
-        this.ValidationResults = validationResults as List<ValidationResult> ?? validationResults.ToList();
+        this.ValidationResults = validationResults is List<ValidationResult> list
+            ? list
+            : new List<ValidationResult>(validationResults);
     }
 
     /// <summary>
