@@ -663,6 +663,26 @@ public class ReferenceAppOpenApiTests
     }
 
     [Fact]
+    public async Task When_body_property_has_writeOnly_attribute_then_schema_emits_writeOnly()
+    {
+        var (json, _) = await InvokeOpenApiEndpointAsync();
+        using var doc = JsonDocument.Parse(json);
+
+        // ChangePasswordCommand (PUT /account/password) has [OpenApiWriteOnly] on all password fields
+        var passwordPath = doc.RootElement.GetProperty("paths").GetProperty("/account/password");
+        var requestBody = passwordPath.GetProperty("put").GetProperty("requestBody");
+        var properties = requestBody.GetProperty("content").GetProperty("application/json")
+            .GetProperty("schema").GetProperty("properties");
+
+        properties.GetProperty("currentPassword").GetProperty("writeOnly").GetBoolean()
+            .Should().BeTrue("password fields marked with [OpenApiWriteOnly] should emit writeOnly: true");
+        properties.GetProperty("newPassword").GetProperty("writeOnly").GetBoolean()
+            .Should().BeTrue();
+        properties.GetProperty("confirmNewPassword").GetProperty("writeOnly").GetBoolean()
+            .Should().BeTrue();
+    }
+
+    [Fact]
     public async Task When_body_property_is_array_of_primitives_then_items_schema_uses_inline_type()
     {
         var (json, _) = await InvokeOpenApiEndpointAsync();

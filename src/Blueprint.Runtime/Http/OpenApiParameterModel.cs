@@ -147,4 +147,7 @@ public sealed record OpenApiRequestBodyPropertyModel(
 
     /// <summary>Gets the component schema name for complex dictionary values, rendered as a <c>$ref</c> instead of an inline type.</summary>
     public string? AdditionalPropertiesSchemaRef { get; init; }
+
+    /// <summary>Gets whether this property is write-only (annotated with <see cref="Blueprint.Model.Attributes.OpenApiWriteOnlyAttribute"/>).</summary>
+    public bool IsWriteOnly { get; init; }
 }

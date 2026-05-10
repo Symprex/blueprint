@@ -33,6 +33,7 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
     public void ContributeToDescriptor(DescriptorContributorContext context)
     {
         ValidateReferencedPropertyAttributes(context);
+        ValidateIValidatableObjectFallback(context);
     }
 
     /// <inheritdoc />
@@ -125,6 +126,7 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
             ValidateConflictingRanges(context, operationType.Name, property);
             ValidateEmptyRegexPattern(context, operationType.Name, property);
             ValidateRedundantRequiredOnValueType(context, operationType.Name, property);
+            ValidateConflictingRequiredAndDefault(context, operationType.Name, property);
         }
     }
 
@@ -322,6 +324,69 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
                         [property.Name, operationTypeName, property.Type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)]));
             }
         }
+    }
+
+    /// <summary>
+    /// Emits BPV013 when the operation implements <c>IValidatableObject</c>, which forces
+    /// runtime validation fallback instead of compile-time generated checks.
+    /// </summary>
+    private static void ValidateIValidatableObjectFallback(DescriptorContributorContext context)
+    {
+        var operationType = context.GetOperationTypeSymbol();
+
+        if (!operationType.AllInterfaces.Any(
+                static i => i.ToDisplayString() == "System.ComponentModel.DataAnnotations.IValidatableObject"))
+        {
+            return;
+        }
+
+        context.AddDiagnostic(
+            new DiagnosticInfo(
+                ValidationDiagnosticDescriptors.ValidatableObjectFallback,
+                operationType.Locations.FirstOrDefault(),
+                [operationType.Name]));
+    }
+
+    /// <summary>
+    /// Emits BPV014 when <c>[Required]</c> and <c>[DefaultValue]</c> are both applied to the
+    /// same property, creating a contradictory contract where Required can never fail.
+    /// </summary>
+    private static void ValidateConflictingRequiredAndDefault(
+        DescriptorContributorContext context,
+        string operationTypeName,
+        IPropertySymbol property)
+    {
+        var attributes = property.GetAttributes();
+        AttributeData? requiredAttr = null;
+        object? defaultValue = null;
+
+        foreach (var attr in attributes)
+        {
+            if (ValidationSymbolHelpers.IsRequiredAttribute(attr.AttributeClass))
+            {
+                requiredAttr = attr;
+            }
+
+            if (attr.AttributeClass?.ToDisplayString() == "System.ComponentModel.DefaultValueAttribute"
+                && attr.ConstructorArguments.Length >= 1)
+            {
+                defaultValue = attr.ConstructorArguments[0].Value;
+            }
+        }
+
+        if (requiredAttr is null || defaultValue is null)
+        {
+            return;
+        }
+
+        var location = requiredAttr.ApplicationSyntaxReference?.GetSyntax().GetLocation()
+                       ?? property.Locations.FirstOrDefault();
+
+        context.AddDiagnostic(
+            new DiagnosticInfo(
+                ValidationDiagnosticDescriptors.ConflictingRequiredAndDefault,
+                location,
+                [property.Name, operationTypeName, defaultValue.ToString() ?? "null"]));
     }
 
     /// <summary>

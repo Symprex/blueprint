@@ -21,17 +21,20 @@
                 "properties": {
                   "currentPassword": {
                     "type": "string",
-                    "description": "The current password."
+                    "description": "The current password.",
+                    "writeOnly": true
                   },
                   "newPassword": {
                     "type": "string",
                     "description": "The new password.",
                     "minLength": 8,
-                    "maxLength": 128
+                    "maxLength": 128,
+                    "writeOnly": true
                   },
                   "confirmNewPassword": {
                     "type": "string",
-                    "description": "Re-enter the new password for confirmation."
+                    "description": "Re-enter the new password for confirmation.",
+                    "writeOnly": true
                   }
                 },
                 "required": [

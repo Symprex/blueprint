@@ -75,7 +75,8 @@ public sealed record OpenApiSchemaComponentRenderingContext(
             property.DeprecationReason,
             property.DefaultValue,
             property.ExampleValue,
-            property.IsReadOnly);
+            property.IsReadOnly,
+            property.IsWriteOnly);
     }
 
     private static string? MapType(OpenApiSchemaKind kind)
@@ -137,6 +138,7 @@ public sealed record OpenApiSchemaComponentModel(
 /// <param name="DefaultValue">The default value from <see cref="System.ComponentModel.DefaultValueAttribute"/>, or null.</param>
 /// <param name="ExampleValue">A representative example value from <see cref="Blueprint.Model.Attributes.OpenApiExampleAttribute"/>, or null.</param>
 /// <param name="IsReadOnly">Whether this property is read-only (no public setter or <c>[ReadOnly(true)]</c>).</param>
+/// <param name="IsWriteOnly">Whether this property is write-only (<c>[OpenApiWriteOnly]</c>, e.g. a password field).</param>
 public sealed record OpenApiSchemaComponentPropertyModel(
     string Name,
     string? Type,
@@ -162,4 +164,5 @@ public sealed record OpenApiSchemaComponentPropertyModel(
     string? DeprecationReason = null,
     object? DefaultValue = null,
     object? ExampleValue = null,
-    bool IsReadOnly = false);
+    bool IsReadOnly = false,
+    bool IsWriteOnly = false);

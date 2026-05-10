@@ -185,6 +185,7 @@ public sealed record OpenApiOperationRenderingContext(
             var propertyDeprecationReason = obsoletePropertyAttr?.Message;
             var defaultValueAttr = clrProperty?.GetCustomAttribute<System.ComponentModel.DefaultValueAttribute>();
             var exampleValueAttr = clrProperty?.GetCustomAttribute<Blueprint.Model.Attributes.OpenApiExampleAttribute>();
+            var isWriteOnly = clrProperty?.GetCustomAttribute<Blueprint.Model.Attributes.OpenApiWriteOnlyAttribute>() is not null;
 
             switch (entry.Source)
             {
@@ -313,6 +314,7 @@ public sealed record OpenApiOperationRenderingContext(
                         DeprecationReason = propertyDeprecationReason,
                         DefaultValue = defaultValueAttr?.Value,
                         ExampleValue = exampleValueAttr?.Value,
+                        IsWriteOnly = isWriteOnly,
                     });
                     break;
             }

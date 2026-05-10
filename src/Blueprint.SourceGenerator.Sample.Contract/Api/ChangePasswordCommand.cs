@@ -26,6 +26,7 @@ public partial class ChangePasswordCommand : ICommand<NoResultOperationResult>
     /// </summary>
     [Required]
     [Description("The current password.")]
+    [OpenApiWriteOnly]
     public string? CurrentPassword { get; set; }
 
     /// <summary>
@@ -37,6 +38,7 @@ public partial class ChangePasswordCommand : ICommand<NoResultOperationResult>
     [Required]
     [Length(8, 128)]
     [Description("The new password.")]
+    [OpenApiWriteOnly]
     public string? NewPassword { get; set; }
 
     /// <summary>
@@ -45,5 +47,6 @@ public partial class ChangePasswordCommand : ICommand<NoResultOperationResult>
     [Required]
     [Compare(nameof(NewPassword))]
     [Description("Re-enter the new password for confirmation.")]
+    [OpenApiWriteOnly]
     public string? ConfirmNewPassword { get; set; }
 }

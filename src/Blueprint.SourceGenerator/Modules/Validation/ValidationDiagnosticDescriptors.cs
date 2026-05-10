@@ -154,4 +154,30 @@ internal static class ValidationDiagnosticDescriptors
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
         description: "Applying [Required] to a non-nullable value type (int, bool, Guid, etc.) has no effect because the property can never be null. Use a nullable type (e.g. int?) if the property should be optional, or remove the attribute to reduce noise.");
+
+    /// <summary>
+    /// Gets the diagnostic emitted when an operation implements <c>IValidatableObject</c>,
+    /// which prevents compile-time validation generation and forces runtime fallback.
+    /// </summary>
+    public static readonly DiagnosticDescriptor ValidatableObjectFallback = new(
+        id: "BPV013",
+        title: "IValidatableObject prevents compile-time validation",
+        messageFormat: "Operation '{0}' implements IValidatableObject, which forces runtime validation fallback instead of compile-time generated checks — consider using property-level validation attributes for better performance",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Info,
+        isEnabledByDefault: true,
+        description: "Operations that implement IValidatableObject bypass the source-generated validation fast path and fall back to runtime DataAnnotation validation. Property-level attributes can be fully source-generated for better startup and request performance.");
+
+    /// <summary>
+    /// Gets the diagnostic emitted when <c>[Required]</c> and <c>[DefaultValue]</c> are both
+    /// applied to the same property, creating a contradictory contract.
+    /// </summary>
+    public static readonly DiagnosticDescriptor ConflictingRequiredAndDefault = new(
+        id: "BPV014",
+        title: "[Required] conflicts with [DefaultValue]",
+        messageFormat: "Property '{0}' on operation '{1}' has both [Required] and [DefaultValue({2})], which is contradictory — the property can never fail the Required check because the model binder will use the default value",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "Applying both [Required] and [DefaultValue] to the same property is contradictory: the model binder fills in the default value before validation runs, so the Required check can never fail. Remove one of the attributes to clarify intent.");
 }

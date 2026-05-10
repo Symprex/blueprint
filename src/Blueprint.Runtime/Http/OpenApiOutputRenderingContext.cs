@@ -443,6 +443,11 @@ public sealed record OpenApiOutputRenderingContext(
                     }
                 }
 
+                if (property.IsWriteOnly)
+                {
+                    writer.WriteBoolean("writeOnly", true);
+                }
+
                 if (property.DefaultValue is not null)
                 {
                     WriteDefaultValue(writer, property.DefaultValue);
@@ -1012,6 +1017,11 @@ public sealed record OpenApiOutputRenderingContext(
         if (property.IsReadOnly)
         {
             writer.WriteBoolean("readOnly", true);
+        }
+
+        if (property.IsWriteOnly)
+        {
+            writer.WriteBoolean("writeOnly", true);
         }
 
         if (property.DefaultValue is not null)

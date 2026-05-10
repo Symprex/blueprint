@@ -116,7 +116,7 @@ public static class EndpointRouteBuilderExtensions
                 var builder = endpoints.Map(RoutePatternFactory.Parse(basePath.TrimEnd('/') + url.UrlFormat), requestDelegate);
                 builder.WithMetadata(operation);
                 builder.WithMetadata(new HttpMethodMetadata(httpMethods));
-                builder.WithDisplayName($"{string.Join("|", httpMethods)} {operation.Name}");
+                builder.WithDisplayName(string.Concat(string.Join('|', httpMethods), " ", operation.Name));
 
                 builders.Add(builder);
             }

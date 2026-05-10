@@ -139,6 +139,8 @@ public sealed record OpenApiSchemaProjectionContext(
             ? exampleMember.GetCustomAttribute<Blueprint.Model.Attributes.OpenApiExampleAttribute>()?.Value
             : null;
         var isReadOnly = IsReadOnlyProperty(property, bodyType);
+        var isWriteOnly = property.AttributeProvider is MemberInfo writeOnlyMember
+            && writeOnlyMember.GetCustomAttribute<Blueprint.Model.Attributes.OpenApiWriteOnlyAttribute>() is not null;
 
         // Extract element type metadata for collection/dictionary properties so schema rendering
         // can emit "items" (arrays) or "additionalProperties" (dictionaries).
@@ -172,7 +174,8 @@ public sealed record OpenApiSchemaProjectionContext(
             deprecationReason,
             defaultValue,
             exampleValue,
-            isReadOnly);
+            isReadOnly,
+            isWriteOnly);
     }
 
     /// <summary>
@@ -897,6 +900,7 @@ public sealed record OpenApiSchemaModel(
 /// <param name="DefaultValue">The default value from <see cref="System.ComponentModel.DefaultValueAttribute"/>, or null.</param>
 /// <param name="ExampleValue">A representative example value from <see cref="Blueprint.Model.Attributes.OpenApiExampleAttribute"/>, or null.</param>
 /// <param name="IsReadOnly">Whether this property is read-only (no public setter or annotated with <c>[ReadOnly(true)]</c>).</param>
+/// <param name="IsWriteOnly">Whether this property is write-only (annotated with <c>[OpenApiWriteOnly]</c>, e.g. a password field).</param>
 public sealed record OpenApiSchemaPropertyModel(
     string Name,
     OpenApiSchemaKind Kind,
@@ -923,7 +927,8 @@ public sealed record OpenApiSchemaPropertyModel(
     string? DeprecationReason = null,
     object? DefaultValue = null,
     object? ExampleValue = null,
-    bool IsReadOnly = false);
+    bool IsReadOnly = false,
+    bool IsWriteOnly = false);
 
 /// <summary>
 /// Describes the broad schema shape currently projected from serializer metadata.

@@ -2722,6 +2722,85 @@ public class ValidationModuleTests
     }
 
     [Fact]
+    public void When_operation_implements_IValidatableObject_then_reports_BPV013()
+    {
+        var source = """
+                     using System.Collections.Generic;
+                     using System.ComponentModel.DataAnnotations;
+
+                     public partial class IncludedOperation : IOperation, IValidatableObject
+                     {
+                         public string? Name { get; set; }
+
+                         public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+                         {
+                             yield break;
+                         }
+                     }
+                     """;
+
+        var result = CompileDescriptor(source);
+
+        result.Diagnostics.Select(static d => d.Id).Should().Contain("BPV013");
+    }
+
+    [Fact]
+    public void When_operation_does_not_implement_IValidatableObject_then_no_BPV013()
+    {
+        var source = """
+                     using System.ComponentModel.DataAnnotations;
+
+                     public partial class IncludedOperation : IOperation
+                     {
+                         [Required]
+                         public string? Name { get; set; }
+                     }
+                     """;
+
+        var result = CompileDescriptor(source);
+
+        result.Diagnostics.Where(static d => d.Id == "BPV013").Should().BeEmpty();
+    }
+
+    [Fact]
+    public void When_Required_and_DefaultValue_on_same_property_then_reports_BPV014()
+    {
+        var source = """
+                     using System.ComponentModel;
+                     using System.ComponentModel.DataAnnotations;
+
+                     public partial class IncludedOperation : IOperation
+                     {
+                         [Required]
+                         [DefaultValue(0)]
+                         public int? Count { get; set; }
+                     }
+                     """;
+
+        var result = CompileDescriptor(source);
+
+        result.Diagnostics.Select(static d => d.Id).Should().Contain("BPV014");
+    }
+
+    [Fact]
+    public void When_Required_without_DefaultValue_then_no_BPV014()
+    {
+        var source = """
+                     using System.ComponentModel.DataAnnotations;
+
+                     public partial class IncludedOperation : IOperation
+                     {
+                         [Required]
+                         public string? Name { get; set; }
+                     }
+                     """;
+
+        var result = CompileDescriptor(source);
+
+        result.Diagnostics.Where(static d => d.Id == "BPV014").Should().BeEmpty();
+    }
+
+    [Fact]
     public void Inline_handler_with_additional_blueprint_validation_attributes_generates_fast_property_checks_before_handler_invocation()
     {
         var source = """
