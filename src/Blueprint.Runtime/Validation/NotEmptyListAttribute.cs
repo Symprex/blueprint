@@ -48,7 +48,16 @@ public sealed class NotEmptyListAttribute : ValidationAttribute
 
         if (value is IEnumerable enumerable)
         {
-            return enumerable.GetEnumerator().MoveNext();
+            var enumerator = enumerable.GetEnumerator();
+
+            try
+            {
+                return enumerator.MoveNext();
+            }
+            finally
+            {
+                (enumerator as IDisposable)?.Dispose();
+            }
         }
 
         return false;

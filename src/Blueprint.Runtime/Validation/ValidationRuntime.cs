@@ -34,27 +34,30 @@ public static class ValidationRuntime
             DisplayName = GetDisplayName(propertyAttributes, memberName),
         };
 
-        foreach (var requiredAttribute in propertyAttributes.OfType<RequiredAttribute>())
+        // First pass: check Required attributes and short-circuit on failure.
+        for (var i = 0; i < propertyAttributes.Count; i++)
         {
-            var requiredResult = requiredAttribute.GetValidationResult(propertyValue, validationContext);
-            if (requiredResult != ValidationResult.Success)
+            if (propertyAttributes[i] is RequiredAttribute requiredAttribute)
             {
-                AddValidationResult(requiredResult!, ref validationResults);
-                return;
+                var requiredResult = requiredAttribute.GetValidationResult(propertyValue, validationContext);
+                if (requiredResult != ValidationResult.Success)
+                {
+                    AddValidationResult(requiredResult!, ref validationResults);
+                    return;
+                }
             }
         }
 
-        foreach (var validationAttribute in propertyAttributes.OfType<ValidationAttribute>())
+        // Second pass: check all other validation attributes.
+        for (var i = 0; i < propertyAttributes.Count; i++)
         {
-            if (validationAttribute is RequiredAttribute)
+            if (propertyAttributes[i] is ValidationAttribute validationAttribute and not RequiredAttribute)
             {
-                continue;
-            }
-
-            var validationResult = validationAttribute.GetValidationResult(propertyValue, validationContext);
-            if (validationResult != ValidationResult.Success)
-            {
-                AddValidationResult(validationResult!, ref validationResults);
+                var validationResult = validationAttribute.GetValidationResult(propertyValue, validationContext);
+                if (validationResult != ValidationResult.Success)
+                {
+                    AddValidationResult(validationResult!, ref validationResults);
+                }
             }
         }
     }
