@@ -74,15 +74,15 @@ namespace Blueprint.Generated
             }
             else
             {
-            var legacyAuthProvider = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Authorization.IResourceAuthorizationProvider>(context.ServiceProvider);
-            if (legacyAuthProvider != null)
-            {
-                var isAuthorized = await legacyAuthProvider.IsAuthorizedAsync(context, httpContext.User, new Blueprint.Model.ScopePair[] { new Blueprint.Model.ScopePair("account", "read", "/tenants/{Auth:AccountId}/accounts/{Id}") }, httpContext.RequestAborted);
-                if (!isAuthorized)
+                var legacyAuthProvider = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Authorization.IResourceAuthorizationProvider>(context.ServiceProvider);
+                if (legacyAuthProvider != null)
                 {
-                    return new Blueprint.Runtime.Exec.ForbiddenResult();
+                    var isAuthorized = await legacyAuthProvider.IsAuthorizedAsync(context, httpContext.User, new Blueprint.Model.ScopePair[] { new Blueprint.Model.ScopePair("account", "read", "/tenants/{Auth:AccountId}/accounts/{Id}") }, httpContext.RequestAborted);
+                    if (!isAuthorized)
+                    {
+                        return new Blueprint.Runtime.Exec.ForbiddenResult();
+                    }
                 }
-            }
             }
 
             if (!context.SkipAuthorisation)

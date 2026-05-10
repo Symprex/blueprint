@@ -362,10 +362,10 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
             });
 
         // Fallback to legacy provider
-        context.WriteStatement("else");
-        context.WriteStatement("{");
-        RenderLegacyAuthorizationCheckBody(context, scopePairs);
-        context.WriteStatement("}");
+        context.Else(elseBranch =>
+        {
+            RenderLegacyAuthorizationCheckBody(elseBranch, scopePairs);
+        });
 
         context.WriteBlankLine();
     }

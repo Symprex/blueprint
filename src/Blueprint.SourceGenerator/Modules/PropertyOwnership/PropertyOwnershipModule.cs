@@ -1071,10 +1071,10 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
                 {
                     parsedCtx.WriteStatement(FormatPropertyAssignment(operationExpr, entry, $"_parsed_{entry.PropertyName}"));
                 });
-                ifCtx.WriteStatement("else");
-                ifCtx.WriteStatement("{");
-                ifCtx.WriteStatement($"    return new Blueprint.Runtime.Exec.BindingFailureResult(\"Invalid route parameter '{entry.BindingName}'\");");
-                ifCtx.WriteStatement("}");
+                ifCtx.Else(elseCtx =>
+                {
+                    elseCtx.Return($"new Blueprint.Runtime.Exec.BindingFailureResult(\"Invalid route parameter '{entry.BindingName}'\")");
+                });
             });
         }
     }
@@ -1119,10 +1119,10 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
                 {
                     parsedCtx.WriteStatement(FormatPropertyAssignment(operationExpr, entry, $"_parsed_{entry.PropertyName}"));
                 });
-                ifCtx.WriteStatement("else");
-                ifCtx.WriteStatement("{");
-                ifCtx.WriteStatement($"    return new Blueprint.Runtime.Exec.BindingFailureResult(\"Invalid query parameter '{entry.BindingName}'\");");
-                ifCtx.WriteStatement("}");
+                ifCtx.Else(elseCtx =>
+                {
+                    elseCtx.Return($"new Blueprint.Runtime.Exec.BindingFailureResult(\"Invalid query parameter '{entry.BindingName}'\")");
+                });
             });
         }
     }
@@ -1202,10 +1202,10 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
                 {
                     parsedCtx.WriteStatement(FormatPropertyAssignment(operationExpr, entry, $"_parsed_{entry.PropertyName}"));
                 });
-                ifCtx.WriteStatement("else");
-                ifCtx.WriteStatement("{");
-                ifCtx.WriteStatement($"    return new Blueprint.Runtime.Exec.BindingFailureResult(\"Invalid header '{entry.BindingName}'\");");
-                ifCtx.WriteStatement("}");
+                ifCtx.Else(elseCtx =>
+                {
+                    elseCtx.Return($"new Blueprint.Runtime.Exec.BindingFailureResult(\"Invalid header '{entry.BindingName}'\")");
+                });
             });
         }
     }
@@ -1244,10 +1244,10 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
                 {
                     parsedCtx.WriteStatement(FormatPropertyAssignment(operationExpr, entry, $"_parsed_{entry.PropertyName}"));
                 });
-                ifCtx.WriteStatement("else");
-                ifCtx.WriteStatement("{");
-                ifCtx.WriteStatement($"    return new Blueprint.Runtime.Exec.BindingFailureResult(\"Invalid cookie '{entry.BindingName}'\");");
-                ifCtx.WriteStatement("}");
+                ifCtx.Else(elseCtx =>
+                {
+                    elseCtx.Return($"new Blueprint.Runtime.Exec.BindingFailureResult(\"Invalid cookie '{entry.BindingName}'\")");
+                });
             });
         }
     }
