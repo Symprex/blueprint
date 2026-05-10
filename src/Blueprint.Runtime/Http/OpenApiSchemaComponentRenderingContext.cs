@@ -70,7 +70,8 @@ public sealed record OpenApiSchemaComponentRenderingContext(
             property.AdditionalPropertiesFormat,
             property.ItemsSchemaName,
             property.AdditionalPropertiesSchemaName,
-            property.IsDeprecated);
+            property.IsDeprecated,
+            property.DefaultValue);
     }
 
     private static string? MapType(OpenApiSchemaKind kind)
@@ -126,6 +127,7 @@ public sealed record OpenApiSchemaComponentModel(
 /// <param name="ItemsSchemaRef">The schema component name for complex array element types, enabling <c>$ref</c> rendering instead of inline <c>type</c>.</param>
 /// <param name="AdditionalPropertiesSchemaRef">The schema component name for complex dictionary value types, enabling <c>$ref</c> rendering instead of inline <c>type</c>.</param>
 /// <param name="IsDeprecated">Whether the property is deprecated (mapped from <see cref="ObsoleteAttribute"/>).</param>
+/// <param name="DefaultValue">The default value from <see cref="System.ComponentModel.DefaultValueAttribute"/>, or null.</param>
 public sealed record OpenApiSchemaComponentPropertyModel(
     string Name,
     string? Type,
@@ -147,4 +149,5 @@ public sealed record OpenApiSchemaComponentPropertyModel(
     string? AdditionalPropertiesFormat = null,
     string? ItemsSchemaRef = null,
     string? AdditionalPropertiesSchemaRef = null,
-    bool IsDeprecated = false);
+    bool IsDeprecated = false,
+    object? DefaultValue = null);

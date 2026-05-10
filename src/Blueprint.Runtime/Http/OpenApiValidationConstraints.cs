@@ -270,7 +270,7 @@ internal sealed record OpenApiValidationConstraints(
     /// <summary>
     /// Infers an OpenAPI <c>format</c> hint from well-known validation attributes
     /// (<c>EmailAddressAttribute</c> → <c>"email"</c>, <c>PhoneAttribute</c> → <c>"phone"</c>,
-    /// <c>UrlAttribute</c> → <c>"uri"</c>).
+    /// <c>UrlAttribute</c> → <c>"uri"</c>, <c>CreditCardAttribute</c> → <c>"credit-card"</c>).
     /// </summary>
     private static string? GetFormat(IReadOnlyList<ValidationAttribute> validationAttributes)
     {
@@ -286,6 +286,8 @@ internal sealed record OpenApiValidationConstraints(
                 case System.ComponentModel.DataAnnotations.UrlAttribute:
                 case Blueprint.Validation.UrlAttribute:
                     return "uri";
+                case CreditCardAttribute:
+                    return "credit-card";
             }
         }
 

@@ -61,6 +61,7 @@ public partial class CreateTemplateCommand : ICommand<ResourceEventResult<Templa
     /// <see cref="RangeAttribute"/> fast-path validation and OpenAPI min/max constraints.
     /// </summary>
     [Range(1, 1000)]
+    [DefaultValue(100)]
     [Description("Priority for template ordering (1-1000).")]
     public int Priority { get; set; } = 100;
 

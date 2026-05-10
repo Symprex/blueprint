@@ -310,7 +310,8 @@
                     "format": "int32",
                     "description": "Priority for template ordering (1-1000).",
                     "minimum": 1,
-                    "maximum": 1000
+                    "maximum": 1000,
+                    "default": 100
                   },
                   "htmlSource": {
                     "type": "string",

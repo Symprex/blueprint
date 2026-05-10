@@ -119,6 +119,9 @@ public sealed record OpenApiSchemaProjectionContext(
         var description = GetPropertyDescription(property);
         var isDeprecated = property.AttributeProvider is MemberInfo deprecatedMember
             && deprecatedMember.IsDefined(typeof(ObsoleteAttribute), inherit: true);
+        var defaultValue = property.AttributeProvider is MemberInfo defaultMember
+            ? defaultMember.GetCustomAttribute<System.ComponentModel.DefaultValueAttribute>()?.Value
+            : null;
 
         // Extract element type metadata for collection/dictionary properties so schema rendering
         // can emit "items" (arrays) or "additionalProperties" (dictionaries).
@@ -148,7 +151,8 @@ public sealed record OpenApiSchemaProjectionContext(
             additionalPropertiesFormat,
             itemsSchemaName,
             additionalPropertiesSchemaName,
-            isDeprecated);
+            isDeprecated,
+            defaultValue);
     }
 
     /// <summary>
@@ -792,6 +796,7 @@ public sealed record OpenApiSchemaModel(
 /// <param name="ItemsSchemaName">The component schema name for complex array element types, enabling <c>$ref</c> rendering.</param>
 /// <param name="AdditionalPropertiesSchemaName">The component schema name for complex dictionary value types, enabling <c>$ref</c> rendering.</param>
 /// <param name="IsDeprecated">Whether the property is deprecated (mapped from <see cref="ObsoleteAttribute"/>).</param>
+/// <param name="DefaultValue">The default value from <see cref="System.ComponentModel.DefaultValueAttribute"/>, or null.</param>
 public sealed record OpenApiSchemaPropertyModel(
     string Name,
     OpenApiSchemaKind Kind,
@@ -814,7 +819,8 @@ public sealed record OpenApiSchemaPropertyModel(
     string? AdditionalPropertiesFormat = null,
     string? ItemsSchemaName = null,
     string? AdditionalPropertiesSchemaName = null,
-    bool IsDeprecated = false);
+    bool IsDeprecated = false,
+    object? DefaultValue = null);
 
 /// <summary>
 /// Describes the broad schema shape currently projected from serializer metadata.

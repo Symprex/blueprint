@@ -403,6 +403,11 @@ public sealed record OpenApiOutputRenderingContext(
                     writer.WriteBoolean("deprecated", true);
                 }
 
+                if (property.DefaultValue is not null)
+                {
+                    WriteDefaultValue(writer, property.DefaultValue);
+                }
+
                 writer.WriteEndObject();
             }
 
@@ -489,6 +494,37 @@ public sealed record OpenApiOutputRenderingContext(
         if (!string.IsNullOrWhiteSpace(pattern))
         {
             writer.WriteString("pattern", pattern);
+        }
+    }
+
+    /// <summary>
+    /// Writes a JSON <c>"default"</c> property with the correct JSON type based on the CLR value.
+    /// </summary>
+    private static void WriteDefaultValue(Utf8JsonWriter writer, object value)
+    {
+        switch (value)
+        {
+            case bool b:
+                writer.WriteBoolean("default", b);
+                break;
+            case int i:
+                writer.WriteNumber("default", i);
+                break;
+            case long l:
+                writer.WriteNumber("default", l);
+                break;
+            case double d:
+                writer.WriteNumber("default", d);
+                break;
+            case decimal m:
+                writer.WriteNumber("default", m);
+                break;
+            case float f:
+                writer.WriteNumber("default", f);
+                break;
+            default:
+                writer.WriteString("default", value.ToString());
+                break;
         }
     }
 
@@ -885,6 +921,11 @@ public sealed record OpenApiOutputRenderingContext(
         if (property.IsDeprecated)
         {
             writer.WriteBoolean("deprecated", true);
+        }
+
+        if (property.DefaultValue is not null)
+        {
+            WriteDefaultValue(writer, property.DefaultValue);
         }
 
         writer.WriteEndObject();

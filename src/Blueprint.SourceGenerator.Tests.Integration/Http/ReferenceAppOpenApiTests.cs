@@ -554,6 +554,26 @@ public class ReferenceAppOpenApiTests
             .Should().BeFalse("non-obsolete properties should not emit deprecated");
     }
 
+    [Fact]
+    public async Task When_body_property_has_default_value_attribute_then_schema_emits_default()
+    {
+        var (json, _) = await InvokeOpenApiEndpointAsync();
+        using var doc = JsonDocument.Parse(json);
+
+        // CreateTemplateCommand (POST /templates) has [DefaultValue(100)] on Priority
+        var templatesPath = doc.RootElement.GetProperty("paths").GetProperty("/templates");
+        var requestBody = templatesPath.GetProperty("post").GetProperty("requestBody");
+        var properties = requestBody.GetProperty("content").GetProperty("application/json")
+            .GetProperty("schema").GetProperty("properties");
+
+        properties.GetProperty("priority").GetProperty("default").GetInt32()
+            .Should().Be(100);
+
+        // Name does NOT have a default — default should be absent
+        properties.GetProperty("name").TryGetProperty("default", out _)
+            .Should().BeFalse("properties without [DefaultValue] should not emit default");
+    }
+
     private static async Task<(string Json, int StatusCode)> InvokeOpenApiEndpointAsync(
         Action<OpenApiInfoOptions>? configureOpenApi = null,
         Action<OpenApiOperationProcessorOptions>? configureOperationProcessors = null)

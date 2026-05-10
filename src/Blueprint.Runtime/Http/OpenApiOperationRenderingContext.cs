@@ -169,6 +169,7 @@ public sealed record OpenApiOperationRenderingContext(
             // Validation-derived format (email, uri, phone) takes precedence over CLR type format.
             var effectiveFormat = constraints.Format ?? schemaFormat;
             var isDeprecated = clrProperty?.GetCustomAttribute<System.ObsoleteAttribute>() is not null;
+            var defaultValueAttr = clrProperty?.GetCustomAttribute<System.ComponentModel.DefaultValueAttribute>();
 
             switch (entry.Source)
             {
@@ -280,6 +281,7 @@ public sealed record OpenApiOperationRenderingContext(
                         AdditionalPropertiesType = bodyAdditionalType,
                         AdditionalPropertiesFormat = bodyAdditionalFormat,
                         IsDeprecated = isDeprecated,
+                        DefaultValue = defaultValueAttr?.Value,
                     });
                     break;
             }
