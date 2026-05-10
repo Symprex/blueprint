@@ -603,6 +603,10 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
     /// the custom cross-property logic the type author wrote, while property-level DataAnnotations have already
     /// been checked by generated code.
     /// </summary>
+    /// <remarks>
+    /// Uses lazy list allocation so the success path (no validation errors) avoids
+    /// allocating a <c>List&lt;ValidationResult&gt;</c> entirely.
+    /// </remarks>
     private static void RenderIValidatableObjectTailCall(PipelineRenderContext context)
     {
         var operation = context.GetOperationExpression();
@@ -615,15 +619,21 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
             $"((global::System.ComponentModel.DataAnnotations.IValidatableObject){operation}).Validate(ivoContext)");
         context.DeclareVariable(
             "ivoFailures",
-            "new global::System.Collections.Generic.List<global::System.ComponentModel.DataAnnotations.ValidationResult>()");
+            "default(global::System.Collections.Generic.List<global::System.ComponentModel.DataAnnotations.ValidationResult>)");
         context.ForEach("var ivoResult", "ivoResults", branch =>
         {
             branch.If(
                 "ivoResult != global::System.ComponentModel.DataAnnotations.ValidationResult.Success",
-                static innerBranch => innerBranch.WriteStatement("ivoFailures.Add(ivoResult);"));
+                static innerBranch =>
+                {
+                    innerBranch.Assign(
+                        "ivoFailures",
+                        "ivoFailures ?? new global::System.Collections.Generic.List<global::System.ComponentModel.DataAnnotations.ValidationResult>()");
+                    innerBranch.WriteStatement("ivoFailures.Add(ivoResult);");
+                });
         });
         context.If(
-            "ivoFailures.Count > 0",
+            "ivoFailures is not null",
             static branch => ReturnValidationFailure(
                 branch,
                 "new Blueprint.Runtime.Exec.ValidationFailedResult(ivoFailures)"));
