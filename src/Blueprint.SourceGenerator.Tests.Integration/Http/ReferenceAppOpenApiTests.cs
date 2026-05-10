@@ -555,6 +555,44 @@ public class ReferenceAppOpenApiTests
     }
 
     [Fact]
+    public async Task When_query_parameter_is_obsolete_then_parameter_emits_deprecated()
+    {
+        var (json, _) = await InvokeOpenApiEndpointAsync();
+        using var doc = JsonDocument.Parse(json);
+
+        // GetPagedTemplatesQuery (GET /templates/paged) has [Obsolete("Use NameFilter instead.")] on CategoryFilter
+        var pagedPath = doc.RootElement.GetProperty("paths").GetProperty("/templates/paged");
+        var parameters = pagedPath.GetProperty("get").GetProperty("parameters");
+
+        JsonElement? categoryParam = null;
+        JsonElement? nameParam = null;
+
+        foreach (var p in parameters.EnumerateArray())
+        {
+            var name = p.GetProperty("name").GetString();
+
+            if (name == "categoryFilter")
+            {
+                categoryParam = p;
+            }
+            else if (name == "nameFilter")
+            {
+                nameParam = p;
+            }
+        }
+
+        categoryParam.Should().NotBeNull("CategoryFilter should appear as a query parameter");
+        categoryParam!.Value.GetProperty("deprecated").GetBoolean()
+            .Should().BeTrue("CategoryFilter is marked [Obsolete]");
+        categoryParam!.Value.GetProperty("x-deprecated-reason").GetString()
+            .Should().Be("Use NameFilter instead.");
+
+        nameParam.Should().NotBeNull("NameFilter should appear as a query parameter");
+        nameParam!.Value.TryGetProperty("deprecated", out _)
+            .Should().BeFalse("NameFilter is not obsolete and should not have deprecated");
+    }
+
+    [Fact]
     public async Task When_body_property_has_default_value_attribute_then_schema_emits_default()
     {
         var (json, _) = await InvokeOpenApiEndpointAsync();

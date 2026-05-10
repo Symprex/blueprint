@@ -723,6 +723,18 @@
         ],
         "parameters": [
           {
+            "name": "categoryFilter",
+            "in": "query",
+            "required": false,
+            "description": "Legacy category filter \u2014 use instead.",
+            "deprecated": true,
+            "x-deprecated-reason": "Use NameFilter instead.",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            }
+          },
+          {
             "name": "nameFilter",
             "in": "query",
             "required": false,

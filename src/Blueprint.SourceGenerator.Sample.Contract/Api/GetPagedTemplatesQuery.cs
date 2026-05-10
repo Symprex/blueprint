@@ -20,4 +20,10 @@ public partial class GetPagedTemplatesQuery : OrderedPagedQuery<TemplateApiResou
     /// Optional name filter to search templates.
     /// </summary>
     public string? NameFilter { get; set; }
+
+    /// <summary>
+    /// Legacy category filter — use <see cref="NameFilter"/> instead.
+    /// </summary>
+    [Obsolete("Use NameFilter instead.")]
+    public string? CategoryFilter { get; set; }
 }

@@ -299,6 +299,16 @@ public sealed record OpenApiOutputRenderingContext(
                 writer.WriteString("description", parameter.Description);
             }
 
+            if (parameter.IsDeprecated)
+            {
+                writer.WriteBoolean("deprecated", true);
+
+                if (parameter.DeprecationReason is not null)
+                {
+                    writer.WriteString("x-deprecated-reason", parameter.DeprecationReason);
+                }
+            }
+
             writer.WritePropertyName("schema");
             writer.WriteStartObject();
             writer.WriteString("type", parameter.SchemaType);

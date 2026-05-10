@@ -205,6 +205,8 @@ public sealed record OpenApiOperationRenderingContext(
                         ExclusiveMaximum = constraints.ExclusiveMaximum,
                         EnumValues = enumValues,
                         IsNullable = entry.IsNullable,
+                        IsDeprecated = isDeprecated,
+                        DeprecationReason = propertyDeprecationReason,
                     });
                     break;
 
@@ -226,6 +228,8 @@ public sealed record OpenApiOperationRenderingContext(
                         ExclusiveMaximum = constraints.ExclusiveMaximum,
                         EnumValues = enumValues,
                         IsNullable = entry.IsNullable,
+                        IsDeprecated = isDeprecated,
+                        DeprecationReason = propertyDeprecationReason,
                     });
                     break;
 
@@ -247,6 +251,8 @@ public sealed record OpenApiOperationRenderingContext(
                         ExclusiveMaximum = constraints.ExclusiveMaximum,
                         EnumValues = enumValues,
                         IsNullable = entry.IsNullable,
+                        IsDeprecated = isDeprecated,
+                        DeprecationReason = propertyDeprecationReason,
                     });
                     break;
 
@@ -268,6 +274,8 @@ public sealed record OpenApiOperationRenderingContext(
                         ExclusiveMaximum = constraints.ExclusiveMaximum,
                         EnumValues = enumValues,
                         IsNullable = entry.IsNullable,
+                        IsDeprecated = isDeprecated,
+                        DeprecationReason = propertyDeprecationReason,
                     });
                     break;
 

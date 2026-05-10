@@ -51,6 +51,12 @@ public sealed record OpenApiParameterModel(
 
     /// <summary>Gets whether this parameter is nullable (reference type with <c>?</c> or <c>Nullable&lt;T&gt;</c>).</summary>
     public bool IsNullable { get; init; }
+
+    /// <summary>Gets whether this parameter is deprecated (mapped from <see cref="System.ObsoleteAttribute"/>).</summary>
+    public bool IsDeprecated { get; init; }
+
+    /// <summary>Gets the deprecation reason extracted from the <see cref="System.ObsoleteAttribute.Message"/>, or null when unset.</summary>
+    public string? DeprecationReason { get; init; }
 }
 
 /// <summary>
