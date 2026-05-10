@@ -107,10 +107,18 @@ public sealed record OpenApiOperationRenderingContext(
             .OfType<DescriptionAttribute>()
             .FirstOrDefault()?.Description;
 
+        // Use XML <remarks> as the longer-form OpenAPI description when available.
+        string? operationRemarks = null;
+
         if (operationDescription is null
             && operation.Operation.TryGetFeatureData<OperationDocumentationFeatureData>(out var docData))
         {
             operationDescription = docData.Summary;
+            operationRemarks = docData.Remarks;
+        }
+        else if (operation.Operation.TryGetFeatureData<OperationDocumentationFeatureData>(out docData))
+        {
+            operationRemarks = docData.Remarks;
         }
 
         var obsoleteAttr = operation.Operation.OperationType.GetCustomAttribute<ObsoleteAttribute>(inherit: false);
@@ -131,6 +139,7 @@ public sealed record OpenApiOperationRenderingContext(
             requestBody)
         {
             Summary = operationDescription,
+            Description = operationRemarks,
             Deprecated = isDeprecated,
             DeprecationReason = deprecationReason,
             RequiresAuthentication = requiresAuthentication,

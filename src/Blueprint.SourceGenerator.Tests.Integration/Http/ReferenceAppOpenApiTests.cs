@@ -632,6 +632,22 @@ public class ReferenceAppOpenApiTests
             .Should().Be("Use Tags instead.");
     }
 
+    [Fact]
+    public async Task When_operation_has_xml_remarks_then_description_field_rendered()
+    {
+        var (json, _) = await InvokeOpenApiEndpointAsync();
+        using var doc = JsonDocument.Parse(json);
+
+        // CreateTemplateCommand has <remarks> XML documentation
+        var templatesPath = doc.RootElement.GetProperty("paths").GetProperty("/templates");
+        var postOperation = templatesPath.GetProperty("post");
+
+        postOperation.GetProperty("summary").GetString().Should().NotBeNullOrWhiteSpace();
+        postOperation.TryGetProperty("description", out var descriptionElement).Should().BeTrue(
+            "operations with XML <remarks> should emit an OpenAPI description field");
+        descriptionElement.GetString().Should().NotBeNullOrWhiteSpace();
+    }
+
     private static async Task<(string Json, int StatusCode)> InvokeOpenApiEndpointAsync(
         Action<OpenApiInfoOptions>? configureOpenApi = null,
         Action<OpenApiOperationProcessorOptions>? configureOperationProcessors = null)

@@ -253,7 +253,7 @@ public class HttpOperationResultExecutor
 
         var runtimeResultTypeNames = _resultTypeNamesCache.GetOrAdd(result.GetType(), static resultType =>
         {
-            var names = new HashSet<string>(StringComparer.Ordinal);
+            var names = new HashSet<string>(4, StringComparer.Ordinal);
             for (var current = resultType; current is not null; current = current.BaseType)
             {
                 if (current.FullName is { } fullName)
@@ -278,13 +278,31 @@ public class HttpOperationResultExecutor
         }
         else
         {
-            validationErrors = validationFailedResult.ValidationResults
-                .SelectMany(static validationResult => ExpandValidationErrorEntries(validationResult))
-                .GroupBy(static entry => entry.MemberName, StringComparer.Ordinal)
-                .ToDictionary(
-                    static group => group.Key,
-                    static group => group.Select(static entry => entry.ErrorMessage).Distinct(StringComparer.Ordinal).ToArray(),
-                    StringComparer.Ordinal);
+            // Single-pass grouping avoids the 5+ intermediate LINQ allocations
+            // (SelectMany → GroupBy → ToDictionary → nested Select/Distinct/ToArray).
+            var grouped = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+
+            foreach (var entry in validationFailedResult.ValidationResults
+                         .SelectMany(static validationResult => ExpandValidationErrorEntries(validationResult)))
+            {
+                if (!grouped.TryGetValue(entry.MemberName, out var messages))
+                {
+                    messages = new List<string>(1);
+                    grouped[entry.MemberName] = messages;
+                }
+
+                if (!messages.Contains(entry.ErrorMessage))
+                {
+                    messages.Add(entry.ErrorMessage);
+                }
+            }
+
+            validationErrors = new Dictionary<string, string[]>(grouped.Count, StringComparer.Ordinal);
+
+            foreach (var pair in grouped)
+            {
+                validationErrors[pair.Key] = pair.Value.ToArray();
+            }
         }
 
         var problemDetails = new MvcValidationProblemDetails(validationErrors)
