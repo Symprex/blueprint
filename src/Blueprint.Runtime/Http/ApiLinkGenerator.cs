@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
+using System.Linq.Expressions;
 using System.Reflection;
 using System.Text;
 using Blueprint.Model;
@@ -145,7 +146,7 @@ public class ApiLinkGenerator : IApiLinkGenerator
                 for (var i = 0; i < props.Length; i++)
                 {
                     var prop = props[i];
-                    result[i] = (prop.Name, prop.GetValue);
+                    result[i] = (prop.Name, CompileGetter(type, prop));
                 }
 
                 return result;
@@ -174,5 +175,21 @@ public class ApiLinkGenerator : IApiLinkGenerator
         }
 
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// Compiles a property getter into a <c>Func&lt;object, object?&gt;</c> delegate using
+    /// expression trees, avoiding the overhead of <see cref="PropertyInfo.GetValue(object?)"/>
+    /// on every invocation. The compiled delegate casts the input to the declaring type and
+    /// boxes the property value (if value-typed) in a single generated IL body.
+    /// </summary>
+    private static Func<object, object?> CompileGetter(Type declaringType, PropertyInfo property)
+    {
+        var instance = Expression.Parameter(typeof(object), "instance");
+        var cast = Expression.Convert(instance, declaringType);
+        var access = Expression.Property(cast, property);
+        var box = Expression.Convert(access, typeof(object));
+
+        return Expression.Lambda<Func<object, object?>>(box, instance).Compile();
     }
 }
