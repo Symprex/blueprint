@@ -5,15 +5,17 @@ namespace Blueprint.SourceGenerator.Modules;
 /// runtime validation.
 /// </summary>
 /// <param name="RequiresWholeObjectFallback">Whether property-level generation is unsafe and runtime validation must own the whole object.</param>
+/// <param name="ImplementsIValidatableObject">Whether the operation implements IValidatableObject, requiring a tail call after property-level checks.</param>
 /// <param name="Properties">The per-property validation plans when fast-path generation is possible.</param>
 internal sealed record ValidationPipelinePlan(
     bool RequiresWholeObjectFallback,
+    bool ImplementsIValidatableObject,
     IReadOnlyList<PropertyValidationPlan> Properties)
 {
     /// <summary>
     /// Gets a value indicating whether the operation needs any generated or runtime validation at all.
     /// </summary>
-    public bool RequiresValidation => this.RequiresWholeObjectFallback || this.Properties.Count > 0;
+    public bool RequiresValidation => this.RequiresWholeObjectFallback || this.ImplementsIValidatableObject || this.Properties.Count > 0;
 }
 
 /// <summary>

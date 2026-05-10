@@ -102,8 +102,10 @@ public class ValidationManifestModuleTests
         result.Diagnostics.Should().BeEmpty();
         result.Value.Should().NotBeNull();
         result.Value!.Entries["validation.enabled"].ToString().Should().Be("True");
-        result.Value.Entries["validation.mode"].ToString().Should().Be("whole-object-fallback");
-        result.Value.Entries.Should().NotContainKey("validation.properties");
+        result.Value.Entries["validation.mode"].ToString().Should().Be("per-property+ivalidatable",
+            "IValidatableObject-only types should use hybrid mode: property checks then IValidatableObject.Validate()");
+        result.Value.Entries.Should().NotContainKey("validation.properties",
+            "with no property-level validation attributes, the properties list should be omitted");
     }
 
     [Fact]

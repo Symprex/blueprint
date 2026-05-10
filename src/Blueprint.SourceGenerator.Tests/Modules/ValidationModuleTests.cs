@@ -1617,10 +1617,81 @@ public class ValidationModuleTests
         result.Diagnostics.Should().BeEmpty();
         var pipelineSource = result.Output.Single(static tree => tree.FilePath.EndsWith("CreateUserCommandExecutorPipeline.g.cs", StringComparison.Ordinal)).ToString();
 
-        pipelineSource.Should().Contain("global::System.ComponentModel.DataAnnotations.Validator.TryValidateObject");
+        pipelineSource.Should().Contain("((global::System.ComponentModel.DataAnnotations.IValidatableObject)",
+            "IValidatableObject should be called directly instead of TryValidateObject fallback");
+        pipelineSource.Should().Contain("ivoFailures");
         pipelineSource.Should().Contain("context.Activity?.SetTag(\"otel.status_code\", \"OK\");");
-        pipelineSource.Should().Contain("return new Blueprint.Runtime.Exec.ValidationFailedResult(validationResults);");
+        pipelineSource.Should().Contain("return new Blueprint.Runtime.Exec.ValidationFailedResult(ivoFailures);");
+        pipelineSource.Should().NotContain("global::System.ComponentModel.DataAnnotations.Validator.TryValidateObject",
+            "IValidatableObject-only types should use direct Validate() call, not whole-object TryValidateObject fallback");
         pipelineSource.Should().NotContain("throw new global::Blueprint.Validation.ValidationException(validationResults);");
+    }
+
+    [Fact]
+    public void Inline_handler_with_IValidatableObject_and_property_attributes_uses_hybrid_validation()
+    {
+        var source = """
+                     using Blueprint;
+                     using Blueprint.Model;
+                     using System.Collections.Generic;
+                     using System.ComponentModel.DataAnnotations;
+                     using System.Threading.Tasks;
+
+                     namespace TestNamespace;
+
+                     [BlueprintAppScan]
+                     public partial class TestApp : BlueprintApp
+                     {
+                         public TestApp()
+                         {
+                             this.Register(CreateUserCommand.Configure());
+                         }
+                     }
+
+                     public class CreateUserCommand : ICommand<string>, IValidatableObject
+                     {
+                         public static ApiOperationDescriptor Configure()
+                         {
+                             return new ApiOperationDescriptor(typeof(CreateUserCommand), nameof(CreateUserCommand), "Tests");
+                         }
+
+                         [Required]
+                         public string? Name { get; set; }
+
+                         [Range(1, 100)]
+                         public int Age { get; set; }
+
+                         public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+                         {
+                             yield break;
+                         }
+
+                         public static Task<string> HandleAsync(CreateUserCommand command)
+                         {
+                             return Task.FromResult(command.Name ?? string.Empty);
+                         }
+                     }
+                     """;
+
+        var result = CompilePipeline(source);
+
+        result.Diagnostics.Should().BeEmpty();
+        var pipelineSource = result.Output.Single(static tree => tree.FilePath.EndsWith("CreateUserCommandExecutorPipeline.g.cs", StringComparison.Ordinal)).ToString();
+
+        // Property-level checks should be generated (fast-path)
+        pipelineSource.Should().Contain("operation.Name",
+            "property-level [Required] check should be generated even when IValidatableObject is implemented");
+        pipelineSource.Should().Contain("operation.Age",
+            "property-level [Range] check should be generated even when IValidatableObject is implemented");
+
+        // IValidatableObject.Validate() should be called as a tail call after property checks
+        pipelineSource.Should().Contain("((global::System.ComponentModel.DataAnnotations.IValidatableObject)",
+            "IValidatableObject.Validate() should be called after generated property checks");
+        pipelineSource.Should().Contain("ivoFailures");
+
+        // Should NOT use the whole-object TryValidateObject fallback
+        pipelineSource.Should().NotContain("global::System.ComponentModel.DataAnnotations.Validator.TryValidateObject",
+            "hybrid mode should not use TryValidateObject — property checks are generated and IValidatableObject is called directly");
     }
 
     [Fact]

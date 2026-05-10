@@ -53,7 +53,12 @@ internal sealed class ValidationManifestModule : IBlueprintSourceGeneratorModule
             return;
         }
 
-        context.AddEntry("validation.mode", "per-property");
+        context.AddEntry("validation.mode", plan.ImplementsIValidatableObject ? "per-property+ivalidatable" : "per-property");
+
+        if (plan.Properties.Count == 0)
+        {
+            return;
+        }
 
         var propertiesArray = new JArray(plan.Properties.Select(static p =>
         {

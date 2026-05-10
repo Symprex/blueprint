@@ -55,10 +55,15 @@ internal static class ValidationPropertyPlanner
     [MustUseReturnValue]
     public static ValidationPipelinePlan Create(INamedTypeSymbol operationType)
     {
-        if (ValidationSymbolHelpers.RequiresWholeObjectFallback(operationType))
+        // Class-level validation attributes (e.g. [CustomValidation] on the type) require full runtime fallback
+        // because they may depend on cross-property state that we cannot safely decompose at compile time.
+        if (ValidationSymbolHelpers.HasValidationAttribute(operationType))
         {
-            return new ValidationPipelinePlan(RequiresWholeObjectFallback: true, Properties: []);
+            return new ValidationPipelinePlan(RequiresWholeObjectFallback: true, ImplementsIValidatableObject: false, Properties: []);
         }
+
+        var implementsIValidatableObject = operationType.AllInterfaces.Any(
+            static interfaceSymbol => interfaceSymbol.ToDisplayString() == "System.ComponentModel.DataAnnotations.IValidatableObject");
 
         var properties = new List<PropertyValidationPlan>();
 
@@ -107,7 +112,7 @@ internal static class ValidationPropertyPlanner
             properties.Add(new RuntimeFallbackPropertyValidationPlan(property.Name, propertyAccess));
         }
 
-        return new ValidationPipelinePlan(RequiresWholeObjectFallback: false, Properties: properties);
+        return new ValidationPipelinePlan(RequiresWholeObjectFallback: false, ImplementsIValidatableObject: implementsIValidatableObject, Properties: properties);
     }
 
     private static bool TryCreateFastPathPlan(

@@ -1474,6 +1474,74 @@ public class ValidationModuleIntegrationTests
         LengthValidationOperation.HandlerCallCount.Should().Be(1);
     }
 
+    [Fact]
+    public async Task When_IValidatableObject_with_property_attributes_and_property_valid_but_ivalidatable_fails_then_returns_failure()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(HybridValidatableOperation));
+        var context = CreateContext(app, HybridValidatableOperation.Configure());
+        var operation = (HybridValidatableOperation)context.Operation;
+
+        // Property-level checks pass, but IValidatableObject.Validate() fails
+        operation.Name = "valid-name";
+        operation.TriggerIValidatableFailure = true;
+
+        HybridValidatableOperation.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<ValidationFailedResult>();
+        HybridValidatableOperation.HandlerCallCount.Should().Be(0,
+            "handler should not run when IValidatableObject.Validate() returns errors");
+        var failures = ((ValidationFailedResult)result).ValidationResults;
+        failures.Should().ContainSingle().Which.ErrorMessage.Should().Contain("custom cross-property check");
+    }
+
+    [Fact]
+    public async Task When_IValidatableObject_with_property_attributes_and_property_fails_then_returns_property_failure_without_calling_ivalidatable()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(HybridValidatableOperation));
+        var context = CreateContext(app, HybridValidatableOperation.Configure());
+        var operation = (HybridValidatableOperation)context.Operation;
+
+        // Property-level [Required] fails — IValidatableObject.Validate() should still run since
+        // generated code runs property checks then IValidatableObject tail call sequentially
+        operation.Name = null;
+        operation.TriggerIValidatableFailure = false;
+
+        HybridValidatableOperation.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<ValidationFailedResult>();
+        HybridValidatableOperation.HandlerCallCount.Should().Be(0);
+        var failures = ((ValidationFailedResult)result).ValidationResults;
+        failures.Should().ContainSingle().Which.MemberNames.Should().Contain(nameof(HybridValidatableOperation.Name));
+    }
+
+    [Fact]
+    public async Task When_IValidatableObject_with_property_attributes_and_all_valid_then_handler_executes()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(HybridValidatableOperation));
+        var context = CreateContext(app, HybridValidatableOperation.Configure());
+        var operation = (HybridValidatableOperation)context.Operation;
+
+        operation.Name = "valid-name";
+        operation.TriggerIValidatableFailure = false;
+
+        HybridValidatableOperation.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<OkResult<string>>();
+        HybridValidatableOperation.HandlerCallCount.Should().Be(1);
+    }
+
     private static ApiOperationContext CreateContext(BlueprintApp app, ApiOperationDescriptor descriptor)
     {
         return new ApiOperationContext(new EmptyServiceProvider(), app, descriptor, CancellationToken.None);
@@ -2320,6 +2388,41 @@ public partial class AdditionalBlueprintValidationFastPathOperation : ICommand<s
     {
         HandlerCallCount++;
         return Task.FromResult("ok");
+    }
+}
+
+/// <summary>
+/// Exercises the hybrid validation path: generated property-level checks plus IValidatableObject.Validate() tail call.
+/// </summary>
+public partial class HybridValidatableOperation : ICommand<string>, IValidatableObject
+{
+    public static int HandlerCallCount { get; private set; }
+
+    [Required]
+    public string? Name { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value that triggers an IValidatableObject failure when true, simulating cross-property logic.
+    /// </summary>
+    public bool TriggerIValidatableFailure { get; set; }
+
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        if (this.TriggerIValidatableFailure)
+        {
+            yield return new ValidationResult("Failed custom cross-property check.", [nameof(this.Name)]);
+        }
+    }
+
+    public static void Reset()
+    {
+        HandlerCallCount = 0;
+    }
+
+    public static Task<string> HandleAsync(HybridValidatableOperation operation)
+    {
+        HandlerCallCount++;
+        return Task.FromResult(operation.Name ?? string.Empty);
     }
 }
 

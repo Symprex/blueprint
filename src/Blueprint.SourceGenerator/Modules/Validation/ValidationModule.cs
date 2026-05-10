@@ -56,7 +56,18 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
         // This eliminates per-request allocation for attributes whose IsValid() call runs on the success path.
         var cachedAttributeFields = EmitCachedAttributeFields(context, validationPlan.Properties);
 
-        context.AddRenderStep(PipelineStage.Validation, renderContext => RenderPropertyValidation(renderContext, validationPlan.Properties, cachedAttributeFields));
+        context.AddRenderStep(PipelineStage.Validation, renderContext =>
+        {
+            if (validationPlan.Properties.Count > 0)
+            {
+                RenderPropertyValidation(renderContext, validationPlan.Properties, cachedAttributeFields);
+            }
+
+            if (validationPlan.ImplementsIValidatableObject)
+            {
+                RenderIValidatableObjectTailCall(renderContext);
+            }
+        });
     }
 
     private static void ValidateReferencedPropertyAttributes(DescriptorContributorContext context)
@@ -584,6 +595,39 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
         }
 
         return rule.FailureCondition.Replace(rule.ValidationAttributeExpression, fieldName, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Emits a targeted IValidatableObject.Validate() tail call that runs after generated property-level checks.
+    /// Unlike <see cref="RenderGenericValidation"/> which delegates ALL validation to runtime, this only invokes
+    /// the custom cross-property logic the type author wrote, while property-level DataAnnotations have already
+    /// been checked by generated code.
+    /// </summary>
+    private static void RenderIValidatableObjectTailCall(PipelineRenderContext context)
+    {
+        var operation = context.GetOperationExpression();
+
+        context.DeclareVariable(
+            "ivoContext",
+            $"new global::System.ComponentModel.DataAnnotations.ValidationContext({operation})");
+        context.DeclareVariable(
+            "ivoResults",
+            $"((global::System.ComponentModel.DataAnnotations.IValidatableObject){operation}).Validate(ivoContext)");
+        context.DeclareVariable(
+            "ivoFailures",
+            "new global::System.Collections.Generic.List<global::System.ComponentModel.DataAnnotations.ValidationResult>()");
+        context.ForEach("var ivoResult", "ivoResults", branch =>
+        {
+            branch.If(
+                "ivoResult != global::System.ComponentModel.DataAnnotations.ValidationResult.Success",
+                static innerBranch => innerBranch.WriteStatement("ivoFailures.Add(ivoResult);"));
+        });
+        context.If(
+            "ivoFailures.Count > 0",
+            static branch => ReturnValidationFailure(
+                branch,
+                "new Blueprint.Runtime.Exec.ValidationFailedResult(ivoFailures)"));
+        context.WriteBlankLine();
     }
 
     private static void RenderGenericValidation(PipelineRenderContext context)
