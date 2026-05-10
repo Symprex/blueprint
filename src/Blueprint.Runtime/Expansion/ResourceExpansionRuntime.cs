@@ -190,17 +190,25 @@ public static class ResourceExpansionRuntime
             }
 
             // Support both repeated keys (?expand=A&expand=B) and comma-separated (?expand=A,B)
-            if (v.Contains(','))
+            var span = v.AsSpan();
+
+            if (span.IndexOf(',') >= 0)
             {
-                foreach (var part in v.Split(','))
+                // Walk comma-separated segments without allocating Split array
+                while (span.Length > 0)
                 {
-                    if (part.Trim().Equals(propertyPath, StringComparison.OrdinalIgnoreCase))
+                    var commaIndex = span.IndexOf(',');
+                    var segment = commaIndex >= 0 ? span[..commaIndex] : span;
+
+                    if (segment.Trim().Equals(propertyPath.AsSpan(), StringComparison.OrdinalIgnoreCase))
                     {
                         return true;
                     }
+
+                    span = commaIndex >= 0 ? span[(commaIndex + 1)..] : ReadOnlySpan<char>.Empty;
                 }
             }
-            else if (v.Equals(propertyPath, StringComparison.OrdinalIgnoreCase))
+            else if (span.Equals(propertyPath.AsSpan(), StringComparison.OrdinalIgnoreCase))
             {
                 return true;
             }
