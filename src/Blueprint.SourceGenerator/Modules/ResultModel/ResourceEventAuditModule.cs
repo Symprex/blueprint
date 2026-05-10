@@ -84,22 +84,20 @@ public sealed class ResourceEventAuditModule : IBlueprintSourceGeneratorModule, 
                         innerBranch.WriteStatement(
                             $"context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent(\"blueprint.resource_event_audit.started\", default, new System.Diagnostics.ActivityTagsCollection {{ {{ \"blueprint.operation.type\", \"{operationTypeName}\" }}, {{ \"blueprint.resource_event.id\", _reAuditResult.EventId }}, {{ \"blueprint.resource_event.resource_id\", _reAuditResult.ResourceId }} }}));");
 
-                        innerBranch.WriteStatement("try");
-                        innerBranch.WriteStatement("{");
-                        innerBranch.WriteStatement(
-                            "    await resourceEventAuditSink.RecordAsync(_reAuditResult.EventId, _reAuditResult.ResourceId, context, System.Threading.CancellationToken.None);");
+                        innerBranch.Try(tryBranch =>
+                        {
+                            tryBranch.WriteStatement(
+                                "await resourceEventAuditSink.RecordAsync(_reAuditResult.EventId, _reAuditResult.ResourceId, context, System.Threading.CancellationToken.None);");
 
-                        innerBranch.WriteStatement(
-                            $"    context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent(\"blueprint.resource_event_audit.succeeded\", default, new System.Diagnostics.ActivityTagsCollection {{ {{ \"blueprint.operation.type\", \"{operationTypeName}\" }}, {{ \"blueprint.resource_event.id\", _reAuditResult.EventId }} }}));");
+                            tryBranch.WriteStatement(
+                                $"context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent(\"blueprint.resource_event_audit.succeeded\", default, new System.Diagnostics.ActivityTagsCollection {{ {{ \"blueprint.operation.type\", \"{operationTypeName}\" }}, {{ \"blueprint.resource_event.id\", _reAuditResult.EventId }} }}));");
+                        });
 
-                        innerBranch.WriteStatement("}");
-                        innerBranch.WriteStatement("catch (System.Exception resourceEventAuditException)");
-                        innerBranch.WriteStatement("{");
-
-                        innerBranch.WriteStatement(
-                            $"    context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent(\"blueprint.resource_event_audit.failed\", default, new System.Diagnostics.ActivityTagsCollection {{ {{ \"blueprint.operation.type\", \"{operationTypeName}\" }}, {{ \"blueprint.resource_event.id\", _reAuditResult.EventId }}, {{ \"exception.type\", resourceEventAuditException.GetType().FullName }}, {{ \"exception.message\", resourceEventAuditException.Message }}, {{ \"exception.stacktrace\", resourceEventAuditException.StackTrace }} }}));");
-
-                        innerBranch.WriteStatement("}");
+                        innerBranch.Catch("System.Exception resourceEventAuditException", catchBranch =>
+                        {
+                            catchBranch.WriteStatement(
+                                $"context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent(\"blueprint.resource_event_audit.failed\", default, new System.Diagnostics.ActivityTagsCollection {{ {{ \"blueprint.operation.type\", \"{operationTypeName}\" }}, {{ \"blueprint.resource_event.id\", _reAuditResult.EventId }}, {{ \"exception.type\", resourceEventAuditException.GetType().FullName }}, {{ \"exception.message\", resourceEventAuditException.Message }}, {{ \"exception.stacktrace\", resourceEventAuditException.StackTrace }} }}));");
+                        });
                     });
             });
     }

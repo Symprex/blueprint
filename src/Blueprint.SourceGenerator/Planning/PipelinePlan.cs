@@ -386,6 +386,25 @@ public sealed class PipelineRenderContext
     {
         this._writer.If(condition, branchWriter => render(new PipelineRenderContext(branchWriter, this._handler, this._plan)));
     }
+
+    /// <summary>
+    /// Emits a <c>try</c> block. Must be followed by a <see cref="Catch"/> call.
+    /// </summary>
+    /// <param name="render">The nested render callback for the try body.</param>
+    public void Try(Action<PipelineRenderContext> render)
+    {
+        this._writer.Try(tryWriter => render(new PipelineRenderContext(tryWriter, this._handler, this._plan)));
+    }
+
+    /// <summary>
+    /// Emits a <c>catch</c> block following a <see cref="Try"/> call.
+    /// </summary>
+    /// <param name="exceptionDeclaration">The exception declaration (e.g. <c>"System.Exception ex"</c>).</param>
+    /// <param name="render">The nested render callback for the catch body.</param>
+    public void Catch(string exceptionDeclaration, Action<PipelineRenderContext> render)
+    {
+        this._writer.Catch(exceptionDeclaration, catchWriter => render(new PipelineRenderContext(catchWriter, this._handler, this._plan)));
+    }
 }
 
 /// <summary>
