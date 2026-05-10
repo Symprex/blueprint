@@ -305,6 +305,12 @@ public static class RecursiveDataAnnotationValidator
 
     private static string ToCamelCasePath(string memberName)
     {
+        // Fast path: most member names contain no dots, so avoid Split/Join overhead
+        if (!memberName.Contains('.'))
+        {
+            return ToCamelCase(memberName);
+        }
+
         return string.Join(".", memberName.Split('.').Select(ToCamelCase));
     }
 }
