@@ -250,6 +250,34 @@ public class HttpClientRequestBuilderModuleTests
         source.Should().NotContain("typed.OldFilter");
     }
 
+    [Fact]
+    public void When_query_has_array_property_then_emits_foreach_loop()
+    {
+        var result = CompileDescriptor(
+            """
+            [global::Blueprint.Model.Attributes.RootLink("/items")]
+            public partial class SearchItemsQuery : IQuery<string>
+            {
+                public string[] Ids { get; set; }
+                public string Filter { get; set; }
+
+                public static Task<string> HandleAsync(SearchItemsQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var source = GetDescriptorSource(result, "SearchItemsQuery");
+        source.Should().Contain("CompiledHttpRequestFeatureData");
+
+        // Collection should use foreach to emit repeated keys
+        source.Should().Contain("foreach (var _item in typed.Ids)");
+        source.Should().Contain("Ids=");
+    }
+
     private static GenerationResult CompileDescriptor(string source)
     {
         return TestHelpers.Compile<OperationDescriptorSourceGenerator>(

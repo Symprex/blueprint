@@ -223,7 +223,12 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
             var propAccess = $"typed.{prop.Name}";
             var escapedName = Uri.EscapeDataString(prop.Name);
 
-            if (prop.Type.SpecialType == SpecialType.System_Boolean)
+            // Check if the property is a collection type (IEnumerable<T>, List<T>, T[], etc.)
+            if (IsEnumerableType(prop.Type, out var elementType))
+            {
+                EmitCollectionQueryParam(parts, propAccess, escapedName, elementType);
+            }
+            else if (prop.Type.SpecialType == SpecialType.System_Boolean)
             {
                 parts.Add($"parts.Add(\"{escapedName}=\" + ({propAccess} ? \"true\" : \"false\"));");
             }
@@ -258,5 +263,88 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
         parts.Add("return url + sep + string.Join(\"&\", parts); }");
 
         return string.Join(" ", parts);
+    }
+
+    /// <summary>
+    /// Determines whether <paramref name="type"/> is a collection that should be expanded as
+    /// repeated query-string keys (e.g. <c>?ids=1&amp;ids=2</c>). Returns the element type
+    /// when the type is an array or implements <c>IEnumerable&lt;T&gt;</c> (excluding
+    /// <see cref="string"/> which is itself <c>IEnumerable&lt;char&gt;</c>).
+    /// </summary>
+    private static bool IsEnumerableType(ITypeSymbol type, out ITypeSymbol? elementType)
+    {
+        elementType = null;
+
+        // string is IEnumerable<char> but should not be treated as a collection
+        if (type.SpecialType == SpecialType.System_String)
+        {
+            return false;
+        }
+
+        // Arrays: T[]
+        if (type is IArrayTypeSymbol arrayType)
+        {
+            elementType = arrayType.ElementType;
+            return true;
+        }
+
+        // IEnumerable<T>, IReadOnlyList<T>, List<T>, IList<T>, etc.
+        foreach (var iface in type.AllInterfaces)
+        {
+            if (iface is INamedTypeSymbol { IsGenericType: true } named
+                && named.ConstructedFrom.SpecialType == SpecialType.System_Collections_Generic_IEnumerable_T)
+            {
+                elementType = named.TypeArguments[0];
+                return true;
+            }
+        }
+
+        // Also check if the type itself is IEnumerable<T>
+        if (type is INamedTypeSymbol { IsGenericType: true } self
+            && self.ConstructedFrom.SpecialType == SpecialType.System_Collections_Generic_IEnumerable_T)
+        {
+            elementType = self.TypeArguments[0];
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Emits a <c>foreach</c> loop that appends one query-string key per element,
+    /// producing the standard repeated-key encoding (e.g. <c>?ids=1&amp;ids=2&amp;ids=3</c>).
+    /// </summary>
+    private static void EmitCollectionQueryParam(
+        List<string> parts,
+        string propAccess,
+        string escapedName,
+        ITypeSymbol? elementType)
+    {
+        parts.Add($"if ({propAccess} is not null)");
+        parts.Add("{");
+        parts.Add($"foreach (var _item in {propAccess})");
+        parts.Add("{");
+
+        if (elementType?.SpecialType == SpecialType.System_String)
+        {
+            parts.Add($"if (_item is not null && _item.Length > 0) parts.Add(\"{escapedName}=\" + global::System.Uri.EscapeDataString(_item));");
+        }
+        else if (elementType?.SpecialType == SpecialType.System_Boolean)
+        {
+            parts.Add($"parts.Add(\"{escapedName}=\" + (_item ? \"true\" : \"false\"));");
+        }
+        else if (elementType is { IsValueType: true, NullableAnnotation: not NullableAnnotation.Annotated })
+        {
+            // Non-nullable value types (int, Guid, etc.) — ToString() is always safe
+            parts.Add($"parts.Add(\"{escapedName}=\" + global::System.Uri.EscapeDataString(_item.ToString()!));");
+        }
+        else
+        {
+            // Reference types or nullable value types — null-check required
+            parts.Add($"{{ var s = _item?.ToString(); if (!string.IsNullOrEmpty(s)) parts.Add(\"{escapedName}=\" + global::System.Uri.EscapeDataString(s)); }}");
+        }
+
+        parts.Add("}");
+        parts.Add("}");
     }
 }
