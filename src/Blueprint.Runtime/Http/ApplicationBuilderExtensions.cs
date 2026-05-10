@@ -177,7 +177,7 @@ public static class EndpointRouteBuilderExtensions
         private readonly BlueprintApp _app;
         private readonly ILogger<BlueprintApiRouter<TExec>> _logger;
         private readonly BlueprintHttpOptions _httpOptions;
-        private readonly string _basePath;
+        private readonly PathString _normalizedBasePath;
 
         public BlueprintApiRouter(
             IServiceProvider rootServiceProvider,
@@ -190,13 +190,12 @@ public static class EndpointRouteBuilderExtensions
             this._app = app;
             this._logger = logger;
             this._httpOptions = httpOptions;
-            this._basePath = basePath;
+            this._normalizedBasePath = new PathString("/" + basePath.TrimStart('/'));
         }
 
         public async Task RouteAsync(HttpContext httpContext)
         {
             var endpoint = httpContext.GetEndpoint()!;
-            var routeData = httpContext.GetRouteData();
             var httpRequest = httpContext.Request;
 
             var operation = endpoint.Metadata.GetMetadata<ApiOperationDescriptor>()!;
@@ -224,7 +223,7 @@ public static class EndpointRouteBuilderExtensions
             // Compute a stable base URI for link generation and redirect targets.
             // PathString concatenation handles slash normalization correctly.
             var host = this._httpOptions.PublicHost ?? httpRequest.Host.Value;
-            var basePath = httpRequest.PathBase.Add(new PathString("/" + this._basePath.TrimStart('/')));
+            var basePath = httpRequest.PathBase.Add(this._normalizedBasePath);
             apiContext.Data["blueprint:base-uri"] = $"{httpRequest.Scheme}://{host}{basePath}";
 
             var result = await nestedContainer.ServiceProvider.GetRequiredService<TExec>().GetPipeline(operation.OperationType).ExecuteAsync(apiContext);
