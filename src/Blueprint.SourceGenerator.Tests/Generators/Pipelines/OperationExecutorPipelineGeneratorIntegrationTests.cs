@@ -1009,6 +1009,54 @@ public class OperationExecutorPipelineGeneratorIntegrationTests
     }
 
     [Fact]
+    public void When_operation_implements_both_ICommand_and_IQuery_then_reports_BP115()
+    {
+        var source = """
+                     using Blueprint.Model;
+
+                     namespace TestNamespace;
+
+                     public partial class BadOperation : ICommand<string>, IQuery<string>
+                     {
+                         public static ApiOperationDescriptor Configure()
+                         {
+                             return new ApiOperationDescriptor(typeof(BadOperation), nameof(BadOperation), "Tests");
+                         }
+
+                         public static string Invoke() => "Hello";
+                     }
+                     """;
+
+        var result = TestHelpers.Compile<Blueprint.SourceGenerator.Generators.Descriptors.OperationDescriptorSourceGenerator>(source);
+
+        result.Diagnostics.Should().ContainSingle(static diagnostic => diagnostic.Id == "BP115");
+    }
+
+    [Fact]
+    public void When_operation_implements_only_ICommand_then_no_BP115()
+    {
+        var source = """
+                     using Blueprint.Model;
+
+                     namespace TestNamespace;
+
+                     public partial class GoodCommand : ICommand<string>
+                     {
+                         public static ApiOperationDescriptor Configure()
+                         {
+                             return new ApiOperationDescriptor(typeof(GoodCommand), nameof(GoodCommand), "Tests");
+                         }
+
+                         public static string Invoke() => "Hello";
+                     }
+                     """;
+
+        var result = TestHelpers.Compile<Blueprint.SourceGenerator.Generators.Descriptors.OperationDescriptorSourceGenerator>(source);
+
+        result.Diagnostics.Where(static d => d.Id == "BP115").Should().BeEmpty();
+    }
+
+    [Fact]
     public void Plain_value_handler_with_incompatible_declared_contract_generates_diagnostic()
     {
         var source = """

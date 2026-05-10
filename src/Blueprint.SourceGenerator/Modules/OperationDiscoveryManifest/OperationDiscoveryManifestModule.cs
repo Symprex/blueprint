@@ -1,3 +1,5 @@
+using Blueprint.SourceGenerator.Generators.Pipelines;
+using Blueprint.SourceGenerator.Helpers;
 using Blueprint.SourceGenerator.Planning;
 using Microsoft.CodeAnalysis;
 using Newtonsoft.Json.Linq;
@@ -36,6 +38,9 @@ public sealed class OperationDiscoveryManifestModule : IBlueprintSourceGenerator
     public void ContributeToDescriptor(DescriptorContributorContext context)
     {
         var typeSymbol = context.GetOperationTypeSymbol();
+
+        ValidateCommandQueryConflict(context, typeSymbol);
+
         var featureData = CreatePlanData(typeSymbol);
         var hostNames = GetOrderedHostNames(context.GetMetadata<HostExposureRegistration>());
 
@@ -136,6 +141,43 @@ public sealed class OperationDiscoveryManifestModule : IBlueprintSourceGenerator
     private static string RenderStringLiteral(string value)
     {
         return CSharpSymbolDisplay.FormatLiteral(value, quote: true);
+    }
+
+    /// <summary>
+    /// Emits BP115 when an operation implements both <c>ICommand</c> and <c>IQuery</c>,
+    /// which violates command-query separation.
+    /// </summary>
+    private static void ValidateCommandQueryConflict(DescriptorContributorContext context, INamedTypeSymbol typeSymbol)
+    {
+        var isCommand = false;
+        var isQuery = false;
+
+        foreach (var iface in typeSymbol.AllInterfaces)
+        {
+            if (iface.ContainingNamespace.ToDisplayString() != "Blueprint.Model")
+            {
+                continue;
+            }
+
+            if (iface.Name == "ICommand")
+            {
+                isCommand = true;
+            }
+            else if (iface.Name == "IQuery")
+            {
+                isQuery = true;
+            }
+        }
+
+        if (isCommand && isQuery)
+        {
+            var location = typeSymbol.Locations.FirstOrDefault();
+            context.AddDiagnostic(
+                new DiagnosticInfo(
+                    DiagnosticDescriptors.CommandAndQueryConflict,
+                    location,
+                    [typeSymbol.Name]));
+        }
     }
 
     /// <summary>

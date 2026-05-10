@@ -141,4 +141,17 @@ internal static class ValidationDiagnosticDescriptors
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
         description: "A RegularExpressionAttribute with an empty pattern will match everything and is almost certainly a mistake.");
+
+    /// <summary>
+    /// Gets the diagnostic emitted when a <c>[Required]</c> attribute is applied to a non-nullable value type
+    /// where the attribute has no practical effect because the property can never be <see langword="null"/>.
+    /// </summary>
+    public static readonly DiagnosticDescriptor RedundantRequiredOnValueType = new(
+        id: "BPV012",
+        title: "[Required] is redundant on non-nullable value type",
+        messageFormat: "Property '{0}' on operation '{1}' is a non-nullable value type ({2}) where [Required] has no effect — consider removing it or using '{2}?' if the property should be optional",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "Applying [Required] to a non-nullable value type (int, bool, Guid, etc.) has no effect because the property can never be null. Use a nullable type (e.g. int?) if the property should be optional, or remove the attribute to reduce noise.");
 }

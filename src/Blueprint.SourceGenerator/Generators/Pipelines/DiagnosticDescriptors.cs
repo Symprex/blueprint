@@ -191,6 +191,18 @@ internal static class DiagnosticDescriptors
         isEnabledByDefault: true,
         description: "Each member type in a Results<T1, T2> union must be unique. Duplicate members are almost certainly a copy-paste mistake.");
 
+    /// <summary>
+    /// BP115: Operation implements both ICommand and IQuery.
+    /// </summary>
+    public static readonly DiagnosticDescriptor CommandAndQueryConflict = new(
+        id: "BP115",
+        title: "Operation implements both ICommand and IQuery",
+        messageFormat: "The operation '{0}' implements both ICommand and IQuery which violates command-query separation — choose one",
+        category: Category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "An operation must be either a command (mutates state) or a query (reads state), not both. Implementing both ICommand and IQuery causes ambiguous pipeline behavior.");
+
     // Warning diagnostics (BP200-BP299)
 
     /// <summary>

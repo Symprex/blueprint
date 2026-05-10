@@ -120,6 +120,7 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
 
             ValidateConflictingRanges(context, operationType.Name, property);
             ValidateEmptyRegexPattern(context, operationType.Name, property);
+            ValidateRedundantRequiredOnValueType(context, operationType.Name, property);
         }
     }
 
@@ -286,6 +287,36 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
                     ValidationDiagnosticDescriptors.EmptyRegularExpressionPattern,
                     location,
                     [property.Name, operationTypeName]));
+        }
+    }
+
+    /// <summary>
+    /// Emits BPV012 when <c>[Required]</c> is applied to a non-nullable value type where it has no practical effect.
+    /// </summary>
+    private static void ValidateRedundantRequiredOnValueType(
+        DescriptorContributorContext context,
+        string operationTypeName,
+        IPropertySymbol property)
+    {
+        // Only applies to non-nullable value types (int, bool, Guid, enum, etc.)
+        if (property.Type.IsValueType
+            && property.Type.NullableAnnotation != NullableAnnotation.Annotated
+            && property.Type.OriginalDefinition.SpecialType != SpecialType.System_Nullable_T)
+        {
+            foreach (var attr in property.GetAttributes())
+            {
+                if (!ValidationSymbolHelpers.IsRequiredAttribute(attr.AttributeClass))
+                {
+                    continue;
+                }
+
+                var location = attr.ApplicationSyntaxReference?.GetSyntax().GetLocation() ?? property.Locations.FirstOrDefault();
+                context.AddDiagnostic(
+                    new DiagnosticInfo(
+                        ValidationDiagnosticDescriptors.RedundantRequiredOnValueType,
+                        location,
+                        [property.Name, operationTypeName, property.Type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)]));
+            }
         }
     }
 

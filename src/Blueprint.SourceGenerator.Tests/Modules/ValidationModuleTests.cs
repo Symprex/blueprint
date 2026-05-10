@@ -2649,6 +2649,79 @@ public class ValidationModuleTests
     }
 
     [Fact]
+    public void When_Required_on_non_nullable_value_type_then_reports_BPV012()
+    {
+        var source = """
+                     using System.ComponentModel.DataAnnotations;
+
+                     public partial class IncludedOperation : IOperation
+                     {
+                         [Required]
+                         public int Count { get; set; }
+                     }
+                     """;
+
+        var result = CompileDescriptor(source);
+
+        result.Diagnostics.Select(static d => d.Id).Should().Contain("BPV012");
+    }
+
+    [Fact]
+    public void When_Required_on_nullable_value_type_then_no_BPV012()
+    {
+        var source = """
+                     using System.ComponentModel.DataAnnotations;
+
+                     public partial class IncludedOperation : IOperation
+                     {
+                         [Required]
+                         public int? Count { get; set; }
+                     }
+                     """;
+
+        var result = CompileDescriptor(source);
+
+        result.Diagnostics.Where(static d => d.Id == "BPV012").Should().BeEmpty();
+    }
+
+    [Fact]
+    public void When_Required_on_reference_type_then_no_BPV012()
+    {
+        var source = """
+                     using System.ComponentModel.DataAnnotations;
+
+                     public partial class IncludedOperation : IOperation
+                     {
+                         [Required]
+                         public string? Name { get; set; }
+                     }
+                     """;
+
+        var result = CompileDescriptor(source);
+
+        result.Diagnostics.Where(static d => d.Id == "BPV012").Should().BeEmpty();
+    }
+
+    [Fact]
+    public void When_Required_on_non_nullable_Guid_then_reports_BPV012()
+    {
+        var source = """
+                     using System;
+                     using System.ComponentModel.DataAnnotations;
+
+                     public partial class IncludedOperation : IOperation
+                     {
+                         [Required]
+                         public Guid Id { get; set; }
+                     }
+                     """;
+
+        var result = CompileDescriptor(source);
+
+        result.Diagnostics.Select(static d => d.Id).Should().Contain("BPV012");
+    }
+
+    [Fact]
     public void Inline_handler_with_additional_blueprint_validation_attributes_generates_fast_property_checks_before_handler_invocation()
     {
         var source = """
