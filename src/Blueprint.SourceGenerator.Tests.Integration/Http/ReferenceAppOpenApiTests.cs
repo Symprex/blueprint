@@ -354,6 +354,36 @@ public class ReferenceAppOpenApiTests
     }
 
     [Fact]
+    public async Task When_route_uses_catch_all_then_openapi_renders_allow_reserved()
+    {
+        var (json, _) = await InvokeOpenApiEndpointAsync();
+        using var doc = JsonDocument.Parse(json);
+
+        var folderPath = doc.RootElement.GetProperty("paths").GetProperty("/folders/{**FolderPath}");
+        var parameters = folderPath.GetProperty("get").GetProperty("parameters");
+        var folderPathParam = parameters.EnumerateArray()
+            .Single(static p => p.GetProperty("name").GetString() == "FolderPath");
+
+        folderPathParam.GetProperty("allowReserved").GetBoolean().Should().BeTrue(
+            "catch-all route parameters should emit allowReserved: true");
+    }
+
+    [Fact]
+    public async Task When_route_uses_normal_parameter_then_openapi_does_not_render_allow_reserved()
+    {
+        var (json, _) = await InvokeOpenApiEndpointAsync();
+        using var doc = JsonDocument.Parse(json);
+
+        var templatePath = doc.RootElement.GetProperty("paths").GetProperty("/templates/{Id}");
+        var parameters = templatePath.GetProperty("get").GetProperty("parameters");
+        var idParam = parameters.EnumerateArray()
+            .Single(static p => p.GetProperty("name").GetString() == "Id");
+
+        idParam.TryGetProperty("allowReserved", out _).Should().BeFalse(
+            "regular route parameters should not emit allowReserved");
+    }
+
+    [Fact]
     public async Task When_body_property_is_nullable_and_not_required_then_openapi_renders_nullable()
     {
         var (json, _) = await InvokeOpenApiEndpointAsync();

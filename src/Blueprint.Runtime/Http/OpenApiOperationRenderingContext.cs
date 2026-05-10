@@ -161,6 +161,9 @@ public sealed record OpenApiOperationRenderingContext(
 
         descriptor.TryGetFeatureData<OperationDocumentationFeatureData>(out var docData);
 
+        // Pre-compute which route parameter names are catch-all (contain slashes/reserved chars).
+        var catchAllNames = BuildCatchAllParameterNames(descriptor);
+
         var parameters = ImmutableArray.CreateBuilder<OpenApiParameterModel>();
         var bodyProperties = ImmutableArray.CreateBuilder<OpenApiRequestBodyPropertyModel>();
 
@@ -190,8 +193,9 @@ public sealed record OpenApiOperationRenderingContext(
             switch (entry.Source)
             {
                 case PropertyBindingSource.Route:
+                    var bindingName = entry.BindingName ?? entry.PropertyName;
                     parameters.Add(new OpenApiParameterModel(
-                        entry.BindingName ?? entry.PropertyName,
+                        bindingName,
                         "path",
                         Required: true,
                         schemaType,
@@ -210,6 +214,7 @@ public sealed record OpenApiOperationRenderingContext(
                         IsDeprecated = isDeprecated,
                         DeprecationReason = propertyDeprecationReason,
                         ExampleValue = exampleValueAttr?.Value,
+                        AllowReserved = catchAllNames.Contains(bindingName),
                     });
                     break;
 
@@ -645,6 +650,61 @@ public sealed record OpenApiOperationRenderingContext(
 
         // IParsable without a recognisable wrapped field still serialises as a string.
         return ("string", null);
+    }
+
+    /// <summary>
+    /// Scans the descriptor's URL formats for catch-all route placeholders (<c>{*name}</c> or <c>{**name}</c>)
+    /// and returns the set of parameter names that require <c>allowReserved: true</c> in OpenAPI.
+    /// </summary>
+    private static HashSet<string> BuildCatchAllParameterNames(ApiOperationDescriptor descriptor)
+    {
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var url in descriptor.Urls)
+        {
+            var remaining = url.UrlFormat.AsSpan();
+
+            while (true)
+            {
+                var open = remaining.IndexOf('{');
+                if (open < 0)
+                {
+                    break;
+                }
+
+                remaining = remaining[(open + 1)..];
+                var close = remaining.IndexOf('}');
+                if (close < 0)
+                {
+                    break;
+                }
+
+                var placeholder = remaining[..close];
+                remaining = remaining[(close + 1)..];
+
+                // Catch-all: {*name} or {**name}
+                if (placeholder.Length > 1 && placeholder[0] == '*')
+                {
+                    var paramName = placeholder[1] == '*'
+                        ? placeholder[2..]
+                        : placeholder[1..];
+
+                    // Strip any inline constraint (e.g. {**path:required})
+                    var colonIdx = paramName.IndexOf(':');
+                    if (colonIdx >= 0)
+                    {
+                        paramName = paramName[..colonIdx];
+                    }
+
+                    if (paramName.Length > 0)
+                    {
+                        names.Add(paramName.ToString());
+                    }
+                }
+            }
+        }
+
+        return names;
     }
 }
 

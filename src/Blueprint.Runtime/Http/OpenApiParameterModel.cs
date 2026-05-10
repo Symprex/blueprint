@@ -58,6 +58,12 @@ public sealed record OpenApiParameterModel(
     /// <summary>Gets the deprecation reason extracted from the <see cref="System.ObsoleteAttribute.Message"/>, or null when unset.</summary>
     public string? DeprecationReason { get; init; }
 
+    /// <summary>
+    /// Gets whether this parameter uses <c>allowReserved: true</c>, which is required for catch-all route
+    /// parameters (<c>{*param}</c> or <c>{**param}</c>) that may contain forward slashes or other reserved characters.
+    /// </summary>
+    public bool AllowReserved { get; init; }
+
     /// <summary>Gets a representative example value from <see cref="Blueprint.Model.Attributes.OpenApiExampleAttribute"/>, or null when unset.</summary>
     public object? ExampleValue { get; init; }
 }

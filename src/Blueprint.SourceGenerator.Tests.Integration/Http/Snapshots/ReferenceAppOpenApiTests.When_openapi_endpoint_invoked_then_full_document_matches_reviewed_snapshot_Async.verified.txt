@@ -120,6 +120,7 @@
             "name": "FolderPath",
             "in": "path",
             "required": true,
+            "allowReserved": true,
             "description": "Path of the folder (may contain / separators).",
             "schema": {
               "type": "string"

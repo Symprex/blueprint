@@ -294,6 +294,11 @@ public sealed record OpenApiOutputRenderingContext(
             writer.WriteString("in", parameter.In);
             writer.WriteBoolean("required", parameter.Required);
 
+            if (parameter.AllowReserved)
+            {
+                writer.WriteBoolean("allowReserved", true);
+            }
+
             if (parameter.Description is not null)
             {
                 writer.WriteString("description", parameter.Description);
