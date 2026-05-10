@@ -51,9 +51,17 @@ public sealed class BlueprintApiActivator : IContainerAdapter
             {
                 var (app, sp) = state;
 
-                if (!app.TryFindOperation(messageType, out _))
+                if (!app.TryFindOperation(messageType, out var descriptor))
                 {
                     return Task.FromResult(Enumerable.Empty<IHandleMessages<TMessage>>());
+                }
+
+                // Tag the descriptor as a Rebus message and hide from HTTP exposure
+                if (!descriptor.TryGetFeatureData<RebusMessageFeature>(out _))
+                {
+                    descriptor.SetFeatureData(new RebusMessageFeature());
+                    descriptor.IsExposed = false;
+                    descriptor.AnonymousAccessAllowed = true;
                 }
 
                 var singleHandler = (IHandleMessages<TMessage>)Activator
@@ -87,7 +95,10 @@ public sealed class BlueprintApiActivator : IContainerAdapter
 
         /// <summary>
         /// Handles a Rebus message by creating a scoped Blueprint execution context and
-        /// running the message through the generated pipeline.
+        /// running the message through the generated pipeline. Unless the operation type
+        /// is decorated with <see cref="NoRebusTransactionAttribute"/>, execution is wrapped
+        /// in a <see cref="RebusTransactionScope"/> so that outgoing messages are batched
+        /// and sent only after successful completion.
         /// </summary>
         public async Task Handle(T message)
         {
@@ -113,11 +124,30 @@ public sealed class BlueprintApiActivator : IContainerAdapter
             // Store the Rebus message context so pipeline code can access it
             apiContext.Data["MessageContext"] = messageContext;
 
-            var result = await executor.ExecuteAsync(apiContext);
+            // Wrap in Rebus transaction scope unless opted out via [NoRebusTransaction]
+            var useTransaction = !typeof(T).IsDefined(typeof(NoRebusTransactionAttribute), inherit: false);
 
-            if (result is UnhandledExceptionResult { Exception: { } exception })
+            if (useTransaction)
             {
-                ExceptionDispatchInfo.Throw(exception);
+                using var txnScope = new RebusTransactionScope();
+
+                var result = await executor.ExecuteAsync(apiContext);
+
+                if (result is UnhandledExceptionResult { Exception: { } exception })
+                {
+                    ExceptionDispatchInfo.Throw(exception);
+                }
+
+                await txnScope.CompleteAsync();
+            }
+            else
+            {
+                var result = await executor.ExecuteAsync(apiContext);
+
+                if (result is UnhandledExceptionResult { Exception: { } exception })
+                {
+                    ExceptionDispatchInfo.Throw(exception);
+                }
             }
         }
     }
