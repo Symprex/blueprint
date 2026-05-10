@@ -239,6 +239,7 @@ namespace TestNamespace
             : base(app)
         {
             this.Register(typeof(global::TestNamespace.CreateDisclaimerCommand), new Blueprint.Generated.CreateDisclaimerCommandExecutorPipeline(loggerFactory));
+            this.Freeze();
         }
     }
 }

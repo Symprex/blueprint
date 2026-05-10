@@ -266,6 +266,7 @@ namespace TestNamespace
             : base(app)
         {
             this.Register(typeof(global::TestNamespace.CreateResourceCommand), new Blueprint.Generated.CreateResourceCommandExecutorPipeline(loggerFactory));
+            this.Freeze();
         }
     }
 }

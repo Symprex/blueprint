@@ -235,6 +235,7 @@ namespace TestNamespace
             : base(app)
         {
             this.Register(typeof(global::TestNamespace.CreateTenantUserCommand), new Blueprint.Generated.CreateTenantUserCommandExecutorPipeline(loggerFactory));
+            this.Freeze();
         }
     }
 }

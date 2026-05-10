@@ -611,6 +611,7 @@ namespace TestNamespace
         {
             this.Register(typeof(global::TestNamespace.AllTypesPostCommand), new Blueprint.Generated.AllTypesPostCommandExecutorPipeline(loggerFactory));
             this.Register(typeof(global::TestNamespace.AllTypesGetQuery), new Blueprint.Generated.AllTypesGetQueryExecutorPipeline(loggerFactory));
+            this.Freeze();
         }
     }
 }

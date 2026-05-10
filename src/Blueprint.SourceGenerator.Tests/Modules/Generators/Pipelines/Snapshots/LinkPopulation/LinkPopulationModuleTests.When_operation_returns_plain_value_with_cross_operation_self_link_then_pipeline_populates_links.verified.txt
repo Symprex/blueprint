@@ -182,6 +182,7 @@ namespace TestNamespace
         {
             this.Register(typeof(global::TestNamespace.UpdateWidgetCommand), new Blueprint.Generated.UpdateWidgetCommandExecutorPipeline(loggerFactory));
             this.Register(typeof(global::TestNamespace.GetWidgetQuery), new Blueprint.Generated.GetWidgetQueryExecutorPipeline(loggerFactory));
+            this.Freeze();
         }
     }
 }

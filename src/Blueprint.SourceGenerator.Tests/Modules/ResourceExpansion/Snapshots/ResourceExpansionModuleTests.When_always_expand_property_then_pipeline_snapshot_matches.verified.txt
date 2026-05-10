@@ -106,6 +106,7 @@ namespace TestNamespace
             : base(app)
         {
             this.Register(typeof(global::TestNamespace.GetSummaryQuery), new Blueprint.Generated.GetSummaryQueryExecutorPipeline(loggerFactory));
+            this.Freeze();
         }
     }
 }

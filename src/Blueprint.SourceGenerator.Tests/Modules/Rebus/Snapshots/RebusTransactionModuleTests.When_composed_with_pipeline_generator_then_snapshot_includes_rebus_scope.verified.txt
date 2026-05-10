@@ -113,6 +113,7 @@ namespace TestNamespace
             : base(app)
         {
             this.Register(typeof(global::TestNamespace.PlaceOrderCommand), new Blueprint.Generated.PlaceOrderCommandExecutorPipeline(loggerFactory));
+            this.Freeze();
         }
     }
 }

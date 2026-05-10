@@ -33,6 +33,9 @@ internal static class ExecutorCodeGenerator
                         var pipelineType = $"Blueprint.Generated.{handler.PipelineClassName}";
                         writer.AppendLine($"this.Register(typeof({handler.OperationTypeFullName}), new {pipelineType}(loggerFactory));");
                     }
+
+                    // Freeze the pipeline dictionary after all registrations for optimal dispatch performance
+                    writer.AppendLine("this.Freeze();");
                 });
 
         return codeBuilder.Build();

@@ -198,6 +198,7 @@ namespace TestNamespace
             : base(app)
         {
             this.Register(typeof(global::TestNamespace.GetUserItemsQuery), new Blueprint.Generated.GetUserItemsQueryExecutorPipeline(loggerFactory));
+            this.Freeze();
         }
     }
 }

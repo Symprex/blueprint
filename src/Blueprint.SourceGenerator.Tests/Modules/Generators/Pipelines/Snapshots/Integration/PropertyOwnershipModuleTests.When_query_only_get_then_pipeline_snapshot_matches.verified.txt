@@ -179,6 +179,7 @@ namespace TestNamespace
             : base(app)
         {
             this.Register(typeof(global::TestNamespace.SearchAllQuery), new Blueprint.Generated.SearchAllQueryExecutorPipeline(loggerFactory));
+            this.Freeze();
         }
     }
 }

@@ -115,6 +115,7 @@ namespace TestNamespace
             : base(app)
         {
             this.Register(typeof(global::TestNamespace.TestCommand), new Blueprint.Generated.TestCommandExecutorPipeline(loggerFactory));
+            this.Freeze();
         }
     }
 }

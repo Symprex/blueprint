@@ -186,6 +186,7 @@ namespace TestNamespace
             : base(app)
         {
             this.Register(typeof(global::TestNamespace.EditDocCommand), new Blueprint.Generated.EditDocCommandExecutorPipeline(loggerFactory));
+            this.Freeze();
         }
     }
 }

@@ -314,6 +314,7 @@ namespace TestNamespace
         {
             this.Register(typeof(global::TestNamespace.ProcessOrderMessage), new Blueprint.Generated.ProcessOrderMessageExecutorPipeline(loggerFactory));
             this.Register(typeof(global::TestNamespace.GetOrderStatus), new Blueprint.Generated.GetOrderStatusExecutorPipeline(loggerFactory));
+            this.Freeze();
         }
     }
 }

@@ -97,6 +97,7 @@ namespace TestNamespace
             : base(app)
         {
             this.Register(typeof(global::TestNamespace.IncludedOperation), new Blueprint.Generated.IncludedOperationExecutorPipeline(loggerFactory));
+            this.Freeze();
         }
     }
 }

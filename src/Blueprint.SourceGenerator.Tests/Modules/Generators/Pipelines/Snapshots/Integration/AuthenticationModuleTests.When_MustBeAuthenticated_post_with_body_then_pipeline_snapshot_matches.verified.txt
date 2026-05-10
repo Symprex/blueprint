@@ -19,6 +19,7 @@ namespace TestNamespace
             : base(app)
         {
             this.Register(typeof(global::TestNamespace.UpdateItemCommand), new Blueprint.Generated.UpdateItemCommandExecutorPipeline(loggerFactory));
+            this.Freeze();
         }
     }
 }

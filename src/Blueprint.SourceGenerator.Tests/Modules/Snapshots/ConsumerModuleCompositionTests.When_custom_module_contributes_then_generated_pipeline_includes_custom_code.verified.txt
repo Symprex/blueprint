@@ -111,6 +111,7 @@ namespace TestNamespace
             : base(app)
         {
             this.Register(typeof(global::TestNamespace.EnrichedCommand), new Blueprint.Generated.EnrichedCommandExecutorPipeline(loggerFactory));
+            this.Freeze();
         }
     }
 }

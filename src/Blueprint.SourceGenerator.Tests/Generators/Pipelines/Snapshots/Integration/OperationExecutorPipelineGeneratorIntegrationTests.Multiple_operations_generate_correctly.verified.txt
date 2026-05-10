@@ -188,6 +188,7 @@ namespace TestNamespace
         {
             this.Register(typeof(global::TestNamespace.GetUserQuery), new Blueprint.Generated.GetUserQueryExecutorPipeline(loggerFactory));
             this.Register(typeof(global::TestNamespace.CreateUserCommand), new Blueprint.Generated.CreateUserCommandExecutorPipeline(loggerFactory));
+            this.Freeze();
         }
     }
 }

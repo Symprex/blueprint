@@ -109,6 +109,7 @@ namespace TestNamespace
             : base(app)
         {
             this.Register(typeof(global::TestNamespace.PublishOrderCommand), new Blueprint.Generated.PublishOrderCommandExecutorPipeline(loggerFactory));
+            this.Freeze();
         }
     }
 }

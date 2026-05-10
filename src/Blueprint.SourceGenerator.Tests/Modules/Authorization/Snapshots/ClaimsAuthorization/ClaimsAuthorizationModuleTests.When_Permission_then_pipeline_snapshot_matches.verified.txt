@@ -172,6 +172,7 @@ namespace TestNamespace
             : base(app)
         {
             this.Register(typeof(global::TestNamespace.ListUsersQuery), new Blueprint.Generated.ListUsersQueryExecutorPipeline(loggerFactory));
+            this.Freeze();
         }
     }
 }

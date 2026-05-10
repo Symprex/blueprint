@@ -97,6 +97,7 @@ namespace TestNamespace
             : base(app)
         {
             this.Register(typeof(global::TestNamespace.GetOrdersQuery), new Blueprint.Generated.GetOrdersQueryExecutorPipeline(loggerFactory));
+            this.Freeze();
         }
     }
 }

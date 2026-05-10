@@ -98,6 +98,7 @@ namespace TestNamespace
             : base(app)
         {
             this.Register(typeof(global::TestNamespace.TestQuery), new Blueprint.Generated.TestQueryExecutorPipeline(loggerFactory));
+            this.Freeze();
         }
     }
 }
