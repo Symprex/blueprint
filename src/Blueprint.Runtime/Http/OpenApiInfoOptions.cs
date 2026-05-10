@@ -42,6 +42,20 @@ public sealed class OpenApiInfoOptions
     /// When empty, the <c>servers</c> section is omitted. Servers are rendered in list order.
     /// </summary>
     public List<OpenApiServerEntry> Servers { get; } = [];
+
+    /// <summary>
+    /// Gets the list of security scheme definitions to include in the OpenAPI
+    /// <c>components.securitySchemes</c> object. When empty, the default <c>bearerAuth</c>
+    /// JWT scheme is emitted for any operation that requires authentication.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Add entries to override the default Bearer JWT scheme with OAuth2, API Key, or
+    /// custom security definitions. Each scheme is referenced by its <see cref="OpenApiSecurityScheme.Name"/>
+    /// in per-operation and document-level <c>security</c> blocks.
+    /// </para>
+    /// </remarks>
+    public List<OpenApiSecurityScheme> SecuritySchemes { get; } = [];
 }
 
 /// <summary>

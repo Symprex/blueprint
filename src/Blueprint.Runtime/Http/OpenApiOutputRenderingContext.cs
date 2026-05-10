@@ -95,16 +95,23 @@ public sealed record OpenApiOutputRenderingContext(
         var hasAnyAuth = allOperations.Any(static op => op.RequiresAuthentication);
         var allRequireAuth = hasAnyAuth && allOperations.All(static op => op.RequiresAuthentication);
 
+        // Resolve effective security schemes — use configured schemes or default to Bearer JWT
+        var effectiveSchemes = infoOptions.SecuritySchemes.Count > 0
+            ? infoOptions.SecuritySchemes
+            : hasAnyAuth
+                ? [OpenApiSecurityScheme.BearerJwt()]
+                : [];
+
         writer.WriteString("openapi", OpenApiVersion);
         WriteInfo(writer, infoOptions);
         WriteServers(writer, infoOptions.Servers);
-        WritePaths(writer, document.Paths, allRequireAuth);
-        WriteComponents(writer, document.SchemaComponents, schemaProcessorOptions, hasAnyAuth);
+        WritePaths(writer, document.Paths, allRequireAuth, effectiveSchemes);
+        WriteComponents(writer, document.SchemaComponents, schemaProcessorOptions, effectiveSchemes);
         WriteDocumentTags(writer, document.Paths);
 
-        if (allRequireAuth)
+        if (allRequireAuth && effectiveSchemes.Count > 0)
         {
-            WriteDocumentSecurity(writer);
+            WriteDocumentSecurity(writer, effectiveSchemes);
         }
 
         writer.WriteEndObject();
@@ -193,33 +200,33 @@ public sealed record OpenApiOutputRenderingContext(
         writer.WriteEndArray();
     }
 
-    private static void WritePaths(Utf8JsonWriter writer, ImmutableArray<OpenApiPathItemModel> paths, bool useDocumentLevelSecurity)
+    private static void WritePaths(Utf8JsonWriter writer, ImmutableArray<OpenApiPathItemModel> paths, bool useDocumentLevelSecurity, List<OpenApiSecurityScheme> securitySchemes)
     {
         writer.WritePropertyName("paths");
         writer.WriteStartObject();
 
         foreach (var pathItem in paths)
         {
-            WritePathItem(writer, pathItem, useDocumentLevelSecurity);
+            WritePathItem(writer, pathItem, useDocumentLevelSecurity, securitySchemes);
         }
 
         writer.WriteEndObject();
     }
 
-    private static void WritePathItem(Utf8JsonWriter writer, OpenApiPathItemModel pathItem, bool useDocumentLevelSecurity)
+    private static void WritePathItem(Utf8JsonWriter writer, OpenApiPathItemModel pathItem, bool useDocumentLevelSecurity, List<OpenApiSecurityScheme> securitySchemes)
     {
         writer.WritePropertyName(pathItem.UrlFormat);
         writer.WriteStartObject();
 
         foreach (var methodSlot in pathItem.Methods)
         {
-            WriteMethodSlot(writer, methodSlot, useDocumentLevelSecurity);
+            WriteMethodSlot(writer, methodSlot, useDocumentLevelSecurity, securitySchemes);
         }
 
         writer.WriteEndObject();
     }
 
-    private static void WriteMethodSlot(Utf8JsonWriter writer, OpenApiPathItemMethodModel methodSlot, bool useDocumentLevelSecurity)
+    private static void WriteMethodSlot(Utf8JsonWriter writer, OpenApiPathItemMethodModel methodSlot, bool useDocumentLevelSecurity, List<OpenApiSecurityScheme> securitySchemes)
     {
         writer.WritePropertyName(methodSlot.HttpMethod.ToLowerInvariant());
         writer.WriteStartObject();
@@ -261,7 +268,7 @@ public sealed record OpenApiOutputRenderingContext(
             // useDocumentLevelSecurity is only true when ALL operations require auth.
             if (!useDocumentLevelSecurity && primaryOperation.RequiresAuthentication)
             {
-                WriteOperationSecurity(writer);
+                WriteOperationSecurity(writer, securitySchemes);
             }
         }
         else
@@ -848,9 +855,9 @@ public sealed record OpenApiOutputRenderingContext(
         Utf8JsonWriter writer,
         ImmutableArray<OpenApiSchemaComponentModel> schemaComponents,
         OpenApiSchemaProcessorOptions schemaProcessorOptions,
-        bool hasAuthenticatedOperations)
+        List<OpenApiSecurityScheme> securitySchemes)
     {
-        if (schemaComponents.IsEmpty && !hasAuthenticatedOperations)
+        if (schemaComponents.IsEmpty && securitySchemes.Count == 0)
         {
             return;
         }
@@ -876,19 +883,118 @@ public sealed record OpenApiOutputRenderingContext(
             writer.WriteEndObject();
         }
 
-        if (hasAuthenticatedOperations)
+        if (securitySchemes.Count > 0)
         {
             writer.WritePropertyName("securitySchemes");
             writer.WriteStartObject();
-            writer.WritePropertyName("bearerAuth");
-            writer.WriteStartObject();
-            writer.WriteString("type", "http");
-            writer.WriteString("scheme", "bearer");
-            writer.WriteString("bearerFormat", "JWT");
-            writer.WriteEndObject();
+
+            foreach (var scheme in securitySchemes)
+            {
+                WriteSecurityScheme(writer, scheme);
+            }
+
             writer.WriteEndObject();
         }
 
+        writer.WriteEndObject();
+    }
+
+    private static void WriteSecurityScheme(Utf8JsonWriter writer, OpenApiSecurityScheme scheme)
+    {
+        writer.WritePropertyName(scheme.Name);
+        writer.WriteStartObject();
+        writer.WriteString("type", scheme.Type);
+
+        if (scheme.Description is not null)
+        {
+            writer.WriteString("description", scheme.Description);
+        }
+
+        if (scheme.Scheme is not null)
+        {
+            writer.WriteString("scheme", scheme.Scheme);
+        }
+
+        if (scheme.BearerFormat is not null)
+        {
+            writer.WriteString("bearerFormat", scheme.BearerFormat);
+        }
+
+        if (scheme.ParameterName is not null)
+        {
+            writer.WriteString("name", scheme.ParameterName);
+        }
+
+        if (scheme.In is not null)
+        {
+            writer.WriteString("in", scheme.In);
+        }
+
+        if (scheme.OpenIdConnectUrl is not null)
+        {
+            writer.WriteString("openIdConnectUrl", scheme.OpenIdConnectUrl);
+        }
+
+        if (scheme.Flows is not null)
+        {
+            WriteOAuth2Flows(writer, scheme.Flows);
+        }
+
+        writer.WriteEndObject();
+    }
+
+    private static void WriteOAuth2Flows(Utf8JsonWriter writer, OpenApiOAuth2Flows flows)
+    {
+        writer.WritePropertyName("flows");
+        writer.WriteStartObject();
+
+        if (flows.AuthorizationCode is not null)
+        {
+            WriteOAuth2Flow(writer, "authorizationCode", flows.AuthorizationCode);
+        }
+
+        if (flows.ClientCredentials is not null)
+        {
+            WriteOAuth2Flow(writer, "clientCredentials", flows.ClientCredentials);
+        }
+
+        if (flows.Implicit is not null)
+        {
+            WriteOAuth2Flow(writer, "implicit", flows.Implicit);
+        }
+
+        writer.WriteEndObject();
+    }
+
+    private static void WriteOAuth2Flow(Utf8JsonWriter writer, string flowName, OpenApiOAuth2Flow flow)
+    {
+        writer.WritePropertyName(flowName);
+        writer.WriteStartObject();
+
+        if (flow.AuthorizationUrl is not null)
+        {
+            writer.WriteString("authorizationUrl", flow.AuthorizationUrl);
+        }
+
+        if (flow.TokenUrl is not null)
+        {
+            writer.WriteString("tokenUrl", flow.TokenUrl);
+        }
+
+        if (flow.RefreshUrl is not null)
+        {
+            writer.WriteString("refreshUrl", flow.RefreshUrl);
+        }
+
+        writer.WritePropertyName("scopes");
+        writer.WriteStartObject();
+
+        foreach (var (scope, description) in flow.Scopes)
+        {
+            writer.WriteString(scope, description);
+        }
+
+        writer.WriteEndObject();
         writer.WriteEndObject();
     }
 
@@ -896,30 +1002,40 @@ public sealed record OpenApiOutputRenderingContext(
     /// Writes the document-level <c>security</c> array, applied when every operation requires
     /// authentication so per-operation blocks can be omitted entirely.
     /// </summary>
-    private static void WriteDocumentSecurity(Utf8JsonWriter writer)
+    private static void WriteDocumentSecurity(Utf8JsonWriter writer, List<OpenApiSecurityScheme> securitySchemes)
     {
         writer.WritePropertyName("security");
         writer.WriteStartArray();
         writer.WriteStartObject();
-        writer.WritePropertyName("bearerAuth");
-        writer.WriteStartArray();
-        writer.WriteEndArray();
+
+        foreach (var scheme in securitySchemes)
+        {
+            writer.WritePropertyName(scheme.Name);
+            writer.WriteStartArray();
+            writer.WriteEndArray();
+        }
+
         writer.WriteEndObject();
         writer.WriteEndArray();
     }
 
     /// <summary>
-    /// Writes a per-operation <c>security</c> block referencing the <c>bearerAuth</c> scheme.
+    /// Writes a per-operation <c>security</c> block referencing all configured security schemes.
     /// Used when the document contains a mix of authenticated and anonymous operations.
     /// </summary>
-    private static void WriteOperationSecurity(Utf8JsonWriter writer)
+    private static void WriteOperationSecurity(Utf8JsonWriter writer, List<OpenApiSecurityScheme> securitySchemes)
     {
         writer.WritePropertyName("security");
         writer.WriteStartArray();
         writer.WriteStartObject();
-        writer.WritePropertyName("bearerAuth");
-        writer.WriteStartArray();
-        writer.WriteEndArray();
+
+        foreach (var scheme in securitySchemes)
+        {
+            writer.WritePropertyName(scheme.Name);
+            writer.WriteStartArray();
+            writer.WriteEndArray();
+        }
+
         writer.WriteEndObject();
         writer.WriteEndArray();
     }
