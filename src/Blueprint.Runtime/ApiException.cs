@@ -1,3 +1,5 @@
+using System.Collections.Frozen;
+
 using JetBrains.Annotations;
 
 namespace Blueprint;
@@ -14,7 +16,7 @@ namespace Blueprint;
 public class ApiException : Exception
 {
     private static readonly IReadOnlyDictionary<string, object> EmptyExtensions =
-        new Dictionary<string, object>();
+        FrozenDictionary<string, object>.Empty;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ApiException"/> class.

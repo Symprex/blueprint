@@ -286,4 +286,81 @@ public class LinkPopulationModuleTests
             d => d.Descriptor.Id == "BPLG004",
             "ambiguous self-link warning should be emitted when multiple URLs target same resource type");
     }
+
+    [Fact]
+    public void When_RootLink_has_empty_url_then_BPLG005_is_emitted()
+    {
+        const string source = """
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace
+            {
+                [RootLink("")]
+                public partial class BadQuery : IQuery<string>
+                {
+                    public static Task<string> HandleAsync(BadQuery op) => throw new System.NotImplementedException();
+                }
+            }
+            """;
+
+        var result = TestHelpers.Compile<OperationDescriptorSourceGenerator>(source);
+
+        result.Diagnostics.Should().ContainSingle(static d => d.Id == "BPLG005");
+    }
+
+    [Fact]
+    public void When_SelfLink_has_empty_url_then_BPLG005_is_emitted()
+    {
+        const string source = """
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using Blueprint.Runtime.Exec;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace
+            {
+                public partial class TestResource : ApiResource
+                {
+                    public override string Object => "test_resource";
+                    public string Id { get; set; }
+                }
+
+                [SelfLink(typeof(TestResource), "")]
+                public partial class BadCommand : ICommand<ResourceEventResult<TestResource>>
+                {
+                    public string Id { get; set; }
+                    public static Task<ResourceEventResult<TestResource>> HandleAsync(BadCommand op) => throw new System.NotImplementedException();
+                }
+            }
+            """;
+
+        var result = TestHelpers.Compile<OperationDescriptorSourceGenerator>(source);
+
+        result.Diagnostics.Should().ContainSingle(static d => d.Id == "BPLG005");
+    }
+
+    [Fact]
+    public void When_RootLink_has_whitespace_url_then_BPLG005_is_emitted()
+    {
+        const string source = """
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace
+            {
+                [RootLink("   ")]
+                public partial class BadQuery : IQuery<string>
+                {
+                    public static Task<string> HandleAsync(BadQuery op) => throw new System.NotImplementedException();
+                }
+            }
+            """;
+
+        var result = TestHelpers.Compile<OperationDescriptorSourceGenerator>(source);
+
+        result.Diagnostics.Should().ContainSingle(static d => d.Id == "BPLG005");
+    }
 }

@@ -67,6 +67,14 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
 
+    private static readonly DiagnosticDescriptor _emptyRouteTemplateError = new(
+        id: "BPLG005",
+        title: "Empty route template",
+        messageFormat: "The route template on '{0}' is empty or whitespace. Provide a valid URL path.",
+        category: "OperationLinks",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
     private static readonly Regex _placeholderRegex = new(@"\{\*{0,2}[A-Za-z0-9]+\}", RegexOptions.Compiled);
     private static readonly Regex _mappedPlaceholderRegex = new(@"\{(?<catchAll>\*{0,2})(?<routeName>[A-Za-z0-9]+)(:(?<resourcePropName>.*?))?(\((?<format>.*)\))?\}", RegexOptions.Compiled);
 
@@ -213,8 +221,16 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
 
         var (_, locationInfo, url) = rootLinkAttribute.GetConstructorArgument(RootLinkAttributeDescriptor.UrlArgument);
 
-        // We have a placeholder. We need to find all of these placeholders and ensure that they point to a
-        // property of the operation. If they do not, we must register a diagnostic error.
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            context.AddDiagnostic(
+                new DiagnosticInfo(
+                    _emptyRouteTemplateError,
+                    locationInfo,
+                    [operationType.Name]));
+
+            return;
+        }
         if (url.Contains("{"))
         {
             var placeholders = _placeholderRegex.Matches(url);
@@ -245,6 +261,17 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
         {
             var (_, urlLocation, url) = selfLinkAttribute.GetConstructorArgument(SelfLinkAttributeDescriptor.UrlArgument);
             var (_, resourceLocation, resourceType) = selfLinkAttribute.GetConstructorArgument(SelfLinkAttributeDescriptor.ResourceTypeArgument);
+
+            if (string.IsNullOrWhiteSpace(url))
+            {
+                context.AddDiagnostic(
+                    new DiagnosticInfo(
+                        _emptyRouteTemplateError,
+                        urlLocation,
+                        [operationType.Name]));
+
+                continue;
+            }
 
             if (resourceType is not INamedTypeSymbol resourceTypeSymbol || resourceTypeSymbol.AllInterfaces.Any(i => i.Name == "ILinkableResource") == false)
             {

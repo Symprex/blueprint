@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.ComponentModel.DataAnnotations;
 
 using JetBrains.Annotations;
@@ -25,7 +26,7 @@ namespace Blueprint.Validation;
 public class ValidationFailures
 {
     private static readonly IReadOnlyDictionary<string, string[]> _noFailures =
-        new Dictionary<string, string[]>();
+        FrozenDictionary<string, string[]>.Empty;
 
     /// <summary>
     /// The property key used for form-level (non-property-specific) validation messages.

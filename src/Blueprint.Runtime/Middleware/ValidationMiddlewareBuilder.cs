@@ -14,10 +14,10 @@ public static class ValidationMiddlewareBuilder
     /// <returns>A <see cref="Blueprint.Runtime.Exec.ValidationFailedResult"/>.</returns>
     public static Blueprint.Runtime.Exec.ValidationFailedResult ToValidationFailedResult(ValidationException exception)
     {
-        var validationResults = new[]
-        {
+        ValidationResult[] validationResults =
+        [
             new ValidationResult(exception.Message, exception.ValidationResult?.MemberNames),
-        };
+        ];
 
         return new Blueprint.Runtime.Exec.ValidationFailedResult(validationResults);
     }
