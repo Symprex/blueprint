@@ -416,6 +416,25 @@ public sealed class PipelineRenderContext
     {
         this._writer.Block($"foreach ({variableDeclaration} in {collection})", bodyWriter => render(new PipelineRenderContext(bodyWriter, this._handler, this._plan)));
     }
+
+    /// <summary>
+    /// Emits an <c>else</c> block following an <see cref="If"/> call.
+    /// </summary>
+    /// <param name="render">The nested render callback for the else body.</param>
+    public void Else(Action<PipelineRenderContext> render)
+    {
+        this._writer.Else(elseWriter => render(new PipelineRenderContext(elseWriter, this._handler, this._plan)));
+    }
+
+    /// <summary>
+    /// Emits an arbitrary block expression (e.g. a <c>for</c> loop or <c>lock</c> statement).
+    /// </summary>
+    /// <param name="expression">The block header expression (e.g. <c>"for (var i = 0; i &lt; 10; i++)"</c>).</param>
+    /// <param name="render">The nested render callback for the block body.</param>
+    public void Block(string expression, Action<PipelineRenderContext> render)
+    {
+        this._writer.Block(expression, bodyWriter => render(new PipelineRenderContext(bodyWriter, this._handler, this._plan)));
+    }
 }
 
 /// <summary>

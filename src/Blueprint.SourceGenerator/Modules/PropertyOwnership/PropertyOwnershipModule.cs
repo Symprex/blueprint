@@ -865,25 +865,28 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
                     bodyContext.WriteStatement("await httpContext.Request.Body.CopyToAsync(bodyStream, context.OperationCancelled);");
                     bodyContext.WriteBlankLine();
 
-                    bodyContext.WriteStatement("if (bodyStream.Length > 0)");
-                    bodyContext.WriteStatement("{");
-                    bodyContext.WriteStatement("    try");
-                    bodyContext.WriteStatement("    {");
-                    bodyContext.WriteStatement($"        PopulateFromJsonBody(new System.ReadOnlySpan<byte>(bodyStream.GetBuffer(), 0, (int)bodyStream.Length), {operationExpr});");
-                    bodyContext.WriteStatement("    }");
-                    bodyContext.WriteStatement("    catch (System.Text.Json.JsonException)");
-                    bodyContext.WriteStatement("    {");
-                    bodyContext.WriteStatement("        return new Blueprint.Runtime.Exec.BindingFailureResult(\"Invalid JSON body\");");
-                    bodyContext.WriteStatement("    }");
-                    bodyContext.WriteStatement("    catch (System.InvalidOperationException)");
-                    bodyContext.WriteStatement("    {");
-                    bodyContext.WriteStatement("        return new Blueprint.Runtime.Exec.BindingFailureResult(\"Invalid JSON body\");");
-                    bodyContext.WriteStatement("    }");
-                    bodyContext.WriteStatement("    catch (System.NotSupportedException)");
-                    bodyContext.WriteStatement("    {");
-                    bodyContext.WriteStatement("        return new Blueprint.Runtime.Exec.BindingFailureResult(\"Invalid JSON body\");");
-                    bodyContext.WriteStatement("    }");
-                    bodyContext.WriteStatement("}");
+                    bodyContext.If("bodyStream.Length > 0", lengthCtx =>
+                    {
+                        lengthCtx.Try(tryCtx =>
+                        {
+                            tryCtx.WriteStatement($"PopulateFromJsonBody(new System.ReadOnlySpan<byte>(bodyStream.GetBuffer(), 0, (int)bodyStream.Length), {operationExpr});");
+                        });
+
+                        lengthCtx.Catch("System.Text.Json.JsonException", catchCtx =>
+                        {
+                            catchCtx.Return("new Blueprint.Runtime.Exec.BindingFailureResult(\"Invalid JSON body\")");
+                        });
+
+                        lengthCtx.Catch("System.InvalidOperationException", catchCtx =>
+                        {
+                            catchCtx.Return("new Blueprint.Runtime.Exec.BindingFailureResult(\"Invalid JSON body\")");
+                        });
+
+                        lengthCtx.Catch("System.NotSupportedException", catchCtx =>
+                        {
+                            catchCtx.Return("new Blueprint.Runtime.Exec.BindingFailureResult(\"Invalid JSON body\")");
+                        });
+                    });
                 });
 
             context.WriteBlankLine();
@@ -1148,17 +1151,18 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
                 var tryParseExpr = GetScalarTryParseExpression(elementType, $"{queryVar}[_i]", $"_parsed_{entry.PropertyName}");
 
                 ifCtx.WriteStatement($"var _arr_{entry.PropertyName} = new {elementDisplay}[{queryVar}.Count];");
-                ifCtx.WriteStatement($"for (var _i = 0; _i < {queryVar}.Count; _i++)");
-                ifCtx.WriteStatement("{");
-                ifCtx.WriteStatement($"    if ({tryParseExpr})");
-                ifCtx.WriteStatement("    {");
-                ifCtx.WriteStatement($"        _arr_{entry.PropertyName}[_i] = _parsed_{entry.PropertyName};");
-                ifCtx.WriteStatement("    }");
-                ifCtx.WriteStatement("    else");
-                ifCtx.WriteStatement("    {");
-                ifCtx.WriteStatement($"        return new Blueprint.Runtime.Exec.BindingFailureResult(\"Invalid query parameter '{entry.BindingName}'\");");
-                ifCtx.WriteStatement("    }");
-                ifCtx.WriteStatement("}");
+                ifCtx.Block($"for (var _i = 0; _i < {queryVar}.Count; _i++)", forCtx =>
+                {
+                    forCtx.If($"{tryParseExpr}", parsedCtx =>
+                    {
+                        parsedCtx.WriteStatement($"_arr_{entry.PropertyName}[_i] = _parsed_{entry.PropertyName};");
+                    });
+
+                    forCtx.Else(elseCtx =>
+                    {
+                        elseCtx.Return($"new Blueprint.Runtime.Exec.BindingFailureResult(\"Invalid query parameter '{entry.BindingName}'\")");
+                    });
+                });
                 ifCtx.WriteStatement(FormatPropertyAssignment(operationExpr, entry, $"_arr_{entry.PropertyName}"));
             }
         });
