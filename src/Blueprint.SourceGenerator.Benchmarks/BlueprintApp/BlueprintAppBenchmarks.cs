@@ -206,6 +206,8 @@ internal static class BlueprintAppBenchmarkScenarioFactory
             app.Register(descriptor);
         }
 
+        app.Freeze();
+
         return app;
     }
 

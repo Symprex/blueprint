@@ -55,11 +55,12 @@ Measures `TryFindOperation` by type — the hot path for every request dispatch.
 
 | Method | 10 ops | 100 ops | 250 ops | 500 ops |
 |---|---:|---:|---:|---:|
-| TryFindRegisteredOperation | 23.3 ns | 15.1 ns | 16.5 ns | — |
-| TryFindMissingOperation | 12.2 ns | 10.9 ns | 11.1 ns | 10.6 ns |
+| TryFindRegisteredOperation | 9.3 ns | 10.2 ns | 8.4 ns | 8.4 ns |
+| TryFindMissingOperation | 10.1 ns | 8.0 ns | 6.3 ns | 6.4 ns |
 
-**Key insight**: Lookup is O(1) via `FrozenDictionary`, ~15 ns for hits and ~11 ns
-for misses. Zero allocation in all cases.
+**Key insight**: After `Freeze()` converts to `FrozenDictionary`, lookup is O(1) at
+~8-10 ns for hits and ~6-10 ns for misses. Zero allocation in all cases. This is a
+~50% improvement over the pre-freeze baseline.
 
 ## Endpoint Mapping (Startup)
 

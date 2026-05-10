@@ -28,14 +28,13 @@ Current pipeline IDs in the `BP100`-`BP104` handler-validation range:
 
 - `BP100`: no handler found for operation.
 - `BP101`: multiple handlers found for operation (each operation can have only one handler).
-- `BP102`: invalid handler signature (parameters or return type not resolvable).
-- `BP103`: handler parameter cannot be resolved from context, operation, or DI (warning).
 - `BP104`: operation class must be partial to support generated pipelines.
 
-Current pipeline IDs in the `BP200`-`BP202` performance/ergonomics range:
+> IDs `BP102` and `BP103` are reserved for future handler-signature and parameter-resolution diagnostics.
 
-- `BP201`: inline handler doesn't use instance state — consider making it static (info).
-- `BP202`: handler class not found or not accessible in current compilation (error).
+Current pipeline IDs in the `BP200` performance/ergonomics range:
+
+- `BP200`: handler method should be async (info — not a build error, guidance only).
 
 These diagnostics should stay stable and descriptive because they are part of the repo's human and AI feedback loop.
 
