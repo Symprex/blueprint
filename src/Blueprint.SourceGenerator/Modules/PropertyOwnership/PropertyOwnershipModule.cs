@@ -680,7 +680,8 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             or "System.DateTimeOffset"
             or "bool"
             or "decimal"
-            || type.TypeKind == TypeKind.Enum;
+            || type.TypeKind == TypeKind.Enum
+            || ImplementsIParsable(type);
     }
 
     /// <summary>

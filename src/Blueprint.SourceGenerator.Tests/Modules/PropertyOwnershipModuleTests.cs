@@ -1321,6 +1321,131 @@ public class PropertyOwnershipModuleTests
         pipelineSource.Should().Contain("httpContext.Request.RouteValues[\"FolderPath\"]");
     }
 
+    [Fact]
+    public void When_route_parameter_type_implements_IParsable_then_no_diagnostic_and_pipeline_uses_TryParse()
+    {
+        const string source = """
+            using Blueprint;
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using System;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace
+            {
+                [BlueprintAppScan]
+                public partial class TestApp : BlueprintApp { }
+
+                public class StrongId : IParsable<StrongId>
+                {
+                    public string Value { get; set; } = string.Empty;
+
+                    public static StrongId Parse(string s, IFormatProvider? provider) => new StrongId { Value = s };
+                    public static bool TryParse(string? s, IFormatProvider? provider, out StrongId result)
+                    {
+                        result = new StrongId { Value = s ?? string.Empty };
+                        return true;
+                    }
+                }
+
+                [RootLink("/items/{ItemId}")]
+                public partial class GetItemQuery : IQuery<string>
+                {
+                    public StrongId ItemId { get; set; } = new();
+
+                    public static Task<string> HandleAsync(GetItemQuery operation)
+                    {
+                        return Task.FromResult(operation.ItemId.Value);
+                    }
+                }
+            }
+            """;
+
+        var generators = new[]
+        {
+            TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>(),
+            TestHelpers.CreateTrackedGenerator<OperationExecutorPipelineSourceGenerator>(),
+        };
+
+        var result = TestHelpers.CompileWithTrackedGenerators(
+            generators,
+            [source],
+            ["Input0.cs"]);
+
+        result.Diagnostics.Should().BeEmpty("IParsable<T> types should be accepted as route parameters");
+
+        var pipelineSource = string.Join(
+            Environment.NewLine,
+            result.GetGeneratedSources(nameof(OperationExecutorPipelineSourceGenerator)).Select(static s => s.SourceText.ToString()));
+
+        pipelineSource.Should().Contain("StrongId.TryParse(", "should use T.TryParse for IParsable types");
+    }
+
+    [Fact]
+    public void When_route_parameter_type_is_not_supported_then_BPPO001_diagnostic_is_reported()
+    {
+        var result = CompileDescriptor(
+            """
+            public class UnsupportedType
+            {
+                public string Data { get; set; }
+            }
+
+            [global::Blueprint.Model.Attributes.RootLink("/items/{ItemId}")]
+            public partial class GetUnsupportedRouteQuery : IQuery<string>
+            {
+                public UnsupportedType ItemId { get; set; }
+
+                public static Task<string> HandleAsync(GetUnsupportedRouteQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().Contain(d => d.Id == "BPPO001");
+    }
+
+    [Fact]
+    public void When_route_parameter_type_implements_IParsable_then_descriptor_has_route_ownership()
+    {
+        var result = CompileDescriptor(
+            """
+            public class StrongId : System.IParsable<StrongId>
+            {
+                public string Value { get; set; } = string.Empty;
+
+                public static StrongId Parse(string s, System.IFormatProvider? provider) => new StrongId { Value = s };
+                public static bool TryParse(string? s, System.IFormatProvider? provider, out StrongId result)
+                {
+                    result = new StrongId { Value = s ?? string.Empty };
+                    return true;
+                }
+            }
+
+            [global::Blueprint.Model.Attributes.RootLink("/items/{ItemId}")]
+            public partial class GetStrongIdRouteQuery : IQuery<string>
+            {
+                public StrongId ItemId { get; set; } = new();
+
+                public static Task<string> HandleAsync(GetStrongIdRouteQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().BeEmpty("IParsable<T> should be accepted as a route parameter type");
+
+        var descriptorSource = result.Output
+            .Select(static t => t.ToString())
+            .FirstOrDefault(static s => s.Contains("GetStrongIdRouteQueryDescriptor") || s.Contains("OperationPropertyOwnershipFeatureData"));
+
+        descriptorSource.Should().NotBeNull();
+        descriptorSource!.Should().Contain("PropertyBindingSource.Route");
+        descriptorSource.Should().Contain("ItemId");
+    }
+
     private static GenerationResult CompileDescriptor(string source)
     {
         return TestHelpers.Compile<OperationDescriptorSourceGenerator>(
