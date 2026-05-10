@@ -1043,6 +1043,27 @@ public class ReferenceAppHttpEndToEndIntegrationTests
     }
 
     [Fact]
+    public async Task When_catch_all_route_invoked_with_path_like_id_then_returns_200_with_full_path()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/folders/{**FolderPath}", "GET");
+        endpoint.Should().NotBeNull("the catch-all folder route should be registered");
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
+        {
+            context.Request.Method = HttpMethods.Get;
+            context.Request.Path = "/api/folders/UK/Marketing/Archive";
+            context.Request.RouteValues = new RouteValueDictionary { ["FolderPath"] = "UK/Marketing/Archive" };
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        response.Body.Should().Contain("UK/Marketing/Archive",
+            "the catch-all parameter should preserve the full path including slashes");
+    }
+
+    [Fact]
     public async Task When_download_template_with_auth_then_returns_200_with_binary_stream()
     {
         var endpoints = CreateEndpoints();

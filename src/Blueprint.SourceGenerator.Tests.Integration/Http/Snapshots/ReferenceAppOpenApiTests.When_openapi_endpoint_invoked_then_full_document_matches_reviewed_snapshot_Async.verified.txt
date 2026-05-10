@@ -105,6 +105,51 @@
         ]
       }
     },
+    "/folders/{**FolderPath}": {
+      "get": {
+        "operationId": "GetFolderContentsQuery",
+        "summary": "Get contents of a folder by its path.",
+        "tags": [
+          "Folders"
+        ],
+        "parameters": [
+          {
+            "name": "FolderPath",
+            "in": "path",
+            "required": true,
+            "description": "Path of the folder (may contain / separators).",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Microsoft_AspNetCore_Mvc_ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/me/authManifest": {
       "get": {
         "operationId": "GetMyAuthManifestQuery",
@@ -2352,6 +2397,9 @@
     },
     {
       "name": "Authorization"
+    },
+    {
+      "name": "Folders"
     },
     {
       "name": "System"
