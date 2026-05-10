@@ -18,6 +18,31 @@ namespace Blueprint.Runtime.Http;
 /// </summary>
 public class HttpOperationResultExecutor
 {
+    // Pre-built ProblemDetails for fixed error responses, avoiding per-request allocation.
+    // These are safe to share because JsonSerializer reads but does not mutate them.
+    private static readonly MvcProblemDetails _unauthorizedProblem = new()
+    {
+        Status = StatusCodes.Status401Unauthorized,
+        Title = "Unauthorized",
+        Detail = "Authentication is required to access this resource.",
+    };
+
+    private static readonly MvcProblemDetails _forbiddenProblem = new()
+    {
+        Status = StatusCodes.Status403Forbidden,
+        Title = "Forbidden",
+        Detail = "You do not have permission to access this resource.",
+    };
+
+    private static readonly MvcProblemDetails _unsupportedMediaTypeProblem = new()
+    {
+        Status = StatusCodes.Status415UnsupportedMediaType,
+        Title = "Unsupported Media Type",
+        Detail = "The request content type is not supported. Expected 'application/json'.",
+    };
+
+    private static readonly BlueprintHttpOptions _defaultHttpOptions = new();
+
     /// <summary>
     /// Attempts to execute the supplied semantic result against the HTTP response.
     /// </summary>
@@ -32,29 +57,19 @@ public class HttpOperationResultExecutor
         ArgumentNullException.ThrowIfNull(operationContext);
         ArgumentNullException.ThrowIfNull(result);
 
-        httpOptions ??= new BlueprintHttpOptions();
+        httpOptions ??= _defaultHttpOptions;
 
         switch (result)
         {
             case UnauthenticatedResult:
                 httpContext.Response.StatusCode = StatusCodes.Status401Unauthorized;
                 httpContext.Response.ContentType = "application/problem+json; charset=utf-8";
-                await WriteJsonAsync(httpContext, operationContext, new MvcProblemDetails
-                {
-                    Status = StatusCodes.Status401Unauthorized,
-                    Title = "Unauthorized",
-                    Detail = "Authentication is required to access this resource.",
-                });
+                await WriteJsonAsync(httpContext, operationContext, _unauthorizedProblem);
                 return true;
             case ForbiddenResult:
                 httpContext.Response.StatusCode = StatusCodes.Status403Forbidden;
                 httpContext.Response.ContentType = "application/problem+json; charset=utf-8";
-                await WriteJsonAsync(httpContext, operationContext, new MvcProblemDetails
-                {
-                    Status = StatusCodes.Status403Forbidden,
-                    Title = "Forbidden",
-                    Detail = "You do not have permission to access this resource.",
-                });
+                await WriteJsonAsync(httpContext, operationContext, _forbiddenProblem);
                 return true;
             case BindingFailureResult bindingFailureResult:
                 httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
@@ -69,12 +84,7 @@ public class HttpOperationResultExecutor
             case UnsupportedMediaTypeResult:
                 httpContext.Response.StatusCode = StatusCodes.Status415UnsupportedMediaType;
                 httpContext.Response.ContentType = "application/problem+json; charset=utf-8";
-                await WriteJsonAsync(httpContext, operationContext, new MvcProblemDetails
-                {
-                    Status = StatusCodes.Status415UnsupportedMediaType,
-                    Title = "Unsupported Media Type",
-                    Detail = "The request content type is not supported. Expected 'application/json'.",
-                });
+                await WriteJsonAsync(httpContext, operationContext, _unsupportedMediaTypeProblem);
                 return true;
             case HttpPipelineShortCircuitResult:
                 // Response was already written by the generated pipeline (e.g. binding failure).
