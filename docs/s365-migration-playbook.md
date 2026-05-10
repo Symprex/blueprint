@@ -489,6 +489,116 @@ services.AddBlueprintApi<MyApp, MyAppExecutor>(blueprint =>
 - [ ] Create `Blueprint.Tasks.Hangfire` project
 - [ ] Implement `HangfireBackgroundTaskScheduler : IBackgroundTaskScheduler`
 - [ ] Implement recurring task support
+
+---
+
+## Authorization Migration
+
+S365 has a layered authorization model that maps cleanly to new Blueprint's split interfaces:
+
+### Current S365 Authorization Stack
+
+| Class | Role | New Blueprint Equivalent |
+|-------|------|-------------------------|
+| `ScopeApiAuthoriser` | Checks OAuth scopes + tenant access | Register as `IApiAuthoriser` (backward compatible) |
+| `S365ClaimsApiAuthoriser` | Claims-based resource permission checks | Register as `IApiAuthoriser` |
+| `IS365ResourceKeyExpander` (async) | Expands resource keys via DB lookups | Custom `IApiAuthoriser` implementation (see below) |
+| `IS365ClaimInspector` (async) | Inspects claims with async expansion | Consumer-side interface, called from authoriser |
+| `ResourcePermissionsFeatureData` | Per-operation resource key templates + scope pairs | Set via runtime `SetFeatureData<T>()` during startup |
+
+### Migration Approach
+
+#### 1. Keep `ScopeApiAuthoriser` / `S365ClaimsApiAuthoriser` As-Is
+
+New Blueprint's `IApiAuthoriser : IOperationAuthoriser, ILinkVisibilityAuthoriser` is backward-compatible:
+
+```csharp
+services.AddBlueprintApi<MyApp, MyAppExecutor>(blueprint =>
+{
+    // These work unchanged — they implement IApiAuthoriser
+    blueprint.AddOperationAuthoriser<ScopeApiAuthoriser>();
+    blueprint.AddOperationAuthoriser<S365ClaimsApiAuthoriser>();
+});
+```
+
+#### 2. Populate `ResourcePermissionsFeatureData` at Startup
+
+S365's legacy Blueprint populated this during `DataModel.Build()`. In the new model, populate it after registration:
+
+```csharp
+services.AddBlueprintApi<MyApp, MyAppExecutor>(blueprint =>
+{
+    blueprint.ConfigureApp(app =>
+    {
+        // Populate resource permissions from [Resource] attributes at startup
+        foreach (var descriptor in app.Operations)
+        {
+            var resourceAttrs = descriptor.OperationType
+                .GetCustomAttributes<ResourceAttribute>(inherit: true);
+
+            if (resourceAttrs.Length > 0)
+            {
+                descriptor.SetFeatureData(new ResourcePermissionsFeatureData
+                {
+                    ResourceKeyTemplates = resourceAttrs
+                        .Select(a => a.Template)
+                        .ToArray(),
+                    ExpectedOneOfScopePairs = resourceAttrs
+                        .Select(a => new ScopePair(a.Noun, a.Verb))
+                        .ToArray(),
+                    SpecialPermission = descriptor.OperationType
+                        .GetCustomAttribute<AllowAnonymousAttribute>(),
+                });
+            }
+        }
+    });
+});
+```
+
+#### 3. `IS365ResourceKeyExpander` (Async) — No Framework Change Needed
+
+S365's async expander is a consumer-level concern. The async expansion runs INSIDE `S365ClaimsApiAuthoriser.CanExecuteOperationAsync()`, which is already called from the generated pipeline's authorization stage (via `IApiAuthoriser`). The pipeline awaits it — no synchronous constraint.
+
+#### 4. Consider Migrating to `[PermissionFor]` (Optional)
+
+For operations that use `[Resource(Verb, "/Template/{TenantId}")]`:
+
+```csharp
+// Before (S365)
+[Resource(Verb.Read, "/Tenants/{TenantId}/Templates/{Id}")]
+public partial class GetTemplateQuery : IQuery<TemplateApiResource> { ... }
+
+// After (new Blueprint — compile-time claims check, no runtime authoriser needed)
+[PermissionFor("Read", "/Tenants/{TenantId}/Templates/{Id}")]
+public partial class GetTemplateQuery : IQuery<TemplateApiResource> { ... }
+```
+
+This eliminates the need for `S365ClaimsApiAuthoriser` for simple cases — the generated pipeline inlines the check without DI or async overhead. However, scope expansion (where `Manage` implies `Read`) would need a custom `IClaimInspector` implementation.
+
+---
+
+## Marten Integration
+
+### Current S365 Pattern
+
+S365 uses Marten for event sourcing and document storage, integrated with Blueprint's UnitOfWork:
+
+```csharp
+// CommitMartenTransactionScopeMiddleware commits IDocumentSession after handler
+```
+
+### New Blueprint Integration
+
+The `AddUnitOfWork<T>()` extension handles this:
+
+```csharp
+services.AddBlueprintApi<MyApp, MyAppExecutor>(blueprint =>
+{
+    blueprint.AddUnitOfWork<MartenUnitOfWork>();
+});
+```
+
+The generated pipeline calls `IUnitOfWork.CommitAsync()` after successful handler execution, then `IUnitOfWork.RollbackAsync()` on failure — matching S365's middleware behavior without the middleware abstraction.
 - [ ] Add Hangfire integration to sample app
 - [ ] Test job scheduling and execution
 
