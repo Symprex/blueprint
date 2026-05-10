@@ -597,4 +597,174 @@ public class AppModelOpenApiOutputRenderingContextTests
 
         return OpenApiOutputRenderingContext.Create(documentContext, schemaProcessorOptions: schemaProcessorOptions);
     }
+
+    private static OpenApiOutputRenderingContext CreateSyntheticOutputContextWithInfoOptions(
+        OpenApiPathItemModel[] pathItems,
+        OpenApiInfoOptions infoOptions)
+    {
+        var documentBuilderContext = new OpenApiDocumentBuilderContext(
+            new BlueprintApp(),
+            null,
+            ImmutableArray<string>.Empty,
+            ImmutableArray<OpenApiDocumentOperationContext>.Empty);
+        var schemaProjectionContext = new OpenApiSchemaProjectionContext(documentBuilderContext, ImmutableArray<OpenApiSchemaModel>.Empty);
+        var schemaComponentContext = new OpenApiSchemaComponentRenderingContext(schemaProjectionContext, []);
+        var responseSchemaProjectionContext = new OpenApiResponseSchemaReferenceProjectionContext(
+            schemaProjectionContext,
+            ImmutableArray<OpenApiResponseSchemaReferenceOperationContext>.Empty);
+        var responseObjectContext = new OpenApiResponseObjectRenderingContext(
+            responseSchemaProjectionContext,
+            schemaComponentContext,
+            ImmutableArray<OpenApiResponseObjectOperationContext>.Empty);
+        var operationContext = new OpenApiOperationRenderingContext(
+            responseObjectContext,
+            ImmutableArray<OpenApiOperationModel>.Empty);
+        var pathItemContext = new OpenApiPathItemRenderingContext(operationContext, [.. pathItems]);
+        var documentContext = OpenApiDocumentRenderingContext.Create(pathItemContext);
+
+        return OpenApiOutputRenderingContext.Create(documentContext, infoOptions: infoOptions);
+    }
+
+    [Fact]
+    public void When_custom_security_schemes_configured_then_output_uses_configured_schemes_instead_of_default()
+    {
+        var infoOptions = new OpenApiInfoOptions { Title = "TestApi" };
+        infoOptions.SecuritySchemes.Add(new OpenApiSecurityScheme
+        {
+            Name = "apiKeyAuth",
+            Type = "apiKey",
+            ParameterName = "X-API-Key",
+            In = "header",
+            Description = "API key authentication",
+        });
+
+        var authOp = new OpenApiOperationModel(
+            "TestOp",
+            "TestOp",
+            ["GET"],
+            ["/test"],
+            ImmutableArray<string>.Empty,
+            ImmutableArray<OpenApiResponseObjectModel>.Empty,
+            ImmutableArray<OpenApiParameterModel>.Empty,
+            null)
+        {
+            RequiresAuthentication = true,
+        };
+
+        var pathItems = new[]
+        {
+            new OpenApiPathItemModel("/test", [
+                new OpenApiPathItemMethodModel("GET", [authOp]),
+            ]),
+        };
+
+        var context = CreateSyntheticOutputContextWithInfoOptions(pathItems, infoOptions);
+        var doc = JsonDocument.Parse(context.Json);
+
+        // Should have the custom scheme, not bearerAuth
+        var securitySchemes = doc.RootElement
+            .GetProperty("components")
+            .GetProperty("securitySchemes");
+
+        securitySchemes.TryGetProperty("apiKeyAuth", out var apiKeyScheme).Should().BeTrue();
+        apiKeyScheme.GetProperty("type").GetString().Should().Be("apiKey");
+        apiKeyScheme.GetProperty("name").GetString().Should().Be("X-API-Key");
+        apiKeyScheme.GetProperty("in").GetString().Should().Be("header");
+        apiKeyScheme.GetProperty("description").GetString().Should().Be("API key authentication");
+
+        securitySchemes.TryGetProperty("bearerAuth", out _).Should().BeFalse(
+            "custom schemes should replace, not supplement, the default bearerAuth");
+    }
+
+    [Fact]
+    public void When_no_custom_security_schemes_and_auth_required_then_default_bearer_jwt_is_used()
+    {
+        var authOp = new OpenApiOperationModel(
+            "TestOp",
+            "TestOp",
+            ["GET"],
+            ["/test"],
+            ImmutableArray<string>.Empty,
+            ImmutableArray<OpenApiResponseObjectModel>.Empty,
+            ImmutableArray<OpenApiParameterModel>.Empty,
+            null)
+        {
+            RequiresAuthentication = true,
+        };
+
+        var pathItems = new[]
+        {
+            new OpenApiPathItemModel("/test", [
+                new OpenApiPathItemMethodModel("GET", [authOp]),
+            ]),
+        };
+
+        var context = CreateSyntheticOutputContextWithInfoOptions(pathItems, new OpenApiInfoOptions { Title = "TestApi" });
+        var doc = JsonDocument.Parse(context.Json);
+
+        var securitySchemes = doc.RootElement
+            .GetProperty("components")
+            .GetProperty("securitySchemes");
+
+        securitySchemes.TryGetProperty("bearerAuth", out var bearerScheme).Should().BeTrue();
+        bearerScheme.GetProperty("type").GetString().Should().Be("http");
+        bearerScheme.GetProperty("scheme").GetString().Should().Be("bearer");
+        bearerScheme.GetProperty("bearerFormat").GetString().Should().Be("JWT");
+    }
+
+    [Fact]
+    public void When_oauth2_security_scheme_configured_then_flows_are_rendered()
+    {
+        var infoOptions = new OpenApiInfoOptions { Title = "TestApi" };
+        infoOptions.SecuritySchemes.Add(new OpenApiSecurityScheme
+        {
+            Name = "oauth2",
+            Type = "oauth2",
+            Flows = new OpenApiOAuth2Flows
+            {
+                AuthorizationCode = new OpenApiOAuth2Flow
+                {
+                    AuthorizationUrl = "https://auth.example.com/authorize",
+                    TokenUrl = "https://auth.example.com/token",
+                    Scopes = { ["read"] = "Read access", ["write"] = "Write access" },
+                },
+            },
+        });
+
+        var authOp = new OpenApiOperationModel(
+            "TestOp",
+            "TestOp",
+            ["GET"],
+            ["/test"],
+            ImmutableArray<string>.Empty,
+            ImmutableArray<OpenApiResponseObjectModel>.Empty,
+            ImmutableArray<OpenApiParameterModel>.Empty,
+            null)
+        {
+            RequiresAuthentication = true,
+        };
+
+        var pathItems = new[]
+        {
+            new OpenApiPathItemModel("/test", [
+                new OpenApiPathItemMethodModel("GET", [authOp]),
+            ]),
+        };
+
+        var context = CreateSyntheticOutputContextWithInfoOptions(pathItems, infoOptions);
+        var doc = JsonDocument.Parse(context.Json);
+
+        var scheme = doc.RootElement
+            .GetProperty("components")
+            .GetProperty("securitySchemes")
+            .GetProperty("oauth2");
+
+        scheme.GetProperty("type").GetString().Should().Be("oauth2");
+
+        var flow = scheme.GetProperty("flows").GetProperty("authorizationCode");
+        flow.GetProperty("authorizationUrl").GetString().Should().Be("https://auth.example.com/authorize");
+        flow.GetProperty("tokenUrl").GetString().Should().Be("https://auth.example.com/token");
+        flow.GetProperty("scopes").GetProperty("read").GetString().Should().Be("Read access");
+        flow.GetProperty("scopes").GetProperty("write").GetString().Should().Be("Write access");
+    }
 }

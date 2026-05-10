@@ -103,24 +103,24 @@ Based on S365 analysis, these gaps need closing in `blueprint-source-gen` before
 | Gap | Description | Status |
 |-----|-------------|--------|
 | **InvokeAsync handler pattern** | S365 operations use `InvokeAsync()` instance methods with DI parameters, not separate `IApiOperationHandler<T>` classes. The source generator must support this "inline handler" pattern. | ✅ Already supported |
-| **`IReturn<T>` marker interface** | Used by `BlueprintHttpClient` to associate operations with response types. Need to confirm this compiles. | ⚠️ Verify |
+| **`IReturn<T>` marker interface** | Used by `BlueprintHttpClient` to associate operations with response types. | ✅ Available in `Blueprint.Runtime.Model` |
 | **`{Auth:PropertyName}` resource key placeholders** | S365 uses `{Auth:AccountId}` in resource templates. Source gen must expand these from `IUserAuthorisationContext`. | ✅ Implemented (BPAU007/BPAU009) |
 | **`ResourceEvent<T>` return type** | S365 operations return `ResourceEvent<T>` extensively. Source gen must handle this as a valid result type. | ✅ Implemented |
 | **`ApiResource` base class** | S365 resources extend `ApiResource`. Must be available in new Blueprint. | ✅ Available in Runtime.Model |
-| **`StatusCodeResult` (legacy)** | S365 uses `StatusCodeResult` for non-content responses. Map to new `HttpStatusCodeResult`. | ⚠️ Verify/alias |
+| **`StatusCodeResult`** | S365 uses `StatusCodeResult` for non-content responses. | ✅ Available in `Blueprint.Runtime.Exec` |
 | **`PlainTextResult`** | Used for proxied responses. | ✅ Implemented |
-| **`BlueprintHttpClient`** | Inter-service HTTP calls using operation metadata. Needs new implementation. | 🔴 Needs implementation |
-| **`TestApiOperationExecutor`** | In-memory test executor. Needs new equivalent. | 🔴 Needs implementation |
+| **`BlueprintHttpClient`** | Inter-service HTTP calls using operation metadata. | ✅ Implemented in `Blueprint.HttpClient` package |
+| **`TestApiOperationExecutor` equivalent** | In-memory test executor for unit/integration testing. | ✅ `BlueprintTestHost` in `Blueprint.Testing` package |
 
 ### Important (Should Fix)
 
 | Gap | Description | Status |
 |-----|-------------|--------|
-| **Rebus integration package** | `Blueprint.Rebus` — message subscription, outbox pattern | 🔴 Needs package |
-| **Hangfire integration package** | `Blueprint.Tasks.Hangfire` — background task scheduling | 🔴 Needs package |
-| **`OperationsHandlerScanner`** | S365 convention: scan `ApiOperations` base classes for handler methods | ⚠️ May need migration guidance |
-| **NSwag → Built-in OpenAPI** | S365 uses NSwag for OpenAPI. New Blueprint has built-in OpenAPI. TypeScript client gen needs testing. | ⚠️ Compatibility check |
-| **`FromResourceAttribute` with path** | `[FromResource(typeof(X), "/Tenants/{Auth:AccountId}")]` — path override variant | ⚠️ Verify |
+| **Rebus integration package** | `Blueprint.Rebus` — message subscription, outbox pattern | ✅ Implemented in `Blueprint.Rebus` |
+| **Hangfire integration package** | `Blueprint.Tasks.Hangfire` — background task scheduling | ✅ Implemented in `Blueprint.Tasks.Hangfire` + `Blueprint.Hangfire` |
+| **`OperationsHandlerScanner`** | S365 convention: scan `ApiOperations` base classes for handler methods | ✅ Not needed — source gen discovers `InvokeAsync` inline handlers automatically |
+| **NSwag → Built-in OpenAPI** | S365 uses NSwag for OpenAPI. New Blueprint has built-in OpenAPI with pluggable security schemes. | ✅ Feature-complete, TypeScript client gen compatible |
+| **`FromResourceAttribute` with path** | `[FromResource(typeof(X), "/Tenants/{Auth:AccountId}")]` — path override variant | ✅ Supported via `PropertyOwnershipModule` |
 | **`Link` attribute (non-self, non-root)** | `[Link(typeof(Resource), "/path", Rel = "name")]` — arbitrary HATEOAS links | ✅ Implemented |
 
 ### Nice to Have
@@ -130,6 +130,8 @@ Based on S365 analysis, these gaps need closing in `blueprint-source-gen` before
 | **`AppDefinition` pattern** | S365 uses `AppDefinition.Instance` for service-level configuration | Consumer-side pattern, no framework change needed |
 | **Convention test infrastructure** | `MustHaveResourceAttributesConventionSpecification` etc. | Consumer-side, document migration |
 | **`IRegistry` modular DI** | S365 uses `IRegistry` pattern for service discovery | Consumer-side, no framework change needed |
+| **Pluggable OpenAPI security schemes** | Custom auth schemes beyond Bearer JWT | ✅ Implemented — `OpenApiInfoOptions.SecuritySchemes` |
+| **OpenAPI HATEOAS metadata** | `x-links` vendor extension per operation | Low priority — links are runtime, not schema-level |
 
 ---
 
