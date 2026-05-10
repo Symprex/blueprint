@@ -1,4 +1,7 @@
+using System.Security.Cryptography;
+using System.Text;
 using Blueprint.Model;
+using Microsoft.Net.Http.Headers;
 
 namespace Blueprint.Runtime.Http;
 
@@ -38,10 +41,32 @@ internal static class OpenApiDocumentEndpoint
         var json = RenderDocument(app, infoOptions, schemaProcessorOptions, operationProcessorOptions);
         var document = new PreRenderedOpenApiDocument(json);
 
+        // Compute a stable ETag from the document content so clients can use If-None-Match
+        // to avoid redundant downloads of the static spec.
+        var jsonBytes = Encoding.UTF8.GetBytes(json);
+        var hashBytes = SHA256.HashData(jsonBytes);
+        var etag = new EntityTagHeaderValue($"\"{Convert.ToHexString(hashBytes)[..16]}\"");
+
         var handler = new RequestDelegate(async httpContext =>
         {
+            // Support conditional GET: if the client sends If-None-Match matching our ETag, return 304.
+            if (httpContext.Request.Headers.IfNoneMatch.Count > 0)
+            {
+                foreach (var clientEtag in httpContext.Request.Headers.IfNoneMatch)
+                {
+                    if (string.Equals(clientEtag, etag.ToString(), StringComparison.Ordinal))
+                    {
+                        httpContext.Response.StatusCode = StatusCodes.Status304NotModified;
+                        httpContext.Response.Headers.ETag = etag.ToString();
+                        return;
+                    }
+                }
+            }
+
             httpContext.Response.StatusCode = StatusCodes.Status200OK;
             httpContext.Response.ContentType = "application/json; charset=utf-8";
+            httpContext.Response.Headers.ETag = etag.ToString();
+            httpContext.Response.Headers.CacheControl = "public, max-age=3600";
             await httpContext.Response.WriteAsync(json, httpContext.RequestAborted);
         });
 

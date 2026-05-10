@@ -937,6 +937,72 @@ public class ReferenceAppOpenApiTests
         return (json, context.Response.StatusCode);
     }
 
+    [Fact]
+    public async Task When_openapi_endpoint_invoked_then_returns_etag_and_cache_control_headers()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+        var endpoint = FindEndpoint(endpoints, "api/.blueprint/openapi.json", "GET")!;
+
+        await using var body = new MemoryStream();
+        var context = new DefaultHttpContext
+        {
+            RequestServices = endpoints.ServiceProvider,
+            Response = { Body = body },
+        };
+
+        context.SetEndpoint(endpoint);
+        context.Request.Method = HttpMethods.Get;
+        context.Request.Path = "/api/.blueprint/openapi.json";
+
+        await endpoint.RequestDelegate!(context);
+
+        context.Response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        context.Response.Headers.ETag.ToString().Should().NotBeNullOrWhiteSpace();
+        context.Response.Headers.CacheControl.ToString().Should().Contain("public");
+    }
+
+    [Fact]
+    public async Task When_openapi_endpoint_invoked_with_matching_etag_then_returns_304()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+        var endpoint = FindEndpoint(endpoints, "api/.blueprint/openapi.json", "GET")!;
+
+        // First request to get the ETag
+        await using var body1 = new MemoryStream();
+        var context1 = new DefaultHttpContext
+        {
+            RequestServices = endpoints.ServiceProvider,
+            Response = { Body = body1 },
+        };
+
+        context1.SetEndpoint(endpoint);
+        context1.Request.Method = HttpMethods.Get;
+        context1.Request.Path = "/api/.blueprint/openapi.json";
+        await endpoint.RequestDelegate!(context1);
+
+        var etag = context1.Response.Headers.ETag.ToString();
+        etag.Should().NotBeNullOrWhiteSpace();
+
+        // Second request with If-None-Match header
+        await using var body2 = new MemoryStream();
+        var context2 = new DefaultHttpContext
+        {
+            RequestServices = endpoints.ServiceProvider,
+            Response = { Body = body2 },
+        };
+
+        context2.SetEndpoint(endpoint);
+        context2.Request.Method = HttpMethods.Get;
+        context2.Request.Path = "/api/.blueprint/openapi.json";
+        context2.Request.Headers.IfNoneMatch = etag;
+        await endpoint.RequestDelegate!(context2);
+
+        context2.Response.StatusCode.Should().Be(StatusCodes.Status304NotModified);
+        body2.Length.Should().Be(0, "304 responses should not have a body");
+    }
+
     private static RouteEndpoint? FindEndpoint(TestEndpointRouteBuilder builder, string routePattern, string httpMethod)
     {
         return builder.DataSources
