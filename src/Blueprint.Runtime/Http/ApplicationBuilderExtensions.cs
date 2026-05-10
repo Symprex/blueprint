@@ -224,7 +224,7 @@ public static class EndpointRouteBuilderExtensions
             // PathString concatenation handles slash normalization correctly.
             var host = this._httpOptions.PublicHost ?? httpRequest.Host.Value;
             var basePath = httpRequest.PathBase.Add(this._normalizedBasePath);
-            apiContext.Data["blueprint:base-uri"] = $"{httpRequest.Scheme}://{host}{basePath}";
+            apiContext.BaseUri = $"{httpRequest.Scheme}://{host}{basePath}";
 
             var result = await nestedContainer.ServiceProvider.GetRequiredService<TExec>().GetPipeline(operation.OperationType).ExecuteAsync(apiContext);
 

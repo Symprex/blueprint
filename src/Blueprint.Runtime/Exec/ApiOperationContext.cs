@@ -96,6 +96,13 @@ public class ApiOperationContext : IHttpOperationContext
     }
 
     /// <summary>
+    /// Gets the stable base URI for this request (e.g. <c>https://api.example.com/v1</c>).
+    /// Computed once per request from the HTTP host, scheme, and path base. Used by link generators
+    /// and redirect targets.
+    /// </summary>
+    public string? BaseUri { get; internal set; }
+
+    /// <summary>
     /// Gets or sets the <see cref="Microsoft.AspNetCore.Http.HttpContext"/> associated with this operation
     /// when the operation is being executed via the HTTP host.
     /// </summary>
@@ -156,11 +163,15 @@ public class ApiOperationContext : IHttpOperationContext
             UserPrincipal = this.UserPrincipal,
             UserAuthorisationContext = this.UserAuthorisationContext,
             HttpContext = this.HttpContext,
-
-            // Share mutable state dictionary with the parent so nested operations
-            // can read/write ambient data established by the parent pipeline.
-            Data = this.Data,
+            BaseUri = this.BaseUri,
         };
+
+        // Share mutable state dictionary with the parent only when one has already been
+        // created, avoiding a Dictionary allocation when no pipeline has used Data yet.
+        if (this._data is not null)
+        {
+            nested._data = this._data;
+        }
 
         return nested;
     }
