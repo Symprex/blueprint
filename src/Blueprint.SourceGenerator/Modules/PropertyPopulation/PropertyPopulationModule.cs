@@ -61,10 +61,10 @@ public sealed class PropertyPopulationModule : IBlueprintSourceGeneratorModule, 
             "propertyPopulators != null",
             branch =>
             {
-                branch.WriteStatement("foreach (var populator in propertyPopulators)");
-                branch.WriteStatement("{");
-                branch.WriteStatement("    await populator.PopulateAsync(context, context.OperationCancelled);");
-                branch.WriteStatement("}");
+                branch.ForEach("var populator", "propertyPopulators", foreachBody =>
+                {
+                    foreachBody.WriteStatement("await populator.PopulateAsync(context, context.OperationCancelled);");
+                });
             });
     }
 }

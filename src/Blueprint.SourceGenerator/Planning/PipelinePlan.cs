@@ -405,6 +405,17 @@ public sealed class PipelineRenderContext
     {
         this._writer.Catch(exceptionDeclaration, catchWriter => render(new PipelineRenderContext(catchWriter, this._handler, this._plan)));
     }
+
+    /// <summary>
+    /// Emits a <c>foreach</c> loop block.
+    /// </summary>
+    /// <param name="variableDeclaration">The loop variable declaration (e.g. <c>"var item"</c>).</param>
+    /// <param name="collection">The collection expression to iterate.</param>
+    /// <param name="render">The nested render callback for the loop body.</param>
+    public void ForEach(string variableDeclaration, string collection, Action<PipelineRenderContext> render)
+    {
+        this._writer.Block($"foreach ({variableDeclaration} in {collection})", bodyWriter => render(new PipelineRenderContext(bodyWriter, this._handler, this._plan)));
+    }
 }
 
 /// <summary>

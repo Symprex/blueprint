@@ -130,18 +130,18 @@ namespace Blueprint.Generated
                 {
                     foreach (var authoriser in apiAuthorisers)
                     {
-                    if (authoriser.AppliesTo(context.Descriptor))
-                    {
-                        var authoriseResult = await authoriser.CanExecuteOperationAsync(context, context.Descriptor, context.Operation);
-                        if (!authoriseResult.IsAllowed)
+                        if (authoriser.AppliesTo(context.Descriptor))
                         {
-                            if (authoriseResult.FailureType == Blueprint.Authorization.ExecutionAllowedFailureType.Authentication)
+                            var authoriseResult = await authoriser.CanExecuteOperationAsync(context, context.Descriptor, context.Operation);
+                            if (!authoriseResult.IsAllowed)
                             {
-                                return new Blueprint.Runtime.Exec.UnauthenticatedResult();
+                                if (authoriseResult.FailureType == Blueprint.Authorization.ExecutionAllowedFailureType.Authentication)
+                                {
+                                    return new Blueprint.Runtime.Exec.UnauthenticatedResult();
+                                }
+                                return new Blueprint.Runtime.Exec.ForbiddenResult();
                             }
-                            return new Blueprint.Runtime.Exec.ForbiddenResult();
                         }
-                    }
                     }
                 }
                 var operationAuthorisers = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Authorization.IOperationAuthoriser>>(context.ServiceProvider);
@@ -149,18 +149,18 @@ namespace Blueprint.Generated
                 {
                     foreach (var authoriser in operationAuthorisers)
                     {
-                    if (authoriser.AppliesTo(context.Descriptor))
-                    {
-                        var authoriseResult = await authoriser.CanExecuteOperationAsync(context, context.Descriptor, context.Operation);
-                        if (!authoriseResult.IsAllowed)
+                        if (authoriser.AppliesTo(context.Descriptor))
                         {
-                            if (authoriseResult.FailureType == Blueprint.Authorization.ExecutionAllowedFailureType.Authentication)
+                            var authoriseResult = await authoriser.CanExecuteOperationAsync(context, context.Descriptor, context.Operation);
+                            if (!authoriseResult.IsAllowed)
                             {
-                                return new Blueprint.Runtime.Exec.UnauthenticatedResult();
+                                if (authoriseResult.FailureType == Blueprint.Authorization.ExecutionAllowedFailureType.Authentication)
+                                {
+                                    return new Blueprint.Runtime.Exec.UnauthenticatedResult();
+                                }
+                                return new Blueprint.Runtime.Exec.ForbiddenResult();
                             }
-                            return new Blueprint.Runtime.Exec.ForbiddenResult();
                         }
-                    }
                     }
                 }
             }

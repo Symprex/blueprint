@@ -161,16 +161,15 @@ public sealed class ApiAuthoriserModule : IBlueprintSourceGeneratorModule, IPipe
                     "apiAuthorisers != null",
                     innerBranch =>
                     {
-                        innerBranch.WriteStatement("foreach (var authoriser in apiAuthorisers)");
-                        innerBranch.WriteStatement("{");
-                        innerBranch.If(
-                            "authoriser.AppliesTo(context.Descriptor)",
-                            appliesBody =>
-                            {
-                                RenderDenialCheck(appliesBody, "authoriser");
-                            });
-
-                        innerBranch.WriteStatement("}");
+                        innerBranch.ForEach("var authoriser", "apiAuthorisers", foreachBody =>
+                        {
+                            foreachBody.If(
+                                "authoriser.AppliesTo(context.Descriptor)",
+                                appliesBody =>
+                                {
+                                    RenderDenialCheck(appliesBody, "authoriser");
+                                });
+                        });
                     });
 
                 // Resolve IEnumerable<IOperationAuthoriser> from DI (execution-only).
@@ -182,16 +181,15 @@ public sealed class ApiAuthoriserModule : IBlueprintSourceGeneratorModule, IPipe
                     "operationAuthorisers != null",
                     innerBranch =>
                     {
-                        innerBranch.WriteStatement("foreach (var authoriser in operationAuthorisers)");
-                        innerBranch.WriteStatement("{");
-                        innerBranch.If(
-                            "authoriser.AppliesTo(context.Descriptor)",
-                            appliesBody =>
-                            {
-                                RenderDenialCheck(appliesBody, "authoriser");
-                            });
-
-                        innerBranch.WriteStatement("}");
+                        innerBranch.ForEach("var authoriser", "operationAuthorisers", foreachBody =>
+                        {
+                            foreachBody.If(
+                                "authoriser.AppliesTo(context.Descriptor)",
+                                appliesBody =>
+                                {
+                                    RenderDenialCheck(appliesBody, "authoriser");
+                                });
+                        });
                     });
             });
 
