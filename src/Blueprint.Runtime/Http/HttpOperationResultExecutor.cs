@@ -341,20 +341,52 @@ public class HttpOperationResultExecutor
         var errorMessage = string.IsNullOrWhiteSpace(validationResult.ErrorMessage)
             ? "Validation failed."
             : validationResult.ErrorMessage;
-        var memberNames = validationResult.MemberNames
-            .Where(static memberName => string.IsNullOrWhiteSpace(memberName) == false)
-            .Distinct(StringComparer.Ordinal)
-            .ToArray();
 
-        if (memberNames.Length == 0)
+        // Fast path: most validation results target exactly one member.
+        // Avoid LINQ/HashSet/Array overhead for the common single-member case.
+        var hasAny = false;
+        string? first = null;
+
+        foreach (var memberName in validationResult.MemberNames)
         {
-            yield return (string.Empty, errorMessage);
-            yield break;
+            if (string.IsNullOrWhiteSpace(memberName))
+            {
+                continue;
+            }
+
+            if (!hasAny)
+            {
+                first = memberName;
+                hasAny = true;
+                continue;
+            }
+
+            // Multiple members: fall back to full deduplication
+            return ExpandMultipleMemberNames(validationResult.MemberNames, first!, errorMessage);
         }
+
+        if (!hasAny)
+        {
+            return [(string.Empty, errorMessage)];
+        }
+
+        return [(first!, errorMessage)];
+    }
+
+    private static IEnumerable<(string MemberName, string ErrorMessage)> ExpandMultipleMemberNames(
+        IEnumerable<string> memberNames,
+        string first,
+        string errorMessage)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal) { first };
+        yield return (first, errorMessage);
 
         foreach (var memberName in memberNames)
         {
-            yield return (memberName, errorMessage);
+            if (!string.IsNullOrWhiteSpace(memberName) && memberName != first && seen.Add(memberName))
+            {
+                yield return (memberName, errorMessage);
+            }
         }
     }
 
