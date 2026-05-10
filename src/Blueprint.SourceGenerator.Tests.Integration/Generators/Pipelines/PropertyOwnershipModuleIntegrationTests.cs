@@ -92,6 +92,61 @@ public class PropertyOwnershipModuleIntegrationTests
     }
 
     [Fact]
+    public void When_route_parameter_is_IParsable_type_then_descriptor_shows_route_ownership()
+    {
+        var descriptor = GetItemByStrongIdPopulationQuery.Configure();
+
+        descriptor.TryGetFeatureData<OperationPropertyOwnershipFeatureData>(out var ownershipData)
+            .Should().BeTrue();
+
+        ownershipData!.Entries.Should().Contain(
+            static e => e.PropertyName == "ItemId" && e.Source == PropertyBindingSource.Route);
+    }
+
+    [Fact]
+    public async Task When_route_parameter_is_IParsable_type_then_pipeline_parses_from_route_value()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(GetItemByStrongIdPopulationQuery));
+        var descriptor = GetItemByStrongIdPopulationQuery.Configure();
+        var httpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        httpContext.Request.RouteValues["ItemId"] = "item-42";
+
+        var context = new Blueprint.Runtime.Exec.ApiOperationContext(new EmptyServiceProvider(), app, descriptor, CancellationToken.None)
+        {
+            Operation = new GetItemByStrongIdPopulationQuery(),
+            HttpContext = httpContext,
+        };
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<Blueprint.Runtime.Exec.OkResult<string>>();
+        ((Blueprint.Runtime.Exec.OkResult<string>)result).Content.Should().Be("item-42");
+    }
+
+    [Fact]
+    public async Task When_route_parameter_is_IParsable_type_and_value_is_invalid_then_binding_failure()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance, app);
+        var pipeline = executor.GetPipeline(typeof(GetItemByStrictIdPopulationQuery));
+        var descriptor = GetItemByStrictIdPopulationQuery.Configure();
+        var httpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        httpContext.Request.RouteValues["ItemId"] = "INVALID_NOT_NUMERIC";
+
+        var context = new Blueprint.Runtime.Exec.ApiOperationContext(new EmptyServiceProvider(), app, descriptor, CancellationToken.None)
+        {
+            Operation = new GetItemByStrictIdPopulationQuery(),
+            HttpContext = httpContext,
+        };
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<Blueprint.Runtime.Exec.BindingFailureResult>();
+    }
+
+    [Fact]
     public void When_http_method_metadata_set_then_descriptor_reports_correct_methods()
     {
         var descriptor = UpdateUserPopulationCommand.Configure();
@@ -588,6 +643,81 @@ public partial class MixedBindingPopulationCommand : ICommand<string>
     public static Task<string> HandleAsync(MixedBindingPopulationCommand operation)
     {
         return Task.FromResult($"{operation.OrgId}:{operation.Filter}:{operation.TenantId}:{operation.Token}:{operation.Name}");
+    }
+}
+
+/// <summary>
+/// A strongly-typed identifier that implements <see cref="IParsable{T}"/> for route/query binding.
+/// Always succeeds parsing (accepts any string).
+/// </summary>
+public class StrongItemId : IParsable<StrongItemId>
+{
+    public string Value { get; set; } = string.Empty;
+
+    public static StrongItemId Parse(string s, IFormatProvider? provider)
+    {
+        return new() { Value = s };
+    }
+
+    public static bool TryParse(string? s, IFormatProvider? provider, out StrongItemId result)
+    {
+        result = new StrongItemId { Value = s ?? string.Empty };
+        return true;
+    }
+}
+
+/// <summary>
+/// A strongly-typed identifier that rejects non-numeric strings to test binding failure paths.
+/// </summary>
+public class StrictNumericId : IParsable<StrictNumericId>
+{
+    public int Value { get; set; }
+
+    public static StrictNumericId Parse(string s, IFormatProvider? provider)
+    {
+        return new() { Value = int.Parse(s, provider) };
+    }
+
+    public static bool TryParse(string? s, IFormatProvider? provider, out StrictNumericId result)
+    {
+        if (int.TryParse(s, System.Globalization.NumberStyles.Integer, provider, out var parsed))
+        {
+            result = new StrictNumericId { Value = parsed };
+            return true;
+        }
+
+        result = default!;
+        return false;
+    }
+}
+
+/// <summary>
+/// GET with IParsable route parameter — tests that source-gen accepts IParsable types as route params.
+/// </summary>
+[Blueprint.Model.Attributes.AllowAnonymous]
+[Blueprint.Model.Attributes.RootLink("/population-test/items/{ItemId}")]
+public partial class GetItemByStrongIdPopulationQuery : IQuery<string>
+{
+    public StrongItemId ItemId { get; set; } = new();
+
+    public static Task<string> HandleAsync(GetItemByStrongIdPopulationQuery operation)
+    {
+        return Task.FromResult(operation.ItemId.Value);
+    }
+}
+
+/// <summary>
+/// GET with strict IParsable route parameter — tests binding failure when TryParse returns false.
+/// </summary>
+[Blueprint.Model.Attributes.AllowAnonymous]
+[Blueprint.Model.Attributes.RootLink("/population-test/strict-items/{ItemId}")]
+public partial class GetItemByStrictIdPopulationQuery : IQuery<string>
+{
+    public StrictNumericId ItemId { get; set; } = new();
+
+    public static Task<string> HandleAsync(GetItemByStrictIdPopulationQuery operation)
+    {
+        return Task.FromResult(operation.ItemId.Value.ToString());
     }
 }
 
