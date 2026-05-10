@@ -106,10 +106,13 @@ public class ApiOperationDescriptor
     /// <exception cref="NotImplementedException">If the link has not been created for this descriptor.</exception>
     public void AddUrl(ApiOperationUrl apiOperationUrl)
     {
-        if (this._urls.Any(u => u.UrlFormat == apiOperationUrl.UrlFormat))
+        foreach (var u in this._urls)
         {
-            throw new InvalidOperationException(
-                $"Cannot add a URL with the same URL format as an existing URL. Tried to add {apiOperationUrl.UrlFormat}");
+            if (u.UrlFormat == apiOperationUrl.UrlFormat)
+            {
+                throw new InvalidOperationException(
+                    $"Cannot add a URL with the same URL format as an existing URL. Tried to add {apiOperationUrl.UrlFormat}");
+            }
         }
 
         this._urls.Add(apiOperationUrl);
@@ -127,17 +130,24 @@ public class ApiOperationDescriptor
             throw new InvalidOperationException($"The ApiOperationLink MUST have been created for this ApiOperationDescriptor, but was instead created for the description {link.OperationDescriptor}");
         }
 
-        var existing = this._links.Where(l =>
-                l.UrlFormat.Equals(link.UrlFormat, StringComparison.CurrentCultureIgnoreCase) &&
+        List<ApiOperationLink>? conflicts = null;
+
+        foreach (var l in this._links)
+        {
+            if (l.UrlFormat.Equals(link.UrlFormat, StringComparison.CurrentCultureIgnoreCase) &&
                 l.OperationDescriptor.Name == link.OperationDescriptor.Name &&
                 l.ResourceType == link.ResourceType)
-            .ToList();
+            {
+                conflicts ??= new List<ApiOperationLink>(1);
+                conflicts.Add(l);
+            }
+        }
 
-        if (existing.Count > 0)
+        if (conflicts is { Count: > 0 })
         {
             throw new InvalidOperationException(
                 $"Could not register {link} from {link.OperationDescriptor.Source} as it conflicts with existing Link registrations:\n\n" +
-                string.Join("\n", existing.Select(e => $" {e} sourced from {e.OperationDescriptor.Source}")));
+                string.Join("\n", conflicts.Select(static e => $" {e} sourced from {e.OperationDescriptor.Source}")));
         }
 
         this._links.Add(link);
@@ -207,7 +217,7 @@ public class ApiOperationDescriptor
         return operationType.GetProperties()
             .ToFrozenDictionary(
                 static property => property.Name,
-                static property => (IReadOnlyList<Attribute>)property.GetCustomAttributes(inherit: true).OfType<Attribute>().ToArray(),
+                static property => (IReadOnlyList<Attribute>)Attribute.GetCustomAttributes(property, inherit: true),
                 StringComparer.Ordinal);
     }
 

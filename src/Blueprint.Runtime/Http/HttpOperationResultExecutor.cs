@@ -303,18 +303,20 @@ public class HttpOperationResultExecutor
             // (SelectMany → GroupBy → ToDictionary → nested Select/Distinct/ToArray).
             var grouped = new Dictionary<string, List<string>>(StringComparer.Ordinal);
 
-            foreach (var entry in validationFailedResult.ValidationResults
-                         .SelectMany(static validationResult => ExpandValidationErrorEntries(validationResult)))
+            foreach (var validationResult in validationFailedResult.ValidationResults)
             {
-                if (!grouped.TryGetValue(entry.MemberName, out var messages))
+                foreach (var entry in ExpandValidationErrorEntries(validationResult))
                 {
-                    messages = new List<string>(1);
-                    grouped[entry.MemberName] = messages;
-                }
+                    if (!grouped.TryGetValue(entry.MemberName, out var messages))
+                    {
+                        messages = new List<string>(1);
+                        grouped[entry.MemberName] = messages;
+                    }
 
-                if (!messages.Contains(entry.ErrorMessage))
-                {
-                    messages.Add(entry.ErrorMessage);
+                    if (!messages.Contains(entry.ErrorMessage))
+                    {
+                        messages.Add(entry.ErrorMessage);
+                    }
                 }
             }
 
