@@ -403,10 +403,17 @@ public sealed record PipelineContribution(
 /// <param name="stage">The target stage.</param>
 /// <param name="contributorId">The contributing contributor identifier.</param>
 /// <param name="render">The contributor-owned rendering callback.</param>
+/// <param name="requiresSuccessGuard">
+/// When <c>true</c>, the code generator wraps this step (and adjacent success-guarded steps)
+/// inside a single <c>if (handlerResult.WasSuccessful)</c> block instead of each module
+/// emitting its own guard. This eliminates repeated virtual-dispatch checks in the generated
+/// pipeline and produces a single consolidated PostExecution success block.
+/// </param>
 public sealed class PipelineRenderStep(
     PipelineStage stage,
     string contributorId,
-    Action<PipelineRenderContext> render)
+    Action<PipelineRenderContext> render,
+    bool requiresSuccessGuard = false)
 {
     private readonly Action<PipelineRenderContext> _render = render ?? throw new ArgumentNullException(nameof(render));
 
@@ -419,6 +426,11 @@ public sealed class PipelineRenderStep(
     /// Gets the contributing contributor identifier.
     /// </summary>
     public string ContributorId { get; } = contributorId;
+
+    /// <summary>
+    /// Gets a value indicating whether this step requires the outer <c>handlerResult.WasSuccessful</c> guard.
+    /// </summary>
+    public bool RequiresSuccessGuard { get; } = requiresSuccessGuard;
 
     /// <summary>
     /// Invokes the contributor-owned render callback.

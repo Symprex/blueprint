@@ -76,7 +76,7 @@ public sealed class UnitOfWorkModule : IBlueprintSourceGeneratorModule, IPipelin
             requiredBy: PipelineStage.PostExecution);
 
         context.RequireAsync();
-        context.AddRenderStep(PipelineStage.PostExecution, RenderSaveChanges);
+        context.AddSuccessGuardedRenderStep(PipelineStage.PostExecution, RenderSaveChanges);
     }
 
     private static void RenderSaveChanges(PipelineRenderContext context)
@@ -88,7 +88,7 @@ public sealed class UnitOfWorkModule : IBlueprintSourceGeneratorModule, IPipelin
             context.GetOptionalServiceExpression("Blueprint.Persistence.IUnitOfWork"));
 
         context.If(
-            "unitOfWork != null && handlerResult.WasSuccessful",
+            "unitOfWork != null",
             branch =>
             {
                 branch.WriteStatement("await unitOfWork.SaveChangesAsync(context.OperationCancelled);");

@@ -77,9 +77,59 @@ internal static class PipelineCodeGenerator
 
     private static void WritePipelineSteps(ICodeWriter writer, OperationHandlerModel handler, PipelinePlan plan)
     {
+        var inSuccessGuard = false;
+
         foreach (var contribution in plan.Contributions)
         {
-            foreach (var renderStep in plan.GetRenderSteps(contribution))
+            var steps = plan.GetRenderSteps(contribution).ToList();
+            if (steps.Count == 0)
+            {
+                continue;
+            }
+
+            // When we encounter the first success-guarded step, open a consolidated
+            // if (handlerResult.WasSuccessful) block and render ALL success-guarded
+            // steps from every contribution inside it.
+            if (!inSuccessGuard && steps.Any(static s => s.RequiresSuccessGuard))
+            {
+                inSuccessGuard = true;
+
+                // Render any non-guarded steps in this contribution first
+                foreach (var step in steps.Where(static s => !s.RequiresSuccessGuard))
+                {
+                    step.Render(new PipelineRenderContext(writer, handler, plan));
+                }
+
+                // Collect ALL success-guarded steps across ALL remaining contributions
+                var guardedSteps = plan.RenderSteps.Where(static s => s.RequiresSuccessGuard).ToList();
+
+                writer.NewLine();
+                writer.If(
+                    "handlerResult.WasSuccessful",
+                    guardWriter =>
+                    {
+                        var guardContext = new PipelineRenderContext(guardWriter, handler, plan);
+                        foreach (var guardedStep in guardedSteps)
+                        {
+                            guardedStep.Render(guardContext);
+                        }
+                    });
+
+                continue;
+            }
+
+            // Skip success-guarded steps from later contributions — already rendered above
+            if (inSuccessGuard)
+            {
+                foreach (var step in steps.Where(static s => !s.RequiresSuccessGuard))
+                {
+                    step.Render(new PipelineRenderContext(writer, handler, plan));
+                }
+
+                continue;
+            }
+
+            foreach (var renderStep in steps)
             {
                 renderStep.Render(new PipelineRenderContext(writer, handler, plan));
             }

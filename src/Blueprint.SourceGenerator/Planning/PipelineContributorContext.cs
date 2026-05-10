@@ -58,6 +58,19 @@ public sealed class PipelineContributorContext
     }
 
     /// <summary>
+    /// Adds a render step that will be wrapped inside a consolidated
+    /// <c>if (handlerResult.WasSuccessful)</c> guard by the code generator. Multiple modules
+    /// that call this method produce a single outer guard block instead of each emitting its own
+    /// <c>WasSuccessful</c> check, eliminating repeated virtual-dispatch calls in the generated pipeline.
+    /// </summary>
+    /// <param name="stage">The target stage.</param>
+    /// <param name="render">The contributor-owned render callback (should NOT emit its own WasSuccessful guard).</param>
+    public void AddSuccessGuardedRenderStep(PipelineStage stage, Action<PipelineRenderContext> render)
+    {
+        this._plan.AddRenderStep(new PipelineRenderStep(stage, this._contributorId, render, requiresSuccessGuard: true));
+    }
+
+    /// <summary>
     /// Marks the generated pipeline as requiring an async method signature even when
     /// the handler itself is synchronous. Use when a contributor adds render steps that
     /// emit <c>await</c> expressions (for example async body reading in the Population stage).

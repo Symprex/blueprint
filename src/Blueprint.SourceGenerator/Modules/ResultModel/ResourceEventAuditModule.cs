@@ -62,7 +62,7 @@ public sealed class ResourceEventAuditModule : IBlueprintSourceGeneratorModule, 
             requiredBy: PipelineStage.PostExecution);
 
         context.RequireAsync();
-        context.AddRenderStep(PipelineStage.PostExecution, ctx => RenderResourceEventAudit(ctx, operationTypeName, castTypeName));
+        context.AddSuccessGuardedRenderStep(PipelineStage.PostExecution, ctx => RenderResourceEventAudit(ctx, operationTypeName, castTypeName));
     }
 
     private static void RenderResourceEventAudit(PipelineRenderContext context, string operationTypeName, string castTypeName)
@@ -70,7 +70,7 @@ public sealed class ResourceEventAuditModule : IBlueprintSourceGeneratorModule, 
         context.WriteBlankLine();
 
         context.If(
-            $"handlerResult.WasSuccessful && handlerResult is {castTypeName} _reAuditResult",
+            $"handlerResult is {castTypeName} _reAuditResult",
             branch =>
             {
                 branch.DeclareVariable(

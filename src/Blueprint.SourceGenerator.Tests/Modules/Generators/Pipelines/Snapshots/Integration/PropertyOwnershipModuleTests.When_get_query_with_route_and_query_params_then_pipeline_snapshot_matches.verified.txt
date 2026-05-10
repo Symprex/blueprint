@@ -143,6 +143,7 @@ namespace Blueprint.Generated
 
             if (handlerResult.WasSuccessful)
             {
+
                 var auditSink = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Auditing.IAuditSink>(context.ServiceProvider);
                 if (auditSink != null)
                 {
@@ -157,10 +158,7 @@ namespace Blueprint.Generated
                         context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent("blueprint.audit.failed", default, new System.Diagnostics.ActivityTagsCollection { { "blueprint.operation.type", "GetUserItemsQuery" }, { "exception.type", auditException.GetType().FullName }, { "exception.message", auditException.Message }, { "exception.stacktrace", auditException.StackTrace } }));
                     }
                 }
-            }
 
-            if (handlerResult.WasSuccessful)
-            {
                 var backgroundTaskScheduler = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Tasks.IBackgroundTaskScheduler>(context.ServiceProvider);
                 if (backgroundTaskScheduler != null)
                 {

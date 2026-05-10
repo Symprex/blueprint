@@ -75,7 +75,7 @@ public sealed class MessageOutboxModule : IBlueprintSourceGeneratorModule, IPipe
             requiredBy: PipelineStage.PostExecution);
 
         context.RequireAsync();
-        context.AddRenderStep(PipelineStage.PostExecution, RenderCommitOutbox);
+        context.AddSuccessGuardedRenderStep(PipelineStage.PostExecution, RenderCommitOutbox);
     }
 
     private static void RenderCommitOutbox(PipelineRenderContext context)
@@ -87,7 +87,7 @@ public sealed class MessageOutboxModule : IBlueprintSourceGeneratorModule, IPipe
             context.GetOptionalServiceExpression("Blueprint.Messaging.IMessageOutbox"));
 
         context.If(
-            "messageOutbox != null && handlerResult.WasSuccessful",
+            "messageOutbox != null",
             branch =>
             {
                 branch.WriteStatement("await messageOutbox.CommitAsync(context.OperationCancelled);");

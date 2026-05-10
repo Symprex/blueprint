@@ -80,47 +80,42 @@ public sealed class AuditingModule : IBlueprintSourceGeneratorModule, IPipelineC
             requiredBy: PipelineStage.PostExecution);
 
         context.RequireAsync();
-        context.AddRenderStep(PipelineStage.PostExecution, ctx => RenderAuditSink(ctx, operationTypeName, safeFieldName));
+        context.AddSuccessGuardedRenderStep(PipelineStage.PostExecution, ctx => RenderAuditSink(ctx, operationTypeName, safeFieldName));
     }
 
     private static void RenderAuditSink(PipelineRenderContext context, string operationTypeName, string cachedTagsFieldName)
     {
         context.WriteBlankLine();
 
+        context.DeclareVariable(
+            "auditSink",
+            context.GetOptionalServiceExpression("Blueprint.Auditing.IAuditSink"));
+
         context.If(
-            "handlerResult.WasSuccessful",
-            branch =>
+            "auditSink != null",
+            innerBranch =>
             {
-                branch.DeclareVariable(
-                    "auditSink",
-                    context.GetOptionalServiceExpression("Blueprint.Auditing.IAuditSink"));
+                // Reuse static readonly tag collection — zero per-request allocation for constant tags
+                innerBranch.WriteStatement(
+                    $"context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent(\"blueprint.audit.started\", default, {cachedTagsFieldName}));");
 
-                branch.If(
-                    "auditSink != null",
-                    innerBranch =>
-                    {
-                        // Reuse static readonly tag collection — zero per-request allocation for constant tags
-                        innerBranch.WriteStatement(
-                            $"context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent(\"blueprint.audit.started\", default, {cachedTagsFieldName}));");
+                innerBranch.WriteStatement("try");
+                innerBranch.WriteStatement("{");
+                innerBranch.WriteStatement(
+                    "    await auditSink.RecordAsync(context, handlerResult, System.Threading.CancellationToken.None);");
 
-                        innerBranch.WriteStatement("try");
-                        innerBranch.WriteStatement("{");
-                        innerBranch.WriteStatement(
-                            "    await auditSink.RecordAsync(context, handlerResult, System.Threading.CancellationToken.None);");
+                innerBranch.WriteStatement(
+                    $"    context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent(\"blueprint.audit.succeeded\", default, {cachedTagsFieldName}));");
 
-                        innerBranch.WriteStatement(
-                            $"    context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent(\"blueprint.audit.succeeded\", default, {cachedTagsFieldName}));");
+                innerBranch.WriteStatement("}");
+                innerBranch.WriteStatement("catch (System.Exception auditException)");
+                innerBranch.WriteStatement("{");
 
-                        innerBranch.WriteStatement("}");
-                        innerBranch.WriteStatement("catch (System.Exception auditException)");
-                        innerBranch.WriteStatement("{");
+                // Failed event has dynamic exception details — allocation acceptable since exceptions are exceptional
+                innerBranch.WriteStatement(
+                    $"    context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent(\"blueprint.audit.failed\", default, new System.Diagnostics.ActivityTagsCollection {{ {{ \"blueprint.operation.type\", \"{operationTypeName}\" }}, {{ \"exception.type\", auditException.GetType().FullName }}, {{ \"exception.message\", auditException.Message }}, {{ \"exception.stacktrace\", auditException.StackTrace }} }}));");
 
-                        // Failed event has dynamic exception details — allocation acceptable since exceptions are exceptional
-                        innerBranch.WriteStatement(
-                            $"    context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent(\"blueprint.audit.failed\", default, new System.Diagnostics.ActivityTagsCollection {{ {{ \"blueprint.operation.type\", \"{operationTypeName}\" }}, {{ \"exception.type\", auditException.GetType().FullName }}, {{ \"exception.message\", auditException.Message }}, {{ \"exception.stacktrace\", auditException.StackTrace }} }}));");
-
-                        innerBranch.WriteStatement("}");
-                    });
+                innerBranch.WriteStatement("}");
             });
     }
 

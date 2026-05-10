@@ -42,6 +42,7 @@ namespace Blueprint.Generated
 
             if (handlerResult.WasSuccessful)
             {
+
                 var auditSink = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Auditing.IAuditSink>(context.ServiceProvider);
                 if (auditSink != null)
                 {
@@ -56,6 +57,12 @@ namespace Blueprint.Generated
                         context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent("blueprint.audit.failed", default, new System.Diagnostics.ActivityTagsCollection { { "blueprint.operation.type", "GetSummaryQuery" }, { "exception.type", auditException.GetType().FullName }, { "exception.message", auditException.Message }, { "exception.stacktrace", auditException.StackTrace } }));
                     }
                 }
+
+                var backgroundTaskScheduler = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Tasks.IBackgroundTaskScheduler>(context.ServiceProvider);
+                if (backgroundTaskScheduler != null)
+                {
+                    await backgroundTaskScheduler.RunNowAsync();
+                }
             }
 
             if (handlerResult is global::Blueprint.Runtime.Exec.OkResult<global::TestNamespace.SummaryResource> okResult_0A0E1A7F)
@@ -64,15 +71,6 @@ namespace Blueprint.Generated
                 if (expansionContent_0A0E1A7F != null)
                 {
                     await global::Blueprint.Runtime.Expansion.ResourceExpansionRuntime.ExpandAsync(context, handlerResult, expansionContent_0A0E1A7F?.Detail, typeof(global::TestNamespace.DetailResource), false);
-                }
-            }
-
-            if (handlerResult.WasSuccessful)
-            {
-                var backgroundTaskScheduler = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Tasks.IBackgroundTaskScheduler>(context.ServiceProvider);
-                if (backgroundTaskScheduler != null)
-                {
-                    await backgroundTaskScheduler.RunNowAsync();
                 }
             }
 

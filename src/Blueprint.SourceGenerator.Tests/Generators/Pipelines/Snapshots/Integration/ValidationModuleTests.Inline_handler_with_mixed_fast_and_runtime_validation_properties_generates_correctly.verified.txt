@@ -58,20 +58,21 @@ namespace Blueprint.Generated
 
             var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<string>(await global::TestNamespace.CreateUserCommand.HandleAsync(operation));
 
-            var unitOfWork = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Persistence.IUnitOfWork>(context.ServiceProvider);
-            if (unitOfWork != null && handlerResult.WasSuccessful)
-            {
-                await unitOfWork.SaveChangesAsync(context.OperationCancelled);
-            }
-
-            var messageOutbox = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Messaging.IMessageOutbox>(context.ServiceProvider);
-            if (messageOutbox != null && handlerResult.WasSuccessful)
-            {
-                await messageOutbox.CommitAsync(context.OperationCancelled);
-            }
-
             if (handlerResult.WasSuccessful)
             {
+
+                var unitOfWork = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Persistence.IUnitOfWork>(context.ServiceProvider);
+                if (unitOfWork != null)
+                {
+                    await unitOfWork.SaveChangesAsync(context.OperationCancelled);
+                }
+
+                var messageOutbox = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Messaging.IMessageOutbox>(context.ServiceProvider);
+                if (messageOutbox != null)
+                {
+                    await messageOutbox.CommitAsync(context.OperationCancelled);
+                }
+
                 var auditSink = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Auditing.IAuditSink>(context.ServiceProvider);
                 if (auditSink != null)
                 {
@@ -86,10 +87,7 @@ namespace Blueprint.Generated
                         context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent("blueprint.audit.failed", default, new System.Diagnostics.ActivityTagsCollection { { "blueprint.operation.type", "CreateUserCommand" }, { "exception.type", auditException.GetType().FullName }, { "exception.message", auditException.Message }, { "exception.stacktrace", auditException.StackTrace } }));
                     }
                 }
-            }
 
-            if (handlerResult.WasSuccessful)
-            {
                 var backgroundTaskScheduler = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Tasks.IBackgroundTaskScheduler>(context.ServiceProvider);
                 if (backgroundTaskScheduler != null)
                 {
