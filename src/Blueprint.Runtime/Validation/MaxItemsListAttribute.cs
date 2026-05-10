@@ -60,17 +60,24 @@ public sealed class MaxItemsListAttribute : ValidationAttribute
             var count = 0;
             var enumerator = enumerable.GetEnumerator();
 
-            while (enumerator.MoveNext())
+            try
             {
-                count++;
-
-                if (count > this.MaximumItems)
+                while (enumerator.MoveNext())
                 {
-                    return false;
-                }
-            }
+                    count++;
 
-            return true;
+                    if (count > this.MaximumItems)
+                    {
+                        return false;
+                    }
+                }
+
+                return true;
+            }
+            finally
+            {
+                (enumerator as IDisposable)?.Dispose();
+            }
         }
 
         return false;

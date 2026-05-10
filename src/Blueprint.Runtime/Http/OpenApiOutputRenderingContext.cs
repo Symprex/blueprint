@@ -1010,10 +1010,10 @@ public sealed record OpenApiOutputRenderingContext(
                 {
                     foreach (var tag in operation.Tags)
                     {
-                        if (tagDescriptions.ContainsKey(tag))
+                        if (tagDescriptions.TryGetValue(tag, out var existingDesc))
                         {
                             // Keep the first non-null description encountered for this tag.
-                            if (tagDescriptions[tag] is null
+                            if (existingDesc is null
                                 && operation.TagDescriptions.TryGetValue(tag, out var desc)
                                 && desc is not null)
                             {

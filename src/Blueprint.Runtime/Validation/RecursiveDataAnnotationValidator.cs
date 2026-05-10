@@ -176,17 +176,20 @@ public static class RecursiveDataAnnotationValidator
                 continue;
             }
 
-            var memberNames = result.MemberNames.ToArray();
+            var hasMembers = false;
 
-            if (memberNames.Length == 0)
+            foreach (var memberName in result.MemberNames)
             {
-                yield return new ValidationResult(result.ErrorMessage, [path]);
-            }
-            else
-            {
+                hasMembers = true;
+
                 yield return new ValidationResult(
                     result.ErrorMessage,
-                    memberNames.Select(n => $"{path}.{ToCamelCasePath(n)}"));
+                    [$"{path}.{ToCamelCasePath(memberName)}"]);
+            }
+
+            if (!hasMembers)
+            {
+                yield return new ValidationResult(result.ErrorMessage, [path]);
             }
         }
 

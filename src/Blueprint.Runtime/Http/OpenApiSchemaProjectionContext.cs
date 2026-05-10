@@ -58,12 +58,17 @@ public sealed record OpenApiSchemaProjectionContext(
             .Distinct(StringComparer.Ordinal)
             .OrderBy(static bodyTypeName => bodyTypeName, StringComparer.Ordinal);
 
-        var schemas = coveredBodyTypeNames
-            .Where(coveredTypesByName.ContainsKey)
-            .Select(bodyTypeName => CreateSchema(bodyTypeName, coveredTypesByName[bodyTypeName], serializerContext, coveredTypesByName))
-            .ToImmutableArray();
+        var schemaBuilder = ImmutableArray.CreateBuilder<OpenApiSchemaModel>();
 
-        return new OpenApiSchemaProjectionContext(document, schemas);
+        foreach (var bodyTypeName in coveredBodyTypeNames)
+        {
+            if (coveredTypesByName.TryGetValue(bodyTypeName, out var bodyType))
+            {
+                schemaBuilder.Add(CreateSchema(bodyTypeName, bodyType, serializerContext, coveredTypesByName));
+            }
+        }
+
+        return new OpenApiSchemaProjectionContext(document, schemaBuilder.ToImmutable());
     }
 
     private static OpenApiSchemaModel CreateSchema(
