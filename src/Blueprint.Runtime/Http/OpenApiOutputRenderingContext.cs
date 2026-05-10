@@ -635,14 +635,42 @@ public sealed record OpenApiOutputRenderingContext(
 
     private static void WriteResponse(Utf8JsonWriter writer, OpenApiResponseObjectModel response)
     {
-        writer.WritePropertyName(response.StatusCode.ToString());
+        writer.WritePropertyName(MapStatusCodeString(response.StatusCode));
         writer.WriteStartObject();
 
         writer.WriteString("description", MapStatusDescription(response.StatusCode));
 
+        if (!response.Headers.IsDefault && !response.Headers.IsEmpty)
+        {
+            WriteResponseHeaders(writer, response.Headers);
+        }
+
         if (!response.Content.IsEmpty)
         {
             WriteResponseContent(writer, response.Content);
+        }
+
+        writer.WriteEndObject();
+    }
+
+    private static void WriteResponseHeaders(Utf8JsonWriter writer, ImmutableArray<OpenApiResponseHeaderModel> headers)
+    {
+        writer.WritePropertyName("headers");
+        writer.WriteStartObject();
+
+        foreach (var header in headers)
+        {
+            writer.WritePropertyName(header.Name);
+            writer.WriteStartObject();
+
+            writer.WriteString("description", header.Description);
+
+            writer.WritePropertyName("schema");
+            writer.WriteStartObject();
+            writer.WriteString("type", header.SchemaType);
+            writer.WriteEndObject();
+
+            writer.WriteEndObject();
         }
 
         writer.WriteEndObject();
@@ -1060,6 +1088,28 @@ public sealed record OpenApiOutputRenderingContext(
         }
 
         writer.WriteEndObject();
+    }
+
+    private static string MapStatusCodeString(int statusCode)
+    {
+        return statusCode switch
+        {
+            200 => "200",
+            201 => "201",
+            202 => "202",
+            204 => "204",
+            301 => "301",
+            302 => "302",
+            304 => "304",
+            400 => "400",
+            401 => "401",
+            403 => "403",
+            404 => "404",
+            409 => "409",
+            422 => "422",
+            500 => "500",
+            _ => statusCode.ToString(),
+        };
     }
 
     private static string MapStatusDescription(int statusCode)

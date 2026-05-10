@@ -296,6 +296,64 @@ public class ReferenceAppOpenApiTests
     }
 
     [Fact]
+    public async Task When_operation_returns_201_then_openapi_renders_location_response_header()
+    {
+        var (json, _) = await InvokeOpenApiEndpointAsync();
+        using var doc = JsonDocument.Parse(json);
+
+        var createPath = doc.RootElement.GetProperty("paths").GetProperty("/templates");
+        var responses = createPath.GetProperty("post").GetProperty("responses");
+        var created = responses.GetProperty("201");
+
+        created.TryGetProperty("headers", out var headers).Should().BeTrue(
+            "201 Created responses should include a headers section");
+
+        headers.TryGetProperty("Location", out var location).Should().BeTrue(
+            "201 Created should document the Location header");
+
+        location.GetProperty("description").GetString().Should().NotBeNullOrWhiteSpace();
+        location.GetProperty("schema").GetProperty("type").GetString().Should().Be("string");
+    }
+
+    [Fact]
+    public async Task When_operation_returns_file_stream_then_openapi_renders_content_disposition_header()
+    {
+        var (json, _) = await InvokeOpenApiEndpointAsync();
+        using var doc = JsonDocument.Parse(json);
+
+        var downloadPath = doc.RootElement.GetProperty("paths").GetProperty("/templates/{Id}/download");
+        var responses = downloadPath.GetProperty("get").GetProperty("responses");
+        var ok = responses.GetProperty("200");
+
+        ok.TryGetProperty("headers", out var headers).Should().BeTrue(
+            "file-stream responses should include a headers section");
+
+        headers.TryGetProperty("Content-Disposition", out var disposition).Should().BeTrue(
+            "file-stream responses should document the Content-Disposition header");
+
+        disposition.GetProperty("schema").GetProperty("type").GetString().Should().Be("string");
+    }
+
+    [Fact]
+    public async Task When_operation_returns_redirect_then_openapi_renders_location_header()
+    {
+        var (json, _) = await InvokeOpenApiEndpointAsync();
+        using var doc = JsonDocument.Parse(json);
+
+        var redirectPath = doc.RootElement.GetProperty("paths").GetProperty("/templates/{Id}/docs");
+        var responses = redirectPath.GetProperty("get").GetProperty("responses");
+        var found = responses.GetProperty("302");
+
+        found.TryGetProperty("headers", out var headers).Should().BeTrue(
+            "redirect responses should include a headers section");
+
+        headers.TryGetProperty("Location", out var location).Should().BeTrue(
+            "302 Found should document the Location header");
+
+        location.GetProperty("schema").GetProperty("type").GetString().Should().Be("string");
+    }
+
+    [Fact]
     public async Task When_body_property_is_nullable_and_not_required_then_openapi_renders_nullable()
     {
         var (json, _) = await InvokeOpenApiEndpointAsync();

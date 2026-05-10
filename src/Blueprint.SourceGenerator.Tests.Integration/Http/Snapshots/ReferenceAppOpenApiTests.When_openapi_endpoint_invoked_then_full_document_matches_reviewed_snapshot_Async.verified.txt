@@ -422,6 +422,14 @@
         "responses": {
           "201": {
             "description": "Created",
+            "headers": {
+              "Location": {
+                "description": "The URL of the created or redirected resource.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -1025,7 +1033,15 @@
         ],
         "responses": {
           "201": {
-            "description": "Created"
+            "description": "Created",
+            "headers": {
+              "Location": {
+                "description": "The URL of the created or redirected resource.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "401": {
             "description": "Unauthorized",
@@ -1212,6 +1228,14 @@
         "responses": {
           "201": {
             "description": "Created",
+            "headers": {
+              "Location": {
+                "description": "The URL of the created or redirected resource.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -1329,6 +1353,14 @@
         "responses": {
           "201": {
             "description": "Created",
+            "headers": {
+              "Location": {
+                "description": "The URL of the created or redirected resource.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -1425,7 +1457,15 @@
         ],
         "responses": {
           "302": {
-            "description": "Found"
+            "description": "Found",
+            "headers": {
+              "Location": {
+                "description": "The URL of the created or redirected resource.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "401": {
             "description": "Unauthorized",
@@ -1496,6 +1536,14 @@
         "responses": {
           "200": {
             "description": "OK",
+            "headers": {
+              "Content-Disposition": {
+                "description": "Indicates the file should be downloaded as an attachment, including the suggested filename.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/octet-stream": {
                 "schema": {
@@ -1797,6 +1845,14 @@
         "responses": {
           "201": {
             "description": "Created",
+            "headers": {
+              "Location": {
+                "description": "The URL of the created or redirected resource.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -1927,6 +1983,14 @@
         "responses": {
           "201": {
             "description": "Created",
+            "headers": {
+              "Location": {
+                "description": "The URL of the created or redirected resource.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {

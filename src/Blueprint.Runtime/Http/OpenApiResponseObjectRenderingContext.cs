@@ -67,11 +67,14 @@ public sealed record OpenApiResponseObjectRenderingContext(
             ? CreateContent(operation, response, componentsByBodyTypeName)
             : ImmutableArray<OpenApiResponseContentModel>.Empty;
 
+        var headers = InferResponseHeaders(response.Response);
+
         return new OpenApiResponseObjectModel(
             response.Response.StatusCode,
             response.Response.HasResponseBody,
             response.Response.ResultTypeNames,
-            content);
+            content,
+            headers);
     }
 
     private static ImmutableArray<OpenApiResponseContentModel> CreateContent(
@@ -200,6 +203,74 @@ public sealed record OpenApiResponseObjectRenderingContext(
             ? null
             : new OpenApiResponseDiscriminatorModel("eventId", cases.ToImmutableArray());
     }
+
+    private const string CreatedResultTypeName = "Blueprint.Runtime.Exec.CreatedResult";
+    private const string ResourceEventCreatedResultPrefix = "Blueprint.Runtime.Exec.ResourceEventResult+";
+    private const string RedirectResultTypeName = "Blueprint.Runtime.Http.RedirectResult";
+    private const string OkResultTypeName = "Blueprint.Runtime.Exec.OkResult";
+
+    /// <summary>
+    /// Infers well-known HTTP response headers from the response status code and result type names.
+    /// Blueprint result types carry implicit header contracts — for example, <c>CreatedResult</c> sets a
+    /// <c>Location</c> header, <c>FileStreamResult</c> sets <c>Content-Disposition</c>, and <c>RedirectResult</c>
+    /// always sets <c>Location</c>.
+    /// </summary>
+    private static ImmutableArray<OpenApiResponseHeaderModel> InferResponseHeaders(
+        OperationHttpResponseMetadata response)
+    {
+        var headers = new List<OpenApiResponseHeaderModel>(2);
+
+        var hasLocation = false;
+        var hasContentDisposition = false;
+
+        foreach (var resultTypeName in response.ResultTypeNames)
+        {
+            if (!hasLocation
+                && (string.Equals(resultTypeName, CreatedResultTypeName, StringComparison.Ordinal)
+                    || string.Equals(resultTypeName, RedirectResultTypeName, StringComparison.Ordinal)
+                    || resultTypeName.StartsWith(ResourceEventCreatedResultPrefix, StringComparison.Ordinal)))
+            {
+                hasLocation = true;
+            }
+
+            if (!hasContentDisposition
+                && string.Equals(resultTypeName, FileStreamResultTypeName, StringComparison.Ordinal))
+            {
+                hasContentDisposition = true;
+            }
+        }
+
+        // 201 Created always implies a Location header even if we didn't see CreatedResult
+        // (the executor sets Location from self-link on any 201).
+        if (!hasLocation && response.StatusCode == 201)
+        {
+            hasLocation = true;
+        }
+
+        // Redirect status codes always have a Location header.
+        if (!hasLocation && response.StatusCode is 301 or 302 or 303 or 307 or 308)
+        {
+            hasLocation = true;
+        }
+
+        if (hasLocation)
+        {
+            headers.Add(new OpenApiResponseHeaderModel(
+                "Location",
+                "The URL of the created or redirected resource."));
+        }
+
+        if (hasContentDisposition)
+        {
+            headers.Add(new OpenApiResponseHeaderModel(
+                "Content-Disposition",
+                "Indicates the file should be downloaded as an attachment, including the suggested filename."));
+        }
+
+        return headers.Count == 0
+            ? ImmutableArray<OpenApiResponseHeaderModel>.Empty
+            : headers.ToImmutableArray();
+    }
 }
 
 /// <summary>
@@ -218,11 +289,13 @@ public sealed record OpenApiResponseObjectOperationContext(
 /// <param name="HasResponseBody">Whether the response family writes a response body.</param>
 /// <param name="ResultTypeNames">The semantic result type names that collapse into this response family.</param>
 /// <param name="Content">The rendered response content keyed by media type when covered schema components exist.</param>
+/// <param name="Headers">Well-known response headers inferred from result types and status codes.</param>
 public sealed record OpenApiResponseObjectModel(
     int StatusCode,
     bool HasResponseBody,
     ImmutableArray<string> ResultTypeNames,
-    ImmutableArray<OpenApiResponseContentModel> Content);
+    ImmutableArray<OpenApiResponseContentModel> Content,
+    ImmutableArray<OpenApiResponseHeaderModel> Headers = default);
 
 /// <summary>
 /// Captures one rendered media-type entry for an OpenAPI-style response object.
@@ -279,3 +352,17 @@ public sealed record OpenApiResponseContentSchemaComponent(
 public sealed record OpenApiInlineSchemaModel(
     string Type,
     string? Format = null);
+
+/// <summary>
+/// Represents a response header declared in an OpenAPI response object. Blueprint infers well-known
+/// headers from result types — for example <c>Location</c> on 201 Created, <c>ETag</c> and
+/// <c>Cache-Control</c> on responses that can carry conditional caching metadata, and
+/// <c>Content-Disposition</c> on file-stream responses.
+/// </summary>
+/// <param name="Name">The HTTP header name (e.g. <c>Location</c>, <c>ETag</c>).</param>
+/// <param name="Description">A human-readable description of the header's purpose.</param>
+/// <param name="SchemaType">The OpenAPI schema type for the header value (typically <c>string</c>).</param>
+public sealed record OpenApiResponseHeaderModel(
+    string Name,
+    string Description,
+    string SchemaType = "string");
