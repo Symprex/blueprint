@@ -6,7 +6,7 @@ namespace Blueprint.Middleware;
 /// <summary>
 /// Compatibility alias for legacy callers that still refer to the pre-canonical validation-failure result name.
 /// </summary>
-public class ValidationFailedOperationResult : ValidationFailedResult
+public sealed class ValidationFailedOperationResult : ValidationFailedResult
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="ValidationFailedOperationResult"/> class.

@@ -6,7 +6,7 @@ namespace Blueprint.Runtime.Http;
 /// Represents an HTTP redirect response. By default emits a 302 Found status, but can be configured
 /// for permanent (301), see-other (303), or temporary redirect (307) via <see cref="StatusCode"/>.
 /// </summary>
-public class RedirectResult : OperationResult
+public sealed class RedirectResult : OperationResult
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="RedirectResult"/> class that redirects to the given URL.

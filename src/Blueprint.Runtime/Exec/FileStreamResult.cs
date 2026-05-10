@@ -10,7 +10,7 @@ namespace Blueprint.Runtime.Exec;
 /// will not dispose it — disposal is the responsibility of the code that created the stream (typically
 /// the operation handler or a <c>using</c> block wrapping the handler call).
 /// </remarks>
-public class FileStreamResult : OperationResult
+public sealed class FileStreamResult : OperationResult
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="FileStreamResult"/> class.

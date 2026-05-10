@@ -5,7 +5,7 @@ namespace Blueprint;
 /// <summary>
 /// Compatibility alias for legacy callers that still refer to the pre-canonical unhandled-exception result name.
 /// </summary>
-public class UnhandledExceptionOperationResult : UnhandledExceptionResult
+public sealed class UnhandledExceptionOperationResult : UnhandledExceptionResult
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="UnhandledExceptionOperationResult"/> class.

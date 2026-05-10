@@ -8,7 +8,7 @@ namespace Blueprint.Runtime.Exec;
 /// and content type can be overridden to support content types like <c>text/vcard</c> or
 /// error responses with non-200 status codes.
 /// </summary>
-public class PlainTextResult : OperationResult
+public sealed class PlainTextResult : OperationResult
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="PlainTextResult"/> class with the given text content
