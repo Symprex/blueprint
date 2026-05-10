@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Blueprint.Model;
 using Blueprint.Runtime.Exec;
 using JetBrains.Annotations;
@@ -26,6 +27,7 @@ namespace Blueprint.Authorization;
 public sealed class ClaimsRequiredApiAuthoriser : IApiAuthoriser
 {
     private readonly IClaimInspector _claimInspector;
+    private readonly ConcurrentDictionary<Type, ClaimRequiredAttribute[]> _claimAttributeCache = new();
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ClaimsRequiredApiAuthoriser"/> class.
@@ -39,7 +41,7 @@ public sealed class ClaimsRequiredApiAuthoriser : IApiAuthoriser
     /// <inheritdoc />
     public bool AppliesTo(ApiOperationDescriptor descriptor)
     {
-        return descriptor.TypeAttributes.OfType<ClaimRequiredAttribute>().Any();
+        return this.GetClaimAttributes(descriptor).Length > 0;
     }
 
     /// <inheritdoc />
@@ -92,8 +94,8 @@ public sealed class ClaimsRequiredApiAuthoriser : IApiAuthoriser
                 ExecutionAllowedFailureType.Authorisation));
         }
 
-        // Check all ClaimRequired attributes
-        var claimAttributes = descriptor.TypeAttributes.OfType<ClaimRequiredAttribute>();
+        // Check all ClaimRequired attributes (cached per operation type to avoid per-request LINQ allocation)
+        var claimAttributes = this.GetClaimAttributes(descriptor);
 
         foreach (var attribute in claimAttributes)
         {
@@ -109,5 +111,43 @@ public sealed class ClaimsRequiredApiAuthoriser : IApiAuthoriser
         }
 
         return ExecutionAllowed.YesTask;
+    }
+
+    private ClaimRequiredAttribute[] GetClaimAttributes(ApiOperationDescriptor descriptor)
+    {
+        return this._claimAttributeCache.GetOrAdd(
+            descriptor.OperationType,
+            static (_, d) =>
+            {
+                var attributes = d.TypeAttributes;
+                var count = 0;
+
+                for (var i = 0; i < attributes.Count; i++)
+                {
+                    if (attributes[i] is ClaimRequiredAttribute)
+                    {
+                        count++;
+                    }
+                }
+
+                if (count == 0)
+                {
+                    return [];
+                }
+
+                var result = new ClaimRequiredAttribute[count];
+                var index = 0;
+
+                for (var i = 0; i < attributes.Count; i++)
+                {
+                    if (attributes[i] is ClaimRequiredAttribute cra)
+                    {
+                        result[index++] = cra;
+                    }
+                }
+
+                return result;
+            },
+            descriptor);
     }
 }

@@ -110,7 +110,11 @@ public class ApiLinkGenerator : IApiLinkGenerator
     {
         var operationType = operation.GetType();
         var links = this._app.GetLinksForOperation(operationType);
-        var link = links.FirstOrDefault();
+
+        // Use pattern match to avoid IEnumerator allocation from FirstOrDefault()
+        var link = links is IReadOnlyList<ApiOperationLink> { Count: > 0 } list
+            ? list[0]
+            : links.FirstOrDefault();
 
         if (link is null)
         {
