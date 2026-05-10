@@ -90,6 +90,12 @@ public sealed class BlueprintHttpClient<TApp>
         var httpMethod = ResolveHttpMethod(descriptor);
         var url = ResolveUrl(descriptor, operation);
 
+        // For GET requests, append non-URL properties as query string parameters
+        if (httpMethod == HttpMethod.Get)
+        {
+            url = AppendQueryString(url, descriptor, operation);
+        }
+
         var request = new HttpRequestMessage(httpMethod, url);
 
         // For methods that carry a body, serialize the operation as JSON
@@ -99,6 +105,88 @@ public sealed class BlueprintHttpClient<TApp>
         }
 
         return request;
+    }
+
+    private static string AppendQueryString(string url, ApiOperationDescriptor descriptor, IOperation operation)
+    {
+        // Collect URL placeholder property names to exclude from query string
+        var urlPlaceholders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var urlDef in descriptor.Urls)
+        {
+            ExtractPlaceholderNames(urlDef.UrlFormat, urlPlaceholders);
+        }
+
+        foreach (var link in descriptor.Links)
+        {
+            ExtractPlaceholderNames(link.UrlFormat, urlPlaceholders);
+        }
+
+        var queryParts = new List<string>();
+        var operationType = operation.GetType();
+
+        foreach (var property in operationType.GetProperties(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public))
+        {
+            if (urlPlaceholders.Contains(property.Name))
+            {
+                continue;
+            }
+
+            var value = property.GetValue(operation);
+            if (value is null)
+            {
+                continue;
+            }
+
+            var stringValue = value switch
+            {
+                bool b => b ? "true" : "false",
+                _ => value.ToString(),
+            };
+
+            if (string.IsNullOrEmpty(stringValue))
+            {
+                continue;
+            }
+
+            queryParts.Add($"{Uri.EscapeDataString(property.Name)}={Uri.EscapeDataString(stringValue)}");
+        }
+
+        if (queryParts.Count == 0)
+        {
+            return url;
+        }
+
+        var separator = url.Contains('?') ? "&" : "?";
+        return url + separator + string.Join("&", queryParts);
+    }
+
+    private static void ExtractPlaceholderNames(string urlFormat, HashSet<string> names)
+    {
+        var startIndex = 0;
+        while (true)
+        {
+            var open = urlFormat.IndexOf('{', startIndex);
+            if (open < 0)
+            {
+                break;
+            }
+
+            var close = urlFormat.IndexOf('}', open);
+            if (close < 0)
+            {
+                break;
+            }
+
+            var placeholder = urlFormat.Substring(open + 1, close - open - 1).TrimStart('*');
+            var colon = placeholder.IndexOf(':');
+            if (colon >= 0)
+            {
+                placeholder = placeholder[..colon];
+            }
+
+            names.Add(placeholder);
+            startIndex = close + 1;
+        }
     }
 
     private static HttpMethod ResolveHttpMethod(ApiOperationDescriptor descriptor)
