@@ -57,5 +57,30 @@ public class AppModelOpenApiSchemaProjectionContextTests
         schemaContext.Schemas.Should().BeEmpty();
     }
 
+    [Fact]
+    public void When_body_type_has_description_attribute_then_schema_description_is_projected()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var documentContext = OpenApiDocumentBuilderContext.Create(app);
+
+        var schemaContext = OpenApiSchemaProjectionContext.Create(documentContext);
+        var linkTestSchema = schemaContext.Schemas.Single(
+            static schema => schema.BodyTypeName == "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.LinkTestApiResource");
+
+        linkTestSchema.Description.Should().Be("A test resource used for link population integration tests.");
+    }
+
+    [Fact]
+    public void When_body_type_has_no_description_attribute_then_schema_description_is_null()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var documentContext = OpenApiDocumentBuilderContext.Create(app);
+
+        var schemaContext = OpenApiSchemaProjectionContext.Create(documentContext);
+        var guidSchema = schemaContext.Schemas.Single(static schema => schema.BodyTypeName == "System.Guid");
+
+        guidSchema.Description.Should().BeNull();
+    }
+
     private sealed class NoSerializerContextBlueprintApp : Blueprint.Model.BlueprintApp;
 }

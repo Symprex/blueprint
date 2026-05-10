@@ -810,6 +810,11 @@ public sealed record OpenApiOutputRenderingContext(
 
         writer.WriteString("title", shortTitle);
 
+        if (component.Description is not null)
+        {
+            writer.WriteString("description", component.Description);
+        }
+
         if (component.Type is not null)
         {
             writer.WriteString("type", component.Type);

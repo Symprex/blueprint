@@ -129,6 +129,33 @@ public class AppModelOpenApiSchemaComponentRenderingContextTests
         quantityProperty.ExclusiveMaximum.Should().BeFalse();
     }
 
+    [Fact]
+    public void When_body_type_has_description_attribute_then_schema_component_includes_description()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var documentContext = OpenApiDocumentBuilderContext.Create(app);
+        var schemaContext = OpenApiSchemaProjectionContext.Create(documentContext);
+
+        var componentContext = OpenApiSchemaComponentRenderingContext.Create(schemaContext);
+        var linkTestComponent = componentContext.Components.Single(
+            static component => component.BodyTypeName == "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.LinkTestApiResource");
+
+        linkTestComponent.Description.Should().Be("A test resource used for link population integration tests.");
+    }
+
+    [Fact]
+    public void When_body_type_has_no_description_attribute_then_schema_component_description_is_null()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var documentContext = OpenApiDocumentBuilderContext.Create(app);
+        var schemaContext = OpenApiSchemaProjectionContext.Create(documentContext);
+
+        var componentContext = OpenApiSchemaComponentRenderingContext.Create(schemaContext);
+        var guidComponent = componentContext.Components.Single(static component => component.BodyTypeName == "System.Guid");
+
+        guidComponent.Description.Should().BeNull();
+    }
+
     private sealed class NoSerializerContextBlueprintApp : BlueprintApp;
 
     private sealed class PropertyMetadataSchemaComponentBlueprintApp : BlueprintApp

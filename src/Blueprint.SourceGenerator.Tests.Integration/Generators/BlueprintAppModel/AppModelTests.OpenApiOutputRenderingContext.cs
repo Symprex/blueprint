@@ -254,6 +254,35 @@ public class AppModelOpenApiOutputRenderingContextTests
     }
 
     [Fact]
+    public void When_schema_component_has_description_then_output_emits_description()
+    {
+        var context = CreateSyntheticOutputContext(
+            [],
+            [
+                new OpenApiSchemaComponentModel(
+                    "Sample.ResponseDto",
+                    "object",
+                    [],
+                    [],
+                    Description: "Represents a sample response object."),
+                new OpenApiSchemaComponentModel(
+                    "Sample.OtherDto",
+                    "object",
+                    [],
+                    []),
+            ]);
+
+        var doc = JsonDocument.Parse(context.Json);
+        var schemas = doc.RootElement.GetProperty("components").GetProperty("schemas");
+
+        schemas.GetProperty("Sample_ResponseDto").GetProperty("description").GetString()
+            .Should().Be("Represents a sample response object.");
+
+        schemas.GetProperty("Sample_OtherDto").TryGetProperty("description", out _).Should().BeFalse(
+            "components without a [Description] attribute should not emit description");
+    }
+
+    [Fact]
     public void When_schema_component_property_has_description_then_output_emits_description()
     {
         var context = CreateSyntheticOutputContext(

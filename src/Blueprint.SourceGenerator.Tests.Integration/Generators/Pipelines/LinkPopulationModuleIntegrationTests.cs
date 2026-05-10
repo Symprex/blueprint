@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using Blueprint.Http;
 using Blueprint.Model;
 using Blueprint.Runtime.Exec;
@@ -267,6 +268,7 @@ public class LinkPopulationModuleIntegrationTests
 
 // --- Resource types ---
 
+[Description("A test resource used for link population integration tests.")]
 public partial class LinkTestApiResource : ApiResource
 {
     public string Id { get; set; } = null!;
