@@ -101,7 +101,7 @@ public abstract class ResourceEventDefinitionFactoryBase<TResource, TReturn>
 /// requiring the caller to supply the resource body when calling <see cref="ResourceEventDefinition{TResource}.New"/>.
 /// </summary>
 /// <typeparam name="TResource">The type of resource that has been modified.</typeparam>
-public class ResourceEventDefinitionFactory<TResource>
+public sealed class ResourceEventDefinitionFactory<TResource>
     : ResourceEventDefinitionFactoryBase<TResource, ResourceEventDefinition<TResource>>
     where TResource : ApiResource
 {
@@ -117,7 +117,7 @@ public class ResourceEventDefinitionFactory<TResource>
 /// inheriting a parameterless mapper so callers can create events without supplying a resource or query.
 /// </summary>
 /// <typeparam name="TResource">The type of resource that has been modified.</typeparam>
-public class ResourceEventDefinitionFactoryWithMapper<TResource>
+public sealed class ResourceEventDefinitionFactoryWithMapper<TResource>
     : ResourceEventDefinitionFactoryBase<TResource, ResourceEventDefinitionWithMapper<TResource>>
     where TResource : ApiResource
 {
@@ -158,7 +158,7 @@ public class ResourceEventDefinitionFactoryWithMapper<TResource>
 /// </summary>
 /// <typeparam name="TResource">The type of resource that has been modified.</typeparam>
 /// <typeparam name="TDomain">The domain entity type that the mapper transforms.</typeparam>
-public class ResourceEventDefinitionFactoryWithMapper<TResource, TDomain>
+public sealed class ResourceEventDefinitionFactoryWithMapper<TResource, TDomain>
     : ResourceEventDefinitionFactoryBase<TResource, ResourceEventDefinitionWithMapper<TResource, TDomain>>
     where TResource : ApiResource
 {

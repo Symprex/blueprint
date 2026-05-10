@@ -7,7 +7,7 @@ namespace Blueprint.Tasks;
 /// on a given time cadence will be executed by the background task processor.
 /// </summary>
 [PublicAPI]
-public class RecurringTaskSchedule
+public sealed class RecurringTaskSchedule
 {
     /// <summary>
     /// Initialises a new instance of the <see cref="RecurringTaskSchedule" /> class in the <see cref="TimeZoneInfo.Utc" />

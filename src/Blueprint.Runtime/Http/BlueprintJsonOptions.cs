@@ -11,7 +11,7 @@ namespace Blueprint.Http;
 /// <see cref="SerializerOptions"/> to add NodaTime converters, custom naming policies, or
 /// other serializer customizations.
 /// </summary>
-public class BlueprintJsonOptions
+public sealed class BlueprintJsonOptions
 {
     /// <summary>
     /// Default <see cref="JsonSerializerOptions"/> used when no consumer-provided options

@@ -8,7 +8,7 @@ namespace Blueprint.Model;
 /// query's property shape.
 /// </summary>
 [PublicAPI]
-public class QueryOrderDefinition
+public sealed class QueryOrderDefinition
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="QueryOrderDefinition"/> class.

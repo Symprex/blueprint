@@ -5,7 +5,7 @@ namespace Blueprint.Runtime.Http;
 /// <summary>
 /// A set of options that are used throughout the Blueprint HTTP support module.
 /// </summary>
-public class BlueprintHttpOptions
+public sealed class BlueprintHttpOptions
 {
     /// <summary>
     /// Whether to expose exception details when formatting unhandled exceptions in the pipeline. If this

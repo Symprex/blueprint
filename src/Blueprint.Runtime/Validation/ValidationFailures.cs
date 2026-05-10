@@ -23,7 +23,7 @@ namespace Blueprint.Validation;
 /// </para>
 /// </remarks>
 [PublicAPI]
-public class ValidationFailures
+public sealed class ValidationFailures
 {
     private static readonly IReadOnlyDictionary<string, string[]> _noFailures =
         FrozenDictionary<string, string[]>.Empty;

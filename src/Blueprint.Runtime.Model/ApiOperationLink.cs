@@ -6,7 +6,7 @@ namespace Blueprint.Model;
 /// <summary>
 /// An exception that will be thrown if the format of an <see cref="ApiOperationLink" /> is invalid.
 /// </summary>
-public class OperationLinkFormatException : Exception
+public sealed class OperationLinkFormatException : Exception
 {
     /// <summary>
     /// Initialises a new instance of the <see cref="OperationLinkFormatException"/> class.
@@ -23,7 +23,7 @@ public class OperationLinkFormatException : Exception
 /// URL's for a given resource that represents operations that can act on that resource.
 /// </summary>
 /// <seealso cref="ILinkableResource" />
-public class ApiOperationLink
+public sealed class ApiOperationLink
 {
     /// <summary>
     /// Cached property lookups for reflection-based URL building, keyed by (type, propertyName).

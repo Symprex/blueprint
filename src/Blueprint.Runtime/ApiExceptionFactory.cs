@@ -16,7 +16,7 @@ namespace Blueprint;
 /// generator can discover them and enrich the operation's failure-outcome metadata.
 /// </remarks>
 [PublicAPI]
-public class ApiExceptionFactory
+public sealed class ApiExceptionFactory
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="ApiExceptionFactory"/> class.

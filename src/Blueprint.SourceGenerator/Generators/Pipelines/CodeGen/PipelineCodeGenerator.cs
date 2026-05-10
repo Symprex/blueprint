@@ -101,7 +101,7 @@ internal static class PipelineCodeGenerator
                 }
 
                 // Collect ALL success-guarded steps across ALL remaining contributions
-                var guardedSteps = plan.RenderSteps.Where(static s => s.RequiresSuccessGuard).ToList();
+                var guardedSteps = plan.RenderSteps.Where(static s => s.RequiresSuccessGuard);
 
                 writer.NewLine();
                 writer.If(

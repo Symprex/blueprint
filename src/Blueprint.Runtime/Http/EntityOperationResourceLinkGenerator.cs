@@ -11,7 +11,7 @@ namespace Blueprint.Http;
 /// user is authorised to see it, and whether a URL can be constructed — only adding the link
 /// if all conditions are met.
 /// </summary>
-public class EntityOperationResourceLinkGenerator : IResourceLinkGenerator
+public sealed class EntityOperationResourceLinkGenerator : IResourceLinkGenerator
 {
     private readonly IApiAuthoriserAggregator _apiAuthoriserAggregator;
     private readonly IApiLinkGenerator _linkGenerator;

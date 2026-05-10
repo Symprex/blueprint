@@ -11,7 +11,7 @@ namespace Blueprint.Http;
 /// Default implementation of <see cref="IApiLinkGenerator"/> that resolves links from
 /// <see cref="BlueprintApp"/> and constructs fully-qualified URLs using a configured base URI.
 /// </summary>
-public class ApiLinkGenerator : IApiLinkGenerator
+public sealed class ApiLinkGenerator : IApiLinkGenerator
 {
     /// <summary>
     /// Cached property accessors per query-string type, avoiding repeated reflection on hot paths.
