@@ -154,6 +154,28 @@ public sealed class BlueprintHttpClient<TApp>
                 continue;
             }
 
+            var escapedName = Uri.EscapeDataString(property.Name);
+
+            // Handle collection types (arrays, List<T>, IEnumerable<T>) by emitting repeated keys
+            if (value is not string && value is System.Collections.IEnumerable enumerable)
+            {
+                foreach (var item in enumerable)
+                {
+                    if (item is null)
+                    {
+                        continue;
+                    }
+
+                    var itemStr = item.ToString();
+                    if (!string.IsNullOrEmpty(itemStr))
+                    {
+                        queryParts.Add($"{escapedName}={Uri.EscapeDataString(itemStr)}");
+                    }
+                }
+
+                continue;
+            }
+
             var stringValue = value switch
             {
                 bool b => b ? "true" : "false",
@@ -165,7 +187,7 @@ public sealed class BlueprintHttpClient<TApp>
                 continue;
             }
 
-            queryParts.Add($"{Uri.EscapeDataString(property.Name)}={Uri.EscapeDataString(stringValue)}");
+            queryParts.Add($"{escapedName}={Uri.EscapeDataString(stringValue)}");
         }
 
         if (queryParts.Count == 0)

@@ -240,4 +240,145 @@ public static class ResultAssertionExtensions
 
         return result;
     }
+
+    /// <summary>
+    /// Asserts the result is a <see cref="NotFoundResult"/> and returns it.
+    /// </summary>
+    /// <param name="result">The operation result.</param>
+    /// <returns>The not-found result for further assertions.</returns>
+    public static NotFoundResult ShouldBeNotFound(this OperationResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+
+        return result as NotFoundResult
+            ?? throw new BlueprintTestExecutionException(
+                $"Expected NotFoundResult but got {result.GetType().Name}.",
+                result);
+    }
+
+    /// <summary>
+    /// Asserts the result is a <see cref="CreatedResult"/> and returns it.
+    /// </summary>
+    /// <param name="result">The operation result.</param>
+    /// <returns>The created result for further assertions.</returns>
+    public static CreatedResult ShouldBeCreated(this OperationResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+
+        return result as CreatedResult
+            ?? throw new BlueprintTestExecutionException(
+                $"Expected CreatedResult but got {result.GetType().Name}.",
+                result);
+    }
+
+    /// <summary>
+    /// Asserts the result is a <see cref="CreatedResult{T}"/> and returns the created content.
+    /// </summary>
+    /// <typeparam name="T">The expected content type.</typeparam>
+    /// <param name="result">The operation result.</param>
+    /// <returns>The created content.</returns>
+    public static T ShouldBeCreated<T>(this OperationResult result) where T : notnull
+    {
+        ArgumentNullException.ThrowIfNull(result);
+
+        if (result is CreatedResult<T> createdResult)
+        {
+            return createdResult.Content;
+        }
+
+        throw new BlueprintTestExecutionException(
+            $"Expected CreatedResult<{typeof(T).Name}> but got {result.GetType().Name}.",
+            result);
+    }
+
+    /// <summary>
+    /// Asserts the result is a <see cref="ForbiddenResult"/> and returns it.
+    /// </summary>
+    /// <param name="result">The operation result.</param>
+    /// <returns>The forbidden result for further assertions.</returns>
+    public static ForbiddenResult ShouldBeForbidden(this OperationResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+
+        return result as ForbiddenResult
+            ?? throw new BlueprintTestExecutionException(
+                $"Expected ForbiddenResult but got {result.GetType().Name}.",
+                result);
+    }
+
+    /// <summary>
+    /// Asserts the result is a <see cref="UnauthenticatedResult"/> and returns it.
+    /// </summary>
+    /// <param name="result">The operation result.</param>
+    /// <returns>The unauthenticated result for further assertions.</returns>
+    public static UnauthenticatedResult ShouldBeUnauthenticated(this OperationResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+
+        return result as UnauthenticatedResult
+            ?? throw new BlueprintTestExecutionException(
+                $"Expected UnauthenticatedResult but got {result.GetType().Name}.",
+                result);
+    }
+
+    /// <summary>
+    /// Asserts the result is a <see cref="ConflictResult"/> and returns it.
+    /// </summary>
+    /// <param name="result">The operation result.</param>
+    /// <returns>The conflict result for further assertions.</returns>
+    public static ConflictResult ShouldBeConflict(this OperationResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+
+        return result as ConflictResult
+            ?? throw new BlueprintTestExecutionException(
+                $"Expected ConflictResult but got {result.GetType().Name}.",
+                result);
+    }
+
+    /// <summary>
+    /// Asserts the result is an <see cref="AcceptedResult"/> and returns it.
+    /// </summary>
+    /// <param name="result">The operation result.</param>
+    /// <returns>The accepted result for further assertions.</returns>
+    public static AcceptedResult ShouldBeAccepted(this OperationResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+
+        return result as AcceptedResult
+            ?? throw new BlueprintTestExecutionException(
+                $"Expected AcceptedResult but got {result.GetType().Name}.",
+                result);
+    }
+
+    /// <summary>
+    /// Asserts the result is a <see cref="NoResultOperationResult"/>.
+    /// </summary>
+    /// <param name="result">The operation result.</param>
+    /// <returns>The no-result for further assertions.</returns>
+    public static NoResultOperationResult ShouldBeNoResult(this OperationResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+
+        return result as NoResultOperationResult
+            ?? throw new BlueprintTestExecutionException(
+                $"Expected NoResultOperationResult but got {result.GetType().Name}.",
+                result);
+    }
+
+    /// <summary>
+    /// Asserts the result is an <see cref="UnhandledExceptionResult"/> and returns it.
+    /// Useful for verifying exception propagation in pipeline tests.
+    /// </summary>
+    /// <param name="result">The operation result.</param>
+    /// <returns>The unhandled exception result for further assertions.</returns>
+    public static UnhandledExceptionResult ShouldBeUnhandledException(this OperationResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+
+        return result as UnhandledExceptionResult
+            ?? throw new BlueprintTestExecutionException(
+                $"Expected UnhandledExceptionResult but got {result.GetType().Name}.",
+                result);
+    }
 }
