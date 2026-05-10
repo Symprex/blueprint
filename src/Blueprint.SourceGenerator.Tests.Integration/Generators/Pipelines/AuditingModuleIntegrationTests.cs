@@ -19,9 +19,9 @@ public class AuditingModuleIntegrationTests
     public async Task When_handler_succeeds_then_audit_sink_is_called()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var auditSink = new TestAuditSink();
         var serviceProvider = new AuditTestServiceProvider(auditSink);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
 
         var pipeline = executor.GetPipeline(typeof(AuditableQuery));
         var context = new ApiOperationContext(serviceProvider, app, AuditableQuery.Configure(), CancellationToken.None);
@@ -38,9 +38,9 @@ public class AuditingModuleIntegrationTests
     public async Task When_handler_fails_validation_then_audit_sink_is_not_called()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var auditSink = new TestAuditSink();
         var serviceProvider = new AuditTestServiceProvider(auditSink);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
 
         var pipeline = executor.GetPipeline(typeof(AuditableCommand));
         var context = new ApiOperationContext(serviceProvider, app, AuditableCommand.Configure(), CancellationToken.None);
@@ -71,9 +71,9 @@ public class AuditingModuleIntegrationTests
     public async Task When_audit_sink_throws_then_pipeline_still_returns_success()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var auditSink = new ThrowingAuditSink();
         var serviceProvider = new AuditTestServiceProvider(auditSink);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
 
         var pipeline = executor.GetPipeline(typeof(AuditableQuery));
         var context = new ApiOperationContext(serviceProvider, app, AuditableQuery.Configure(), CancellationToken.None);
@@ -108,9 +108,9 @@ public class AuditingModuleIntegrationTests
         activity.Start();
 
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var auditSink = new TestAuditSink();
         var serviceProvider = new AuditTestServiceProvider(auditSink);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
 
         var pipeline = executor.GetPipeline(typeof(AuditableQuery));
         var context = new ApiOperationContext(serviceProvider, app, AuditableQuery.Configure(), CancellationToken.None)
@@ -143,9 +143,9 @@ public class AuditingModuleIntegrationTests
         activity.Start();
 
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var auditSink = new ThrowingAuditSink();
         var serviceProvider = new AuditTestServiceProvider(auditSink);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
 
         var pipeline = executor.GetPipeline(typeof(AuditableQuery));
         var context = new ApiOperationContext(serviceProvider, app, AuditableQuery.Configure(), CancellationToken.None)

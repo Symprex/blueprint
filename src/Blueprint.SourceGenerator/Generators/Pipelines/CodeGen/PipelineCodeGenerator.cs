@@ -54,7 +54,7 @@ internal static class PipelineCodeGenerator
             // Emit private readonly fields for each cached service
             foreach (var cached in plan.CachedServices.Values)
             {
-                var fieldType = cached.IsNullable ? cached.ServiceTypeName + "?" : cached.ServiceTypeName;
+                var fieldType = cached.ServiceTypeName;
                 pipelineClass.AddProperty(cached.FieldName)
                     .SetType(fieldType)
                     .WithReadonlyValue();

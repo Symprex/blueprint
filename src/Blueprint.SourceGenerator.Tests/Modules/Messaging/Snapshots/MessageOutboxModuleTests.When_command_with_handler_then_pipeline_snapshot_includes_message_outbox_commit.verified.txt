@@ -17,6 +17,7 @@ namespace Blueprint.Generated
     {
         static readonly string[] _appliedModuleIds =
             new string[] { "PropertyPopulationModule", "HandlerExecutionModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
+        readonly Blueprint.Auditing.IAuditSink _auditSink;
         private static readonly System.Diagnostics.ActivityTagsCollection _auditTags_PublishOrderCommand =
             new System.Diagnostics.ActivityTagsCollection { { "blueprint.operation.type", "PublishOrderCommand" } };
         readonly Blueprint.Runtime.Middleware.IPropertyPopulator[] _propertyPopulators;
@@ -25,6 +26,7 @@ namespace Blueprint.Generated
             : base(loggerFactory, "PublishOrderCommand")
         {
             this._propertyPopulators = (Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Runtime.Middleware.IPropertyPopulator>>(serviceProvider) is { } populators ? System.Linq.Enumerable.ToArray(populators) : System.Array.Empty<Blueprint.Runtime.Middleware.IPropertyPopulator>());
+            this._auditSink = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Auditing.IAuditSink>(serviceProvider);
         }
 
         protected override async System.Threading.Tasks.Task<Blueprint.OperationResult> ExecuteCoreAsync(Blueprint.Runtime.Exec.ApiOperationContext context)
@@ -56,13 +58,12 @@ namespace Blueprint.Generated
                     await messageOutbox.CommitAsync(context.OperationCancelled);
                 }
 
-                var auditSink = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Auditing.IAuditSink>(context.ServiceProvider);
-                if (auditSink != null)
+                if (this._auditSink != null)
                 {
                     context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent("blueprint.audit.started", default, _auditTags_PublishOrderCommand));
                     try
                     {
-                        await auditSink.RecordAsync(context, handlerResult, System.Threading.CancellationToken.None);
+                        await this._auditSink.RecordAsync(context, handlerResult, System.Threading.CancellationToken.None);
                         context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent("blueprint.audit.succeeded", default, _auditTags_PublishOrderCommand));
                     }
                     catch (System.Exception auditException)

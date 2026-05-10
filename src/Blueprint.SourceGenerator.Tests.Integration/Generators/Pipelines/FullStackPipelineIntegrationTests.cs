@@ -25,8 +25,8 @@ public class FullStackPipelineIntegrationTests
     {
         var tracker = new ExecutionOrderTracker();
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var serviceProvider = new FullStackTestServiceProvider(tracker);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
 
         var pipeline = executor.GetPipeline(typeof(FullStackCommand));
         var context = new ApiOperationContext(serviceProvider, app, FullStackCommand.Configure(), CancellationToken.None);
@@ -67,8 +67,8 @@ public class FullStackPipelineIntegrationTests
     {
         var tracker = new ExecutionOrderTracker();
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var serviceProvider = new FullStackTestServiceProvider(tracker);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
 
         var pipeline = executor.GetPipeline(typeof(FullStackCommand));
         var context = new ApiOperationContext(serviceProvider, app, FullStackCommand.Configure(), CancellationToken.None);
@@ -90,8 +90,8 @@ public class FullStackPipelineIntegrationTests
     {
         var tracker = new ExecutionOrderTracker(throwOnAudit: true);
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var serviceProvider = new FullStackTestServiceProvider(tracker);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
 
         var pipeline = executor.GetPipeline(typeof(FullStackCommand));
         var context = new ApiOperationContext(serviceProvider, app, FullStackCommand.Configure(), CancellationToken.None);
@@ -124,8 +124,8 @@ public class FullStackPipelineIntegrationTests
     {
         var tracker = new ExecutionOrderTracker();
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var serviceProvider = new FullStackTestServiceProvider(tracker);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
 
         var pipeline = executor.GetPipeline(typeof(FullStackCommand));
         var context = new ApiOperationContext(serviceProvider, app, FullStackCommand.Configure(), CancellationToken.None);
@@ -150,8 +150,8 @@ public class FullStackPipelineIntegrationTests
     {
         var tracker = new ExecutionOrderTracker();
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var serviceProvider = new FullStackTestServiceProvider(tracker);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
 
         var pipeline = executor.GetPipeline(typeof(ThrowingFullStackCommand));
         var context = new ApiOperationContext(serviceProvider, app, ThrowingFullStackCommand.Configure(), CancellationToken.None);

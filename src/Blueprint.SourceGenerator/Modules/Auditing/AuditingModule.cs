@@ -60,6 +60,13 @@ public sealed class AuditingModule : IBlueprintSourceGeneratorModule, IPipelineC
             return;
         }
 
+        // Cache singleton IAuditSink at pipeline construction time (nullable — may not be registered)
+        context.CacheService(
+            "_auditSink",
+            "Blueprint.Auditing.IAuditSink",
+            "Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Auditing.IAuditSink>(serviceProvider)",
+            isNullable: true);
+
         var operationTypeName = context.Operation.TypeName;
 
         // Generate a safe field name from the operation type for the cached tags collection
@@ -87,12 +94,8 @@ public sealed class AuditingModule : IBlueprintSourceGeneratorModule, IPipelineC
     {
         context.WriteBlankLine();
 
-        context.DeclareVariable(
-            "auditSink",
-            context.GetOptionalServiceExpression("Blueprint.Auditing.IAuditSink"));
-
         context.If(
-            "auditSink != null",
+            "this._auditSink != null",
             innerBranch =>
             {
                 // Reuse static readonly tag collection — zero per-request allocation for constant tags
@@ -102,7 +105,7 @@ public sealed class AuditingModule : IBlueprintSourceGeneratorModule, IPipelineC
                 innerBranch.Try(tryBranch =>
                 {
                     tryBranch.WriteStatement(
-                        "await auditSink.RecordAsync(context, handlerResult, System.Threading.CancellationToken.None);");
+                        "await this._auditSink.RecordAsync(context, handlerResult, System.Threading.CancellationToken.None);");
 
                     tryBranch.WriteStatement(
                         $"context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent(\"blueprint.audit.succeeded\", default, {cachedTagsFieldName}));");
