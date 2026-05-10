@@ -84,12 +84,28 @@ public sealed record OpenApiOutputRenderingContext(
     {
         writer.WriteStartObject();
 
+        // Pre-compute whether security can be hoisted to document level. When every operation
+        // requires authentication we write a single top-level security array and opt-out
+        // anonymous endpoints with security: [], which is more idiomatic OpenAPI.
+        var allOperations = document.Paths
+            .SelectMany(static p => p.Methods)
+            .SelectMany(static m => m.Operations)
+            .ToList();
+
+        var hasAnyAuth = allOperations.Any(static op => op.RequiresAuthentication);
+        var allRequireAuth = hasAnyAuth && allOperations.All(static op => op.RequiresAuthentication);
+
         writer.WriteString("openapi", OpenApiVersion);
         WriteInfo(writer, infoOptions);
         WriteServers(writer, infoOptions.Servers);
-        WritePaths(writer, document.Paths);
-        WriteComponents(writer, document.SchemaComponents, schemaProcessorOptions, document.Paths);
+        WritePaths(writer, document.Paths, allRequireAuth);
+        WriteComponents(writer, document.SchemaComponents, schemaProcessorOptions, hasAnyAuth);
         WriteDocumentTags(writer, document.Paths);
+
+        if (allRequireAuth)
+        {
+            WriteDocumentSecurity(writer);
+        }
 
         writer.WriteEndObject();
     }
@@ -177,33 +193,33 @@ public sealed record OpenApiOutputRenderingContext(
         writer.WriteEndArray();
     }
 
-    private static void WritePaths(Utf8JsonWriter writer, ImmutableArray<OpenApiPathItemModel> paths)
+    private static void WritePaths(Utf8JsonWriter writer, ImmutableArray<OpenApiPathItemModel> paths, bool useDocumentLevelSecurity)
     {
         writer.WritePropertyName("paths");
         writer.WriteStartObject();
 
         foreach (var pathItem in paths)
         {
-            WritePathItem(writer, pathItem);
+            WritePathItem(writer, pathItem, useDocumentLevelSecurity);
         }
 
         writer.WriteEndObject();
     }
 
-    private static void WritePathItem(Utf8JsonWriter writer, OpenApiPathItemModel pathItem)
+    private static void WritePathItem(Utf8JsonWriter writer, OpenApiPathItemModel pathItem, bool useDocumentLevelSecurity)
     {
         writer.WritePropertyName(pathItem.UrlFormat);
         writer.WriteStartObject();
 
         foreach (var methodSlot in pathItem.Methods)
         {
-            WriteMethodSlot(writer, methodSlot);
+            WriteMethodSlot(writer, methodSlot, useDocumentLevelSecurity);
         }
 
         writer.WriteEndObject();
     }
 
-    private static void WriteMethodSlot(Utf8JsonWriter writer, OpenApiPathItemMethodModel methodSlot)
+    private static void WriteMethodSlot(Utf8JsonWriter writer, OpenApiPathItemMethodModel methodSlot, bool useDocumentLevelSecurity)
     {
         writer.WritePropertyName(methodSlot.HttpMethod.ToLowerInvariant());
         writer.WriteStartObject();
@@ -239,16 +255,13 @@ public sealed record OpenApiOutputRenderingContext(
                 }
             }
 
-            if (primaryOperation.RequiresAuthentication)
+            // When document-level security is active (all ops require auth), per-operation security
+            // blocks are omitted — the document-level array covers them. If an operation were anonymous
+            // in this mode we'd write security: [] to opt out, but that can't happen since
+            // useDocumentLevelSecurity is only true when ALL operations require auth.
+            if (!useDocumentLevelSecurity && primaryOperation.RequiresAuthentication)
             {
-                writer.WritePropertyName("security");
-                writer.WriteStartArray();
-                writer.WriteStartObject();
-                writer.WritePropertyName("bearerAuth");
-                writer.WriteStartArray();
-                writer.WriteEndArray();
-                writer.WriteEndObject();
-                writer.WriteEndArray();
+                WriteOperationSecurity(writer);
             }
         }
         else
@@ -835,13 +848,8 @@ public sealed record OpenApiOutputRenderingContext(
         Utf8JsonWriter writer,
         ImmutableArray<OpenApiSchemaComponentModel> schemaComponents,
         OpenApiSchemaProcessorOptions schemaProcessorOptions,
-        ImmutableArray<OpenApiPathItemModel> paths)
+        bool hasAuthenticatedOperations)
     {
-        var hasAuthenticatedOperations = paths
-            .SelectMany(static p => p.Methods)
-            .SelectMany(static m => m.Operations)
-            .Any(static op => op.RequiresAuthentication);
-
         if (schemaComponents.IsEmpty && !hasAuthenticatedOperations)
         {
             return;
@@ -882,6 +890,38 @@ public sealed record OpenApiOutputRenderingContext(
         }
 
         writer.WriteEndObject();
+    }
+
+    /// <summary>
+    /// Writes the document-level <c>security</c> array, applied when every operation requires
+    /// authentication so per-operation blocks can be omitted entirely.
+    /// </summary>
+    private static void WriteDocumentSecurity(Utf8JsonWriter writer)
+    {
+        writer.WritePropertyName("security");
+        writer.WriteStartArray();
+        writer.WriteStartObject();
+        writer.WritePropertyName("bearerAuth");
+        writer.WriteStartArray();
+        writer.WriteEndArray();
+        writer.WriteEndObject();
+        writer.WriteEndArray();
+    }
+
+    /// <summary>
+    /// Writes a per-operation <c>security</c> block referencing the <c>bearerAuth</c> scheme.
+    /// Used when the document contains a mix of authenticated and anonymous operations.
+    /// </summary>
+    private static void WriteOperationSecurity(Utf8JsonWriter writer)
+    {
+        writer.WritePropertyName("security");
+        writer.WriteStartArray();
+        writer.WriteStartObject();
+        writer.WritePropertyName("bearerAuth");
+        writer.WriteStartArray();
+        writer.WriteEndArray();
+        writer.WriteEndObject();
+        writer.WriteEndArray();
     }
 
     private static void WriteSchemaComponent(Utf8JsonWriter writer, OpenApiSchemaComponentModel component)

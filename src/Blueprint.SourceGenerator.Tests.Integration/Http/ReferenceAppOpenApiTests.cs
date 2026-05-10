@@ -296,6 +296,28 @@ public class ReferenceAppOpenApiTests
     }
 
     [Fact]
+    public async Task When_app_has_mixed_auth_then_security_is_per_operation_not_document_level()
+    {
+        var (json, _) = await InvokeOpenApiEndpointAsync();
+        using var doc = JsonDocument.Parse(json);
+
+        // The sample app has both authenticated and anonymous operations, so security should
+        // be per-operation rather than hoisted to the document level.
+        doc.RootElement.TryGetProperty("security", out _).Should().BeFalse(
+            "mixed-auth apps should use per-operation security, not document-level");
+
+        // Verify per-operation security is present on an authenticated operation
+        var createPath = doc.RootElement.GetProperty("paths").GetProperty("/templates");
+        createPath.GetProperty("post").TryGetProperty("security", out _).Should().BeTrue(
+            "authenticated operations in mixed-auth apps should have per-operation security blocks");
+
+        // Verify anonymous operations do NOT have security blocks
+        var healthPath = doc.RootElement.GetProperty("paths").GetProperty("/system/health");
+        healthPath.GetProperty("get").TryGetProperty("security", out _).Should().BeFalse(
+            "anonymous operations should not have security blocks");
+    }
+
+    [Fact]
     public async Task When_operation_returns_201_then_openapi_renders_location_response_header()
     {
         var (json, _) = await InvokeOpenApiEndpointAsync();
