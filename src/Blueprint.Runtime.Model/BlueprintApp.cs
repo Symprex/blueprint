@@ -333,6 +333,11 @@ Operations will be found polymorphically, meaning an operation could be register
                 static kvp => kvp.Key,
                 static kvp => (IReadOnlyList<ApiOperationDescriptor>)kvp.Value,
                 StringComparer.Ordinal);
+
+        foreach (var descriptor in this._allOperations.Values)
+        {
+            descriptor.FreezeFeatureData();
+        }
     }
 
     private void RegisterHostExposure(ApiOperationDescriptor descriptor)

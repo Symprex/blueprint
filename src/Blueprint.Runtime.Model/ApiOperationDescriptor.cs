@@ -9,11 +9,13 @@ namespace Blueprint.Model;
 /// </summary>
 public class ApiOperationDescriptor
 {
-    private readonly Dictionary<Type, object> _featureData = new();
     private readonly FrozenDictionary<string, IReadOnlyList<Attribute>> _propertyAttributes;
 
     private readonly List<ApiOperationUrl> _urls = new();
     private readonly List<ApiOperationLink> _links = new();
+
+    private readonly Dictionary<Type, object> _featureData = new();
+    private FrozenDictionary<Type, object>? _frozenFeatureData;
 
     // private readonly List<ResponseDescriptor> _responses = new();
     // private readonly List<IOperationExecutorBuilder> _handlers = new();
@@ -176,7 +178,11 @@ public class ApiOperationDescriptor
     /// <returns>Whether the feature data exists.</returns>
     public bool TryGetFeatureData<TFeatureData>([NotNullWhen(true)] out TFeatureData? feature)
     {
-        if (this._featureData.TryGetValue(typeof(TFeatureData), out var data))
+        var lookup = this._frozenFeatureData is not null
+            ? (IReadOnlyDictionary<Type, object>)this._frozenFeatureData
+            : this._featureData;
+
+        if (lookup.TryGetValue(typeof(TFeatureData), out var data))
         {
             feature = (TFeatureData)data;
 
@@ -195,6 +201,15 @@ public class ApiOperationDescriptor
     public void SetFeatureData<TFeatureData>(TFeatureData newFeatureData) where TFeatureData : class
     {
         this._featureData[typeof(TFeatureData)] = newFeatureData;
+    }
+
+    /// <summary>
+    /// Freezes internal mutable dictionaries into read-optimized frozen collections.
+    /// Called by <see cref="BlueprintApp.Freeze"/> after all registration is complete.
+    /// </summary>
+    internal void FreezeFeatureData()
+    {
+        this._frozenFeatureData = this._featureData.ToFrozenDictionary();
     }
 
     /// <summary>
