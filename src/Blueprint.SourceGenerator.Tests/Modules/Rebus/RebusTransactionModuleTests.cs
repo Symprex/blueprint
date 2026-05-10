@@ -1,0 +1,209 @@
+using System.Text;
+using Blueprint.SourceGenerator.Generators.Descriptors;
+using Blueprint.SourceGenerator.Generators.Pipelines;
+using Blueprint.SourceGenerator.Modules;
+using Blueprint.SourceGenerator.Planning;
+using FluentAssertions;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+
+namespace Blueprint.SourceGenerator.Tests.Modules.Rebus;
+
+/// <summary>
+/// Tests for the <see cref="RebusTransactionModule"/> proving that the Rebus transaction scope
+/// is correctly contributed to the generated pipeline and respects the NoRebusTransaction opt-out.
+/// </summary>
+public class RebusTransactionModuleTests
+{
+    [Fact]
+    public void When_command_operation_then_plan_contains_rebus_setup_and_post_execution()
+    {
+        var compilation = CreateCompilation(
+            """
+            using Blueprint.Model;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace;
+
+            public partial class CreateOrderCommand : ICommand<string>
+            {
+                public static Task<string> HandleAsync(CreateOrderCommand operation)
+                {
+                    return Task.FromResult("done");
+                }
+            }
+            """);
+
+        var config = new BlueprintSourceGenerationConfig(
+        [
+            new RebusTransactionModule(),
+            new HandlerExecutionModule(),
+            new PipelineReturnModule(),
+        ]);
+        var result = config.BuildPipelinePlan("TestNamespace.CreateOrderCommand", compilation);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Value.Should().NotBeNull();
+
+        var contributions = result.Value!.Contributions;
+
+        contributions.Should().ContainInOrder(
+            new PipelineContribution(PipelineStage.Setup, nameof(RebusTransactionModule)),
+            new PipelineContribution(PipelineStage.Execution, nameof(HandlerExecutionModule)),
+            new PipelineContribution(PipelineStage.PostExecution, nameof(RebusTransactionModule)));
+    }
+
+    [Fact]
+    public void When_query_operation_then_plan_still_contains_rebus_transaction()
+    {
+        var compilation = CreateCompilation(
+            """
+            using Blueprint.Model;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace;
+
+            public partial class GetOrderQuery : IQuery<string>
+            {
+                public static Task<string> HandleAsync(GetOrderQuery operation)
+                {
+                    return Task.FromResult("done");
+                }
+            }
+            """);
+
+        var config = new BlueprintSourceGenerationConfig(
+        [
+            new RebusTransactionModule(),
+            new HandlerExecutionModule(),
+            new PipelineReturnModule(),
+        ]);
+        var result = config.BuildPipelinePlan("TestNamespace.GetOrderQuery", compilation);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Value.Should().NotBeNull();
+
+        result.Value!.Contributions.Should().Contain(
+            new PipelineContribution(PipelineStage.Setup, nameof(RebusTransactionModule)));
+    }
+
+    [Fact]
+    public void When_NoRebusTransaction_attribute_then_plan_excludes_rebus_transaction()
+    {
+        var compilation = CreateCompilation(
+            """
+            using Blueprint.Model;
+            using Blueprint.Rebus;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace;
+
+            [NoRebusTransaction]
+            public partial class FireAndForgetCommand : ICommand<string>
+            {
+                public static Task<string> HandleAsync(FireAndForgetCommand operation)
+                {
+                    return Task.FromResult("done");
+                }
+            }
+            """);
+
+        var config = new BlueprintSourceGenerationConfig(
+        [
+            new RebusTransactionModule(),
+            new HandlerExecutionModule(),
+            new PipelineReturnModule(),
+        ]);
+        var result = config.BuildPipelinePlan("TestNamespace.FireAndForgetCommand", compilation);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Value.Should().NotBeNull();
+
+        result.Value!.Contributions.Should().NotContain(
+            static c => c.ContributorId == nameof(RebusTransactionModule),
+            "NoRebusTransaction should exclude the module");
+    }
+
+    [Fact]
+    public async Task When_composed_with_pipeline_generator_then_snapshot_includes_rebus_scope()
+    {
+        const string source = """
+            using Blueprint;
+            using Blueprint.Model;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace
+            {
+                [BlueprintAppScan]
+                public partial class TestApp : BlueprintApp { }
+
+                public partial class PlaceOrderCommand : ICommand<string>
+                {
+                    public static Task<string> HandleAsync(PlaceOrderCommand operation)
+                    {
+                        return Task.FromResult("ordered");
+                    }
+                }
+            }
+            """;
+
+        var generators = new[]
+        {
+            TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>(),
+            TestHelpers.CreateTrackedGenerator<RebusCompanionPipelineSourceGenerator>(),
+        };
+
+        var result = TestHelpers.CompileWithTrackedGenerators(
+            generators,
+            [source],
+            ["Input0.cs"]);
+
+        result.Diagnostics.Should().BeEmpty("the compilation should have no diagnostics");
+
+        var pipelineSources = result.GetGeneratedSources(nameof(RebusCompanionPipelineSourceGenerator));
+        pipelineSources.Should().HaveCountGreaterOrEqualTo(1, "pipeline should be generated with Rebus module");
+
+        var outputText = new StringBuilder();
+        foreach (var s in pipelineSources.OrderBy(static s => s.HintName))
+        {
+            outputText.AppendLine(s.HintName + ":");
+            outputText.AppendLine();
+            outputText.AppendLine(s.SourceText);
+            outputText.AppendLine();
+        }
+
+        await Verify(outputText)
+            .UseDirectory("Snapshots");
+    }
+
+    private static CSharpCompilation CreateCompilation(string source)
+    {
+        var syntaxTree = CSharpSyntaxTree.ParseText(source, new CSharpParseOptions(LanguageVersion.Preview));
+
+        var references = AppDomain.CurrentDomain.GetAssemblies()
+            .Where(static assembly => !assembly.IsDynamic && !string.IsNullOrWhiteSpace(assembly.Location))
+            .Select(static assembly => (MetadataReference)MetadataReference.CreateFromFile(assembly.Location))
+            .ToList();
+
+        references.Add(MetadataReference.CreateFromFile(typeof(Blueprint.Model.IOperation).Assembly.Location));
+        references.Add(MetadataReference.CreateFromFile(typeof(Blueprint.Rebus.NoRebusTransactionAttribute).Assembly.Location));
+
+        return CSharpCompilation.Create(
+            assemblyName: "RebusTransactionModuleTests",
+            syntaxTrees: [syntaxTree],
+            references: references,
+            options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+    }
+}
+
+/// <summary>
+/// A derived pipeline source generator that composes the <see cref="RebusTransactionModule"/> to prove
+/// consumer companion generators can add Rebus transaction support to generated pipelines.
+/// </summary>
+internal sealed class RebusCompanionPipelineSourceGenerator : OperationExecutorPipelineSourceGenerator
+{
+    public RebusCompanionPipelineSourceGenerator()
+        : base(CreateDefaultConfig(new RebusTransactionModule()))
+    {
+    }
+}
