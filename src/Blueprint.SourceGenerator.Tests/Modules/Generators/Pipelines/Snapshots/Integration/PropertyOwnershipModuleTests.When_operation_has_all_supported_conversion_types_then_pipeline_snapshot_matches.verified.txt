@@ -15,15 +15,19 @@ namespace Blueprint.Generated
 {
     public sealed partial class AllTypesGetQueryExecutorPipeline : Blueprint.OperationExecutorShell
     {
+        readonly Blueprint.Authorization.IApiAuthoriser[] _apiAuthorisers;
         static readonly string[] _appliedModuleIds =
             new string[] { "PropertyOwnershipModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "HandlerExecutionModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
         private static readonly System.Diagnostics.ActivityTagsCollection _auditTags_AllTypesGetQuery =
             new System.Diagnostics.ActivityTagsCollection { { "blueprint.operation.type", "AllTypesGetQuery" } };
+        readonly Blueprint.Authorization.IOperationAuthoriser[] _operationAuthorisers;
         readonly Blueprint.Runtime.Middleware.IPropertyPopulator[] _propertyPopulators;
 
         public AllTypesGetQueryExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, System.IServiceProvider serviceProvider)
             : base(loggerFactory, "AllTypesGetQuery")
         {
+            this._apiAuthorisers = (Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Authorization.IApiAuthoriser>>(serviceProvider) is { } aa ? System.Linq.Enumerable.ToArray(aa) : System.Array.Empty<Blueprint.Authorization.IApiAuthoriser>());
+            this._operationAuthorisers = (Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Authorization.IOperationAuthoriser>>(serviceProvider) is { } oa ? System.Linq.Enumerable.ToArray(oa) : System.Array.Empty<Blueprint.Authorization.IOperationAuthoriser>());
             this._propertyPopulators = (Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Runtime.Middleware.IPropertyPopulator>>(serviceProvider) is { } populators ? System.Linq.Enumerable.ToArray(populators) : System.Array.Empty<Blueprint.Runtime.Middleware.IPropertyPopulator>());
         }
 
@@ -224,10 +228,9 @@ namespace Blueprint.Generated
 
             if (!context.SkipAuthorisation)
             {
-                var apiAuthorisers = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Authorization.IApiAuthoriser>>(context.ServiceProvider);
-                if (apiAuthorisers != null)
+                if (this._apiAuthorisers.Length > 0)
                 {
-                    foreach (var authoriser in apiAuthorisers)
+                    foreach (var authoriser in this._apiAuthorisers)
                     {
                         if (authoriser.AppliesTo(context.Descriptor))
                         {
@@ -243,10 +246,9 @@ namespace Blueprint.Generated
                         }
                     }
                 }
-                var operationAuthorisers = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Authorization.IOperationAuthoriser>>(context.ServiceProvider);
-                if (operationAuthorisers != null)
+                if (this._operationAuthorisers.Length > 0)
                 {
-                    foreach (var authoriser in operationAuthorisers)
+                    foreach (var authoriser in this._operationAuthorisers)
                     {
                         if (authoriser.AppliesTo(context.Descriptor))
                         {
@@ -319,15 +321,19 @@ namespace Blueprint.Generated
 {
     public sealed partial class AllTypesPostCommandExecutorPipeline : Blueprint.OperationExecutorShell
     {
+        readonly Blueprint.Authorization.IApiAuthoriser[] _apiAuthorisers;
         static readonly string[] _appliedModuleIds =
             new string[] { "PropertyOwnershipModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "HandlerExecutionModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
         private static readonly System.Diagnostics.ActivityTagsCollection _auditTags_AllTypesPostCommand =
             new System.Diagnostics.ActivityTagsCollection { { "blueprint.operation.type", "AllTypesPostCommand" } };
+        readonly Blueprint.Authorization.IOperationAuthoriser[] _operationAuthorisers;
         readonly Blueprint.Runtime.Middleware.IPropertyPopulator[] _propertyPopulators;
 
         public AllTypesPostCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, System.IServiceProvider serviceProvider)
             : base(loggerFactory, "AllTypesPostCommand")
         {
+            this._apiAuthorisers = (Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Authorization.IApiAuthoriser>>(serviceProvider) is { } aa ? System.Linq.Enumerable.ToArray(aa) : System.Array.Empty<Blueprint.Authorization.IApiAuthoriser>());
+            this._operationAuthorisers = (Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Authorization.IOperationAuthoriser>>(serviceProvider) is { } oa ? System.Linq.Enumerable.ToArray(oa) : System.Array.Empty<Blueprint.Authorization.IOperationAuthoriser>());
             this._propertyPopulators = (Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Runtime.Middleware.IPropertyPopulator>>(serviceProvider) is { } populators ? System.Linq.Enumerable.ToArray(populators) : System.Array.Empty<Blueprint.Runtime.Middleware.IPropertyPopulator>());
         }
 
@@ -424,10 +430,9 @@ namespace Blueprint.Generated
 
             if (!context.SkipAuthorisation)
             {
-                var apiAuthorisers = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Authorization.IApiAuthoriser>>(context.ServiceProvider);
-                if (apiAuthorisers != null)
+                if (this._apiAuthorisers.Length > 0)
                 {
-                    foreach (var authoriser in apiAuthorisers)
+                    foreach (var authoriser in this._apiAuthorisers)
                     {
                         if (authoriser.AppliesTo(context.Descriptor))
                         {
@@ -443,10 +448,9 @@ namespace Blueprint.Generated
                         }
                     }
                 }
-                var operationAuthorisers = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Authorization.IOperationAuthoriser>>(context.ServiceProvider);
-                if (operationAuthorisers != null)
+                if (this._operationAuthorisers.Length > 0)
                 {
-                    foreach (var authoriser in operationAuthorisers)
+                    foreach (var authoriser in this._operationAuthorisers)
                     {
                         if (authoriser.AppliesTo(context.Descriptor))
                         {

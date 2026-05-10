@@ -68,6 +68,19 @@ public sealed class ApiAuthoriserModule : IBlueprintSourceGeneratorModule, IPipe
             return;
         }
 
+        // Cache singleton authoriser arrays at pipeline construction time
+        context.CacheService(
+            "_apiAuthorisers",
+            "Blueprint.Authorization.IApiAuthoriser[]",
+            "(Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Authorization.IApiAuthoriser>>(serviceProvider) is { } aa ? System.Linq.Enumerable.ToArray(aa) : System.Array.Empty<Blueprint.Authorization.IApiAuthoriser>())",
+            isNullable: false);
+
+        context.CacheService(
+            "_operationAuthorisers",
+            "Blueprint.Authorization.IOperationAuthoriser[]",
+            "(Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Authorization.IOperationAuthoriser>>(serviceProvider) is { } oa ? System.Linq.Enumerable.ToArray(oa) : System.Array.Empty<Blueprint.Authorization.IOperationAuthoriser>())",
+            isNullable: false);
+
         context.RequireAsync();
 
         // User context loading runs in Authentication stage (after identity check)
@@ -152,16 +165,12 @@ public sealed class ApiAuthoriserModule : IBlueprintSourceGeneratorModule, IPipe
             "!context.SkipAuthorisation",
             branch =>
             {
-                // Resolve IEnumerable<IApiAuthoriser> from DI (combined execution + link-visibility).
-                branch.DeclareVariable(
-                    "apiAuthorisers",
-                    $"Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Authorization.IApiAuthoriser>>({context.GetServiceProviderExpression()})");
-
+                // Use cached IApiAuthoriser[] (combined execution + link-visibility).
                 branch.If(
-                    "apiAuthorisers != null",
+                    "this._apiAuthorisers.Length > 0",
                     innerBranch =>
                     {
-                        innerBranch.ForEach("var authoriser", "apiAuthorisers", foreachBody =>
+                        innerBranch.ForEach("var authoriser", "this._apiAuthorisers", foreachBody =>
                         {
                             foreachBody.If(
                                 "authoriser.AppliesTo(context.Descriptor)",
@@ -172,16 +181,12 @@ public sealed class ApiAuthoriserModule : IBlueprintSourceGeneratorModule, IPipe
                         });
                     });
 
-                // Resolve IEnumerable<IOperationAuthoriser> from DI (execution-only).
-                branch.DeclareVariable(
-                    "operationAuthorisers",
-                    $"Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Authorization.IOperationAuthoriser>>({context.GetServiceProviderExpression()})");
-
+                // Use cached IOperationAuthoriser[] (execution-only).
                 branch.If(
-                    "operationAuthorisers != null",
+                    "this._operationAuthorisers.Length > 0",
                     innerBranch =>
                     {
-                        innerBranch.ForEach("var authoriser", "operationAuthorisers", foreachBody =>
+                        innerBranch.ForEach("var authoriser", "this._operationAuthorisers", foreachBody =>
                         {
                             foreachBody.If(
                                 "authoriser.AppliesTo(context.Descriptor)",
