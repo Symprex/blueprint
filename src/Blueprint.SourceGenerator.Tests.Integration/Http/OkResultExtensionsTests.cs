@@ -96,5 +96,45 @@ public class OkResultExtensionsTests
         Assert.ThrowsAny<ArgumentException>(() => result.WithHeader(string.Empty, "value"));
     }
 
+    [Fact]
+    public void WithMaxAge_sets_max_age_cache_control()
+    {
+        var result = new OkResult<TestDto>(new TestDto("cached"));
+
+        var returned = result.WithMaxAge(600);
+
+        Assert.Same(result, returned);
+        Assert.Equal("max-age=600", result.Headers["Cache-Control"].ToString());
+    }
+
+    [Fact]
+    public void WithMaxAge_zero_sets_max_age_zero()
+    {
+        var result = new OkResult<TestDto>(new TestDto("x"));
+
+        result.WithMaxAge(0);
+
+        Assert.Equal("max-age=0", result.Headers["Cache-Control"].ToString());
+    }
+
+    [Fact]
+    public void WithMaxAge_throws_on_negative()
+    {
+        var result = new OkResult<TestDto>(new TestDto("x"));
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => result.WithMaxAge(-1));
+    }
+
+    [Fact]
+    public void WithNoStore_sets_no_store_cache_control()
+    {
+        var result = new OkResult<TestDto>(new TestDto("sensitive"));
+
+        var returned = result.WithNoStore();
+
+        Assert.Same(result, returned);
+        Assert.Equal("no-store", result.Headers["Cache-Control"].ToString());
+    }
+
     private sealed record TestDto(string Value);
 }
