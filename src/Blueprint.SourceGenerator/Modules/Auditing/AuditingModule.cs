@@ -62,15 +62,28 @@ public sealed class AuditingModule : IBlueprintSourceGeneratorModule, IPipelineC
 
         var operationTypeName = context.Operation.TypeName;
 
+        // Generate a safe field name from the operation type for the cached tags collection
+        var safeFieldName = "_auditTags_" + operationTypeName.Replace(".", "_").Replace("+", "_");
+
+        // Pre-declare a static readonly ActivityTagsCollection to avoid per-request allocations for constant tags
+        context.AddDeferredClassMember(classBuilder =>
+        {
+            classBuilder.AddProperty(safeFieldName, Accessibility.Private)
+                .SetType("System.Diagnostics.ActivityTagsCollection")
+                .MakeStatic()
+                .WithReadonlyValue(
+                    $"new System.Diagnostics.ActivityTagsCollection {{ {{ \"blueprint.operation.type\", \"{operationTypeName}\" }} }}");
+        });
+
         context.RequireVariable(
             new VariableKey(HandlerExecutionModule.HandlerResultTypeName, HandlerExecutionModule.HandlerResultPurpose),
             requiredBy: PipelineStage.PostExecution);
 
         context.RequireAsync();
-        context.AddRenderStep(PipelineStage.PostExecution, ctx => RenderAuditSink(ctx, operationTypeName));
+        context.AddRenderStep(PipelineStage.PostExecution, ctx => RenderAuditSink(ctx, operationTypeName, safeFieldName));
     }
 
-    private static void RenderAuditSink(PipelineRenderContext context, string operationTypeName)
+    private static void RenderAuditSink(PipelineRenderContext context, string operationTypeName, string cachedTagsFieldName)
     {
         context.WriteBlankLine();
 
@@ -86,24 +99,23 @@ public sealed class AuditingModule : IBlueprintSourceGeneratorModule, IPipelineC
                     "auditSink != null",
                     innerBranch =>
                     {
-                        // Emit structured audit started event with operation type tag
+                        // Reuse static readonly tag collection — zero per-request allocation for constant tags
                         innerBranch.WriteStatement(
-                            $"context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent(\"blueprint.audit.started\", default, new System.Diagnostics.ActivityTagsCollection {{ {{ \"blueprint.operation.type\", \"{operationTypeName}\" }} }}));");
+                            $"context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent(\"blueprint.audit.started\", default, {cachedTagsFieldName}));");
 
                         innerBranch.WriteStatement("try");
                         innerBranch.WriteStatement("{");
                         innerBranch.WriteStatement(
                             "    await auditSink.RecordAsync(context, handlerResult, System.Threading.CancellationToken.None);");
 
-                        // Emit structured audit succeeded event with operation type tag
                         innerBranch.WriteStatement(
-                            $"    context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent(\"blueprint.audit.succeeded\", default, new System.Diagnostics.ActivityTagsCollection {{ {{ \"blueprint.operation.type\", \"{operationTypeName}\" }} }}));");
+                            $"    context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent(\"blueprint.audit.succeeded\", default, {cachedTagsFieldName}));");
 
                         innerBranch.WriteStatement("}");
                         innerBranch.WriteStatement("catch (System.Exception auditException)");
                         innerBranch.WriteStatement("{");
 
-                        // Emit structured audit failed event with exception details matching BlueprintActivitySource.RecordException schema
+                        // Failed event has dynamic exception details — allocation acceptable since exceptions are exceptional
                         innerBranch.WriteStatement(
                             $"    context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent(\"blueprint.audit.failed\", default, new System.Diagnostics.ActivityTagsCollection {{ {{ \"blueprint.operation.type\", \"{operationTypeName}\" }}, {{ \"exception.type\", auditException.GetType().FullName }}, {{ \"exception.message\", auditException.Message }}, {{ \"exception.stacktrace\", auditException.StackTrace }} }}));");
 

@@ -53,7 +53,7 @@
           },
           "OperationExecutorPipelineSourceGenerator": {
             "generatedOutputCount": 101,
-            "generatedOutputLineCount": 8822,
+            "generatedOutputLineCount": 9022,
             "trackedStages": {
               "CombineWithCompilation": 1,
               "FindBlueprintApp": 1,

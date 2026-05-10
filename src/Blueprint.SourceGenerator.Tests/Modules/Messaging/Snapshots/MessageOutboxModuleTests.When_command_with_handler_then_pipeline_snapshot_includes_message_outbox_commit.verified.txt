@@ -17,6 +17,8 @@ namespace Blueprint.Generated
     {
         static readonly string[] _appliedModuleIds =
             new string[] { "PropertyPopulationModule", "HandlerExecutionModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
+        private static readonly System.Diagnostics.ActivityTagsCollection _auditTags_PublishOrderCommand =
+            new System.Diagnostics.ActivityTagsCollection { { "blueprint.operation.type", "PublishOrderCommand" } };
 
         public PublishOrderCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory)
             : base(loggerFactory, "PublishOrderCommand")
@@ -55,11 +57,11 @@ namespace Blueprint.Generated
                 var auditSink = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Auditing.IAuditSink>(context.ServiceProvider);
                 if (auditSink != null)
                 {
-                    context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent("blueprint.audit.started", default, new System.Diagnostics.ActivityTagsCollection { { "blueprint.operation.type", "PublishOrderCommand" } }));
+                    context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent("blueprint.audit.started", default, _auditTags_PublishOrderCommand));
                     try
                     {
                         await auditSink.RecordAsync(context, handlerResult, System.Threading.CancellationToken.None);
-                        context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent("blueprint.audit.succeeded", default, new System.Diagnostics.ActivityTagsCollection { { "blueprint.operation.type", "PublishOrderCommand" } }));
+                        context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent("blueprint.audit.succeeded", default, _auditTags_PublishOrderCommand));
                     }
                     catch (System.Exception auditException)
                     {

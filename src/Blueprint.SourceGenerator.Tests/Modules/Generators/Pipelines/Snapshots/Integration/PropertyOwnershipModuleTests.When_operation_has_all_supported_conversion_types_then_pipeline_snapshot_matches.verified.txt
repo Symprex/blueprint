@@ -17,6 +17,8 @@ namespace Blueprint.Generated
     {
         static readonly string[] _appliedModuleIds =
             new string[] { "PropertyOwnershipModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "HandlerExecutionModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
+        private static readonly System.Diagnostics.ActivityTagsCollection _auditTags_AllTypesGetQuery =
+            new System.Diagnostics.ActivityTagsCollection { { "blueprint.operation.type", "AllTypesGetQuery" } };
 
         public AllTypesGetQueryExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory)
             : base(loggerFactory, "AllTypesGetQuery")
@@ -268,11 +270,11 @@ namespace Blueprint.Generated
                 var auditSink = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Auditing.IAuditSink>(context.ServiceProvider);
                 if (auditSink != null)
                 {
-                    context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent("blueprint.audit.started", default, new System.Diagnostics.ActivityTagsCollection { { "blueprint.operation.type", "AllTypesGetQuery" } }));
+                    context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent("blueprint.audit.started", default, _auditTags_AllTypesGetQuery));
                     try
                     {
                         await auditSink.RecordAsync(context, handlerResult, System.Threading.CancellationToken.None);
-                        context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent("blueprint.audit.succeeded", default, new System.Diagnostics.ActivityTagsCollection { { "blueprint.operation.type", "AllTypesGetQuery" } }));
+                        context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent("blueprint.audit.succeeded", default, _auditTags_AllTypesGetQuery));
                     }
                     catch (System.Exception auditException)
                     {
@@ -320,6 +322,8 @@ namespace Blueprint.Generated
     {
         static readonly string[] _appliedModuleIds =
             new string[] { "PropertyOwnershipModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "HandlerExecutionModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
+        private static readonly System.Diagnostics.ActivityTagsCollection _auditTags_AllTypesPostCommand =
+            new System.Diagnostics.ActivityTagsCollection { { "blueprint.operation.type", "AllTypesPostCommand" } };
 
         public AllTypesPostCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory)
             : base(loggerFactory, "AllTypesPostCommand")
@@ -479,11 +483,11 @@ namespace Blueprint.Generated
                 var auditSink = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Auditing.IAuditSink>(context.ServiceProvider);
                 if (auditSink != null)
                 {
-                    context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent("blueprint.audit.started", default, new System.Diagnostics.ActivityTagsCollection { { "blueprint.operation.type", "AllTypesPostCommand" } }));
+                    context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent("blueprint.audit.started", default, _auditTags_AllTypesPostCommand));
                     try
                     {
                         await auditSink.RecordAsync(context, handlerResult, System.Threading.CancellationToken.None);
-                        context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent("blueprint.audit.succeeded", default, new System.Diagnostics.ActivityTagsCollection { { "blueprint.operation.type", "AllTypesPostCommand" } }));
+                        context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent("blueprint.audit.succeeded", default, _auditTags_AllTypesPostCommand));
                     }
                     catch (System.Exception auditException)
                     {

@@ -17,6 +17,8 @@ namespace Blueprint.Generated
     {
         static readonly string[] _appliedModuleIds =
             new string[] { "PropertyOwnershipModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "HandlerExecutionModule", "LinkGenerationModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "ResourceEventAuditModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
+        private static readonly System.Diagnostics.ActivityTagsCollection _auditTags_CreateResourceCommand =
+            new System.Diagnostics.ActivityTagsCollection { { "blueprint.operation.type", "CreateResourceCommand" } };
 
         public CreateResourceCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory)
             : base(loggerFactory, "CreateResourceCommand")
@@ -172,11 +174,11 @@ namespace Blueprint.Generated
                 var auditSink = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Auditing.IAuditSink>(context.ServiceProvider);
                 if (auditSink != null)
                 {
-                    context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent("blueprint.audit.started", default, new System.Diagnostics.ActivityTagsCollection { { "blueprint.operation.type", "CreateResourceCommand" } }));
+                    context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent("blueprint.audit.started", default, _auditTags_CreateResourceCommand));
                     try
                     {
                         await auditSink.RecordAsync(context, handlerResult, System.Threading.CancellationToken.None);
-                        context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent("blueprint.audit.succeeded", default, new System.Diagnostics.ActivityTagsCollection { { "blueprint.operation.type", "CreateResourceCommand" } }));
+                        context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent("blueprint.audit.succeeded", default, _auditTags_CreateResourceCommand));
                     }
                     catch (System.Exception auditException)
                     {

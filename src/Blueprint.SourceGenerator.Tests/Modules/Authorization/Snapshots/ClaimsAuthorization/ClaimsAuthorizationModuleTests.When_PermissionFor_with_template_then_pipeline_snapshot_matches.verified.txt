@@ -17,6 +17,8 @@ namespace Blueprint.Generated
     {
         static readonly string[] _appliedModuleIds =
             new string[] { "PropertyOwnershipModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "ClaimsAuthorizationModule", "HandlerExecutionModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
+        private static readonly System.Diagnostics.ActivityTagsCollection _auditTags_EditDocCommand =
+            new System.Diagnostics.ActivityTagsCollection { { "blueprint.operation.type", "EditDocCommand" } };
 
         public EditDocCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory)
             : base(loggerFactory, "EditDocCommand")
@@ -132,11 +134,11 @@ namespace Blueprint.Generated
                 var auditSink = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Auditing.IAuditSink>(context.ServiceProvider);
                 if (auditSink != null)
                 {
-                    context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent("blueprint.audit.started", default, new System.Diagnostics.ActivityTagsCollection { { "blueprint.operation.type", "EditDocCommand" } }));
+                    context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent("blueprint.audit.started", default, _auditTags_EditDocCommand));
                     try
                     {
                         await auditSink.RecordAsync(context, handlerResult, System.Threading.CancellationToken.None);
-                        context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent("blueprint.audit.succeeded", default, new System.Diagnostics.ActivityTagsCollection { { "blueprint.operation.type", "EditDocCommand" } }));
+                        context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent("blueprint.audit.succeeded", default, _auditTags_EditDocCommand));
                     }
                     catch (System.Exception auditException)
                     {

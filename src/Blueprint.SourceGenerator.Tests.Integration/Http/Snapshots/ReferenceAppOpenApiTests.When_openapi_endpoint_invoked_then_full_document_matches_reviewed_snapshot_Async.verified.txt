@@ -1344,7 +1344,7 @@
         ],
         "responses": {
           "302": {
-            "description": "302"
+            "description": "Found"
           },
           "401": {
             "description": "Unauthorized",
