@@ -139,6 +139,11 @@ internal static class ManifestDiagnosticsPageEndpoint
               color: #bf8700;
             }
 
+            .badge-warn {
+              background: color-mix(in srgb, #cf222e 15%, Canvas 85%);
+              color: #cf222e;
+            }
+
             .detail-row td {
               padding: 0.5rem 0.75rem 1rem;
               background: color-mix(in srgb, CanvasText 3%, Canvas 97%);
@@ -208,6 +213,10 @@ internal static class ManifestDiagnosticsPageEndpoint
                   <dt>With validation</dt>
                   <dd id="validation-count">-</dd>
                 </div>
+                <div class="summary-card">
+                  <dt>HTTP routed</dt>
+                  <dd id="routed-count">-</dd>
+                </div>
               </dl>
             </section>
 
@@ -249,9 +258,9 @@ internal static class ManifestDiagnosticsPageEndpoint
 
             function getHttpMethods(op) {
               const routing = op.httpRouting;
-              if (!routing) return "-";
+              if (!routing) return badge("none", "badge-warn");
               const methods = routing.methods;
-              if (!methods) return "-";
+              if (!methods) return badge("none", "badge-warn");
               return (Array.isArray(methods) ? methods : [methods])
                 .map(m => badge(m, "badge-method"))
                 .join(" ");
@@ -352,10 +361,12 @@ internal static class ManifestDiagnosticsPageEndpoint
 
               let authCount = 0;
               let validationCount = 0;
+              let routedCount = 0;
 
               for (const [operationName, operation] of operations) {
                 if (operation.authorization?.accessMode === "Authenticated") authCount++;
                 if (operation.validation?.hasValidation === true || operation.validation?.enabled === true) validationCount++;
+                if (operation.httpRouting?.methods) routedCount++;
 
                 const rowHtml = `<tr class="clickable">` +
                   `<td><code>${operation.typeName ?? operationName}</code></td>` +
@@ -372,6 +383,7 @@ internal static class ManifestDiagnosticsPageEndpoint
 
               setText("auth-count", String(authCount));
               setText("validation-count", String(validationCount));
+              setText("routed-count", `${routedCount}/${operations.length}`);
 
               operationsBody.addEventListener("click", function(e) {
                 const row = e.target.closest("tr.clickable");
