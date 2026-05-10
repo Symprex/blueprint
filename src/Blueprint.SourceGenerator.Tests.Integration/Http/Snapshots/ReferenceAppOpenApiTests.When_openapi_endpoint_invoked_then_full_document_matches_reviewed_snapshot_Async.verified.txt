@@ -332,7 +332,8 @@
                   "name": {
                     "type": "string",
                     "description": "The display name for the template.",
-                    "maxLength": 200
+                    "maxLength": 200,
+                    "example": "Welcome Email"
                   },
                   "slug": {
                     "type": "string",
@@ -357,7 +358,8 @@
                     "description": "Priority for template ordering (1-1000).",
                     "minimum": 1,
                     "maximum": 1000,
-                    "default": 100
+                    "default": 100,
+                    "example": 42
                   },
                   "htmlSource": {
                     "type": "string",
@@ -2106,7 +2108,8 @@
             "description": "The unique identifier of the template.",
             "schema": {
               "type": "string"
-            }
+            },
+            "example": "tmpl-001"
           }
         ],
         "responses": {

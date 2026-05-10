@@ -33,6 +33,7 @@ public partial class CreateTemplateCommand : ICommand<ResourceEventResult<Templa
     [Required]
     [MaxLength(200)]
     [Description("The display name for the template.")]
+    [OpenApiExample("Welcome Email")]
     public string? Name { get; set; }
 
     /// <summary>
@@ -62,6 +63,7 @@ public partial class CreateTemplateCommand : ICommand<ResourceEventResult<Templa
     /// </summary>
     [Range(1, 1000)]
     [DefaultValue(100)]
+    [OpenApiExample(42)]
     [Description("Priority for template ordering (1-1000).")]
     public int Priority { get; set; } = 100;
 

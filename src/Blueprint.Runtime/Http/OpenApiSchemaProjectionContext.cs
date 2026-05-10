@@ -135,6 +135,9 @@ public sealed record OpenApiSchemaProjectionContext(
         var defaultValue = property.AttributeProvider is MemberInfo defaultMember
             ? defaultMember.GetCustomAttribute<System.ComponentModel.DefaultValueAttribute>()?.Value
             : null;
+        var exampleValue = property.AttributeProvider is MemberInfo exampleMember
+            ? exampleMember.GetCustomAttribute<Blueprint.Model.Attributes.OpenApiExampleAttribute>()?.Value
+            : null;
         var isReadOnly = IsReadOnlyProperty(property, bodyType);
 
         // Extract element type metadata for collection/dictionary properties so schema rendering
@@ -168,6 +171,7 @@ public sealed record OpenApiSchemaProjectionContext(
             isDeprecated,
             deprecationReason,
             defaultValue,
+            exampleValue,
             isReadOnly);
     }
 
@@ -891,6 +895,7 @@ public sealed record OpenApiSchemaModel(
 /// <param name="IsDeprecated">Whether the property is deprecated (mapped from <see cref="ObsoleteAttribute"/>).</param>
 /// <param name="DeprecationReason">The deprecation reason from <see cref="ObsoleteAttribute.Message"/>, or null.</param>
 /// <param name="DefaultValue">The default value from <see cref="System.ComponentModel.DefaultValueAttribute"/>, or null.</param>
+/// <param name="ExampleValue">A representative example value from <see cref="Blueprint.Model.Attributes.OpenApiExampleAttribute"/>, or null.</param>
 /// <param name="IsReadOnly">Whether this property is read-only (no public setter or annotated with <c>[ReadOnly(true)]</c>).</param>
 public sealed record OpenApiSchemaPropertyModel(
     string Name,
@@ -917,6 +922,7 @@ public sealed record OpenApiSchemaPropertyModel(
     bool IsDeprecated = false,
     string? DeprecationReason = null,
     object? DefaultValue = null,
+    object? ExampleValue = null,
     bool IsReadOnly = false);
 
 /// <summary>

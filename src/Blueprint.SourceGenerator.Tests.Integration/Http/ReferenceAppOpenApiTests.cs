@@ -613,6 +613,56 @@ public class ReferenceAppOpenApiTests
     }
 
     [Fact]
+    public async Task When_body_property_has_example_attribute_then_schema_emits_example()
+    {
+        var (json, _) = await InvokeOpenApiEndpointAsync();
+        using var doc = JsonDocument.Parse(json);
+
+        // CreateTemplateCommand (POST /templates) has [OpenApiExample("Welcome Email")] on Name
+        // and [OpenApiExample(42)] on Priority
+        var templatesPath = doc.RootElement.GetProperty("paths").GetProperty("/templates");
+        var requestBody = templatesPath.GetProperty("post").GetProperty("requestBody");
+        var properties = requestBody.GetProperty("content").GetProperty("application/json")
+            .GetProperty("schema").GetProperty("properties");
+
+        properties.GetProperty("name").GetProperty("example").GetString()
+            .Should().Be("Welcome Email");
+
+        properties.GetProperty("priority").GetProperty("example").GetInt32()
+            .Should().Be(42);
+
+        // Slug does NOT have an example — example should be absent
+        properties.GetProperty("slug").TryGetProperty("example", out _)
+            .Should().BeFalse("properties without [OpenApiExample] should not emit example");
+    }
+
+    [Fact]
+    public async Task When_route_parameter_has_example_attribute_then_parameter_emits_example()
+    {
+        var (json, _) = await InvokeOpenApiEndpointAsync();
+        using var doc = JsonDocument.Parse(json);
+
+        // GetTemplateVersionsQuery (GET /templates/{Id}/versions) has [OpenApiExample("tmpl-001")] on Id
+        var versionsPath = doc.RootElement.GetProperty("paths").GetProperty("/templates/{Id}/versions");
+        var parameters = versionsPath.GetProperty("get").GetProperty("parameters");
+
+        // Find the Id parameter
+        JsonElement? idParam = null;
+        foreach (var param in parameters.EnumerateArray())
+        {
+            if (param.GetProperty("name").GetString() == "Id")
+            {
+                idParam = param;
+                break;
+            }
+        }
+
+        idParam.Should().NotBeNull("Id parameter should exist");
+        idParam!.Value.GetProperty("example").GetString()
+            .Should().Be("tmpl-001");
+    }
+
+    [Fact]
     public async Task When_body_property_is_array_of_primitives_then_items_schema_uses_inline_type()
     {
         var (json, _) = await InvokeOpenApiEndpointAsync();

@@ -74,6 +74,7 @@ public sealed record OpenApiSchemaComponentRenderingContext(
             property.IsDeprecated,
             property.DeprecationReason,
             property.DefaultValue,
+            property.ExampleValue,
             property.IsReadOnly);
     }
 
@@ -134,6 +135,7 @@ public sealed record OpenApiSchemaComponentModel(
 /// <param name="IsDeprecated">Whether the property is deprecated (mapped from <see cref="ObsoleteAttribute"/>).</param>
 /// <param name="DeprecationReason">The deprecation reason from <see cref="ObsoleteAttribute.Message"/>, or null.</param>
 /// <param name="DefaultValue">The default value from <see cref="System.ComponentModel.DefaultValueAttribute"/>, or null.</param>
+/// <param name="ExampleValue">A representative example value from <see cref="Blueprint.Model.Attributes.OpenApiExampleAttribute"/>, or null.</param>
 /// <param name="IsReadOnly">Whether this property is read-only (no public setter or <c>[ReadOnly(true)]</c>).</param>
 public sealed record OpenApiSchemaComponentPropertyModel(
     string Name,
@@ -159,4 +161,5 @@ public sealed record OpenApiSchemaComponentPropertyModel(
     bool IsDeprecated = false,
     string? DeprecationReason = null,
     object? DefaultValue = null,
+    object? ExampleValue = null,
     bool IsReadOnly = false);

@@ -23,5 +23,6 @@ public partial class GetTemplateVersionsQuery : IQuery<TemplateVersionApiResourc
     /// The identifier of the template whose versions to retrieve.
     /// </summary>
     [Description("The unique identifier of the template.")]
+    [OpenApiExample("tmpl-001")]
     public required string Id { get; set; }
 }

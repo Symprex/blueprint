@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using Blueprint.Model;
+using Blueprint.Model.Attributes;
 
 namespace Blueprint.SourceGenerator.Sample.Contract.Api;
 
@@ -34,6 +35,7 @@ public partial class TemplateApiResource : ApiResource
     /// The id of this template.
     /// </summary>
     [Description("The unique identifier for this template.")]
+    [OpenApiExample("tmpl-abc-123")]
     public string Id { get; private set; } = null!;
 
     /// <summary>

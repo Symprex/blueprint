@@ -184,6 +184,7 @@ public sealed record OpenApiOperationRenderingContext(
             var isDeprecated = obsoletePropertyAttr is not null;
             var propertyDeprecationReason = obsoletePropertyAttr?.Message;
             var defaultValueAttr = clrProperty?.GetCustomAttribute<System.ComponentModel.DefaultValueAttribute>();
+            var exampleValueAttr = clrProperty?.GetCustomAttribute<Blueprint.Model.Attributes.OpenApiExampleAttribute>();
 
             switch (entry.Source)
             {
@@ -207,6 +208,7 @@ public sealed record OpenApiOperationRenderingContext(
                         IsNullable = entry.IsNullable,
                         IsDeprecated = isDeprecated,
                         DeprecationReason = propertyDeprecationReason,
+                        ExampleValue = exampleValueAttr?.Value,
                     });
                     break;
 
@@ -230,6 +232,7 @@ public sealed record OpenApiOperationRenderingContext(
                         IsNullable = entry.IsNullable,
                         IsDeprecated = isDeprecated,
                         DeprecationReason = propertyDeprecationReason,
+                        ExampleValue = exampleValueAttr?.Value,
                     });
                     break;
 
@@ -253,6 +256,7 @@ public sealed record OpenApiOperationRenderingContext(
                         IsNullable = entry.IsNullable,
                         IsDeprecated = isDeprecated,
                         DeprecationReason = propertyDeprecationReason,
+                        ExampleValue = exampleValueAttr?.Value,
                     });
                     break;
 
@@ -276,6 +280,7 @@ public sealed record OpenApiOperationRenderingContext(
                         IsNullable = entry.IsNullable,
                         IsDeprecated = isDeprecated,
                         DeprecationReason = propertyDeprecationReason,
+                        ExampleValue = exampleValueAttr?.Value,
                     });
                     break;
 
@@ -307,6 +312,7 @@ public sealed record OpenApiOperationRenderingContext(
                         IsDeprecated = isDeprecated,
                         DeprecationReason = propertyDeprecationReason,
                         DefaultValue = defaultValueAttr?.Value,
+                        ExampleValue = exampleValueAttr?.Value,
                     });
                     break;
             }

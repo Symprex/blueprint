@@ -57,6 +57,9 @@ public sealed record OpenApiParameterModel(
 
     /// <summary>Gets the deprecation reason extracted from the <see cref="System.ObsoleteAttribute.Message"/>, or null when unset.</summary>
     public string? DeprecationReason { get; init; }
+
+    /// <summary>Gets a representative example value from <see cref="Blueprint.Model.Attributes.OpenApiExampleAttribute"/>, or null when unset.</summary>
+    public object? ExampleValue { get; init; }
 }
 
 /// <summary>
@@ -135,6 +138,9 @@ public sealed record OpenApiRequestBodyPropertyModel(
 
     /// <summary>Gets the default value for this property, sourced from <c>[DefaultValue]</c> attribute, or null when unset.</summary>
     public object? DefaultValue { get; init; }
+
+    /// <summary>Gets a representative example value from <see cref="Blueprint.Model.Attributes.OpenApiExampleAttribute"/>, or null when unset.</summary>
+    public object? ExampleValue { get; init; }
 
     /// <summary>Gets the component schema name for complex array element items, rendered as a <c>$ref</c> instead of an inline type.</summary>
     public string? ItemsSchemaRef { get; init; }

@@ -328,6 +328,12 @@ public sealed record OpenApiOutputRenderingContext(
             WriteStringConstraints(writer, parameter.MinLength, parameter.MaxLength, parameter.Pattern);
 
             writer.WriteEndObject();
+
+            if (parameter.ExampleValue is not null)
+            {
+                WriteExampleValue(writer, parameter.ExampleValue);
+            }
+
             writer.WriteEndObject();
         }
 
@@ -442,6 +448,11 @@ public sealed record OpenApiOutputRenderingContext(
                     WriteDefaultValue(writer, property.DefaultValue);
                 }
 
+                if (property.ExampleValue is not null)
+                {
+                    WriteExampleValue(writer, property.ExampleValue);
+                }
+
                 writer.WriteEndObject();
             }
 
@@ -536,28 +547,44 @@ public sealed record OpenApiOutputRenderingContext(
     /// </summary>
     private static void WriteDefaultValue(Utf8JsonWriter writer, object value)
     {
+        WriteConstantValue(writer, "default", value);
+    }
+
+    /// <summary>
+    /// Writes a JSON <c>"example"</c> property with the correct JSON type based on the CLR value.
+    /// </summary>
+    private static void WriteExampleValue(Utf8JsonWriter writer, object value)
+    {
+        WriteConstantValue(writer, "example", value);
+    }
+
+    /// <summary>
+    /// Writes a named JSON property with the correct JSON type for a compile-time constant value.
+    /// </summary>
+    private static void WriteConstantValue(Utf8JsonWriter writer, string propertyName, object value)
+    {
         switch (value)
         {
             case bool b:
-                writer.WriteBoolean("default", b);
+                writer.WriteBoolean(propertyName, b);
                 break;
             case int i:
-                writer.WriteNumber("default", i);
+                writer.WriteNumber(propertyName, i);
                 break;
             case long l:
-                writer.WriteNumber("default", l);
+                writer.WriteNumber(propertyName, l);
                 break;
             case double d:
-                writer.WriteNumber("default", d);
+                writer.WriteNumber(propertyName, d);
                 break;
             case decimal m:
-                writer.WriteNumber("default", m);
+                writer.WriteNumber(propertyName, m);
                 break;
             case float f:
-                writer.WriteNumber("default", f);
+                writer.WriteNumber(propertyName, f);
                 break;
             default:
-                writer.WriteString("default", value.ToString());
+                writer.WriteString(propertyName, value.ToString());
                 break;
         }
     }
@@ -990,6 +1017,11 @@ public sealed record OpenApiOutputRenderingContext(
         if (property.DefaultValue is not null)
         {
             WriteDefaultValue(writer, property.DefaultValue);
+        }
+
+        if (property.ExampleValue is not null)
+        {
+            WriteExampleValue(writer, property.ExampleValue);
         }
 
         writer.WriteEndObject();
