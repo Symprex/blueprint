@@ -265,7 +265,17 @@ public class HttpOperationResultExecutor
             return names;
         });
 
-        return failureOutcomes.Outcomes.Any(outcome => runtimeResultTypeNames.Contains(outcome.ResultTypeName));
+        var outcomes = failureOutcomes.Outcomes;
+
+        for (var i = 0; i < outcomes.Length; i++)
+        {
+            if (runtimeResultTypeNames.Contains(outcomes[i].ResultTypeName))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static async Task WriteValidationFailureAsync(HttpContext httpContext, ApiOperationContext operationContext, ValidationFailedResult validationFailedResult)

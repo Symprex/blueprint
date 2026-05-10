@@ -28,12 +28,9 @@ public static class EnumUtilities
 
             if (memberInfo.Length > 0)
             {
-                var descriptionAttribute = memberInfo[0]
-                    .GetCustomAttributes(typeof(DescriptionAttribute), false)
-                    .OfType<DescriptionAttribute>()
-                    .FirstOrDefault();
+                var attrs = memberInfo[0].GetCustomAttributes(typeof(DescriptionAttribute), false);
 
-                if (descriptionAttribute != null)
+                if (attrs.Length > 0 && attrs[0] is DescriptionAttribute descriptionAttribute)
                 {
                     return descriptionAttribute.Description;
                 }
