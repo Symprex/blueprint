@@ -2293,6 +2293,7 @@
   "components": {
     "schemas": {
       "Blueprint_SourceGenerator_Sample_Contract_Api_AuthManifestApiResource": {
+        "title": "AuthManifestApiResource",
         "type": "object",
         "properties": {
           "$links": {
@@ -2319,6 +2320,7 @@
         }
       },
       "Blueprint_SourceGenerator_Sample_Contract_Api_ExportJobApiResource": {
+        "title": "ExportJobApiResource",
         "type": "object",
         "required": [
           "JobId"
@@ -2334,6 +2336,7 @@
         }
       },
       "Blueprint_SourceGenerator_Sample_Contract_Api_TemplateApiResource": {
+        "title": "TemplateApiResource",
         "type": "object",
         "properties": {
           "$links": {
@@ -2372,6 +2375,7 @@
         }
       },
       "Blueprint_SourceGenerator_Sample_Contract_Api_TemplatePreviewApiResource": {
+        "title": "TemplatePreviewApiResource",
         "type": "object",
         "properties": {
           "$links": {
@@ -2401,6 +2405,7 @@
         }
       },
       "Blueprint_SourceGenerator_Sample_Contract_Api_TemplateVersionApiResource": {
+        "title": "TemplateVersionApiResource",
         "type": "object",
         "properties": {
           "$links": {
@@ -2432,6 +2437,7 @@
         }
       },
       "Microsoft_AspNetCore_Mvc_ProblemDetails": {
+        "title": "ProblemDetails",
         "type": "object",
         "properties": {
           "Extensions": {
@@ -2457,6 +2463,7 @@
         }
       },
       "Microsoft_AspNetCore_Mvc_ValidationProblemDetails": {
+        "title": "ValidationProblemDetails",
         "type": "object",
         "properties": {
           "Extensions": {
