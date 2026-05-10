@@ -690,4 +690,188 @@ public class ValidationAttributeTests
             dict1.Should().BeSameAs(dict2);
         }
     }
+
+    public class GreaterThanOrEqualToAttributeTests
+    {
+        [Theory]
+        [InlineData(5, 5)]
+        [InlineData(6, 5)]
+        public void Value_at_or_above_minimum_passes(int value, int minimum)
+        {
+            new GreaterThanOrEqualToAttribute(minimum).IsValid(value).Should().BeTrue();
+        }
+
+        [Fact]
+        public void Value_below_minimum_fails()
+        {
+            new GreaterThanOrEqualToAttribute(5).IsValid(4).Should().BeFalse();
+        }
+
+        [Fact]
+        public void Null_passes()
+        {
+            new GreaterThanOrEqualToAttribute(0).IsValid(null).Should().BeTrue();
+        }
+    }
+
+    public class LessThanOrEqualToAttributeTests
+    {
+        [Theory]
+        [InlineData(5, 5)]
+        [InlineData(4, 5)]
+        public void Value_at_or_below_maximum_passes(int value, int maximum)
+        {
+            new LessThanOrEqualToAttribute(maximum).IsValid(value).Should().BeTrue();
+        }
+
+        [Fact]
+        public void Value_above_maximum_fails()
+        {
+            new LessThanOrEqualToAttribute(5).IsValid(6).Should().BeFalse();
+        }
+
+        [Fact]
+        public void Null_passes()
+        {
+            new LessThanOrEqualToAttribute(100).IsValid(null).Should().BeTrue();
+        }
+    }
+
+    public class NotInFutureAttributeTests
+    {
+        [Fact]
+        public void Past_datetime_passes()
+        {
+            new NotInFutureAttribute().IsValid(DateTime.UtcNow.AddDays(-1)).Should().BeTrue();
+        }
+
+        [Fact]
+        public void Future_datetime_fails()
+        {
+            new NotInFutureAttribute().IsValid(DateTime.UtcNow.AddDays(1)).Should().BeFalse();
+        }
+
+        [Fact]
+        public void Null_passes()
+        {
+            new NotInFutureAttribute().IsValid(null).Should().BeTrue();
+        }
+
+        [Fact]
+        public void Future_datetimeoffset_fails()
+        {
+            new NotInFutureAttribute().IsValid(DateTimeOffset.UtcNow.AddHours(1)).Should().BeFalse();
+        }
+    }
+
+    public class NotInPastAttributeTests
+    {
+        [Fact]
+        public void Future_datetime_passes()
+        {
+            new NotInPastAttribute().IsValid(DateTime.UtcNow.AddDays(1)).Should().BeTrue();
+        }
+
+        [Fact]
+        public void Past_datetime_fails()
+        {
+            new NotInPastAttribute().IsValid(DateTime.UtcNow.AddDays(-1)).Should().BeFalse();
+        }
+
+        [Fact]
+        public void Null_passes()
+        {
+            new NotInPastAttribute().IsValid(null).Should().BeTrue();
+        }
+    }
+
+    public class LessThanPropertyAttributeTests
+    {
+        private class RangeModel
+        {
+            public int Min { get; set; }
+
+            public int Max { get; set; }
+        }
+
+        [Fact]
+        public void When_value_less_than_other_then_passes()
+        {
+            var model = new RangeModel { Min = 1, Max = 10 };
+            var context = new ValidationContext(model) { MemberName = nameof(RangeModel.Min) };
+            var attr = new LessThanPropertyAttribute(nameof(RangeModel.Max));
+
+            attr.GetValidationResult(model.Min, context).Should().Be(ValidationResult.Success);
+        }
+
+        [Fact]
+        public void When_value_greater_than_other_then_fails()
+        {
+            var model = new RangeModel { Min = 10, Max = 1 };
+            var context = new ValidationContext(model) { MemberName = nameof(RangeModel.Min) };
+            var attr = new LessThanPropertyAttribute(nameof(RangeModel.Max));
+
+            attr.GetValidationResult(model.Min, context).Should().NotBe(ValidationResult.Success);
+        }
+
+        [Fact]
+        public void When_either_null_then_passes()
+        {
+            var model = new RangeModel();
+            var context = new ValidationContext(model) { MemberName = "Min" };
+            var attr = new LessThanPropertyAttribute("Max");
+
+            attr.GetValidationResult(null, context).Should().Be(ValidationResult.Success);
+        }
+    }
+
+    public class MustBeGreaterThanOrEqualAttributeTests
+    {
+        private class CompareModel
+        {
+            public int Baseline { get; set; }
+
+            public int Value { get; set; }
+        }
+
+        [Fact]
+        public void When_value_greater_than_other_then_passes()
+        {
+            var model = new CompareModel { Baseline = 5, Value = 10 };
+            var context = new ValidationContext(model) { MemberName = nameof(CompareModel.Value) };
+            var attr = new MustBeGreaterThanOrEqualAttribute(nameof(CompareModel.Baseline));
+
+            attr.GetValidationResult(model.Value, context).Should().Be(ValidationResult.Success);
+        }
+
+        [Fact]
+        public void When_value_equal_to_other_then_passes()
+        {
+            var model = new CompareModel { Baseline = 5, Value = 5 };
+            var context = new ValidationContext(model) { MemberName = nameof(CompareModel.Value) };
+            var attr = new MustBeGreaterThanOrEqualAttribute(nameof(CompareModel.Baseline));
+
+            attr.GetValidationResult(model.Value, context).Should().Be(ValidationResult.Success);
+        }
+
+        [Fact]
+        public void When_value_less_than_other_then_fails()
+        {
+            var model = new CompareModel { Baseline = 10, Value = 5 };
+            var context = new ValidationContext(model) { MemberName = nameof(CompareModel.Value) };
+            var attr = new MustBeGreaterThanOrEqualAttribute(nameof(CompareModel.Baseline));
+
+            attr.GetValidationResult(model.Value, context).Should().NotBe(ValidationResult.Success);
+        }
+
+        [Fact]
+        public void When_either_null_then_passes()
+        {
+            var model = new CompareModel();
+            var context = new ValidationContext(model) { MemberName = "Value" };
+            var attr = new MustBeGreaterThanOrEqualAttribute("Baseline");
+
+            attr.GetValidationResult(null, context).Should().Be(ValidationResult.Success);
+        }
+    }
 }
