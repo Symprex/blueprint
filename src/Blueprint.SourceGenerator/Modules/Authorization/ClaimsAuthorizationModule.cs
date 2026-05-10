@@ -164,14 +164,41 @@ public sealed class ClaimsAuthorizationModule : IBlueprintSourceGeneratorModule,
         }
 
         context.RequireAsync();
+
+        // Pre-register static readonly fields for claims with constant resource keys
+        // (wildcard or no-token templates) to avoid per-request Claim allocations.
+        var cachedClaimFields = new Dictionary<int, string>();
+
+        foreach (var demand in claimDemands)
+        {
+            if (!IsConstantResourceKey(demand))
+            {
+                continue;
+            }
+
+            var resourceKeyLiteral = demand.ResourceKeyTemplate ?? "*";
+            var fieldName = $"_claimDemand_{context.Operation.TypeSymbol.Name}_{demand.Index}";
+            cachedClaimFields[demand.Index] = fieldName;
+
+            context.AddDeferredClassMember(classBuilder =>
+            {
+                classBuilder.AddProperty(fieldName, Accessibility.Private)
+                    .SetType("Blueprint.Authorization.Claim")
+                    .MakeStatic()
+                    .WithReadonlyValue(
+                        $"new Blueprint.Authorization.Claim(\"{demand.ClaimType}\", \"{resourceKeyLiteral}\", \"{demand.ValueType}\")");
+            });
+        }
+
         context.AddRenderStep(
             PipelineStage.Authorisation,
-            ctx => RenderClaimsCheck(ctx, claimDemands));
+            ctx => RenderClaimsCheck(ctx, claimDemands, cachedClaimFields));
     }
 
     private static void RenderClaimsCheck(
         PipelineRenderContext context,
-        List<ClaimDemand> claimDemands)
+        List<ClaimDemand> claimDemands,
+        Dictionary<int, string> cachedClaimFields)
     {
         var operationExpr = context.GetOperationExpression();
 
@@ -186,16 +213,28 @@ public sealed class ClaimsAuthorizationModule : IBlueprintSourceGeneratorModule,
             {
                 foreach (var demand in claimDemands)
                 {
-                    var resourceKeyExpr = GenerateResourceKeyExpression(
-                        demand, operationExpr);
+                    string claimExpr;
 
-                    // Generate inline claim demand and check
-                    branch.DeclareVariable(
-                        $"claimDemand_{demand.Index}",
-                        $"new Blueprint.Authorization.Claim(\"{demand.ClaimType}\", {resourceKeyExpr}, \"{demand.ValueType}\")");
+                    if (cachedClaimFields.TryGetValue(demand.Index, out var fieldName))
+                    {
+                        // Use the pre-cached static readonly field
+                        claimExpr = fieldName;
+                    }
+                    else
+                    {
+                        // Dynamic resource key — must allocate per-request
+                        var resourceKeyExpr = GenerateResourceKeyExpression(
+                            demand, operationExpr);
+
+                        branch.DeclareVariable(
+                            $"claimDemand_{demand.Index}",
+                            $"new Blueprint.Authorization.Claim(\"{demand.ClaimType}\", {resourceKeyExpr}, \"{demand.ValueType}\")");
+
+                        claimExpr = $"claimDemand_{demand.Index}";
+                    }
 
                     branch.If(
-                        $"!claimInspector.IsDemandedClaimFulfilled(claimsHolder, claimDemand_{demand.Index})",
+                        $"!claimInspector.IsDemandedClaimFulfilled(claimsHolder, {claimExpr})",
                         deniedBranch =>
                         {
                             deniedBranch.Return(
@@ -228,6 +267,21 @@ public sealed class ClaimsAuthorizationModule : IBlueprintSourceGeneratorModule,
             tokens,
             operationExpr,
             "((Blueprint.Runtime.Http.IHttpOperationContext)context).HttpContext.User");
+    }
+
+    /// <summary>
+    /// Returns <see langword="true" /> when the demand's resource key is fully known at compile
+    /// time (wildcard, null, or a template with no <c>{Property}</c> / <c>{Auth:…}</c> tokens),
+    /// enabling the <c>Claim</c> to be cached as a <c>static readonly</c> field.
+    /// </summary>
+    private static bool IsConstantResourceKey(ClaimDemand demand)
+    {
+        if (demand.ResourceKeyTemplate is null or "*")
+        {
+            return true;
+        }
+
+        return ResourceKeyTemplateParser.ParseTokens(demand.ResourceKeyTemplate).Count == 0;
     }
 
     private static List<ClaimDemand> GetClaimDemands(INamedTypeSymbol operationType)

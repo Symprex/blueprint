@@ -19,6 +19,8 @@ namespace Blueprint.Generated
             new string[] { "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "ClaimsAuthorizationModule", "HandlerExecutionModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
         private static readonly System.Diagnostics.ActivityTagsCollection _auditTags_ListUsersQuery =
             new System.Diagnostics.ActivityTagsCollection { { "blueprint.operation.type", "ListUsersQuery" } };
+        private static readonly Blueprint.Authorization.Claim _claimDemand_ListUsersQuery_0 =
+            new Blueprint.Authorization.Claim("urn:claims/permission", "*", "ManageUsers");
 
         public ListUsersQueryExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory)
             : base(loggerFactory, "ListUsersQuery")
@@ -62,8 +64,7 @@ namespace Blueprint.Generated
             var claimInspector = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Authorization.IClaimInspector>(context.ServiceProvider);
             if (claimInspector != null && context.UserAuthorisationContext is Blueprint.Authorization.IClaimsHolder claimsHolder)
             {
-                var claimDemand_0 = new Blueprint.Authorization.Claim("urn:claims/permission", "*", "ManageUsers");
-                if (!claimInspector.IsDemandedClaimFulfilled(claimsHolder, claimDemand_0))
+                if (!claimInspector.IsDemandedClaimFulfilled(claimsHolder, _claimDemand_ListUsersQuery_0))
                 {
                     return new Blueprint.Runtime.Exec.ForbiddenResult();
                 }
