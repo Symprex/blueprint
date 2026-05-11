@@ -374,7 +374,17 @@ public sealed record OpenApiOutputRenderingContext(
 
             WriteEnumValues(writer, parameter.EnumValues);
             WriteNumericConstraints(writer, parameter.Minimum, parameter.Maximum, parameter.ExclusiveMinimum, parameter.ExclusiveMaximum);
-            WriteStringConstraints(writer, parameter.MinLength, parameter.MaxLength, parameter.Pattern);
+
+            // For array parameters, [MinLength]/[MaxLength]/[NotEmptyList]/[MaxItemsList] map to
+            // minItems/maxItems rather than minLength/maxLength.
+            if (string.Equals(parameter.SchemaType, "array", StringComparison.Ordinal))
+            {
+                WriteArrayItemConstraints(writer, parameter.MinLength, parameter.MaxLength);
+            }
+            else
+            {
+                WriteStringConstraints(writer, parameter.MinLength, parameter.MaxLength, parameter.Pattern);
+            }
 
             writer.WriteEndObject();
 

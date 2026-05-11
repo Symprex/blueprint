@@ -324,6 +324,12 @@ public class ReferenceAppOpenApiTests
         var schema = tagsParam.GetProperty("schema");
         schema.GetProperty("type").GetString().Should().Be("array");
         schema.GetProperty("items").GetProperty("type").GetString().Should().Be("string");
+
+        // [NotEmptyList] → minItems: 1, [MaxItemsList(10)] → maxItems: 10
+        schema.GetProperty("minItems").GetInt32().Should().Be(1,
+            "[NotEmptyList] should render as minItems: 1 for array parameters");
+        schema.GetProperty("maxItems").GetInt32().Should().Be(10,
+            "[MaxItemsList(10)] should render as maxItems: 10 for array parameters");
     }
 
     [Fact]

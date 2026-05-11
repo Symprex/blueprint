@@ -82,8 +82,12 @@ public partial class SearchTemplatesQuery : IQuery<TemplateApiResource[]>
     /// <summary>
     /// Optional tag filters to restrict results to templates matching any of the given tags.
     /// Demonstrates array query parameter binding with OpenAPI <c>style: form, explode: true</c>
-    /// serialization (e.g. <c>?tags=draft&amp;tags=approved</c>).
+    /// serialization (e.g. <c>?tags=draft&amp;tags=approved</c>), plus
+    /// <see cref="NotEmptyListAttribute"/> rendering as <c>minItems: 1</c>
+    /// and <see cref="MaxItemsListAttribute"/> rendering as <c>maxItems: 10</c>.
     /// </summary>
+    [NotEmptyList]
+    [MaxItemsList(10)]
     [Description("Filter templates by tags (repeated query parameter).")]
     public string[]? Tags { get; set; }
 
