@@ -353,6 +353,38 @@ public sealed class PipelineRenderContext
     }
 
     /// <summary>
+    /// Gets an expression that constructs the external handler by calling its constructor directly
+    /// with <c>GetRequiredService</c> for each parameter, avoiding the reflection overhead of
+    /// <c>ActivatorUtilities.CreateInstance</c>. Falls back to <see cref="GetActivatorCreateInstanceExpression"/>
+    /// when the constructor cannot be statically resolved.
+    /// </summary>
+    /// <param name="handlerTypeFullName">The fully qualified handler type name.</param>
+    /// <returns>A <c>new Handler(...)</c> expression or an <c>ActivatorUtilities</c> fallback.</returns>
+    public string GetCompiledHandlerConstructorExpression(string handlerTypeFullName)
+    {
+        var ctorParams = this._handler.ConstructorParameters;
+
+        if (ctorParams is not { } resolved)
+        {
+            return this.GetActivatorCreateInstanceExpression(handlerTypeFullName);
+        }
+
+        if (resolved.Count == 0)
+        {
+            return $"new {handlerTypeFullName}()";
+        }
+
+        var sp = this.GetServiceProviderExpression();
+        var argParts = new List<string>(resolved.Count);
+        foreach (var p in resolved)
+        {
+            argParts.Add($"Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<{p.ParameterTypeName}>({sp})");
+        }
+
+        return $"new {handlerTypeFullName}({string.Join(", ", argParts)})";
+    }
+
+    /// <summary>
     /// Declares a variable in the generated code.
     /// </summary>
     /// <param name="variableName">The variable name.</param>

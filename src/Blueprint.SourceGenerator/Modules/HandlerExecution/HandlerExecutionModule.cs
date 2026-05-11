@@ -123,7 +123,7 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
                 {
                     branch.Assign(
                         handlerVarName,
-                        branch.GetActivatorCreateInstanceExpression(handlerClassFullName));
+                        branch.GetCompiledHandlerConstructorExpression(handlerClassFullName));
                 });
 
             context.WriteBlankLine();

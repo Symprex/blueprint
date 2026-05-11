@@ -654,6 +654,69 @@ public class OperationExecutorPipelineGeneratorIntegrationTests
     }
 
     [Fact]
+    public async Task External_handler_with_constructor_DI_generates_correctly()
+    {
+        var source = """
+                     using Blueprint;
+                     using Blueprint.Model;
+                     using System.Threading.Tasks;
+
+                     namespace TestNamespace;
+
+                     [BlueprintAppScan]
+                     public partial class TestApp : BlueprintApp
+                     {
+                         public TestApp()
+                         {
+                             this.Register(TestCommand.Configure());
+                         }
+                     }
+
+                     public interface IRepository
+                     {
+                         Task SaveAsync(string value);
+                     }
+
+                     public interface ILogger
+                     {
+                         void Log(string message);
+                     }
+
+                     public class TestCommand : ICommand<bool>
+                     {
+                         public static ApiOperationDescriptor Configure()
+                         {
+                             return new ApiOperationDescriptor(typeof(TestCommand), nameof(TestCommand), "Tests");
+                         }
+
+                         public string Value { get; set; }
+                     }
+
+                     public class TestCommandHandler
+                     {
+                         private readonly IRepository _repository;
+                         private readonly ILogger _logger;
+
+                         public TestCommandHandler(IRepository repository, ILogger logger)
+                         {
+                             _repository = repository;
+                             _logger = logger;
+                         }
+
+                         public async Task<bool> HandleAsync(TestCommand command)
+                         {
+                             _logger.Log("Saving: " + command.Value);
+                             await _repository.SaveAsync(command.Value);
+                             return true;
+                         }
+                     }
+                     """;
+
+        await Compile(source)
+            .VerifySuccessAsync(SnapshotsFolder);
+    }
+
+    [Fact]
     public async Task Synchronous_handler_generates_correctly()
     {
         var source = """

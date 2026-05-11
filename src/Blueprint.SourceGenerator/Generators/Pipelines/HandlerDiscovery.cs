@@ -202,8 +202,52 @@ public static class HandlerDiscovery
             HandlerClassName: handlerClass.Name,
             HandlerClassFullName: handlerClass.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
             HandlerClassNamespace: handlerClass.ContainingNamespace.ToDisplayString(),
-            Parameters: parameters);
+            Parameters: parameters,
+            ConstructorParameters: ExtractConstructorParameters(handlerClass));
 
         return (model, null);
+    }
+
+    /// <summary>
+    /// Extracts the constructor parameters of an external handler class so the pipeline can
+    /// generate a direct <c>new Handler(GetRequiredService&lt;X&gt;(), ...)</c> call instead of
+    /// <c>ActivatorUtilities.CreateInstance</c>. Returns <c>null</c> when the constructor
+    /// cannot be unambiguously resolved (abstract class, multiple public constructors, etc.).
+    /// </summary>
+    private static EquatableList<ConstructorParameterInfo>? ExtractConstructorParameters(INamedTypeSymbol handlerClass)
+    {
+        if (handlerClass.IsAbstract)
+        {
+            return null;
+        }
+
+        var publicCtors = handlerClass.InstanceConstructors
+            .Where(static c => c.DeclaredAccessibility == Accessibility.Public && !c.IsImplicitlyDeclared)
+            .ToArray();
+
+        // Parameterless constructor: no DI needed, just `new Handler()`
+        if (publicCtors.Length == 0)
+        {
+            // Only implicit default constructor exists
+            return new EquatableList<ConstructorParameterInfo>([]);
+        }
+
+        if (publicCtors.Length != 1)
+        {
+            // Multiple public constructors — ActivatorUtilities uses its own heuristics;
+            // fall back to the reflection path to avoid mismatching behaviour.
+            return null;
+        }
+
+        var ctor = publicCtors[0];
+        var parameters = new List<ConstructorParameterInfo>(ctor.Parameters.Length);
+
+        foreach (var param in ctor.Parameters)
+        {
+            parameters.Add(new ConstructorParameterInfo(
+                param.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)));
+        }
+
+        return new EquatableList<ConstructorParameterInfo>(parameters.ToArray());
     }
 }

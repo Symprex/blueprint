@@ -18,6 +18,11 @@ namespace Blueprint.SourceGenerator.Generators.Pipelines.Model;
 /// <param name="HandlerClassFullName">For external handlers, the fully qualified name of the handler class. Null for inline handlers.</param>
 /// <param name="HandlerClassNamespace">For external handlers, the namespace of the handler class. Null for inline handlers.</param>
 /// <param name="Parameters">The list of parameters for the handler method.</param>
+/// <param name="ConstructorParameters">
+/// For external handlers, the constructor parameters of the handler class. Used to generate
+/// a direct <c>new Handler(...)</c> call instead of <c>ActivatorUtilities.CreateInstance</c>.
+/// Null for inline handlers or when the constructor cannot be statically resolved.
+/// </param>
 public sealed record OperationHandlerModel(
     string OperationTypeName,
     string OperationTypeFullName,
@@ -30,7 +35,8 @@ public sealed record OperationHandlerModel(
     string? HandlerClassName,
     string? HandlerClassFullName,
     string? HandlerClassNamespace,
-    EquatableList<HandlerParameter> Parameters) : IEquatable<OperationHandlerModel>
+    EquatableList<HandlerParameter> Parameters,
+    EquatableList<ConstructorParameterInfo>? ConstructorParameters = null) : IEquatable<OperationHandlerModel>
 {
     /// <summary>
     /// Gets the name to use for the generated executor pipeline class.
@@ -65,7 +71,8 @@ public sealed record OperationHandlerModel(
                this.HandlerClassName == other.HandlerClassName &&
                this.HandlerClassFullName == other.HandlerClassFullName &&
                this.HandlerClassNamespace == other.HandlerClassNamespace &&
-               this.Parameters == other.Parameters;
+               this.Parameters == other.Parameters &&
+               this.ConstructorParameters == other.ConstructorParameters;
     }
 
     /// <inheritdoc />
@@ -84,6 +91,7 @@ public sealed record OperationHandlerModel(
         hash.Add(this.HandlerClassFullName);
         hash.Add(this.HandlerClassNamespace);
         hash.Add(this.Parameters);
+        hash.Add(this.ConstructorParameters);
         return hash.ToHashCode();
     }
 }

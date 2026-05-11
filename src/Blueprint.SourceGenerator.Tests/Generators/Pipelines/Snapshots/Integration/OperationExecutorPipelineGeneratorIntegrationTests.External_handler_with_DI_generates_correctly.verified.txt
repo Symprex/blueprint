@@ -53,7 +53,7 @@ namespace Blueprint.Generated
             var testCommandHandler = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<global::TestNamespace.TestCommandHandler>(context.ServiceProvider);
             if (testCommandHandler == null)
             {
-                testCommandHandler = Microsoft.Extensions.DependencyInjection.ActivatorUtilities.CreateInstance<global::TestNamespace.TestCommandHandler>(context.ServiceProvider);
+                testCommandHandler = new global::TestNamespace.TestCommandHandler();
             }
 
             var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<bool>(await testCommandHandler.HandleAsync(operation, repository));
