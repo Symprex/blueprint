@@ -187,12 +187,16 @@ A compile-time proof project (`.scratch/s365-proof/`) validated S365 patterns ag
 - **Query operations** (GET) with `IQuery<T>` returning `ApiResource`
 - **Command operations** returning `ResourceEventResult<T>` (POST, PUT)
 - **Command operations** returning `KeyOnlyResourceEventResult` (DELETE)
+- **Command operations** returning `AcceptedResult` (HTTP 202 long-running)
+- **Command operations** returning `NoResultOperationResult` (HTTP 204 fire-and-forget)
 - **`[ResourceEventFamily]`** with source-generated event records (Created, Updated, Deleted)
 - **`[Resource]` authorization** with noun/verb constants
 - **`[FromHeader]` binding** (e.g. idempotency keys)
 - **`ApiId` value-type route parameters** with `IParsable<T>`
-- **Validation attributes** (`[Required]`, `[MaxLength]`)
+- **Validation attributes** (`[Required]`, `[MaxLength]`, `[StringLength]`, `[MinLength]`)
+- **`IValidatableObject`** cross-property validation (e.g. conditional required fields)
 - **`ApiOperations` external handler classes** with `InvokeAsync` methods
+- **Paged resource returns** with `TenantPagedApiResource<T>` pattern
 
 **Result: builds successfully with 0 errors, 0 warnings** after applying these requirements:
 
