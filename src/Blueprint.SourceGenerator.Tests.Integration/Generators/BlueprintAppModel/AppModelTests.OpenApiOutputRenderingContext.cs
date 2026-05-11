@@ -609,7 +609,8 @@ public class AppModelOpenApiOutputRenderingContextTests
 
     private static OpenApiOutputRenderingContext CreateSyntheticOutputContextWithInfoOptions(
         OpenApiPathItemModel[] pathItems,
-        OpenApiInfoOptions infoOptions)
+        OpenApiInfoOptions infoOptions,
+        OpenApiSchemaComponentModel[]? schemaComponents = null)
     {
         var documentBuilderContext = new OpenApiDocumentBuilderContext(
             new BlueprintApp(),
@@ -617,7 +618,7 @@ public class AppModelOpenApiOutputRenderingContextTests
             ImmutableArray<string>.Empty,
             ImmutableArray<OpenApiDocumentOperationContext>.Empty);
         var schemaProjectionContext = new OpenApiSchemaProjectionContext(documentBuilderContext, ImmutableArray<OpenApiSchemaModel>.Empty);
-        var schemaComponentContext = new OpenApiSchemaComponentRenderingContext(schemaProjectionContext, []);
+        var schemaComponentContext = new OpenApiSchemaComponentRenderingContext(schemaProjectionContext, [.. schemaComponents ?? []]);
         var responseSchemaProjectionContext = new OpenApiResponseSchemaReferenceProjectionContext(
             schemaProjectionContext,
             ImmutableArray<OpenApiResponseSchemaReferenceOperationContext>.Empty);
@@ -775,5 +776,70 @@ public class AppModelOpenApiOutputRenderingContextTests
         flow.GetProperty("tokenUrl").GetString().Should().Be("https://auth.example.com/token");
         flow.GetProperty("scopes").GetProperty("read").GetString().Should().Be("Read access");
         flow.GetProperty("scopes").GetProperty("write").GetString().Should().Be("Write access");
+    }
+
+    [Fact]
+    public void When_custom_schema_name_formatter_configured_then_component_keys_use_formatter()
+    {
+        var infoOptions = new OpenApiInfoOptions
+        {
+            Title = "TestApi",
+            SchemaNameFormatter = clrName =>
+            {
+                // Strip namespace, keep only the short type name
+                var lastDot = clrName.LastIndexOf('.');
+                return lastDot >= 0 ? clrName[(lastDot + 1)..] : clrName;
+            },
+        };
+
+        var schemaComponents = new[]
+        {
+            new OpenApiSchemaComponentModel(
+                "Symprex.Signature365.Portal.Contract.Api.TemplateApiResource",
+                "object",
+                [],
+                [new OpenApiSchemaComponentPropertyModel("Name", "string", false, false)]),
+        };
+
+        var context = CreateSyntheticOutputContextWithInfoOptions([], infoOptions, schemaComponents);
+        var doc = JsonDocument.Parse(context.Json);
+
+        var schemas = doc.RootElement
+            .GetProperty("components")
+            .GetProperty("schemas");
+
+        schemas.TryGetProperty("TemplateApiResource", out _).Should().BeTrue(
+            "custom formatter should strip namespace from schema key");
+        schemas.TryGetProperty("Symprex_Signature365_Portal_Contract_Api_TemplateApiResource", out _).Should().BeFalse(
+            "default underscore-separated key should not appear when custom formatter is configured");
+    }
+
+    [Fact]
+    public void When_schema_name_formatter_is_null_then_default_underscore_formatting_is_used()
+    {
+        var infoOptions = new OpenApiInfoOptions
+        {
+            Title = "TestApi",
+            SchemaNameFormatter = null,
+        };
+
+        var schemaComponents = new[]
+        {
+            new OpenApiSchemaComponentModel(
+                "Sample.ResponseDto",
+                "object",
+                [],
+                [new OpenApiSchemaComponentPropertyModel("Name", "string", false, false)]),
+        };
+
+        var context = CreateSyntheticOutputContextWithInfoOptions([], infoOptions, schemaComponents);
+        var doc = JsonDocument.Parse(context.Json);
+
+        doc.RootElement
+            .GetProperty("components")
+            .GetProperty("schemas")
+            .TryGetProperty("Sample_ResponseDto", out _)
+            .Should()
+            .BeTrue("null formatter should fall back to default dot-to-underscore replacement");
     }
 }

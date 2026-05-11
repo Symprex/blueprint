@@ -26,9 +26,11 @@ public sealed record OpenApiOutputRenderingContext(
     /// namespace separators and fail to resolve <c>$ref</c> pointers that contain them. Using underscores preserves
     /// the full type identity while remaining universally safe.
     /// </summary>
-    private static string SanitiseSchemaKey(string clrTypeName)
+    private static string SanitiseSchemaKey(string clrTypeName, Func<string, string>? customFormatter)
     {
-        return clrTypeName.Replace('.', '_');
+        return customFormatter is not null
+            ? customFormatter(clrTypeName)
+            : clrTypeName.Replace('.', '_');
     }
 
     /// <summary>
@@ -121,8 +123,8 @@ public sealed record OpenApiOutputRenderingContext(
         writer.WriteString("openapi", OpenApiVersion);
         WriteInfo(writer, infoOptions);
         WriteServers(writer, infoOptions.Servers);
-        WritePaths(writer, document.Paths, allRequireAuth, effectiveSchemes);
-        WriteComponents(writer, document.SchemaComponents, schemaProcessorOptions, effectiveSchemes);
+        WritePaths(writer, document.Paths, allRequireAuth, effectiveSchemes, infoOptions.SchemaNameFormatter);
+        WriteComponents(writer, document.SchemaComponents, schemaProcessorOptions, effectiveSchemes, infoOptions.SchemaNameFormatter);
         WriteDocumentTags(writer, document.Paths);
 
         if (allRequireAuth && effectiveSchemes.Count > 0)
@@ -216,33 +218,33 @@ public sealed record OpenApiOutputRenderingContext(
         writer.WriteEndArray();
     }
 
-    private static void WritePaths(Utf8JsonWriter writer, ImmutableArray<OpenApiPathItemModel> paths, bool useDocumentLevelSecurity, List<OpenApiSecurityScheme> securitySchemes)
+    private static void WritePaths(Utf8JsonWriter writer, ImmutableArray<OpenApiPathItemModel> paths, bool useDocumentLevelSecurity, List<OpenApiSecurityScheme> securitySchemes, Func<string, string>? schemaNameFormatter)
     {
         writer.WritePropertyName("paths");
         writer.WriteStartObject();
 
         foreach (var pathItem in paths)
         {
-            WritePathItem(writer, pathItem, useDocumentLevelSecurity, securitySchemes);
+            WritePathItem(writer, pathItem, useDocumentLevelSecurity, securitySchemes, schemaNameFormatter);
         }
 
         writer.WriteEndObject();
     }
 
-    private static void WritePathItem(Utf8JsonWriter writer, OpenApiPathItemModel pathItem, bool useDocumentLevelSecurity, List<OpenApiSecurityScheme> securitySchemes)
+    private static void WritePathItem(Utf8JsonWriter writer, OpenApiPathItemModel pathItem, bool useDocumentLevelSecurity, List<OpenApiSecurityScheme> securitySchemes, Func<string, string>? schemaNameFormatter)
     {
         writer.WritePropertyName(pathItem.UrlFormat);
         writer.WriteStartObject();
 
         foreach (var methodSlot in pathItem.Methods)
         {
-            WriteMethodSlot(writer, methodSlot, useDocumentLevelSecurity, securitySchemes);
+            WriteMethodSlot(writer, methodSlot, useDocumentLevelSecurity, securitySchemes, schemaNameFormatter);
         }
 
         writer.WriteEndObject();
     }
 
-    private static void WriteMethodSlot(Utf8JsonWriter writer, OpenApiPathItemMethodModel methodSlot, bool useDocumentLevelSecurity, List<OpenApiSecurityScheme> securitySchemes)
+    private static void WriteMethodSlot(Utf8JsonWriter writer, OpenApiPathItemMethodModel methodSlot, bool useDocumentLevelSecurity, List<OpenApiSecurityScheme> securitySchemes, Func<string, string>? schemaNameFormatter)
     {
         writer.WritePropertyName(methodSlot.HttpMethod.ToLowerInvariant());
         writer.WriteStartObject();
@@ -265,8 +267,8 @@ public sealed record OpenApiOutputRenderingContext(
 
             WriteTags(writer, primaryOperation.Tags);
             WriteParameters(writer, primaryOperation.Parameters);
-            WriteRequestBody(writer, primaryOperation.RequestBody);
-            WriteResponses(writer, primaryOperation.Responses);
+            WriteRequestBody(writer, primaryOperation.RequestBody, schemaNameFormatter);
+            WriteResponses(writer, primaryOperation.Responses, schemaNameFormatter);
 
             if (primaryOperation.Deprecated)
             {
@@ -289,7 +291,7 @@ public sealed record OpenApiOutputRenderingContext(
         }
         else
         {
-            WriteResponses(writer, ImmutableArray<OpenApiResponseObjectModel>.Empty);
+            WriteResponses(writer, ImmutableArray<OpenApiResponseObjectModel>.Empty, schemaNameFormatter);
         }
 
         writer.WriteEndObject();
@@ -415,7 +417,7 @@ public sealed record OpenApiOutputRenderingContext(
         writer.WriteEndArray();
     }
 
-    private static void WriteRequestBody(Utf8JsonWriter writer, OpenApiRequestBodyModel? requestBody)
+    private static void WriteRequestBody(Utf8JsonWriter writer, OpenApiRequestBodyModel? requestBody, Func<string, string>? schemaNameFormatter)
     {
         if (requestBody is null)
         {
@@ -469,7 +471,7 @@ public sealed record OpenApiOutputRenderingContext(
                 {
                     writer.WritePropertyName("items");
                     writer.WriteStartObject();
-                    writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(property.ItemsSchemaRef)}");
+                    writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(property.ItemsSchemaRef, schemaNameFormatter)}");
                     writer.WriteEndObject();
                 }
                 else if (property.ItemsType is not null)
@@ -490,7 +492,7 @@ public sealed record OpenApiOutputRenderingContext(
                 {
                     writer.WritePropertyName("additionalProperties");
                     writer.WriteStartObject();
-                    writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(property.AdditionalPropertiesSchemaRef)}");
+                    writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(property.AdditionalPropertiesSchemaRef, schemaNameFormatter)}");
                     writer.WriteEndObject();
                 }
                 else if (property.AdditionalPropertiesType is not null)
@@ -715,20 +717,20 @@ public sealed record OpenApiOutputRenderingContext(
         }
     }
 
-    private static void WriteResponses(Utf8JsonWriter writer, ImmutableArray<OpenApiResponseObjectModel> responses)
+    private static void WriteResponses(Utf8JsonWriter writer, ImmutableArray<OpenApiResponseObjectModel> responses, Func<string, string>? schemaNameFormatter)
     {
         writer.WritePropertyName("responses");
         writer.WriteStartObject();
 
         foreach (var response in responses)
         {
-            WriteResponse(writer, response);
+            WriteResponse(writer, response, schemaNameFormatter);
         }
 
         writer.WriteEndObject();
     }
 
-    private static void WriteResponse(Utf8JsonWriter writer, OpenApiResponseObjectModel response)
+    private static void WriteResponse(Utf8JsonWriter writer, OpenApiResponseObjectModel response, Func<string, string>? schemaNameFormatter)
     {
         writer.WritePropertyName(MapStatusCodeString(response.StatusCode));
         writer.WriteStartObject();
@@ -742,7 +744,7 @@ public sealed record OpenApiOutputRenderingContext(
 
         if (!response.Content.IsEmpty)
         {
-            WriteResponseContent(writer, response.Content);
+            WriteResponseContent(writer, response.Content, schemaNameFormatter);
         }
 
         writer.WriteEndObject();
@@ -771,7 +773,7 @@ public sealed record OpenApiOutputRenderingContext(
         writer.WriteEndObject();
     }
 
-    private static void WriteResponseContent(Utf8JsonWriter writer, ImmutableArray<OpenApiResponseContentModel> content)
+    private static void WriteResponseContent(Utf8JsonWriter writer, ImmutableArray<OpenApiResponseContentModel> content, Func<string, string>? schemaNameFormatter)
     {
         writer.WritePropertyName("content");
         writer.WriteStartObject();
@@ -782,7 +784,7 @@ public sealed record OpenApiOutputRenderingContext(
             writer.WriteStartObject();
             writer.WritePropertyName("schema");
 
-            WriteResponseSchema(writer, mediaEntry);
+            WriteResponseSchema(writer, mediaEntry, schemaNameFormatter);
 
             writer.WriteEndObject();
         }
@@ -792,11 +794,12 @@ public sealed record OpenApiOutputRenderingContext(
 
     private static void WriteResponseSchema(
         Utf8JsonWriter writer,
-        OpenApiResponseContentModel content)
+        OpenApiResponseContentModel content,
+        Func<string, string>? schemaNameFormatter)
     {
         if (content.Discriminator is not null)
         {
-            WriteResourceEventDiscriminatedResponseSchema(writer, content.Discriminator);
+            WriteResourceEventDiscriminatedResponseSchema(writer, content.Discriminator, schemaNameFormatter);
             return;
         }
 
@@ -811,12 +814,12 @@ public sealed record OpenApiOutputRenderingContext(
                 writer.WriteString("type", "array");
                 writer.WritePropertyName("items");
                 writer.WriteStartObject();
-                writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(component.Component.BodyTypeName)}");
+                writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(component.Component.BodyTypeName, schemaNameFormatter)}");
                 writer.WriteEndObject();
             }
             else
             {
-                writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(component.BodyTypeName)}");
+                writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(component.BodyTypeName, schemaNameFormatter)}");
             }
 
             writer.WriteEndObject();
@@ -836,12 +839,12 @@ public sealed record OpenApiOutputRenderingContext(
                     writer.WriteString("type", "array");
                     writer.WritePropertyName("items");
                     writer.WriteStartObject();
-                    writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(component.Component.BodyTypeName)}");
+                    writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(component.Component.BodyTypeName, schemaNameFormatter)}");
                     writer.WriteEndObject();
                 }
                 else
                 {
-                    writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(component.BodyTypeName)}");
+                    writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(component.BodyTypeName, schemaNameFormatter)}");
                 }
 
                 writer.WriteEndObject();
@@ -871,7 +874,8 @@ public sealed record OpenApiOutputRenderingContext(
 
     private static void WriteResourceEventDiscriminatedResponseSchema(
         Utf8JsonWriter writer,
-        OpenApiResponseDiscriminatorModel discriminator)
+        OpenApiResponseDiscriminatorModel discriminator,
+        Func<string, string>? schemaNameFormatter)
     {
         writer.WriteStartObject();
         writer.WritePropertyName("oneOf");
@@ -906,7 +910,7 @@ public sealed record OpenApiOutputRenderingContext(
 
             writer.WritePropertyName("content");
             writer.WriteStartObject();
-            writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(discriminatorCase.SchemaComponent.BodyTypeName)}");
+            writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(discriminatorCase.SchemaComponent.BodyTypeName, schemaNameFormatter)}");
             writer.WriteEndObject();
 
             writer.WriteEndObject();
@@ -925,7 +929,8 @@ public sealed record OpenApiOutputRenderingContext(
         Utf8JsonWriter writer,
         ImmutableArray<OpenApiSchemaComponentModel> schemaComponents,
         OpenApiSchemaProcessorOptions schemaProcessorOptions,
-        List<OpenApiSecurityScheme> securitySchemes)
+        List<OpenApiSecurityScheme> securitySchemes,
+        Func<string, string>? schemaNameFormatter)
     {
         if (schemaComponents.IsEmpty && securitySchemes.Count == 0)
         {
@@ -947,7 +952,7 @@ public sealed record OpenApiOutputRenderingContext(
 
             foreach (var component in objectSchemaComponents)
             {
-                WriteSchemaComponent(writer, ProcessSchemaComponent(component, schemaProcessorOptions));
+                WriteSchemaComponent(writer, ProcessSchemaComponent(component, schemaProcessorOptions), schemaNameFormatter);
             }
 
             writer.WriteEndObject();
@@ -1110,9 +1115,9 @@ public sealed record OpenApiOutputRenderingContext(
         writer.WriteEndArray();
     }
 
-    private static void WriteSchemaComponent(Utf8JsonWriter writer, OpenApiSchemaComponentModel component)
+    private static void WriteSchemaComponent(Utf8JsonWriter writer, OpenApiSchemaComponentModel component, Func<string, string>? schemaNameFormatter)
     {
-        writer.WritePropertyName(SanitiseSchemaKey(component.BodyTypeName));
+        writer.WritePropertyName(SanitiseSchemaKey(component.BodyTypeName, schemaNameFormatter));
         writer.WriteStartObject();
 
         // Prefer an explicit [DisplayName] title; fall back to the short CLR type name.
@@ -1156,7 +1161,7 @@ public sealed record OpenApiOutputRenderingContext(
 
             foreach (var property in component.Properties)
             {
-                WriteSchemaProperty(writer, property);
+                WriteSchemaProperty(writer, property, schemaNameFormatter);
             }
 
             writer.WriteEndObject();
@@ -1181,7 +1186,7 @@ public sealed record OpenApiOutputRenderingContext(
         return processedComponent;
     }
 
-    private static void WriteSchemaProperty(Utf8JsonWriter writer, OpenApiSchemaComponentPropertyModel property)
+    private static void WriteSchemaProperty(Utf8JsonWriter writer, OpenApiSchemaComponentPropertyModel property, Func<string, string>? schemaNameFormatter)
     {
         writer.WritePropertyName(property.Name);
         writer.WriteStartObject();
@@ -1212,7 +1217,7 @@ public sealed record OpenApiOutputRenderingContext(
         {
             writer.WritePropertyName("items");
             writer.WriteStartObject();
-            writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(property.ItemsSchemaRef)}");
+            writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(property.ItemsSchemaRef, schemaNameFormatter)}");
             writer.WriteEndObject();
         }
         else if (property.ItemsType is not null)
@@ -1233,7 +1238,7 @@ public sealed record OpenApiOutputRenderingContext(
         {
             writer.WritePropertyName("additionalProperties");
             writer.WriteStartObject();
-            writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(property.AdditionalPropertiesSchemaRef)}");
+            writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(property.AdditionalPropertiesSchemaRef, schemaNameFormatter)}");
             writer.WriteEndObject();
         }
         else if (property.AdditionalPropertiesType is not null)

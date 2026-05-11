@@ -5,4 +5,7 @@ riderModule.iml
 /_ReSharper.Caches/
 /BenchmarkDotNet.Artifacts/
 /.scratch/
+.scratch/
 *.received.*
+*.binlog
+/reports/

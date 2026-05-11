@@ -56,6 +56,28 @@ public sealed class OpenApiInfoOptions
     /// </para>
     /// </remarks>
     public List<OpenApiSecurityScheme> SecuritySchemes { get; } = [];
+
+    /// <summary>
+    /// Gets or sets an optional delegate that transforms CLR type names into OpenAPI schema
+    /// component keys. When <see langword="null"/> the default strategy is used, which replaces
+    /// dots with underscores (e.g. <c>MyApp.Api.TemplateResource</c> → <c>MyApp_Api_TemplateResource</c>).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Use this to produce shorter or project-specific schema names. For example, to strip
+    /// a common namespace prefix:
+    /// </para>
+    /// <code>
+    /// options.SchemaNameFormatter = clrName =>
+    ///     clrName.Replace("Symprex.Signature365.", "").Replace('.', '_');
+    /// </code>
+    /// <para>
+    /// The formatter receives the full CLR type name (e.g. <c>MyNamespace.MyType</c>) and must
+    /// return a string safe for use as a JSON property key. Names must be unique across all
+    /// schema components in the document.
+    /// </para>
+    /// </remarks>
+    public Func<string, string>? SchemaNameFormatter { get; set; }
 }
 
 /// <summary>
