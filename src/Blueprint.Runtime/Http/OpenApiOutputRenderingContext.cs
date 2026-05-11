@@ -1338,7 +1338,11 @@ public sealed record OpenApiOutputRenderingContext(
             404 => "404",
             409 => "409",
             422 => "422",
+            429 => "429",
             500 => "500",
+            502 => "502",
+            503 => "503",
+            504 => "504",
             _ => statusCode.ToString(),
         };
     }
@@ -1366,7 +1370,9 @@ public sealed record OpenApiOutputRenderingContext(
             422 => "Unprocessable Entity",
             429 => "Too Many Requests",
             500 => "Internal Server Error",
+            502 => "Bad Gateway",
             503 => "Service Unavailable",
+            504 => "Gateway Timeout",
             _ => statusCode.ToString(),
         };
     }

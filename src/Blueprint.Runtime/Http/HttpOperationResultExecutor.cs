@@ -18,6 +18,9 @@ namespace Blueprint.Runtime.Http;
 /// </summary>
 public class HttpOperationResultExecutor
 {
+    private const string JsonContentType = "application/json; charset=utf-8";
+    private const string ProblemJsonContentType = "application/problem+json; charset=utf-8";
+
     // Pre-built ProblemDetails for fixed error responses, avoiding per-request allocation.
     // These are safe to share because JsonSerializer reads but does not mutate them.
     private static readonly MvcProblemDetails _unauthorizedProblem = new()
@@ -63,17 +66,17 @@ public class HttpOperationResultExecutor
         {
             case UnauthenticatedResult:
                 httpContext.Response.StatusCode = StatusCodes.Status401Unauthorized;
-                httpContext.Response.ContentType = "application/problem+json; charset=utf-8";
+                httpContext.Response.ContentType = ProblemJsonContentType;
                 await WriteJsonAsync(httpContext, operationContext, _unauthorizedProblem);
                 return true;
             case ForbiddenResult:
                 httpContext.Response.StatusCode = StatusCodes.Status403Forbidden;
-                httpContext.Response.ContentType = "application/problem+json; charset=utf-8";
+                httpContext.Response.ContentType = ProblemJsonContentType;
                 await WriteJsonAsync(httpContext, operationContext, _forbiddenProblem);
                 return true;
             case BindingFailureResult bindingFailureResult:
                 httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
-                httpContext.Response.ContentType = "application/problem+json; charset=utf-8";
+                httpContext.Response.ContentType = ProblemJsonContentType;
                 await WriteJsonAsync(httpContext, operationContext, new MvcProblemDetails
                 {
                     Status = StatusCodes.Status400BadRequest,
@@ -83,7 +86,7 @@ public class HttpOperationResultExecutor
                 return true;
             case UnsupportedMediaTypeResult:
                 httpContext.Response.StatusCode = StatusCodes.Status415UnsupportedMediaType;
-                httpContext.Response.ContentType = "application/problem+json; charset=utf-8";
+                httpContext.Response.ContentType = ProblemJsonContentType;
                 await WriteJsonAsync(httpContext, operationContext, _unsupportedMediaTypeProblem);
                 return true;
             case HttpPipelineShortCircuitResult:
@@ -91,23 +94,23 @@ public class HttpOperationResultExecutor
                 return true;
             case CreatedResult createdResult:
                 httpContext.Response.StatusCode = StatusCodes.Status201Created;
-                httpContext.Response.ContentType = "application/json; charset=utf-8";
+                httpContext.Response.ContentType = JsonContentType;
                 TrySetLocationHeader(httpContext, createdResult.Content);
                 await WriteJsonAsync(httpContext, operationContext, createdResult.Content);
                 return true;
             case AcceptedResult acceptedResult:
                 httpContext.Response.StatusCode = StatusCodes.Status202Accepted;
-                httpContext.Response.ContentType = "application/json; charset=utf-8";
+                httpContext.Response.ContentType = JsonContentType;
                 await WriteJsonAsync(httpContext, operationContext, acceptedResult.Content);
                 return true;
             case ConflictResult conflictResult:
                 httpContext.Response.StatusCode = StatusCodes.Status409Conflict;
-                httpContext.Response.ContentType = "application/json; charset=utf-8";
+                httpContext.Response.ContentType = JsonContentType;
                 await WriteJsonAsync(httpContext, operationContext, conflictResult.Content);
                 return true;
             case NotFoundResult notFoundResult:
                 httpContext.Response.StatusCode = StatusCodes.Status404NotFound;
-                httpContext.Response.ContentType = "application/json; charset=utf-8";
+                httpContext.Response.ContentType = JsonContentType;
                 await WriteJsonAsync(httpContext, operationContext, notFoundResult.Content);
                 return true;
             case OkResult okResult:
@@ -131,7 +134,7 @@ public class HttpOperationResultExecutor
                 }
 
                 httpContext.Response.StatusCode = StatusCodes.Status200OK;
-                httpContext.Response.ContentType = "application/json; charset=utf-8";
+                httpContext.Response.ContentType = JsonContentType;
                 if (okResult.HasHeaders)
                 {
                     foreach (var header in okResult.Headers)
@@ -156,7 +159,7 @@ public class HttpOperationResultExecutor
                 return true;
             case ResourceEventResult resourceEventResult:
                 httpContext.Response.StatusCode = MapChangeTypeToStatusCode(resourceEventResult.ChangeType);
-                httpContext.Response.ContentType = "application/json; charset=utf-8";
+                httpContext.Response.ContentType = JsonContentType;
                 if (resourceEventResult.ChangeType == ChangeType.Created)
                 {
                     TrySetLocationHeader(httpContext, resourceEventResult.Content);
@@ -193,7 +196,7 @@ public class HttpOperationResultExecutor
                 return true;
             case ResourceEvent resourceEvent:
                 httpContext.Response.StatusCode = MapResourceEventChangeTypeToStatusCode(resourceEvent.ChangeType);
-                httpContext.Response.ContentType = "application/json; charset=utf-8";
+                httpContext.Response.ContentType = JsonContentType;
                 if (resourceEvent.ChangeType == ResourceEventChangeType.Created && resourceEvent.Data is not null)
                 {
                     TrySetLocationHeader(httpContext, resourceEvent.Data);
@@ -244,6 +247,13 @@ public class HttpOperationResultExecutor
 
     private static readonly ConcurrentDictionary<JsonSerializerOptions, JsonSerializerOptions> _fallbackOptionsCache = new();
 
+    // Shared singleton avoids allocating a new resolver each time the fallback cache is populated.
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2026",
+        Justification = "The fallback serialization path already suppresses IL2026 for this code path. Sharing a single DefaultJsonTypeInfoResolver instance avoids unnecessary allocations.")]
+    private static readonly DefaultJsonTypeInfoResolver _sharedDefaultTypeInfoResolver = new();
+
     [UnconditionalSuppressMessage(
         "Trimming",
         "IL2026",
@@ -254,8 +264,8 @@ public class HttpOperationResultExecutor
             new JsonSerializerOptions(opts)
             {
                 TypeInfoResolver = opts.TypeInfoResolver is null
-                    ? new DefaultJsonTypeInfoResolver()
-                    : JsonTypeInfoResolver.Combine(opts.TypeInfoResolver, new DefaultJsonTypeInfoResolver()),
+                    ? _sharedDefaultTypeInfoResolver
+                    : JsonTypeInfoResolver.Combine(opts.TypeInfoResolver, _sharedDefaultTypeInfoResolver),
             });
     }
 
@@ -345,7 +355,7 @@ public class HttpOperationResultExecutor
         };
 
         httpContext.Response.StatusCode = StatusCodes.Status422UnprocessableEntity;
-        httpContext.Response.ContentType = "application/problem+json; charset=utf-8";
+        httpContext.Response.ContentType = ProblemJsonContentType;
         await WriteJsonAsync(httpContext, operationContext, problemDetails);
     }
 
@@ -437,7 +447,7 @@ public class HttpOperationResultExecutor
         }
 
         httpContext.Response.StatusCode = statusCode;
-        httpContext.Response.ContentType = "application/problem+json; charset=utf-8";
+        httpContext.Response.ContentType = ProblemJsonContentType;
         await WriteJsonAsync(httpContext, operationContext, problemDetails);
     }
 

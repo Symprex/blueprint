@@ -181,6 +181,12 @@ public static class EndpointRouteBuilderExtensions
         private readonly TExec _executor;
         private readonly HttpOperationResultExecutor? _resultExecutor;
 
+        // Cached base URI to avoid per-request string interpolation when scheme/host/path are stable
+        private string? _cachedBaseUri;
+        private string? _cachedScheme;
+        private string? _cachedHost;
+        private PathString _cachedPathBase;
+
         public BlueprintApiRouter(
             IServiceProvider rootServiceProvider,
             BlueprintApp app,
@@ -227,10 +233,23 @@ public static class EndpointRouteBuilderExtensions
             };
 
             // Compute a stable base URI for link generation and redirect targets.
-            // PathString concatenation handles slash normalization correctly.
+            // Cache the result to avoid per-request string interpolation when values are stable.
             var host = this._httpOptions.PublicHost ?? httpRequest.Host.Value;
             var basePath = httpRequest.PathBase.Add(this._normalizedBasePath);
-            apiContext.BaseUri = $"{httpRequest.Scheme}://{host}{basePath}";
+            var scheme = httpRequest.Scheme;
+
+            if (this._cachedBaseUri is null
+                || !string.Equals(scheme, this._cachedScheme, StringComparison.Ordinal)
+                || !string.Equals(host, this._cachedHost, StringComparison.Ordinal)
+                || basePath != this._cachedPathBase)
+            {
+                this._cachedScheme = scheme;
+                this._cachedHost = host;
+                this._cachedPathBase = basePath;
+                this._cachedBaseUri = $"{scheme}://{host}{basePath}";
+            }
+
+            apiContext.BaseUri = this._cachedBaseUri;
 
             var result = await this._executor.GetPipeline(operation.OperationType).ExecuteAsync(apiContext);
 
