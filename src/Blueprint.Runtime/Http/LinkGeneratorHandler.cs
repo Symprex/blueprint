@@ -37,9 +37,7 @@ public static class LinkGeneratorHandler
             return;
         }
 
-        var logger = context.ServiceProvider.GetRequiredService<ILogger<EntityOperationResourceLinkGenerator>>();
-
-        var enriched = await AddResourceLinksAsync(logger, apiLinkGenerator, registeredGenerators, context, content).ConfigureAwait(false);
+        var enriched = await AddResourceLinksAsync(apiLinkGenerator, registeredGenerators, context, content).ConfigureAwait(false);
 
         // OkResult allows content replacement (e.g. when materialising IQueryable)
         if (result is OkResult ok && !ReferenceEquals(ok.Content, enriched))
@@ -49,7 +47,6 @@ public static class LinkGeneratorHandler
     }
 
     private static async ValueTask<object> AddResourceLinksAsync(
-        ILogger logger,
         IApiLinkGenerator apiLinkGenerator,
         IEnumerable<IResourceLinkGenerator> generators,
         ApiOperationContext context,
@@ -57,7 +54,7 @@ public static class LinkGeneratorHandler
     {
         if (resource is ILinkableResource linkableResource)
         {
-            await AddLinksAsync(logger, apiLinkGenerator, generators, context, linkableResource).ConfigureAwait(false);
+            await AddLinksAsync(apiLinkGenerator, generators, context, linkableResource).ConfigureAwait(false);
         }
 
         var enumerableResult = resource as IEnumerable<object>;
@@ -80,7 +77,7 @@ public static class LinkGeneratorHandler
             {
                 if (obj is ILinkableResource apiResourceItem)
                 {
-                    await AddLinksAsync(logger, apiLinkGenerator, generators, context, apiResourceItem).ConfigureAwait(false);
+                    await AddLinksAsync(apiLinkGenerator, generators, context, apiResourceItem).ConfigureAwait(false);
                 }
                 else
                 {
@@ -94,22 +91,15 @@ public static class LinkGeneratorHandler
     }
 
     private static async ValueTask AddLinksAsync(
-        ILogger logger,
         IApiLinkGenerator apiLinkGenerator,
         IEnumerable<IResourceLinkGenerator> generators,
         ApiOperationContext context,
         ILinkableResource result)
     {
+        // Individual IResourceLinkGenerator implementations (e.g. EntityOperationResourceLinkGenerator)
+        // carry their own ILogger for per-link trace diagnostics, so no logger resolution needed here.
         foreach (var resourceLinkGenerator in generators)
         {
-            if (logger.IsEnabled(LogLevel.Trace))
-            {
-                logger.LogTrace(
-                    "Generating links. generator={GeneratorType} result_type={ResourceType}",
-                    resourceLinkGenerator.GetType().Name,
-                    result.GetType().Name);
-            }
-
             await resourceLinkGenerator.AddLinksAsync(apiLinkGenerator, context, result).ConfigureAwait(false);
         }
     }
