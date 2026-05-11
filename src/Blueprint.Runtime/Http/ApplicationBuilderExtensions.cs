@@ -212,10 +212,11 @@ public static class EndpointRouteBuilderExtensions
 
             var operation = endpoint.Metadata.GetMetadata<ApiOperationDescriptor>()!;
 
-            // If we have an activity set the DisplayName to the operation type
-            if (Activity.Current != null)
+            // Set the activity display name to the operation type for better trace visibility
+            var activity = Activity.Current;
+            if (activity != null)
             {
-                Activity.Current.DisplayName = operation.Name;
+                activity.DisplayName = operation.Name;
             }
 
             // Method enforcement is handled by ASP.NET Core routing via HttpMethodMetadata on mapped endpoints.
