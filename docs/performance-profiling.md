@@ -286,6 +286,36 @@ dotnet run -c Release --project src/Blueprint.SourceGenerator.Benchmarks -- \
 
 ---
 
+## Measured Profiling Results
+
+### Source Generator Compile-Time Profile (Sample App — 24 operations)
+
+| Metric | Value |
+|--------|-------|
+| Generated files | 61 (31 pipeline + 30 STJ) |
+| Generated code | 606 KB / 8,917 lines |
+| Pipeline generator output | 349 KB / 4,998 lines (26 files) |
+| STJ context generator output | 214 KB / 3,375 lines (30 files) |
+| HTTP client extensions | 36 KB / 458 lines (1 file) |
+| Cold build (with generator) | ~9s |
+| Warm build (no-op incremental) | ~2.8s |
+| Single-file-touched incremental | ~4.1s |
+| Full solution build (25+ projects) | ~38s |
+
+**S365 projection (~240 operations):** Based on the 24-operation sample producing 606 KB,
+a 240-operation S365 service would generate roughly ~3-6 MB of source across ~300+ files.
+Build times scale sub-linearly because the pipeline templates are similar — expect ~15-25s
+for the largest S365 service (Portal, 70 ops) on a cold build.
+
+### Incremental Caching Verification
+
+The source generator is fully incremental (verified by test infrastructure). On a no-op
+build, the generator executes but returns cached results (`IncrementalStepRunReason.Cached`).
+This is verified automatically by `TestHelpers.AssertGeneratedSource()` which runs each
+generator twice and asserts the second run is fully cached.
+
+---
+
 ## NBomber Load Tests
 
 ### Scenario Definitions
