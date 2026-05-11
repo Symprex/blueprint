@@ -83,6 +83,14 @@ public sealed class ApiAuthoriserModule : IBlueprintSourceGeneratorModule, IPipe
 
         context.RequireAsync();
 
+        // Cache singleton IUserAuthorisationContextFactory at pipeline construction time
+        // (registered as singleton per ServiceCollectionExtensions.AddUserAuthorisationContextFactory)
+        context.CacheService(
+            "_userContextFactory",
+            "Blueprint.Authorization.IUserAuthorisationContextFactory",
+            "Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Authorization.IUserAuthorisationContextFactory>(serviceProvider)",
+            isNullable: true);
+
         // User context loading runs in Authentication stage (after identity check)
         context.AddRenderStep(
             PipelineStage.Authentication,
@@ -120,13 +128,9 @@ public sealed class ApiAuthoriserModule : IBlueprintSourceGeneratorModule, IPipe
 
     private static void RenderUserContextLoading(PipelineRenderContext context)
     {
-        // Resolve optional IUserAuthorisationContextFactory and populate context
-        context.DeclareVariable(
-            "userContextFactory",
-            context.GetOptionalServiceExpression("Blueprint.Authorization.IUserAuthorisationContextFactory"));
-
+        // Use cached singleton IUserAuthorisationContextFactory field
         context.If(
-            "userContextFactory != null",
+            "this._userContextFactory != null",
             branch =>
             {
                 branch.DeclareVariable(
@@ -138,7 +142,7 @@ public sealed class ApiAuthoriserModule : IBlueprintSourceGeneratorModule, IPipe
                     innerBranch =>
                     {
                         innerBranch.WriteStatement(
-                            "context.UserAuthorisationContext = await userContextFactory.CreateContextAsync(userIdentity, context.OperationCancelled);");
+                            "context.UserAuthorisationContext = await this._userContextFactory.CreateContextAsync(userIdentity, context.OperationCancelled);");
                     });
             });
 
