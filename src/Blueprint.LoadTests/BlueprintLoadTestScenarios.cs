@@ -238,11 +238,6 @@ internal sealed class LoadTestAuthHandler : AuthenticationHandler<Authentication
             // matching "{noun}:{verb}" from [Resource] attributes on operations).
             new Claim("scope", "template:read"),
             new Claim("scope", "template:write"),
-
-            // Optional claims-based authorization demo claims (urn:claims/permission).
-            new Claim("urn:claims/permission", "ManageTemplates"),
-            new Claim("urn:claims/permission", "read:template/*"),
-            new Claim("urn:claims/permission", "write:template/*"),
         };
 
         var identity = new ClaimsIdentity(claims, "LoadTest");

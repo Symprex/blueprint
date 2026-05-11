@@ -348,6 +348,153 @@ dotnet test
 
 ---
 
+## Concrete Example: Analytics Service Migration
+
+This section walks through the actual Analytics service migration using real code from S365.
+
+### Current State
+
+Analytics has 2 HTTP operations (both queries) + ~25 Rebus event handlers:
+
+| Operation | Type | Route |
+|---|---|---|
+| `GetSentEmailQuery` | `IQuery<SentEmailApiResource>` | `GET /tenants/{TenantId}/sent-emails/{Id}` |
+| `FindSentEmailsQuery` | `TenantOrderedPagedQuery<SentEmailApiResource>` | `GET /tenants/{TenantId}/sent-emails` |
+
+**Handler pattern:** Separate handler classes extending `ApiOperations` (e.g. `GetSentEmailQueryHandler`).
+**Auth:** `[Resource(S365Nouns.SentEmail, S365VerbNames.Read, "/Tenants/{TenantId}/SentEmails/{Id}")]`
+**Serialization:** Already using `SystemTextJson` with NodaTime — no Newtonsoft migration needed.
+**DB:** Dapper + PostgreSQL (no Marten).
+
+### Step-by-Step Transformation
+
+#### A. Create BlueprintApp
+
+```csharp
+// New file: AnalyticsBlueprintApp.cs
+using Blueprint;
+using Symprex.Signature365.Analytics.Contract.Api;
+
+namespace Symprex.Signature365.Analytics;
+
+[BlueprintAppScan(FromAssemblyOf = typeof(GetSentEmailQuery))]
+public partial class AnalyticsBlueprintApp : BlueprintApp { }
+```
+
+#### B. Make Operations Partial
+
+```csharp
+// Before
+public class GetSentEmailQuery : IQuery<SentEmailApiResource>
+
+// After
+public partial class GetSentEmailQuery : IQuery<SentEmailApiResource>
+```
+
+#### C. Move Handler Logic Into Operations (or keep separate)
+
+**Option 1: Inline handler** (preferred for simple operations)
+```csharp
+public partial class GetSentEmailQuery : IQuery<SentEmailApiResource>
+{
+    [Required]
+    public ApiId TenantId { get; set; }
+
+    [Required]
+    public string Id { get; set; } = null!;
+
+    public async Task<SentEmailApiResource> HandleAsync(
+        AnalyticsDatabase analyticsDatabase)
+    {
+        // Handler logic moved here from GetSentEmailQueryHandler
+    }
+}
+```
+
+**Option 2: Keep separate handler** (register as `IApiOperationHandler<T>`)
+```csharp
+public class GetSentEmailQueryHandler : IApiOperationHandler<GetSentEmailQuery>
+{
+    private readonly AnalyticsDatabase _db;
+    public GetSentEmailQueryHandler(AnalyticsDatabase db) => _db = db;
+
+    public async ValueTask<object> Handle(GetSentEmailQuery op, ApiOperationContext ctx)
+    {
+        // Existing logic, adapted signature
+    }
+}
+```
+
+#### D. Update Startup.cs
+
+```csharp
+// Before
+services.AddBlueprintApi(b => b
+    .ConfigureCommon(AppDefinition.Instance)
+    .Http(h => { h.Json(j => j.SerializerOptions.ConfigureForNodaTime(...)); })
+    .RebusConsumer(r => { r.Subscribe<CampaignEditedEvent>(); /* ... */ })
+    .Executors(e => e.AddScanner<OperationsHandlerScanner>())
+    .Operations(o => o.ScanCallingAssembly().Scan(typeof(IAnalyticsApi).Assembly))
+    .AddAuthentication(a => a.UseContextLoader<Signature365UserAuthorisationContextFactory>())
+    .AddAuthorisation()
+    .UseRebus());
+
+// After
+services.AddBlueprintApi<AnalyticsBlueprintApp, AnalyticsBlueprintAppExecutor>(blueprint =>
+{
+    blueprint.AddResourceAuthorizationProvider<S365ResourceAuthorizationProvider>();
+    blueprint.AddUserAuthorisationContextFactory<Signature365UserAuthorisationContextFactory>();
+
+    blueprint.ConfigureHttp(http =>
+    {
+        http.JsonSerializerOptions.ConfigureForNodaTime(DateTimeZoneProviders.Tzdb);
+    });
+});
+
+services.AddBlueprintRebus(rebus =>
+{
+    rebus.Subscribe<CampaignEditedEvent>();
+    rebus.Subscribe<CampaignCreatedEvent>();
+    // ... all subscriptions
+});
+
+// In Configure:
+app.UseEndpoints(endpoints =>
+{
+    endpoints.MapBlueprintApi<AnalyticsBlueprintApp, AnalyticsBlueprintAppExecutor>(
+        "api/",
+        configureOpenApi: info =>
+        {
+            info.Title = AppDefinition.Instance.OpenApiTitle;
+            info.Version = "1.0";
+        });
+});
+```
+
+#### E. Update .csproj References
+
+```xml
+<!-- Remove -->
+<ProjectReference Include="..\..\Blueprint\Blueprint\Blueprint.csproj" />
+<ProjectReference Include="..\..\Blueprint\Blueprint.Http\Blueprint.Http.csproj" />
+
+<!-- Add -->
+<ProjectReference Include="path\to\Blueprint.Runtime\Blueprint.Runtime.csproj" />
+<ProjectReference Include="path\to\Blueprint.Runtime.Model\Blueprint.Runtime.Model.csproj" />
+<ProjectReference Include="path\to\Blueprint.SourceGenerator\Blueprint.SourceGenerator.csproj"
+                  OutputItemType="Analyzer"
+                  ReferenceOutputAssembly="false" />
+<ProjectReference Include="path\to\Blueprint.Rebus\Blueprint.Rebus.csproj" />
+```
+
+#### F. Verify
+
+1. `dotnet build` — should compile with source-gen generating executor + descriptors
+2. Compare OpenAPI output against baseline
+3. Run existing tests (update test infrastructure if needed)
+
+---
+
 ## OpenAPI & TypeScript Client Generation
 
 ### Current S365 Setup
