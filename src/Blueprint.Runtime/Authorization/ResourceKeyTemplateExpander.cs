@@ -75,7 +75,7 @@ public static class ResourceKeyTemplateExpander
         ArgumentNullException.ThrowIfNull(principal);
         ArgumentNullException.ThrowIfNull(scopePairs);
 
-        var results = new List<string>();
+        var results = new List<string>(scopePairs.Count);
 
         foreach (var pair in scopePairs)
         {

@@ -278,6 +278,37 @@ public class HttpClientRequestBuilderModuleTests
         source.Should().Contain("Ids=");
     }
 
+    [Fact]
+    public void When_delete_command_with_non_url_params_then_emits_query_string_builder()
+    {
+        var result = CompileDescriptor(
+            """
+            [global::Blueprint.Model.Attributes.HttpDelete]
+            [global::Blueprint.Model.Attributes.RootLink("/widgets/{Id}")]
+            public partial class DeleteWidgetCommand : ICommand<string>
+            {
+                public string Id { get; set; }
+                public bool Permanent { get; set; }
+                public string Reason { get; set; }
+
+                public static Task<string> HandleAsync(DeleteWidgetCommand operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var source = GetDescriptorSource(result, "DeleteWidgetCommand");
+        source.Should().Contain("CompiledHttpRequestFeatureData");
+
+        // DELETE should build query strings for non-URL properties (like GET does)
+        source.Should().Contain("typed.Permanent");
+        source.Should().Contain("typed.Reason");
+        source.Should().Contain("parts.Add(");
+    }
+
     private static GenerationResult CompileDescriptor(string source)
     {
         return TestHelpers.Compile<OperationDescriptorSourceGenerator>(

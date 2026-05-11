@@ -73,13 +73,15 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
                 && !p.GetAttributes().Any(static a => a.AttributeClass?.Name is "ObsoleteAttribute"))
             .ToList();
 
-        // Determine if this is a GET request (needs query string builder)
-        var isGet = context.GetMetadata<OperationHttpMethodMetadataRegistration>()
-            .Any(static m => m.HttpMethod.Equals("GET", StringComparison.OrdinalIgnoreCase));
+        // Determine if this operation uses query string parameters (GET and DELETE carry
+        // non-URL properties as query string rather than body)
+        var isQueryMethod = context.GetMetadata<OperationHttpMethodMetadataRegistration>()
+            .Any(static m => m.HttpMethod.Equals("GET", StringComparison.OrdinalIgnoreCase)
+                || m.HttpMethod.Equals("DELETE", StringComparison.OrdinalIgnoreCase));
 
         context.AddRenderStep(codeWriter =>
         {
-            RenderCompiledHttpRequestFeatureData(codeWriter, operationFqn, urlTemplate, placeholders, properties, isGet);
+            RenderCompiledHttpRequestFeatureData(codeWriter, operationFqn, urlTemplate, placeholders, properties, isQueryMethod);
         });
     }
 
@@ -89,13 +91,14 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
         string urlTemplate,
         HashSet<string> placeholders,
         List<IPropertySymbol> properties,
-        bool isGet)
+        bool isQueryMethod)
     {
         // Build the URL builder lambda
         var urlBuilderLambda = BuildUrlBuilderLambda(operationFqn, urlTemplate, placeholders, properties);
 
-        // Build the query string builder lambda (only for GET operations with non-URL properties)
-        var queryStringLambda = isGet
+        // Build the query string builder lambda for methods that carry non-URL properties
+        // as query string rather than body (GET and DELETE)
+        var queryStringLambda = isQueryMethod
             ? BuildQueryStringLambda(operationFqn, placeholders, properties)
             : null;
 

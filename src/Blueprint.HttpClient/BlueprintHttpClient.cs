@@ -98,7 +98,7 @@ public sealed class BlueprintHttpClient<TApp>
                     $"Compiled URL builder returned null for '{operationType.FullName}'. " +
                     $"A required route parameter is likely null.");
 
-            if (httpMethod == HttpMethod.Get && compiled.AppendQueryString is not null)
+            if ((httpMethod == HttpMethod.Get || httpMethod == HttpMethod.Delete) && compiled.AppendQueryString is not null)
             {
                 url = compiled.AppendQueryString(operation, url);
             }
@@ -107,7 +107,7 @@ public sealed class BlueprintHttpClient<TApp>
         {
             url = ResolveUrl(descriptor, operation);
 
-            if (httpMethod == HttpMethod.Get)
+            if (httpMethod == HttpMethod.Get || httpMethod == HttpMethod.Delete)
             {
                 url = AppendQueryString(url, descriptor, operation);
             }
