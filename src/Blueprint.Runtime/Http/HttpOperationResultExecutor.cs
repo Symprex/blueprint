@@ -20,6 +20,7 @@ public class HttpOperationResultExecutor
 {
     private const string JsonContentType = "application/json; charset=utf-8";
     private const string ProblemJsonContentType = "application/problem+json; charset=utf-8";
+    private const string PlainTextContentType = "text/plain; charset=utf-8";
 
     // Pre-built ProblemDetails for fixed error responses, avoiding per-request allocation.
     // These are safe to share because JsonSerializer reads but does not mutate them.
@@ -173,7 +174,7 @@ public class HttpOperationResultExecutor
             case PlainTextResult plainTextResult:
                 httpContext.Response.StatusCode = (int)plainTextResult.StatusCode;
                 httpContext.Response.ContentType = string.Equals(plainTextResult.ContentType, "text/plain", StringComparison.Ordinal)
-                    ? "text/plain; charset=utf-8"
+                    ? PlainTextContentType
                     : $"{plainTextResult.ContentType}; charset=utf-8";
                 await httpContext.Response.WriteAsync(plainTextResult.Content, httpContext.RequestAborted);
                 return true;
