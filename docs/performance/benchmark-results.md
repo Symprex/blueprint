@@ -197,3 +197,26 @@ constants to improve readability and allow the compiler to intern them.
 
 The 304 Not Modified path reuses a static `Cache-Control` header dictionary,
 eliminating a per-response allocation on the conditional request fast path.
+
+### ILogger\<T\> Singleton Caching (commit f3ffb77)
+
+Generated pipeline constructors now resolve `ILogger<T>` once via
+`loggerFactory.CreateLogger<T>()` and store it in a `_cached_ILogger_*` field.
+This eliminates per-request `GetRequiredService<ILogger<T>>()` calls for every
+handler that accepts a logger parameter. The factory-based resolution ensures
+compatibility with `NullLoggerFactory.Instance` in test scenarios.
+
+### ConfigureAwait(false) (commits 4466f98, 29e1c03)
+
+All `await` expressions in both generated pipeline code (13 modules) and runtime
+code (`HttpOperationResultExecutor`, `ApplicationBuilderExtensions`, diagnostic
+endpoints) now use `.ConfigureAwait(false)`. While ASP.NET Core has no
+`SynchronizationContext`, this is best practice for library code and prevents
+issues when Blueprint is used outside ASP.NET Core (e.g., CLI tools, tests).
+
+### Activity Local Variable (commit 254b080)
+
+Generated `PopulateMetadata` lambdas in the authoriser pipeline now capture
+`context.Activity` into a local `_activity` variable instead of repeatedly
+reading the thread-static `Activity.Current` property. This avoids redundant
+TLS lookups in delegate captures.
