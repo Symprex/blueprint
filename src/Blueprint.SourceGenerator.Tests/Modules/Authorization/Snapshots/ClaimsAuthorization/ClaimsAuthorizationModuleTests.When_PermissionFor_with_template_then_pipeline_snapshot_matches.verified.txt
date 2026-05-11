@@ -75,9 +75,10 @@ namespace Blueprint.Generated
             }
             if (context.UserAuthorisationContext != null && context.Activity != null)
             {
-                context.Activity.SetTag("enduser.id", context.UserAuthorisationContext.Id);
-                context.Activity.SetTag("enduser.account_id", context.UserAuthorisationContext.AccountId);
-                context.UserAuthorisationContext.PopulateMetadata(static (key, value) => System.Diagnostics.Activity.Current?.SetTag(key, value));
+                var _activity = context.Activity;
+                _activity.SetTag("enduser.id", context.UserAuthorisationContext.Id);
+                _activity.SetTag("enduser.account_id", context.UserAuthorisationContext.AccountId);
+                context.UserAuthorisationContext.PopulateMetadata((key, value) => _activity.SetTag(key, value));
             }
 
             if (this._claimInspector != null && context.UserAuthorisationContext is Blueprint.Authorization.IClaimsHolder claimsHolder)

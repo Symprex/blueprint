@@ -151,12 +151,13 @@ public sealed class ApiAuthoriserModule : IBlueprintSourceGeneratorModule, IPipe
             "context.UserAuthorisationContext != null && context.Activity != null",
             branch =>
             {
+                branch.DeclareVariable("_activity", "context.Activity");
                 branch.WriteStatement(
-                    "context.Activity.SetTag(\"enduser.id\", context.UserAuthorisationContext.Id);");
+                    "_activity.SetTag(\"enduser.id\", context.UserAuthorisationContext.Id);");
                 branch.WriteStatement(
-                    "context.Activity.SetTag(\"enduser.account_id\", context.UserAuthorisationContext.AccountId);");
+                    "_activity.SetTag(\"enduser.account_id\", context.UserAuthorisationContext.AccountId);");
                 branch.WriteStatement(
-                    "context.UserAuthorisationContext.PopulateMetadata(static (key, value) => System.Diagnostics.Activity.Current?.SetTag(key, value));");
+                    "context.UserAuthorisationContext.PopulateMetadata((key, value) => _activity.SetTag(key, value));");
             });
 
         context.WriteBlankLine();
