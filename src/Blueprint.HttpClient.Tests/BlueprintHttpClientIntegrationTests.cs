@@ -226,4 +226,31 @@ public sealed class BlueprintHttpClientTests : IClassFixture<SampleAppFixture>
 
         act.Should().Throw<ArgumentNullException>();
     }
+
+    [Fact]
+    public async Task SendAsync_catch_all_route_preserves_slashes_in_url()
+    {
+        HttpRequestMessage? captured = null;
+        var handler = new FakeHttpHandler(req =>
+        {
+            captured = req;
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("""{"content":"ok"}""", Encoding.UTF8, "application/json"),
+            };
+        });
+
+        var client = this._fixture.CreateClient(handler);
+
+        await client.SendAsync<JsonElement>(new GetFolderContentsQuery { FolderPath = "UK/Marketing/Archive" });
+
+        captured.Should().NotBeNull();
+        captured!.Method.Should().Be(HttpMethod.Get);
+        captured.RequestUri!.PathAndQuery.Should().Contain(
+            "UK/Marketing/Archive",
+            "catch-all route parameter should NOT URL-encode slashes");
+        captured.RequestUri.PathAndQuery.Should().NotContain(
+            "%2F",
+            "slashes in catch-all parameters must be preserved, not percent-encoded");
+    }
 }

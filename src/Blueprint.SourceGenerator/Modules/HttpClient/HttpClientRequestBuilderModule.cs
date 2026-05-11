@@ -17,7 +17,7 @@ namespace Blueprint.SourceGenerator.Modules.HttpClient;
 /// </summary>
 public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorModule, IDescriptorContributor
 {
-    private static readonly Regex _placeholderRegex = new(@"\{(?<star>\*)?(?<name>[^:}]+)(?::(?<constraint>[^}]+))?\}", RegexOptions.Compiled);
+    private static readonly Regex _placeholderRegex = new(@"\{(?<star>\*{1,2})?(?<name>[^:}]+)(?::(?<constraint>[^}]+))?\}", RegexOptions.Compiled);
 
     /// <inheritdoc />
     public string ModuleId => nameof(HttpClientRequestBuilderModule);
@@ -147,6 +147,8 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
         foreach (Match match in _placeholderRegex.Matches(urlTemplate))
         {
             var name = match.Groups["name"].Value;
+            var isCatchAll = match.Groups["star"].Success;
+
             if (!propertyLookup.TryGetValue(name, out var prop))
             {
                 continue;
@@ -158,9 +160,25 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
                 segments.Add($"\"{urlTemplate.Substring(lastEnd, match.Index - lastEnd)}\"");
             }
 
-            // Add the escaped property value
+            // Catch-all parameters (e.g. {*FolderPath} or {**FolderPath}) preserve slashes
+            // and must not be URL-encoded. Regular parameters are escaped.
             var propertyAccess = $"typed.{prop.Name}";
-            if (prop.Type.SpecialType == SpecialType.System_String)
+            if (isCatchAll)
+            {
+                if (prop.Type.SpecialType == SpecialType.System_String)
+                {
+                    segments.Add(propertyAccess);
+                }
+                else if (prop.Type.IsValueType && prop.Type.NullableAnnotation == NullableAnnotation.Annotated)
+                {
+                    segments.Add($"{propertyAccess}.Value.ToString()!");
+                }
+                else
+                {
+                    segments.Add($"{propertyAccess}.ToString()!");
+                }
+            }
+            else if (prop.Type.SpecialType == SpecialType.System_String)
             {
                 segments.Add($"global::System.Uri.EscapeDataString({propertyAccess})");
             }

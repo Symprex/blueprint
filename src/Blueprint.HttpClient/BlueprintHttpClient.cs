@@ -318,6 +318,7 @@ public sealed class BlueprintHttpClient<TApp>
             var placeholder = result.Substring(openBrace + 1, closeBrace - openBrace - 1);
 
             // Strip catch-all prefix and format specifier
+            var isCatchAll = placeholder.StartsWith('*');
             var propertyName = placeholder.TrimStart('*');
             var colonIndex = propertyName.IndexOf(':');
             if (colonIndex >= 0)
@@ -340,7 +341,8 @@ public sealed class BlueprintHttpClient<TApp>
                 return null;
             }
 
-            var rendered = Uri.EscapeDataString(value.ToString()!);
+            // Catch-all parameters (e.g. {**FolderPath}) preserve slashes and must not be encoded
+            var rendered = isCatchAll ? value.ToString()! : Uri.EscapeDataString(value.ToString()!);
             result = string.Concat(result.AsSpan(0, openBrace), rendered, result.AsSpan(closeBrace + 1));
             startIndex = openBrace + rendered.Length;
         }
