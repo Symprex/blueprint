@@ -168,7 +168,8 @@ Based on S365 analysis, these gaps need closing in `blueprint-source-gen` before
 | `[Resource(noun, verb, key)]` | S365 Custom | `Blueprint.Model.Attributes.ResourceAttribute` | **Constructor compatible** — same (noun, verb, resourceKeyTemplate) signature |
 | `PagedApiResource<T>` | Legacy Blueprint | `Blueprint.Runtime.Model.PagedApiResource<T>` | Namespace change |
 | `OrderedPagedQuery` | Legacy Blueprint | `Blueprint.Runtime.Model.OrderedPagedQuery` | Namespace change |
-| `ResourceEvent<T>` | Legacy Blueprint | `Blueprint.Runtime.Exec.ResourceEvent<T>` | Namespace change |
+| `ResourceEvent<T>` | Legacy Blueprint | `Blueprint.Runtime.Exec.ResourceEventResult<T>` | **API change**: use `[ResourceEventFamily]` attribute with generated event records |
+| `ResourceEvent<T>` (delete/key-only) | Legacy Blueprint | `Blueprint.Runtime.Exec.KeyOnlyResourceEventResult` | Use `[ResourceEventKey]` parameter on event record |
 | `StatusCodeResult` | Legacy Blueprint | `Blueprint.Runtime.Exec.StatusCodeResult` | Namespace change |
 | `ApiId` | S365 Custom | **Keep in S365** | No change needed |
 | `TenantOrderedPagedQuery<T>` | S365 Custom | **Keep in S365** (update base class import) | Carries forward |
@@ -181,7 +182,19 @@ Based on S365 analysis, these gaps need closing in `blueprint-source-gen` before
 
 ### Compile-Time Proof Results
 
-A compile-time proof project (`.scratch/s365-proof/`) validated the full Analytics.Contract pattern against the source generator. **Result: builds successfully** after applying these requirements:
+A compile-time proof project (`.scratch/s365-proof/`) validated S365 patterns against the source generator on .NET 10. The proof now covers:
+
+- **Query operations** (GET) with `IQuery<T>` returning `ApiResource`
+- **Command operations** returning `ResourceEventResult<T>` (POST, PUT)
+- **Command operations** returning `KeyOnlyResourceEventResult` (DELETE)
+- **`[ResourceEventFamily]`** with source-generated event records (Created, Updated, Deleted)
+- **`[Resource]` authorization** with noun/verb constants
+- **`[FromHeader]` binding** (e.g. idempotency keys)
+- **`ApiId` value-type route parameters** with `IParsable<T>`
+- **Validation attributes** (`[Required]`, `[MaxLength]`)
+- **`ApiOperations` external handler classes** with `InvokeAsync` methods
+
+**Result: builds successfully with 0 errors, 0 warnings** after applying these requirements:
 
 | Requirement | Details |
 |---|---|
@@ -191,6 +204,28 @@ A compile-time proof project (`.scratch/s365-proof/`) validated the full Analyti
 | **ResourceAttribute namespace ambiguity** | If S365 imports both its own `ResourceAttribute` namespace and `Blueprint.Model.Attributes`, a CS0104 ambiguity error occurs. Solution: use explicit `using S365Resource = Symprex.Signature365.Common.Authorisation.ResourceAttribute;` or only import one namespace. |
 | **ProblemDetails in JsonSerializerContext** | The `JsonSerializerContext` must include `ProblemDetails` and `ValidationProblemDetails` for HTTP error responses (BP006 diagnostic). |
 | **Value-type link properties** | Fixed in source generator: custom struct types like `ApiId` in link URL placeholders now generate correct code without `?.` operator or `== null` checks. |
+| **ResourceEvent → ResourceEventResult** | S365's `ResourceEvent<T>` return type must change to `ResourceEventResult<T>` (or `KeyOnlyResourceEventResult`). Use `[ResourceEventFamily]` attribute with generated event records instead of `ResourceEventDefinitionFactory`. |
+
+### S365 Pattern Compatibility (Gap Analysis)
+
+Cross-referenced S365 codebase patterns against Blueprint source-gen support. **Result: 11/12 patterns fully supported.** Only `ServiceApiInclude` (gateway API client declarations) is missing.
+
+| S365 Pattern | Status | Blueprint Location |
+|---|---|---|
+| `ResourceEvent<T>` (via ResourceEventResult) | ✅ | Runtime/Exec/ResourceEventResult.cs |
+| `StateBasedLinkChecker<T,R>` | ✅ | Runtime/Authorization/StateBasedLinkChecker.cs |
+| `HttpResult` | ✅ | Runtime/Http/HttpResult.cs |
+| `IPropertyPopulator` (SetTenantMiddleware equiv) | ✅ | Runtime/Middleware/IPropertyPopulator.cs |
+| Handler discovery (OperationsHandlerScanner equiv) | ✅ | SourceGenerator/Generators/Pipelines/HandlerDiscovery.cs |
+| `ServiceApiInclude` (gateway API client decl) | ❌ Missing | Not yet implemented — needed for gateway projects |
+| `PagedApiResource`/`OrderedPagedQuery` | ✅ | Runtime.Model/PagedApiResource.cs |
+| `ResourceEventDefinition` factory | ✅ | Runtime/Http/ResourceEventDefinition.cs |
+| `IApiAuthoriser` | ✅ | Runtime/Authorization/IApiAuthoriser.cs |
+| `FromHeader` attribute | ✅ | Runtime.Model/Attributes/FromHeaderAttribute.cs |
+| `BackgroundTaskCollector` | ✅ | Testing/BackgroundTaskCollector.cs |
+| `FakeBus` (Rebus test double) | ✅ External | Use `Rebus.TestHelpers` NuGet package directly |
+
+**Gateway migration note:** `ServiceApiInclude` is only needed for Tier 4+ (gateway projects). All Tier 1–3 services can migrate without it. Gateway migration can use a workaround of manually referencing the contract assembly's operations.
 
 ### Critical (Must Fix)
 
@@ -389,23 +424,80 @@ public partial class LoadAnalyticsQuery : IQuery<ProxyResult>
 
 **Pattern B: Separate handler class** (used via `OperationsHandlerScanner`)
 ```csharp
-// Before: ApiOperations base class with convention-matched methods
+// The source generator discovers handlers from ApiOperations base classes
+// automatically. Rename Handle → InvokeAsync for the convention match.
 public class AnalyticsOperations : ApiOperations
 {
-    public async Task<Result> Handle(FindSentEmailsQuery query, ...) { ... }
-}
-
-// After: Implement IApiOperationHandler<T> explicitly
-public class AnalyticsOperations : IApiOperationHandler<FindSentEmailsQuery>
-{
-    public async ValueTask<object> Handle(
-        FindSentEmailsQuery operation,
-        ApiOperationContext context)
-    {
-        // Implementation adapted
-    }
+    public async Task<Result> InvokeAsync(FindSentEmailsQuery query, ...) { ... }
 }
 ```
+
+#### 6b. Migrate ResourceEvent Return Types
+
+S365 commands return `ResourceEvent<T>` from `ResourceEventDefinitionFactory`. The new Blueprint uses source-generated event records via `[ResourceEventFamily]`.
+
+```csharp
+// Before (S365): ResourceEventDefinitionFactory pattern
+public static class FolderEvents
+{
+    private static readonly ResourceEventDefinitionFactoryWithMapper<FolderApiResource, Folder> Factory =
+        ResourceEventDefinition.For<FolderApiResource, Folder>(f => new GetFolderQuery { Id = f.Id });
+
+    public static readonly ResourceEventDefinitionWithMapper<FolderApiResource, Folder> Created = Factory.Created();
+    public static readonly ResourceEventDefinitionWithMapper<FolderApiResource, Folder> Updated = Factory.Updated();
+    public static readonly ResourceEventDefinitionWithMapper<FolderApiResource, Folder> Deleted = Factory.Deleted();
+}
+
+// Command declares ICommand<ResourceEvent<FolderApiResource>>
+public class CreateFolderCommand : ICommand<ResourceEvent<FolderApiResource>> { ... }
+
+// Handler returns ResourceEvent<T>
+public ResourceEvent<FolderApiResource> Handle(CreateFolderCommand cmd)
+{
+    var folder = new Folder { ... };
+    _session.Store(folder);
+    return FolderEvents.Created.New(folder);
+}
+```
+
+```csharp
+// After (new Blueprint): [ResourceEventFamily] + generated event records
+[ResourceEventFamily(typeof(FolderApiResource), ResourceObject = "folder")]
+public static partial class FolderResourceEvents
+{
+    [ResourceEventReason(ChangeType.Created, "created")]
+    public sealed partial record Created(FolderApiResource Body);
+
+    [ResourceEventReason(ChangeType.Updated, "updated")]
+    public sealed partial record Updated(FolderApiResource Body);
+
+    [ResourceEventReason(ChangeType.Deleted, "deleted")]
+    public sealed partial record Deleted([ResourceEventKey] string Key);
+}
+
+// Command declares ICommand<ResourceEventResult<FolderApiResource>>
+public partial class CreateFolderCommand : ICommand<ResourceEventResult<FolderApiResource>> { ... }
+
+// Handler returns ResourceEventResult<T> (implicit conversion from generated record)
+public ResourceEventResult<FolderApiResource> InvokeAsync(CreateFolderCommand cmd)
+{
+    var folder = new FolderApiResource { ... };
+    return new FolderResourceEvents.Created(folder);
+}
+
+// For delete (key-only): ICommand<KeyOnlyResourceEventResult>
+public partial class DeleteFolderCommand : ICommand<KeyOnlyResourceEventResult> { ... }
+public KeyOnlyResourceEventResult InvokeAsync(DeleteFolderCommand cmd)
+{
+    return new FolderResourceEvents.Deleted(cmd.Id);
+}
+```
+
+**Key differences:**
+- Return type changes: `ResourceEvent<T>` → `ResourceEventResult<T>` (or `KeyOnlyResourceEventResult` for deletes)
+- Event definition: `ResourceEventDefinitionFactory` → `[ResourceEventFamily]` attribute with generated records
+- Handler return: `FolderEvents.Created.New(entity)` → `new FolderResourceEvents.Created(apiResource)`
+- The generated event records have implicit conversions to `ResourceEventResult<T>`/`KeyOnlyResourceEventResult`
 
 #### 7. Verify and Run Tests
 
