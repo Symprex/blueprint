@@ -182,6 +182,19 @@ Based on S365 analysis, these gaps need closing in `blueprint-source-gen` before
 
 **Key insight:** New Blueprint's `[Resource(noun, verb, resourceKeyTemplate)]` constructor is compatible with S365's usage. S365 can either (a) use the new Blueprint `ResourceAttribute` directly or (b) keep its custom one since the source generator matches by attribute name, not type identity.
 
+### Compile-Time Proof Results
+
+A compile-time proof project (`.scratch/s365-proof/`) validated the full Analytics.Contract pattern against the source generator. **Result: builds successfully** after applying these requirements:
+
+| Requirement | Details |
+|---|---|
+| **`partial` keyword** | All operation classes must be `partial` (BP001 diagnostic) |
+| **`IParsable<T>` for custom route types** | `ApiId` must implement `IParsable<ApiId>` (the three-parameter `TryParse(string?, IFormatProvider?, out T)` pattern), not just the two-parameter overload. The source generator checks for `IParsable<T>` interface. |
+| **Abstract generic bases must NOT implement IOperation** | `TenantOrderedPagedQuery<T>` must NOT extend `IQuery<T>` — only concrete leaf classes should, because `IOperation` requires `static abstract Configure()` which cannot be satisfied by an open generic. |
+| **ResourceAttribute namespace ambiguity** | If S365 imports both its own `ResourceAttribute` namespace and `Blueprint.Model.Attributes`, a CS0104 ambiguity error occurs. Solution: use explicit `using S365Resource = Symprex.Signature365.Common.Authorisation.ResourceAttribute;` or only import one namespace. |
+| **ProblemDetails in JsonSerializerContext** | The `JsonSerializerContext` must include `ProblemDetails` and `ValidationProblemDetails` for HTTP error responses (BP006 diagnostic). |
+| **Value-type link properties** | Fixed in source generator: custom struct types like `ApiId` in link URL placeholders now generate correct code without `?.` operator or `== null` checks. |
+
 ### Critical (Must Fix)
 
 | Gap | Description | Status |
