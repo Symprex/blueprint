@@ -252,14 +252,52 @@ public static class EndpointRouteBuilderExtensions
 
             apiContext.BaseUri = this._cachedBaseUri;
 
-            var result = await this._executor.GetPipeline(operation.OperationType).ExecuteAsync(apiContext).ConfigureAwait(false);
-
-            var operationResultExecutor = this._resultExecutor ?? DefaultOperationResultExecutor;
-            if (await operationResultExecutor.TryExecuteAsync(httpContext, apiContext, result, this._httpOptions).ConfigureAwait(false) == false)
+            try
             {
-                // Legacy self-executing results still flow through the old path until the broader host-translation workstream lands.
-                await result.ExecuteAsync(apiContext).ConfigureAwait(false);
+                var result = await this._executor.GetPipeline(operation.OperationType).ExecuteAsync(apiContext).ConfigureAwait(false);
+
+                var operationResultExecutor = this._resultExecutor ?? DefaultOperationResultExecutor;
+                if (await operationResultExecutor.TryExecuteAsync(httpContext, apiContext, result, this._httpOptions).ConfigureAwait(false) == false)
+                {
+                    // Legacy self-executing results still flow through the old path until the broader host-translation workstream lands.
+                    await result.ExecuteAsync(apiContext).ConfigureAwait(false);
+                }
             }
+            catch (OperationCanceledException) when (httpContext.RequestAborted.IsCancellationRequested)
+            {
+                // Client disconnected — no response needed. Let ASP.NET Core handle the abort.
+                throw;
+            }
+            catch (Exception ex)
+            {
+                // Defense-in-depth: the generated pipeline has its own exception translation, but if something
+                // truly unexpected escapes (DI failure, result executor crash), emit a ProblemDetails 500.
+                activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+                this._logger.LogError(ex, "Unhandled exception escaped pipeline for operation {OperationName}", operation.Name);
+
+                if (!httpContext.Response.HasStarted)
+                {
+                    httpContext.Response.StatusCode = 500;
+                    httpContext.Response.ContentType = "application/problem+json";
+
+                    var exposeDetails = this._httpOptions.ExposeExceptionDetailsInErrorResponses;
+                    var detail = exposeDetails ? ex.ToString() : "An unexpected error occurred.";
+
+                    await httpContext.Response.WriteAsync(
+                        $$"""{"type":"https://httpstatuses.com/500","title":"Internal Server Error","status":500,"detail":"{{EscapeJsonString(detail)}}"}""",
+                        httpContext.RequestAborted).ConfigureAwait(false);
+                }
+            }
+        }
+
+        private static string EscapeJsonString(string value)
+        {
+            return value
+                .Replace("\\", "\\\\", StringComparison.Ordinal)
+                .Replace("\"", "\\\"", StringComparison.Ordinal)
+                .Replace("\n", "\\n", StringComparison.Ordinal)
+                .Replace("\r", "\\r", StringComparison.Ordinal)
+                .Replace("\t", "\\t", StringComparison.Ordinal);
         }
     }
 }
