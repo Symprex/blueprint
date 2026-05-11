@@ -95,15 +95,36 @@ Measures inline source-generated validation vs runtime DataAnnotation fallback.
 ~2.5 µs with 0.75x allocation ratio compared to the baseline. Runtime fallback
 paths (for complex validators) add ~0.5-1 µs overhead.
 
+## Full Pipeline (End-to-End Scenarios)
+
+Measures realistic end-to-end pipeline execution across different complexity levels:
+minimal (handler-only), validated, and full-stack (multi-property validation + handler).
+
+| Method | Mean | Ratio | Gen0 | Allocated |
+|---|---:|---:|---:|---:|
+| MinimalQueryAsync | 2.88 µs | 1.00 | 0.20 | 2.51 KB |
+| ValidatedQueryValidInputAsync | 27.6 µs | 10.0 | 0.40 | 5.04 KB |
+| FullStackCommandValidationFailureAsync | 29.0 µs | 10.5 | 0.46 | 5.65 KB |
+| ValidatedQueryInvalidInputAsync | 31.7 µs | 11.5 | 0.40 | 5.04 KB |
+| FullStackCommandValidAsync | 36.2 µs | 13.2 | 0.43 | 5.65 KB |
+
+**Key insight**: A minimal pipeline (no validation, no auth) executes in ~2.9 µs
+with just 2.5 KB allocation — this is the pure pipeline framework overhead.
+Validation adds ~25-30 µs, and validation failure short-circuits at the same cost
+as success, confirming no wasted handler invocation. Full-stack commands with
+3 validated properties complete in ~36 µs.
+
 ## Summary
 
 | Area | Hot Path Latency | Allocation |
 |---|---|---|
 | Pipeline resolution | ~16 ns | 0 B |
 | Pipeline execution | ~40-60 ns | 144 B |
+| Minimal pipeline (E2E) | ~2.9 µs | 2.5 KB |
 | Route-only GET | ~4.7 µs | 4.85 KB |
 | POST with body | ~8-14 µs | 6-9 KB |
 | Validation (inline) | ~2.5 µs | 2.5 KB |
+| Full-stack command (E2E) | ~36 µs | 5.65 KB |
 | Operation lookup | ~15 ns | 0 B |
 | Registration (100 ops) | ~25 µs | 45 KB |
 | Endpoint mapping (100 ops) | ~833 µs | 490 KB |
