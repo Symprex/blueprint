@@ -300,12 +300,56 @@ public static class EndpointRouteBuilderExtensions
 
         private static string EscapeJsonString(string value)
         {
-            return value
-                .Replace("\\", "\\\\", StringComparison.Ordinal)
-                .Replace("\"", "\\\"", StringComparison.Ordinal)
-                .Replace("\n", "\\n", StringComparison.Ordinal)
-                .Replace("\r", "\\r", StringComparison.Ordinal)
-                .Replace("\t", "\\t", StringComparison.Ordinal);
+            // Fast path: if no special characters, return unchanged (zero allocation).
+            if (!NeedsEscaping(value))
+            {
+                return value;
+            }
+
+            // Single-pass escape avoids 5 chained Replace allocations.
+            return string.Create(CountEscapedLength(value), value, static (span, src) =>
+            {
+                var pos = 0;
+                foreach (var c in src)
+                {
+                    switch (c)
+                    {
+                        case '\\': span[pos++] = '\\'; span[pos++] = '\\'; break;
+                        case '"': span[pos++] = '\\'; span[pos++] = '"'; break;
+                        case '\n': span[pos++] = '\\'; span[pos++] = 'n'; break;
+                        case '\r': span[pos++] = '\\'; span[pos++] = 'r'; break;
+                        case '\t': span[pos++] = '\\'; span[pos++] = 't'; break;
+                        default: span[pos++] = c; break;
+                    }
+                }
+            });
+
+            static bool NeedsEscaping(string s)
+            {
+                foreach (var c in s)
+                {
+                    if (c is '\\' or '"' or '\n' or '\r' or '\t')
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+
+            static int CountEscapedLength(string s)
+            {
+                var length = s.Length;
+                foreach (var c in s)
+                {
+                    if (c is '\\' or '"' or '\n' or '\r' or '\t')
+                    {
+                        length++;
+                    }
+                }
+
+                return length;
+            }
         }
     }
 

@@ -281,14 +281,23 @@ public class HttpOperationResultExecutor
 
         var runtimeResultTypeNames = _resultTypeNamesCache.GetOrAdd(result.GetType(), static resultType =>
         {
-            // Build a small array of ancestor type names, then freeze directly
-            // to avoid the intermediate HashSet allocation.
-            var names = new List<string>(4);
+            // Count ancestor types first to avoid intermediate List allocation.
+            var count = 0;
+            for (var current = resultType; current is not null; current = current.BaseType)
+            {
+                if (current.FullName is not null)
+                {
+                    count++;
+                }
+            }
+
+            var names = new string[count];
+            var index = 0;
             for (var current = resultType; current is not null; current = current.BaseType)
             {
                 if (current.FullName is { } fullName)
                 {
-                    names.Add(fullName);
+                    names[index++] = fullName;
                 }
             }
 
@@ -321,33 +330,29 @@ public class HttpOperationResultExecutor
         }
         else
         {
-            // Single-pass grouping avoids the 5+ intermediate LINQ allocations
-            // (SelectMany → GroupBy → ToDictionary → nested Select/Distinct/ToArray).
-            var grouped = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+            // Single-pass grouping that builds string[] values directly,
+            // avoiding the intermediate Dictionary<string, List<string>> copy.
+            var grouped = new Dictionary<string, string[]>(StringComparer.Ordinal);
 
             foreach (var validationResult in validationFailedResult.ValidationResults)
             {
                 foreach (var entry in ExpandValidationErrorEntries(validationResult))
                 {
-                    if (!grouped.TryGetValue(entry.MemberName, out var messages))
+                    if (!grouped.TryGetValue(entry.MemberName, out var existing))
                     {
-                        messages = new List<string>(1);
-                        grouped[entry.MemberName] = messages;
+                        grouped[entry.MemberName] = [entry.ErrorMessage];
                     }
-
-                    if (!messages.Contains(entry.ErrorMessage))
+                    else if (Array.IndexOf(existing, entry.ErrorMessage) < 0)
                     {
-                        messages.Add(entry.ErrorMessage);
+                        var expanded = new string[existing.Length + 1];
+                        existing.CopyTo(expanded, 0);
+                        expanded[^1] = entry.ErrorMessage;
+                        grouped[entry.MemberName] = expanded;
                     }
                 }
             }
 
-            validationErrors = new Dictionary<string, string[]>(grouped.Count, StringComparer.Ordinal);
-
-            foreach (var pair in grouped)
-            {
-                validationErrors[pair.Key] = pair.Value.ToArray();
-            }
+            validationErrors = grouped;
         }
 
         var problemDetails = new MvcValidationProblemDetails(validationErrors)
