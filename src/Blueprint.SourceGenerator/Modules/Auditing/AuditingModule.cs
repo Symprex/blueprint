@@ -105,7 +105,7 @@ public sealed class AuditingModule : IBlueprintSourceGeneratorModule, IPipelineC
                 innerBranch.Try(tryBranch =>
                 {
                     tryBranch.WriteStatement(
-                        "await this._auditSink.RecordAsync(context, handlerResult, System.Threading.CancellationToken.None);");
+                        "await this._auditSink.RecordAsync(context, handlerResult, System.Threading.CancellationToken.None).ConfigureAwait(false);");
 
                     tryBranch.WriteStatement(
                         $"context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent(\"blueprint.audit.succeeded\", default, {cachedTagsFieldName}));");

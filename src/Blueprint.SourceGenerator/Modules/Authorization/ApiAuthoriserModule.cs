@@ -142,7 +142,7 @@ public sealed class ApiAuthoriserModule : IBlueprintSourceGeneratorModule, IPipe
                     innerBranch =>
                     {
                         innerBranch.WriteStatement(
-                            "context.UserAuthorisationContext = await this._userContextFactory.CreateContextAsync(userIdentity, context.OperationCancelled);");
+                            "context.UserAuthorisationContext = await this._userContextFactory.CreateContextAsync(userIdentity, context.OperationCancelled).ConfigureAwait(false);");
                     });
             });
 
@@ -209,7 +209,7 @@ public sealed class ApiAuthoriserModule : IBlueprintSourceGeneratorModule, IPipe
     {
         context.DeclareVariable(
             "authoriseResult",
-            $"await {authoriserVar}.CanExecuteOperationAsync(context, context.Descriptor, context.Operation)");
+            $"await {authoriserVar}.CanExecuteOperationAsync(context, context.Descriptor, context.Operation).ConfigureAwait(false)");
 
         context.If(
             "!authoriseResult.IsAllowed",

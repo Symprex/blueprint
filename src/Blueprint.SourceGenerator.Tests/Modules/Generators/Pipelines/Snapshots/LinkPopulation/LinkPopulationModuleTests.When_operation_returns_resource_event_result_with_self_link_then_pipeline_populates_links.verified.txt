@@ -53,7 +53,7 @@ namespace Blueprint.Generated
                 using var bodyStream = httpContext.Request.ContentLength.HasValue
                     ? new System.IO.MemoryStream((int)httpContext.Request.ContentLength.Value)
                     : new System.IO.MemoryStream();
-                await httpContext.Request.Body.CopyToAsync(bodyStream, context.OperationCancelled);
+                await httpContext.Request.Body.CopyToAsync(bodyStream, context.OperationCancelled).ConfigureAwait(false);
 
                 if (bodyStream.Length > 0)
                 {
@@ -80,7 +80,7 @@ namespace Blueprint.Generated
 
             if (this._propertyPopulators.Length == 1)
             {
-                await this._propertyPopulators[0].PopulateAsync(context, context.OperationCancelled);
+                await this._propertyPopulators[0].PopulateAsync(context, context.OperationCancelled).ConfigureAwait(false);
             }
             else
             {
@@ -88,7 +88,7 @@ namespace Blueprint.Generated
                 {
                     foreach (var populator in this._propertyPopulators)
                     {
-                        await populator.PopulateAsync(context, context.OperationCancelled);
+                        await populator.PopulateAsync(context, context.OperationCancelled).ConfigureAwait(false);
                     }
                 }
             }
@@ -102,7 +102,7 @@ namespace Blueprint.Generated
                 var userIdentity = httpContext.User.Identity as System.Security.Claims.ClaimsIdentity;
                 if (userIdentity != null && userIdentity.IsAuthenticated)
                 {
-                    context.UserAuthorisationContext = await this._userContextFactory.CreateContextAsync(userIdentity, context.OperationCancelled);
+                    context.UserAuthorisationContext = await this._userContextFactory.CreateContextAsync(userIdentity, context.OperationCancelled).ConfigureAwait(false);
                 }
             }
             if (context.UserAuthorisationContext != null && context.Activity != null)
@@ -120,7 +120,7 @@ namespace Blueprint.Generated
                     {
                         if (authoriser.AppliesTo(context.Descriptor))
                         {
-                            var authoriseResult = await authoriser.CanExecuteOperationAsync(context, context.Descriptor, context.Operation);
+                            var authoriseResult = await authoriser.CanExecuteOperationAsync(context, context.Descriptor, context.Operation).ConfigureAwait(false);
                             if (!authoriseResult.IsAllowed)
                             {
                                 if (authoriseResult.FailureType == Blueprint.Authorization.ExecutionAllowedFailureType.Authentication)
@@ -138,7 +138,7 @@ namespace Blueprint.Generated
                     {
                         if (authoriser.AppliesTo(context.Descriptor))
                         {
-                            var authoriseResult = await authoriser.CanExecuteOperationAsync(context, context.Descriptor, context.Operation);
+                            var authoriseResult = await authoriser.CanExecuteOperationAsync(context, context.Descriptor, context.Operation).ConfigureAwait(false);
                             if (!authoriseResult.IsAllowed)
                             {
                                 if (authoriseResult.FailureType == Blueprint.Authorization.ExecutionAllowedFailureType.Authentication)
@@ -152,7 +152,7 @@ namespace Blueprint.Generated
                 }
             }
 
-            var handlerResult = await global::TestNamespace.CreateResourceCommand.HandleAsync(operation);
+            var handlerResult = await global::TestNamespace.CreateResourceCommand.HandleAsync(operation).ConfigureAwait(false);
 
             // Populate $links.self on the returned resource (skip 304 Not Modified)
             if (handlerResult is global::Blueprint.Runtime.Exec.ResourceEventResult<global::TestNamespace.TestApiResource> and not global::Blueprint.Runtime.Exec.INotModifiedResult)
@@ -168,7 +168,7 @@ namespace Blueprint.Generated
                 if (apiLinkGenerator != null)
                 {
                     var resourceLinkGenerators = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<System.Collections.Generic.IEnumerable<Blueprint.Http.IResourceLinkGenerator>>(context.ServiceProvider);
-                    await Blueprint.Http.LinkGeneratorHandler.AddLinksAsync(apiLinkGenerator, resourceLinkGenerators, context, handlerResult);
+                    await Blueprint.Http.LinkGeneratorHandler.AddLinksAsync(apiLinkGenerator, resourceLinkGenerators, context, handlerResult).ConfigureAwait(false);
                 }
             }
 
@@ -178,13 +178,13 @@ namespace Blueprint.Generated
                 var unitOfWork = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Persistence.IUnitOfWork>(context.ServiceProvider);
                 if (unitOfWork != null)
                 {
-                    await unitOfWork.SaveChangesAsync(context.OperationCancelled);
+                    await unitOfWork.SaveChangesAsync(context.OperationCancelled).ConfigureAwait(false);
                 }
 
                 var messageOutbox = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Messaging.IMessageOutbox>(context.ServiceProvider);
                 if (messageOutbox != null)
                 {
-                    await messageOutbox.CommitAsync(context.OperationCancelled);
+                    await messageOutbox.CommitAsync(context.OperationCancelled).ConfigureAwait(false);
                 }
 
                 if (this._auditSink != null)
@@ -192,7 +192,7 @@ namespace Blueprint.Generated
                     context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent("blueprint.audit.started", default, _auditTags_CreateResourceCommand));
                     try
                     {
-                        await this._auditSink.RecordAsync(context, handlerResult, System.Threading.CancellationToken.None);
+                        await this._auditSink.RecordAsync(context, handlerResult, System.Threading.CancellationToken.None).ConfigureAwait(false);
                         context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent("blueprint.audit.succeeded", default, _auditTags_CreateResourceCommand));
                     }
                     catch (System.Exception auditException)
@@ -208,7 +208,7 @@ namespace Blueprint.Generated
                         context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent("blueprint.resource_event_audit.started", default, new System.Diagnostics.ActivityTagsCollection { { "blueprint.operation.type", "CreateResourceCommand" }, { "blueprint.resource_event.id", _reAuditResult.EventId }, { "blueprint.resource_event.resource_id", _reAuditResult.ResourceId } }));
                         try
                         {
-                            await this._resourceEventAuditSink.RecordAsync(_reAuditResult.EventId, _reAuditResult.ResourceId, context, System.Threading.CancellationToken.None);
+                            await this._resourceEventAuditSink.RecordAsync(_reAuditResult.EventId, _reAuditResult.ResourceId, context, System.Threading.CancellationToken.None).ConfigureAwait(false);
                             context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent("blueprint.resource_event_audit.succeeded", default, new System.Diagnostics.ActivityTagsCollection { { "blueprint.operation.type", "CreateResourceCommand" }, { "blueprint.resource_event.id", _reAuditResult.EventId } }));
                         }
                         catch (System.Exception resourceEventAuditException)
@@ -221,7 +221,7 @@ namespace Blueprint.Generated
                 var backgroundTaskScheduler = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Tasks.IBackgroundTaskScheduler>(context.ServiceProvider);
                 if (backgroundTaskScheduler != null)
                 {
-                    await backgroundTaskScheduler.RunNowAsync();
+                    await backgroundTaskScheduler.RunNowAsync().ConfigureAwait(false);
                 }
             }
 

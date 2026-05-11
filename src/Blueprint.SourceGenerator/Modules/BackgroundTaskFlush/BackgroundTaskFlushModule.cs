@@ -50,7 +50,7 @@ public sealed class BackgroundTaskFlushModule : IBlueprintSourceGeneratorModule,
             "backgroundTaskScheduler != null",
             innerBranch =>
             {
-                innerBranch.WriteStatement("await backgroundTaskScheduler.RunNowAsync();");
+                innerBranch.WriteStatement("await backgroundTaskScheduler.RunNowAsync().ConfigureAwait(false);");
             });
     }
 }

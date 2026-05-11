@@ -90,7 +90,7 @@ public sealed class MessageOutboxModule : IBlueprintSourceGeneratorModule, IPipe
             "messageOutbox != null",
             branch =>
             {
-                branch.WriteStatement("await messageOutbox.CommitAsync(context.OperationCancelled);");
+                branch.WriteStatement("await messageOutbox.CommitAsync(context.OperationCancelled).ConfigureAwait(false);");
             });
     }
 

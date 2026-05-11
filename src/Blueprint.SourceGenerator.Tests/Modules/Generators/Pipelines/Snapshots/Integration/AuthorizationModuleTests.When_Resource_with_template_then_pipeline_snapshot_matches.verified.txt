@@ -50,7 +50,7 @@ namespace Blueprint.Generated
 
             if (this._propertyPopulators.Length == 1)
             {
-                await this._propertyPopulators[0].PopulateAsync(context, context.OperationCancelled);
+                await this._propertyPopulators[0].PopulateAsync(context, context.OperationCancelled).ConfigureAwait(false);
             }
             else
             {
@@ -58,7 +58,7 @@ namespace Blueprint.Generated
                 {
                     foreach (var populator in this._propertyPopulators)
                     {
-                        await populator.PopulateAsync(context, context.OperationCancelled);
+                        await populator.PopulateAsync(context, context.OperationCancelled).ConfigureAwait(false);
                     }
                 }
             }
@@ -72,7 +72,7 @@ namespace Blueprint.Generated
                 var userIdentity = httpContext.User.Identity as System.Security.Claims.ClaimsIdentity;
                 if (userIdentity != null && userIdentity.IsAuthenticated)
                 {
-                    context.UserAuthorisationContext = await this._userContextFactory.CreateContextAsync(userIdentity, context.OperationCancelled);
+                    context.UserAuthorisationContext = await this._userContextFactory.CreateContextAsync(userIdentity, context.OperationCancelled).ConfigureAwait(false);
                 }
             }
             if (context.UserAuthorisationContext != null && context.Activity != null)
@@ -85,7 +85,7 @@ namespace Blueprint.Generated
             var resolvedAuthProvider = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Authorization.IResolvedResourceAuthorizationProvider>(context.ServiceProvider);
             if (resolvedAuthProvider != null)
             {
-                var isAuthorized = await resolvedAuthProvider.IsAuthorizedAsync(context, httpContext.User, new Blueprint.Model.ResolvedScopePair[] { new Blueprint.Model.ResolvedScopePair("account", "read", "/tenants/{Auth:AccountId}/accounts/{Id}", $"/tenants/{httpContext.User.FindFirst("AccountId")?.Value ?? ""}/accounts/{operation.Id?.ToString() ?? ""}") }, httpContext.RequestAborted);
+                var isAuthorized = await resolvedAuthProvider.IsAuthorizedAsync(context, httpContext.User, new Blueprint.Model.ResolvedScopePair[] { new Blueprint.Model.ResolvedScopePair("account", "read", "/tenants/{Auth:AccountId}/accounts/{Id}", $"/tenants/{httpContext.User.FindFirst("AccountId")?.Value ?? ""}/accounts/{operation.Id?.ToString() ?? ""}") }, httpContext.RequestAborted).ConfigureAwait(false);
                 if (!isAuthorized)
                 {
                     return new Blueprint.Runtime.Exec.ForbiddenResult();
@@ -95,7 +95,7 @@ namespace Blueprint.Generated
             {
                 if (this._resourceAuthorizationProvider != null)
                 {
-                    var isAuthorized = await this._resourceAuthorizationProvider.IsAuthorizedAsync(context, httpContext.User, _scopePairs_GetAccountQuery, httpContext.RequestAborted);
+                    var isAuthorized = await this._resourceAuthorizationProvider.IsAuthorizedAsync(context, httpContext.User, _scopePairs_GetAccountQuery, httpContext.RequestAborted).ConfigureAwait(false);
                     if (!isAuthorized)
                     {
                         return new Blueprint.Runtime.Exec.ForbiddenResult();
@@ -111,7 +111,7 @@ namespace Blueprint.Generated
                     {
                         if (authoriser.AppliesTo(context.Descriptor))
                         {
-                            var authoriseResult = await authoriser.CanExecuteOperationAsync(context, context.Descriptor, context.Operation);
+                            var authoriseResult = await authoriser.CanExecuteOperationAsync(context, context.Descriptor, context.Operation).ConfigureAwait(false);
                             if (!authoriseResult.IsAllowed)
                             {
                                 if (authoriseResult.FailureType == Blueprint.Authorization.ExecutionAllowedFailureType.Authentication)
@@ -129,7 +129,7 @@ namespace Blueprint.Generated
                     {
                         if (authoriser.AppliesTo(context.Descriptor))
                         {
-                            var authoriseResult = await authoriser.CanExecuteOperationAsync(context, context.Descriptor, context.Operation);
+                            var authoriseResult = await authoriser.CanExecuteOperationAsync(context, context.Descriptor, context.Operation).ConfigureAwait(false);
                             if (!authoriseResult.IsAllowed)
                             {
                                 if (authoriseResult.FailureType == Blueprint.Authorization.ExecutionAllowedFailureType.Authentication)
@@ -143,7 +143,7 @@ namespace Blueprint.Generated
                 }
             }
 
-            var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<string>(await global::TestNamespace.GetAccountQuery.HandleAsync(operation));
+            var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<string>(await global::TestNamespace.GetAccountQuery.HandleAsync(operation).ConfigureAwait(false));
 
             if (handlerResult.WasSuccessful)
             {
@@ -153,7 +153,7 @@ namespace Blueprint.Generated
                     context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent("blueprint.audit.started", default, _auditTags_GetAccountQuery));
                     try
                     {
-                        await this._auditSink.RecordAsync(context, handlerResult, System.Threading.CancellationToken.None);
+                        await this._auditSink.RecordAsync(context, handlerResult, System.Threading.CancellationToken.None).ConfigureAwait(false);
                         context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent("blueprint.audit.succeeded", default, _auditTags_GetAccountQuery));
                     }
                     catch (System.Exception auditException)
@@ -165,7 +165,7 @@ namespace Blueprint.Generated
                 var backgroundTaskScheduler = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Tasks.IBackgroundTaskScheduler>(context.ServiceProvider);
                 if (backgroundTaskScheduler != null)
                 {
-                    await backgroundTaskScheduler.RunNowAsync();
+                    await backgroundTaskScheduler.RunNowAsync().ConfigureAwait(false);
                 }
             }
 

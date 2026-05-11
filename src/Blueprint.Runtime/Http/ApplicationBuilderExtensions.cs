@@ -251,13 +251,13 @@ public static class EndpointRouteBuilderExtensions
 
             apiContext.BaseUri = this._cachedBaseUri;
 
-            var result = await this._executor.GetPipeline(operation.OperationType).ExecuteAsync(apiContext);
+            var result = await this._executor.GetPipeline(operation.OperationType).ExecuteAsync(apiContext).ConfigureAwait(false);
 
             var operationResultExecutor = this._resultExecutor ?? DefaultOperationResultExecutor;
-            if (await operationResultExecutor.TryExecuteAsync(httpContext, apiContext, result, this._httpOptions) == false)
+            if (await operationResultExecutor.TryExecuteAsync(httpContext, apiContext, result, this._httpOptions).ConfigureAwait(false) == false)
             {
                 // Legacy self-executing results still flow through the old path until the broader host-translation workstream lands.
-                await result.ExecuteAsync(apiContext);
+                await result.ExecuteAsync(apiContext).ConfigureAwait(false);
             }
         }
     }

@@ -129,7 +129,7 @@ public class OperationExecutorPipelineGeneratorIntegrationTests
 
         renderStep.Render(new PipelineRenderContext(writer, handlerResult.Value!, plan));
 
-        writer.Rendered.Should().Contain("var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<string>(await global::TestNamespace.TestQuery.InvokeAsync());");
+        writer.Rendered.Should().Contain("var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<string>(await global::TestNamespace.TestQuery.InvokeAsync().ConfigureAwait(false));");
     }
 
     [Fact]
@@ -166,7 +166,7 @@ public class OperationExecutorPipelineGeneratorIntegrationTests
 
         renderStep.Render(new PipelineRenderContext(writer, handlerResult.Value!, plan));
 
-        writer.Rendered.Should().Contain("await global::TestNamespace.TestCommand.HandleAsync();");
+        writer.Rendered.Should().Contain("await global::TestNamespace.TestCommand.HandleAsync().ConfigureAwait(false);");
         writer.Rendered.Should().Contain("var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.NoResultOperationResult();");
     }
 

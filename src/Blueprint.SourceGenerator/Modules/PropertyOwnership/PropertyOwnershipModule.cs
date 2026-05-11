@@ -869,7 +869,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
                     bodyContext.WriteStatement("using var bodyStream = httpContext.Request.ContentLength.HasValue");
                     bodyContext.WriteStatement("    ? new System.IO.MemoryStream((int)httpContext.Request.ContentLength.Value)");
                     bodyContext.WriteStatement("    : new System.IO.MemoryStream();");
-                    bodyContext.WriteStatement("await httpContext.Request.Body.CopyToAsync(bodyStream, context.OperationCancelled);");
+                    bodyContext.WriteStatement("await httpContext.Request.Body.CopyToAsync(bodyStream, context.OperationCancelled).ConfigureAwait(false);");
                     bodyContext.WriteBlankLine();
 
                     bodyContext.If("bodyStream.Length > 0", lengthCtx =>

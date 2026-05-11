@@ -80,7 +80,7 @@ public sealed class RebusTransactionModule : IBlueprintSourceGeneratorModule, IP
     private static void RenderTransactionScopeComplete(PipelineRenderContext context)
     {
         context.WriteBlankLine();
-        context.WriteStatement("await rebusTransactionScope.CompleteAsync();");
+        context.WriteStatement("await rebusTransactionScope.CompleteAsync().ConfigureAwait(false);");
     }
 
     private static bool HasNoRebusTransactionAttribute(INamedTypeSymbol operationType)

@@ -91,7 +91,7 @@ public sealed class UnitOfWorkModule : IBlueprintSourceGeneratorModule, IPipelin
             "unitOfWork != null",
             branch =>
             {
-                branch.WriteStatement("await unitOfWork.SaveChangesAsync(context.OperationCancelled);");
+                branch.WriteStatement("await unitOfWork.SaveChangesAsync(context.OperationCancelled).ConfigureAwait(false);");
             });
     }
 

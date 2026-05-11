@@ -138,20 +138,24 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
             invocationExpression = $"{handlerVarName}.{context.GetHandlerMethodName()}({string.Join(", ", allParams)})";
         }
 
+        var configuredAwait = context.IsHandlerAsync()
+            ? $"await {invocationExpression}.ConfigureAwait(false)"
+            : invocationExpression;
+
         switch (normalization.Kind)
         {
             case HandlerReturnNormalizationKind.NoResult:
-                context.WriteStatement($"{(context.IsHandlerAsync() ? "await " : string.Empty)}{invocationExpression};");
+                context.WriteStatement($"{configuredAwait};");
                 context.DeclareVariable("handlerResult", "(Blueprint.OperationResult)new Blueprint.Runtime.Exec.NoResultOperationResult()");
                 break;
             case HandlerReturnNormalizationKind.OperationResult:
-                context.DeclareVariable("handlerResult", $"{(context.IsHandlerAsync() ? "await " : string.Empty)}{invocationExpression}");
+                context.DeclareVariable("handlerResult", configuredAwait);
                 break;
             case HandlerReturnNormalizationKind.PlainValue:
-                context.DeclareVariable("handlerResult", $"(Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<{normalization.PlainValueTypeName}>({(context.IsHandlerAsync() ? "await " : string.Empty)}{invocationExpression})");
+                context.DeclareVariable("handlerResult", $"(Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<{normalization.PlainValueTypeName}>({configuredAwait})");
                 break;
             case HandlerReturnNormalizationKind.ResultsUnion:
-                context.DeclareVariable("handlerUnionResult", $"{(context.IsHandlerAsync() ? "await " : string.Empty)}{invocationExpression}");
+                context.DeclareVariable("handlerUnionResult", configuredAwait);
                 context.DeclareVariable("handlerResult", "handlerUnionResult.IsT1 ? (Blueprint.OperationResult)handlerUnionResult.AsT1 : (Blueprint.OperationResult)handlerUnionResult.AsT2");
                 break;
             default:

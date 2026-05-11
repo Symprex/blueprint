@@ -568,7 +568,7 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
                             "resourceLinkGenerators",
                             "Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<System.Collections.Generic.IEnumerable<Blueprint.Http.IResourceLinkGenerator>>(context.ServiceProvider)");
 
-                        branch.WriteStatement("await Blueprint.Http.LinkGeneratorHandler.AddLinksAsync(apiLinkGenerator, resourceLinkGenerators, context, handlerResult);");
+                        branch.WriteStatement("await Blueprint.Http.LinkGeneratorHandler.AddLinksAsync(apiLinkGenerator, resourceLinkGenerators, context, handlerResult).ConfigureAwait(false);");
                     });
             });
     }

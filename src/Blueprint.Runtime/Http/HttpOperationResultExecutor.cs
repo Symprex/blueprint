@@ -68,12 +68,12 @@ public class HttpOperationResultExecutor
             case UnauthenticatedResult:
                 httpContext.Response.StatusCode = StatusCodes.Status401Unauthorized;
                 httpContext.Response.ContentType = ProblemJsonContentType;
-                await WriteJsonAsync(httpContext, operationContext, _unauthorizedProblem);
+                await WriteJsonAsync(httpContext, operationContext, _unauthorizedProblem).ConfigureAwait(false);
                 return true;
             case ForbiddenResult:
                 httpContext.Response.StatusCode = StatusCodes.Status403Forbidden;
                 httpContext.Response.ContentType = ProblemJsonContentType;
-                await WriteJsonAsync(httpContext, operationContext, _forbiddenProblem);
+                await WriteJsonAsync(httpContext, operationContext, _forbiddenProblem).ConfigureAwait(false);
                 return true;
             case BindingFailureResult bindingFailureResult:
                 httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
@@ -88,7 +88,7 @@ public class HttpOperationResultExecutor
             case UnsupportedMediaTypeResult:
                 httpContext.Response.StatusCode = StatusCodes.Status415UnsupportedMediaType;
                 httpContext.Response.ContentType = ProblemJsonContentType;
-                await WriteJsonAsync(httpContext, operationContext, _unsupportedMediaTypeProblem);
+                await WriteJsonAsync(httpContext, operationContext, _unsupportedMediaTypeProblem).ConfigureAwait(false);
                 return true;
             case HttpPipelineShortCircuitResult:
                 // Response was already written by the generated pipeline (e.g. binding failure).
@@ -97,22 +97,22 @@ public class HttpOperationResultExecutor
                 httpContext.Response.StatusCode = StatusCodes.Status201Created;
                 httpContext.Response.ContentType = JsonContentType;
                 TrySetLocationHeader(httpContext, createdResult.Content);
-                await WriteJsonAsync(httpContext, operationContext, createdResult.Content);
+                await WriteJsonAsync(httpContext, operationContext, createdResult.Content).ConfigureAwait(false);
                 return true;
             case AcceptedResult acceptedResult:
                 httpContext.Response.StatusCode = StatusCodes.Status202Accepted;
                 httpContext.Response.ContentType = JsonContentType;
-                await WriteJsonAsync(httpContext, operationContext, acceptedResult.Content);
+                await WriteJsonAsync(httpContext, operationContext, acceptedResult.Content).ConfigureAwait(false);
                 return true;
             case ConflictResult conflictResult:
                 httpContext.Response.StatusCode = StatusCodes.Status409Conflict;
                 httpContext.Response.ContentType = JsonContentType;
-                await WriteJsonAsync(httpContext, operationContext, conflictResult.Content);
+                await WriteJsonAsync(httpContext, operationContext, conflictResult.Content).ConfigureAwait(false);
                 return true;
             case NotFoundResult notFoundResult:
                 httpContext.Response.StatusCode = StatusCodes.Status404NotFound;
                 httpContext.Response.ContentType = JsonContentType;
-                await WriteJsonAsync(httpContext, operationContext, notFoundResult.Content);
+                await WriteJsonAsync(httpContext, operationContext, notFoundResult.Content).ConfigureAwait(false);
                 return true;
             case OkResult okResult:
                 if (okResult is INotModifiedResult notModifiedResult)
@@ -144,13 +144,13 @@ public class HttpOperationResultExecutor
                     }
                 }
 
-                await WriteJsonAsync(httpContext, operationContext, okResult.Content);
+                await WriteJsonAsync(httpContext, operationContext, okResult.Content).ConfigureAwait(false);
                 return true;
             case ValidationFailedResult validationFailedResult when DescriptorSupportsFailureResult(operationContext.Descriptor, validationFailedResult):
-                await WriteValidationFailureAsync(httpContext, operationContext, validationFailedResult);
+                await WriteValidationFailureAsync(httpContext, operationContext, validationFailedResult).ConfigureAwait(false);
                 return true;
             case UnhandledExceptionResult unhandledExceptionResult when DescriptorSupportsFailureResult(operationContext.Descriptor, unhandledExceptionResult):
-                await WriteUnhandledExceptionAsync(httpContext, operationContext, unhandledExceptionResult, httpOptions);
+                await WriteUnhandledExceptionAsync(httpContext, operationContext, unhandledExceptionResult, httpOptions).ConfigureAwait(false);
                 return true;
             case NoResultOperationResult:
                 httpContext.Response.StatusCode = StatusCodes.Status200OK;
@@ -176,7 +176,7 @@ public class HttpOperationResultExecutor
                 httpContext.Response.ContentType = string.Equals(plainTextResult.ContentType, "text/plain", StringComparison.Ordinal)
                     ? PlainTextContentType
                     : $"{plainTextResult.ContentType}; charset=utf-8";
-                await httpContext.Response.WriteAsync(plainTextResult.Content, httpContext.RequestAborted);
+                await httpContext.Response.WriteAsync(plainTextResult.Content, httpContext.RequestAborted).ConfigureAwait(false);
                 return true;
             case RedirectResult redirectResult:
                 httpContext.Response.StatusCode = redirectResult.StatusCode;
@@ -190,7 +190,7 @@ public class HttpOperationResultExecutor
                     httpContext.Response.Headers.ContentDisposition = $"attachment; filename=\"{fileStreamResult.FileName}\"";
                 }
 
-                await fileStreamResult.Stream.CopyToAsync(httpContext.Response.Body, httpContext.RequestAborted);
+                await fileStreamResult.Stream.CopyToAsync(httpContext.Response.Body, httpContext.RequestAborted).ConfigureAwait(false);
                 return true;
             case StatusCodeResult statusCodeResult:
                 httpContext.Response.StatusCode = statusCodeResult.StatusCode;
@@ -203,10 +203,10 @@ public class HttpOperationResultExecutor
                     TrySetLocationHeader(httpContext, resourceEvent.Data);
                 }
 
-                await WriteJsonAsync(httpContext, operationContext, resourceEvent);
+                await WriteJsonAsync(httpContext, operationContext, resourceEvent).ConfigureAwait(false);
                 return true;
             case HttpResult httpResult:
-                await httpResult.ExecuteAsync(operationContext);
+                await httpResult.ExecuteAsync(operationContext).ConfigureAwait(false);
                 return true;
             default:
                 return false;
@@ -237,12 +237,12 @@ public class HttpOperationResultExecutor
 
         if (jsonTypeInfo is not null)
         {
-            await JsonSerializer.SerializeAsync(httpContext.Response.Body, content, jsonTypeInfo, httpContext.RequestAborted);
+            await JsonSerializer.SerializeAsync(httpContext.Response.Body, content, jsonTypeInfo, httpContext.RequestAborted).ConfigureAwait(false);
         }
         else
         {
             var serializerOptions = serializerContext?.Options ?? new JsonSerializerOptions();
-            await JsonSerializer.SerializeAsync(httpContext.Response.Body, content, contentType, CreateFallbackSerializerOptions(serializerOptions), httpContext.RequestAborted);
+            await JsonSerializer.SerializeAsync(httpContext.Response.Body, content, contentType, CreateFallbackSerializerOptions(serializerOptions), httpContext.RequestAborted).ConfigureAwait(false);
         }
     }
 
@@ -357,7 +357,7 @@ public class HttpOperationResultExecutor
 
         httpContext.Response.StatusCode = StatusCodes.Status422UnprocessableEntity;
         httpContext.Response.ContentType = ProblemJsonContentType;
-        await WriteJsonAsync(httpContext, operationContext, problemDetails);
+        await WriteJsonAsync(httpContext, operationContext, problemDetails).ConfigureAwait(false);
     }
 
     private static IEnumerable<(string MemberName, string ErrorMessage)> ExpandValidationErrorEntries(ValidationResult validationResult)
@@ -449,7 +449,7 @@ public class HttpOperationResultExecutor
 
         httpContext.Response.StatusCode = statusCode;
         httpContext.Response.ContentType = ProblemJsonContentType;
-        await WriteJsonAsync(httpContext, operationContext, problemDetails);
+        await WriteJsonAsync(httpContext, operationContext, problemDetails).ConfigureAwait(false);
     }
 
     /// <summary>

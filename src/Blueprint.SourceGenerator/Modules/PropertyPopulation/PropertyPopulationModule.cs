@@ -61,7 +61,7 @@ public sealed class PropertyPopulationModule : IBlueprintSourceGeneratorModule, 
             $"this.{FieldName}.Length == 1",
             singleBranch =>
             {
-                singleBranch.WriteStatement($"await this.{FieldName}[0].PopulateAsync(context, context.OperationCancelled);");
+                singleBranch.WriteStatement($"await this.{FieldName}[0].PopulateAsync(context, context.OperationCancelled).ConfigureAwait(false);");
             });
         context.Else(elseBranch =>
         {
@@ -71,7 +71,7 @@ public sealed class PropertyPopulationModule : IBlueprintSourceGeneratorModule, 
                 {
                     multiBranch.ForEach("var populator", $"this.{FieldName}", foreachBody =>
                     {
-                        foreachBody.WriteStatement("await populator.PopulateAsync(context, context.OperationCancelled);");
+                        foreachBody.WriteStatement("await populator.PopulateAsync(context, context.OperationCancelled).ConfigureAwait(false);");
                     });
                 });
         });

@@ -372,7 +372,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
 
                 resolvedBranch.DeclareVariable(
                     "isAuthorized",
-                    $"await resolvedAuthProvider.IsAuthorizedAsync(context, {principalExpr}, new Blueprint.Model.ResolvedScopePair[] {{ {resolvedElements} }}, {httpContextExpr}.RequestAborted)");
+                    $"await resolvedAuthProvider.IsAuthorizedAsync(context, {principalExpr}, new Blueprint.Model.ResolvedScopePair[] {{ {resolvedElements} }}, {httpContextExpr}.RequestAborted).ConfigureAwait(false)");
 
                 resolvedBranch.If(
                     "!isAuthorized",
@@ -423,7 +423,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
             {
                 branch.DeclareVariable(
                     "isAuthorized",
-                    $"await this._resourceAuthorizationProvider.IsAuthorizedAsync(context, {context.GetHttpContextExpression()}.User, {scopePairFieldName}, {context.GetHttpContextExpression()}.RequestAborted)");
+                    $"await this._resourceAuthorizationProvider.IsAuthorizedAsync(context, {context.GetHttpContextExpression()}.User, {scopePairFieldName}, {context.GetHttpContextExpression()}.RequestAborted).ConfigureAwait(false)");
 
                 branch.If(
                     "!isAuthorized",
@@ -444,7 +444,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
     {
         branch.DeclareVariable(
             "isAuthorized",
-            $"await this._resourceAuthorizationProvider.IsAuthorizedAsync(context, {context.GetHttpContextExpression()}.User, {scopePairFieldName}, {context.GetHttpContextExpression()}.RequestAborted)");
+            $"await this._resourceAuthorizationProvider.IsAuthorizedAsync(context, {context.GetHttpContextExpression()}.User, {scopePairFieldName}, {context.GetHttpContextExpression()}.RequestAborted).ConfigureAwait(false)");
 
         branch.If(
             "!isAuthorized",

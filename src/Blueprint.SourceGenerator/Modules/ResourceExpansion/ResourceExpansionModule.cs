@@ -181,7 +181,7 @@ public sealed class ResourceExpansionModule : IBlueprintSourceGeneratorModule, I
                                         $"await global::Blueprint.Runtime.Expansion.ResourceExpansionRuntime.ExpandAsync(" +
                                         $"context, handlerResult, {accessPath}, " +
                                         $"typeof({prop.ExpandableResourceTypeName}), " +
-                                        $"{(prop.IsEnumerable ? "true" : "false")});");
+                                        $"{(prop.IsEnumerable ? "true" : "false")}).ConfigureAwait(false);");
                                 }
                                 else
                                 {
@@ -191,7 +191,7 @@ public sealed class ResourceExpansionModule : IBlueprintSourceGeneratorModule, I
                                         $"context, handlerResult, {accessPath}, " +
                                         $"\"{prop.PropertyPath}\", " +
                                         $"typeof({prop.ExpandableResourceTypeName}), " +
-                                        $"{(prop.IsEnumerable ? "true" : "false")});");
+                                        $"{(prop.IsEnumerable ? "true" : "false")}).ConfigureAwait(false);");
                                 }
                             }
                         });

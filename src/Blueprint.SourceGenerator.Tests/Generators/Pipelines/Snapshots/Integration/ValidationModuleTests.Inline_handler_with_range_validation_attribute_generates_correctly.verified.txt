@@ -36,7 +36,7 @@ namespace Blueprint.Generated
 
             if (this._propertyPopulators.Length == 1)
             {
-                await this._propertyPopulators[0].PopulateAsync(context, context.OperationCancelled);
+                await this._propertyPopulators[0].PopulateAsync(context, context.OperationCancelled).ConfigureAwait(false);
             }
             else
             {
@@ -44,7 +44,7 @@ namespace Blueprint.Generated
                 {
                     foreach (var populator in this._propertyPopulators)
                     {
-                        await populator.PopulateAsync(context, context.OperationCancelled);
+                        await populator.PopulateAsync(context, context.OperationCancelled).ConfigureAwait(false);
                     }
                 }
             }
@@ -60,7 +60,7 @@ namespace Blueprint.Generated
                 return new Blueprint.Runtime.Exec.ValidationFailedResult(validationResults);
             }
 
-            var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<string>(await global::TestNamespace.CreateUserCommand.HandleAsync(operation));
+            var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<string>(await global::TestNamespace.CreateUserCommand.HandleAsync(operation).ConfigureAwait(false));
 
             if (handlerResult.WasSuccessful)
             {
@@ -68,13 +68,13 @@ namespace Blueprint.Generated
                 var unitOfWork = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Persistence.IUnitOfWork>(context.ServiceProvider);
                 if (unitOfWork != null)
                 {
-                    await unitOfWork.SaveChangesAsync(context.OperationCancelled);
+                    await unitOfWork.SaveChangesAsync(context.OperationCancelled).ConfigureAwait(false);
                 }
 
                 var messageOutbox = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Messaging.IMessageOutbox>(context.ServiceProvider);
                 if (messageOutbox != null)
                 {
-                    await messageOutbox.CommitAsync(context.OperationCancelled);
+                    await messageOutbox.CommitAsync(context.OperationCancelled).ConfigureAwait(false);
                 }
 
                 if (this._auditSink != null)
@@ -82,7 +82,7 @@ namespace Blueprint.Generated
                     context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent("blueprint.audit.started", default, _auditTags_CreateUserCommand));
                     try
                     {
-                        await this._auditSink.RecordAsync(context, handlerResult, System.Threading.CancellationToken.None);
+                        await this._auditSink.RecordAsync(context, handlerResult, System.Threading.CancellationToken.None).ConfigureAwait(false);
                         context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent("blueprint.audit.succeeded", default, _auditTags_CreateUserCommand));
                     }
                     catch (System.Exception auditException)
@@ -94,7 +94,7 @@ namespace Blueprint.Generated
                 var backgroundTaskScheduler = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Tasks.IBackgroundTaskScheduler>(context.ServiceProvider);
                 if (backgroundTaskScheduler != null)
                 {
-                    await backgroundTaskScheduler.RunNowAsync();
+                    await backgroundTaskScheduler.RunNowAsync().ConfigureAwait(false);
                 }
             }
 
