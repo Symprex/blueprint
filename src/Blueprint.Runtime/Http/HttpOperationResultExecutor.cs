@@ -303,7 +303,10 @@ public class HttpOperationResultExecutor
 
         if (validationFailedResult.Errors is { Count: > 0 } preBuilt)
         {
-            validationErrors = new Dictionary<string, string[]>(preBuilt, StringComparer.Ordinal);
+            // The concrete type is Dictionary<string, string[]> which implements both
+            // IReadOnlyDictionary and IDictionary. Cast directly to avoid a copy.
+            // MvcValidationProblemDetails only reads the dictionary so mutation is safe.
+            validationErrors = (IDictionary<string, string[]>)preBuilt;
         }
         else
         {
