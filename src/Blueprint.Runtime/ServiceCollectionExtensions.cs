@@ -39,8 +39,33 @@ public static class ServiceCollectionExtensions
         // BlueprintAppExecutor for nested operation execution without knowing the concrete type.
         services.AddSingleton<BlueprintAppExecutor>(sp => sp.GetRequiredService<TExec>());
 
-        // Default link generation infrastructure
-        services.TryAddScoped<Blueprint.Http.IApiLinkGenerator, Blueprint.Http.ApiLinkGenerator>();
+        // Default link generation infrastructure.
+        // ApiLinkGenerator needs the per-request base URI from ApiOperationContext,
+        // which is set by BlueprintApiRouter before pipeline execution.
+        // IHttpContextAccessor bridges the gap: the scoped factory reads the current
+        // request's scheme/host/pathBase to construct the base URI dynamically.
+        services.TryAddSingleton<Microsoft.AspNetCore.Http.IHttpContextAccessor, Microsoft.AspNetCore.Http.HttpContextAccessor>();
+        services.TryAddScoped<Blueprint.Http.IApiLinkGenerator>(sp =>
+        {
+            var app = sp.GetRequiredService<BlueprintApp>();
+            var httpContextAccessor = sp.GetService<Microsoft.AspNetCore.Http.IHttpContextAccessor>();
+            var httpContext = httpContextAccessor?.HttpContext;
+
+            string baseUri;
+            if (httpContext is not null)
+            {
+                var request = httpContext.Request;
+                var host = request.Host.Value;
+                var pathBase = request.PathBase.HasValue ? request.PathBase.Value : string.Empty;
+                baseUri = $"{request.Scheme}://{host}{pathBase}/";
+            }
+            else
+            {
+                baseUri = "https://localhost/";
+            }
+
+            return new Blueprint.Http.ApiLinkGenerator(app, baseUri);
+        });
         services.TryAddScoped<Blueprint.Http.IResourceLinkGenerator, Blueprint.Http.EntityOperationResourceLinkGenerator>();
 
         // Pre-rendered OpenAPI document holder — populated at endpoint mapping time

@@ -73,14 +73,6 @@ public static class BlueprintLoadTestScenarios
                     services.AddAuthentication("LoadTest")
                         .AddScheme<AuthenticationSchemeOptions, LoadTestAuthHandler>("LoadTest", _ => { });
 
-                    // Register IApiLinkGenerator BEFORE AddBlueprintApi so TryAddScoped
-                    // inside AddBlueprintApi skips its type-based registration (which
-                    // would fail because ApiLinkGenerator needs a string baseUri).
-                    services.AddScoped<Blueprint.Http.IApiLinkGenerator>(sp =>
-                        new Blueprint.Http.ApiLinkGenerator(
-                            sp.GetRequiredService<Blueprint.Model.BlueprintApp>(),
-                            "http://localhost/api/"));
-
                     services.AddBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>(blueprint =>
                     {
                         blueprint.AddAuditSink<LoggingAuditSink>();

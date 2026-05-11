@@ -76,6 +76,20 @@ public class AppDataModelSourceGeneratorTests
             .VerifySuccessAsync(SnapshotsFolder);
     }
 
+    [Fact]
+    public async Task When_scan_attribute_has_error_type_then_reports_BP004()
+    {
+        var source = """
+                     [BlueprintAppScan(FromAssemblyOf = typeof(NonExistentType))]
+                     public partial class TestBlueprintApp : BlueprintApp
+                     {
+                     }
+                     """;
+
+        await Compile(source)
+            .VerifyCompilationFailedAsync(SnapshotsFolder);
+    }
+
     internal static GenerationResult Compile(string source)
     {
         return TestHelpers.Compile<AppDataModelSourceGenerator>("using Blueprint.Model;\nusing Blueprint.Model.Attributes;\n\nnamespace TestNamespace;\n\n" + source);

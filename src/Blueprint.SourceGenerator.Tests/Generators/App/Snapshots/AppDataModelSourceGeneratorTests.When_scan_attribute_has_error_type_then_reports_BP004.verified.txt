@@ -1,0 +1,12 @@
+﻿File: Input0.cs
+using Blueprint.Model;
+using Blueprint.Model.Attributes;
+
+namespace TestNamespace;
+
+[BlueprintAppScan(FromAssemblyOf = typeof(NonExistentType))]
+ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [Error:BP004] The Scan attribute is not valid
+                                          ^^^^^^^^^^^^^^^ [Error:CS0246] The type or namespace name 'NonExistentType' could not be found (are you missing a using directive or an assembly reference?)
+public partial class TestBlueprintApp : BlueprintApp
+{
+}
