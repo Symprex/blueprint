@@ -296,6 +296,147 @@ _host = new BlueprintTestHostBuilder<PortalApp, PortalAppExecutor>()
     .Build();
 ```
 
+---
+
+## S365-Specific Test Patterns
+
+### Authentication Helper Migration
+
+S365 uses an `Authentication` class on `ApiFixture` with `Set()` and scoped `As()` methods:
+
+```csharp
+// ─── BEFORE (S365) ─────────────────────────────────────────────
+// Set for entire fixture
+api.Authentication.Set(new ClaimsIdentity(
+    new[]
+    {
+        new Claim("sub", "user-1"),
+        new Claim("sig365_tenant_id", "tenant-1"),
+        new Claim("sig365_assigned_scope_pair", "Signature.Read"),
+    },
+    "Bearer"));
+
+// Scoped (reverts on dispose)
+using (api.Authentication.As(tenantAdminIdentity))
+{
+    var result = await api.QueryAsync(new GetSignaturesQuery());
+    // ...
+}
+
+// ─── AFTER (Blueprint) ────────────────────────────────────────
+// Use BlueprintTestContext
+var result = await host.ExecuteAsync(
+    new GetSignaturesQuery(),
+    ctx => ctx.WithUser(new ClaimsIdentity(
+        new[]
+        {
+            new Claim("sub", "user-1"),
+            new Claim("sig365_tenant_id", "tenant-1"),
+            new Claim("sig365_assigned_scope_pair", "Signature.Read"),
+        },
+        "Bearer")));
+```
+
+### FakeBus Assertion Migration
+
+S365 uses custom FluentAssertions extensions on `FakeBus`:
+
+```csharp
+// ─── BEFORE (S365) ─────────────────────────────────────────────
+api.Bus.Should().HavePublishedSingle<UserCreatedEvent>();
+api.Bus.Should().HavePublished<SignatureUpdatedEvent>();
+api.Bus.Should().NotHavePublished<TenantDeletedEvent>();
+api.Bus.Should().HaveSent<ProcessImportTask>();
+
+// ─── AFTER (Blueprint) ────────────────────────────────────────
+// Use Rebus.TestHelpers.FakeBus directly
+var fakeBus = host.Services.GetRequiredService<IBus>() as FakeBus;
+fakeBus.Events.OfType<MessagePublished<UserCreatedEvent>>().Should().ContainSingle();
+fakeBus.Events.OfType<MessagePublished<SignatureUpdatedEvent>>().Should().NotBeEmpty();
+fakeBus.Events.OfType<MessagePublished<TenantDeletedEvent>>().Should().BeEmpty();
+fakeBus.Events.OfType<MessageSent<ProcessImportTask>>().Should().ContainSingle();
+```
+
+### Background Task Assertion Migration
+
+Both frameworks use `BackgroundTaskCollector` with the same API:
+
+```csharp
+// ─── BEFORE (S365) ─────────────────────────────────────────────
+var tasks = api.Tasks.Enqueued.OfType<SendWelcomeEmailTask>();
+tasks.Should().HaveCount(1);
+tasks.First().UserId.Should().Be("user-1");
+
+// ─── AFTER (Blueprint) ────────────────────────────────────────
+var collector = host.Services.GetRequiredService<IBackgroundTaskScheduleProvider>()
+    as BackgroundTaskCollector;
+var tasks = collector.Enqueued.OfType<SendWelcomeEmailTask>();
+tasks.Should().HaveCount(1);
+tasks.First().UserId.Should().Be("user-1");
+```
+
+### Authorization Test Fixture Migration
+
+S365 has a sophisticated `OperationAuthTestFixture<T>` pattern with declarative expectations:
+
+```csharp
+// ─── BEFORE (S365) ─────────────────────────────────────────────
+public class CreateUserAuthTest : OperationAuthTestFixture<CreateUserCommand>
+{
+    public CreateUserAuthTest(PortalApiFixtureFactory factory) : base(factory)
+    {
+        this.ExpectTenantUserAllowed(S365Roles.TenantAdministrator);
+        this.ExpectTenantUserAllowed(S365Roles.TenantUsersManage);
+        // Remaining roles are implicitly expected to be denied
+    }
+}
+
+// ─── AFTER (Blueprint) ────────────────────────────────────────
+// Blueprint provides compile-time scope pair validation, so the
+// declarative authorization test pattern is less critical.
+// Integration tests that verify 403 responses are recommended:
+[Fact]
+public async Task Unauthorized_role_returns_403()
+{
+    var result = await host.ExecuteAsync(
+        new CreateUserCommand { Name = "Test" },
+        ctx => ctx.WithUser(CreateIdentity(role: "Reader")));
+    result.Should().BeOfType<ForbiddenResult>();
+}
+
+[Fact]
+public async Task Admin_role_succeeds()
+{
+    var result = await host.ExecuteAsync(
+        new CreateUserCommand { Name = "Test" },
+        ctx => ctx.WithUser(CreateIdentity(role: "TenantAdministrator")));
+    result.Should().BeOfType<ResourceEventResult<UserApiResource>>();
+}
+```
+
+### Database Extension Migration
+
+S365 uses `ApiFixtureDbExtensions` for tenant-scoped Marten queries:
+
+```csharp
+// ─── BEFORE (S365) ─────────────────────────────────────────────
+var user = await api.LoadFromDatabaseAsync<User>(tenantId, userId);
+user.Should().NotBeNull();
+
+await api.WithDatabaseAsync(tenantId, async session =>
+{
+    var all = await session.Query<Template>().ToListAsync();
+    all.Should().HaveCount(5);
+});
+
+// ─── AFTER (Blueprint) ────────────────────────────────────────
+// Access Marten directly from the DI container:
+using var scope = host.Services.CreateScope();
+var session = scope.ServiceProvider.GetRequiredService<IDocumentSession>();
+var user = await session.LoadAsync<User>(userId);
+user.Should().NotBeNull();
+```
+
 ### Shared Fixture for Performance
 
 ```csharp
