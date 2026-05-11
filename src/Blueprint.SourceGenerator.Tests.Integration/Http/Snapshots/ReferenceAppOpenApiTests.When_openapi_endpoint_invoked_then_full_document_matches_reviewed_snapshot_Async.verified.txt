@@ -967,6 +967,28 @@
             }
           },
           {
+            "name": "maxResults",
+            "in": "query",
+            "required": false,
+            "description": "Maximum number of results to return.",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "maximum": 500
+            }
+          },
+          {
+            "name": "minResults",
+            "in": "query",
+            "required": false,
+            "description": "Minimum number of results to return.",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
             "name": "page",
             "in": "query",
             "required": false,

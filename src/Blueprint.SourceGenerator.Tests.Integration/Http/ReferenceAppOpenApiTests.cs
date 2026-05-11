@@ -156,6 +156,40 @@ public class ReferenceAppOpenApiTests
     }
 
     [Fact]
+    public async Task When_openapi_endpoint_invoked_then_min_results_parameter_has_inclusive_minimum()
+    {
+        var (json, _) = await InvokeOpenApiEndpointAsync();
+        using var doc = JsonDocument.Parse(json);
+
+        var searchPath = doc.RootElement.GetProperty("paths").GetProperty("/templates/search");
+        var parameters = searchPath.GetProperty("get").GetProperty("parameters");
+        var minResultsParam = parameters.EnumerateArray()
+            .Single(static p => p.GetProperty("name").GetString() == "minResults");
+
+        var schema = minResultsParam.GetProperty("schema");
+        schema.GetProperty("minimum").GetDecimal().Should().Be(0);
+        schema.TryGetProperty("exclusiveMinimum", out _).Should().BeFalse(
+            "[GreaterThanOrEqualTo] is inclusive — exclusiveMinimum must not be emitted");
+    }
+
+    [Fact]
+    public async Task When_openapi_endpoint_invoked_then_max_results_parameter_has_inclusive_maximum()
+    {
+        var (json, _) = await InvokeOpenApiEndpointAsync();
+        using var doc = JsonDocument.Parse(json);
+
+        var searchPath = doc.RootElement.GetProperty("paths").GetProperty("/templates/search");
+        var parameters = searchPath.GetProperty("get").GetProperty("parameters");
+        var maxResultsParam = parameters.EnumerateArray()
+            .Single(static p => p.GetProperty("name").GetString() == "maxResults");
+
+        var schema = maxResultsParam.GetProperty("schema");
+        schema.GetProperty("maximum").GetDecimal().Should().Be(500);
+        schema.TryGetProperty("exclusiveMaximum", out _).Should().BeFalse(
+            "[LessThanOrEqualTo] is inclusive — exclusiveMaximum must not be emitted");
+    }
+
+    [Fact]
     public async Task When_openapi_endpoint_invoked_then_create_request_body_has_required_array_and_max_length()
     {
         var (json, _) = await InvokeOpenApiEndpointAsync();

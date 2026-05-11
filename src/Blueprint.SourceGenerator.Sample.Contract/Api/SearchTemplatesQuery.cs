@@ -53,6 +53,24 @@ public partial class SearchTemplatesQuery : IQuery<TemplateApiResource[]>
     public TemplateSortOrder SortBy { get; set; } = TemplateSortOrder.Name;
 
     /// <summary>
+    /// The minimum number of results to return. Inclusive lower bound (0 or more).
+    /// Demonstrates <see cref="GreaterThanOrEqualToAttribute"/> rendering as OpenAPI
+    /// <c>minimum</c> without <c>exclusiveMinimum</c>.
+    /// </summary>
+    [GreaterThanOrEqualTo(0)]
+    [Description("Minimum number of results to return.")]
+    public int MinResults { get; set; }
+
+    /// <summary>
+    /// The maximum number of results to return. Inclusive upper bound (500 or fewer).
+    /// Demonstrates <see cref="LessThanOrEqualToAttribute"/> rendering as OpenAPI
+    /// <c>maximum</c> without <c>exclusiveMaximum</c>.
+    /// </summary>
+    [LessThanOrEqualTo(500)]
+    [Description("Maximum number of results to return.")]
+    public int MaxResults { get; set; } = 100;
+
+    /// <summary>
     /// An optional correlation ID provided via the <c>X-Correlation-Id</c> request header.
     /// Demonstrates <see cref="FromHeaderAttribute"/> binding for cross-system trace correlation.
     /// The handler echoes this value for observability integration.

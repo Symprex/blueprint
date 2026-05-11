@@ -176,6 +176,9 @@ internal sealed record OpenApiValidationConstraints(
                 case GreaterThanAttribute greaterThanAttribute:
                     ApplyLowerBound(ref minimum, ref isExclusive, greaterThanAttribute.MinimumValue, isExclusiveCandidate: true);
                     break;
+                case GreaterThanOrEqualToAttribute greaterThanOrEqualToAttribute:
+                    ApplyLowerBound(ref minimum, ref isExclusive, greaterThanOrEqualToAttribute.MinimumValue, isExclusiveCandidate: false);
+                    break;
             }
         }
 
@@ -196,6 +199,9 @@ internal sealed record OpenApiValidationConstraints(
                     break;
                 case LessThanAttribute lessThanAttribute:
                     ApplyUpperBound(ref maximum, ref isExclusive, lessThanAttribute.MaximumValue, isExclusiveCandidate: true);
+                    break;
+                case LessThanOrEqualToAttribute lessThanOrEqualToAttribute:
+                    ApplyUpperBound(ref maximum, ref isExclusive, lessThanOrEqualToAttribute.MaximumValue, isExclusiveCandidate: false);
                     break;
             }
         }
