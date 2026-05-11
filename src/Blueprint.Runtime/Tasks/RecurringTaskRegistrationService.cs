@@ -48,7 +48,7 @@ public sealed class RecurringTaskRegistrationService : IHostedService
 
         foreach (var scheduler in this._schedulers)
         {
-            var schedules = await scheduler.GetTaskSchedulesAsync();
+            var schedules = await scheduler.GetTaskSchedulesAsync().ConfigureAwait(false);
             allSchedules.AddRange(schedules);
         }
 
@@ -63,7 +63,7 @@ public sealed class RecurringTaskRegistrationService : IHostedService
             allSchedules.Count,
             this._provider.GetType().Name);
 
-        await this._provider.RegisterSchedulesAsync(allSchedules, cancellationToken);
+        await this._provider.RegisterSchedulesAsync(allSchedules, cancellationToken).ConfigureAwait(false);
     }
 
     /// <inheritdoc />

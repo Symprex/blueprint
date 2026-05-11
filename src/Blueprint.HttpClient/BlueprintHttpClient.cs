@@ -54,9 +54,9 @@ public sealed class BlueprintHttpClient<TApp>
         ArgumentNullException.ThrowIfNull(operation);
 
         using var request = this.CreateRequest(operation);
-        using var response = await this._httpClient.SendAsync(request, cancellationToken);
+        using var response = await this._httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
 
-        return await this.HandleResponseAsync<TResponse>(response, cancellationToken);
+        return await this.HandleResponseAsync<TResponse>(response, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -74,9 +74,9 @@ public sealed class BlueprintHttpClient<TApp>
         ArgumentNullException.ThrowIfNull(operation);
 
         using var request = this.CreateRequest(operation);
-        using var response = await this._httpClient.SendAsync(request, cancellationToken);
+        using var response = await this._httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
 
-        await this.EnsureSuccessOrThrowAsync(response, cancellationToken);
+        await this.EnsureSuccessOrThrowAsync(response, cancellationToken).ConfigureAwait(false);
     }
 
     private HttpRequestMessage CreateRequest(IOperation operation)
@@ -352,7 +352,7 @@ public sealed class BlueprintHttpClient<TApp>
         HttpResponseMessage response,
         CancellationToken cancellationToken)
     {
-        await this.EnsureSuccessOrThrowAsync(response, cancellationToken);
+        await this.EnsureSuccessOrThrowAsync(response, cancellationToken).ConfigureAwait(false);
 
         if (response.StatusCode == HttpStatusCode.NoContent)
         {
@@ -365,12 +365,12 @@ public sealed class BlueprintHttpClient<TApp>
         if (contentType?.StartsWith("text/", StringComparison.OrdinalIgnoreCase) == true
             && typeof(TResponse) == typeof(string))
         {
-            var text = await response.Content.ReadAsStringAsync(cancellationToken);
+            var text = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
             return (TResponse)(object)text;
         }
 
         // JSON deserialization
-        return await response.Content.ReadFromJsonAsync<TResponse>(this._jsonOptions, cancellationToken);
+        return await response.Content.ReadFromJsonAsync<TResponse>(this._jsonOptions, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task EnsureSuccessOrThrowAsync(
@@ -382,7 +382,7 @@ public sealed class BlueprintHttpClient<TApp>
             return;
         }
 
-        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
 
         // 422 Unprocessable Entity → ValidationException with field errors
         if (response.StatusCode == HttpStatusCode.UnprocessableEntity)

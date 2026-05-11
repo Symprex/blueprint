@@ -82,7 +82,7 @@ public sealed class EntityOperationResourceLinkGenerator : IResourceLinkGenerato
                 continue;
             }
 
-            var result = await this._apiAuthoriserAggregator.CanShowLinkAsync(context, entityOperation, linkableResource);
+            var result = await this._apiAuthoriserAggregator.CanShowLinkAsync(context, entityOperation, linkableResource).ConfigureAwait(false);
 
             if (result.IsAllowed == false)
             {

@@ -63,7 +63,7 @@ public static class ResourceExpansionRuntime
             return;
         }
 
-        await DoExpandAsync(context, okResult, propertyValue, expandableResourceType, isEnumerable);
+        await DoExpandAsync(context, okResult, propertyValue, expandableResourceType, isEnumerable).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -93,7 +93,7 @@ public static class ResourceExpansionRuntime
             return;
         }
 
-        await DoExpandAsync(context, okResult, propertyValue, expandableResourceType, isEnumerable);
+        await DoExpandAsync(context, okResult, propertyValue, expandableResourceType, isEnumerable).ConfigureAwait(false);
     }
 
     private static async ValueTask DoExpandAsync(
@@ -157,7 +157,7 @@ public static class ResourceExpansionRuntime
             context,
             okResult.Content!,
             enumerable,
-            context.OperationCancelled);
+            context.OperationCancelled).ConfigureAwait(false);
     }
 
     private static bool CheckForExpandableParameters(ApiOperationContext context, out StringValues expandables)

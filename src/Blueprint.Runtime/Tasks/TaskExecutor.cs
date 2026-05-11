@@ -81,7 +81,7 @@ public sealed class TaskExecutor
             Operation = (IOperation)envelope.Task,
         };
 
-        var result = await this._executor.ExecuteAsync(context);
+        var result = await this._executor.ExecuteAsync(context).ConfigureAwait(false);
 
         if (result is UnhandledExceptionResult unhandled)
         {

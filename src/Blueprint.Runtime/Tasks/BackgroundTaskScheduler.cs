@@ -94,7 +94,7 @@ public sealed class BackgroundTaskScheduler : IBackgroundTaskScheduler
     {
         foreach (var task in tasks)
         {
-            await task.PushToProviderAsync(this._provider);
+            await task.PushToProviderAsync(this._provider).ConfigureAwait(false);
         }
     }
 
@@ -164,18 +164,18 @@ public sealed class BackgroundTaskScheduler : IBackgroundTaskScheduler
 
             if (this._delay is null)
             {
-                id = await provider.EnqueueAsync(this._envelope);
+                id = await provider.EnqueueAsync(this._envelope).ConfigureAwait(false);
             }
             else
             {
-                id = await provider.ScheduleAsync(this._envelope, this._delay.Value);
+                id = await provider.ScheduleAsync(this._envelope, this._delay.Value).ConfigureAwait(false);
             }
 
             if (this._children is not null)
             {
                 foreach (var child in this._children)
                 {
-                    await child.PushToProviderAsync(provider, id);
+                    await child.PushToProviderAsync(provider, id).ConfigureAwait(false);
                 }
             }
         }
@@ -235,13 +235,13 @@ public sealed class BackgroundTaskScheduler : IBackgroundTaskScheduler
         /// <returns>A task representing the asynchronous dispatch operation.</returns>
         internal async Task PushToProviderAsync(IBackgroundTaskScheduleProvider provider, string parentId)
         {
-            var id = await provider.EnqueueChildAsync(this._envelope, parentId, this._options);
+            var id = await provider.EnqueueChildAsync(this._envelope, parentId, this._options).ConfigureAwait(false);
 
             if (this._children is not null)
             {
                 foreach (var child in this._children)
                 {
-                    await child.PushToProviderAsync(provider, id);
+                    await child.PushToProviderAsync(provider, id).ConfigureAwait(false);
                 }
             }
         }

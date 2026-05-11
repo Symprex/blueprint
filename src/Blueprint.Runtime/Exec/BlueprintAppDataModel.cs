@@ -131,6 +131,6 @@ public class BlueprintAppExecutor
             Operation = operation,
         };
 
-        return await this.ExecuteAsync(context);
+        return await this.ExecuteAsync(context).ConfigureAwait(false);
     }
 }

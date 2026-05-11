@@ -68,7 +68,7 @@ public abstract class OperationExecutorShell : IOperationExecutorPipeline
         {
             _logApiOperationExecuting(this._logger, this._operationTypeName, null);
 
-            return await this.ExecuteCoreAsync(context);
+            return await this.ExecuteCoreAsync(context).ConfigureAwait(false);
         }
         catch (Validation.ValidationException e)
         {

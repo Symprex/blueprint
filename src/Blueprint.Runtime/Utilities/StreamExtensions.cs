@@ -51,7 +51,7 @@ public static class StreamExtensions
 
         // leaveOpen: true so the caller retains ownership of the underlying stream
         using var streamReader = new StreamReader(input, leaveOpen: true);
-        return await streamReader.ReadToEndAsync();
+        return await streamReader.ReadToEndAsync().ConfigureAwait(false);
     }
 
     /// <summary>

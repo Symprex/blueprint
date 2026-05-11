@@ -455,10 +455,13 @@ public class ReferenceAppOpenApiTests
             "nullable string? properties without [Required] should emit nullable: true");
         nullableVal.GetBoolean().Should().BeTrue();
 
-        // Name is nullable (string?) but has [Required] → should NOT have nullable
+        // Name is nullable (string?) and has [Required] → should still have nullable: true
+        // because nullable and required are orthogonal in OpenAPI 3.0.
+        // Required means "must be present", nullable means "value can be null".
         var name = bodySchema.GetProperty("name");
-        name.TryGetProperty("nullable", out _).Should().BeFalse(
-            "properties with [Required] should not emit nullable even if CLR type is nullable");
+        name.TryGetProperty("nullable", out var nameNullable).Should().BeTrue(
+            "string? properties should emit nullable: true regardless of [Required] status");
+        nameNullable.GetBoolean().Should().BeTrue();
     }
 
     [Fact]

@@ -21,11 +21,13 @@
                 "properties": {
                   "currentPassword": {
                     "type": "string",
+                    "nullable": true,
                     "description": "The current password.",
                     "writeOnly": true
                   },
                   "newPassword": {
                     "type": "string",
+                    "nullable": true,
                     "description": "The new password.",
                     "minLength": 8,
                     "maxLength": 128,
@@ -33,6 +35,7 @@
                   },
                   "confirmNewPassword": {
                     "type": "string",
+                    "nullable": true,
                     "description": "Re-enter the new password for confirmation.",
                     "writeOnly": true
                   }
@@ -335,6 +338,7 @@
                 "properties": {
                   "name": {
                     "type": "string",
+                    "nullable": true,
                     "description": "The display name for the template.",
                     "maxLength": 200,
                     "example": "Welcome Email"
@@ -995,6 +999,7 @@
             "description": "The search term to filter templates by name.",
             "schema": {
               "type": "string",
+              "nullable": true,
               "minLength": 1
             }
           },
@@ -1270,6 +1275,7 @@
                 "properties": {
                   "name": {
                     "type": "string",
+                    "nullable": true,
                     "description": "The new display name for the template.",
                     "maxLength": 200
                   },
@@ -1407,6 +1413,7 @@
                 "properties": {
                   "newName": {
                     "type": "string",
+                    "nullable": true,
                     "description": "The display name for the new cloned template.",
                     "maxLength": 200
                   }

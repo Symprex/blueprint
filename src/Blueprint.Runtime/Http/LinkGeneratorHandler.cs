@@ -18,8 +18,8 @@ public static class LinkGeneratorHandler
     /// <param name="registeredGenerators">All registered resource link generators.</param>
     /// <param name="context">The current operation context.</param>
     /// <param name="result">The operation result to enrich with links.</param>
-    /// <returns>A task representing the asynchronous link population.</returns>
-    public static async Task AddLinksAsync(
+    /// <returns>A <see cref="ValueTask"/> representing the asynchronous link population.</returns>
+    public static async ValueTask AddLinksAsync(
         IApiLinkGenerator apiLinkGenerator,
         IEnumerable<IResourceLinkGenerator> registeredGenerators,
         ApiOperationContext context,
@@ -39,7 +39,7 @@ public static class LinkGeneratorHandler
 
         var logger = context.ServiceProvider.GetRequiredService<ILogger<EntityOperationResourceLinkGenerator>>();
 
-        var enriched = await AddResourceLinksAsync(logger, apiLinkGenerator, registeredGenerators, context, content);
+        var enriched = await AddResourceLinksAsync(logger, apiLinkGenerator, registeredGenerators, context, content).ConfigureAwait(false);
 
         // OkResult allows content replacement (e.g. when materialising IQueryable)
         if (result is OkResult ok && !ReferenceEquals(ok.Content, enriched))
@@ -57,7 +57,7 @@ public static class LinkGeneratorHandler
     {
         if (resource is ILinkableResource linkableResource)
         {
-            await AddLinksAsync(logger, apiLinkGenerator, generators, context, linkableResource);
+            await AddLinksAsync(logger, apiLinkGenerator, generators, context, linkableResource).ConfigureAwait(false);
         }
 
         var enumerableResult = resource as IEnumerable<object>;
@@ -80,7 +80,7 @@ public static class LinkGeneratorHandler
             {
                 if (obj is ILinkableResource apiResourceItem)
                 {
-                    await AddLinksAsync(logger, apiLinkGenerator, generators, context, apiResourceItem);
+                    await AddLinksAsync(logger, apiLinkGenerator, generators, context, apiResourceItem).ConfigureAwait(false);
                 }
                 else
                 {
@@ -110,7 +110,7 @@ public static class LinkGeneratorHandler
                     result.GetType().Name);
             }
 
-            await resourceLinkGenerator.AddLinksAsync(apiLinkGenerator, context, result);
+            await resourceLinkGenerator.AddLinksAsync(apiLinkGenerator, context, result).ConfigureAwait(false);
         }
     }
 }

@@ -350,7 +350,9 @@ public sealed record OpenApiOutputRenderingContext(
                 writer.WriteString("format", parameter.SchemaFormat);
             }
 
-            if (parameter.IsNullable && !parameter.Required)
+            // nullable and required are orthogonal in OpenAPI 3.0: a required parameter
+            // can still accept null values, so emit nullable regardless of required status.
+            if (parameter.IsNullable)
             {
                 writer.WriteBoolean("nullable", true);
             }
@@ -423,7 +425,9 @@ public sealed record OpenApiOutputRenderingContext(
                     writer.WriteString("format", property.SchemaFormat);
                 }
 
-                if (property.IsNullable && !property.IsRequired)
+                // nullable and required are orthogonal in OpenAPI 3.0: a required body
+                // property can still accept null values.
+                if (property.IsNullable)
                 {
                     writer.WriteBoolean("nullable", true);
                 }

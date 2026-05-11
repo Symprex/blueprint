@@ -79,7 +79,7 @@ internal sealed class ApiAuthoriserAggregator : IApiAuthoriserAggregator
 
         foreach (var checker in applicableApi)
         {
-            var result = await checker.CanShowLinkAsync(operationContext, descriptor, resource!);
+            var result = await checker.CanShowLinkAsync(operationContext, descriptor, resource!).ConfigureAwait(false);
 
             if (!result.IsAllowed)
             {
@@ -99,7 +99,7 @@ internal sealed class ApiAuthoriserAggregator : IApiAuthoriserAggregator
 
         foreach (var checker in applicableLink)
         {
-            var result = await checker.CanShowLinkAsync(operationContext, descriptor, resource!);
+            var result = await checker.CanShowLinkAsync(operationContext, descriptor, resource!).ConfigureAwait(false);
 
             if (!result.IsAllowed)
             {
