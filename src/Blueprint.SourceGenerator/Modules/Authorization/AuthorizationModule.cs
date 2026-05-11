@@ -286,9 +286,23 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
             "Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Authorization.IResourceAuthorizationProvider>(serviceProvider)",
             isNullable: true);
 
+        // Cache the ScopePair[] as a static readonly field to avoid per-request allocation
+        // (all values are compile-time string literals)
+        var scopePairFieldName = "_scopePairs_" + context.Operation.TypeName.Replace(".", "_").Replace("+", "_");
+        var scopePairArrayExpr = BuildScopePairArrayExpression(effectiveScopePairs);
+
+        context.AddDeferredClassMember(classBuilder =>
+        {
+            classBuilder.AddProperty(scopePairFieldName, Accessibility.Private)
+                .SetType("Blueprint.Model.ScopePair[]")
+                .MakeStatic()
+                .WithReadonlyValue(
+                    $"new Blueprint.Model.ScopePair[] {{ {scopePairArrayExpr} }}");
+        });
+
         context.AddRenderStep(
             PipelineStage.Authorisation,
-            ctx => RenderAuthorizationCheck(ctx, effectiveScopePairs, hasTemplateValidationErrors));
+            ctx => RenderAuthorizationCheck(ctx, effectiveScopePairs, hasTemplateValidationErrors, scopePairFieldName));
     }
 
     private static bool HasHttpHostExposure(INamedTypeSymbol operationType)
@@ -300,18 +314,19 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
     private static void RenderAuthorizationCheck(
         PipelineRenderContext context,
         List<(string Noun, string Verb, string? ResourceKeyTemplate)> scopePairs,
-        bool hasTemplateValidationErrors)
+        bool hasTemplateValidationErrors,
+        string scopePairFieldName)
     {
         var hasTemplates = scopePairs.Any(static sp => sp.ResourceKeyTemplate is not null);
 
         // When templates are valid, prefer the resolved provider for zero-reflection expansion
         if (hasTemplates && !hasTemplateValidationErrors)
         {
-            RenderResolvedAuthorizationCheck(context, scopePairs);
+            RenderResolvedAuthorizationCheck(context, scopePairs, scopePairFieldName);
         }
         else
         {
-            RenderLegacyAuthorizationCheck(context, scopePairs);
+            RenderLegacyAuthorizationCheck(context, scopePairFieldName);
         }
     }
 
@@ -322,7 +337,8 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
     /// </summary>
     private static void RenderResolvedAuthorizationCheck(
         PipelineRenderContext context,
-        List<(string Noun, string Verb, string? ResourceKeyTemplate)> scopePairs)
+        List<(string Noun, string Verb, string? ResourceKeyTemplate)> scopePairs,
+        string scopePairFieldName)
     {
         var operationExpr = context.GetOperationExpression();
         var httpContextExpr = context.GetHttpContextExpression();
@@ -372,7 +388,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
         // Fallback to legacy provider
         context.Else(elseBranch =>
         {
-            RenderLegacyAuthorizationCheckBody(elseBranch, scopePairs);
+            RenderLegacyAuthorizationCheckBody(elseBranch, scopePairFieldName);
         });
 
         context.WriteBlankLine();
@@ -384,14 +400,14 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
     /// </summary>
     private static void RenderLegacyAuthorizationCheck(
         PipelineRenderContext context,
-        List<(string Noun, string Verb, string? ResourceKeyTemplate)> scopePairs)
+        string scopePairFieldName)
     {
         // Use cached IResourceAuthorizationProvider — permissive when not registered
         context.If(
             "this._resourceAuthorizationProvider != null",
             branch =>
             {
-                RenderLegacyAuthorizationCheckInner(branch, context, scopePairs);
+                RenderLegacyAuthorizationCheckInner(branch, context, scopePairFieldName);
             });
 
         context.WriteBlankLine();
@@ -399,17 +415,15 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
 
     private static void RenderLegacyAuthorizationCheckBody(
         PipelineRenderContext context,
-        List<(string Noun, string Verb, string? ResourceKeyTemplate)> scopePairs)
+        string scopePairFieldName)
     {
         context.If(
             "this._resourceAuthorizationProvider != null",
             branch =>
             {
-                var scopePairElements = BuildScopePairArrayExpression(scopePairs);
-
                 branch.DeclareVariable(
                     "isAuthorized",
-                    $"await this._resourceAuthorizationProvider.IsAuthorizedAsync(context, {context.GetHttpContextExpression()}.User, new Blueprint.Model.ScopePair[] {{ {scopePairElements} }}, {context.GetHttpContextExpression()}.RequestAborted)");
+                    $"await this._resourceAuthorizationProvider.IsAuthorizedAsync(context, {context.GetHttpContextExpression()}.User, {scopePairFieldName}, {context.GetHttpContextExpression()}.RequestAborted)");
 
                 branch.If(
                     "!isAuthorized",
@@ -426,13 +440,11 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
     private static void RenderLegacyAuthorizationCheckInner(
         PipelineRenderContext branch,
         PipelineRenderContext context,
-        List<(string Noun, string Verb, string? ResourceKeyTemplate)> scopePairs)
+        string scopePairFieldName)
     {
-        var scopePairElements = BuildScopePairArrayExpression(scopePairs);
-
         branch.DeclareVariable(
             "isAuthorized",
-            $"await this._resourceAuthorizationProvider.IsAuthorizedAsync(context, {context.GetHttpContextExpression()}.User, new Blueprint.Model.ScopePair[] {{ {scopePairElements} }}, {context.GetHttpContextExpression()}.RequestAborted)");
+            $"await this._resourceAuthorizationProvider.IsAuthorizedAsync(context, {context.GetHttpContextExpression()}.User, {scopePairFieldName}, {context.GetHttpContextExpression()}.RequestAborted)");
 
         branch.If(
             "!isAuthorized",
