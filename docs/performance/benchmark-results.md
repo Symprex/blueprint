@@ -157,3 +157,43 @@ authentication, authorization, property binding, validation, handler, and respon
   deserialization, authorization checks, and handler execution.
 - **Zero failures** across 34,797 total requests at 1,160 concurrent RPS.
 - p99 stays under 5.3 ms even for the heaviest scenario (parameterized GET with link generation).
+
+## Recent Optimizations
+
+### Compiled Handler Constructors (commit 097b428)
+
+Generated pipelines now emit `new Handler(GetRequiredService<X>(), ...)` directly
+when the handler has a single public constructor with DI-resolvable parameters.
+This eliminates the `ActivatorUtilities.CreateInstance` reflection-based constructor
+selection at runtime. When the handler is also registered in DI, the compiled
+constructor serves as a zero-reflection fallback.
+
+### Singleton Service Caching (commits 66d6fe4, various)
+
+Pipeline constructor fields now cache singleton-lifetime services (e.g.,
+`IAuditSink`, `IResourceAuthorizationProvider`, `IUserAuthorisationContextFactory`)
+resolved once at startup. This eliminates per-request `GetRequiredService<T>()` calls
+for services whose lifetime guarantees a single instance.
+
+### FrozenDictionary Lookups
+
+`BlueprintApp.Freeze()` converts operation dictionaries to `FrozenDictionary<Type, ...>`
+for O(1) lookup at ~8-10 ns. The `BlueprintAppExecutor` pipeline registry also uses
+frozen dictionaries.
+
+### BaseUri Caching (commit 27a3e10)
+
+`BlueprintApiRouter` caches the computed base URI across requests when scheme, host,
+and path base are stable — avoiding per-request string interpolation for the common
+case where these values don't change.
+
+### Content-Type Constants
+
+All HTTP response content-type strings (`application/json; charset=utf-8`,
+`application/problem+json; charset=utf-8`, `text/plain; charset=utf-8`) are static
+constants to improve readability and allow the compiler to intern them.
+
+### ETagger Header Caching (commit db06b3d)
+
+The 304 Not Modified path reuses a static `Cache-Control` header dictionary,
+eliminating a per-response allocation on the conditional request fast path.
