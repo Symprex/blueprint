@@ -1,6 +1,6 @@
 # Blueprint Source Generator
 
-Blueprint Source Generator is a .NET 8 / Roslyn-based framework for building CQRS-style APIs with compile-time code generation instead of runtime reflection.
+Blueprint Source Generator is a .NET 10 / Roslyn-based framework for building CQRS-style APIs with compile-time code generation instead of runtime reflection.
 
 The repository combines:
 
@@ -12,7 +12,7 @@ The repository combines:
 
 ## Requirements
 
-- .NET SDK `8.0.206` (see `global.json`)
+- .NET SDK `10.0.203` (see `global.json`)
 
 ## Docs for humans and AI agents
 

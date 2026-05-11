@@ -8,5 +8,5 @@ public interface ITrackedSourceGenerator
     /// <summary>
     /// Gets the tracked stage names that should appear in incremental run-step diagnostics.
     /// </summary>
-    public string[] StageNames { get; }
+    string[] StageNames { get; }
 }

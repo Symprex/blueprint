@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.ComponentModel;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Blueprint.Utilities;
 
@@ -17,6 +18,7 @@ public static class EnumUtilities
     /// </summary>
     /// <param name="value">The enum value to describe.</param>
     /// <returns>The description or string representation.</returns>
+    [UnconditionalSuppressMessage("Trimming", "IL2075", Justification = "Enum description lookup reads public enum-member metadata for caller-supplied enum values that remain available to Blueprint runtime helpers.")]
     public static string GetDescription(this Enum value)
     {
         Guard.NotNull(value);

@@ -2467,10 +2467,12 @@
         "type": "object",
         "properties": {
           "$links": {
-            "type": "object"
+            "type": "object",
+            "readOnly": true
           },
           "$object": {
-            "type": "string"
+            "type": "string",
+            "readOnly": true
           },
           "$partial": {
             "type": "boolean"
@@ -2513,27 +2515,34 @@
         "type": "object",
         "properties": {
           "$links": {
-            "type": "object"
+            "type": "object",
+            "readOnly": true
           },
           "$object": {
-            "type": "string"
+            "type": "string",
+            "readOnly": true
           },
           "$partial": {
             "type": "boolean"
           },
           "HtmlSource": {
             "type": "string",
+            "description": "The full HTML source content of this template.",
             "readOnly": true
           },
           "Id": {
             "type": "string",
-            "readOnly": true
+            "description": "The unique identifier for this template.",
+            "readOnly": true,
+            "example": "tmpl-abc-123"
           },
           "IsArchived": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "Whether the template has been archived (soft-deleted)."
           },
           "Name": {
             "type": "string",
+            "description": "The human-readable display name of this template.",
             "readOnly": true
           },
           "Object": {
@@ -2541,10 +2550,13 @@
             "readOnly": true
           },
           "Owner": {
-            "type": "object"
+            "type": "object",
+            "nullable": true,
+            "description": "The owner of this template, expandable via ?expand=Owner."
           },
           "PlainTextSource": {
             "type": "string",
+            "description": "The plain text fallback content of this template.",
             "readOnly": true
           },
           "ResourceKey": {
@@ -2558,10 +2570,12 @@
         "type": "object",
         "properties": {
           "$links": {
-            "type": "object"
+            "type": "object",
+            "readOnly": true
           },
           "$object": {
-            "type": "string"
+            "type": "string",
+            "readOnly": true
           },
           "$partial": {
             "type": "boolean"
@@ -2593,10 +2607,12 @@
         "type": "object",
         "properties": {
           "$links": {
-            "type": "object"
+            "type": "object",
+            "readOnly": true
           },
           "$object": {
-            "type": "string"
+            "type": "string",
+            "readOnly": true
           },
           "$partial": {
             "type": "boolean"
@@ -2633,10 +2649,12 @@
             "type": "object"
           },
           "detail": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "instance": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "status": {
             "type": "integer",
@@ -2644,10 +2662,12 @@
             "format": "int32"
           },
           "title": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "type": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           }
         }
       },
@@ -2659,7 +2679,8 @@
             "type": "object"
           },
           "detail": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "errors": {
             "type": "object",
@@ -2668,7 +2689,8 @@
             }
           },
           "instance": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "status": {
             "type": "integer",
@@ -2676,10 +2698,12 @@
             "format": "int32"
           },
           "title": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "type": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           }
         }
       }

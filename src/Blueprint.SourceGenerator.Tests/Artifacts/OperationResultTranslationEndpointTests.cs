@@ -261,7 +261,7 @@ public partial class OperationResultTranslationEndpointTests
     }
 
     [Fact]
-    public async Task When_http_endpoint_pipeline_returns_ok_result_with_null_content_then_host_route_fails_fast()
+    public async Task When_http_endpoint_pipeline_returns_ok_result_with_null_content_then_host_route_completes_with_500_problem_response()
     {
         var endpoints = CreateEndpoints();
         endpoints.MapBlueprintApi<ResultTranslationBlueprintApp, ResultTranslationBlueprintAppExecutor>("api/");
@@ -270,10 +270,12 @@ public partial class OperationResultTranslationEndpointTests
 
         endpoint.Should().NotBeNull();
 
-        var act = () => InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider);
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider);
 
-        await act.Should().ThrowAsync<ArgumentNullException>()
-            .WithMessage("*content*");
+        response.StatusCode.Should().Be(StatusCodes.Status500InternalServerError);
+        response.ContentType.Should().Be("application/problem+json");
+        response.Body.Should().Contain("\"status\":500")
+            .And.Contain("An unexpected error occurred.");
     }
 
     private static async Task<TestEndpointInvocationResult> InvokeEndpointAsync(RouteEndpoint endpoint, IServiceProvider serviceProvider)

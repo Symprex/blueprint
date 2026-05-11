@@ -2617,11 +2617,7 @@ public class ReferenceAppHttpEndToEndIntegrationTests
         configureRequest?.Invoke(context);
 
         // ETagger and other HTTP services resolve the current context from IHttpContextAccessor
-        var httpContextAccessor = serviceProvider.GetService<IHttpContextAccessor>();
-        if (httpContextAccessor is not null)
-        {
-            httpContextAccessor.HttpContext = context;
-        }
+        serviceProvider.GetService<IHttpContextAccessor>()?.HttpContext = context;
 
         await endpoint.RequestDelegate!(context);
         body.Position = 0;

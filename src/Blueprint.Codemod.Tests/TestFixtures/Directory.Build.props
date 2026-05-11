@@ -1,0 +1,11 @@
+<Project>
+  <!-- Fixture solutions are intentionally authored with legacy patterns that trigger
+       migration-analyzer diagnostics. They must not inherit the repo-wide style
+       enforcement because IDE style rules (e.g. IDE0022) are not migration diagnostics
+       and should not cause fixture builds to fail. -->
+  <PropertyGroup>
+    <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+</Project>

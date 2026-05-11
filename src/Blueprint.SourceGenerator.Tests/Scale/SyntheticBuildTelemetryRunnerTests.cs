@@ -8,7 +8,7 @@ namespace Blueprint.SourceGenerator.Tests.Scale;
 public class SyntheticBuildTelemetryRunnerTests
 {
     [Fact]
-    public void When_running_capture_script_then_all_scenarios_emit_binlogs_and_manifest_contracts()
+    public async Task When_running_capture_script_then_all_scenarios_emit_binlogs_and_manifest_contracts()
     {
         var scriptPath = FindCaptureScriptPath();
         var outputDirectory = Path.Combine(Path.GetTempPath(), "Blueprint-SyntheticBuildTelemetry", Guid.NewGuid().ToString("N"));
@@ -16,7 +16,7 @@ public class SyntheticBuildTelemetryRunnerTests
 
         try
         {
-            RunCaptureScript(scriptPath, outputDirectory, operationCount: 5);
+            await RunCaptureScriptAsync(scriptPath, outputDirectory, operationCount: 5);
 
             AssertCaptureDirectory(outputDirectory, "cold-build");
             AssertCaptureDirectory(outputDirectory, "no-op-build");
@@ -65,7 +65,7 @@ public class SyntheticBuildTelemetryRunnerTests
         }
     }
 
-    private static void RunCaptureScript(string scriptPath, string outputDirectory, int operationCount)
+    private static async Task RunCaptureScriptAsync(string scriptPath, string outputDirectory, int operationCount)
     {
         using var process = new Process();
         process.StartInfo = new ProcessStartInfo
@@ -78,10 +78,29 @@ public class SyntheticBuildTelemetryRunnerTests
             CreateNoWindow = true,
         };
 
+        using var cancellationSource = new CancellationTokenSource(TimeSpan.FromMinutes(5));
         process.Start();
-        var standardOutput = process.StandardOutput.ReadToEnd();
-        var standardError = process.StandardError.ReadToEnd();
-        process.WaitForExit();
+
+        var standardOutputTask = process.StandardOutput.ReadToEndAsync(cancellationSource.Token);
+        var standardErrorTask = process.StandardError.ReadToEndAsync(cancellationSource.Token);
+
+        try
+        {
+            await process.WaitForExitAsync(cancellationSource.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+                process.WaitForExit();
+            }
+
+            throw;
+        }
+
+        var standardOutput = await standardOutputTask;
+        var standardError = await standardErrorTask;
 
         process.ExitCode.Should().Be(0, $"runner output:{Environment.NewLine}{standardOutput}{Environment.NewLine}{standardError}");
     }

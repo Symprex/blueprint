@@ -133,6 +133,7 @@ public sealed class ApiLinkGenerator : IApiLinkGenerator
         return this._baseUri + relativeUrl;
     }
 
+    [UnconditionalSuppressMessage("Trimming", "IL2075", Justification = "Query-string objects are reflected over their public properties to serialize caller-supplied link parameters into the generated URL.")]
     private string BuildUrl(string relativeUrl, object? queryString)
     {
         if (queryString is null)
@@ -140,20 +141,19 @@ public sealed class ApiLinkGenerator : IApiLinkGenerator
             return this._baseUri + relativeUrl;
         }
 
-        var accessors = _queryStringAccessors.GetOrAdd(
-            queryString.GetType(),
-            static ([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] Type type) =>
+        var queryStringType = queryString.GetType();
+        if (!_queryStringAccessors.TryGetValue(queryStringType, out var accessors))
+        {
+            var props = queryStringType.GetProperties(BindingFlags.Instance | BindingFlags.Public);
+            var computedAccessors = new (string Name, Func<object, object?> Getter)[props.Length];
+
+            for (var i = 0; i < props.Length; i++)
             {
-                var props = type.GetProperties(BindingFlags.Instance | BindingFlags.Public);
-                var result = new (string Name, Func<object, object?> Getter)[props.Length];
+                computedAccessors[i] = (props[i].Name, CompiledPropertyAccessor.GetGetter(props[i]));
+            }
 
-                for (var i = 0; i < props.Length; i++)
-                {
-                    result[i] = (props[i].Name, CompiledPropertyAccessor.GetGetter(props[i]));
-                }
-
-                return result;
-            });
+            accessors = _queryStringAccessors.GetOrAdd(queryStringType, computedAccessors);
+        }
 
         var sb = new StringBuilder(this._baseUri.Length + relativeUrl.Length + 64);
         sb.Append(this._baseUri);

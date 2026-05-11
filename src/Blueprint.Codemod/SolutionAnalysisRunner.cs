@@ -89,6 +89,7 @@ public sealed class SolutionAnalysisRunner
         processStartInfo.ArgumentList.Add("build");
         processStartInfo.ArgumentList.Add(solutionPath);
         processStartInfo.ArgumentList.Add("--nologo");
+        processStartInfo.ArgumentList.Add("--no-incremental");
         processStartInfo.ArgumentList.Add($"/p:ErrorLog={sarifPath};version=2");
 
         using var process = new Process { StartInfo = processStartInfo };

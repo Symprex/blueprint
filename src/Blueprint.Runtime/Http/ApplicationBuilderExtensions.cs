@@ -225,10 +225,7 @@ public static class EndpointRouteBuilderExtensions
 
             // Set the activity display name to the operation type for better trace visibility
             var activity = Activity.Current;
-            if (activity != null)
-            {
-                activity.DisplayName = operation.Name;
-            }
+            activity?.DisplayName = operation.Name;
 
             // Method enforcement is handled by ASP.NET Core routing via HttpMethodMetadata on mapped endpoints.
 

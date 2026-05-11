@@ -8,5 +8,5 @@ public interface IHaveResourceKey
     /// <summary>
     /// The resource key of this resource.
     /// </summary>
-    public string ResourceKey { get; }
+    string ResourceKey { get; }
 }
