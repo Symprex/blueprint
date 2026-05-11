@@ -8,13 +8,24 @@ namespace Blueprint.SourceGenerator.Sample;
 /// </summary>
 public class Startup
 {
+    private readonly IWebHostEnvironment _environment;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="Startup"/> class with the hosting environment.
+    /// </summary>
+    /// <param name="environment">The hosting environment for conditional configuration.</param>
+    public Startup(IWebHostEnvironment environment)
+    {
+        this._environment = environment;
+    }
+
     /// <summary>
     /// Registers the sample Blueprint services needed to execute the sample operations.
     /// </summary>
     /// <param name="services">The application service collection.</param>
-    /// <param name="environment">The hosting environment for conditional configuration.</param>
-    public void ConfigureServices(IServiceCollection services, IWebHostEnvironment environment)
+    public void ConfigureServices(IServiceCollection services)
     {
+        var environment = this._environment;
         services.AddLogging();
         services.AddSingleton<TemplateStore>();
 
