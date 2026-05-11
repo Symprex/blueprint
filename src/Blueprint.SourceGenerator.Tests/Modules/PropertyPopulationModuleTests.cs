@@ -96,7 +96,7 @@ public class PropertyPopulationModuleTests
     }
 
     [Fact]
-    public void When_pipeline_generated_then_populators_guarded_by_length_check()
+    public void When_pipeline_generated_then_populators_use_single_fast_path_and_multi_loop()
     {
         const string source = """
             using Blueprint;
@@ -131,7 +131,12 @@ public class PropertyPopulationModuleTests
         var pipelineSources = result.GetGeneratedSources(nameof(OperationExecutorPipelineSourceGenerator));
         var pipelineSource = string.Join("\n", pipelineSources.Select(static s => s.SourceText));
 
-        // The generated code caches populators at construction time and guards with a length check
-        pipelineSource.Should().Contain("_propertyPopulators.Length > 0");
+        // Single-populator fast path: direct indexed call avoids enumerator allocation
+        pipelineSource.Should().Contain("_propertyPopulators.Length == 1");
+        pipelineSource.Should().Contain("_propertyPopulators[0].PopulateAsync");
+
+        // Multi-populator path: foreach loop for 2+ populators
+        pipelineSource.Should().Contain("_propertyPopulators.Length > 1");
+        pipelineSource.Should().Contain("foreach");
     }
 }

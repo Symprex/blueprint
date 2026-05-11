@@ -34,11 +34,18 @@ namespace Blueprint.Generated
             var operation = (global::TestNamespace.CreateUserCommand)context.Operation;
 
 
-            if (this._propertyPopulators.Length > 0)
+            if (this._propertyPopulators.Length == 1)
             {
-                foreach (var populator in this._propertyPopulators)
+                await this._propertyPopulators[0].PopulateAsync(context, context.OperationCancelled);
+            }
+            else
+            {
+                if (this._propertyPopulators.Length > 1)
                 {
-                    await populator.PopulateAsync(context, context.OperationCancelled);
+                    foreach (var populator in this._propertyPopulators)
+                    {
+                        await populator.PopulateAsync(context, context.OperationCancelled);
+                    }
                 }
             }
             var validationResults = default(global::System.Collections.Generic.List<global::System.ComponentModel.DataAnnotations.ValidationResult>);

@@ -1378,8 +1378,8 @@ public sealed record OpenApiOutputRenderingContext(
     /// </summary>
     private static void WriteDocumentTags(Utf8JsonWriter writer, ImmutableArray<OpenApiPathItemModel> paths)
     {
-        // Collect all unique tags and the first description found for each tag across all operations.
-        var tagDescriptions = new Dictionary<string, string?>(StringComparer.Ordinal);
+        // Collect all unique tags sorted by name, keeping the first description found for each.
+        var tagDescriptions = new SortedDictionary<string, string?>(StringComparer.Ordinal);
 
         foreach (var path in paths)
         {
@@ -1414,14 +1414,10 @@ public sealed record OpenApiOutputRenderingContext(
             return;
         }
 
-        // Sort tags by name using a pre-sized list to avoid extra LINQ allocation
-        var sortedTags = new List<KeyValuePair<string, string?>>(tagDescriptions);
-        sortedTags.Sort(static (a, b) => string.Compare(a.Key, b.Key, StringComparison.Ordinal));
-
         writer.WritePropertyName("tags");
         writer.WriteStartArray();
 
-        foreach (var (tag, description) in sortedTags)
+        foreach (var (tag, description) in tagDescriptions)
         {
             writer.WriteStartObject();
             writer.WriteString("name", tag);

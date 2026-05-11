@@ -24,12 +24,14 @@ namespace Blueprint.Generated
         readonly Blueprint.Authorization.IOperationAuthoriser[] _operationAuthorisers;
         readonly Blueprint.Runtime.Middleware.IPropertyPopulator[] _propertyPopulators;
         readonly Blueprint.Auditing.IResourceEventAuditSink _resourceEventAuditSink;
+        readonly Blueprint.Authorization.IUserAuthorisationContextFactory _userContextFactory;
 
         public CreateResourceCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, System.IServiceProvider serviceProvider)
             : base(loggerFactory, "CreateResourceCommand")
         {
             this._apiAuthorisers = (Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Authorization.IApiAuthoriser>>(serviceProvider) is { } aa ? System.Linq.Enumerable.ToArray(aa) : System.Array.Empty<Blueprint.Authorization.IApiAuthoriser>());
             this._operationAuthorisers = (Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Authorization.IOperationAuthoriser>>(serviceProvider) is { } oa ? System.Linq.Enumerable.ToArray(oa) : System.Array.Empty<Blueprint.Authorization.IOperationAuthoriser>());
+            this._userContextFactory = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Authorization.IUserAuthorisationContextFactory>(serviceProvider);
             this._propertyPopulators = (Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Runtime.Middleware.IPropertyPopulator>>(serviceProvider) is { } populators ? System.Linq.Enumerable.ToArray(populators) : System.Array.Empty<Blueprint.Runtime.Middleware.IPropertyPopulator>());
             this._auditSink = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Auditing.IAuditSink>(serviceProvider);
             this._resourceEventAuditSink = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Auditing.IResourceEventAuditSink>(serviceProvider);
@@ -76,11 +78,18 @@ namespace Blueprint.Generated
 
             operation.Id = (string)httpContext.Request.RouteValues["Id"];
 
-            if (this._propertyPopulators.Length > 0)
+            if (this._propertyPopulators.Length == 1)
             {
-                foreach (var populator in this._propertyPopulators)
+                await this._propertyPopulators[0].PopulateAsync(context, context.OperationCancelled);
+            }
+            else
+            {
+                if (this._propertyPopulators.Length > 1)
                 {
-                    await populator.PopulateAsync(context, context.OperationCancelled);
+                    foreach (var populator in this._propertyPopulators)
+                    {
+                        await populator.PopulateAsync(context, context.OperationCancelled);
+                    }
                 }
             }
             if (httpContext.User.Identity?.IsAuthenticated != true)
@@ -88,13 +97,12 @@ namespace Blueprint.Generated
                 return new Blueprint.Runtime.Exec.UnauthenticatedResult();
             }
 
-            var userContextFactory = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Authorization.IUserAuthorisationContextFactory>(context.ServiceProvider);
-            if (userContextFactory != null)
+            if (this._userContextFactory != null)
             {
                 var userIdentity = httpContext.User.Identity as System.Security.Claims.ClaimsIdentity;
                 if (userIdentity != null && userIdentity.IsAuthenticated)
                 {
-                    context.UserAuthorisationContext = await userContextFactory.CreateContextAsync(userIdentity, context.OperationCancelled);
+                    context.UserAuthorisationContext = await this._userContextFactory.CreateContextAsync(userIdentity, context.OperationCancelled);
                 }
             }
             if (context.UserAuthorisationContext != null && context.Activity != null)

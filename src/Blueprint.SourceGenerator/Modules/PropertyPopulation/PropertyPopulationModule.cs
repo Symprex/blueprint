@@ -55,15 +55,26 @@ public sealed class PropertyPopulationModule : IBlueprintSourceGeneratorModule, 
     private static void RenderPopulation(PipelineRenderContext context)
     {
         context.WriteBlankLine();
+
+        // Single-populator fast path: direct indexed call avoids enumerator allocation.
         context.If(
-            $"this.{FieldName}.Length > 0",
-            branch =>
+            $"this.{FieldName}.Length == 1",
+            singleBranch =>
             {
-                branch.ForEach("var populator", $"this.{FieldName}", foreachBody =>
-                {
-                    foreachBody.WriteStatement("await populator.PopulateAsync(context, context.OperationCancelled);");
-                });
+                singleBranch.WriteStatement($"await this.{FieldName}[0].PopulateAsync(context, context.OperationCancelled);");
             });
+        context.Else(elseBranch =>
+        {
+            elseBranch.If(
+                $"this.{FieldName}.Length > 1",
+                multiBranch =>
+                {
+                    multiBranch.ForEach("var populator", $"this.{FieldName}", foreachBody =>
+                    {
+                        foreachBody.WriteStatement("await populator.PopulateAsync(context, context.OperationCancelled);");
+                    });
+                });
+        });
     }
 }
 
