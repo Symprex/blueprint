@@ -95,19 +95,21 @@ public static class Program
         _ = TryGetOption(args, "--output", out var outputDirectory);
         var applyMode = HasFlag(args, "--apply");
 
+        var effectiveFilter = string.IsNullOrWhiteSpace(diagnosticFilter) ? "BPMIG*" : diagnosticFilter;
+
         if (applyMode)
         {
             await applyAsync(
                 new ApplyModeOptions(
                     solutionPath,
-                    diagnosticFilter ?? "BPMIG*"),
+                    effectiveFilter),
                 cancellationToken);
         }
 
         var report = await dryRunAsync(
             new SolutionAnalysisOptions(
                 solutionPath,
-                diagnosticFilter ?? "BPMIG*"),
+                effectiveFilter),
             cancellationToken);
 
         if (!string.IsNullOrWhiteSpace(outputDirectory))

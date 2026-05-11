@@ -69,23 +69,20 @@ Gateways migrate AFTER the services they call are stable.
 
 Each service MUST complete these audits before migration begins:
 
-#### Serialization Audit (HIGH RISK)
-S365 uses Newtonsoft.Json extensively. The new Blueprint requires System.Text.Json with
-an app-owned `JsonSerializerContext`. Missing/incomplete coverage fails build (`BP007`/`BP006`).
+#### Serialization Audit (LOW RISK)
+S365 already uses System.Text.Json (STJ) for all API request/response serialization.
+Newtonsoft.Json is only used for Marten document storage (via `JsonNetSerializer`).
+The new Blueprint requires an app-owned `JsonSerializerContext` — missing/incomplete
+coverage fails build (`BP007`/`BP006`).
 
-1. Inventory all Newtonsoft.Json usage: converters, settings, `JToken`, `dynamic`
-2. Inventory all HTTP body types (request + response) — these need `[JsonSerializable]`
-3. Check NodaTime serialization (`NodaTime.Serialization.SystemTextJson` replaces `NodaTime.Serialization.JsonNet`)
-4. Identify custom `JsonConverter` implementations that need STJ equivalents
-5. Create `JsonSerializerContext` with all body types declared
-6. Add old-vs-new JSON snapshot tests (serialize with both, diff)
+1. Inventory all HTTP body types (request + response) — these need `[JsonSerializable]`
+2. Verify NodaTime serialization already uses `NodaTime.Serialization.SystemTextJson`
+3. Create `JsonSerializerContext` with all body types declared
+4. Include `ProblemDetails` and `ValidationProblemDetails` (required by `BP006`)
 
-Key Newtonsoft → STJ differences:
-- `[JsonProperty]` → `[JsonPropertyName]`
-- `NullValueHandling.Ignore` → `[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]`
-- Custom `JsonConverter<T>` base class is different
-- `JObject`/`JToken` → `JsonElement`/`JsonNode`
-- `StringEnumConverter` → `JsonStringEnumConverter`
+**No Newtonsoft → STJ migration needed for API serialization.** The only Newtonsoft
+dependency is in Marten's `JsonNetSerializer` for document persistence, which is
+independent of Blueprint's API serialization and remains unchanged.
 
 #### Auth Audit
 1. Count `[Resource]` vs `[FromResource]` operations
@@ -231,6 +228,45 @@ A compile-time proof project (`.scratch/s365-proof/`) validated the full Analyti
 | **`IRegistry` modular DI** | S365 uses `IRegistry` pattern for service discovery | Consumer-side, no framework change needed |
 | **Pluggable OpenAPI security schemes** | Custom auth schemes beyond Bearer JWT | ✅ Implemented — `OpenApiInfoOptions.SecuritySchemes` |
 | **OpenAPI HATEOAS metadata** | `x-links` vendor extension per operation | Low priority — links are runtime, not schema-level |
+
+---
+
+## Automated Migration Report (Blueprint.Codemod)
+
+Before manually migrating any service, run the codemod tool to generate a
+machine-readable migration report identifying all BPMIG diagnostics.
+
+### Prerequisites
+
+- S365 solution must build cleanly (`dotnet build Signature365.sln`)
+- Blueprint.Codemod must be built (`dotnet build src\Blueprint.Codemod\Blueprint.Codemod.csproj -c Release`)
+
+### Running the Codemod
+
+```powershell
+# From the blueprint-source-gen repo root
+dotnet run --project src\Blueprint.Codemod\Blueprint.Codemod.csproj -c Release -- \
+  --solution D:\Projects\Signature365\Signature365.sln \
+  --output .scratch\codemod-report
+```
+
+This produces:
+- JSON migration report on stdout (pipe to file with `> report.json`)
+- Reviewable artifact files in the `--output` directory
+
+### Apply Mode (after review)
+
+```powershell
+dotnet run --project src\Blueprint.Codemod\Blueprint.Codemod.csproj -c Release -- \
+  --solution D:\Projects\Signature365\Signature365.sln \
+  --apply
+```
+
+### Current Status
+
+> **Note:** As of initial proof work, S365 has ~95 build errors in the main
+> branch. The codemod requires a clean build. Fix S365 build issues before
+> running the codemod.
 
 ---
 
@@ -851,27 +887,10 @@ services.AddBlueprintApi<MyApp, MyAppExecutor>(blueprint =>
 ```
 
 The generated pipeline calls `IUnitOfWork.CommitAsync()` after successful handler execution, then `IUnitOfWork.RollbackAsync()` on failure — matching S365's middleware behavior without the middleware abstraction.
-- [ ] Add Hangfire integration to sample app
-- [ ] Test job scheduling and execution
 
----
-
-## Marten Integration
-
-### Current S365 Pattern
-- Marten used for event sourcing in Portal/EventStore
-- Not directly integrated with Blueprint pipeline
-- Uses standard DI + `IDocumentSession`
-
-### New Blueprint Integration
-- Implement `MartenUnitOfWork : IUnitOfWork` that calls `SaveChangesAsync`
-- Register via `blueprint.AddUnitOfWork<MartenUnitOfWork>()`
-- Pipeline automatically commits after successful handler execution
-
-### Action Items
-- [ ] Create `Blueprint.Marten` project (or document inline pattern)
-- [ ] Implement `MartenUnitOfWork : IUnitOfWork`
-- [ ] Test with sample event store scenario
+> **Status:** `Blueprint.Marten`, `Blueprint.Tasks.Hangfire`, and `Blueprint.Rebus`
+> all exist with tests. No new packages needed — only S365-specific implementations of
+> the unit-of-work and auth provider interfaces.
 
 ---
 
@@ -1071,8 +1090,10 @@ to support a smooth S365 migration.
    pipeline: Handler → Commit Rebus Transaction → Save Marten Changes.
 5. **Verify Blueprint.Testing ApiFixture** — Must support CommandAsync, QueryAsync,
    MessageAsync, BackgroundTaskAsync, tenant auth context switching.
-6. **Serialization migration guide** — `docs/serialization-migration.md` covering
-   Newtonsoft → STJ with NodaTime, converters, and JsonSerializerContext patterns.
+6. **Serialization guide** — `docs/serialization-migration.md` covering
+   `JsonSerializerContext` setup, NodaTime STJ integration, and `BP006`/`BP007`
+   diagnostics. Note: S365 already uses STJ for API serialization — Newtonsoft
+   is only used for Marten document storage.
 
 ### Before Tier 4 migration (gateways)
 7. **Second sample project** — `Blueprint.SourceGenerator.Sample.Client` using
@@ -1108,7 +1129,7 @@ should be recorded in the `docs/` folder:
 |----------|---------|
 | `docs/s365-migration-playbook.md` | This document — step-by-step guide |
 | `docs/openapi-migration.md` | ✅ OpenAPI shape comparison, NSwag compatibility |
-| `docs/serialization-migration.md` | ✅ Newtonsoft → STJ guide, NodaTime, pitfalls |
+| `docs/serialization-migration.md` | ✅ JsonSerializerContext setup, NodaTime, BP006/BP007 (S365 already uses STJ) |
 | `docs/testing-migration.md` | ✅ S365 test pattern → Blueprint.Testing mapping |
 | `docs/performance-profiling.md` | ✅ Profiling guide with dotnet-trace/counters/gcdump |
 | `docs/integration-packages.md` | ✅ Marten/Rebus/Hangfire/HttpClient/Testing package reference |
@@ -1121,7 +1142,7 @@ should be recorded in the `docs/` folder:
 
 | Risk | Severity | Mitigation |
 |------|----------|------------|
-| Newtonsoft → STJ breaks serialization | **HIGH** | Per-service serialization audit + JSON snapshot tests before migration |
+| Serialization shape drift | **LOW** | S365 already uses STJ; only need `JsonSerializerContext` with `[JsonSerializable]` entries |
 | Auth/tenant semantics change silently | **HIGH** | Early auth spike (Tier 2), 401/403 behavior tests, claim expansion tests |
 | OpenAPI shape change breaks TS clients | **HIGH** | Hard gate: OpenAPI diff + NSwag generation per service before shipping |
 | Multi-tenancy context loss | **HIGH** | ASP.NET Core middleware approach, integration tests with tenant context |

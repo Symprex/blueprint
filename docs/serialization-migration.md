@@ -1,10 +1,16 @@
-# Serialization Migration Guide: Newtonsoft.Json → System.Text.Json
+# Serialization Guide: JsonSerializerContext Setup for Blueprint
 
-This guide covers migrating a consumer application (such as Signature365) from
-Newtonsoft.Json to System.Text.Json (STJ) with source-generated serialization,
-which Blueprint source-gen requires.
+This guide covers setting up source-generated JSON serialization for Blueprint
+source-gen consumers. Blueprint requires an app-owned `JsonSerializerContext`
+declared via `[BlueprintAppSerializerContext]`.
 
-## Why the Migration is Required
+> **Note for Signature365:** S365 already uses System.Text.Json (STJ) for all
+> API request/response serialization. Newtonsoft.Json is only used for Marten
+> document storage (via `JsonNetSerializer`) and is unaffected by this migration.
+> The main task is adding a `JsonSerializerContext` with `[JsonSerializable]`
+> entries for all HTTP body types.
+
+## Why the JsonSerializerContext is Required
 
 Blueprint source-gen requires an app-owned `JsonSerializerContext` declared via
 `[BlueprintAppSerializerContext]`. This enables:
@@ -15,11 +21,9 @@ Blueprint source-gen requires an app-owned `JsonSerializerContext` declared via
 - **Performance** — Source-generated serializers are faster than reflection-based ones
 - **Determinism** — The serialization shape is known at build time
 
-## Pre-Migration Audit Checklist
+## Setup Checklist
 
-Before touching code, inventory every serialization concern in the service:
-
-### 1. Find All Newtonsoft.Json Usage
+### 1. Inventory HTTP Body Types
 
 ```powershell
 # Find all files referencing Newtonsoft
