@@ -23,12 +23,14 @@ namespace Blueprint.Generated
             new System.Diagnostics.ActivityTagsCollection { { "blueprint.operation.type", "ListUsersQuery" } };
         private static readonly Blueprint.Authorization.Claim _claimDemand_ListUsersQuery_0 =
             new Blueprint.Authorization.Claim("urn:claims/permission", "*", "ManageUsers");
+        readonly Blueprint.Authorization.IClaimInspector _claimInspector;
         readonly Blueprint.Authorization.IOperationAuthoriser[] _operationAuthorisers;
         readonly Blueprint.Runtime.Middleware.IPropertyPopulator[] _propertyPopulators;
 
         public ListUsersQueryExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, System.IServiceProvider serviceProvider)
             : base(loggerFactory, "ListUsersQuery")
         {
+            this._claimInspector = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Authorization.IClaimInspector>(serviceProvider);
             this._apiAuthorisers = (Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Authorization.IApiAuthoriser>>(serviceProvider) is { } aa ? System.Linq.Enumerable.ToArray(aa) : System.Array.Empty<Blueprint.Authorization.IApiAuthoriser>());
             this._operationAuthorisers = (Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Authorization.IOperationAuthoriser>>(serviceProvider) is { } oa ? System.Linq.Enumerable.ToArray(oa) : System.Array.Empty<Blueprint.Authorization.IOperationAuthoriser>());
             this._propertyPopulators = (Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Runtime.Middleware.IPropertyPopulator>>(serviceProvider) is { } populators ? System.Linq.Enumerable.ToArray(populators) : System.Array.Empty<Blueprint.Runtime.Middleware.IPropertyPopulator>());
@@ -69,10 +71,9 @@ namespace Blueprint.Generated
                 context.UserAuthorisationContext.PopulateMetadata(static (key, value) => System.Diagnostics.Activity.Current?.SetTag(key, value));
             }
 
-            var claimInspector = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Authorization.IClaimInspector>(context.ServiceProvider);
-            if (claimInspector != null && context.UserAuthorisationContext is Blueprint.Authorization.IClaimsHolder claimsHolder)
+            if (this._claimInspector != null && context.UserAuthorisationContext is Blueprint.Authorization.IClaimsHolder claimsHolder)
             {
-                if (!claimInspector.IsDemandedClaimFulfilled(claimsHolder, _claimDemand_ListUsersQuery_0))
+                if (!this._claimInspector.IsDemandedClaimFulfilled(claimsHolder, _claimDemand_ListUsersQuery_0))
                 {
                     return new Blueprint.Runtime.Exec.ForbiddenResult();
                 }

@@ -55,6 +55,13 @@ public sealed class ResourceEventAuditModule : IBlueprintSourceGeneratorModule, 
             return;
         }
 
+        // Cache singleton IResourceEventAuditSink at pipeline construction time
+        context.CacheService(
+            "_resourceEventAuditSink",
+            "Blueprint.Auditing.IResourceEventAuditSink",
+            "Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Auditing.IResourceEventAuditSink>(serviceProvider)",
+            isNullable: true);
+
         var operationTypeName = context.Operation.TypeName;
 
         context.RequireVariable(
@@ -73,12 +80,8 @@ public sealed class ResourceEventAuditModule : IBlueprintSourceGeneratorModule, 
             $"handlerResult is {castTypeName} _reAuditResult",
             branch =>
             {
-                branch.DeclareVariable(
-                    "resourceEventAuditSink",
-                    context.GetOptionalServiceExpression("Blueprint.Auditing.IResourceEventAuditSink"));
-
                 branch.If(
-                    "resourceEventAuditSink != null",
+                    "this._resourceEventAuditSink != null",
                     innerBranch =>
                     {
                         innerBranch.WriteStatement(
@@ -87,7 +90,7 @@ public sealed class ResourceEventAuditModule : IBlueprintSourceGeneratorModule, 
                         innerBranch.Try(tryBranch =>
                         {
                             tryBranch.WriteStatement(
-                                "await resourceEventAuditSink.RecordAsync(_reAuditResult.EventId, _reAuditResult.ResourceId, context, System.Threading.CancellationToken.None);");
+                                "await this._resourceEventAuditSink.RecordAsync(_reAuditResult.EventId, _reAuditResult.ResourceId, context, System.Threading.CancellationToken.None);");
 
                             tryBranch.WriteStatement(
                                 $"context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent(\"blueprint.resource_event_audit.succeeded\", default, new System.Diagnostics.ActivityTagsCollection {{ {{ \"blueprint.operation.type\", \"{operationTypeName}\" }}, {{ \"blueprint.resource_event.id\", _reAuditResult.EventId }} }}));");

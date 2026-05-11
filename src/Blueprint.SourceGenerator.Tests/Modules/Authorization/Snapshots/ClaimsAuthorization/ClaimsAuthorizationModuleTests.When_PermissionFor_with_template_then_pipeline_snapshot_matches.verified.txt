@@ -21,12 +21,14 @@ namespace Blueprint.Generated
         readonly Blueprint.Auditing.IAuditSink _auditSink;
         private static readonly System.Diagnostics.ActivityTagsCollection _auditTags_EditDocCommand =
             new System.Diagnostics.ActivityTagsCollection { { "blueprint.operation.type", "EditDocCommand" } };
+        readonly Blueprint.Authorization.IClaimInspector _claimInspector;
         readonly Blueprint.Authorization.IOperationAuthoriser[] _operationAuthorisers;
         readonly Blueprint.Runtime.Middleware.IPropertyPopulator[] _propertyPopulators;
 
         public EditDocCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, System.IServiceProvider serviceProvider)
             : base(loggerFactory, "EditDocCommand")
         {
+            this._claimInspector = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Authorization.IClaimInspector>(serviceProvider);
             this._apiAuthorisers = (Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Authorization.IApiAuthoriser>>(serviceProvider) is { } aa ? System.Linq.Enumerable.ToArray(aa) : System.Array.Empty<Blueprint.Authorization.IApiAuthoriser>());
             this._operationAuthorisers = (Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Authorization.IOperationAuthoriser>>(serviceProvider) is { } oa ? System.Linq.Enumerable.ToArray(oa) : System.Array.Empty<Blueprint.Authorization.IOperationAuthoriser>());
             this._propertyPopulators = (Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Runtime.Middleware.IPropertyPopulator>>(serviceProvider) is { } populators ? System.Linq.Enumerable.ToArray(populators) : System.Array.Empty<Blueprint.Runtime.Middleware.IPropertyPopulator>());
@@ -70,11 +72,10 @@ namespace Blueprint.Generated
                 context.UserAuthorisationContext.PopulateMetadata(static (key, value) => System.Diagnostics.Activity.Current?.SetTag(key, value));
             }
 
-            var claimInspector = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Authorization.IClaimInspector>(context.ServiceProvider);
-            if (claimInspector != null && context.UserAuthorisationContext is Blueprint.Authorization.IClaimsHolder claimsHolder)
+            if (this._claimInspector != null && context.UserAuthorisationContext is Blueprint.Authorization.IClaimsHolder claimsHolder)
             {
                 var claimDemand_0 = new Blueprint.Authorization.Claim("urn:claims/permission", $"Tenant/{operation.TenantId?.ToString() ?? ""}/Document/{operation.DocId?.ToString() ?? ""}", "Edit");
-                if (!claimInspector.IsDemandedClaimFulfilled(claimsHolder, claimDemand_0))
+                if (!this._claimInspector.IsDemandedClaimFulfilled(claimsHolder, claimDemand_0))
                 {
                     return new Blueprint.Runtime.Exec.ForbiddenResult();
                 }

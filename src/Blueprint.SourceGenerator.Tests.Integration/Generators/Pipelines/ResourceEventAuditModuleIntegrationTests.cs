@@ -19,9 +19,9 @@ public class ResourceEventAuditModuleIntegrationTests
     public async Task When_handler_returns_resource_event_result_then_audit_sink_is_called_with_event_and_resource_ids()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var auditSink = new TestResourceEventAuditSink();
         var serviceProvider = new ResourceEventAuditTestServiceProvider(auditSink);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
 
         var pipeline = executor.GetPipeline(typeof(ResourceEventAuditTestCommand));
         var context = new ApiOperationContext(serviceProvider, app, ResourceEventAuditTestCommand.Configure(), CancellationToken.None);
@@ -54,9 +54,9 @@ public class ResourceEventAuditModuleIntegrationTests
     public async Task When_resource_event_audit_sink_throws_then_pipeline_still_returns_success()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var auditSink = new ThrowingResourceEventAuditSink();
         var serviceProvider = new ResourceEventAuditTestServiceProvider(auditSink);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
 
         var pipeline = executor.GetPipeline(typeof(ResourceEventAuditTestCommand));
         var context = new ApiOperationContext(serviceProvider, app, ResourceEventAuditTestCommand.Configure(), CancellationToken.None);
@@ -73,9 +73,9 @@ public class ResourceEventAuditModuleIntegrationTests
         activity.Start();
 
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var auditSink = new TestResourceEventAuditSink();
         var serviceProvider = new ResourceEventAuditTestServiceProvider(auditSink);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
 
         var pipeline = executor.GetPipeline(typeof(ResourceEventAuditTestCommand));
         var context = new ApiOperationContext(serviceProvider, app, ResourceEventAuditTestCommand.Configure(), CancellationToken.None)
@@ -106,9 +106,9 @@ public class ResourceEventAuditModuleIntegrationTests
     public async Task When_operation_does_not_return_resource_event_then_audit_sink_is_not_called()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var auditSink = new TestResourceEventAuditSink();
         var serviceProvider = new ResourceEventAuditTestServiceProvider(auditSink);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
 
         // AuditableQuery returns a plain string, not a ResourceEventResult
         var pipeline = executor.GetPipeline(typeof(AuditableQuery));
@@ -123,9 +123,9 @@ public class ResourceEventAuditModuleIntegrationTests
     public async Task When_handler_returns_key_only_resource_event_result_then_audit_sink_is_called()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var auditSink = new TestResourceEventAuditSink();
         var serviceProvider = new ResourceEventAuditTestServiceProvider(auditSink);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
 
         var pipeline = executor.GetPipeline(typeof(KeyOnlyResourceEventAuditTestCommand));
         var context = new ApiOperationContext(serviceProvider, app, KeyOnlyResourceEventAuditTestCommand.Configure(), CancellationToken.None);

@@ -54,9 +54,9 @@ public class AuthorizationModuleIntegrationTests
     public async Task When_claims_authorization_has_valid_claims_then_pipeline_allows_execution()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
-        var pipeline = executor.GetPipeline(typeof(ManageUsersAuthorizationQuery));
         var serviceProvider = CreateClaimsAuthorizationServiceProvider();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
+        var pipeline = executor.GetPipeline(typeof(ManageUsersAuthorizationQuery));
         var context = CreateHttpContext(
             app,
             ManageUsersAuthorizationQuery.Configure(),
@@ -77,9 +77,9 @@ public class AuthorizationModuleIntegrationTests
     public async Task When_claims_authorization_has_missing_claims_then_pipeline_returns_forbidden()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
-        var pipeline = executor.GetPipeline(typeof(EditTenantAuthorizationCommand));
         var serviceProvider = CreateClaimsAuthorizationServiceProvider();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
+        var pipeline = executor.GetPipeline(typeof(EditTenantAuthorizationCommand));
         var context = CreateHttpContext(
             app,
             EditTenantAuthorizationCommand.Configure(),
@@ -99,11 +99,11 @@ public class AuthorizationModuleIntegrationTests
     public async Task When_resource_authorization_has_matching_claim_then_pipeline_allows_execution()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
-        var pipeline = executor.GetPipeline(typeof(UpdateTenantAuthorizationCommand));
         var serviceProvider = new ServiceCollection()
             .AddSingleton<IResolvedResourceAuthorizationProvider, MatchingClaimResolvedResourceAuthorizationProvider>()
             .BuildServiceProvider();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
+        var pipeline = executor.GetPipeline(typeof(UpdateTenantAuthorizationCommand));
         var context = CreateHttpContext(
             app,
             UpdateTenantAuthorizationCommand.Configure(),
@@ -128,7 +128,7 @@ public class AuthorizationModuleIntegrationTests
             .AddSingleton<IApiAuthoriser>(countingAuthoriser)
             .BuildServiceProvider();
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
         var pipeline = executor.GetPipeline(typeof(AllowAnonymousAuthorizationQuery));
         var context = CreateHttpContext(
             app,
@@ -151,11 +151,11 @@ public class AuthorizationModuleIntegrationTests
     public async Task When_resource_with_claim_token_then_expanded_key_uses_principal_claim()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
-        var pipeline = executor.GetPipeline(typeof(GetMyAccountAuthorizationQuery));
         var serviceProvider = new ServiceCollection()
             .AddSingleton<IResolvedResourceAuthorizationProvider, MatchingClaimResolvedResourceAuthorizationProvider>()
             .BuildServiceProvider();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
+        var pipeline = executor.GetPipeline(typeof(GetMyAccountAuthorizationQuery));
 
         // The {Auth:AccountId} token should be expanded from the principal's "AccountId" claim
         var context = CreateHttpContext(
@@ -179,11 +179,11 @@ public class AuthorizationModuleIntegrationTests
     public async Task When_resource_with_claim_token_and_wrong_claim_then_forbidden()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
-        var pipeline = executor.GetPipeline(typeof(GetMyAccountAuthorizationQuery));
         var serviceProvider = new ServiceCollection()
             .AddSingleton<IResolvedResourceAuthorizationProvider, MatchingClaimResolvedResourceAuthorizationProvider>()
             .BuildServiceProvider();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
+        var pipeline = executor.GetPipeline(typeof(GetMyAccountAuthorizationQuery));
 
         // Wrong AccountId claim should fail resource authorization
         var context = CreateHttpContext(
@@ -207,11 +207,11 @@ public class AuthorizationModuleIntegrationTests
     public async Task When_resource_with_property_path_token_then_sub_property_is_expanded()
     {
         var app = new IntegrationTestBlueprintApp();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
-        var pipeline = executor.GetPipeline(typeof(GetBillingAuthorizationQuery));
         var serviceProvider = new ServiceCollection()
             .AddSingleton<IResolvedResourceAuthorizationProvider, MatchingClaimResolvedResourceAuthorizationProvider>()
             .BuildServiceProvider();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
+        var pipeline = executor.GetPipeline(typeof(GetBillingAuthorizationQuery));
 
         // The {TenantId:Id} should expand to the .Id sub-property of TenantId
         var context = CreateHttpContext(

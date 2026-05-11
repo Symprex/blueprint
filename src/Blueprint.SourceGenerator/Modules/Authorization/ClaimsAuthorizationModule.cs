@@ -165,6 +165,13 @@ public sealed class ClaimsAuthorizationModule : IBlueprintSourceGeneratorModule,
 
         context.RequireAsync();
 
+        // Cache singleton IClaimInspector at pipeline construction time
+        context.CacheService(
+            "_claimInspector",
+            "Blueprint.Authorization.IClaimInspector",
+            "Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Authorization.IClaimInspector>(serviceProvider)",
+            isNullable: true);
+
         // Pre-register static readonly fields for claims with constant resource keys
         // (wildcard or no-token templates) to avoid per-request Claim allocations.
         var cachedClaimFields = new Dictionary<int, string>();
@@ -202,13 +209,9 @@ public sealed class ClaimsAuthorizationModule : IBlueprintSourceGeneratorModule,
     {
         var operationExpr = context.GetOperationExpression();
 
-        // Resolve IClaimInspector (optional — if not registered, claims checks are skipped)
-        context.DeclareVariable(
-            "claimInspector",
-            context.GetOptionalServiceExpression("Blueprint.Authorization.IClaimInspector"));
-
+        // Use cached IClaimInspector (optional — if not registered, claims checks are skipped)
         context.If(
-            "claimInspector != null && context.UserAuthorisationContext is Blueprint.Authorization.IClaimsHolder claimsHolder",
+            "this._claimInspector != null && context.UserAuthorisationContext is Blueprint.Authorization.IClaimsHolder claimsHolder",
             branch =>
             {
                 foreach (var demand in claimDemands)
@@ -234,7 +237,7 @@ public sealed class ClaimsAuthorizationModule : IBlueprintSourceGeneratorModule,
                     }
 
                     branch.If(
-                        $"!claimInspector.IsDemandedClaimFulfilled(claimsHolder, {claimExpr})",
+                        $"!this._claimInspector.IsDemandedClaimFulfilled(claimsHolder, {claimExpr})",
                         deniedBranch =>
                         {
                             deniedBranch.Return(

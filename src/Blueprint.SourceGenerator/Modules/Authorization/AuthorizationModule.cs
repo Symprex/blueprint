@@ -278,6 +278,14 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
 
         // Add authorization check after authentication
         context.RequireAsync();
+
+        // Cache singleton IResourceAuthorizationProvider at pipeline construction time
+        context.CacheService(
+            "_resourceAuthorizationProvider",
+            "Blueprint.Authorization.IResourceAuthorizationProvider",
+            "Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Authorization.IResourceAuthorizationProvider>(serviceProvider)",
+            isNullable: true);
+
         context.AddRenderStep(
             PipelineStage.Authorisation,
             ctx => RenderAuthorizationCheck(ctx, effectiveScopePairs, hasTemplateValidationErrors));
@@ -378,13 +386,9 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
         PipelineRenderContext context,
         List<(string Noun, string Verb, string? ResourceKeyTemplate)> scopePairs)
     {
-        // Resolve optional IResourceAuthorizationProvider — permissive when not registered
-        context.DeclareVariable(
-            "authorizationProvider",
-            context.GetOptionalServiceExpression("Blueprint.Authorization.IResourceAuthorizationProvider"));
-
+        // Use cached IResourceAuthorizationProvider — permissive when not registered
         context.If(
-            "authorizationProvider != null",
+            "this._resourceAuthorizationProvider != null",
             branch =>
             {
                 RenderLegacyAuthorizationCheckInner(branch, context, scopePairs);
@@ -397,19 +401,15 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
         PipelineRenderContext context,
         List<(string Noun, string Verb, string? ResourceKeyTemplate)> scopePairs)
     {
-        context.DeclareVariable(
-            "legacyAuthProvider",
-            context.GetOptionalServiceExpression("Blueprint.Authorization.IResourceAuthorizationProvider"));
-
         context.If(
-            "legacyAuthProvider != null",
+            "this._resourceAuthorizationProvider != null",
             branch =>
             {
                 var scopePairElements = BuildScopePairArrayExpression(scopePairs);
 
                 branch.DeclareVariable(
                     "isAuthorized",
-                    $"await legacyAuthProvider.IsAuthorizedAsync(context, {context.GetHttpContextExpression()}.User, new Blueprint.Model.ScopePair[] {{ {scopePairElements} }}, {context.GetHttpContextExpression()}.RequestAborted)");
+                    $"await this._resourceAuthorizationProvider.IsAuthorizedAsync(context, {context.GetHttpContextExpression()}.User, new Blueprint.Model.ScopePair[] {{ {scopePairElements} }}, {context.GetHttpContextExpression()}.RequestAborted)");
 
                 branch.If(
                     "!isAuthorized",
@@ -432,7 +432,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
 
         branch.DeclareVariable(
             "isAuthorized",
-            $"await authorizationProvider.IsAuthorizedAsync(context, {context.GetHttpContextExpression()}.User, new Blueprint.Model.ScopePair[] {{ {scopePairElements} }}, {context.GetHttpContextExpression()}.RequestAborted)");
+            $"await this._resourceAuthorizationProvider.IsAuthorizedAsync(context, {context.GetHttpContextExpression()}.User, new Blueprint.Model.ScopePair[] {{ {scopePairElements} }}, {context.GetHttpContextExpression()}.RequestAborted)");
 
         branch.If(
             "!isAuthorized",

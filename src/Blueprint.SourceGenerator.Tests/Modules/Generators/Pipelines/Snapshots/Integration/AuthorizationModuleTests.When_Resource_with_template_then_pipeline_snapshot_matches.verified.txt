@@ -23,10 +23,12 @@ namespace Blueprint.Generated
             new System.Diagnostics.ActivityTagsCollection { { "blueprint.operation.type", "GetAccountQuery" } };
         readonly Blueprint.Authorization.IOperationAuthoriser[] _operationAuthorisers;
         readonly Blueprint.Runtime.Middleware.IPropertyPopulator[] _propertyPopulators;
+        readonly Blueprint.Authorization.IResourceAuthorizationProvider _resourceAuthorizationProvider;
 
         public GetAccountQueryExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, System.IServiceProvider serviceProvider)
             : base(loggerFactory, "GetAccountQuery")
         {
+            this._resourceAuthorizationProvider = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Authorization.IResourceAuthorizationProvider>(serviceProvider);
             this._apiAuthorisers = (Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Authorization.IApiAuthoriser>>(serviceProvider) is { } aa ? System.Linq.Enumerable.ToArray(aa) : System.Array.Empty<Blueprint.Authorization.IApiAuthoriser>());
             this._operationAuthorisers = (Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Authorization.IOperationAuthoriser>>(serviceProvider) is { } oa ? System.Linq.Enumerable.ToArray(oa) : System.Array.Empty<Blueprint.Authorization.IOperationAuthoriser>());
             this._propertyPopulators = (Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Runtime.Middleware.IPropertyPopulator>>(serviceProvider) is { } populators ? System.Linq.Enumerable.ToArray(populators) : System.Array.Empty<Blueprint.Runtime.Middleware.IPropertyPopulator>());
@@ -81,10 +83,9 @@ namespace Blueprint.Generated
             }
             else
             {
-                var legacyAuthProvider = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Authorization.IResourceAuthorizationProvider>(context.ServiceProvider);
-                if (legacyAuthProvider != null)
+                if (this._resourceAuthorizationProvider != null)
                 {
-                    var isAuthorized = await legacyAuthProvider.IsAuthorizedAsync(context, httpContext.User, new Blueprint.Model.ScopePair[] { new Blueprint.Model.ScopePair("account", "read", "/tenants/{Auth:AccountId}/accounts/{Id}") }, httpContext.RequestAborted);
+                    var isAuthorized = await this._resourceAuthorizationProvider.IsAuthorizedAsync(context, httpContext.User, new Blueprint.Model.ScopePair[] { new Blueprint.Model.ScopePair("account", "read", "/tenants/{Auth:AccountId}/accounts/{Id}") }, httpContext.RequestAborted);
                     if (!isAuthorized)
                     {
                         return new Blueprint.Runtime.Exec.ForbiddenResult();
