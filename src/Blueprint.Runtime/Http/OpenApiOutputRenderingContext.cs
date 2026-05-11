@@ -87,13 +87,29 @@ public sealed record OpenApiOutputRenderingContext(
         // Pre-compute whether security can be hoisted to document level. When every operation
         // requires authentication we write a single top-level security array and opt-out
         // anonymous endpoints with security: [], which is more idiomatic OpenAPI.
-        var allOperations = document.Paths
-            .SelectMany(static p => p.Methods)
-            .SelectMany(static m => m.Operations)
-            .ToList();
+        // Uses single-pass iteration to avoid intermediate List allocation from ToList().
+        var hasAnyAuth = false;
+        var allRequireAuth = true;
 
-        var hasAnyAuth = allOperations.Any(static op => op.RequiresAuthentication);
-        var allRequireAuth = hasAnyAuth && allOperations.All(static op => op.RequiresAuthentication);
+        foreach (var path in document.Paths)
+        {
+            foreach (var method in path.Methods)
+            {
+                foreach (var operation in method.Operations)
+                {
+                    if (operation.RequiresAuthentication)
+                    {
+                        hasAnyAuth = true;
+                    }
+                    else
+                    {
+                        allRequireAuth = false;
+                    }
+                }
+            }
+        }
+
+        allRequireAuth = hasAnyAuth && allRequireAuth;
 
         // Resolve effective security schemes — use configured schemes or default to Bearer JWT
         var effectiveSchemes = infoOptions.SecuritySchemes.Count > 0
@@ -533,20 +549,26 @@ public sealed record OpenApiOutputRenderingContext(
 
             writer.WriteEndObject();
 
-            var requiredProperties = requestBody.Properties
-                .Where(static p => p.IsRequired)
-                .Select(static p => p.Name)
-                .ToArray();
+            // Write required array inline without intermediate allocation — check, then write
+            var hasRequired = false;
 
-            if (requiredProperties.Length > 0)
+            foreach (var property in requestBody.Properties)
             {
-                writer.WritePropertyName("required");
-                writer.WriteStartArray();
-
-                foreach (var name in requiredProperties)
+                if (property.IsRequired)
                 {
-                    writer.WriteStringValue(name);
+                    if (!hasRequired)
+                    {
+                        writer.WritePropertyName("required");
+                        writer.WriteStartArray();
+                        hasRequired = true;
+                    }
+
+                    writer.WriteStringValue(property.Name);
                 }
+            }
+
+            if (hasRequired)
+            {
 
                 writer.WriteEndArray();
             }
@@ -1392,21 +1414,21 @@ public sealed record OpenApiOutputRenderingContext(
             return;
         }
 
-        var orderedTags = tagDescriptions.Keys
-            .OrderBy(static tag => tag, StringComparer.Ordinal)
-            .ToArray();
+        // Sort tags by name using a pre-sized list to avoid extra LINQ allocation
+        var sortedTags = new List<KeyValuePair<string, string?>>(tagDescriptions);
+        sortedTags.Sort(static (a, b) => string.Compare(a.Key, b.Key, StringComparison.Ordinal));
 
         writer.WritePropertyName("tags");
         writer.WriteStartArray();
 
-        foreach (var tag in orderedTags)
+        foreach (var (tag, description) in sortedTags)
         {
             writer.WriteStartObject();
             writer.WriteString("name", tag);
 
-            if (tagDescriptions[tag] is { Length: > 0 } desc)
+            if (description is { Length: > 0 })
             {
-                writer.WriteString("description", desc);
+                writer.WriteString("description", description);
             }
 
             writer.WriteEndObject();
