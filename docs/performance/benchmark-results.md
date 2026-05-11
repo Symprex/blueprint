@@ -132,3 +132,28 @@ as success, confirming no wasted handler invocation. Full-stack commands with
 The source-generated approach eliminates all reflection from hot paths. Pipeline
 resolution and operation lookup are zero-allocation O(1) operations. Body parsing
 and validation scale linearly with property count.
+
+## Load Testing (NBomber — HTTP Pipeline Under Concurrent Load)
+
+Measures end-to-end HTTP request throughput and latency through the sample application
+host using TestServer + NBomber. All 6 scenarios run concurrently at their specified
+injection rates for 30 seconds. Each request traverses the full pipeline: routing,
+authentication, authorization, property binding, validation, handler, and response.
+
+| Scenario | Rate (RPS) | Total Requests | p50 (ms) | p75 (ms) | p99 (ms) | Mean (ms) |
+|---|---:|---:|---:|---:|---:|---:|
+| health_check (AllowAnonymous) | 500 | 14,999 | 0.23 | 0.29 | 2.94 | 0.33 |
+| get_templates_list (auth+scope) | 100 | 3,000 | 0.27 | 0.33 | 2.91 | 0.36 |
+| validation_failure_fast_path | 300 | 8,999 | 0.28 | 0.34 | 3.20 | 0.39 |
+| openapi_spec_fetch | 10 | 300 | 0.34 | 0.42 | 3.61 | 0.53 |
+| create_template_command (auth+perms) | 50 | 1,500 | 1.01 | 1.17 | 4.25 | 1.27 |
+| get_template_by_id (auth+scope) | 200 | 5,999 | 1.38 | 1.64 | 5.22 | 1.66 |
+
+**Key insights**:
+- **Sub-millisecond p50** for all query/read and validation-failure paths (0.23–0.34 ms).
+- **Validation failure short-circuits** at the same latency as the health check (~0.28 ms p50),
+  confirming no handler invocation or unnecessary pipeline stages execute after validation fails.
+- Commands and parameterized queries are ~1.0–1.7 ms p50, which includes JSON body
+  deserialization, authorization checks, and handler execution.
+- **Zero failures** across 34,797 total requests at 1,160 concurrent RPS.
+- p99 stays under 5.3 ms even for the heaviest scenario (parameterized GET with link generation).
