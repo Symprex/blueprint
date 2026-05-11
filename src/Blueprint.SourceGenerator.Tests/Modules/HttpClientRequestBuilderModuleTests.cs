@@ -59,10 +59,10 @@ public class HttpClientRequestBuilderModuleTests
         var source = GetDescriptorSource(result, "GetWidgetQuery");
         source.Should().Contain("CompiledHttpRequestFeatureData");
 
-        // Query string builder should handle non-route params
+        // Query string builder should handle non-route params using scalar separator pattern
         source.Should().Contain("typed.Locale");
         source.Should().Contain("typed.Page");
-        source.Should().Contain("parts.Add(");
+        source.Should().Contain("sep = '&'");
     }
 
     [Fact]
@@ -306,7 +306,7 @@ public class HttpClientRequestBuilderModuleTests
         // DELETE should build query strings for non-URL properties (like GET does)
         source.Should().Contain("typed.Permanent");
         source.Should().Contain("typed.Reason");
-        source.Should().Contain("parts.Add(");
+        source.Should().Contain("sep = '&'");
     }
 
     private static GenerationResult CompileDescriptor(string source)

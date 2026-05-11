@@ -232,8 +232,85 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
             return null;
         }
 
-        // Build a static lambda that appends query string params using string concat (not interpolation)
-        // to avoid global:: inside interpolation holes which requires C# 13+
+        // Determine whether any property is a collection — collections need List<string>
+        // for repeated key expansion (e.g. ?ids=1&ids=2). Scalar-only operations use a
+        // zero-allocation StringBuilder approach with separator tracking.
+        var hasCollections = queryProperties.Any(p => IsEnumerableType(p.Type, out _));
+
+        return hasCollections
+            ? BuildQueryStringLambdaWithList(operationFqn, queryProperties)
+            : BuildQueryStringLambdaScalarOnly(operationFqn, queryProperties);
+    }
+
+    /// <summary>
+    /// Generates a query string lambda for operations where ALL query parameters are scalar
+    /// (no collections). Uses a zero-allocation separator-tracking pattern instead of List.
+    /// </summary>
+    private static string BuildQueryStringLambdaScalarOnly(
+        string operationFqn,
+        List<IPropertySymbol> queryProperties)
+    {
+        // Pattern: track separator char, build string with direct concatenation.
+        // Generated code shape:
+        //   var sep = url.Contains('?') ? '&' : '?';
+        //   var qs = url;
+        //   qs += sep + "Prop=..." ; sep = '&';
+        //   return qs;
+        var parts = new List<string>
+        {
+            $"static (op, url) => {{ var typed = ({operationFqn})op;",
+            "var sep = url.Contains('?') ? '&' : '?';",
+            "var qs = url;",
+        };
+
+        foreach (var prop in queryProperties)
+        {
+            var propAccess = $"typed.{prop.Name}";
+            var escapedName = Uri.EscapeDataString(prop.Name);
+
+            if (prop.Type.SpecialType == SpecialType.System_Boolean)
+            {
+                parts.Add($"qs = qs + sep + \"{escapedName}=\" + ({propAccess} ? \"true\" : \"false\"); sep = '&';");
+            }
+            else if (prop.Type.IsValueType && prop.Type.NullableAnnotation != NullableAnnotation.Annotated)
+            {
+                parts.Add($"qs = qs + sep + \"{escapedName}=\" + global::System.Uri.EscapeDataString({propAccess}.ToString()!); sep = '&';");
+            }
+            else
+            {
+                parts.Add($"if ({propAccess} is not null)");
+                parts.Add("{");
+
+                if (prop.Type.SpecialType == SpecialType.System_String)
+                {
+                    parts.Add($"if ({propAccess}.Length > 0) {{ qs = qs + sep + \"{escapedName}=\" + global::System.Uri.EscapeDataString({propAccess}); sep = '&'; }}");
+                }
+                else if (prop.Type.IsValueType)
+                {
+                    parts.Add($"qs = qs + sep + \"{escapedName}=\" + global::System.Uri.EscapeDataString({propAccess}.Value.ToString()!); sep = '&';");
+                }
+                else
+                {
+                    parts.Add($"{{ var s = {propAccess}.ToString(); if (!string.IsNullOrEmpty(s)) {{ qs = qs + sep + \"{escapedName}=\" + global::System.Uri.EscapeDataString(s); sep = '&'; }} }}");
+                }
+
+                parts.Add("}");
+            }
+        }
+
+        parts.Add("return qs == url ? url : qs; }");
+
+        return string.Join(" ", parts);
+    }
+
+    /// <summary>
+    /// Generates a query string lambda for operations that have collection parameters.
+    /// Uses List&lt;string&gt; for repeated-key expansion (e.g. ?ids=1&amp;ids=2).
+    /// </summary>
+    private static string BuildQueryStringLambdaWithList(
+        string operationFqn,
+        List<IPropertySymbol> queryProperties)
+    {
         var parts = new List<string>
         {
             $"static (op, url) => {{ var typed = ({operationFqn})op;",
@@ -245,7 +322,6 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
             var propAccess = $"typed.{prop.Name}";
             var escapedName = Uri.EscapeDataString(prop.Name);
 
-            // Check if the property is a collection type (IEnumerable<T>, List<T>, T[], etc.)
             if (IsEnumerableType(prop.Type, out var elementType))
             {
                 EmitCollectionQueryParam(parts, propAccess, escapedName, elementType);
