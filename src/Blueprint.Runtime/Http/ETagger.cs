@@ -22,6 +22,9 @@ namespace Blueprint.Http;
 /// <param name="contextAccessor">The HTTP context accessor used to read request headers.</param>
 public sealed class ETagger(IHttpContextAccessor contextAccessor)
 {
+    private static readonly Dictionary<string, StringValues> NotModifiedCacheHeaders =
+        new(StringComparer.Ordinal) { ["Cache-Control"] = "private, max-age=3600" };
+
     /// <summary>
     /// Wraps a computed value in an <see cref="OkResult{T}"/> while applying ETag conditional request semantics.
     /// </summary>
@@ -38,19 +41,14 @@ public sealed class ETagger(IHttpContextAccessor contextAccessor)
 
         if (RequestHasETagMatch(request, eTag))
         {
-            return OkResult<T>.NotModified(
-                eTag,
-                new Dictionary<string, StringValues>
-                {
-                    ["Cache-Control"] = "private, max-age=3600",
-                });
+            return OkResult<T>.NotModified(eTag, NotModifiedCacheHeaders);
         }
 
         var result = createWhenNoMatch();
 
         return OkResult.For(
             result,
-            new Dictionary<string, StringValues>
+            new Dictionary<string, StringValues>(2, StringComparer.Ordinal)
             {
                 ["ETag"] = eTag,
                 ["Cache-Control"] = "private, max-age=3600",
