@@ -1,6 +1,9 @@
+using System.Security.Claims;
 using Blueprint.Model;
 using Blueprint.Runtime.Http;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.Options;
 
 namespace Blueprint.Testing;
 
@@ -158,6 +161,46 @@ public sealed class BlueprintHttpTestHostBuilder<TApp, TExec>
     }
 
     /// <summary>
+    /// Adds a test authentication scheme that automatically authenticates every request with the given claims.
+    /// This enables testing of operations marked with <c>[MustBeAuthenticated]</c> without
+    /// requiring a real identity provider. Call this before <see cref="BuildAsync"/>.
+    /// </summary>
+    /// <param name="configureClaims">
+    /// A callback that populates the claims for the test user identity. For example:
+    /// <c>claims => { claims.Add(new Claim("sub", "test-user")); claims.Add(new Claim("role", "Admin")); }</c>
+    /// </param>
+    /// <param name="authenticationType">
+    /// The authentication type name. Defaults to <c>"TestScheme"</c>. Must be non-null for
+    /// <see cref="ClaimsIdentity.IsAuthenticated"/> to return <c>true</c>.
+    /// </param>
+    /// <returns>This builder for chaining.</returns>
+    public BlueprintHttpTestHostBuilder<TApp, TExec> WithTestAuthentication(
+        Action<IList<Claim>> configureClaims,
+        string authenticationType = "TestScheme")
+    {
+        ArgumentNullException.ThrowIfNull(configureClaims);
+
+        var claims = new List<Claim>();
+        configureClaims(claims);
+        var identity = new ClaimsIdentity(claims, authenticationType);
+        var principal = new ClaimsPrincipal(identity);
+
+        this._serviceConfigurations.Add(services =>
+        {
+            services.AddAuthentication("TestScheme")
+                .AddScheme<AuthenticationSchemeOptions, TestAuthenticationHandler>("TestScheme", _ => { });
+            services.AddSingleton(new TestAuthenticationPrincipal(principal));
+        });
+
+        this._appConfigurations.Insert(0, app =>
+        {
+            app.UseAuthentication();
+        });
+
+        return this;
+    }
+
+    /// <summary>
     /// Builds and starts the HTTP test host. The host is immediately ready to accept requests.
     /// </summary>
     /// <returns>A fully configured and running HTTP test host.</returns>
@@ -207,5 +250,54 @@ public sealed class BlueprintHttpTestHostBuilder<TApp, TExec>
         await host.StartAsync().ConfigureAwait(false);
 
         return new BlueprintHttpTestHost<TApp, TExec>(host);
+    }
+}
+
+/// <summary>
+/// Holds the pre-configured <see cref="ClaimsPrincipal"/> for the test authentication handler.
+/// Registered as a singleton in DI by <see cref="BlueprintHttpTestHostBuilder{TApp,TExec}.WithTestAuthentication"/>.
+/// </summary>
+internal sealed class TestAuthenticationPrincipal
+{
+    /// <summary>Gets the pre-configured claims principal for test authentication.</summary>
+    public ClaimsPrincipal Principal { get; }
+
+    /// <summary>Initialises a new instance of the <see cref="TestAuthenticationPrincipal"/> class.</summary>
+    /// <param name="principal">The claims principal to use for all authenticated requests.</param>
+    public TestAuthenticationPrincipal(ClaimsPrincipal principal)
+    {
+        this.Principal = principal;
+    }
+}
+
+/// <summary>
+/// A minimal authentication handler that always succeeds with the pre-configured test principal.
+/// Used by <see cref="BlueprintHttpTestHostBuilder{TApp,TExec}.WithTestAuthentication"/> to bypass
+/// real identity providers in integration tests.
+/// </summary>
+internal sealed class TestAuthenticationHandler : AuthenticationHandler<AuthenticationSchemeOptions>
+{
+    private readonly TestAuthenticationPrincipal _principal;
+
+    /// <summary>Initialises a new instance of the <see cref="TestAuthenticationHandler"/> class.</summary>
+    /// <param name="options">The authentication scheme options monitor.</param>
+    /// <param name="logger">The logger factory.</param>
+    /// <param name="encoder">The URL encoder.</param>
+    /// <param name="principal">The pre-configured test principal.</param>
+    public TestAuthenticationHandler(
+        IOptionsMonitor<AuthenticationSchemeOptions> options,
+        ILoggerFactory logger,
+        System.Text.Encodings.Web.UrlEncoder encoder,
+        TestAuthenticationPrincipal principal)
+        : base(options, logger, encoder)
+    {
+        this._principal = principal;
+    }
+
+    /// <inheritdoc />
+    protected override Task<AuthenticateResult> HandleAuthenticateAsync()
+    {
+        var ticket = new AuthenticationTicket(this._principal.Principal, this.Scheme.Name);
+        return Task.FromResult(AuthenticateResult.Success(ticket));
     }
 }

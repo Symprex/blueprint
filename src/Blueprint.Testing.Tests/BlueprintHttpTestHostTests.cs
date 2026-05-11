@@ -107,3 +107,61 @@ public class BlueprintHttpTestHostTests : IAsyncLifetime
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 }
+
+/// <summary>
+/// Proves that <see cref="BlueprintHttpTestHostBuilder{TApp,TExec}.WithTestAuthentication"/>
+/// correctly authenticates requests so operations with <c>[MustBeAuthenticated]</c> succeed.
+/// </summary>
+public class BlueprintHttpTestHostAuthenticatedTests : IAsyncLifetime
+{
+    private BlueprintHttpTestHost<SampleBlueprintApp, SampleBlueprintAppExecutor>? _host;
+
+    public async Task InitializeAsync()
+    {
+        this._host = await BlueprintHttpTestHostBuilder<SampleBlueprintApp, SampleBlueprintAppExecutor>
+            .Create()
+            .ConfigureServices(services =>
+            {
+                services.AddSingleton<TemplateStore>();
+                services.AddScoped<InMemoryUnitOfWork>();
+            })
+            .WithTestAuthentication(claims =>
+            {
+                claims.Add(new System.Security.Claims.Claim("sub", "test-user-1"));
+                claims.Add(new System.Security.Claims.Claim("name", "Test User"));
+            })
+            .WithBasePath("/api")
+            .BuildAsync();
+    }
+
+    public async Task DisposeAsync()
+    {
+        if (this._host is not null)
+        {
+            await this._host.DisposeAsync();
+        }
+    }
+
+    [Fact]
+    public async Task Authenticated_endpoint_returns_success_with_test_auth()
+    {
+        // GetTemplateByStrongIdQuery has [MustBeAuthenticated]
+        var response = await this._host!.Client.GetAsync("/api/templates/by-id/00000000-0000-0000-0000-000000000001");
+
+        // Should not be 401 — test auth should have authenticated the request
+        response.StatusCode.Should().NotBe(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task Post_command_with_test_auth_goes_through_validation()
+    {
+        // CreateTemplateCommand has [MustBeAuthenticated] — with test auth, it should
+        // hit validation instead of 401
+        var response = await this._host!.Client.PostAsJsonAsync(
+            "/api/templates",
+            new { name = string.Empty, htmlSource = string.Empty });
+
+        // With auth in place, we should get validation failure (422), not unauthorized (401)
+        response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
+    }
+}
