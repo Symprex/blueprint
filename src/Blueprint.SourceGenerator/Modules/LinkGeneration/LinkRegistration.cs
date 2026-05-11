@@ -12,7 +12,11 @@ namespace Blueprint.SourceGenerator.Modules.LinkGeneration;
 /// The property on the resource type to read (may differ when the self-link uses
 /// <c>{RouteName:ResourceProp}</c> mapped syntax).
 /// </param>
-public sealed record LinkPlaceholderMapping(string RouteName, string ResourcePropertyName);
+/// <param name="IsValueType">
+/// Whether the resource property type is a non-nullable value type. Value types cannot use
+/// the <c>?.</c> null-conditional operator or be compared to <see langword="null"/>.
+/// </param>
+public sealed record LinkPlaceholderMapping(string RouteName, string ResourcePropertyName, bool IsValueType);
 
 /// <summary>
 /// Records a self-link registration discovered from a <c>[SelfLink]</c> attribute on an operation.

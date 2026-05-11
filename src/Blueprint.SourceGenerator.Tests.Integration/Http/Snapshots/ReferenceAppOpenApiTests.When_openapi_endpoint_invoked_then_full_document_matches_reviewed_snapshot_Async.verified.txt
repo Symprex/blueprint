@@ -325,7 +325,7 @@
       "post": {
         "operationId": "CreateTemplateCommand",
         "summary": "Create a new template with name and optional content.",
-        "description": "Demonstrates for global (non-scoped) claims-based authorization: the user must hold the \u0022ManageTemplates\u0022 permission claim regardless of which template is being created. This complements the scope pair (\u0022template\u0022, \u0022write\u0022) which controls resource-level authorization via .",
+        "description": "Demonstrates -based authorization: the generated descriptor carries the (\u0022template\u0022, \u0022write\u0022) scope pair so a registered can decide whether the current user may create templates.",
         "tags": [
           "Templates"
         ],
@@ -1113,7 +1113,7 @@
       "delete": {
         "operationId": "ArchiveTemplateCommand",
         "summary": "Archive (soft-delete) a template.",
-        "description": "Demonstrates combined with : the user must hold the global \u0022ManageTemplates\u0022 permission claim and satisfy the resource-scope \u0022template:write\u0022 authorization check.",
+        "description": "Demonstrates -based authorization for a destructive command: the user must satisfy the resource-scope (\u0022template\u0022, \u0022write\u0022) check before the archive operation can execute.",
         "tags": [
           "Templates"
         ],
@@ -1275,7 +1275,7 @@
       "put": {
         "operationId": "UpdateTemplateCommand",
         "summary": "Update an existing template\u0027s name and content.",
-        "description": "Demonstrates for resource-scoped claims-based authorization: the user must hold an \u0022Edit\u0022 permission claim scoped to the specific template being modified (key template \u0022Templates/{Id}\u0022 is resolved against the operation\u0027s property at runtime). This is complementary to the resource-scope authorization from which inherits the parent \u0027s [Resource(\u0022template\u0022, \u0022write\u0022)] scope pair.",
+        "description": "Demonstrates inheriting the parent \u0027s [Resource(\u0022template\u0022, \u0022write\u0022)] scope pair so the same resource authorization rule applies to updates without restating the scope metadata.",
         "tags": [
           "Templates"
         ],

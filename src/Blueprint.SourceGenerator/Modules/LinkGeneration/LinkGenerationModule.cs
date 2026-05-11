@@ -176,29 +176,42 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
         EquatableList<LinkPlaceholderMapping> mappings,
         string resourceTypeFqn)
     {
-        var mappingLookup = mappings.ToDictionary(static m => m.RouteName, static m => m.ResourcePropertyName, StringComparer.Ordinal);
+        var mappingLookup = mappings.ToDictionary(static m => m.RouteName, static m => m, StringComparer.Ordinal);
         var interpolated = _mappedPlaceholderRegex.Replace(
             urlFormat,
             match =>
             {
                 var routeName = match.Groups["routeName"].Value;
-                if (!mappingLookup.TryGetValue(routeName, out var resourcePropertyName))
+                if (!mappingLookup.TryGetValue(routeName, out var mapping))
                 {
                     return match.Value;
                 }
 
-                var propertyValueExpression = $"r.{resourcePropertyName}?.ToString() ?? \"\"";
+                // Value types always have a value and cannot use ?. operator
+                var propertyValueExpression = mapping.IsValueType
+                    ? $"r.{mapping.ResourcePropertyName}.ToString()"
+                    : $"r.{mapping.ResourcePropertyName}?.ToString() ?? \"\"";
+
                 return match.Groups["catchAll"].Length > 0
                     ? $"{{{propertyValueExpression}}}"
                     : $"{{System.Uri.EscapeDataString({propertyValueExpression})}}";
             });
 
-        // Build null-guard conditions: return null if any required property is null
-        var nullChecks = string.Join(
-            " || ",
-            mappings.Select(static m => $"r.{m.ResourcePropertyName} == null"));
+        // Build null-guard conditions: return null if any required reference-type property is null.
+        // Value type properties always have a value and are excluded from null checks.
+        var nullableProperties = mappings.Where(static m => !m.IsValueType).ToList();
 
-        return $"static (obj) => {{ var r = ({resourceTypeFqn})obj; return ({nullChecks}) ? null : $\"{interpolated}\"; }}";
+        if (nullableProperties.Count > 0)
+        {
+            var nullChecks = string.Join(
+                " || ",
+                nullableProperties.Select(static m => $"r.{m.ResourcePropertyName} == null"));
+
+            return $"static (obj) => {{ var r = ({resourceTypeFqn})obj; return ({nullChecks}) ? null : $\"{interpolated}\"; }}";
+        }
+
+        // All properties are value types — no null guard needed
+        return $"static (obj) => {{ var r = ({resourceTypeFqn})obj; return $\"{interpolated}\"; }}";
     }
 
     private static void LookForRootLinks(DescriptorContributorContext context)
@@ -312,7 +325,8 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
                                     argumentLocationInfo,
                                     context);
 
-                                placeholderMappings.Add(new LinkPlaceholderMapping(routePropertyName, routePropertyName));
+                                var isValueType = IsResourcePropertyValueType(resourceTypeSymbol, routePropertyName);
+                                placeholderMappings.Add(new LinkPlaceholderMapping(routePropertyName, routePropertyName, isValueType));
                             }
                             else
                             {
@@ -323,7 +337,8 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
                                     argumentLocationInfo,
                                     context);
 
-                                placeholderMappings.Add(new LinkPlaceholderMapping(routePropertyName, resourcePropertyName!));
+                                var isValueType = IsResourcePropertyValueType(resourceTypeSymbol, resourcePropertyName!);
+                                placeholderMappings.Add(new LinkPlaceholderMapping(routePropertyName, resourcePropertyName!, isValueType));
                             }
                         }
 
@@ -359,6 +374,24 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
         }
 
         return memberExists;
+    }
+
+    /// <summary>
+    /// Checks whether a named property on a resource type is a non-nullable value type, which
+    /// affects the generated URL builder code (value types cannot use <c>?.</c> or be compared to null).
+    /// </summary>
+    private static bool IsResourcePropertyValueType(INamedTypeSymbol resourceType, string propertyName)
+    {
+        var member = resourceType.GetAllMembers().FirstOrDefault(m => m.Name == propertyName);
+
+        if (member is IPropertySymbol property)
+        {
+            return property.Type.IsValueType
+                   && property.Type.OriginalDefinition.SpecialType != SpecialType.System_Nullable_T
+                   && property.Type.NullableAnnotation != NullableAnnotation.Annotated;
+        }
+
+        return false;
     }
 
     private static DiagnosticInfo CreatePlaceholderMissingDiagnostic(ITypeSymbol namedType, string placeholderName, LocationInfo argumentLocationInfo)
