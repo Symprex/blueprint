@@ -538,6 +538,18 @@ public sealed record OpenApiOutputRenderingContext(
         }
 
         writer.WriteEndArray();
+
+        // x-enum-varnames helps TypeScript and other code generators produce named
+        // enum members instead of raw string/numeric unions.
+        writer.WritePropertyName("x-enum-varnames");
+        writer.WriteStartArray();
+
+        foreach (var value in enumValues)
+        {
+            writer.WriteStringValue(value);
+        }
+
+        writer.WriteEndArray();
     }
 
     private static void WriteNumericConstraints(Utf8JsonWriter writer, decimal? minimum, decimal? maximum, bool exclusiveMinimum, bool exclusiveMaximum)

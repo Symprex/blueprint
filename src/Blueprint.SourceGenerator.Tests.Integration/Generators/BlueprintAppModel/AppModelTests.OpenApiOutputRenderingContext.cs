@@ -249,8 +249,17 @@ public class AppModelOpenApiOutputRenderingContextTests
         statusEnum[1].GetString().Should().Be("Inactive");
         statusEnum[2].GetString().Should().Be("Pending");
 
+        // x-enum-varnames should mirror enum names for TypeScript client generation
+        var varnames = properties.GetProperty("Status").GetProperty("x-enum-varnames");
+        varnames.GetArrayLength().Should().Be(3);
+        varnames[0].GetString().Should().Be("Active");
+        varnames[1].GetString().Should().Be("Inactive");
+        varnames[2].GetString().Should().Be("Pending");
+
         properties.GetProperty("Name").TryGetProperty("enum", out _).Should().BeFalse(
             "non-enum properties should not emit enum array");
+        properties.GetProperty("Name").TryGetProperty("x-enum-varnames", out _).Should().BeFalse(
+            "non-enum properties should not emit x-enum-varnames");
     }
 
     [Fact]

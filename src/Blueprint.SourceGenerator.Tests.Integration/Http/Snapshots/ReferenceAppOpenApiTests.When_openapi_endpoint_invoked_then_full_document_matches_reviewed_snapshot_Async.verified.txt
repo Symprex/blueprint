@@ -354,6 +354,11 @@
                       "public",
                       "internal",
                       "private"
+                    ],
+                    "x-enum-varnames": [
+                      "public",
+                      "internal",
+                      "private"
                     ]
                   },
                   "priority": {
@@ -1001,6 +1006,11 @@
             "schema": {
               "type": "string",
               "enum": [
+                "Name",
+                "CreatedDate",
+                "LastModified"
+              ],
+              "x-enum-varnames": [
                 "Name",
                 "CreatedDate",
                 "LastModified"

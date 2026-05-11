@@ -261,6 +261,12 @@ public class ReferenceAppOpenApiTests
             .Select(static e => e.GetString())
             .ToArray();
         enumArray.Should().BeEquivalentTo(["Name", "CreatedDate", "LastModified"]);
+
+        // x-enum-varnames should mirror enum values for TypeScript code generation
+        var varnames = schema.GetProperty("x-enum-varnames").EnumerateArray()
+            .Select(static e => e.GetString())
+            .ToArray();
+        varnames.Should().BeEquivalentTo(["Name", "CreatedDate", "LastModified"]);
     }
 
     [Fact]
