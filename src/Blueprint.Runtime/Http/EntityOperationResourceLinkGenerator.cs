@@ -44,7 +44,8 @@ public sealed class EntityOperationResourceLinkGenerator : IResourceLinkGenerato
         Guard.NotNull(linkableResource);
 
         var traceLogEnabled = this._logger.IsEnabled(LogLevel.Trace);
-        var links = context.App.GetLinksForResource(linkableResource.GetType());
+        var resourceType = linkableResource.GetType();
+        var links = context.App.GetLinksForResource(resourceType);
 
         if (links.Count == 0)
         {
@@ -52,7 +53,7 @@ public sealed class EntityOperationResourceLinkGenerator : IResourceLinkGenerato
             {
                 this._logger.LogTrace(
                     "No links have been registered for linkable resource {ResourceType}",
-                    linkableResource.GetType());
+                    resourceType);
             }
 
             return;
@@ -63,7 +64,7 @@ public sealed class EntityOperationResourceLinkGenerator : IResourceLinkGenerato
             this._logger.LogTrace(
                 "Attempting to add {LinkCount} links for the linkable resource {ResourceType}.",
                 links.Count,
-                linkableResource.GetType());
+                resourceType);
         }
 
         foreach (var link in links)

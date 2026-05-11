@@ -17,8 +17,11 @@ public sealed class ClaimsHolder : IClaimsHolder
     /// <param name="claims">The full set of claims for this user.</param>
     public ClaimsHolder(IEnumerable<Claim> claims)
     {
-        this.Claims = claims.ToList().AsReadOnly();
-        this._claimsByValueType = this.Claims.ToLookup(static c => c.ValueType, StringComparer.Ordinal);
+        // Single materialization: build the array once, then wrap as read-only
+        // and index by value type. Avoids the double-copy of ToList().AsReadOnly().
+        var materialized = claims as Claim[] ?? claims.ToArray();
+        this.Claims = materialized;
+        this._claimsByValueType = materialized.ToLookup(static c => c.ValueType, StringComparer.Ordinal);
     }
 
     /// <summary>
