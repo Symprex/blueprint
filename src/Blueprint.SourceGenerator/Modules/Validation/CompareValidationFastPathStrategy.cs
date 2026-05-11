@@ -28,7 +28,8 @@ internal sealed class CompareValidationFastPathStrategy : IValidationFastPathStr
         // CompareAttribute uses Object.Equals for comparison, matching the framework's runtime behaviour.
         rule = new ValidationFastPathRule(
             $"!object.Equals({propertyAccess}, {referencedPropertyAccess})",
-            $"new global::System.ComponentModel.DataAnnotations.CompareAttribute(\"{referencedPropertyName}\")");
+            $"new global::System.ComponentModel.DataAnnotations.CompareAttribute(\"{referencedPropertyName}\")",
+            CachedAttributeTypeName: "System.ComponentModel.DataAnnotations.CompareAttribute");
         return true;
     }
 

@@ -48,7 +48,8 @@ internal sealed class RangeValidationFastPathStrategy : IValidationFastPathStrat
             rule = new ValidationFastPathRule(
                 $"{valueAccess} < {minLiteral} || {valueAccess} > {maxLiteral}",
                 $"new global::System.ComponentModel.DataAnnotations.RangeAttribute({minLiteral}, {maxLiteral})",
-                GuardCondition: guardCondition);
+                GuardCondition: guardCondition,
+                CachedAttributeTypeName: "System.ComponentModel.DataAnnotations.RangeAttribute");
             return true;
         }
 
@@ -60,7 +61,8 @@ internal sealed class RangeValidationFastPathStrategy : IValidationFastPathStrat
             rule = new ValidationFastPathRule(
                 $"{valueAccess} < {minLiteral} || {valueAccess} > {maxLiteral}",
                 $"new global::System.ComponentModel.DataAnnotations.RangeAttribute({minLiteral}, {maxLiteral})",
-                GuardCondition: guardCondition);
+                GuardCondition: guardCondition,
+                CachedAttributeTypeName: "System.ComponentModel.DataAnnotations.RangeAttribute");
             return true;
         }
 

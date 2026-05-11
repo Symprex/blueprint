@@ -32,7 +32,8 @@ internal sealed class EmailAddressValidationFastPathStrategy : IValidationFastPa
 
         rule = new ValidationFastPathRule(
             $"global::Blueprint.Validation.ValidationRuntime.IsValidEmailAddress({propertyAccess}) == false",
-            $"new {qualifiedName}()");
+            $"new {qualifiedName}()",
+            CachedAttributeTypeName: $"{attribute.AttributeClass!.ContainingNamespace.ToDisplayString()}.EmailAddressAttribute");
         return true;
     }
 }

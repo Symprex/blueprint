@@ -1201,7 +1201,8 @@ public class ValidationModuleTests
         pipelineSource.Should().NotContain("global::System.ComponentModel.DataAnnotations.Validator.TryValidateObject");
         pipelineSource.Should().Contain("global::System.String.IsNullOrWhiteSpace(operation.Name)");
         pipelineSource.Should().Contain("operation.Name.Length < 3");
-        pipelineSource.Should().Contain("new global::System.ComponentModel.DataAnnotations.MinLengthAttribute(3).FormatErrorMessage(\"Name\")");
+        pipelineSource.Should().Contain("_va_Name.FormatErrorMessage(\"Name\")");
+        pipelineSource.Should().Contain("new global::System.ComponentModel.DataAnnotations.MinLengthAttribute(3)");
         pipelineSource.Should().Contain("return new Blueprint.Runtime.Exec.ValidationFailedResult(validationResults);");
         pipelineSource.Should().NotContain("throw new global::Blueprint.Validation.ValidationException(validationResults);");
 
@@ -1312,6 +1313,7 @@ public class ValidationModuleTests
         pipelineSource.Should().Contain("operation.Name.Length > 5");
         pipelineSource.Should().Contain("new global::System.ComponentModel.DataAnnotations.StringLengthAttribute(5)");
         pipelineSource.Should().Contain("MinimumLength = 3");
+        pipelineSource.Should().Contain("(_va_Name).FormatErrorMessage(\"Name\")");
         pipelineSource.IndexOf("operation.Name.Length < 3", StringComparison.Ordinal)
             .Should()
             .BeLessThan(pipelineSource.IndexOf("var handlerResult", StringComparison.Ordinal));
@@ -1361,7 +1363,7 @@ public class ValidationModuleTests
 
         pipelineSource.Should().NotContain("global::System.ComponentModel.DataAnnotations.Validator.TryValidateObject");
         pipelineSource.Should().Contain("global::Blueprint.Validation.ValidationRuntime.IsValidEmailAddress(operation.Email) == false");
-        pipelineSource.Should().Contain("new global::System.ComponentModel.DataAnnotations.EmailAddressAttribute().FormatErrorMessage(\"Email\")");
+        pipelineSource.Should().Contain("_va_Email.FormatErrorMessage(\"Email\")");
         pipelineSource.IndexOf("global::Blueprint.Validation.ValidationRuntime.IsValidEmailAddress(operation.Email) == false", StringComparison.Ordinal)
             .Should()
             .BeLessThan(pipelineSource.IndexOf("var handlerResult", StringComparison.Ordinal));
@@ -1466,7 +1468,9 @@ public class ValidationModuleTests
         pipelineSource.Should().NotContain("global::System.ComponentModel.DataAnnotations.Validator.TryValidateObject");
         pipelineSource.Should().Contain("global::System.String.IsNullOrWhiteSpace(operation.Name)");
         pipelineSource.Should().Contain("operation.Name.Length > 3");
-        pipelineSource.Should().Contain("new global::System.ComponentModel.DataAnnotations.MaxLengthAttribute(3).FormatErrorMessage(\"Name\")");
+        pipelineSource.Should().Contain("_va_Name.FormatErrorMessage(\"Name\")");
+        pipelineSource.Should().Contain("_va_Name_1.FormatErrorMessage(\"Name\")");
+        pipelineSource.Should().Contain("new global::System.ComponentModel.DataAnnotations.MaxLengthAttribute(3)");
         var requiredIndex = pipelineSource.IndexOf("global::System.String.IsNullOrWhiteSpace(operation.Name)", StringComparison.Ordinal);
         var maxLengthIndex = pipelineSource.IndexOf("operation.Name.Length > 3", StringComparison.Ordinal);
         var handlerIndex = pipelineSource.IndexOf("var handlerResult", StringComparison.Ordinal);
@@ -2342,7 +2346,7 @@ public class ValidationModuleTests
         result.Diagnostics.Should().BeEmpty();
         var pipelineSource = result.Output.Single(static tree => tree.FilePath.EndsWith("CreateUserCommandExecutorPipeline.g.cs", StringComparison.Ordinal)).ToString();
 
-        pipelineSource.Should().Contain("new global::System.ComponentModel.DataAnnotations.PhoneAttribute().IsValid(operation.PhoneNumber) == false");
+        pipelineSource.Should().Contain("_va_PhoneNumber.IsValid(operation.PhoneNumber) == false");
         pipelineSource.Should().Contain("operation.PhoneNumber is not null");
     }
 
@@ -2388,7 +2392,7 @@ public class ValidationModuleTests
         result.Diagnostics.Should().BeEmpty();
         var pipelineSource = result.Output.Single(static tree => tree.FilePath.EndsWith("CreateUserCommandExecutorPipeline.g.cs", StringComparison.Ordinal)).ToString();
 
-        pipelineSource.Should().Contain("new global::System.ComponentModel.DataAnnotations.UrlAttribute().IsValid(operation.Website) == false");
+        pipelineSource.Should().Contain("_va_Website.IsValid(operation.Website) == false");
         pipelineSource.Should().Contain("operation.Website is not null");
     }
 

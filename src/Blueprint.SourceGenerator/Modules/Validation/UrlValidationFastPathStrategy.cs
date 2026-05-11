@@ -34,7 +34,8 @@ internal sealed class UrlValidationFastPathStrategy : IValidationFastPathStrateg
         rule = new ValidationFastPathRule(
             $"new {qualifiedName}().IsValid({propertyAccess}) == false",
             $"new {qualifiedName}()",
-            GuardCondition: $"{propertyAccess} is not null");
+            GuardCondition: $"{propertyAccess} is not null",
+            CachedAttributeTypeName: $"{attribute.AttributeClass!.ContainingNamespace.ToDisplayString()}.UrlAttribute");
         return true;
     }
 }

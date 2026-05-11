@@ -41,7 +41,8 @@ internal sealed class LengthValidationFastPathStrategy : IValidationFastPathStra
         rule = new ValidationFastPathRule(
             $"{propertyAccess}.Length < {minLiteral} || {propertyAccess}.Length > {maxLiteral}",
             $"new global::System.ComponentModel.DataAnnotations.LengthAttribute({minLiteral}, {maxLiteral})",
-            GuardCondition: $"{propertyAccess} is not null");
+            GuardCondition: $"{propertyAccess} is not null",
+            CachedAttributeTypeName: "System.ComponentModel.DataAnnotations.LengthAttribute");
         return true;
     }
 

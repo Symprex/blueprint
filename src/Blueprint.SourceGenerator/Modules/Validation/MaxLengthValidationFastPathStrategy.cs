@@ -29,7 +29,8 @@ internal sealed class MaxLengthValidationFastPathStrategy : IValidationFastPathS
         rule = new ValidationFastPathRule(
             $"{propertyAccess}.Length > {maxLength}",
             $"new global::System.ComponentModel.DataAnnotations.MaxLengthAttribute({maxLength})",
-            GuardCondition: $"{propertyAccess} is not null");
+            GuardCondition: $"{propertyAccess} is not null",
+            CachedAttributeTypeName: "System.ComponentModel.DataAnnotations.MaxLengthAttribute");
         return true;
     }
 

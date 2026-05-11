@@ -31,7 +31,8 @@ internal sealed class RegularExpressionValidationFastPathStrategy : IValidationF
         rule = new ValidationFastPathRule(
             $"global::System.Text.RegularExpressions.Regex.IsMatch({propertyAccess}, @\"{escapedPattern}\") == false",
             $"new global::System.ComponentModel.DataAnnotations.RegularExpressionAttribute(@\"{escapedPattern}\")",
-            GuardCondition: $"{propertyAccess} is not null");
+            GuardCondition: $"{propertyAccess} is not null",
+            CachedAttributeTypeName: "System.ComponentModel.DataAnnotations.RegularExpressionAttribute");
         return true;
     }
 

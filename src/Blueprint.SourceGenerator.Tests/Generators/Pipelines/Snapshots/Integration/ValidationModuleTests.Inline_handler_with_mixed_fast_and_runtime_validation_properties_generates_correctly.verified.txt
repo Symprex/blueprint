@@ -21,6 +21,10 @@ namespace Blueprint.Generated
         private static readonly System.Diagnostics.ActivityTagsCollection _auditTags_CreateUserCommand =
             new System.Diagnostics.ActivityTagsCollection { { "blueprint.operation.type", "CreateUserCommand" } };
         readonly Blueprint.Runtime.Middleware.IPropertyPopulator[] _propertyPopulators;
+        private static readonly System.ComponentModel.DataAnnotations.RequiredAttribute _va_Name =
+            new global::System.ComponentModel.DataAnnotations.RequiredAttribute();
+        private static readonly System.ComponentModel.DataAnnotations.MaxLengthAttribute _va_Name_1 =
+            new global::System.ComponentModel.DataAnnotations.MaxLengthAttribute(3);
 
         public CreateUserCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, System.IServiceProvider serviceProvider)
             : base(loggerFactory, "CreateUserCommand")
@@ -52,12 +56,12 @@ namespace Blueprint.Generated
             if (global::System.String.IsNullOrWhiteSpace(operation.Name))
             {
                 validationResults = validationResults ?? new global::System.Collections.Generic.List<global::System.ComponentModel.DataAnnotations.ValidationResult>();
-                validationResults.Add(new global::System.ComponentModel.DataAnnotations.ValidationResult(new global::System.ComponentModel.DataAnnotations.RequiredAttribute().FormatErrorMessage("Name"), ["Name"]));
+                validationResults.Add(new global::System.ComponentModel.DataAnnotations.ValidationResult(_va_Name.FormatErrorMessage("Name"), ["Name"]));
             }
             if (!global::System.String.IsNullOrWhiteSpace(operation.Name) && operation.Name.Length > 3)
             {
                 validationResults = validationResults ?? new global::System.Collections.Generic.List<global::System.ComponentModel.DataAnnotations.ValidationResult>();
-                validationResults.Add(new global::System.ComponentModel.DataAnnotations.ValidationResult(new global::System.ComponentModel.DataAnnotations.MaxLengthAttribute(3).FormatErrorMessage("Name"), ["Name"]));
+                validationResults.Add(new global::System.ComponentModel.DataAnnotations.ValidationResult(_va_Name_1.FormatErrorMessage("Name"), ["Name"]));
             }
             global::Blueprint.Validation.ValidationRuntime.ValidateProperty(context.Descriptor.GetPropertyAttributes("Code"), operation, operation.Code, "Code", ref validationResults);
             if (validationResults is not null)

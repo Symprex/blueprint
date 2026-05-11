@@ -29,7 +29,8 @@ internal sealed class MinLengthValidationFastPathStrategy : IValidationFastPathS
         rule = new ValidationFastPathRule(
             $"{propertyAccess}.Length < {minLength}",
             $"new global::System.ComponentModel.DataAnnotations.MinLengthAttribute({minLength})",
-            GuardCondition: $"{propertyAccess} is not null");
+            GuardCondition: $"{propertyAccess} is not null",
+            CachedAttributeTypeName: "System.ComponentModel.DataAnnotations.MinLengthAttribute");
         return true;
     }
 

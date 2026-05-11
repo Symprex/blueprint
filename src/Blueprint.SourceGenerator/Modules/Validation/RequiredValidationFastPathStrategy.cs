@@ -30,7 +30,8 @@ internal sealed class RequiredValidationFastPathStrategy : IValidationFastPathSt
             rule = new ValidationFastPathRule(
                 $"global::System.String.IsNullOrWhiteSpace({propertyAccess})",
                 "new global::System.ComponentModel.DataAnnotations.RequiredAttribute()",
-                $"!global::System.String.IsNullOrWhiteSpace({propertyAccess})");
+                $"!global::System.String.IsNullOrWhiteSpace({propertyAccess})",
+                CachedAttributeTypeName: "System.ComponentModel.DataAnnotations.RequiredAttribute");
             return true;
         }
 
@@ -39,7 +40,8 @@ internal sealed class RequiredValidationFastPathStrategy : IValidationFastPathSt
             rule = new ValidationFastPathRule(
                 $"{propertyAccess} is null",
                 "new global::System.ComponentModel.DataAnnotations.RequiredAttribute()",
-                $"{propertyAccess} is not null");
+                $"{propertyAccess} is not null",
+                CachedAttributeTypeName: "System.ComponentModel.DataAnnotations.RequiredAttribute");
             return true;
         }
 

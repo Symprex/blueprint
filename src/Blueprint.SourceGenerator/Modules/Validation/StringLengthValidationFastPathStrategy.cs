@@ -37,7 +37,8 @@ internal sealed class StringLengthValidationFastPathStrategy : IValidationFastPa
             $"({outOfRangeCondition})",
             attributeExpression,
             GuardCondition: $"{propertyAccess} is not null",
-            WrapValidationAttributeExpression: true);
+            WrapValidationAttributeExpression: true,
+            CachedAttributeTypeName: "System.ComponentModel.DataAnnotations.StringLengthAttribute");
         return true;
     }
 

@@ -31,7 +31,8 @@ internal sealed class PhoneValidationFastPathStrategy : IValidationFastPathStrat
         rule = new ValidationFastPathRule(
             $"new global::System.ComponentModel.DataAnnotations.PhoneAttribute().IsValid({propertyAccess}) == false",
             "new global::System.ComponentModel.DataAnnotations.PhoneAttribute()",
-            GuardCondition: $"{propertyAccess} is not null");
+            GuardCondition: $"{propertyAccess} is not null",
+            CachedAttributeTypeName: "System.ComponentModel.DataAnnotations.PhoneAttribute");
         return true;
     }
 }
