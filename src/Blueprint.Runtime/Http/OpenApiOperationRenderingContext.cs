@@ -190,6 +190,16 @@ public sealed record OpenApiOperationRenderingContext(
             var exampleValueAttr = clrProperty?.GetCustomAttribute<Blueprint.Model.Attributes.OpenApiExampleAttribute>();
             var isWriteOnly = clrProperty?.GetCustomAttribute<Blueprint.Model.Attributes.OpenApiWriteOnlyAttribute>() is not null;
 
+            // Resolve array element schema for collection-typed query/header/cookie parameters
+            string? paramItemsType = null;
+            string? paramItemsFormat = null;
+            if (schemaType == "array" && clrProperty is not null)
+            {
+                var (itemsType, itemsFormat, _, _, _, _) = ResolveCollectionSchema(clrProperty);
+                paramItemsType = itemsType;
+                paramItemsFormat = itemsFormat;
+            }
+
             switch (entry.Source)
             {
                 case PropertyBindingSource.Route:
@@ -239,6 +249,8 @@ public sealed record OpenApiOperationRenderingContext(
                         IsDeprecated = isDeprecated,
                         DeprecationReason = propertyDeprecationReason,
                         ExampleValue = exampleValueAttr?.Value,
+                        ItemsType = paramItemsType,
+                        ItemsFormat = paramItemsFormat,
                     });
                     break;
 

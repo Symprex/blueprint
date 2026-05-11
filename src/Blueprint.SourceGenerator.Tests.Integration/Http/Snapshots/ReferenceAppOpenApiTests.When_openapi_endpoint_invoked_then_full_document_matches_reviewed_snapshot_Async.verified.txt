@@ -1016,6 +1016,21 @@
                 "LastModified"
               ]
             }
+          },
+          {
+            "name": "tags",
+            "in": "query",
+            "required": false,
+            "description": "Filter templates by tags (repeated query parameter).",
+            "style": "form",
+            "explode": true,
+            "schema": {
+              "type": "array",
+              "nullable": true,
+              "items": {
+                "type": "string"
+              }
+            }
           }
         ],
         "responses": {

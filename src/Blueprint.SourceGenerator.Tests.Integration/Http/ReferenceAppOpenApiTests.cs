@@ -270,6 +270,29 @@ public class ReferenceAppOpenApiTests
     }
 
     [Fact]
+    public async Task When_query_parameter_is_array_type_then_openapi_renders_items_and_style()
+    {
+        var (json, _) = await InvokeOpenApiEndpointAsync();
+        using var doc = JsonDocument.Parse(json);
+
+        // SearchTemplatesQuery has a Tags property of type string[]
+        var searchPath = doc.RootElement.GetProperty("paths").GetProperty("/templates/search");
+        var parameters = searchPath.GetProperty("get").GetProperty("parameters");
+
+        var tagsParam = parameters.EnumerateArray()
+            .First(static p => p.GetProperty("name").GetString() == "tags");
+
+        // Array query params should have style=form, explode=true
+        tagsParam.GetProperty("style").GetString().Should().Be("form");
+        tagsParam.GetProperty("explode").GetBoolean().Should().BeTrue();
+
+        // Schema should be array with items sub-schema
+        var schema = tagsParam.GetProperty("schema");
+        schema.GetProperty("type").GetString().Should().Be("array");
+        schema.GetProperty("items").GetProperty("type").GetString().Should().Be("string");
+    }
+
+    [Fact]
     public async Task When_operation_requires_authentication_then_openapi_renders_security_requirement()
     {
         var (json, _) = await InvokeOpenApiEndpointAsync();

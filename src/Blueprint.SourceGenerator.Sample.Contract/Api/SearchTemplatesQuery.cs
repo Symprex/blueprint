@@ -62,6 +62,14 @@ public partial class SearchTemplatesQuery : IQuery<TemplateApiResource[]>
     public string? CorrelationId { get; set; }
 
     /// <summary>
+    /// Optional tag filters to restrict results to templates matching any of the given tags.
+    /// Demonstrates array query parameter binding with OpenAPI <c>style: form, explode: true</c>
+    /// serialization (e.g. <c>?tags=draft&amp;tags=approved</c>).
+    /// </summary>
+    [Description("Filter templates by tags (repeated query parameter).")]
+    public string[]? Tags { get; set; }
+
+    /// <summary>
     /// An optional user-preference cookie that stores the preferred locale for template content.
     /// Demonstrates <see cref="FromCookieAttribute"/> binding for reading per-request state from cookies.
     /// </summary>

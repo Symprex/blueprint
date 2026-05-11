@@ -66,6 +66,12 @@ public sealed record OpenApiParameterModel(
 
     /// <summary>Gets a representative example value from <see cref="Blueprint.Model.Attributes.OpenApiExampleAttribute"/>, or null when unset.</summary>
     public object? ExampleValue { get; init; }
+
+    /// <summary>Gets the OpenAPI type of array element items (e.g. <c>string</c>, <c>integer</c>) when the parameter is a collection.</summary>
+    public string? ItemsType { get; init; }
+
+    /// <summary>Gets the OpenAPI format of array element items when the items have a standard format mapping.</summary>
+    public string? ItemsFormat { get; init; }
 }
 
 /// <summary>

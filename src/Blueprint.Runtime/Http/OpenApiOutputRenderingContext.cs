@@ -334,6 +334,13 @@ public sealed record OpenApiOutputRenderingContext(
                 }
             }
 
+            // Array query/header parameters need style+explode for repeated key serialization
+            if (parameter.SchemaType == "array" && parameter.In is "query" or "header")
+            {
+                writer.WriteString("style", "form");
+                writer.WriteBoolean("explode", true);
+            }
+
             writer.WritePropertyName("schema");
             writer.WriteStartObject();
             writer.WriteString("type", parameter.SchemaType);
@@ -346,6 +353,21 @@ public sealed record OpenApiOutputRenderingContext(
             if (parameter.IsNullable && !parameter.Required)
             {
                 writer.WriteBoolean("nullable", true);
+            }
+
+            // Array parameters: emit items sub-schema
+            if (parameter.ItemsType is not null)
+            {
+                writer.WritePropertyName("items");
+                writer.WriteStartObject();
+                writer.WriteString("type", parameter.ItemsType);
+
+                if (parameter.ItemsFormat is not null)
+                {
+                    writer.WriteString("format", parameter.ItemsFormat);
+                }
+
+                writer.WriteEndObject();
             }
 
             WriteEnumValues(writer, parameter.EnumValues);
