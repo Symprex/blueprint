@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Blueprint.SourceGenerator.CodeWriter;
 using Blueprint.SourceGenerator.Generators.Pipelines.Model;
 using Blueprint.SourceGenerator.Helpers;
@@ -89,6 +90,29 @@ public sealed record PipelinePlan(OperationModel Operation, VariableRegistry Var
         {
             this._cachedServices[fieldName] = new CachedServiceRegistration(fieldName, serviceTypeName, resolutionExpression, isNullable);
         }
+    }
+
+    /// <summary>
+    /// Tries to find a cached service field whose service type matches <paramref name="serviceTypeName"/>.
+    /// Returns the <c>this._fieldName</c> expression when found, so callers can use the cached
+    /// field instead of a per-request <c>GetRequiredService</c> call.
+    /// </summary>
+    /// <param name="serviceTypeName">The fully qualified service type to look up.</param>
+    /// <param name="fieldExpression">When found, the <c>this._fieldName</c> expression; otherwise <c>null</c>.</param>
+    /// <returns><c>true</c> if a matching cached service exists.</returns>
+    public bool TryGetCachedServiceFieldExpression(string serviceTypeName, [NotNullWhen(true)] out string? fieldExpression)
+    {
+        foreach (var entry in this._cachedServices.Values)
+        {
+            if (string.Equals(entry.ServiceTypeName, serviceTypeName, StringComparison.Ordinal))
+            {
+                fieldExpression = $"this.{entry.FieldName}";
+                return true;
+            }
+        }
+
+        fieldExpression = null;
+        return false;
     }
 
     /// <summary>
@@ -323,6 +347,19 @@ public sealed class PipelineRenderContext
     }
 
     /// <summary>
+    /// Tries to find a constructor-cached field whose service type matches <paramref name="serviceTypeName"/>.
+    /// Returns the <c>this._fieldName</c> expression when found, so callers can use the cached
+    /// field instead of a per-request <c>GetRequiredService</c> call.
+    /// </summary>
+    /// <param name="serviceTypeName">The fully qualified service type to look up.</param>
+    /// <param name="fieldExpression">When found, the <c>this._fieldName</c> expression; otherwise <c>null</c>.</param>
+    /// <returns><c>true</c> if a matching cached service exists.</returns>
+    public bool TryGetCachedServiceFieldExpression(string serviceTypeName, [NotNullWhen(true)] out string? fieldExpression)
+    {
+        return this._plan.TryGetCachedServiceFieldExpression(serviceTypeName, out fieldExpression);
+    }
+
+    /// <summary>
     /// Gets an expression that resolves a required service from the service provider.
     /// </summary>
     /// <param name="serviceTypeName">The service type name.</param>
@@ -356,7 +393,8 @@ public sealed class PipelineRenderContext
     /// Gets an expression that constructs the external handler by calling its constructor directly
     /// with <c>GetRequiredService</c> for each parameter, avoiding the reflection overhead of
     /// <c>ActivatorUtilities.CreateInstance</c>. Falls back to <see cref="GetActivatorCreateInstanceExpression"/>
-    /// when the constructor cannot be statically resolved.
+    /// when the constructor cannot be statically resolved. Constructor-cached singletons (e.g.
+    /// <c>ILogger&lt;T&gt;</c>) use the pre-resolved field instead of per-request DI lookups.
     /// </summary>
     /// <param name="handlerTypeFullName">The fully qualified handler type name.</param>
     /// <returns>A <c>new Handler(...)</c> expression or an <c>ActivatorUtilities</c> fallback.</returns>
@@ -378,7 +416,15 @@ public sealed class PipelineRenderContext
         var argParts = new List<string>(resolved.Count);
         foreach (var p in resolved)
         {
-            argParts.Add($"Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<{p.ParameterTypeName}>({sp})");
+            // Use constructor-cached field for known singletons (e.g. ILogger<T>)
+            if (this._plan.TryGetCachedServiceFieldExpression(p.ParameterTypeName, out var cachedExpr))
+            {
+                argParts.Add(cachedExpr);
+            }
+            else
+            {
+                argParts.Add($"Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<{p.ParameterTypeName}>({sp})");
+            }
         }
 
         return $"new {handlerTypeFullName}({string.Join(", ", argParts)})";

@@ -54,6 +54,8 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
             return;
         }
 
+        CacheKnownSingletonServices(context, handler);
+
         context.AddRenderStep(PipelineStage.Execution, renderContext => RenderHandlerInvocation(renderContext, normalization));
         context.RegisterVariable(
             new VariableKey(HandlerResultTypeName, HandlerResultPurpose),
@@ -69,9 +71,12 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
             switch (param.Source)
             {
                 case ParameterSource.FromDependencyInjection:
-                    context.DeclareVariable(
-                        param.VariableName,
-                        context.GetRequiredServiceExpression(param.ParameterTypeName));
+                    // Use constructor-cached field for known singletons (e.g. ILogger<T>)
+                    var serviceExpr = context.TryGetCachedServiceFieldExpression(param.ParameterTypeName, out var cachedExpr)
+                        ? cachedExpr
+                        : context.GetRequiredServiceExpression(param.ParameterTypeName);
+
+                    context.DeclareVariable(param.VariableName, serviceExpr);
                     break;
             }
         }
@@ -458,5 +463,125 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
         PlainValue,
         OperationResult,
         ResultsUnion,
+    }
+
+    /// <summary>
+    /// Scans handler method DI parameters and external handler constructor parameters for
+    /// well-known singleton types (<c>ILogger&lt;T&gt;</c>, <c>ILoggerFactory</c>) and
+    /// registers them as constructor-cached fields to eliminate per-request DI lookups.
+    /// </summary>
+    private static void CacheKnownSingletonServices(PipelineContributorContext context, OperationHandlerModel handler)
+    {
+        // Inline handler method parameters
+        foreach (var param in handler.Parameters)
+        {
+            if (param.Source == ParameterSource.FromDependencyInjection)
+            {
+                TryCacheSingletonParameter(context, param.ParameterTypeName);
+            }
+        }
+
+        // External handler constructor parameters
+        if (handler.ConstructorParameters is { } ctorParams)
+        {
+            foreach (var param in ctorParams)
+            {
+                TryCacheSingletonParameter(context, param.ParameterTypeName);
+            }
+        }
+    }
+
+    private static void TryCacheSingletonParameter(PipelineContributorContext context, string parameterTypeName)
+    {
+        if (!IsKnownSingleton(parameterTypeName))
+        {
+            return;
+        }
+
+        var fieldName = ToFieldName(parameterTypeName);
+        string resolutionExpression;
+
+        if (parameterTypeName is "global::Microsoft.Extensions.Logging.ILoggerFactory"
+            or "Microsoft.Extensions.Logging.ILoggerFactory")
+        {
+            // The pipeline constructor already receives loggerFactory as a parameter
+            resolutionExpression = "loggerFactory";
+        }
+        else
+        {
+            // ILogger<T> → create from the loggerFactory parameter (works with NullLoggerFactory)
+            resolutionExpression =
+                $"Microsoft.Extensions.Logging.LoggerFactoryExtensions.CreateLogger<{ExtractGenericArgument(parameterTypeName)}>(loggerFactory)";
+        }
+
+        context.CacheService(fieldName, parameterTypeName, resolutionExpression);
+    }
+
+    /// <summary>
+    /// Extracts the generic type argument from a type like <c>ILogger&lt;TestNamespace.Foo&gt;</c>.
+    /// </summary>
+    private static string ExtractGenericArgument(string genericTypeName)
+    {
+        var openAngle = genericTypeName.IndexOf('<');
+        var closeAngle = genericTypeName.LastIndexOf('>');
+        if (openAngle >= 0 && closeAngle > openAngle)
+        {
+            return genericTypeName.Substring(openAngle + 1, closeAngle - openAngle - 1);
+        }
+
+        return genericTypeName;
+    }
+
+    /// <summary>
+    /// Returns <c>true</c> for types that the Microsoft.Extensions.DependencyInjection framework
+    /// always registers as singletons, making them safe to resolve once in the pipeline constructor.
+    /// </summary>
+    private static bool IsKnownSingleton(string fullyQualifiedTypeName)
+    {
+        // ILoggerFactory is always a singleton
+        if (fullyQualifiedTypeName is "global::Microsoft.Extensions.Logging.ILoggerFactory"
+            or "Microsoft.Extensions.Logging.ILoggerFactory")
+        {
+            return true;
+        }
+
+        // ILogger<T> is always a singleton (Logger<T> is registered as singleton by AddLogging)
+        if (fullyQualifiedTypeName.StartsWith("global::Microsoft.Extensions.Logging.ILogger<", StringComparison.Ordinal)
+            || fullyQualifiedTypeName.StartsWith("Microsoft.Extensions.Logging.ILogger<", StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Converts a fully qualified type name into a safe field name for caching.
+    /// </summary>
+    private static string ToFieldName(string typeName)
+    {
+        // Strip all global:: prefixes (may appear in generic type arguments)
+        var name = typeName.Replace("global::", string.Empty);
+
+        // Extract the short type name for readability:
+        // "Microsoft.Extensions.Logging.ILogger<TestNamespace.TestQuery>" → "ILogger_TestNamespace_TestQuery"
+        var lastDot = name.LastIndexOf('.');
+        var genericAngle = name.IndexOf('<');
+        if (genericAngle >= 0 && (lastDot < 0 || lastDot > genericAngle))
+        {
+            lastDot = name.LastIndexOf('.', genericAngle);
+        }
+
+        var shortName = lastDot >= 0 ? name.Substring(lastDot + 1) : name;
+
+        var sanitized = shortName
+            .Replace('.', '_')
+            .Replace('<', '_')
+            .Replace('>', '_')
+            .Replace(',', '_')
+            .Replace(' ', '_')
+            .TrimEnd('_');
+
+        return $"_cached_{sanitized}";
     }
 }

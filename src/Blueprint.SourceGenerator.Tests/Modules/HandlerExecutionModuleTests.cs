@@ -138,9 +138,10 @@ public class HandlerExecutionModuleTests
         var pipelineSources = result.GetGeneratedSources(nameof(OperationExecutorPipelineSourceGenerator));
         var pipelineSource = string.Join("\n", pipelineSources.Select(static s => s.SourceText));
 
-        // DI parameter resolved from the service provider
+        // ILogger<T> cached via loggerFactory in constructor, used from field in method body
         pipelineSource.Should().Contain("ILogger");
-        pipelineSource.Should().Contain("GetRequiredService");
+        pipelineSource.Should().Contain("CreateLogger");
+        pipelineSource.Should().Contain("_cached_ILogger");
     }
 
     [Fact]
