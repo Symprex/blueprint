@@ -117,8 +117,8 @@ public sealed class BlueprintTestContext
     /// This matches the S365 pattern where permissions are stored as claims with a configurable
     /// claim type (defaulting to <c>"permission"</c>).
     /// <para>
-    /// Use this when testing authorization flows that depend on <c>[Permission]</c> or
-    /// <c>[PermissionFor]</c> attributes. Each permission string becomes a separate claim.
+    /// Use this when testing authorization flows that depend on permission-style claims. Each
+    /// permission string becomes a separate claim.
     /// </para>
     /// </summary>
     /// <param name="permissions">The permission identifiers to grant the test user.</param>

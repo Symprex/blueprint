@@ -151,7 +151,6 @@ public partial class OperationExecutorPipelineSourceGenerator : IIncrementalGene
             new PropertyPopulationModule(),
             new AuthenticationModule(),
             new AuthorizationModule(),
-            new ClaimsAuthorizationModule(),
             new ApiAuthoriserModule(),
             new ValidationModule(),
             new HandlerExecutionModule(),

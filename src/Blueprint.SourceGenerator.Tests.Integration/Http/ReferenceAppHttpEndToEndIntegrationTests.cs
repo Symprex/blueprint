@@ -2524,41 +2524,9 @@ public class ReferenceAppHttpEndToEndIntegrationTests
     }
 
     [Fact]
-    public async Task When_create_template_with_auth_but_without_permission_claim_then_returns_403()
+    public async Task When_create_template_with_authenticated_user_then_returns_201_without_permission_claim()
     {
-        // Arrange — user is authenticated but does NOT hold the ManageTemplates permission
-        var endpoints = CreateEndpointsWithClaimsAuthorisation();
-        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
-        var endpoint = FindEndpoint(endpoints, "api/templates", "POST");
-        endpoint.Should().NotBeNull("the POST /api/templates endpoint should exist");
-
-        var bodyJson = Encoding.UTF8.GetBytes("""{"name":"Denied Template"}""");
-
-        // Act
-        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, context =>
-        {
-            context.Request.Method = HttpMethods.Post;
-            context.Request.Path = "/api/templates";
-            context.Request.ContentType = "application/json; charset=utf-8";
-            context.Request.ContentLength = bodyJson.Length;
-            context.Request.Body = new MemoryStream(bodyJson);
-            context.User = new ClaimsPrincipal(
-                new ClaimsIdentity(
-                [
-                    new Claim(ClaimTypes.NameIdentifier, "user-claims-test"),
-                ],
-                authenticationType: "test"));
-        });
-
-        // Assert — the generated inline claims check should deny before the handler runs
-        response.StatusCode.Should().Be(StatusCodes.Status403Forbidden,
-            "[Permission(\"ManageTemplates\")] should deny users without the required permission claim");
-    }
-
-    [Fact]
-    public async Task When_create_template_with_auth_and_permission_claim_then_returns_201()
-    {
-        // Arrange — user is authenticated AND holds the ManageTemplates permission
+        // Arrange — CreateTemplateCommand now relies on standard authenticated access in this claims-authoriser harness.
         var endpoints = CreateEndpointsWithClaimsAuthorisation();
         endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
         var endpoint = FindEndpoint(endpoints, "api/templates", "POST");
@@ -2578,14 +2546,13 @@ public class ReferenceAppHttpEndToEndIntegrationTests
                 new ClaimsIdentity(
                 [
                     new Claim(ClaimTypes.NameIdentifier, "user-claims-test"),
-                    new Claim("urn:claims/permission", "ManageTemplates"),
                 ],
                 authenticationType: "test"));
         });
 
-        // Assert — claim check passes, handler returns 201 Created with resource event
+        // Assert — authenticated access is no longer gated on an extra permission claim here.
         response.StatusCode.Should().Be(StatusCodes.Status201Created,
-            "user with ManageTemplates permission should be allowed to create templates");
+            "authenticated users should not need a ManageTemplates permission claim to create templates");
         response.Body.Should().Contain("template.created");
     }
 

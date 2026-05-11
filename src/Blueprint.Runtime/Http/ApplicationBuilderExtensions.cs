@@ -98,6 +98,11 @@ public static class EndpointRouteBuilderExtensions
 
         builders.Add(openApiBuilder);
 
+        // Track mapped (route, operationType) pairs to deduplicate. Multiple HATEOAS links per
+        // operation are valid, but each unique route+operation pair should produce only one ASP.NET
+        // Core endpoint to avoid ambiguous routing.
+        var mappedEndpoints = new HashSet<(string Route, Type OperationType)>(StringTupleComparer.Instance);
+
         foreach (var operation in runtimeModel.Operations)
         {
             // Only map operations that are exposed to the HTTP host (have URLs).
@@ -113,6 +118,12 @@ public static class EndpointRouteBuilderExtensions
 
             foreach (var url in operation.Urls)
             {
+                // Skip duplicate registrations for the same route+operation combination.
+                if (!mappedEndpoints.Add((url.UrlFormat, operation.OperationType)))
+                {
+                    continue;
+                }
+
                 var builder = endpoints.Map(RoutePatternFactory.Parse(basePath.TrimEnd('/') + url.UrlFormat), requestDelegate);
                 builder.WithMetadata(operation);
                 builder.WithMetadata(new HttpMethodMetadata(httpMethods));
@@ -298,6 +309,28 @@ public static class EndpointRouteBuilderExtensions
                 .Replace("\n", "\\n", StringComparison.Ordinal)
                 .Replace("\r", "\\r", StringComparison.Ordinal)
                 .Replace("\t", "\\t", StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>
+    /// Compares (string Route, Type OperationType) tuples using ordinal route comparison
+    /// for endpoint deduplication.
+    /// </summary>
+    private sealed class StringTupleComparer : IEqualityComparer<(string Route, Type OperationType)>
+    {
+        public static readonly StringTupleComparer Instance = new();
+
+        public bool Equals((string Route, Type OperationType) x, (string Route, Type OperationType) y)
+        {
+            return string.Equals(x.Route, y.Route, StringComparison.Ordinal)
+                   && x.OperationType == y.OperationType;
+        }
+
+        public int GetHashCode((string Route, Type OperationType) obj)
+        {
+            return HashCode.Combine(
+                obj.Route.GetHashCode(StringComparison.Ordinal),
+                obj.OperationType);
         }
     }
 }

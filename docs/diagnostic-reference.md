@@ -51,8 +51,6 @@ For detailed explanations, see [compile-time-validation.md](compile-time-validat
 | BPAU005 | Error | Both `[FromResource]` and `[Resource]` applied |
 | BPAU006 | Error | `[FromResource]` target has no `[Resource]` attributes |
 | BPAU007 | Warning | Resource key template `{Token}` does not match a property |
-| BPAU008 | Error | `[Permission]`/`[PermissionFor]` combined with `[AllowAnonymous]` |
-| BPAU009 | Warning | Claims template `{Token}` does not match a property |
 
 ## Link generation (BPLG)
 

@@ -245,20 +245,16 @@ blueprint.AddApiAuthoriser<FullAuthoriser>();
 
 #### Claims-based authorization
 
-For permission-based access control, use `[Permission]` and `[PermissionFor]` attributes with the built-in claims authoriser:
+If your application uses claims-based access control beyond `[Resource]`, derive a reusable attribute from `ClaimRequiredAttribute` and register the built-in claims authoriser:
 
 ```csharp
-// System-wide permission (not scoped to a resource)
-[Permission("ManageUsers")]
-public partial class ListUsersQuery : IQuery<OkResult<UserList>> { }
-
-// Resource-scoped permission with templated resource key
-[PermissionFor("Edit", "Tenant/{TenantId}/Document/{DocumentId}")]
-public partial class UpdateDocumentCommand : ICommand<OkResult<Document>>
+public sealed class DepartmentAccessAttribute(string department)
+    : ClaimRequiredAttribute("urn:claims/department", "*", department)
 {
-    public string TenantId { get; set; }
-    public string DocumentId { get; set; }
 }
+
+[DepartmentAccess("finance")]
+public partial class GetFinanceReportQuery : IQuery<OkResult<FinanceReport>> { }
 ```
 
 Register the claims authoriser:
@@ -1063,7 +1059,7 @@ The generated pipeline executes consumer seams in this order:
 
 1. **Authentication** → identity check
 2. **Property population** → `IPropertyPopulator` (e.g. set TenantId from JWT)
-3. **Authorization** → `[Resource]`, `[Permission]`, `IApiAuthoriser`
+3. **Authorization** → `[Resource]`, `ClaimRequiredAttribute`, `IApiAuthoriser`
 4. **Validation** → data annotation + `IValidator` checks
 5. **Handler execution** → `HandleAsync()`
 6. **Unit of work** → `IUnitOfWork.SaveChangesAsync()` (commands only, on success)

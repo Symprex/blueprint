@@ -16,8 +16,8 @@ namespace Blueprint.Authorization;
 /// are resolved against the operation instance to produce a concrete resource key.
 /// </para>
 /// <para>
-/// Derived attributes <see cref="PermissionAttribute"/> and <see cref="PermissionForAttribute"/>
-/// provide convenient shorthand for common permission patterns.
+/// Consumers can derive specialized attributes from this base type when they want a reusable way to
+/// declare claim requirements across multiple operations.
 /// </para>
 /// </remarks>
 [PublicAPI]

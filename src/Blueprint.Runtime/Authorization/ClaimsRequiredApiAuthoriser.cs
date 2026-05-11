@@ -7,8 +7,7 @@ namespace Blueprint.Authorization;
 
 /// <summary>
 /// An <see cref="IApiAuthoriser"/> that enforces claims-based authorization by evaluating
-/// <see cref="ClaimRequiredAttribute"/> (and its derivatives <see cref="PermissionAttribute"/>
-/// and <see cref="PermissionForAttribute"/>) declared on operation types.
+/// <see cref="ClaimRequiredAttribute"/> instances declared on operation types.
 /// </summary>
 /// <remarks>
 /// <para>

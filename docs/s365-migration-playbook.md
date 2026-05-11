@@ -33,15 +33,76 @@ git worktree add D:\Projects\Signature365-BlueprintMigration main -b blueprint-s
 
 ### Migration Order (by dependency risk, lowest first)
 
-| Phase | Services | Rationale |
-|-------|----------|-----------|
-| **Phase 0** | Isolated contract project compilation test | Prove operations compile against new Blueprint |
-| **Phase 1** | HealthCheck / Analytics (simplest) | Fewest operations, minimal auth, no Rebus |
-| **Phase 2** | Templates, VCard, Partners (medium) | Moderate operation count, standard auth |
-| **Phase 3** | Portal, Billing, Import (complex) | Many operations, Rebus, Hangfire |
-| **Phase 4** | IdentityServer, AdminPortal (highest risk) | OAuth2 integration, job orchestration |
-| **Phase 5** | Gateway services | Depend on contract projects already migrated |
-| **Phase 6** | SMTP services | Domain-specific, may keep legacy Blueprint |
+### S365 Scale (measured)
+
+| Metric | Count |
+|--------|-------|
+| Total projects | ~158 |
+| Microservices (API hosts) | 16+ |
+| Operations (ICommand/IQuery) | ~240+ |
+| `[Resource(...)]` usage | 349 |
+| `[FromResource(...)]` (legacy inheritance) | 158 |
+| S365Nouns constants | 96 |
+| Gateway projects | 5 |
+| Contract assemblies | ~14 |
+| Test projects | 42 |
+| SMTP subsystem projects | 59 |
+
+### Migration Order (risk-prioritized, not just size)
+
+Migrate by **risk profile** — validate the highest-risk patterns early, then expand.
+Gateways migrate AFTER the services they call are stable.
+
+| Tier | Services | Ops | Risk Focus |
+|------|----------|-----|------------|
+| **Tier 0** | Isolated contract compilation test | — | Prove compile-time compatibility |
+| **Tier 1 — Proof** | Analytics (2 ops), EventStore (2 ops) | 4 | Simplest services, minimal auth, Marten only |
+| **Tier 2 — Auth spike** | Templates (1 op), Generation (6 ops, query-only) | 7 | Validate auth + tenant flow end-to-end |
+| **Tier 3 — Persistence + messaging** | Outlook (11 ops), Import (11 ops) | 22 | Commands, Rebus events, Marten persistence |
+| **Tier 4 — Gateway** | VCard (8 ops + gateway), ETA (5 ops + gateway) | 13 | First gateway migrations, BlueprintHttpClient |
+| **Tier 5 — Medium** | Microsoft365 (4 ops + gateway), Partners (17 ops + gateway), Subscriptions (26 ops) | 47 | Multiple gateways, partner auth context |
+| **Tier 6 — High complexity** | Billing (38 ops), IdentityServer (42 ops), AdminPortal | 80+ | Financial ops, OAuth2 provider, admin tooling |
+| **Tier 7 — Highest** | Portal (70 ops) | 70 | Largest, most middleware, most Rebus subscriptions |
+| **Separate track** | SMTP subsystem (59 projects) | ? | Discovery needed — may not be Blueprint-based |
+
+### Pre-Migration Audit (per service, before touching code)
+
+Each service MUST complete these audits before migration begins:
+
+#### Serialization Audit (HIGH RISK)
+S365 uses Newtonsoft.Json extensively. The new Blueprint requires System.Text.Json with
+an app-owned `JsonSerializerContext`. Missing/incomplete coverage fails build (`BP007`/`BP006`).
+
+1. Inventory all Newtonsoft.Json usage: converters, settings, `JToken`, `dynamic`
+2. Inventory all HTTP body types (request + response) — these need `[JsonSerializable]`
+3. Check NodaTime serialization (`NodaTime.Serialization.SystemTextJson` replaces `NodaTime.Serialization.JsonNet`)
+4. Identify custom `JsonConverter` implementations that need STJ equivalents
+5. Create `JsonSerializerContext` with all body types declared
+6. Add old-vs-new JSON snapshot tests (serialize with both, diff)
+
+Key Newtonsoft → STJ differences:
+- `[JsonProperty]` → `[JsonPropertyName]`
+- `NullValueHandling.Ignore` → `[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]`
+- Custom `JsonConverter<T>` base class is different
+- `JObject`/`JToken` → `JsonElement`/`JsonNode`
+- `StringEnumConverter` → `JsonStringEnumConverter`
+
+#### Auth Audit
+1. Count `[Resource]` vs `[FromResource]` operations
+2. Map `{Auth:...}` template patterns used
+3. Identify tenant-scoped vs partner-scoped vs internal operations
+4. Document claim-to-context mappings from `Signature365UserAuthorisationContext`
+
+#### OpenAPI Baseline (HARD GATE)
+1. Capture current OpenAPI JSON: `curl http://localhost:{port}/openapi -o openapi-baseline.json`
+2. Capture current NSwag TypeScript client output
+3. These become the diff baseline — **service does not ship until OpenAPI diff is reviewed
+   and TypeScript client generates equivalent output**
+
+#### Dependency Audit
+1. List all `Blueprint.*` package references
+2. List all middleware in the pipeline
+3. Identify custom middleware needing migration
 
 ---
 
@@ -104,7 +165,7 @@ Based on S365 analysis, these gaps need closing in `blueprint-source-gen` before
 |-----|-------------|--------|
 | **InvokeAsync handler pattern** | S365 operations use `InvokeAsync()` instance methods with DI parameters, not separate `IApiOperationHandler<T>` classes. The source generator must support this "inline handler" pattern. | ✅ Already supported |
 | **`IReturn<T>` marker interface** | Used by `BlueprintHttpClient` to associate operations with response types. | ✅ Available in `Blueprint.Runtime.Model` |
-| **`{Auth:PropertyName}` resource key placeholders** | S365 uses `{Auth:AccountId}` in resource templates. Source gen must expand these from `IUserAuthorisationContext`. | ✅ Implemented (BPAU007/BPAU009) |
+| **`{Auth:PropertyName}` resource key placeholders** | S365 uses `{Auth:AccountId}` in resource templates. Source gen must expand these from `IUserAuthorisationContext`. | ✅ Implemented (BPAU007) |
 | **`ResourceEvent<T>` return type** | S365 operations return `ResourceEvent<T>` extensively. Source gen must handle this as a valid result type. | ✅ Implemented |
 | **`ApiResource` base class** | S365 resources extend `ApiResource`. Must be available in new Blueprint. | ✅ Available in Runtime.Model |
 | **`StatusCodeResult`** | S365 uses `StatusCodeResult` for non-content responses. | ✅ Available in `Blueprint.Runtime.Exec` |
@@ -559,21 +620,27 @@ services.AddBlueprintApi<MyApp, MyAppExecutor>(blueprint =>
 
 S365's async expander is a consumer-level concern. The async expansion runs INSIDE `S365ClaimsApiAuthoriser.CanExecuteOperationAsync()`, which is already called from the generated pipeline's authorization stage (via `IApiAuthoriser`). The pipeline awaits it — no synchronous constraint.
 
-#### 4. Consider Migrating to `[PermissionFor]` (Optional)
+#### 4. Removed `[Permission]`/`[PermissionFor]` from Blueprint
 
-For operations that use `[Resource(Verb, "/Template/{TenantId}")]`:
+S365 exclusively uses `[Resource]`-based authorization, so Blueprint no longer carries built-in
+`[Permission]` or `[PermissionFor]` attribute support. The framework now keeps the reusable
+`ClaimRequiredAttribute` / `ClaimsRequiredApiAuthoriser` seam for consumers that need custom
+claims attributes while the built-in generator and sample flows stay focused on `[Resource]`.
 
-```csharp
-// Before (S365)
-[Resource(Verb.Read, "/Tenants/{TenantId}/Templates/{Id}")]
-public partial class GetTemplateQuery : IQuery<TemplateApiResource> { ... }
+`[Resource]` remains the preferred hot path:
 
-// After (new Blueprint — compile-time claims check, no runtime authoriser needed)
-[PermissionFor("Read", "/Tenants/{TenantId}/Templates/{Id}")]
-public partial class GetTemplateQuery : IQuery<TemplateApiResource> { ... }
-```
+- Generated per-operation static scope-pair arrays (zero allocation on hot path)
+- Inline scope comparison where possible
+- `ScopeApiAuthoriser` uses `StringBuilderPool` for scope key construction — preserve this
+- The `Manage` composite verb (implies Create+Read+Update+Delete) is handled in `ScopeApiAuthoriser`
+  consumer code, not in the framework
 
-This eliminates the need for `S365ClaimsApiAuthoriser` for simple cases — the generated pipeline inlines the check without DI or async overhead. However, scope expansion (where `Manage` implies `Read`) would need a custom `IClaimInspector` implementation.
+**Measured S365 authorization patterns:**
+- 96 distinct resource nouns (S365Nouns)
+- 4 simple verbs (Create, Read, Update, Delete) + 1 composite (Manage)
+- `{Auth:AccountId}` resolves to `TenantId ?? PartnerId ?? "Symprex"`
+- `{Auth:Id}` resolves to subject (sub) claim
+- `{Auth:IdentityId}` resolves to Sig365IdentityId claim
 
 ---
 
@@ -737,3 +804,144 @@ Since migration uses a Git worktree:
 | `src/Blueprint/Blueprint.Tasks.Hangfire/BlueprintTasksBuilderExtensions.cs` | Hangfire integration |
 | `src/Blueprint/Blueprint.Testing/TestApiOperationExecutor.cs` | Test executor |
 | `src/Core/Symprex.Signature365.Common.Core/Authorisation/ResourceAttribute.cs` | Auth attributes |
+
+---
+
+## Route Deduplication
+
+### Problem
+
+Multiple `[Link]`/`[SelfLink]` attributes on one operation are valid for HATEOAS — one
+operation can be a "self" link for multiple resource types. But each unique
+(RoutingUrl, OperationType) pair should only produce **one** ASP.NET Core endpoint.
+
+Currently, if an operation has `[SelfLink(typeof(A), "/items/{Id}")]` and
+`[Link(typeof(B), "/items/{Id}", Rel = "related")]`, Blueprint would register
+two ASP.NET Core endpoints for the same route+method+operation combination.
+
+### Solution
+
+In `EndpointRouteBuilderExtensions.MapBlueprintApi()`:
+1. Deduplicate by `(routeTemplate, operationType)` before calling `endpoints.Map*()`
+2. Cross-operation route collisions (different operations, same route+method) should be
+   a build diagnostic, not silent dedupe
+3. HATEOAS link metadata remains unchanged — all links are still available in descriptors
+
+### Impact on S365
+
+S365 operations frequently declare both `[SelfLink]` and `[Link]` with the same URL
+but different `Rel` values. After deduplication, each unique route maps to exactly one
+ASP.NET Core endpoint, while the HATEOAS `$links` dictionary still contains all
+declared link relations.
+
+---
+
+## Multi-Tenancy Migration
+
+### Current S365 Pattern
+
+`SetTenantMiddleware` runs in the Authentication pipeline stage:
+1. Extracts `sig365_tenant_id` claim from JWT
+2. Sets `ICurrentTenantAccessor.Current = tenantId`
+3. Logs tenant ID to Serilog `IDiagnosticContext`
+4. Auto-populates `TenantId` property on operations (if property is `ApiId` type and writable)
+
+### Migration Options
+
+**Option A (recommended): ASP.NET Core middleware** — runs before Blueprint pipeline:
+```csharp
+app.Use(async (context, next) =>
+{
+    if (context.User.Identity?.IsAuthenticated == true)
+    {
+        var tenantId = context.User.FindFirst("sig365_tenant_id")?.Value;
+        var accessor = context.RequestServices.GetRequiredService<ICurrentTenantAccessor>();
+        accessor.Current = tenantId;
+    }
+    await next();
+});
+```
+
+**Option B: `IContextMetadataProvider`** — if Blueprint supports pre-handler context enrichment.
+
+**Option C: Property populator** — use `IPropertyPopulator` registered via
+`AddPropertyPopulator<T>()` for auto-populating `TenantId` on operations.
+
+The tenant accessor is a scoped DI service — it survives the full request including
+Marten queries, Rebus message headers, and background task context propagation.
+
+---
+
+## Improvement Roadmap (Blueprint source-gen)
+
+These items should be tracked and implemented in the `blueprint-source-gen` repo
+to support a smooth S365 migration.
+
+### Immediate (blocks migration proof)
+1. **Route deduplication** — One ASP.NET endpoint per unique route+operation pair.
+2. **Auth spike integration test** — Prove tenant/partner/internal auth flow end-to-end.
+
+### Before Tier 3 migration
+4. **Verify Blueprint.Marten outbox + Rebus transaction ordering** — Must match S365's
+   pipeline: Handler → Commit Rebus Transaction → Save Marten Changes.
+5. **Verify Blueprint.Testing ApiFixture** — Must support CommandAsync, QueryAsync,
+   MessageAsync, BackgroundTaskAsync, tenant auth context switching.
+6. **Serialization migration guide** — `docs/serialization-migration.md` covering
+   Newtonsoft → STJ with NodaTime, converters, and JsonSerializerContext patterns.
+
+### Before Tier 4 migration (gateways)
+7. **Second sample project** — `Blueprint.SourceGenerator.Sample.Client` using
+   `BlueprintHttpClient` to call main sample. Integration tests.
+8. **OpenAPI shape comparison** — `docs/openapi-migration.md` with diff analysis,
+   NSwag compatibility notes, and TypeScript generation verification.
+
+### Ongoing
+9. **NBomber load tests** — Add to Blueprint.LoadTests:
+   - Simple query scenario (baseline throughput)
+   - Command with validation (validation overhead)
+   - Command with persistence + background task (full pipeline)
+   - Auth-required operation (auth overhead)
+   - Compare old Blueprint vs new Blueprint source-gen
+10. **BenchmarkDotNet runtime benchmarks** — Complement compiler benchmarks:
+    - Pipeline execution latency (per stage)
+    - Request binding (route, query, body, header)
+    - Response serialization (STJ source-gen vs reflection)
+    - Link generation for resources with many links
+    - OpenAPI document rendering
+11. **Profiling guide** — `docs/performance-profiling.md`:
+    - `dotnet-trace collect` against running pipelines
+    - `dotnet-counters monitor` for live metrics
+    - `dotnet-gcdump` for allocation analysis
+    - Profile source generator compiler performance
+    - Use AI-assisted profiling skills for best practices
+
+### Record All Results
+All benchmarks, load test results, profiling findings, and migration learnings
+should be recorded in the `docs/` folder:
+
+| Document | Content |
+|----------|---------|
+| `docs/s365-migration-playbook.md` | This document — step-by-step guide |
+| `docs/openapi-migration.md` | ✅ OpenAPI shape comparison, NSwag compatibility |
+| `docs/serialization-migration.md` | ✅ Newtonsoft → STJ guide, NodaTime, pitfalls |
+| `docs/testing-migration.md` | ✅ S365 test pattern → Blueprint.Testing mapping |
+| `docs/performance-profiling.md` | ✅ Profiling guide with dotnet-trace/counters/gcdump |
+| `docs/integration-packages.md` | ✅ Marten/Rebus/Hangfire/HttpClient/Testing package reference |
+| `docs/benchmark-results.md` | 🔲 BenchmarkDotNet pipeline/serialization results (after benchmarks run) |
+| `docs/performance-results.md` | 🔲 NBomber load test results (after load tests run) |
+
+---
+
+## Key Risks and Mitigations
+
+| Risk | Severity | Mitigation |
+|------|----------|------------|
+| Newtonsoft → STJ breaks serialization | **HIGH** | Per-service serialization audit + JSON snapshot tests before migration |
+| Auth/tenant semantics change silently | **HIGH** | Early auth spike (Tier 2), 401/403 behavior tests, claim expansion tests |
+| OpenAPI shape change breaks TS clients | **HIGH** | Hard gate: OpenAPI diff + NSwag generation per service before shipping |
+| Multi-tenancy context loss | **HIGH** | ASP.NET Core middleware approach, integration tests with tenant context |
+| Marten outbox + Rebus ordering change | **MEDIUM** | Integration tests: handler → save → outbox commit → bus publish |
+| Performance regression | **MEDIUM** | NBomber baselines before/after, BenchmarkDotNet per-stage |
+| Gateway calls break | **MEDIUM** | Migrate gateways AFTER target services are stable (Tier 4+) |
+| SMTP subsystem entangled | **LOW** | Separate discovery track — may not need migration |
+| Config/resource collision in worktree | **LOW** | Isolated infra: ports, DBs, ASB topics, Hangfire schemas, appsettings |

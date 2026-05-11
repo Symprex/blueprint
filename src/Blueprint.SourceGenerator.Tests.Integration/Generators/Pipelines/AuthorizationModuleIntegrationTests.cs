@@ -13,33 +13,6 @@ namespace Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines;
 public class AuthorizationModuleIntegrationTests
 {
     [Fact]
-    public void When_permission_declared_then_descriptor_requires_authentication_and_preserves_claim_requirement()
-    {
-        var descriptor = ManageUsersAuthorizationQuery.Configure();
-
-        descriptor.TryGetFeatureData<OperationAuthenticationFeatureData>(out var authData)
-            .Should().BeTrue();
-        authData!.Requirement.Should().Be(AuthenticationRequirement.Authenticated);
-
-        var claimRequirement = descriptor.TypeAttributes.OfType<ClaimRequiredAttribute>().Should().ContainSingle().Subject;
-        claimRequirement.ValueType.Should().Be("ManageUsers");
-        claimRequirement.ValueTemplate.Should().Be("*");
-    }
-
-    [Fact]
-    public void When_permission_for_declared_then_claim_requirement_expands_operation_properties()
-    {
-        var descriptor = EditTenantAuthorizationCommand.Configure();
-        var claimRequirement = descriptor.TypeAttributes.OfType<ClaimRequiredAttribute>().Should().ContainSingle().Subject;
-
-        var claim = claimRequirement.GetClaim(new EditTenantAuthorizationCommand { TenantId = "tenant-42" });
-
-        claim.Type.Should().Be(Blueprint.Runtime.Authorization.ClaimTypes.Permission);
-        claim.ValueType.Should().Be("Edit");
-        claim.Value.Should().Be("Tenant/tenant-42");
-    }
-
-    [Fact]
     public void When_resource_declared_then_descriptor_has_resource_authorization_data()
     {
         var descriptor = UpdateTenantAuthorizationCommand.Configure();
@@ -48,51 +21,6 @@ public class AuthorizationModuleIntegrationTests
             .Should().BeTrue();
 
         authorizationData!.ScopePairs.Should().ContainSingle().Which.Should().Be(new ScopePair("tenant", "update", "/tenants/{TenantId}"));
-    }
-
-    [Fact]
-    public async Task When_claims_authorization_has_valid_claims_then_pipeline_allows_execution()
-    {
-        var app = new IntegrationTestBlueprintApp();
-        var serviceProvider = CreateClaimsAuthorizationServiceProvider();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
-        var pipeline = executor.GetPipeline(typeof(ManageUsersAuthorizationQuery));
-        var context = CreateHttpContext(
-            app,
-            ManageUsersAuthorizationQuery.Configure(),
-            new ManageUsersAuthorizationQuery(),
-            CreateAuthenticatedPrincipal(new System.Security.Claims.Claim(Blueprint.Runtime.Authorization.ClaimTypes.Permission, "*", "ManageUsers")),
-            serviceProvider);
-
-        ManageUsersAuthorizationQuery.Reset();
-
-        var result = await pipeline.ExecuteAsync(context);
-
-        result.Should().BeOfType<OkResult<string>>();
-        ((OkResult<string>)result).Content.Should().Be("authorized");
-        ManageUsersAuthorizationQuery.HandlerCallCount.Should().Be(1);
-    }
-
-    [Fact]
-    public async Task When_claims_authorization_has_missing_claims_then_pipeline_returns_forbidden()
-    {
-        var app = new IntegrationTestBlueprintApp();
-        var serviceProvider = CreateClaimsAuthorizationServiceProvider();
-        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
-        var pipeline = executor.GetPipeline(typeof(EditTenantAuthorizationCommand));
-        var context = CreateHttpContext(
-            app,
-            EditTenantAuthorizationCommand.Configure(),
-            new EditTenantAuthorizationCommand { TenantId = "tenant-42" },
-            CreateAuthenticatedPrincipal(),
-            serviceProvider);
-
-        EditTenantAuthorizationCommand.Reset();
-
-        var result = await pipeline.ExecuteAsync(context);
-
-        result.Should().BeOfType<ForbiddenResult>();
-        EditTenantAuthorizationCommand.HandlerCallCount.Should().Be(0);
     }
 
     [Fact]
@@ -259,13 +187,6 @@ public class AuthorizationModuleIntegrationTests
         return context;
     }
 
-    private static IServiceProvider CreateClaimsAuthorizationServiceProvider()
-    {
-        return new ServiceCollection()
-            .AddSingleton<IClaimInspector>(_ => new Blueprint.Authorization.ClaimInspector([]))
-            .BuildServiceProvider();
-    }
-
     private static System.Security.Claims.ClaimsPrincipal CreateAuthenticatedPrincipal(params System.Security.Claims.Claim[] claims)
     {
         return new System.Security.Claims.ClaimsPrincipal(new System.Security.Claims.ClaimsIdentity(claims, "IntegrationTestAuth"));
@@ -334,44 +255,6 @@ public class AuthorizationModuleIntegrationTests
         {
             return Task.FromResult(ExecutionAllowed.Yes);
         }
-    }
-}
-
-[Permission("ManageUsers")]
-[RootLink("/authorization/manage-users")]
-public partial class ManageUsersAuthorizationQuery : IQuery<string>
-{
-    public static int HandlerCallCount { get; private set; }
-
-    public static void Reset()
-    {
-        HandlerCallCount = 0;
-    }
-
-    public static Task<string> HandleAsync(ManageUsersAuthorizationQuery operation)
-    {
-        HandlerCallCount++;
-        return Task.FromResult("authorized");
-    }
-}
-
-[PermissionFor("Edit", "Tenant/{TenantId}")]
-[RootLink("/authorization/tenants/{TenantId}")]
-public partial class EditTenantAuthorizationCommand : ICommand<string>
-{
-    public string TenantId { get; set; } = string.Empty;
-
-    public static int HandlerCallCount { get; private set; }
-
-    public static void Reset()
-    {
-        HandlerCallCount = 0;
-    }
-
-    public static Task<string> HandleAsync(EditTenantAuthorizationCommand operation)
-    {
-        HandlerCallCount++;
-        return Task.FromResult(operation.TenantId);
     }
 }
 

@@ -34,7 +34,7 @@ public sealed class SampleUserAuthorisationContextFactory(ILogger<SampleUserAuth
 
         // Map ASP.NET Core permission claims to Blueprint's Claim model for IClaimsHolder.
         // JWT claims with type "urn:claims/permission" carry "{ValueType}:{ResourceKey}" values.
-        // For wildcard permissions (e.g. [Permission("ManageTemplates")]) the value is just the name.
+        // When the incoming value omits a resource key, the sample treats it as a wildcard claim.
         var permissionClaims = identity.Claims
             .Where(static c => c.Type == BlueprintClaimTypes.Permission)
             .Select(static c =>
@@ -56,8 +56,8 @@ public sealed class SampleUserAuthorisationContextFactory(ILogger<SampleUserAuth
 /// <summary>
 /// A minimal <see cref="IUserAuthorisationContext"/> and <see cref="IClaimsHolder"/> implementation
 /// that carries the user's identity, account, and permission claims extracted from JWT claims.
-/// Implementing <see cref="IClaimsHolder"/> enables the source-generated inline claims checks
-/// produced by <c>ClaimsAuthorizationModule</c> for <c>[Permission]</c> and <c>[PermissionFor]</c>.
+/// Implementing <see cref="IClaimsHolder"/> enables claims-based authorisers such as
+/// <see cref="ClaimsRequiredApiAuthoriser"/> or consumer-defined <see cref="ClaimRequiredAttribute"/> flows.
 /// </summary>
 public sealed class SampleUserContext(string id, string accountId, string email, string name, IReadOnlyList<Authorization.Claim> claims) : IUserAuthorisationContext, IClaimsHolder
 {
