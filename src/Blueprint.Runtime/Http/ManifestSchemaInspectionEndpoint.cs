@@ -31,7 +31,7 @@ internal static class ManifestSchemaInspectionEndpoint
         {
             httpContext.Response.StatusCode = StatusCodes.Status200OK;
             httpContext.Response.ContentType = "application/schema+json; charset=utf-8";
-            await httpContext.Response.WriteAsync(schema, httpContext.RequestAborted);
+            await httpContext.Response.WriteAsync(schema, httpContext.RequestAborted).ConfigureAwait(false);
         };
     }
 }

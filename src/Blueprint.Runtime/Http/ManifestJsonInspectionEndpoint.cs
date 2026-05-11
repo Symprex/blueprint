@@ -31,7 +31,7 @@ internal static class ManifestJsonInspectionEndpoint
         {
             httpContext.Response.StatusCode = StatusCodes.Status200OK;
             httpContext.Response.ContentType = "application/json; charset=utf-8";
-            await httpContext.Response.WriteAsync(json, httpContext.RequestAborted);
+            await httpContext.Response.WriteAsync(json, httpContext.RequestAborted).ConfigureAwait(false);
         };
     }
 }

@@ -30,7 +30,7 @@ internal static class ManifestMarkdownInspectionEndpoint
         {
             httpContext.Response.StatusCode = StatusCodes.Status200OK;
             httpContext.Response.ContentType = "text/markdown; charset=utf-8";
-            await httpContext.Response.WriteAsync(markdown, httpContext.RequestAborted);
+            await httpContext.Response.WriteAsync(markdown, httpContext.RequestAborted).ConfigureAwait(false);
         };
     }
 }

@@ -67,7 +67,7 @@ internal static class OpenApiDocumentEndpoint
             httpContext.Response.ContentType = "application/json; charset=utf-8";
             httpContext.Response.Headers.ETag = etag.ToString();
             httpContext.Response.Headers.CacheControl = "public, max-age=3600";
-            await httpContext.Response.WriteAsync(json, httpContext.RequestAborted);
+            await httpContext.Response.WriteAsync(json, httpContext.RequestAborted).ConfigureAwait(false);
         });
 
         return (handler, document);

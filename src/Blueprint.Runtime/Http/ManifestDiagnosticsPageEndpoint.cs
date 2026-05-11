@@ -439,7 +439,7 @@ internal static class ManifestDiagnosticsPageEndpoint
         {
             httpContext.Response.StatusCode = StatusCodes.Status200OK;
             httpContext.Response.ContentType = "text/html; charset=utf-8";
-            await httpContext.Response.WriteAsync(Html, Encoding.UTF8, httpContext.RequestAborted);
+            await httpContext.Response.WriteAsync(Html, Encoding.UTF8, httpContext.RequestAborted).ConfigureAwait(false);
         };
     }
 }

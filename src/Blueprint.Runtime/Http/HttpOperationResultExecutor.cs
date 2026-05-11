@@ -83,7 +83,7 @@ public class HttpOperationResultExecutor
                     Status = StatusCodes.Status400BadRequest,
                     Title = "Bad Request",
                     Detail = bindingFailureResult.Reason,
-                });
+                }).ConfigureAwait(false);
                 return true;
             case UnsupportedMediaTypeResult:
                 httpContext.Response.StatusCode = StatusCodes.Status415UnsupportedMediaType;
@@ -166,7 +166,7 @@ public class HttpOperationResultExecutor
                     TrySetLocationHeader(httpContext, resourceEventResult.Content);
                 }
 
-                await WriteJsonAsync(httpContext, operationContext, ResourceEventEnvelope.Create(resourceEventResult));
+                await WriteJsonAsync(httpContext, operationContext, ResourceEventEnvelope.Create(resourceEventResult)).ConfigureAwait(false);
                 return true;
             case HttpNoContentResult:
                 httpContext.Response.StatusCode = StatusCodes.Status204NoContent;
