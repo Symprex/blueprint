@@ -222,6 +222,40 @@ configureOpenApiSchemas: schemas =>
 }
 ```
 
+### Issue: Schema Naming Convention
+
+Blueprint source-gen uses fully-qualified type names with underscores as schema IDs:
+
+```json
+// Blueprint Source-Gen schema naming
+"Blueprint_SourceGenerator_Sample_Contract_Api_TemplateApiResource"
+
+// For S365 this would produce names like:
+"Symprex_Signature365_Portal_Contract_Api_TemplateApiResource"
+```
+
+Legacy Blueprint (NSwag) typically uses shorter names: `TemplateApiResource`.
+
+**Impact on NSwag TypeScript generation:** NSwag derives TypeScript interface names from
+schema IDs. The longer names produce longer TypeScript names. This is usually acceptable
+for generated code, but verify the NSwag `typeNameGenerator` setting if shorter names are
+preferred.
+
+**Solution:** Use `configureOpenApiSchemas` to customize schema ID generation if needed:
+
+```csharp
+configureOpenApiSchemas: schemas =>
+{
+    schemas.SchemaIdGenerator = type =>
+    {
+        // Use short name (last segment) instead of fully-qualified
+        var name = type.Name;
+        var ns = type.Namespace ?? "";
+        return ns.Contains("Symprex") ? name : $"{ns.Replace('.', '_')}_{name}";
+    };
+}
+```
+
 ### Issue: TenantId in Path Parameters
 
 S365 operations may expose `TenantId` as a path parameter in OpenAPI, but this is resolved from the JWT claim, not the URL.

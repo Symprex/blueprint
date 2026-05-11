@@ -702,6 +702,11 @@ app.UseEndpoints(endpoints =>
    nswag openapi2tsclient /input:http://localhost:5000/api/.blueprint/openapi.json /output:api-client.ts
    ```
 
+5. **Schema naming convention**: New Blueprint uses full CLR type name with underscores
+   (e.g., `Symprex_Signature365_Portal_Contract_Api_TemplateApiResource`). Legacy Blueprint
+   used shorter names. This affects NSwag-generated TypeScript interface names. See
+   `docs/openapi-migration.md` for customization options via `configureOpenApiSchemas`.
+
 ### Action Items
 - [ ] Create an OpenAPI comparison test that captures old vs new specs
 - [ ] Document any breaking changes for frontend team
@@ -743,11 +748,116 @@ public sealed class AnalyticsBlueprintAppHttpClient
 Keep `BlueprintHttpClient` but feed it source-generated metadata instead of runtime-discovered metadata. The client reads from `BlueprintApp.Operations` instead of `ApiDataModel`.
 
 ### Action Items
-- [ ] Create `Blueprint.HttpClient` project in blueprint-source-gen
-- [ ] Add second sample project (`Blueprint.SourceGenerator.Sample.Client`) for integration testing
-- [ ] Implement typed HTTP client that uses generated descriptors
-- [ ] Test with inter-service call scenarios
-- [ ] Benchmark against legacy client
+- [x] `Blueprint.HttpClient` project exists with `BlueprintHttpClient<TApp>` using generated descriptors
+- [x] `TypedHttpClientExtensionsGenerator` generates per-operation extension methods
+- [ ] Add second sample project (`Blueprint.SourceGenerator.Sample.Client`) for full end-to-end integration testing
+- [x] 12 HTTP client tests covering: GET queries, POST commands, validation errors, not-found, conflict, delete
+
+### Gateway Migration Pattern
+
+S365 gateways use typed API client interfaces to call downstream services. The migration
+replaces the old `ServiceApiInclude` attribute + code-generated typed client with the
+new `BlueprintHttpClient<TApp>` + source-generated extension methods.
+
+#### Current S365 Gateway Architecture
+
+Each gateway project:
+1. Defines its own operations (e.g., `VCardGatewayGenerateVCardQuery`)
+2. Injects a typed API client (e.g., `IVCardApi`) via constructor parameter injection
+3. Registers the client via `services.AddBlueprintClient<IVCardApi, VCardApi>(...)`
+4. Uses an `IOperationScannerConvention` to strip the gateway prefix from operation names
+
+**Typed Client Registration (S365):**
+```csharp
+// Current S365 pattern in VCardGatewayRegistry.cs
+services.AddBlueprintClient<IVCardApi, VCardApi>((s, c) =>
+{
+    HttpClientHelpers.AddAuthorizationHeaderIfPresent(s, c);
+    c.BaseAddress = new Uri($"{internalServiceEndpoints.VCard}/api/");
+    c.Timeout = TimeSpan.FromSeconds(10);
+});
+```
+
+**Handler Pattern (S365):**
+```csharp
+public class VCardGatewayGenerateVCardQueryHandler : ApiOperations
+{
+    public async Task<HttpResult> HandleAsync(
+        VCardGatewayGenerateVCardQuery operation,
+        IVCardApi vCardApi,        // injected typed API client
+        ILogger<...> logger)
+    {
+        var result = await vCardApi.GenerateVCardAsync(new GenerateVCardQuery { ... });
+        return new PlainTextResult(result.RenderedTemplate) { ContentType = "text/vcard" };
+    }
+}
+```
+
+#### Migrated Gateway Architecture
+
+**Step 1: Register `BlueprintHttpClient<TTargetApp>`:**
+```csharp
+// New Blueprint registration
+services.AddBlueprintHttpClient<VCardBlueprintApp>(options =>
+{
+    options.BaseAddress = new Uri($"{internalServiceEndpoints.VCard}/api/");
+    options.Timeout = TimeSpan.FromSeconds(10);
+    options.ConfigureHttpClient = (sp, client) =>
+    {
+        HttpClientHelpers.AddAuthorizationHeaderIfPresent(sp, client);
+    };
+});
+```
+
+**Step 2: Use generated extension methods in handlers:**
+```csharp
+public async Task<HttpResult> HandleAsync(
+    VCardGatewayGenerateVCardQuery operation,
+    BlueprintHttpClient<VCardBlueprintApp> vCardClient,  // new typed client
+    ILogger<...> logger)
+{
+    var result = await vCardClient.SendAsync<GeneratedUserTemplateApiResource>(
+        new GenerateVCardQuery { TenantId = tenantId, UserId = userId });
+    return new PlainTextResult(result.RenderedTemplate) { ContentType = "text/vcard" };
+}
+```
+
+Or using the generated extension methods:
+```csharp
+var result = await vCardClient.GenerateVCardAsync(
+    new GenerateVCardQuery { TenantId = tenantId, UserId = userId });
+```
+
+**Step 3: Operation scanner convention replacement:**
+
+S365 gateways use `IOperationScannerConvention` to strip prefixes from operation names
+(e.g., `VCardGatewayGenerateVCardQuery` → `GenerateVCardQuery` in the API surface).
+
+In new Blueprint, operation names come from the class name via `[BlueprintAppScan]`. The
+convention can be replicated by either:
+- Renaming gateway operations to match the desired API name directly
+- Using `[OperationName("GenerateVCard")]` attribute on the operation class
+
+#### S365 Gateway Inventory
+
+| Gateway | Operations | Downstream Clients | Scanner Convention |
+|---------|-----------|-------------------|-------------------|
+| VCard.Gateway | 1 | `IVCardApi` | Strips "VCardGateway" |
+| Microsoft365.Gateway | 1 | `IMicrosoft365Api` | Strips "Microsoft365Gateway" |
+| ETA.Gateway | 2 | `IExchangeTransportAgentApi`, `IGenerationApi` | None |
+| Import.Gateway | 8 | `IImportApi` | Strips "ImportGateway" |
+| Partners.Gateway | 0 (proxy) | `IPartnersApi`, `IIdentityServerApi`, `IPortalApi` | Strips "PartnersGateway" |
+
+#### Key Differences
+
+| Aspect | S365 (Legacy) | Blueprint Source-Gen |
+|--------|---------------|---------------------|
+| Client type | Interface + class (`IVCardApi` / `VCardApi`) | `BlueprintHttpClient<VCardBlueprintApp>` |
+| Method generation | Old Blueprint codegen → methods on class | Source generator → extension methods |
+| Metadata source | `ServiceApiInclude` + `ApiDataModel` | Generated `ApiOperationDescriptor` |
+| Auth propagation | `HttpClientHelpers.AddAuthorizationHeaderIfPresent` | Same (configuration callback) |
+| URL construction | Runtime from `ApiDataModel` | Source-generated `BuildUrl()` |
+| Error handling | `ApiException` | `ApiException` (same shape) |
 
 ---
 
