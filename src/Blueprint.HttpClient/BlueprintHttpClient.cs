@@ -1,5 +1,7 @@
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Json;
+using System.Reflection;
 using System.Text.Json;
 using Blueprint.Http;
 using Blueprint.Model;
@@ -20,6 +22,12 @@ namespace Blueprint.HttpClient;
 public sealed class BlueprintHttpClient<TApp>
     where TApp : BlueprintApp
 {
+    /// <summary>
+    /// Caches <see cref="PropertyInfo"/> arrays per operation type to avoid repeated
+    /// <see cref="Type.GetProperties(BindingFlags)"/> allocations on each request.
+    /// </summary>
+    private static readonly ConcurrentDictionary<Type, PropertyInfo[]> _propertyCache = new();
+
     private readonly System.Net.Http.HttpClient _httpClient;
     private readonly TApp _app;
     private readonly JsonSerializerOptions _jsonOptions;
@@ -107,11 +115,18 @@ public sealed class BlueprintHttpClient<TApp>
             return default;
         }
 
-        // Parse the event envelope and extract the "content" property
+        // Parse the event envelope and extract the resource payload.
+        // The envelope uses "data" for the content (matching ResourceEventEnvelope).
         using var doc = await JsonDocument.ParseAsync(
             await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false),
             cancellationToken: cancellationToken).ConfigureAwait(false);
 
+        if (doc.RootElement.TryGetProperty("data", out var dataElement))
+        {
+            return dataElement.Deserialize<TResource>(this._jsonOptions);
+        }
+
+        // Legacy fallback: some event envelopes use "content" instead of "data"
         if (doc.RootElement.TryGetProperty("content", out var contentElement))
         {
             return contentElement.Deserialize<TResource>(this._jsonOptions);
@@ -188,10 +203,13 @@ public sealed class BlueprintHttpClient<TApp>
             ExtractPlaceholderNames(link.UrlFormat, urlPlaceholders);
         }
 
-        var queryParts = new List<string>();
+        System.Text.StringBuilder? queryBuilder = null;
         var operationType = operation.GetType();
+        var properties = _propertyCache.GetOrAdd(
+            operationType,
+            static t => t.GetProperties(BindingFlags.Instance | BindingFlags.Public));
 
-        foreach (var property in operationType.GetProperties(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public))
+        foreach (var property in properties)
         {
             if (urlPlaceholders.Contains(property.Name))
             {
@@ -219,7 +237,9 @@ public sealed class BlueprintHttpClient<TApp>
                     var itemStr = item.ToString();
                     if (!string.IsNullOrEmpty(itemStr))
                     {
-                        queryParts.Add($"{escapedName}={Uri.EscapeDataString(itemStr)}");
+                        queryBuilder ??= new System.Text.StringBuilder();
+                        queryBuilder.Append(queryBuilder.Length == 0 ? (url.Contains('?') ? '&' : '?') : '&');
+                        queryBuilder.Append(escapedName).Append('=').Append(Uri.EscapeDataString(itemStr));
                     }
                 }
 
@@ -237,43 +257,56 @@ public sealed class BlueprintHttpClient<TApp>
                 continue;
             }
 
-            queryParts.Add($"{escapedName}={Uri.EscapeDataString(stringValue)}");
+            queryBuilder ??= new System.Text.StringBuilder();
+            queryBuilder.Append(queryBuilder.Length == 0 ? (url.Contains('?') ? '&' : '?') : '&');
+            queryBuilder.Append(escapedName).Append('=').Append(Uri.EscapeDataString(stringValue));
         }
 
-        if (queryParts.Count == 0)
+        if (queryBuilder is null)
         {
             return url;
         }
 
-        var separator = url.Contains('?') ? "&" : "?";
-        return url + separator + string.Join("&", queryParts);
+        return string.Concat(url, queryBuilder.ToString());
     }
 
     private static void ExtractPlaceholderNames(string urlFormat, HashSet<string> names)
     {
+        var span = urlFormat.AsSpan();
         var startIndex = 0;
         while (true)
         {
-            var open = urlFormat.IndexOf('{', startIndex);
+            var open = span[startIndex..].IndexOf('{');
             if (open < 0)
             {
                 break;
             }
 
-            var close = urlFormat.IndexOf('}', open);
+            open += startIndex;
+            var close = span[(open + 1)..].IndexOf('}');
             if (close < 0)
             {
                 break;
             }
 
-            var placeholder = urlFormat.Substring(open + 1, close - open - 1).TrimStart('*');
+            close += open + 1;
+
+            var placeholder = span[(open + 1)..close];
+
+            // Strip catch-all prefix
+            while (placeholder.Length > 0 && placeholder[0] == '*')
+            {
+                placeholder = placeholder[1..];
+            }
+
+            // Strip format specifier
             var colon = placeholder.IndexOf(':');
             if (colon >= 0)
             {
                 placeholder = placeholder[..colon];
             }
 
-            names.Add(placeholder);
+            names.Add(placeholder.ToString());
             startIndex = close + 1;
         }
     }
@@ -376,9 +409,19 @@ public sealed class BlueprintHttpClient<TApp>
                 propertyName = propertyName[..colonIndex];
             }
 
-            var property = valueType.GetProperty(
-                propertyName,
-                System.Reflection.BindingFlags.IgnoreCase | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public);
+            var properties = _propertyCache.GetOrAdd(
+                valueType,
+                static t => t.GetProperties(BindingFlags.Instance | BindingFlags.Public));
+
+            PropertyInfo? property = null;
+            foreach (var p in properties)
+            {
+                if (string.Equals(p.Name, propertyName, StringComparison.OrdinalIgnoreCase))
+                {
+                    property = p;
+                    break;
+                }
+            }
 
             if (property is null)
             {

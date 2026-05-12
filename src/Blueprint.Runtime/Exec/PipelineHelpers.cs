@@ -31,10 +31,19 @@ public static class PipelineHelpers
     /// <returns>A materialised array of all registered implementations, or an empty array.</returns>
     public static T[] ResolveServiceArray<T>(IServiceProvider serviceProvider)
     {
-        return Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions
-            .GetService<IEnumerable<T>>(serviceProvider) is { } items
-            ? items.ToArray()
-            : Array.Empty<T>();
+        if (Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions
+            .GetService<IEnumerable<T>>(serviceProvider) is not { } items)
+        {
+            return Array.Empty<T>();
+        }
+
+        // Fast-path: DI containers often return an array or list directly — avoid a copy.
+        if (items is T[] array)
+        {
+            return array;
+        }
+
+        return items.ToArray();
     }
 
     /// <summary>

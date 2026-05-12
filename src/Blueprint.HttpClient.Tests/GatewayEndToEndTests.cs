@@ -201,11 +201,17 @@ public sealed class GatewayEndToEndTests : IAsyncLifetime
         var body2 = await seedResponse.Content.ReadAsStringAsync();
         using var doc = System.Text.Json.JsonDocument.Parse(body2);
 
-        // Try the resource-event envelope shape: { "content": { "Id": ... } }
+        // Try the resource-event envelope shape: { "data": { "Id": ... } } or { "content": { "Id": ... } }
+        if (doc.RootElement.TryGetProperty("data", out var dataElem) &&
+            dataElem.TryGetProperty("Id", out var dataIdElem))
+        {
+            return dataIdElem.GetString() ?? throw new InvalidOperationException("Id was null in data envelope");
+        }
+
         if (doc.RootElement.TryGetProperty("content", out var contentElem) &&
             contentElem.TryGetProperty("Id", out var idElem))
         {
-            return idElem.GetString() ?? throw new InvalidOperationException("Id was null");
+            return idElem.GetString() ?? throw new InvalidOperationException("Id was null in content envelope");
         }
 
         // Try direct shape: { "Id": ... }
