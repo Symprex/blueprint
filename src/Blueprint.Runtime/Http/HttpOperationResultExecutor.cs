@@ -491,24 +491,50 @@ public class HttpOperationResultExecutor
         };
     }
 
+    /// <summary>
+    /// Wire-format envelope for <see cref="ResourceEventResult"/> responses. The shape intentionally mirrors
+    /// the legacy <see cref="ResourceEvent"/> class so that both code paths produce identical JSON, keeping
+    /// TypeScript client generators and downstream consumers working without changes.
+    /// </summary>
     private sealed class ResourceEventEnvelope
     {
+        [JsonPropertyName("$object")]
+        public string Object => "event";
+
         [JsonPropertyName("eventId")]
         public required string EventId { get; init; }
 
-        [JsonPropertyName("resourceId")]
-        public required string ResourceId { get; init; }
+        [JsonPropertyName("changeType")]
+        [JsonConverter(typeof(JsonStringEnumConverter))]
+        public required ChangeType ChangeType { get; init; }
 
-        [JsonPropertyName("content")]
-        public required object Content { get; init; }
+        [JsonPropertyName("created")]
+        public required DateTimeOffset Created { get; init; }
+
+        [JsonPropertyName("resourceObject")]
+        public required string ResourceObject { get; init; }
+
+        [JsonPropertyName("href")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? Href { get; init; }
+
+        [JsonPropertyName("data")]
+        public required object Data { get; init; }
+
+        [JsonPropertyName("metadata")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public Dictionary<string, object>? Metadata { get; init; }
 
         public static ResourceEventEnvelope Create(ResourceEventResult result)
         {
             return new ResourceEventEnvelope
             {
                 EventId = result.EventId,
-                ResourceId = result.ResourceId,
-                Content = result.Content,
+                ChangeType = result.ChangeType,
+                Created = DateTimeOffset.UtcNow,
+                ResourceObject = ApiResource.GetTypeName(result.Content.GetType()),
+                Data = result.Content,
+                Metadata = result.Metadata,
             };
         }
     }

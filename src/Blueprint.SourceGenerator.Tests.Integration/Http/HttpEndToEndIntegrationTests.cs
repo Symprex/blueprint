@@ -1185,8 +1185,9 @@ public class HttpEndToEndIntegrationTests
         response.StatusCode.Should().Be(StatusCodes.Status200OK);
         response.ContentType.Should().StartWith("application/json");
         response.Body.Should().Contain("evt-update-001");
-        response.Body.Should().Contain("res-update-001");
         response.Body.Should().Contain("updated-widget");
+        response.Body.Should().Contain("\"$object\":\"event\"");
+        response.Body.Should().Contain("\"changeType\":\"Updated\"");
     }
 
     [Fact]
