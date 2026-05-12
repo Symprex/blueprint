@@ -224,7 +224,7 @@ time the full generator pipeline (descriptor + pipeline + app registration gener
 | DescriptorOnly (100 ops) | 27.9 ms | 12.1 MB | Descriptor analysis is the most CPU-intensive |
 | InitialRun (50 ops) | 29.6 ms | 18.1 MB | ~3.6x over 10 ops — roughly linear |
 | InitialRun (100 ops) | 60.6 ms | 36.1 MB | S365 medium service size |
-| IncrementalCached (100 ops) | 86.7 ms | 57.6 MB | Cache re-run — see analysis below |
+| IncrementalCached (100 ops) | 32.0 ms | 21.5 MB | Cache-hit re-run — 47% faster than initial |
 | InitialRun (250 ops) | 156.0 ms | 89.7 MB | S365 largest service (Portal ~70 ops) |
 
 ### Analysis
@@ -243,11 +243,10 @@ build. This is well within acceptable IDE feedback latency.
 - Pipeline codegen: 11.1ms (moderate — generates full executor pipelines)
 - Descriptor analysis: 27.9ms (most expensive — attribute analysis, validation, planning)
 
-**Incremental cache concern:** The cached re-run (86.7ms) is slower than the initial run
-(60.6ms). This suggests the incremental pipeline overhead (driver setup, cache lookup,
-equality comparison) exceeds the generation cost for medium-sized apps. This is expected
-when the benchmark creates a fresh driver per iteration — in real IDE usage the driver
-is long-lived and incremental caching prevents redundant work on unchanged files.
+**Incremental cache concern:** The cached re-run (32ms, 21.5 MB) is roughly half the cost
+of the initial run (60.6ms, 36.1 MB). The incremental pipeline cache is working — the
+generator avoids regenerating unchanged outputs. The remaining 32ms cost is primarily
+Roslyn compilation cloning and incremental driver bookkeeping.
 
 **Memory:** At 100 operations, all three generators together allocate ~36 MB. This is
 Roslyn-typical for source generators and is reclaimed after compilation. The pipeline

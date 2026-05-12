@@ -104,16 +104,28 @@ public class SourceGeneratorCompilationBenchmarks
 
     // ─── Incremental (cached) runs ───────────────────────────────────────
 
+    private GeneratorDriver _warmedDriver100 = null!;
+
+    /// <summary>
+    /// Warms the generator driver with an initial run so the incremental benchmark
+    /// measures only the cache-hit path.
+    /// </summary>
+    [IterationSetup(Target = nameof(IncrementalCachedRun_100Ops))]
+    public void SetupIncrementalCachedRun100()
+    {
+        this._warmedDriver100 = RunAllGenerators(this._compilation100);
+    }
+
     /// <summary>
     /// Measures incremental re-run cost for a 100-operation app when nothing has changed.
-    /// The generator should hit its cache and produce results in near-zero time.
+    /// The initial run is performed in <see cref="SetupIncrementalCachedRun100"/> so this
+    /// benchmark isolates only the cache-hit path.
     /// </summary>
-    /// <returns>The generator driver after the incremental re-run.</returns>
+    /// <returns>The generator driver after the cached re-run.</returns>
     [Benchmark]
     public GeneratorDriver IncrementalCachedRun_100Ops()
     {
-        var driver = RunAllGenerators(this._compilation100);
-        return driver.RunGenerators(this._compilation100.Clone());
+        return this._warmedDriver100.RunGenerators(this._compilation100.Clone());
     }
 
     // ─── Individual generator benchmarks ─────────────────────────────────
