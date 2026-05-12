@@ -49,6 +49,9 @@
 | ResourceEventAudit extraction | ✅ Done | ~15 lines inline per pipeline → `PipelineHelpers.ExecuteResourceEventAuditSinkAsync` (saves ~4,110 lines for S365's ~274 ResourceEvent ops) |
 | ScopePair/ResolvedScopePair structs | ✅ Done | Changed from `sealed record` to `readonly record struct` — eliminates per-element heap allocations in auth paths |
 | Constructor service array helper | ✅ Done | `PipelineHelpers.ResolveServiceArray<T>()` replaces ~180-char inline expression across all pipelines |
+| Resource auth helper extraction | ✅ Done | `PipelineHelpers.CheckResourceAuthorizationAsync` — two overloads (resolved + legacy) reduce 19→16 / 8→3 lines per pipeline |
+| S365 middleware gap analysis | ✅ Done | No blocking gaps: all 6 S365 middleware types have Blueprint equivalents |
+| Pipeline optimization audit | ✅ Done | No further extraction opportunities remain; pipelines are already well-optimized |
 | GetHttpContext() compat method | ✅ Done | Instance method on ApiOperationContext for S365 HttpContext access |
 | StatusCodeResult returns | ✅ Verified | Accepted (85 S365 usages), NoContent (10), Created (12) all work |
 | `[DoNotSaveChanges]` | ✅ Verified | Already supported with BPP001 diagnostic for misuse on non-commands |
