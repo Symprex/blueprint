@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Security.Claims;
 using Blueprint.Auditing;
+using Blueprint.Http;
 using Blueprint.Model;
 using Blueprint.Runtime.Middleware;
 
@@ -511,6 +512,11 @@ public static class PipelineHelpers
         {
             eventId = koResult.EventId;
             resourceId = koResult.ResourceId;
+        }
+        else if (handlerResult is ResourceEvent legacyResult)
+        {
+            eventId = legacyResult.EventId;
+            resourceId = legacyResult.Data is IHaveResourceKey rk ? rk.ResourceKey ?? string.Empty : string.Empty;
         }
         else
         {
