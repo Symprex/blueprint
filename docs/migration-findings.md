@@ -78,6 +78,8 @@
 | S365-compatible message assertions | ✅ Done | `HavePublishedSingle<T>()`, `HavePublished<T>()`, `NotHavePublished<T>()` etc. on `TestMessageCollector` |
 | Handler DI parameter injection | ✅ Verified | S365 `HandleAsync(op, IDocumentSession, IMapper)` pattern — Blueprint resolves from DI automatically |
 | Handler return type normalization | ✅ Verified | Plain value → `OkResult<T>`, `ResourceEvent<T>` → direct, `Task` → `NoResult`, `OperationResult` → direct |
+| ResourceEvent<T> BP108 compat | ✅ Done | `Blueprint.Http.ResourceEvent<T>` now recognized as valid declared result contract — 50+ S365 commands unblocked |
+| IQuery<T> type inference overload | ✅ Done | `ResourceEventDefinition.For(new GetSettingsQuery())` infers `TResource` from `IQuery<TResource>` — matches legacy API |
 
 ---
 

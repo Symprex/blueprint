@@ -119,6 +119,7 @@ public static class OperationResultContractHelper
     /// <param name="fileStreamResultType">The resolved <c>Blueprint.Runtime.Exec.FileStreamResult</c> type when available.</param>
     /// <param name="statusCodeResultType">The resolved <c>Blueprint.Runtime.Exec.StatusCodeResult</c> base type when available.</param>
     /// <param name="resourceEventType">The resolved <c>Blueprint.Http.ResourceEvent</c> base type when available (legacy S365 pattern).</param>
+    /// <param name="httpResultType">The resolved <c>Blueprint.Http.HttpResult</c> base type when available (self-executing HTTP result).</param>
     /// <returns>Whether the current HTTP executor can translate the result type.</returns>
     public static bool IsSupportedByHttpOperationResultExecutor(
         ITypeSymbol resultType,
@@ -136,7 +137,8 @@ public static class OperationResultContractHelper
         INamedTypeSymbol? redirectResultType = null,
         INamedTypeSymbol? fileStreamResultType = null,
         INamedTypeSymbol? statusCodeResultType = null,
-        INamedTypeSymbol? resourceEventType = null)
+        INamedTypeSymbol? resourceEventType = null,
+        INamedTypeSymbol? httpResultType = null)
     {
         return IsTypeOrDerivedFrom(resultType, okResultType)
             || IsTypeOrDerivedFromOptional(resultType, acceptedResultType)
@@ -152,7 +154,8 @@ public static class OperationResultContractHelper
             || SymbolEqualityComparer.Default.Equals(resultType, redirectResultType)
             || SymbolEqualityComparer.Default.Equals(resultType, fileStreamResultType)
             || IsTypeOrDerivedFromOptional(resultType, statusCodeResultType)
-            || IsTypeOrDerivedFromOptional(resultType, resourceEventType);
+            || IsTypeOrDerivedFromOptional(resultType, resourceEventType)
+            || IsTypeOrDerivedFromOptional(resultType, httpResultType);
     }
 
     /// <summary>
@@ -176,6 +179,7 @@ public static class OperationResultContractHelper
     /// <param name="fileStreamResultType">The resolved <c>Blueprint.Runtime.Exec.FileStreamResult</c> type when available.</param>
     /// <param name="statusCodeResultType">The resolved <c>Blueprint.Runtime.Exec.StatusCodeResult</c> base type when available.</param>
     /// <param name="resourceEventType">The resolved <c>Blueprint.Http.ResourceEvent</c> base type when available (legacy S365 pattern).</param>
+    /// <param name="httpResultType">The resolved <c>Blueprint.Http.HttpResult</c> base type when available (self-executing HTTP result).</param>
     /// <returns>Whether the current executor path has a deterministic response shape for the semantic result type.</returns>
     public static bool TryGetHttpOperationResultResponseShape(
         ITypeSymbol resultType,
@@ -195,7 +199,8 @@ public static class OperationResultContractHelper
         INamedTypeSymbol? redirectResultType = null,
         INamedTypeSymbol? fileStreamResultType = null,
         INamedTypeSymbol? statusCodeResultType = null,
-        INamedTypeSymbol? resourceEventType = null)
+        INamedTypeSymbol? resourceEventType = null,
+        INamedTypeSymbol? httpResultType = null)
     {
         if (IsTypeOrDerivedFrom(resultType, okResultType))
         {
@@ -303,6 +308,15 @@ public static class OperationResultContractHelper
         {
             statusCode = 201;
             hasResponseBody = true;
+            return true;
+        }
+
+        // Blueprint.Http.HttpResult: self-executing result with constructor-supplied status code.
+        // Runtime status is dynamic, so use 200/no-body as the compile-time sentinel.
+        if (IsTypeOrDerivedFromOptional(resultType, httpResultType))
+        {
+            statusCode = 200;
+            hasResponseBody = false;
             return true;
         }
 

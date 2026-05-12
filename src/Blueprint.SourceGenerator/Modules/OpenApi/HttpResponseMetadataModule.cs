@@ -100,6 +100,7 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
         var fileStreamResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.FileStreamResult");
         var statusCodeResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.StatusCodeResult");
         var resourceEventType = context.FindTypeByMetadataName("Blueprint.Http.ResourceEvent");
+        var httpResultType = context.FindTypeByMetadataName("Blueprint.Http.HttpResult");
         if (operationResultType is null || okResultType is null || noResultType is null)
         {
             return [];
@@ -129,7 +130,7 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
         var responses = ImmutableArray.CreateBuilder<HttpResponseMetadataRegistration>(flattenedResults.Length);
         foreach (var flattenedResult in flattenedResults)
         {
-            if (OperationResultContractHelper.TryGetHttpOperationResultResponseShape(flattenedResult, okResultType, acceptedResultType, conflictResultType, notFoundResultType, createdResultType, validationFailedResultType, noResultType, keyOnlyResourceEventResultType, resourceEventResultType, httpNoContentResultType, out var statusCode, out var hasResponseBody, plainTextResultType, redirectResultType, fileStreamResultType, statusCodeResultType, resourceEventType) == false)
+            if (OperationResultContractHelper.TryGetHttpOperationResultResponseShape(flattenedResult, okResultType, acceptedResultType, conflictResultType, notFoundResultType, createdResultType, validationFailedResultType, noResultType, keyOnlyResourceEventResultType, resourceEventResultType, httpNoContentResultType, out var statusCode, out var hasResponseBody, plainTextResultType, redirectResultType, fileStreamResultType, statusCodeResultType, resourceEventType, httpResultType) == false)
             {
                 continue;
             }
@@ -161,6 +162,7 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
         var fileStreamResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.FileStreamResult");
         var unhandledExceptionResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.UnhandledExceptionResult");
         var resourceEventType = context.FindTypeByMetadataName("Blueprint.Http.ResourceEvent");
+        var httpResultType = context.FindTypeByMetadataName("Blueprint.Http.HttpResult");
         if (okResultType is null || noResultType is null)
         {
             return [];
@@ -190,7 +192,8 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
                     plainTextResultType,
                     redirectResultType,
                     fileStreamResultType,
-                    resourceEventType))
+                    resourceEventType,
+                    httpResultType))
             {
                 responses.Add(CreateResponse(statusCode, hasResponseBody, failureOutcome.ResultTypeName, bodyTypeNames));
             }
@@ -250,11 +253,12 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
         INamedTypeSymbol? plainTextResultType = null,
         INamedTypeSymbol? redirectResultType = null,
         INamedTypeSymbol? fileStreamResultType = null,
-        INamedTypeSymbol? resourceEventType = null)
+        INamedTypeSymbol? resourceEventType = null,
+        INamedTypeSymbol? httpResultType = null)
     {
         var resultType = context.FindTypeByMetadataName(resultTypeName);
         if (resultType is not null
-            && OperationResultContractHelper.TryGetHttpOperationResultResponseShape(resultType, okResultType, acceptedResultType, conflictResultType, notFoundResultType, createdResultType, validationFailedResultType, noResultType, keyOnlyResourceEventResultType, resourceEventResultType, httpNoContentResultType, out statusCode, out hasResponseBody, plainTextResultType, redirectResultType, fileStreamResultType, resourceEventType: resourceEventType))
+            && OperationResultContractHelper.TryGetHttpOperationResultResponseShape(resultType, okResultType, acceptedResultType, conflictResultType, notFoundResultType, createdResultType, validationFailedResultType, noResultType, keyOnlyResourceEventResultType, resourceEventResultType, httpNoContentResultType, out statusCode, out hasResponseBody, plainTextResultType, redirectResultType, fileStreamResultType, resourceEventType: resourceEventType, httpResultType: httpResultType))
         {
             bodyTypeNames = GetResponseBodyTypeNames(resultType, hasResponseBody, validationFailedResultType, unhandledExceptionResultType);
             return true;

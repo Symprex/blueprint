@@ -251,4 +251,22 @@ public class OperationDescriptorSourceGeneratorTestsHostExecutorAvailabilityTest
             .Should()
             .NotContain("BP108");
     }
+
+    [Fact]
+    public void When_http_exposed_operation_declares_http_result_then_generator_treats_it_as_supported_by_current_http_executor()
+    {
+        var result = OperationDescriptorSourceGeneratorTests.Compile("""
+            using Blueprint.Http;
+
+            [RootLink("/host-aware/http-result")]
+            public partial class HttpResultOperation : ICommand<HttpResult> {}
+            """);
+
+        result.Diagnostics.Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+            .Should()
+            .BeEmpty();
+        result.Diagnostics.Select(static diagnostic => diagnostic.Id)
+            .Should()
+            .NotContain("BP108");
+    }
 }
