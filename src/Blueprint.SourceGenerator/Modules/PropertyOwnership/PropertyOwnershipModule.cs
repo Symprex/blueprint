@@ -728,7 +728,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             or "bool"
             or "decimal"
             || type.TypeKind == TypeKind.Enum
-            || ImplementsIParsable(type);
+            || IsStringParsable(type);
     }
 
     private static bool IsSupportedQueryType(ITypeSymbol type)
@@ -766,7 +766,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             or "bool"
             or "decimal"
             || type.TypeKind == TypeKind.Enum
-            || ImplementsIParsable(type);
+            || IsStringParsable(type);
     }
 
     /// <summary>
@@ -801,6 +801,31 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
     {
         return type.AllInterfaces.Any(
             static i => i is { IsGenericType: true, MetadataName: "IParsable`1", ContainingNamespace.Name: "System" });
+    }
+
+    /// <summary>
+    /// Checks whether a type has a <c>static TryParse(string, out T)</c> or
+    /// <c>static TryParse(string, IFormatProvider?, out T)</c> method, which ASP.NET Core
+    /// uses as a fallback for binding route/query values when <c>IParsable&lt;T&gt;</c> is not implemented.
+    /// </summary>
+    private static bool HasStaticTryParseMethod(ITypeSymbol type)
+    {
+        return type.GetMembers("TryParse")
+            .OfType<IMethodSymbol>()
+            .Any(static m =>
+                m is { IsStatic: true, ReturnsVoid: false, ReturnType.SpecialType: SpecialType.System_Boolean }
+                && m.Parameters.Length >= 2
+                && m.Parameters[0].Type.SpecialType == SpecialType.System_String
+                && m.Parameters[^1].RefKind == RefKind.Out);
+    }
+
+    /// <summary>
+    /// Determines whether a type can be parsed from a string value — either via <c>IParsable&lt;T&gt;</c>,
+    /// a conventional <c>static TryParse</c> method, or membership in the built-in scalar set.
+    /// </summary>
+    private static bool IsStringParsable(ITypeSymbol type)
+    {
+        return ImplementsIParsable(type) || HasStaticTryParseMethod(type);
     }
 
     private static void RenderDescriptorFeatureData(ICodeWriter writer, List<PropertyOwnershipEntry> entries)
@@ -1282,6 +1307,8 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
                 $"System.Enum.TryParse<{typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}>({stringExpression}, out var {outVariable})",
             _ when ImplementsIParsable(typeSymbol) =>
                 $"{typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}.TryParse({stringExpression}, null, out var {outVariable})",
+            _ when HasStaticTryParseMethod(typeSymbol) =>
+                $"{typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}.TryParse({stringExpression}, out var {outVariable})",
             _ => $"int.TryParse({stringExpression}, out var {outVariable})", // fallback — should not be reached for supported types
         };
     }

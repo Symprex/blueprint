@@ -1382,6 +1382,125 @@ public class PropertyOwnershipModuleTests
     }
 
     [Fact]
+    public void When_type_has_static_TryParse_method_without_IParsable_then_accepted_as_route_parameter()
+    {
+        const string source = """
+            using Blueprint;
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using System;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace
+            {
+                [BlueprintAppScan]
+                public partial class TestApp : BlueprintApp { }
+
+                /// <summary>
+                /// Custom value type with TryParse but NOT implementing IParsable.
+                /// ASP.NET Core can bind this — Blueprint should too.
+                /// </summary>
+                public readonly struct CustomId
+                {
+                    public string Value { get; }
+
+                    public CustomId(string value) => Value = value;
+
+                    public static bool TryParse(string s, out CustomId result)
+                    {
+                        result = new CustomId(s);
+                        return true;
+                    }
+                }
+
+                [RootLink("/items/{ItemId}")]
+                public partial class GetCustomIdQuery : IQuery<string>
+                {
+                    public CustomId ItemId { get; set; }
+
+                    public static Task<string> HandleAsync(GetCustomIdQuery operation)
+                    {
+                        return Task.FromResult(operation.ItemId.Value);
+                    }
+                }
+            }
+            """;
+
+        var generators = new[]
+        {
+            TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>(),
+            TestHelpers.CreateTrackedGenerator<OperationExecutorPipelineSourceGenerator>(),
+        };
+
+        var result = TestHelpers.CompileWithTrackedGenerators(
+            generators,
+            [source],
+            ["Input0.cs"]);
+
+        result.Diagnostics.Should().BeEmpty("types with static TryParse should be accepted as route parameters");
+
+        var pipelineSource = string.Join(
+            Environment.NewLine,
+            result.GetGeneratedSources(nameof(OperationExecutorPipelineSourceGenerator)).Select(static s => s.SourceText.ToString()));
+
+        pipelineSource.Should().Contain("CustomId.TryParse(", "should use T.TryParse for types with static TryParse method");
+    }
+
+    [Fact]
+    public void When_query_property_has_TryParse_type_then_no_BPPO003()
+    {
+        const string source = """
+            using Blueprint;
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using System;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace
+            {
+                [BlueprintAppScan]
+                public partial class TestApp : BlueprintApp { }
+
+                public readonly struct Slug
+                {
+                    public string Value { get; }
+                    public Slug(string value) => Value = value;
+
+                    public static bool TryParse(string s, out Slug result)
+                    {
+                        result = new Slug(s);
+                        return true;
+                    }
+                }
+
+                [RootLink("/items")]
+                public partial class SearchItemsQuery : IQuery<string>
+                {
+                    public Slug? Filter { get; set; }
+
+                    public static Task<string> HandleAsync(SearchItemsQuery operation)
+                    {
+                        return Task.FromResult("ok");
+                    }
+                }
+            }
+            """;
+
+        var generators = new[]
+        {
+            TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>(),
+            TestHelpers.CreateTrackedGenerator<OperationExecutorPipelineSourceGenerator>(),
+        };
+
+        var result = TestHelpers.CompileWithTrackedGenerators(
+            generators,
+            [source],
+            ["Input0.cs"]);
+
+        result.Diagnostics.Should().BeEmpty("types with static TryParse should be accepted as query string parameters");
+    }
+
+    [Fact]
     public void When_route_parameter_type_is_not_supported_then_BPPO001_diagnostic_is_reported()
     {
         var result = CompileDescriptor(
