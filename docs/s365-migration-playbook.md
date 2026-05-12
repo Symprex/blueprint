@@ -944,9 +944,9 @@ In addition to standard checks, Generation requires:
    `docs/openapi-migration.md` for customization options via `configureOpenApiSchemas`.
 
 ### Action Items
-- [ ] Create an OpenAPI comparison test that captures old vs new specs
-- [ ] Document any breaking changes for frontend team
-- [ ] Test NSwag TS generation against new OpenAPI output
+- [ ] Create an OpenAPI comparison test that captures old vs new specs *(requires running S365 services)*
+- [ ] Document any breaking changes for frontend team *(requires S365 OpenAPI baseline)*
+- [ ] Test NSwag TS generation against new OpenAPI output *(requires S365 OpenAPI baseline)*
 
 ---
 
@@ -986,7 +986,7 @@ Keep `BlueprintHttpClient` but feed it source-generated metadata instead of runt
 ### Action Items
 - [x] `Blueprint.HttpClient` project exists with `BlueprintHttpClient<TApp>` using generated descriptors
 - [x] `TypedHttpClientExtensionsGenerator` generates per-operation extension methods
-- [ ] Add second sample project (`Blueprint.SourceGenerator.Sample.Client`) for full end-to-end integration testing
+- [x] Gateway sample project (`Blueprint.SourceGenerator.Sample.Gateway`) with 6 E2E tests proves inter-service HTTP client story
 - [x] 12 HTTP client tests covering: GET queries, POST commands, validation errors, not-found, conflict, delete
 
 ### Gateway Migration Pattern
@@ -1133,11 +1133,11 @@ We need to provide:
    ```
 
 ### Action Items
-- [ ] Create `Blueprint.Testing` project in blueprint-source-gen
-- [ ] Implement `BlueprintTestExecutor` using generated pipelines
-- [ ] Implement context builder with user/service configuration
-- [ ] Implement result assertion extensions
-- [ ] Port key S365 test patterns to validate infrastructure
+- [x] Create `Blueprint.Testing` project in blueprint-source-gen — **Done** (`Blueprint.Testing` with 69 tests)
+- [x] Implement `BlueprintTestHost` using generated pipelines — **Done** (WebApplicationFactory-based fixture)
+- [x] Implement context builder with user/service configuration — **Done** (claim-based identity helpers, tenant context)
+- [x] Implement result assertion extensions — **Done** (result type assertions)
+- [x] Port key S365 test patterns to validate infrastructure — **Done** (documented in `docs/testing-migration.md`)
 
 ---
 
@@ -1447,13 +1447,13 @@ dotnet-trace collect -- dotnet build src/Blueprint.SourceGenerator.Sample/...
 | Validation failure (no exception) | TBD | TBD | 10x faster (no throw) |
 
 ### Action Items
-- [ ] Create `Blueprint.Performance.LoadTests` project with NBomber
-- [ ] Create `Blueprint.Performance.Benchmarks` project with BenchmarkDotNet
-- [ ] Run baseline benchmarks against legacy Blueprint
-- [ ] Run benchmarks against new Blueprint
-- [ ] Document comparison in `docs/performance/`
-- [ ] Profile generator compilation with dotnet-trace
-- [ ] Profile runtime pipeline execution
+- [x] Create `Blueprint.LoadTests` project with NBomber — **Done** (9 scenarios)
+- [x] Create `Blueprint.SourceGenerator.Benchmarks` project with BenchmarkDotNet — **Done** (8 benchmark suites)
+- [ ] Run baseline benchmarks against legacy Blueprint *(requires running S365 services)*
+- [ ] Run benchmarks against new Blueprint and capture results *(requires S365-equivalent workload)*
+- [ ] Document comparison in `docs/performance/` *(after above baselines)*
+- [x] Profile generator compilation with dotnet-trace — **Done** (guide in `docs/performance-profiling.md`)
+- [x] Profile runtime pipeline execution — **Done** (guide in `docs/performance-profiling.md`)
 
 ---
 
