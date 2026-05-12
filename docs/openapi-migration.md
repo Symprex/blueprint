@@ -150,17 +150,20 @@ diff <(jq -S . openapi-baseline.json) <(jq -S . openapi-candidate.json)
 
 ### Step 4: TypeScript Client Generation
 
+S365 uses **custom Handlebars templates**, NOT NSwag. Run the S365 generator:
+
 ```bash
-# Generate TypeScript client from baseline
-npx nswag openapi2tsclient /input:openapi-baseline.json /output:client-baseline.ts \
-    /template:Fetch /generateClientClasses:true /operationGenerationMode:MultipleClientsFromOperationId
+# From the relevant frontend app directory
+cd D:\Projects\Signature365\frontend\apps\portal
+pnpm run openapi
 
-# Generate TypeScript client from candidate
-npx nswag openapi2tsclient /input:openapi-candidate.json /output:client-candidate.ts \
-    /template:Fetch /generateClientClasses:true /operationGenerationMode:MultipleClientsFromOperationId
+# This loads the OpenAPI spec from disk and generates api.ts
+```
 
-# Diff the generated clients
-diff client-baseline.ts client-candidate.ts
+Verify the generated `api.ts` compiles and has equivalent method signatures:
+
+```bash
+npx tsc --noEmit src/openapi/generated/api.ts
 ```
 
 ### Hard Gate Criteria
@@ -224,37 +227,40 @@ configureOpenApiSchemas: schemas =>
 
 ### Issue: Schema Naming Convention
 
-Blueprint source-gen uses fully-qualified type names with underscores as schema IDs:
+Blueprint source-gen uses fully-qualified type names with underscores as schema IDs by default.
+For **generic types** (e.g., `ResourceEvent<TemplateApiResource>`), Blueprint now produces
+human-readable `NameOfArgument` format automatically:
 
-```json
-// Blueprint Source-Gen schema naming
-"Blueprint_SourceGenerator_Sample_Contract_Api_TemplateApiResource"
-
-// For S365 this would produce names like:
-"Symprex_Signature365_Portal_Contract_Api_TemplateApiResource"
+```
+ResourceEventResultOfTemplate     (from ResourceEventResult<TemplateApiResource>)
+ListApiResourceOfTemplate         (from ListApiResource<TemplateApiResource>)
+PagedApiResourceOfTemplate        (from PagedApiResource<TemplateApiResource>)
 ```
 
-Legacy Blueprint (NSwag) typically uses shorter names: `TemplateApiResource`.
+Common suffixes (`ApiResource`, `Resource`, `DTO`, `Response`) are stripped from the generic
+argument name automatically.
 
-**Impact on NSwag TypeScript generation:** NSwag derives TypeScript interface names from
-schema IDs. The longer names produce longer TypeScript names. This is usually acceptable
-for generated code, but verify the NSwag `typeNameGenerator` setting if shorter names are
-preferred.
-
-**Solution:** Use `configureOpenApiSchemas` to customize schema ID generation if needed:
+For **non-generic types**, the default format is `Namespace_Type_Name` (dots → underscores).
+S365's custom TypeScript templates use `$ref` keys for type resolution, so the exact format
+matters. Use `SchemaNameFormatter` to produce short names:
 
 ```csharp
-configureOpenApiSchemas: schemas =>
-{
-    schemas.SchemaIdGenerator = type =>
+app.MapBlueprintApi<MyApp, MyAppExecutor>(
+    basePath: "/api/",
+    configureOpenApi: options =>
     {
-        // Use short name (last segment) instead of fully-qualified
-        var name = type.Name;
-        var ns = type.Namespace ?? "";
-        return ns.Contains("Symprex") ? name : $"{ns.Replace('.', '_')}_{name}";
-    };
-}
+        options.Title = "Templates API";
+        options.SchemaNameFormatter = clrName =>
+        {
+            // Use last segment only: "Symprex.S365.Api.TemplateApiResource" → "TemplateApiResource"
+            var lastDot = clrName.LastIndexOf('.');
+            return lastDot >= 0 ? clrName[(lastDot + 1)..] : clrName;
+        };
+    });
 ```
+
+**Note:** For generic types, `FormatTypeName` is applied *before* `SanitiseSchemaKey`/`SchemaNameFormatter`,
+so generic types already produce clean names regardless of custom formatter configuration.
 
 ### Issue: TenantId in Path Parameters
 
@@ -320,7 +326,7 @@ Before declaring a service migration "OpenAPI compatible":
 - [ ] Captured baseline OpenAPI JSON from current service
 - [ ] Generated candidate OpenAPI JSON from migrated service
 - [ ] Ran `oasdiff breaking` with zero breaking changes
-- [ ] Generated TypeScript client from candidate (`npm run openapi`)
+- [ ] Generated TypeScript client from candidate (`pnpm run openapi`)
 - [ ] TypeScript client compiles cleanly (`npx tsc --noEmit`)
 - [ ] Client method signatures equivalent (or changes documented)
 - [ ] Verified NodaTime serialization format matches
