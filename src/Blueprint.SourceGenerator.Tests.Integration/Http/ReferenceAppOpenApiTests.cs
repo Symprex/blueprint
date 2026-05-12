@@ -1075,6 +1075,48 @@ public class ReferenceAppOpenApiTests
         body2.Length.Should().Be(0, "304 responses should not have a body");
     }
 
+    [Fact]
+    public void When_blueprint_api_mapped_then_well_known_openapi_endpoint_is_registered()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var wellKnown = FindEndpoint(endpoints, "/.well-known/openapi", "GET");
+        wellKnown.Should().NotBeNull("RFC 9727 well-known OpenAPI endpoint should be registered");
+    }
+
+    [Fact]
+    public async Task When_well_known_openapi_invoked_then_returns_same_document_as_blueprint_endpoint()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var blueprintEndpoint = FindEndpoint(endpoints, "api/.blueprint/openapi.json", "GET")!;
+        var wellKnownEndpoint = FindEndpoint(endpoints, "/.well-known/openapi", "GET")!;
+
+        // Get document from Blueprint endpoint
+        await using var body1 = new MemoryStream();
+        var ctx1 = new DefaultHttpContext { RequestServices = endpoints.ServiceProvider, Response = { Body = body1 } };
+        ctx1.SetEndpoint(blueprintEndpoint);
+        ctx1.Request.Method = HttpMethods.Get;
+        ctx1.Request.Path = "/api/.blueprint/openapi.json";
+        await blueprintEndpoint.RequestDelegate!(ctx1);
+        body1.Position = 0;
+        var blueprintJson = await new StreamReader(body1).ReadToEndAsync();
+
+        // Get document from well-known endpoint
+        await using var body2 = new MemoryStream();
+        var ctx2 = new DefaultHttpContext { RequestServices = endpoints.ServiceProvider, Response = { Body = body2 } };
+        ctx2.SetEndpoint(wellKnownEndpoint);
+        ctx2.Request.Method = HttpMethods.Get;
+        ctx2.Request.Path = "/.well-known/openapi";
+        await wellKnownEndpoint.RequestDelegate!(ctx2);
+        body2.Position = 0;
+        var wellKnownJson = await new StreamReader(body2).ReadToEndAsync();
+
+        wellKnownJson.Should().Be(blueprintJson, "both endpoints should serve the same pre-rendered document");
+    }
+
     private static RouteEndpoint? FindEndpoint(TestEndpointRouteBuilder builder, string routePattern, string httpMethod)
     {
         return builder.DataSources

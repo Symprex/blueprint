@@ -98,6 +98,16 @@ public static class EndpointRouteBuilderExtensions
 
         builders.Add(openApiBuilder);
 
+        // RFC 9727 well-known endpoint for API discovery. Serves the same pre-rendered
+        // document at the IETF-standard location so tooling can auto-discover the spec.
+        var wellKnownBuilder = endpoints.Map(
+            RoutePatternFactory.Parse("/.well-known/openapi"),
+            openApiDelegate);
+        wellKnownBuilder.WithDisplayName("GET OpenAPI document (well-known)");
+        wellKnownBuilder.WithMetadata(new HttpMethodMetadata([HttpMethods.Get]));
+
+        builders.Add(wellKnownBuilder);
+
         // Track mapped (route, operationType) pairs to deduplicate. Multiple HATEOAS links per
         // operation are valid, but each unique route+operation pair should produce only one ASP.NET
         // Core endpoint to avoid ambiguous routing.
