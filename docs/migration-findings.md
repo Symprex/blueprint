@@ -99,6 +99,16 @@
 | OpenAPI version configurable | ✅ Done | `OpenApiInfoOptions.OpenApiVersion` defaults to `3.0.4`; set to `3.0.0` for older tooling compatibility |
 | OpenAPI short schema names | ✅ Done | Schema component keys now use short type names (e.g. `TemplateApiResource`) instead of fully-qualified CLR names |
 | Link schema component | ✅ Done | Well-known `Link` schema emitted in `components/schemas` with `href` (required) + `type`; `$links` property uses `additionalProperties: { $ref: Link }` |
+| `[DoNotAudit]` compile-time | ✅ Already exists | `AuditingModule` skips code generation when attribute present; manifest records `auditing.enabled=false`; integration test proves audit sink NOT called |
+| `[NoRebusTransaction]` compile-time | ✅ Already exists | `RebusTransactionModule` skips transaction wrapping; both runtime and source-gen paths handle opt-out |
+| `[Sensitive]` property metadata | ✅ Already exists | `SensitivePropertyMetadataModule` generates ordered property-name list at compile time; manifest records sensitive fields |
+| `[AlwaysExpand]` resource expansion | ✅ Already exists | `ResourceExpansionModule` generates unconditional expansion for marked properties; `IResourceExpander` from DI |
+| Collection resource types | ✅ Already exists | `ListApiResource<T>`, `PagedApiResource<T>`, `ContinuationPagedApiResource<T>` — identical shape to S365 |
+| Validation fast-paths | ✅ Already exists | 35 compile-time fast-path strategies covering all S365 custom validators (RequiredIf, GreaterThan, LessThan, NotEmptyList, etc.) |
+| S365 control attribute compat | ✅ Verified | All 5 S365 control attributes have Blueprint equivalents: `[DoNotSaveChanges]`, `[NoRebusTransaction]`, `[DoNotAudit]`, `[Sensitive]`, `[AlwaysExpand]` |
+| Tenancy first-class complete | ✅ Verified | `TenantModule` replaces `SetTenantMiddleware` entirely: claim resolution via `ITenantResolver`, direct `TenantId` assignment (no reflection), `ITenantAccessor.Current` ambient context — all compile-time generated |
+| ResourceEvent backward compat | ✅ Verified | `ICommand<ResourceEvent<T>>` works unchanged; S365 `BusResourceEventAuditRepository` → Blueprint `IResourceEventAuditSink`; `[DoNotAudit]` opt-out works; `ResourceCreated/Updated/Deleted<T>` all supported |
+| ReadJsonBodyAsync static delegate | ✅ Already done | `PopulateFromBodyDelegate<TOperation>` takes operation as parameter; generated code uses `static (_bodyBytes, _op) => PopulateFromJsonBody(_bodyBytes, _op)` — zero closure allocation |
 
 ---
 
@@ -394,3 +404,4 @@ S365 testing uses `WebApiFixtureFactory<TStartup>` → `ApiFixture` with:
 | 2025-07 | Current | ReadJsonBodyAsync static lambda, S365 test fixture compat shims (typed overloads, anonymous BackgroundTask/Message, auth API match, factory pattern, GetOptions), migration-findings updates |
 | 2025-07 | Pipeline extraction | UoW/Outbox/BackgroundTask helper extraction, x-links/InvokeAsync/JsonConverter gap resolution, comprehensive S365 compatibility verification |
 | 2025-07 | ResourceEventAudit | Extracted inline resource-event audit code to PipelineHelpers.ExecuteResourceEventAuditSinkAsync; self-link dedup test added; pipeline optimization analysis confirmed most code paths well-optimized |
+| 2025-07 | Gap analysis | OpenAPI version configurable, Link schema component, comprehensive S365 pattern verification: all control attributes, collection types, validation fast-paths, tenancy, ResourceEvent backward compat confirmed |
