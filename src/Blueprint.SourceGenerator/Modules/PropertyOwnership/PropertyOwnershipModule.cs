@@ -128,20 +128,8 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
     {
         var placeholders = new List<string>();
 
-        foreach (var attribute in operationType.GetAttributes())
+        foreach (var url in HttpHostExposureHelper.GetAllRouteTemplates(operationType))
         {
-            var url = attribute.AttributeClass?.Name switch
-            {
-                "RootLinkAttribute" when attribute.ConstructorArguments.Length > 0 => attribute.ConstructorArguments[0].Value as string,
-                "SelfLinkAttribute" when attribute.ConstructorArguments.Length > 1 => attribute.ConstructorArguments[1].Value as string,
-                _ => null,
-            };
-
-            if (url is null)
-            {
-                continue;
-            }
-
             foreach (Match match in PlaceholderRegex.Matches(url))
             {
                 var name = match.Groups[1].Value;
@@ -161,23 +149,11 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
     /// </summary>
     private static void ValidateRoutePlaceholderSyntax(INamedTypeSymbol operationType, DescriptorContributorContext context)
     {
-        foreach (var attribute in operationType.GetAttributes())
+        foreach (var url in HttpHostExposureHelper.GetAllRouteTemplates(operationType))
         {
-            var url = attribute.AttributeClass?.Name switch
-            {
-                "RootLinkAttribute" when attribute.ConstructorArguments.Length > 0 => attribute.ConstructorArguments[0].Value as string,
-                "SelfLinkAttribute" when attribute.ConstructorArguments.Length > 1 => attribute.ConstructorArguments[1].Value as string,
-                _ => null,
-            };
-
-            if (string.IsNullOrWhiteSpace(url))
-            {
-                continue;
-            }
-
             var openCount = 0;
 
-            for (var i = 0; i < url!.Length; i++)
+            for (var i = 0; i < url.Length; i++)
             {
                 switch (url[i])
                 {

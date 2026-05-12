@@ -1,0 +1,15 @@
+﻿File: Input0.cs
+using Blueprint.Model;
+using Blueprint.Model.Attributes;
+
+namespace TestNamespace;
+
+[Link(typeof(ApiResourceWithProps), "/items/{DoesNotExist}", Rel = "item")]
+          ^^^^^^^^^^^^ [Error:BPLG001] A public property 'DoesNotExist' cannot be found on type 'GetItemOperation'
+public partial class GetItemOperation : IOperation {}
+                                        ^^^^^^^^^^ [Error:CS0535] 'GetItemOperation' does not implement interface member 'IOperation.Configure()'
+
+public class ApiResourceWithProps : ApiResource
+{
+    public override string Object => "item";
+}
