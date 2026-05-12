@@ -10,7 +10,7 @@ namespace Blueprint.SourceGenerator.Sample.Gateway.Contract.Api;
 /// Demonstrates the HTTP client's URL placeholder substitution for parameterized routes.
 /// </summary>
 [ApiOperations("GatewayTemplates")]
-[SelfLink(typeof(GatewayTemplateResource), "/gateway/templates/{Id}")]
+[SelfLink(typeof(GatewayTemplateResource), "/templates/{Id}")]
 [HttpGet]
 [Description("Retrieve a single template from the upstream template service via the gateway.")]
 public partial class GetGatewayTemplateQuery : IQuery<Results<OkResult<GatewayTemplateResource>, NotFoundResult<GatewayTemplateResource>>>

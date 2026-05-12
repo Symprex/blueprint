@@ -17,6 +17,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Blueprint.HttpClient\Blueprint.HttpClient.csproj" />
+    <ProjectReference Include="..\Blueprint.Testing\Blueprint.Testing.csproj" />
     <ProjectReference Include="..\Blueprint.SourceGenerator.Sample\Blueprint.SourceGenerator.Sample.csproj" />
     <ProjectReference Include="..\Blueprint.SourceGenerator.Sample.Contract\Blueprint.SourceGenerator.Sample.Contract.csproj" />
     <ProjectReference Include="..\Blueprint.SourceGenerator.Sample.Gateway\Blueprint.SourceGenerator.Sample.Gateway.csproj" />

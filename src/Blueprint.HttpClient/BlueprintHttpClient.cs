@@ -79,6 +79,48 @@ public sealed class BlueprintHttpClient<TApp>
         await this.EnsureSuccessOrThrowAsync(response, cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Sends an operation whose remote handler returns a <see cref="Blueprint.Runtime.Exec.ResourceEventResult{T}"/>.
+    /// The HTTP host serialises that result inside an envelope (<c>{"eventId":"...","resourceId":"...","content":{...}}</c>);
+    /// this method unwraps the <c>content</c> property and deserialises it as <typeparamref name="TResource"/>.
+    /// </summary>
+    /// <typeparam name="TResource">The resource type carried inside the event envelope's <c>content</c> property.</typeparam>
+    /// <param name="operation">The operation to send.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The deserialized resource from the event envelope.</returns>
+    /// <exception cref="BlueprintApiException">Thrown for non-success status codes.</exception>
+    /// <exception cref="ValidationException">Thrown for 422 Unprocessable Entity.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the response does not contain a <c>content</c> property.</exception>
+    public async Task<TResource?> SendResourceEventAsync<TResource>(
+        IOperation operation,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+
+        using var request = this.CreateRequest(operation);
+        using var response = await this._httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+
+        await this.EnsureSuccessOrThrowAsync(response, cancellationToken).ConfigureAwait(false);
+
+        if (response.StatusCode == HttpStatusCode.NoContent)
+        {
+            return default;
+        }
+
+        // Parse the event envelope and extract the "content" property
+        using var doc = await JsonDocument.ParseAsync(
+            await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false),
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        if (doc.RootElement.TryGetProperty("content", out var contentElement))
+        {
+            return contentElement.Deserialize<TResource>(this._jsonOptions);
+        }
+
+        // Fallback: try deserializing the whole body as TResource
+        return doc.RootElement.Deserialize<TResource>(this._jsonOptions);
+    }
+
     private HttpRequestMessage CreateRequest(IOperation operation)
     {
         var operationType = operation.GetType();
@@ -111,6 +153,14 @@ public sealed class BlueprintHttpClient<TApp>
             {
                 url = AppendQueryString(url, descriptor, operation);
             }
+        }
+
+        // Strip the leading '/' so the URL is treated as relative to the HttpClient's BaseAddress.
+        // Without this, HttpClient treats "/templates" as an absolute path from the host root,
+        // discarding the BaseAddress path component (e.g. "http://host/api/" → "http://host/templates").
+        if (url.Length > 0 && url[0] == '/')
+        {
+            url = url[1..];
         }
 
         var request = new HttpRequestMessage(httpMethod, url);

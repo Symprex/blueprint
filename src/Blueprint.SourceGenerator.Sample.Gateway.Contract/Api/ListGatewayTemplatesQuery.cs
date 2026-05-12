@@ -11,7 +11,7 @@ namespace Blueprint.SourceGenerator.Sample.Gateway.Contract.Api;
 /// delegates to a <c>BlueprintHttpClient</c> to reach the upstream service.
 /// </summary>
 [ApiOperations("GatewayTemplates")]
-[Link(typeof(GatewayTemplateResource), "/gateway/templates")]
+[RootLink("/templates")]
 [HttpGet]
 [Description("List all templates from the upstream template service via the gateway.")]
 public partial class ListGatewayTemplatesQuery : IQuery<OkResult<GatewayTemplateResource[]>>;

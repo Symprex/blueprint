@@ -18,7 +18,9 @@ public class CreateGatewayTemplateCommandHandler(BlueprintHttpClient<SampleBluep
         CreateGatewayTemplateCommand command,
         CancellationToken cancellationToken)
     {
-        var upstream = await upstreamClient.SendAsync<TemplateApiResource>(
+        // Upstream returns ResourceEventResult<TemplateApiResource> which serialises as
+        // { "eventId": "...", "resourceId": "...", "content": { ... } }
+        var upstream = await upstreamClient.SendResourceEventAsync<TemplateApiResource>(
             new CreateTemplateCommand
             {
                 Name = command.Name,

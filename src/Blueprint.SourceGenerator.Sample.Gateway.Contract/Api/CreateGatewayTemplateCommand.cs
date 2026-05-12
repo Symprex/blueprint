@@ -11,7 +11,7 @@ namespace Blueprint.SourceGenerator.Sample.Gateway.Contract.Api;
 /// Demonstrates HTTP client POST with a JSON request body serialized from operation properties.
 /// </summary>
 [ApiOperations("GatewayTemplates")]
-[Link(typeof(GatewayTemplateResource), "/gateway/templates")]
+[RootLink("/templates")]
 [HttpPost]
 [Description("Create a new template in the upstream template service via the gateway.")]
 public partial class CreateGatewayTemplateCommand : ICommand<OkResult<GatewayTemplateResource>>

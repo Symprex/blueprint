@@ -2652,8 +2652,8 @@ public class ReferenceAppHttpEndToEndIntegrationTests
             .AddSingleton<SampleBlueprintApp>()
             .AddSingleton<SampleBlueprintAppExecutor>()
             .AddScoped<Blueprint.Tasks.IBackgroundTaskScheduler, InProcessBackgroundTaskScheduler>()
-            .AddScoped<InMemoryUnitOfWork>()
-            .AddScoped<Blueprint.Persistence.IUnitOfWork>(sp => sp.GetRequiredService<InMemoryUnitOfWork>())
+            .AddScoped<SampleMartenUnitOfWork>()
+            .AddScoped<Blueprint.Persistence.IUnitOfWork>(sp => sp.GetRequiredService<SampleMartenUnitOfWork>())
             .AddScoped<Blueprint.Http.ETagger>();
 
         return new TestEndpointRouteBuilder(services.BuildServiceProvider());
@@ -2667,8 +2667,8 @@ public class ReferenceAppHttpEndToEndIntegrationTests
             .AddSingleton<SampleBlueprintApp>()
             .AddSingleton<SampleBlueprintAppExecutor>()
             .AddScoped<Blueprint.Tasks.IBackgroundTaskScheduler, InProcessBackgroundTaskScheduler>()
-            .AddScoped<InMemoryUnitOfWork>()
-            .AddScoped<Blueprint.Persistence.IUnitOfWork>(sp => sp.GetRequiredService<InMemoryUnitOfWork>())
+            .AddScoped<SampleMartenUnitOfWork>()
+            .AddScoped<Blueprint.Persistence.IUnitOfWork>(sp => sp.GetRequiredService<SampleMartenUnitOfWork>())
             .AddSingleton<Blueprint.Authorization.IUserAuthorisationContextFactory, SampleUserAuthorisationContextFactory>()
             .AddSingleton<Blueprint.Authorization.IOperationAuthoriser, TenantIsolationApiAuthoriser>();
 
@@ -2683,8 +2683,8 @@ public class ReferenceAppHttpEndToEndIntegrationTests
             .AddSingleton<SampleBlueprintApp>()
             .AddSingleton<SampleBlueprintAppExecutor>()
             .AddScoped<Blueprint.Tasks.IBackgroundTaskScheduler, InProcessBackgroundTaskScheduler>()
-            .AddScoped<InMemoryUnitOfWork>()
-            .AddScoped<Blueprint.Persistence.IUnitOfWork>(sp => sp.GetRequiredService<InMemoryUnitOfWork>())
+            .AddScoped<SampleMartenUnitOfWork>()
+            .AddScoped<Blueprint.Persistence.IUnitOfWork>(sp => sp.GetRequiredService<SampleMartenUnitOfWork>())
             .AddSingleton<Blueprint.Authorization.IResourceAuthorizationProvider, SampleResourceAuthorizationProvider>();
 
         return new TestEndpointRouteBuilder(services.BuildServiceProvider());
@@ -2698,8 +2698,8 @@ public class ReferenceAppHttpEndToEndIntegrationTests
             .AddSingleton<SampleBlueprintApp>()
             .AddSingleton<SampleBlueprintAppExecutor>()
             .AddScoped<Blueprint.Tasks.IBackgroundTaskScheduler, InProcessBackgroundTaskScheduler>()
-            .AddScoped<InMemoryUnitOfWork>()
-            .AddScoped<Blueprint.Persistence.IUnitOfWork>(sp => sp.GetRequiredService<InMemoryUnitOfWork>())
+            .AddScoped<SampleMartenUnitOfWork>()
+            .AddScoped<Blueprint.Persistence.IUnitOfWork>(sp => sp.GetRequiredService<SampleMartenUnitOfWork>())
             .AddSingleton<Blueprint.Authorization.IUserAuthorisationContextFactory, SampleUserAuthorisationContextFactory>()
             .AddSingleton<Blueprint.Authorization.IOperationAuthoriser, TenantIsolationApiAuthoriser>()
             .AddSingleton<Blueprint.Authorization.IApiAuthoriserAggregator, AllowAllApiAuthoriserAggregator>();
@@ -2715,8 +2715,8 @@ public class ReferenceAppHttpEndToEndIntegrationTests
             .AddSingleton<SampleBlueprintApp>()
             .AddSingleton<SampleBlueprintAppExecutor>()
             .AddScoped<Blueprint.Tasks.IBackgroundTaskScheduler, InProcessBackgroundTaskScheduler>()
-            .AddScoped<InMemoryUnitOfWork>()
-            .AddScoped<Blueprint.Persistence.IUnitOfWork>(sp => sp.GetRequiredService<InMemoryUnitOfWork>())
+            .AddScoped<SampleMartenUnitOfWork>()
+            .AddScoped<Blueprint.Persistence.IUnitOfWork>(sp => sp.GetRequiredService<SampleMartenUnitOfWork>())
             .AddSingleton<ITenantAccessor, AsyncLocalTenantAccessor>()
             .AddSingleton<Blueprint.Runtime.Middleware.IPropertyPopulator, TenantPropertyPopulator>();
 
@@ -2731,8 +2731,8 @@ public class ReferenceAppHttpEndToEndIntegrationTests
             .AddSingleton<SampleBlueprintApp>()
             .AddSingleton<SampleBlueprintAppExecutor>()
             .AddScoped<Blueprint.Tasks.IBackgroundTaskScheduler, InProcessBackgroundTaskScheduler>()
-            .AddScoped<InMemoryUnitOfWork>()
-            .AddScoped<Blueprint.Persistence.IUnitOfWork>(sp => sp.GetRequiredService<InMemoryUnitOfWork>())
+            .AddScoped<SampleMartenUnitOfWork>()
+            .AddScoped<Blueprint.Persistence.IUnitOfWork>(sp => sp.GetRequiredService<SampleMartenUnitOfWork>())
             .AddSingleton<Blueprint.Authorization.IClaimInspector>(
                 new Blueprint.Authorization.ClaimInspector(
                     Array.Empty<Blueprint.Authorization.IResourceKeyExpander>()))

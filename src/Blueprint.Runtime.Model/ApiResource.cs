@@ -41,6 +41,16 @@ public abstract class ApiResource : ILinkableResource, IHaveResourceKey
     public bool IsPartial { get; set; }
 
     /// <summary>
+    /// Returns whether a link with the given rel has already been added to this resource.
+    /// </summary>
+    /// <param name="rel">The relation to check.</param>
+    /// <returns><see langword="true"/> if a link with the given rel exists; otherwise <see langword="false"/>.</returns>
+    public bool HasLink(string rel)
+    {
+        return this._links.ContainsKey(rel);
+    }
+
+    /// <summary>
     /// Adds a new link with the specific rel (relation) and <see cref="Link"/>
     /// definition, throwing an exception if a link with the specific relation already
     /// exists.

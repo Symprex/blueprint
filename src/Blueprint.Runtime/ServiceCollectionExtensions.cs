@@ -68,6 +68,11 @@ public static class ServiceCollectionExtensions
         });
         services.TryAddScoped<Blueprint.Http.IResourceLinkGenerator, Blueprint.Http.EntityOperationResourceLinkGenerator>();
 
+        // Authorization infrastructure — always registered so that link generation (which depends
+        // on IApiAuthoriserAggregator for link-visibility filtering) works even when no explicit
+        // authorisers are configured.
+        services.TryAddSingleton<Blueprint.Authorization.IApiAuthoriserAggregator, Blueprint.Authorization.ApiAuthoriserAggregator>();
+
         // Pre-rendered OpenAPI document holder — populated at endpoint mapping time
         services.TryAddSingleton<PreRenderedOpenApiDocumentHolder>();
 
@@ -203,7 +208,8 @@ public sealed class BlueprintServiceBuilder
     public BlueprintServiceBuilder AddUnitOfWork<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] T>()
         where T : class, Blueprint.Persistence.IUnitOfWork
     {
-        this.Services.AddScoped<Blueprint.Persistence.IUnitOfWork, T>();
+        this.Services.AddScoped<T>();
+        this.Services.AddScoped<Blueprint.Persistence.IUnitOfWork>(static sp => sp.GetRequiredService<T>());
         return this;
     }
 
@@ -223,7 +229,8 @@ public sealed class BlueprintServiceBuilder
     public BlueprintServiceBuilder AddMessageOutbox<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] T>()
         where T : class, Blueprint.Messaging.IMessageOutbox
     {
-        this.Services.AddScoped<Blueprint.Messaging.IMessageOutbox, T>();
+        this.Services.AddScoped<T>();
+        this.Services.AddScoped<Blueprint.Messaging.IMessageOutbox>(static sp => sp.GetRequiredService<T>());
         return this;
     }
 

@@ -112,6 +112,18 @@ public sealed class EntityOperationResourceLinkGenerator : IResourceLinkGenerato
                 this._logger.LogTrace("All checks passed. Adding link. operation_type={OperationType}", entityOperationName);
             }
 
+            // Skip if this rel was already populated — the generated pipeline may have added
+            // a compile-time self link before the runtime link generator runs.
+            if (linkableResource.Links.ContainsKey(link.Rel))
+            {
+                if (traceLogEnabled)
+                {
+                    this._logger.LogTrace("Link rel '{Rel}' already present on resource, skipping. operation_type={OperationType}", link.Rel, entityOperationName);
+                }
+
+                continue;
+            }
+
             linkableResource.AddLink(link.Rel, new Link
             {
                 Href = url,

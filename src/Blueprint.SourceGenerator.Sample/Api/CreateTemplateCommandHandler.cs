@@ -9,7 +9,7 @@ namespace Blueprint.SourceGenerator.Sample.Api;
 /// Also demonstrates the unit-of-work persistence seam: changes tracked in the handler are committed
 /// automatically by the generated pipeline's PostExecution stage.
 /// </summary>
-public class CreateTemplateCommandHandler(TemplateStore store, InMemoryUnitOfWork unitOfWork)
+public class CreateTemplateCommandHandler(TemplateStore store, SampleMartenUnitOfWork unitOfWork)
 {
     /// <summary>
     /// Creates a new template from the validated command properties and returns a resource-event
@@ -25,7 +25,7 @@ public class CreateTemplateCommandHandler(TemplateStore store, InMemoryUnitOfWor
             command.HtmlSource ?? string.Empty,
             command.PlainTextSource ?? string.Empty);
 
-        unitOfWork.TrackChange($"Created template '{template.Name}' (id={template.Id})");
+        unitOfWork.Store("Template", template.Id);
 
         return new TemplateResourceEvents.Created(template);
     }

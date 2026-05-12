@@ -13,12 +13,29 @@ namespace Blueprint.SourceGenerator.CodeWriter
     /// </summary>
     internal sealed class CodeWriter : IDisposable, ICodeWriter
     {
+        // Pre-built indent strings up to depth 16 (covers virtually all generated code).
+        // Deeper nesting falls back to on-demand construction.
+        private static readonly string[] SpaceIndents = BuildIndentCache("    ", 16);
+        private static readonly string[] TabIndents = BuildIndentCache("\t", 16);
+
+        private readonly string[] _indentCache;
+        private readonly string _indentUnit;
         private readonly IndentStyle _indentStyle;
-        private readonly string Indent;
 
         private int _indentLevel = 0;
         private int _extraIndent = 0;
         private readonly List<(StringBuilder? StringBuilder, CodeWriter? Writer)> _blocks = new();
+
+        private static string[] BuildIndentCache(string unit, int maxDepth)
+        {
+            var cache = new string[maxDepth + 1];
+            cache[0] = string.Empty;
+            for (var i = 1; i <= maxDepth; i++)
+            {
+                cache[i] = cache[i - 1] + unit;
+            }
+            return cache;
+        }
 
         /// <summary>
         /// Initializes a new instance of the <see cref="CodeWriter"/> class.
@@ -28,10 +45,15 @@ namespace Blueprint.SourceGenerator.CodeWriter
         public CodeWriter(IndentStyle indentStyle, int startingLevel = 0)
         {
             this._indentStyle = indentStyle;
-            this.Indent = indentStyle switch
+            this._indentUnit = indentStyle switch
             {
                 IndentStyle.Tabs => "\t",
                 _ => "    "
+            };
+            this._indentCache = indentStyle switch
+            {
+                IndentStyle.Tabs => TabIndents,
+                _ => SpaceIndents
             };
         }
 
@@ -152,10 +174,26 @@ namespace Blueprint.SourceGenerator.CodeWriter
 
         private string GetIndentedValue(string value)
         {
-            var indent = string.Empty;
-            for (var i = 0; i < this._indentLevel + this._extraIndent; i++)
+            var depth = this._indentLevel + this._extraIndent;
+            if (depth == 0)
             {
-                indent += this.Indent;
+                return value;
+            }
+
+            string indent;
+            if (depth < this._indentCache.Length)
+            {
+                indent = this._indentCache[depth];
+            }
+            else
+            {
+                // Beyond cache depth — build on demand (extremely rare).
+                var sb = new StringBuilder(this._indentUnit.Length * depth);
+                for (var i = 0; i < depth; i++)
+                {
+                    sb.Append(this._indentUnit);
+                }
+                indent = sb.ToString();
             }
 
             return indent + value;
