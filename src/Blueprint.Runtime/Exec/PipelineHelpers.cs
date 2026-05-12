@@ -166,7 +166,7 @@ public static class PipelineHelpers
         if (httpContext.Request.ContentType is not null &&
             !httpContext.Request.ContentType.Contains("json", StringComparison.OrdinalIgnoreCase))
         {
-            return new UnsupportedMediaTypeResult();
+            return UnsupportedMediaTypeResult.Instance;
         }
 
         // Fast path: Content-Length is known — rent a pooled buffer and read directly
@@ -366,8 +366,8 @@ public static class PipelineHelpers
                 if (!result.IsAllowed)
                 {
                     return result.FailureType == Authorization.ExecutionAllowedFailureType.Authentication
-                        ? new UnauthenticatedResult()
-                        : new ForbiddenResult();
+                        ? UnauthenticatedResult.Instance
+                        : ForbiddenResult.Instance;
                 }
             }
         }
@@ -384,8 +384,8 @@ public static class PipelineHelpers
                 if (!result.IsAllowed)
                 {
                     return result.FailureType == Authorization.ExecutionAllowedFailureType.Authentication
-                        ? new UnauthenticatedResult()
-                        : new ForbiddenResult();
+                        ? UnauthenticatedResult.Instance
+                        : ForbiddenResult.Instance;
                 }
             }
         }

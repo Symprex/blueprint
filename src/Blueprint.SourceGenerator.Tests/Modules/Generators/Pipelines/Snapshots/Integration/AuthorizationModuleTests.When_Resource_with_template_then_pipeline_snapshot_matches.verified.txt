@@ -69,7 +69,7 @@ namespace Blueprint.Generated
             await Blueprint.Runtime.Exec.PipelineHelpers.PopulatePropertiesAsync(this._propertyPopulators, context).ConfigureAwait(false);
             if (httpContext.User.Identity?.IsAuthenticated != true)
             {
-                return new Blueprint.Runtime.Exec.UnauthenticatedResult();
+                return Blueprint.Runtime.Exec.UnauthenticatedResult.Instance;
             }
 
             await Blueprint.Runtime.Exec.PipelineHelpers.LoadUserContextAsync(context, httpContext, this._userContextFactory).ConfigureAwait(false);
@@ -79,7 +79,7 @@ namespace Blueprint.Generated
                 var isAuthorized = await this._resolvedResourceAuthorizationProvider.IsAuthorizedAsync(context, httpContext.User, new Blueprint.Model.ResolvedScopePair[] { new Blueprint.Model.ResolvedScopePair("account", "read", "/tenants/{Auth:AccountId}/accounts/{Id}", $"/tenants/{context.UserAuthorisationContext?.AccountId ?? httpContext.User.FindFirst("AccountId")?.Value ?? ""}/accounts/{operation.Id?.ToString() ?? ""}") }, httpContext.RequestAborted).ConfigureAwait(false);
                 if (!isAuthorized)
                 {
-                    return new Blueprint.Runtime.Exec.ForbiddenResult();
+                    return Blueprint.Runtime.Exec.ForbiddenResult.Instance;
                 }
             }
             else
@@ -89,7 +89,7 @@ namespace Blueprint.Generated
                     var isAuthorized = await this._resourceAuthorizationProvider.IsAuthorizedAsync(context, httpContext.User, _scopePairs_GetAccountQuery, httpContext.RequestAborted).ConfigureAwait(false);
                     if (!isAuthorized)
                     {
-                        return new Blueprint.Runtime.Exec.ForbiddenResult();
+                        return Blueprint.Runtime.Exec.ForbiddenResult.Instance;
                     }
                 }
             }

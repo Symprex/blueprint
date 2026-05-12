@@ -6,6 +6,12 @@ namespace Blueprint.Runtime.Exec;
 /// </summary>
 public sealed class UnauthenticatedResult : OperationResult
 {
+    /// <summary>
+    /// Gets a shared instance to avoid allocating a new object per rejected request.
+    /// Safe because <see cref="UnauthenticatedResult"/> is immutable and stateless.
+    /// </summary>
+    public static UnauthenticatedResult Instance { get; } = new();
+
     /// <inheritdoc />
     public override bool WasSuccessful => false;
 

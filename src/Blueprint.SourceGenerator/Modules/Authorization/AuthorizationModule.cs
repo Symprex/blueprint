@@ -406,8 +406,8 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
                     {
                         deniedBranch.Return(
                             context.IsPipelineAsync()
-                                ? "new Blueprint.Runtime.Exec.ForbiddenResult()"
-                                : "System.Threading.Tasks.Task.FromResult<Blueprint.OperationResult>(new Blueprint.Runtime.Exec.ForbiddenResult())");
+                                ? "Blueprint.Runtime.Exec.ForbiddenResult.Instance"
+                                : "System.Threading.Tasks.Task.FromResult<Blueprint.OperationResult>(Blueprint.Runtime.Exec.ForbiddenResult.Instance)");
                     });
             });
 
@@ -457,8 +457,8 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
                     {
                         deniedBranch.Return(
                             context.IsPipelineAsync()
-                                ? "new Blueprint.Runtime.Exec.ForbiddenResult()"
-                                : "System.Threading.Tasks.Task.FromResult<Blueprint.OperationResult>(new Blueprint.Runtime.Exec.ForbiddenResult())");
+                                ? "Blueprint.Runtime.Exec.ForbiddenResult.Instance"
+                                : "System.Threading.Tasks.Task.FromResult<Blueprint.OperationResult>(Blueprint.Runtime.Exec.ForbiddenResult.Instance)");
                     });
             });
     }
@@ -478,8 +478,8 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
             {
                 deniedBranch.Return(
                     context.IsPipelineAsync()
-                        ? "new Blueprint.Runtime.Exec.ForbiddenResult()"
-                        : "System.Threading.Tasks.Task.FromResult<Blueprint.OperationResult>(new Blueprint.Runtime.Exec.ForbiddenResult())");
+                        ? "Blueprint.Runtime.Exec.ForbiddenResult.Instance"
+                        : "System.Threading.Tasks.Task.FromResult<Blueprint.OperationResult>(Blueprint.Runtime.Exec.ForbiddenResult.Instance)");
             });
     }
 

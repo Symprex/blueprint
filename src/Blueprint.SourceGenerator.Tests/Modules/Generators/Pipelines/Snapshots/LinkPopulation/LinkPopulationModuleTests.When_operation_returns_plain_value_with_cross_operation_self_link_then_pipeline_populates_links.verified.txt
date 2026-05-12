@@ -57,7 +57,7 @@ namespace Blueprint.Generated
             await Blueprint.Runtime.Exec.PipelineHelpers.PopulatePropertiesAsync(this._propertyPopulators, context).ConfigureAwait(false);
             if (httpContext.User.Identity?.IsAuthenticated != true)
             {
-                return new Blueprint.Runtime.Exec.UnauthenticatedResult();
+                return Blueprint.Runtime.Exec.UnauthenticatedResult.Instance;
             }
 
             await Blueprint.Runtime.Exec.PipelineHelpers.LoadUserContextAsync(context, httpContext, this._userContextFactory).ConfigureAwait(false);
@@ -202,7 +202,7 @@ namespace Blueprint.Generated
             await Blueprint.Runtime.Exec.PipelineHelpers.PopulatePropertiesAsync(this._propertyPopulators, context).ConfigureAwait(false);
             if (httpContext.User.Identity?.IsAuthenticated != true)
             {
-                return new Blueprint.Runtime.Exec.UnauthenticatedResult();
+                return Blueprint.Runtime.Exec.UnauthenticatedResult.Instance;
             }
 
             await Blueprint.Runtime.Exec.PipelineHelpers.LoadUserContextAsync(context, httpContext, this._userContextFactory).ConfigureAwait(false);

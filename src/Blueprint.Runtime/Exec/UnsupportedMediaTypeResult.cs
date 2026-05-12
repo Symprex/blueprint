@@ -7,6 +7,12 @@ namespace Blueprint.Runtime.Exec;
 /// </summary>
 public sealed class UnsupportedMediaTypeResult : OperationResult
 {
+    /// <summary>
+    /// Gets a shared instance to avoid allocating a new object per rejected request.
+    /// Safe because <see cref="UnsupportedMediaTypeResult"/> is immutable and stateless.
+    /// </summary>
+    public static UnsupportedMediaTypeResult Instance { get; } = new();
+
     /// <inheritdoc />
     public override bool WasSuccessful => false;
 
