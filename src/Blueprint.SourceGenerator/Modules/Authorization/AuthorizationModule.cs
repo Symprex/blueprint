@@ -286,6 +286,19 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
             "Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Authorization.IResourceAuthorizationProvider>(serviceProvider)",
             isNullable: true);
 
+        // When templates are present, also cache IResolvedResourceAuthorizationProvider to
+        // avoid per-request DI resolution (auth providers are singletons).
+        var hasTemplates = effectiveScopePairs.Any(static sp => sp.ResourceKeyTemplate is not null);
+
+        if (hasTemplates && !hasTemplateValidationErrors)
+        {
+            context.CacheService(
+                "_resolvedResourceAuthorizationProvider",
+                "Blueprint.Authorization.IResolvedResourceAuthorizationProvider",
+                "Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Authorization.IResolvedResourceAuthorizationProvider>(serviceProvider)",
+                isNullable: true);
+        }
+
         // Cache the ScopePair[] as a static readonly field to avoid per-request allocation
         // (all values are compile-time string literals)
         var scopePairFieldName = "_scopePairs_" + context.Operation.TypeName.Replace(".", "_").Replace("+", "_");
@@ -344,13 +357,9 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
         var httpContextExpr = context.GetHttpContextExpression();
         var principalExpr = $"{httpContextExpr}.User";
 
-        // Try resolved provider first
-        context.DeclareVariable(
-            "resolvedAuthProvider",
-            context.GetOptionalServiceExpression("Blueprint.Authorization.IResolvedResourceAuthorizationProvider"));
-
+        // Use cached IResolvedResourceAuthorizationProvider (resolved at construction time)
         context.If(
-            "resolvedAuthProvider != null",
+            "this._resolvedResourceAuthorizationProvider != null",
             resolvedBranch =>
             {
                 // Generate inline-expanded ResolvedScopePair array
@@ -372,7 +381,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
 
                 resolvedBranch.DeclareVariable(
                     "isAuthorized",
-                    $"await resolvedAuthProvider.IsAuthorizedAsync(context, {principalExpr}, new Blueprint.Model.ResolvedScopePair[] {{ {resolvedElements} }}, {httpContextExpr}.RequestAborted).ConfigureAwait(false)");
+                    $"await this._resolvedResourceAuthorizationProvider.IsAuthorizedAsync(context, {principalExpr}, new Blueprint.Model.ResolvedScopePair[] {{ {resolvedElements} }}, {httpContextExpr}.RequestAborted).ConfigureAwait(false)");
 
                 resolvedBranch.If(
                     "!isAuthorized",

@@ -23,6 +23,7 @@ namespace Blueprint.Generated
             new System.Diagnostics.ActivityTagsCollection { { "blueprint.operation.type", "GetAccountQuery" } };
         readonly Blueprint.Authorization.IOperationAuthoriser[] _operationAuthorisers;
         readonly Blueprint.Runtime.Middleware.IPropertyPopulator[] _propertyPopulators;
+        readonly Blueprint.Authorization.IResolvedResourceAuthorizationProvider _resolvedResourceAuthorizationProvider;
         readonly Blueprint.Authorization.IResourceAuthorizationProvider _resourceAuthorizationProvider;
         private static readonly Blueprint.Model.ScopePair[] _scopePairs_GetAccountQuery =
             new Blueprint.Model.ScopePair[] { new Blueprint.Model.ScopePair("account", "read", "/tenants/{Auth:AccountId}/accounts/{Id}") };
@@ -32,6 +33,7 @@ namespace Blueprint.Generated
             : base(loggerFactory, "GetAccountQuery")
         {
             this._resourceAuthorizationProvider = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Authorization.IResourceAuthorizationProvider>(serviceProvider);
+            this._resolvedResourceAuthorizationProvider = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Authorization.IResolvedResourceAuthorizationProvider>(serviceProvider);
             this._apiAuthorisers = (Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Authorization.IApiAuthoriser>>(serviceProvider) is { } aa ? System.Linq.Enumerable.ToArray(aa) : System.Array.Empty<Blueprint.Authorization.IApiAuthoriser>());
             this._operationAuthorisers = (Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Authorization.IOperationAuthoriser>>(serviceProvider) is { } oa ? System.Linq.Enumerable.ToArray(oa) : System.Array.Empty<Blueprint.Authorization.IOperationAuthoriser>());
             this._userContextFactory = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Authorization.IUserAuthorisationContextFactory>(serviceProvider);
@@ -83,10 +85,9 @@ namespace Blueprint.Generated
                 context.UserAuthorisationContext.PopulateMetadata((key, value) => _activity.SetTag(key, value));
             }
 
-            var resolvedAuthProvider = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Authorization.IResolvedResourceAuthorizationProvider>(context.ServiceProvider);
-            if (resolvedAuthProvider != null)
+            if (this._resolvedResourceAuthorizationProvider != null)
             {
-                var isAuthorized = await resolvedAuthProvider.IsAuthorizedAsync(context, httpContext.User, new Blueprint.Model.ResolvedScopePair[] { new Blueprint.Model.ResolvedScopePair("account", "read", "/tenants/{Auth:AccountId}/accounts/{Id}", $"/tenants/{context.UserAuthorisationContext?.AccountId ?? httpContext.User.FindFirst("AccountId")?.Value ?? ""}/accounts/{operation.Id?.ToString() ?? ""}") }, httpContext.RequestAborted).ConfigureAwait(false);
+                var isAuthorized = await this._resolvedResourceAuthorizationProvider.IsAuthorizedAsync(context, httpContext.User, new Blueprint.Model.ResolvedScopePair[] { new Blueprint.Model.ResolvedScopePair("account", "read", "/tenants/{Auth:AccountId}/accounts/{Id}", $"/tenants/{context.UserAuthorisationContext?.AccountId ?? httpContext.User.FindFirst("AccountId")?.Value ?? ""}/accounts/{operation.Id?.ToString() ?? ""}") }, httpContext.RequestAborted).ConfigureAwait(false);
                 if (!isAuthorized)
                 {
                     return new Blueprint.Runtime.Exec.ForbiddenResult();
