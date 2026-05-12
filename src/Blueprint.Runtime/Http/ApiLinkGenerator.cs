@@ -70,21 +70,49 @@ public sealed class ApiLinkGenerator : IApiLinkGenerator
     public Link CreateSelfLink<T>(string id, object? queryString = null)
         where T : ApiResource
     {
-        return this.CreateSelfLink<T>(new { id }, queryString);
+        var selfLink = this._app.GetLinkFor(typeof(T), "self");
+
+        if (selfLink is null)
+        {
+            throw new InvalidOperationException(
+                $"Cannot generate a self link for resource type '{typeof(T).Name}' because no 'self' link " +
+                "has been registered. Ensure an operation has a [SelfLink] attribute targeting this resource type.");
+        }
+
+        // Fast path: try passing the raw string to the compiled builder — single-placeholder
+        // builders generate a string case that avoids anonymous-object allocation and reflection.
+        var relativeUrl = selfLink.CompiledUrlBuilder?.Invoke(id);
+
+        // Slow path: wrap in anonymous object for reflection-based placeholder resolution
+        relativeUrl ??= selfLink.CreateRelativeUrl(new { id });
+
+        if (relativeUrl is null)
+        {
+            throw new InvalidOperationException(
+                $"Cannot fill all placeholders for the self link of '{typeof(T).Name}' from the provided id definition.");
+        }
+
+        var fullUri = this.BuildUrl(relativeUrl, queryString);
+
+        return new Link
+        {
+            Href = fullUri,
+            Type = typeof(T).Name,
+        };
     }
 
     /// <inheritdoc />
     public Link CreateSelfLink<T>(int id, object? queryString = null)
         where T : ApiResource
     {
-        return this.CreateSelfLink<T>(new { id }, queryString);
+        return this.CreateSelfLink<T>(id.ToString(), queryString);
     }
 
     /// <inheritdoc />
     public Link CreateSelfLink<T>(Guid id, object? queryString = null)
         where T : ApiResource
     {
-        return this.CreateSelfLink<T>(new { id }, queryString);
+        return this.CreateSelfLink<T>(id.ToString(), queryString);
     }
 
     /// <inheritdoc />

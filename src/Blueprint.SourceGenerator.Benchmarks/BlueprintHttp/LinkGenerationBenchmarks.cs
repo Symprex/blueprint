@@ -43,15 +43,13 @@ public class LinkGenerationBenchmarks
             "self",
             typeof(BenchmarkLinkResource))
         {
-            // Compiled URL builder — mirrors what the source generator emits
-            CompiledUrlBuilder = static obj =>
+            // Compiled URL builder — mirrors what the source generator now emits:
+            // a switch expression with both a resource-type case and a string scalar case
+            CompiledUrlBuilder = static obj => obj switch
             {
-                if (obj is BenchmarkLinkResource r)
-                {
-                    return "resources/" + Uri.EscapeDataString(r.Id);
-                }
-
-                return null;
+                BenchmarkLinkResource r => "resources/" + Uri.EscapeDataString(r.Id),
+                string id => "resources/" + Uri.EscapeDataString(id),
+                _ => null,
             },
         };
 
@@ -76,9 +74,9 @@ public class LinkGenerationBenchmarks
     }
 
     /// <summary>
-    /// Reflection fallback: string ID convenience overload creates <c>new {{ id }}</c> anonymous object,
-    /// which does not match the compiled builder's expected resource type and falls through to
-    /// reflection-based placeholder resolution.
+    /// Compiled path: string ID passed directly — the <see cref="ApiOperationLink.CompiledUrlBuilder"/>
+    /// matches the <c>string</c> case in its switch expression, using direct string interpolation
+    /// without anonymous-object allocation or reflection.
     /// </summary>
     /// <returns>The generated HATEOAS link.</returns>
     [Benchmark]
@@ -88,7 +86,9 @@ public class LinkGenerationBenchmarks
     }
 
     /// <summary>
-    /// Reflection fallback: GUID ID convenience overload.
+    /// Compiled path with ToString overhead: GUID ID is converted to string first, then
+    /// matched by the compiled builder's <c>string</c> case. Adds one <c>Guid.ToString()</c>
+    /// allocation but avoids anonymous-object allocation and reflection.
     /// </summary>
     /// <returns>The generated HATEOAS link.</returns>
     [Benchmark]

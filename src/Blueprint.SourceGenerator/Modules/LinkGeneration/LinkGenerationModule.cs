@@ -170,6 +170,9 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
     /// Generates a lambda expression that builds a URL from a resource object using direct
     /// property access instead of reflection. Returns <see langword="null"/> when any required
     /// property value is <see langword="null"/>.
+    /// For single-placeholder links, the lambda also handles <see cref="string"/> and
+    /// <see cref="int"/> scalars directly, allowing <c>CreateSelfLink&lt;T&gt;(string id)</c>
+    /// to skip anonymous-object allocation and reflection.
     /// </summary>
     private static string BuildCompiledUrlBuilderLambda(
         string urlFormat,
@@ -177,6 +180,10 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
         string resourceTypeFqn)
     {
         var mappingLookup = mappings.ToDictionary(static m => m.RouteName, static m => m, StringComparer.Ordinal);
+
+        // Track whether the single placeholder uses catch-all (no escaping) semantics
+        var isSinglePlaceholderCatchAll = false;
+
         var interpolated = _mappedPlaceholderRegex.Replace(
             urlFormat,
             match =>
@@ -192,7 +199,14 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
                     ? $"r.{mapping.ResourcePropertyName}.ToString()"
                     : $"r.{mapping.ResourcePropertyName}?.ToString() ?? \"\"";
 
-                return match.Groups["catchAll"].Length > 0
+                var isCatchAll = match.Groups["catchAll"].Length > 0;
+
+                if (mappings.Count == 1)
+                {
+                    isSinglePlaceholderCatchAll = isCatchAll;
+                }
+
+                return isCatchAll
                     ? $"{{{propertyValueExpression}}}"
                     : $"{{System.Uri.EscapeDataString({propertyValueExpression})}}";
             });
@@ -201,17 +215,41 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
         // Value type properties always have a value and are excluded from null checks.
         var nullableProperties = mappings.Where(static m => !m.IsValueType).ToList();
 
+        // Build the resource-typed case
+        string resourceCase;
+
         if (nullableProperties.Count > 0)
         {
             var nullChecks = string.Join(
                 " || ",
                 nullableProperties.Select(static m => $"r.{m.ResourcePropertyName} == null"));
 
-            return $"static (obj) => {{ var r = ({resourceTypeFqn})obj; return ({nullChecks}) ? null : $\"{interpolated}\"; }}";
+            resourceCase = $"{resourceTypeFqn} r when !({nullChecks}) => $\"{interpolated}\"";
+        }
+        else
+        {
+            resourceCase = $"{resourceTypeFqn} r => $\"{interpolated}\"";
         }
 
-        // All properties are value types — no null guard needed
-        return $"static (obj) => {{ var r = ({resourceTypeFqn})obj; return $\"{interpolated}\"; }}";
+        // Single-placeholder links get an additional string scalar case so that
+        // CreateSelfLink<T>(string id) avoids anonymous-object allocation + reflection.
+        if (mappings.Count == 1)
+        {
+            // Build the scalar interpolated URL (replace the single placeholder with {id})
+            var scalarInterpolated = _mappedPlaceholderRegex.Replace(
+                urlFormat,
+                match =>
+                {
+                    var routeName = match.Groups["routeName"].Value;
+                    return mappingLookup.ContainsKey(routeName)
+                        ? (isSinglePlaceholderCatchAll ? "{id}" : "{System.Uri.EscapeDataString(id)}")
+                        : match.Value;
+                });
+
+            return $"static (obj) => obj switch {{ {resourceCase}, string id => $\"{scalarInterpolated}\", _ => null }}";
+        }
+
+        return $"static (obj) => obj switch {{ {resourceCase}, _ => null }}";
     }
 
     private static void LookForRootLinks(DescriptorContributorContext context)

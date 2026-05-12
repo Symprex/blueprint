@@ -163,27 +163,22 @@ dotnet run --project src/Services/Templates/Symprex.Signature365.Templates.Api
 # Compare CSV metrics for regressions
 ```
 
-### Automated Comparison Script
+### Automated Load Testing
 
-```powershell
-# compare-perf.ps1 — Run NBomber against both old and new, compare results
-param(
-    [string]$OldBaseUrl = "http://localhost:5000",
-    [string]$NewBaseUrl = "http://localhost:5001",
-    [int]$DurationSeconds = 60
-)
+The Blueprint load test suite uses the in-process sample host (no external services required):
 
-Write-Host "Baseline: $OldBaseUrl"
-Write-Host "Candidate: $NewBaseUrl"
-Write-Host "Duration: ${DurationSeconds}s"
+```bash
+# Run all NBomber scenarios against the sample app
+dotnet run -c Release --project src/Blueprint.LoadTests
 
-# Run NBomber scenarios against both endpoints
-# Results saved to reports/ folder for comparison
-dotnet run --project src/Blueprint.LoadTests -- `
-    --baseline-url $OldBaseUrl `
-    --candidate-url $NewBaseUrl `
-    --duration $DurationSeconds
+# Results are written to ./reports/ folder with HTML, CSV, and Markdown reports
 ```
+
+The load test project covers 9 scenarios: GET queries, POST commands, validation failures,
+unauthorized access, OpenAPI spec generation, health checks, and CRUD operations.
+
+For comparing old vs new endpoints manually, run both services side-by-side and use the
+NBomber report timestamps to compare throughput and latency metrics.
 
 ---
 
@@ -195,7 +190,7 @@ Measure individual pipeline stages:
 
 ```csharp
 [MemoryDiagnoser]
-[SimpleJob(RuntimeMoniker.Net80)]
+[SimpleJob(RuntimeMoniker.Net100)]
 public class PipelineExecutionBenchmarks
 {
     private BlueprintTestHost<SampleApp, SampleAppExecutor> _host = null!;
@@ -262,13 +257,23 @@ public class SerializationBenchmarks
 
 ### Link Generation Benchmarks
 
-```csharp
-[MemoryDiagnoser]
-public class LinkGenerationBenchmarks
-{
-    // Benchmark link generation for resources with many links
-    // Compare: reflection-based (old) vs source-generated (new)
-}
+Benchmarks in `src/Blueprint.SourceGenerator.Benchmarks/BlueprintHttp/LinkGenerationBenchmarks.cs`
+measure the cost of the three link creation paths S365 uses most heavily:
+
+| Benchmark | Mean | Allocated | Ratio |
+|-----------|------|-----------|-------|
+| CreateSelfLink_TypedResource (compiled) | 45 ns | 208 B | 1.00x |
+| CreateSelfLink_StringId (reflection) | 82 ns | 264 B | 1.9x |
+| CreateSelfLink_GuidId (reflection) | 164 ns | 512 B | 3.8x |
+
+- **TypedResource (baseline)**: passes the actual resource object — `CompiledUrlBuilder` handles
+  URL construction with direct property access, no reflection.
+- **StringId**: wraps `string id` in `new { id }` anonymous object — bypasses the compiled
+  builder and falls through to reflection-based placeholder resolution.
+- **GuidId**: same as StringId but `Guid.ToString()` adds an extra string allocation.
+
+```bash
+dotnet run -c Release --project src/Blueprint.SourceGenerator.Benchmarks -- --filter "*LinkGeneration*"
 ```
 
 ### Running Benchmarks
