@@ -28,13 +28,13 @@ public class AppModelOpenApiResponseSchemaReferenceProjectionContextTests
         var validationResponse = operationContext.Responses[1];
         validationResponse.Response.ResultTypeNames.Should().Equal("Blueprint.Runtime.Exec.ValidationFailedResult");
         validationResponse.Response.BodyTypeNames.Should().Equal("Microsoft.AspNetCore.Mvc.ValidationProblemDetails");
-        validationResponse.SchemaReferences.Select(static reference => reference.BodyTypeName).Should().Equal("Microsoft.AspNetCore.Mvc.ValidationProblemDetails");
+        validationResponse.SchemaReferences.Select(static reference => reference.BodyTypeName).Should().Equal("ValidationProblemDetails");
         validationResponse.SchemaReferences[0].Schema.PropertyNames.Should().Contain("errors");
 
         var errorResponse = operationContext.Responses[2];
         errorResponse.Response.ResultTypeNames.Should().Equal("Blueprint.Runtime.Exec.UnhandledExceptionResult");
         errorResponse.Response.BodyTypeNames.Should().Equal("Microsoft.AspNetCore.Mvc.ProblemDetails");
-        errorResponse.SchemaReferences.Select(static reference => reference.BodyTypeName).Should().Equal("Microsoft.AspNetCore.Mvc.ProblemDetails");
+        errorResponse.SchemaReferences.Select(static reference => reference.BodyTypeName).Should().Equal("ProblemDetails");
         errorResponse.SchemaReferences[0].Schema.PropertyNames.Should().Contain(["detail", "status", "title"]);
     }
 

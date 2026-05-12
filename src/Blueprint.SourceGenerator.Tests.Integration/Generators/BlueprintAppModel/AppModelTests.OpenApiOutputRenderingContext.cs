@@ -64,8 +64,8 @@ public class AppModelOpenApiOutputRenderingContextTests
             .Select(static p => p.Name)
             .Should()
             .Contain(
-                "Microsoft_AspNetCore_Mvc_ProblemDetails",
-                "Microsoft_AspNetCore_Mvc_ValidationProblemDetails",
+                "ProblemDetails",
+                "ValidationProblemDetails",
                 "string");
     }
 
@@ -469,7 +469,7 @@ public class AppModelOpenApiOutputRenderingContextTests
         var schema = doc.RootElement
             .GetProperty("components")
             .GetProperty("schemas")
-            .GetProperty(typeof(SchemaValidationConstraintsResponse).FullName!.Replace('.', '_'));
+            .GetProperty(nameof(SchemaValidationConstraintsResponse));
 
         var code = schema.GetProperty("properties").GetProperty("Code");
         code.GetProperty("minLength").GetInt32().Should().Be(4);

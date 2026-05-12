@@ -17,18 +17,18 @@ public class AppModelOpenApiDocumentRenderingContextTests
 
         var schemaComponentNames = context.SchemaComponents.Select(static component => component.BodyTypeName).ToArray();
         schemaComponentNames.Should().Contain(
-            "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.AlwaysExpandTestEmployee",
-            "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.CatchAllFolderApiResource",
-            "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.ExpandableTestEmployee",
-            "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.LinkTestApiResource",
-            "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.MappedLinkApiResource",
-            "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.MultiExpandableTestEmployee",
-            "Blueprint.SourceGenerator.Tests.Integration.Http.E2EConflictDetail",
-            "Blueprint.SourceGenerator.Tests.Integration.Http.E2EJobAcceptedPayload",
-            "Blueprint.SourceGenerator.Tests.Integration.Http.E2EWidgetResponse",
-            "Microsoft.AspNetCore.Mvc.ProblemDetails",
-            "Microsoft.AspNetCore.Mvc.ValidationProblemDetails",
-            "System.Guid",
+            "AlwaysExpandTestEmployee",
+            "CatchAllFolderApiResource",
+            "E2EConflictDetail",
+            "E2EJobAcceptedPayload",
+            "E2EWidgetResponse",
+            "ExpandableTestEmployee",
+            "Guid",
+            "LinkTestApiResource",
+            "MappedLinkApiResource",
+            "MultiExpandableTestEmployee",
+            "ProblemDetails",
+            "ValidationProblemDetails",
             "string");
 
         var requestBodyOperationNames = context.Paths

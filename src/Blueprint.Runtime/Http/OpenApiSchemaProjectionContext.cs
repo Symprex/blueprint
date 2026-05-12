@@ -41,10 +41,20 @@ public sealed record OpenApiSchemaProjectionContext(
             .Select(static bodyType => new KeyValuePair<string, Type>(FormatTypeName(bodyType), bodyType))
             .ToFrozenDictionary(static pair => pair.Key, static pair => pair.Value, StringComparer.Ordinal);
 
+        // Build a reverse lookup: full CLR name → FormatTypeName short name.
+        // Descriptor feature data stores full CLR names at compile time, while coveredTypesByName
+        // uses FormatTypeName-produced short names. This bridge resolves the mismatch.
+        var fullNameToShortName = document.App.AppOwnedSerializerContextBodyTypes
+            .ToFrozenDictionary(
+                static bodyType => bodyType.FullName ?? bodyType.Name,
+                static bodyType => FormatTypeName(bodyType),
+                StringComparer.Ordinal);
+
         var rawBodyTypeNames = document.Operations
             .Where(static operation => operation.IsSerializerContextCoverageSatisfied)
             .SelectMany(static operation => operation.RequiredSerializerContextBodyTypeNames)
             .Distinct(StringComparer.Ordinal)
+            .Select(name => fullNameToShortName.GetValueOrDefault(name, name))
             .ToList();
 
         // For array body types (e.g. "Namespace.Type[]"), also include the element type so it can be rendered
@@ -872,7 +882,9 @@ public sealed record OpenApiSchemaProjectionContext(
             return $"{baseName}Of{argNames}";
         }
 
-        return type.FullName ?? type.Name;
+        // Short type name by default — matches what TypeScript generators and most OpenAPI
+        // tooling expects (e.g. "TemplateApiResource" not "MyApp_Api_TemplateApiResource").
+        return type.Name;
     }
 
     /// <summary>

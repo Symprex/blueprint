@@ -23,8 +23,8 @@ public sealed record OpenApiResponseObjectRenderingContext(
     private const string OctetStreamMediaType = "application/octet-stream";
     private const string PlainTextResultTypeName = "Blueprint.Runtime.Exec.PlainTextResult";
     private const string FileStreamResultTypeName = "Blueprint.Runtime.Exec.FileStreamResult";
-    private const string ProblemDetailsTypeName = "Microsoft.AspNetCore.Mvc.ProblemDetails";
-    private const string ValidationProblemDetailsTypeName = "Microsoft.AspNetCore.Mvc.ValidationProblemDetails";
+    private const string ProblemDetailsTypeName = "ProblemDetails";
+    private const string ValidationProblemDetailsTypeName = "ValidationProblemDetails";
 
     /// <summary>
     /// Creates deterministic OpenAPI-style response objects from the supplied response-schema reference projection.
@@ -190,7 +190,7 @@ public sealed record OpenApiResponseObjectRenderingContext(
         {
             var outcome = metadata.Outcomes.FirstOrDefault(candidate => string.Equals(candidate.ResultTypeName, resultTypeName, StringComparison.Ordinal));
             if (outcome is null
-                || !schemaComponentsByBodyTypeName.TryGetValue(outcome.BodyTypeName, out var schemaComponent)
+                || !schemaComponentsByBodyTypeName.TryGetValue(NormalizeBodyTypeName(outcome.BodyTypeName), out var schemaComponent)
                 || !distinctEventIds.Add(outcome.EventId))
             {
                 return null;
@@ -208,6 +208,24 @@ public sealed record OpenApiResponseObjectRenderingContext(
     private const string ResourceEventCreatedResultPrefix = "Blueprint.Runtime.Exec.ResourceEventResult+";
     private const string RedirectResultTypeName = "Blueprint.Runtime.Http.RedirectResult";
     private const string OkResultTypeName = "Blueprint.Runtime.Exec.OkResult";
+
+    /// <summary>
+    /// Strips the namespace prefix from a compile-time full CLR body type name so it matches the short
+    /// format used by schema projection. Array suffixes are preserved.
+    /// </summary>
+    private static string NormalizeBodyTypeName(string bodyTypeName)
+    {
+        var isArray = bodyTypeName.EndsWith("[]", StringComparison.Ordinal);
+        var nameToNormalize = isArray ? bodyTypeName[..^2] : bodyTypeName;
+
+        var lastDot = nameToNormalize.LastIndexOf('.');
+        if (lastDot >= 0)
+        {
+            nameToNormalize = nameToNormalize[(lastDot + 1)..];
+        }
+
+        return isArray ? nameToNormalize + "[]" : nameToNormalize;
+    }
 
     /// <summary>
     /// Infers well-known HTTP response headers from the response status code and result type names.

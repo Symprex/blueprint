@@ -14,22 +14,22 @@ public class AppModelOpenApiSchemaProjectionContextTests
 
         var schemaContext = OpenApiSchemaProjectionContext.Create(documentContext);
         var stringSchema = schemaContext.Schemas.Single(static schema => schema.BodyTypeName == "string");
-        var validationProblemDetailsSchema = schemaContext.Schemas.Single(static schema => schema.BodyTypeName == "Microsoft.AspNetCore.Mvc.ValidationProblemDetails");
-        var problemDetailsSchema = schemaContext.Schemas.Single(static schema => schema.BodyTypeName == "Microsoft.AspNetCore.Mvc.ProblemDetails");
+        var validationProblemDetailsSchema = schemaContext.Schemas.Single(static schema => schema.BodyTypeName == "ValidationProblemDetails");
+        var problemDetailsSchema = schemaContext.Schemas.Single(static schema => schema.BodyTypeName == "ProblemDetails");
 
         schemaContext.Schemas.Select(static schema => schema.BodyTypeName).Should().Equal(
-            "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.AlwaysExpandTestEmployee",
-            "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.CatchAllFolderApiResource",
-            "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.ExpandableTestEmployee",
-            "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.LinkTestApiResource",
-            "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.MappedLinkApiResource",
-            "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.MultiExpandableTestEmployee",
-            "Blueprint.SourceGenerator.Tests.Integration.Http.E2EConflictDetail",
-            "Blueprint.SourceGenerator.Tests.Integration.Http.E2EJobAcceptedPayload",
-            "Blueprint.SourceGenerator.Tests.Integration.Http.E2EWidgetResponse",
-            "Microsoft.AspNetCore.Mvc.ProblemDetails",
-            "Microsoft.AspNetCore.Mvc.ValidationProblemDetails",
-            "System.Guid",
+            "AlwaysExpandTestEmployee",
+            "CatchAllFolderApiResource",
+            "E2EConflictDetail",
+            "E2EJobAcceptedPayload",
+            "E2EWidgetResponse",
+            "ExpandableTestEmployee",
+            "Guid",
+            "LinkTestApiResource",
+            "MappedLinkApiResource",
+            "MultiExpandableTestEmployee",
+            "ProblemDetails",
+            "ValidationProblemDetails",
             "string");
 
         stringSchema.Kind.Should().Be(OpenApiSchemaKind.String);
@@ -65,7 +65,7 @@ public class AppModelOpenApiSchemaProjectionContextTests
 
         var schemaContext = OpenApiSchemaProjectionContext.Create(documentContext);
         var linkTestSchema = schemaContext.Schemas.Single(
-            static schema => schema.BodyTypeName == "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.LinkTestApiResource");
+            static schema => schema.BodyTypeName == "LinkTestApiResource");
 
         linkTestSchema.Description.Should().Be("A test resource used for link population integration tests.");
     }
@@ -77,7 +77,7 @@ public class AppModelOpenApiSchemaProjectionContextTests
         var documentContext = OpenApiDocumentBuilderContext.Create(app);
 
         var schemaContext = OpenApiSchemaProjectionContext.Create(documentContext);
-        var guidSchema = schemaContext.Schemas.Single(static schema => schema.BodyTypeName == "System.Guid");
+        var guidSchema = schemaContext.Schemas.Single(static schema => schema.BodyTypeName == "Guid");
 
         guidSchema.Description.Should().BeNull();
     }

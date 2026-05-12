@@ -971,7 +971,7 @@ public class ReferenceAppOpenApiTests
         var schemas = doc.RootElement.GetProperty("components").GetProperty("schemas");
 
         // TemplateApiResource has [DisplayName("Email Template")] — should override default CLR short name
-        var templateSchema = schemas.GetProperty("Blueprint_SourceGenerator_Sample_Contract_Api_TemplateApiResource");
+        var templateSchema = schemas.GetProperty("TemplateApiResource");
         templateSchema.GetProperty("title").GetString().Should().Be("Email Template",
             "[DisplayName(\"Email Template\")] should override the default CLR type name in the schema title");
     }

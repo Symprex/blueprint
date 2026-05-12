@@ -52,7 +52,7 @@ public sealed record OpenApiResponseSchemaReferenceProjectionContext(
     {
         var schemaReferences = response.BodyTypeNames
             .Distinct(StringComparer.Ordinal)
-            .Select(bodyTypeName => TryCreateSchemaReference(bodyTypeName, schemasByBodyTypeName))
+            .Select(bodyTypeName => TryCreateSchemaReference(NormalizeBodyTypeName(bodyTypeName), schemasByBodyTypeName))
             .OfType<OpenApiResponseSchemaReference>()
             .ToImmutableArray();
 
@@ -81,6 +81,25 @@ public sealed record OpenApiResponseSchemaReferenceProjectionContext(
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Normalizes a compile-time full CLR body type name to the short format used by schema projection.
+    /// Strips the namespace prefix so <c>Microsoft.AspNetCore.Mvc.ProblemDetails</c> becomes <c>ProblemDetails</c>.
+    /// Array suffixes are preserved (e.g. <c>Namespace.Type[]</c> → <c>Type[]</c>).
+    /// </summary>
+    private static string NormalizeBodyTypeName(string bodyTypeName)
+    {
+        var isArray = bodyTypeName.EndsWith("[]", StringComparison.Ordinal);
+        var nameToNormalize = isArray ? bodyTypeName[..^2] : bodyTypeName;
+
+        var lastDot = nameToNormalize.LastIndexOf('.');
+        if (lastDot >= 0)
+        {
+            nameToNormalize = nameToNormalize[(lastDot + 1)..];
+        }
+
+        return isArray ? nameToNormalize + "[]" : nameToNormalize;
     }
 }
 

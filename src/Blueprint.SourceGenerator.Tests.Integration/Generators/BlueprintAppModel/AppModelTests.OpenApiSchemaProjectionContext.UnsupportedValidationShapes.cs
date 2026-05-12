@@ -19,7 +19,7 @@ public class AppModelOpenApiSchemaProjectionContextUnsupportedValidationShapesTe
         var act = () => OpenApiSchemaProjectionContext.Create(documentContext);
 
         act.Should().Throw<InvalidOperationException>()
-            .WithMessage("*body type 'Blueprint.SourceGenerator.Tests.Integration.Generators.BlueprintAppModel.UnsupportedValidationSchema'*property 'Password'*CompareAttribute*");
+            .WithMessage("*body type 'UnsupportedValidationSchema'*property 'Password'*CompareAttribute*");
     }
 
     [Fact]
@@ -31,7 +31,7 @@ public class AppModelOpenApiSchemaProjectionContextUnsupportedValidationShapesTe
         var act = () => OpenApiSchemaProjectionContext.Create(documentContext);
 
         act.Should().Throw<InvalidOperationException>()
-            .WithMessage("*body type 'Blueprint.SourceGenerator.Tests.Integration.Generators.BlueprintAppModel.UnsupportedGreaterThanPropertySchema'*property 'Maximum'*GreaterThanPropertyAttribute*");
+            .WithMessage("*body type 'UnsupportedGreaterThanPropertySchema'*property 'Maximum'*GreaterThanPropertyAttribute*");
     }
 
     private sealed class UnsupportedValidationBlueprintApp : BlueprintApp

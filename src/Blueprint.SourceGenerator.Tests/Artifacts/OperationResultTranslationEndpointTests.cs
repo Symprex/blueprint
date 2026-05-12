@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using System.ComponentModel.DataAnnotations;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using Blueprint.Model;
 using Blueprint.Runtime.Exec;
@@ -183,7 +184,15 @@ public partial class OperationResultTranslationEndpointTests
 
         response.StatusCode.Should().Be(StatusCodes.Status201Created);
         response.ContentType.Should().Be("application/json; charset=utf-8");
-        response.Body.Should().Be("{\"eventId\":\"events.created\",\"resourceId\":\"resource-123\",\"content\":{\"displayName\":\"Blueprint\",\"totalCount\":3}}");
+
+        var body = JsonDocument.Parse(response.Body).RootElement;
+        body.GetProperty("$object").GetString().Should().Be("event");
+        body.GetProperty("eventId").GetString().Should().Be("events.created");
+        body.GetProperty("changeType").GetString().Should().Be("Created");
+        body.GetProperty("created").GetString().Should().NotBeNullOrEmpty();
+        body.GetProperty("resourceObject").GetString().Should().Be("resultTranslationResponse");
+        body.GetProperty("data").GetProperty("displayName").GetString().Should().Be("Blueprint");
+        body.GetProperty("data").GetProperty("totalCount").GetInt32().Should().Be(3);
     }
 
     [Fact]

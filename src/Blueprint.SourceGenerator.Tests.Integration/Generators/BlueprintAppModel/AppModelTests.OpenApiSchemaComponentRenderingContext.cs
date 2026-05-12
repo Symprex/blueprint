@@ -18,18 +18,18 @@ public class AppModelOpenApiSchemaComponentRenderingContextTests
         var componentContext = OpenApiSchemaComponentRenderingContext.Create(schemaContext);
 
         componentContext.Components.Select(static component => component.BodyTypeName).Should().Equal(
-            "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.AlwaysExpandTestEmployee",
-            "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.CatchAllFolderApiResource",
-            "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.ExpandableTestEmployee",
-            "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.LinkTestApiResource",
-            "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.MappedLinkApiResource",
-            "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.MultiExpandableTestEmployee",
-            "Blueprint.SourceGenerator.Tests.Integration.Http.E2EConflictDetail",
-            "Blueprint.SourceGenerator.Tests.Integration.Http.E2EJobAcceptedPayload",
-            "Blueprint.SourceGenerator.Tests.Integration.Http.E2EWidgetResponse",
-            "Microsoft.AspNetCore.Mvc.ProblemDetails",
-            "Microsoft.AspNetCore.Mvc.ValidationProblemDetails",
-            "System.Guid",
+            "AlwaysExpandTestEmployee",
+            "CatchAllFolderApiResource",
+            "E2EConflictDetail",
+            "E2EJobAcceptedPayload",
+            "E2EWidgetResponse",
+            "ExpandableTestEmployee",
+            "Guid",
+            "LinkTestApiResource",
+            "MappedLinkApiResource",
+            "MultiExpandableTestEmployee",
+            "ProblemDetails",
+            "ValidationProblemDetails",
             "string");
 
         var stringComponent = componentContext.Components.Single(static component => component.BodyTypeName == "string");
@@ -37,12 +37,12 @@ public class AppModelOpenApiSchemaComponentRenderingContextTests
         stringComponent.RequiredPropertyNames.Should().BeEmpty();
         stringComponent.Properties.Should().BeEmpty();
 
-        var problemDetailsComponent = componentContext.Components.Single(static component => component.BodyTypeName == "Microsoft.AspNetCore.Mvc.ProblemDetails");
+        var problemDetailsComponent = componentContext.Components.Single(static component => component.BodyTypeName == "ProblemDetails");
         problemDetailsComponent.Type.Should().Be("object");
         problemDetailsComponent.RequiredPropertyNames.Should().BeEmpty();
         problemDetailsComponent.Properties.Select(static property => property.Name).Should().Contain(["detail", "status", "title"]);
 
-        var validationProblemDetailsComponent = componentContext.Components.Single(static component => component.BodyTypeName == "Microsoft.AspNetCore.Mvc.ValidationProblemDetails");
+        var validationProblemDetailsComponent = componentContext.Components.Single(static component => component.BodyTypeName == "ValidationProblemDetails");
         validationProblemDetailsComponent.Type.Should().Be("object");
         validationProblemDetailsComponent.Properties.Select(static property => property.Name).Should().Contain("errors");
     }
@@ -68,7 +68,7 @@ public class AppModelOpenApiSchemaComponentRenderingContextTests
         var schemaContext = OpenApiSchemaProjectionContext.Create(documentContext);
 
         var componentContext = OpenApiSchemaComponentRenderingContext.Create(schemaContext);
-        var component = componentContext.Components.Single(static component => component.BodyTypeName == typeof(SchemaPropertyMetadataResponse).FullName);
+        var component = componentContext.Components.Single(static component => component.BodyTypeName == nameof(SchemaPropertyMetadataResponse));
 
         component.Type.Should().Be("object");
         component.RequiredPropertyNames.Should().Equal("Id");
@@ -111,7 +111,7 @@ public class AppModelOpenApiSchemaComponentRenderingContextTests
         var schemaContext = OpenApiSchemaProjectionContext.Create(documentContext);
 
         var componentContext = OpenApiSchemaComponentRenderingContext.Create(schemaContext);
-        var component = componentContext.Components.Single(static component => component.BodyTypeName == typeof(SchemaValidationConstraintsResponse).FullName);
+        var component = componentContext.Components.Single(static component => component.BodyTypeName == nameof(SchemaValidationConstraintsResponse));
 
         var codeProperty = component.Properties.Single(static property => property.Name == "Code");
         codeProperty.MinLength.Should().Be(4);
@@ -138,7 +138,7 @@ public class AppModelOpenApiSchemaComponentRenderingContextTests
 
         var componentContext = OpenApiSchemaComponentRenderingContext.Create(schemaContext);
         var linkTestComponent = componentContext.Components.Single(
-            static component => component.BodyTypeName == "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.LinkTestApiResource");
+            static component => component.BodyTypeName == "LinkTestApiResource");
 
         linkTestComponent.Description.Should().Be("A test resource used for link population integration tests.");
     }
@@ -151,7 +151,7 @@ public class AppModelOpenApiSchemaComponentRenderingContextTests
         var schemaContext = OpenApiSchemaProjectionContext.Create(documentContext);
 
         var componentContext = OpenApiSchemaComponentRenderingContext.Create(schemaContext);
-        var guidComponent = componentContext.Components.Single(static component => component.BodyTypeName == "System.Guid");
+        var guidComponent = componentContext.Components.Single(static component => component.BodyTypeName == "Guid");
 
         guidComponent.Description.Should().BeNull();
     }

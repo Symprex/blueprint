@@ -32,7 +32,7 @@ public class AppModelOpenApiResponseObjectRenderingContextTests
         validationResponse.Content.Select(static content => content.MediaType).Should().Equal("application/problem+json");
         validationResponse.Content[0].SchemaComponents.Select(static component => component.BodyTypeName)
             .Should()
-            .Equal("Microsoft.AspNetCore.Mvc.ValidationProblemDetails");
+            .Equal("ValidationProblemDetails");
         validationResponse.Content[0].SchemaComponents[0].Component.Properties.Select(static property => property.Name)
             .Should()
             .Contain("errors");
@@ -43,7 +43,7 @@ public class AppModelOpenApiResponseObjectRenderingContextTests
         errorResponse.Content.Select(static content => content.MediaType).Should().Equal("application/problem+json");
         errorResponse.Content[0].SchemaComponents.Select(static component => component.BodyTypeName)
             .Should()
-            .Equal("Microsoft.AspNetCore.Mvc.ProblemDetails");
+            .Equal("ProblemDetails");
         errorResponse.Content[0].SchemaComponents[0].Component.Properties.Select(static property => property.Name)
             .Should()
             .Contain(["detail", "status", "title"]);

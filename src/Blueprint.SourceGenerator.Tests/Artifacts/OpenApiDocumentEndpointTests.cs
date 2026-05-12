@@ -166,7 +166,7 @@ public class OpenApiDocumentEndpointTests
         var response = await InvokeEndpointAsync(endpoint);
 
         var doc = JsonDocument.Parse(response.Body);
-        var schemaKey = typeof(OpenApiSchemaComponentEndpointResponseDto).FullName!.Replace('.', '_');
+        var schemaKey = nameof(OpenApiSchemaComponentEndpointResponseDto);
         doc.RootElement
             .GetProperty("components")
             .GetProperty("schemas")
@@ -201,9 +201,9 @@ public class OpenApiDocumentEndpointTests
         oneOf.GetArrayLength().Should().Be(2);
         oneOf[0].GetProperty("required").EnumerateArray().Select(static item => item.GetString()).Should().Equal("eventId", "resourceId", "content");
         oneOf[0].GetProperty("properties").GetProperty("eventId").GetProperty("enum")[0].GetString().Should().Be("events.created");
-        oneOf[0].GetProperty("properties").GetProperty("content").GetProperty("$ref").GetString().Should().Be("#/components/schemas/Blueprint_SourceGenerator_Tests_Artifacts_OpenApiCreatedEventPayload");
+        oneOf[0].GetProperty("properties").GetProperty("content").GetProperty("$ref").GetString().Should().Be("#/components/schemas/OpenApiCreatedEventPayload");
         oneOf[1].GetProperty("properties").GetProperty("eventId").GetProperty("enum")[0].GetString().Should().Be("events.updated");
-        oneOf[1].GetProperty("properties").GetProperty("content").GetProperty("$ref").GetString().Should().Be("#/components/schemas/Blueprint_SourceGenerator_Tests_Artifacts_OpenApiUpdatedEventPayload");
+        oneOf[1].GetProperty("properties").GetProperty("content").GetProperty("$ref").GetString().Should().Be("#/components/schemas/OpenApiUpdatedEventPayload");
     }
 
     private static async Task<TestEndpointInvocationResult> InvokeEndpointAsync(RouteEndpoint endpoint)

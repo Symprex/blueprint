@@ -15,7 +15,7 @@ public class AppModelOpenApiSchemaProjectionContextPropertyMetadataTests
         var documentContext = OpenApiDocumentBuilderContext.Create(app);
 
         var schemaContext = OpenApiSchemaProjectionContext.Create(documentContext);
-        var schema = schemaContext.Schemas.Single(static schema => schema.BodyTypeName == typeof(SchemaPropertyMetadataResponse).FullName);
+        var schema = schemaContext.Schemas.Single(static schema => schema.BodyTypeName == nameof(SchemaPropertyMetadataResponse));
 
         schema.Kind.Should().Be(OpenApiSchemaKind.Object);
         schema.PropertyNames.Should().Equal("Child", "Count", "Enabled", "Extensions", "Id", "Metadata", "Tags");
@@ -64,7 +64,7 @@ public class AppModelOpenApiSchemaProjectionContextPropertyMetadataTests
         var documentContext = OpenApiDocumentBuilderContext.Create(app);
 
         var schemaContext = OpenApiSchemaProjectionContext.Create(documentContext);
-        var schema = schemaContext.Schemas.Single(static schema => schema.BodyTypeName == typeof(SchemaValidationConstraintsResponse).FullName);
+        var schema = schemaContext.Schemas.Single(static schema => schema.BodyTypeName == nameof(SchemaValidationConstraintsResponse));
 
         var codeProperty = schema.Properties.Single(static property => property.Name == "Code");
         codeProperty.MinLength.Should().Be(4);
@@ -109,7 +109,7 @@ public class AppModelOpenApiSchemaProjectionContextPropertyMetadataTests
         var documentContext = OpenApiDocumentBuilderContext.Create(app);
 
         var schemaContext = OpenApiSchemaProjectionContext.Create(documentContext);
-        var schema = schemaContext.Schemas.Single(static schema => schema.BodyTypeName == typeof(ReadOnlyPropertyResponse).FullName);
+        var schema = schemaContext.Schemas.Single(static schema => schema.BodyTypeName == nameof(ReadOnlyPropertyResponse));
 
         var readOnlyProperty = schema.Properties.Single(static property => property.Name == "ComputedValue");
         readOnlyProperty.IsReadOnly.Should().BeTrue("getter-only properties should be marked read-only");
@@ -125,7 +125,7 @@ public class AppModelOpenApiSchemaProjectionContextPropertyMetadataTests
         var documentContext = OpenApiDocumentBuilderContext.Create(app);
 
         var schemaContext = OpenApiSchemaProjectionContext.Create(documentContext);
-        var schema = schemaContext.Schemas.Single(static schema => schema.BodyTypeName == typeof(ReadOnlyPropertyResponse).FullName);
+        var schema = schemaContext.Schemas.Single(static schema => schema.BodyTypeName == nameof(ReadOnlyPropertyResponse));
 
         var attributeReadOnly = schema.Properties.Single(static property => property.Name == "Slug");
         attributeReadOnly.IsReadOnly.Should().BeTrue("[ReadOnly(true)] properties should be marked read-only");
