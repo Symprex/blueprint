@@ -214,7 +214,7 @@ A compile-time proof project (`.scratch/s365-proof/`) validated S365 patterns ag
 
 ### S365 Pattern Compatibility (Gap Analysis)
 
-Cross-referenced S365 codebase patterns against Blueprint source-gen support. **Result: 11/12 patterns fully supported.** Only `ServiceApiInclude` (gateway API client declarations) is missing.
+Cross-referenced S365 codebase patterns against Blueprint source-gen support. **Result: 13/14 patterns fully supported.** Only `ServiceApiInclude` (gateway API client declarations) is missing.
 
 | S365 Pattern | Status | Blueprint Location |
 |---|---|---|
@@ -230,6 +230,10 @@ Cross-referenced S365 codebase patterns against Blueprint source-gen support. **
 | `FromHeader` attribute | ✅ | Runtime.Model/Attributes/FromHeaderAttribute.cs |
 | `BackgroundTaskCollector` | ✅ | Testing/BackgroundTaskCollector.cs |
 | `FakeBus` (Rebus test double) | ✅ External | Use `Rebus.TestHelpers` NuGet package directly |
+| `Expandable<T>` / `IResourceExpander` | ✅ | SourceGenerator/Modules/ResourceExpansion + Runtime/Expansion |
+| `[AlwaysExpand]` attribute | ✅ | Runtime.Model/AlwaysExpandAttribute.cs |
+
+**Resource expansion note:** Blueprint source-gen has **compile-time** resource expansion support that replaces S365's runtime `ResourceExpandMiddleware`. The `ResourceExpansionModule` discovers `Expandable<T>` properties at compile time and generates typed expansion calls in the `PostExecution` pipeline stage. S365's `IResourceExpander` implementations (e.g., `AzureAdGroupApiResourceExpander`) can be ported directly — the interface is identical. The `?expand=` and `?expand[]=` query parameter parsing, comma-separated values, and case-insensitive matching are all handled by `ResourceExpansionRuntime`.
 
 **Gateway migration note:** `ServiceApiInclude` is only needed for Tier 4+ (gateway projects). All Tier 1–3 services can migrate without it. Gateway migration can use a workaround of manually referencing the contract assembly's operations.
 
