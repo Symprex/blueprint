@@ -7,6 +7,8 @@ namespace Blueprint.Codemod;
 /// <summary>
 /// Builds a target solution in dry-run mode and collects the current migration diagnostics into the shared
 /// <see cref="MigrationReport"/> contract so later apply-mode work can reuse the same deterministic report shape.
+/// The runner injects the Blueprint migration analyzer DLL into the build so target solutions do not need to
+/// reference it directly, and uses per-project SARIF output to avoid file corruption from parallel compilation.
 /// </summary>
 public sealed class SolutionAnalysisRunner
 {
@@ -29,15 +31,17 @@ public sealed class SolutionAnalysisRunner
             throw new FileNotFoundException("The codemod dry run requires a solution file that exists on disk.", solutionPath);
         }
 
-        var sarifPath = Path.Combine(
+        var sarifDir = Path.Combine(
             Path.GetTempPath(),
-            $"blueprint-codemod-{Path.GetFileNameWithoutExtension(solutionPath)}-{Guid.NewGuid():N}.sarif");
+            $"blueprint-codemod-{Guid.NewGuid():N}");
 
         try
         {
-            var buildResult = await this.BuildSolutionWithSarifAsync(solutionPath, sarifPath, cancellationToken);
+            Directory.CreateDirectory(sarifDir);
 
-            var allDiagnosticIds = await this.ReadDiagnosticIdsAsync(sarifPath, cancellationToken);
+            var buildResult = await this.BuildSolutionWithSarifAsync(solutionPath, sarifDir, cancellationToken);
+
+            var allDiagnosticIds = await ReadDiagnosticIdsFromDirectoryAsync(sarifDir, cancellationToken);
             var diagnosticIds = allDiagnosticIds
                 .Where(diagnosticId => MatchesDiagnosticFilter(diagnosticId, options.DiagnosticFilter))
                 .ToArray();
@@ -61,21 +65,41 @@ public sealed class SolutionAnalysisRunner
 
             var descriptors = diagnosticIds
                 .Select(static diagnosticId => ResolveDescriptor(diagnosticId))
+                .Where(static descriptor => descriptor is not null)
+                .Cast<DiagnosticDescriptor>()
                 .ToArray();
 
             return MigrationReport.CreateMigrationDiagnostics(descriptors);
         }
         finally
         {
-            if (File.Exists(sarifPath))
+            if (Directory.Exists(sarifDir))
             {
-                File.Delete(sarifPath);
+                Directory.Delete(sarifDir, recursive: true);
             }
         }
     }
 
-    private async Task<BuildResult> BuildSolutionWithSarifAsync(string solutionPath, string sarifPath, CancellationToken cancellationToken)
+    private async Task<BuildResult> BuildSolutionWithSarifAsync(string solutionPath, string sarifDir, CancellationToken cancellationToken)
     {
+        var analyzerDllPath = FindMigrationAnalyzerDllPath();
+        var injectTargetsPath = Path.Combine(sarifDir, "blueprint-inject.targets");
+
+        // The .targets file sets ErrorLog per-project (using $(MSBuildProjectName) for unique paths)
+        // and injects the migration analyzer DLL so the target solution does not need to reference it.
+        var targetsContent = $"""
+                              <Project>
+                                <PropertyGroup>
+                                  <ErrorLog>{sarifDir}\$(MSBuildProjectName).sarif;version=2</ErrorLog>
+                                </PropertyGroup>
+                                <ItemGroup>
+                                  <Analyzer Include="{analyzerDllPath}" />
+                                </ItemGroup>
+                              </Project>
+                              """;
+
+        await File.WriteAllTextAsync(injectTargetsPath, targetsContent, cancellationToken);
+
         var processStartInfo = new ProcessStartInfo
         {
             FileName = "dotnet",
@@ -90,19 +114,35 @@ public sealed class SolutionAnalysisRunner
         processStartInfo.ArgumentList.Add(solutionPath);
         processStartInfo.ArgumentList.Add("--nologo");
         processStartInfo.ArgumentList.Add("--no-incremental");
-        processStartInfo.ArgumentList.Add($"/p:ErrorLog={sarifPath};version=2");
+        processStartInfo.ArgumentList.Add($"/p:CustomAfterMicrosoftCSharpTargets={injectTargetsPath}");
+
+        // Suppress TreatWarningsAsErrors so existing analyzer warnings (CA*, ASP*, etc.)
+        // in the target solution do not cause a false build failure.
+        processStartInfo.ArgumentList.Add("/p:TreatWarningsAsErrors=false");
 
         using var process = new Process { StartInfo = processStartInfo };
         process.Start();
 
         var buildOutput = await WaitForProcessOutputAsync(process, cancellationToken);
 
-        if (!File.Exists(sarifPath))
+        return new BuildResult(process.ExitCode, buildOutput.StandardOutput, buildOutput.StandardError);
+    }
+
+    private static string FindMigrationAnalyzerDllPath()
+    {
+        var codemodAssemblyDir = Path.GetDirectoryName(typeof(SolutionAnalysisRunner).Assembly.Location)
+                                 ?? throw new InvalidOperationException("Could not determine the codemod assembly directory.");
+
+        var analyzerPath = Path.Combine(codemodAssemblyDir, "Blueprint.Migration.Analyzers.dll");
+        if (File.Exists(analyzerPath))
         {
-            throw new InvalidOperationException($"The codemod dry run did not produce the expected SARIF output at '{sarifPath}'.");
+            return analyzerPath;
         }
 
-        return new BuildResult(process.ExitCode, buildOutput.StandardOutput, buildOutput.StandardError);
+        throw new FileNotFoundException(
+            "Could not find the Blueprint.Migration.Analyzers.dll alongside the codemod assembly. " +
+            "Ensure the Blueprint.Migration.Analyzers project is built before running the codemod.",
+            analyzerPath);
     }
 
     private static async Task<BuildOutput> ReadProcessOutputAsync(Process process, CancellationToken cancellationToken)
@@ -135,10 +175,33 @@ public sealed class SolutionAnalysisRunner
         }
     }
 
-    private async Task<IReadOnlyList<string>> ReadDiagnosticIdsAsync(string sarifPath, CancellationToken cancellationToken)
+    private static async Task<IReadOnlyList<string>> ReadDiagnosticIdsFromDirectoryAsync(string sarifDir, CancellationToken cancellationToken)
     {
-        await using var sarifStream = File.OpenRead(sarifPath);
-        return await SarifDiagnosticReader.ReadDiagnosticIdsAsync(sarifStream, cancellationToken);
+        var sarifFiles = Directory.GetFiles(sarifDir, "*.sarif");
+        if (sarifFiles.Length == 0)
+        {
+            return Array.Empty<string>();
+        }
+
+        var allIds = new SortedSet<string>(StringComparer.Ordinal);
+        foreach (var sarifFile in sarifFiles)
+        {
+            try
+            {
+                await using var stream = File.OpenRead(sarifFile);
+                var ids = await SarifDiagnosticReader.ReadDiagnosticIdsAsync(stream, cancellationToken);
+                foreach (var id in ids)
+                {
+                    allIds.Add(id);
+                }
+            }
+            catch (Exception ex) when (ex is System.Text.Json.JsonException or InvalidOperationException)
+            {
+                // Skip malformed SARIF files from projects that failed to compile cleanly.
+            }
+        }
+
+        return allIds.ToArray();
     }
 
     /// <summary>
@@ -164,7 +227,7 @@ public sealed class SolutionAnalysisRunner
         return string.Equals(diagnosticId, diagnosticFilter, StringComparison.Ordinal);
     }
 
-    private static DiagnosticDescriptor ResolveDescriptor(string diagnosticId)
+    private static DiagnosticDescriptor? ResolveDescriptor(string diagnosticId)
     {
         return diagnosticId switch
         {
@@ -178,7 +241,7 @@ public sealed class SolutionAnalysisRunner
             "BPMIG300" => MigrationDiagnosticDescriptors.LegacyNamespaceUsing,
             "BPMIG301" => MigrationDiagnosticDescriptors.LegacyMiddlewareBuilderUsage,
             "BPMIG302" => MigrationDiagnosticDescriptors.LegacyBlueprintApiBuilderUsage,
-            _ => throw new InvalidOperationException($"The codemod dry run does not yet know how to project '{diagnosticId}' into the migration report."),
+            _ => null, // Unknown diagnostics are silently skipped — they may come from the target solution's own analyzers.
         };
     }
 
