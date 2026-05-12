@@ -265,6 +265,10 @@ Successfully ran Blueprint codemod against `Signature365.sln` (158 projects). Fo
 6. ~~**Handlebars template compatibility**: What specific OpenAPI shape properties do the templates expect?~~ → **Resolved**: Blueprint emits `x-links` with `rel`, `operationId`, `method` — matches S365 template expectations exactly. `$links` serialized via `[JsonPropertyName("$links")]` on `ApiResource.Links`. `operationId` = class name (same convention). Path format `{paramName}` compatible.
 7. ~~**StateBasedLinkChecker**: S365 uses state-based link checkers for conditional HATEOAS links~~ → **Resolved**: Fully implemented with identical API
 8. ~~**InvokeAsync convention**: S365 operations can have `InvokeAsync()` directly~~ → **Resolved**: `HandlerDiscovery.FindInlineHandler()` supports `Invoke`, `InvokeAsync`, `Handle`, `HandleAsync` method names
+9. ~~**ProxyResult (Portal CubeJS analytics)**: Is this a Blueprint gap?~~ → **Resolved**: S365-specific result type; extends `HttpResult` (already designed for consumer subclasses). S365 defines `ProxyResult` locally.
+10. ~~**Exception translation ordering**: Does Blueprint preserve catch clause type hierarchy?~~ → **Resolved**: `PipelineExceptionTranslatorPolicy` orders by `IsFallback` → `Order` → type name. Specific exceptions before catch-all. Overlap detection with diagnostics.
+11. ~~**Permission/PermissionFor attributes**: Need removal for S365?~~ → **Resolved**: Already removed in prior session. Only Resource-based auth remains.
+12. ~~**Custom S365 middleware blockers**: Any middleware Blueprint can't handle?~~ → **Resolved**: All 6 S365 middleware types have Blueprint equivalents (TenantModule, UoW, Outbox, RebusTransaction, ResourceExpansion, LinkGeneration). Health checks and CORS are standard ASP.NET Core, not Blueprint concerns.
 
 ---
 
