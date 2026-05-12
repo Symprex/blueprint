@@ -340,6 +340,34 @@ public sealed class BlueprintTestFixture<TApp, TExec> : IDisposable, IAsyncDispo
     }
 
     /// <summary>
+    /// Resolves a service by its interface type and casts to the expected implementation type.
+    /// This is a convenience shorthand for the test-double pattern where a concrete type
+    /// (e.g. <c>FakeBus</c>) is registered as an interface (e.g. <c>IBus</c>) and test code
+    /// needs the concrete type for assertions.
+    /// <para>
+    /// Example: <c>var fakeBus = fixture.GetServiceAs&lt;IBus, FakeBus&gt;();</c>
+    /// </para>
+    /// </summary>
+    /// <typeparam name="TService">The service interface type to resolve from DI.</typeparam>
+    /// <typeparam name="TImpl">The expected implementation type to cast to.</typeparam>
+    /// <returns>The resolved service cast to <typeparamref name="TImpl"/>.</returns>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown when the resolved service is not of type <typeparamref name="TImpl"/>
+    /// or is not registered.
+    /// </exception>
+    public TImpl GetServiceAs<TService, TImpl>()
+        where TService : notnull
+        where TImpl : class, TService
+    {
+        var service = this.Services.GetRequiredService<TService>();
+
+        return service as TImpl
+            ?? throw new InvalidOperationException(
+                $"Expected service {typeof(TService).Name} to be of type {typeof(TImpl).Name}, " +
+                $"but the registered implementation is {service.GetType().Name}.");
+    }
+
+    /// <summary>
     /// Clears all captured test doubles (tasks, messages, unit of work state).
     /// Call between test executions in shared fixture scenarios.
     /// </summary>
@@ -353,6 +381,8 @@ public sealed class BlueprintTestFixture<TApp, TExec> : IDisposable, IAsyncDispo
     // ──────────────────────────────────────────────
     //  Internal helpers
     // ──────────────────────────────────────────────
+
+    private static readonly Action<BlueprintTestContext> _noOp = static _ => { };
 
     /// <summary>
     /// Wraps the user-supplied configure callback to prepend ambient authentication.
@@ -373,11 +403,7 @@ public sealed class BlueprintTestFixture<TApp, TExec> : IDisposable, IAsyncDispo
     /// </summary>
     private Action<BlueprintTestContext> WrapConfigureAnonymous(Action<BlueprintTestContext>? configure)
     {
-        return ctx =>
-        {
-            // Do NOT apply ambient auth — background tasks and messages run anonymously
-            configure?.Invoke(ctx);
-        };
+        return configure ?? _noOp;
     }
 
     /// <summary>

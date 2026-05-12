@@ -358,12 +358,15 @@ api.Bus.Should().NotHavePublished<TenantDeletedEvent>();
 api.Bus.Should().HaveSent<ProcessImportTask>();
 
 // ─── AFTER (Blueprint) ────────────────────────────────────────
-// Use Rebus.TestHelpers.FakeBus directly
-var fakeBus = host.Services.GetRequiredService<IBus>() as FakeBus;
+// Use GetServiceAs<TService, TImpl>() for safe casting to test doubles
+var fakeBus = fixture.GetServiceAs<IBus, FakeBus>();
 fakeBus.Events.OfType<MessagePublished<UserCreatedEvent>>().Should().ContainSingle();
 fakeBus.Events.OfType<MessagePublished<SignatureUpdatedEvent>>().Should().NotBeEmpty();
 fakeBus.Events.OfType<MessagePublished<TenantDeletedEvent>>().Should().BeEmpty();
 fakeBus.Events.OfType<MessageSent<ProcessImportTask>>().Should().ContainSingle();
+
+// S365 can add a derived fixture with a Bus property for zero-churn migration:
+// public FakeBus Bus => GetServiceAs<IBus, FakeBus>();
 ```
 
 ### Background Task Assertion Migration
@@ -604,3 +607,68 @@ task.TemplateId.Should().Be("tmpl-1");
 
 A no-op `IRecurringTaskProvider` that prevents recurring task registration from
 attempting to connect to Hangfire during tests. Registered automatically.
+
+---
+
+## BlueprintTestFixture API Reference
+
+`BlueprintTestFixture<TApp, TExec>` wraps `BlueprintTestHost` and provides the
+high-level API that mirrors S365's `ApiFixture` pattern:
+
+### Properties
+
+| Property | Type | Description |
+|---|---|---|
+| `Authentication` | `TestAuthenticationManager` | Ambient auth — `.Set()`, `.As()`, `.MakeAnonymous()` |
+| `Tasks` | `BackgroundTaskCollector?` | Captured background tasks (null if not registered) |
+| `Messages` | `TestMessageCollector?` | Captured published/sent messages |
+| `UnitOfWork` | `InMemoryUnitOfWork?` | Unit of work test double |
+| `Services` | `IServiceProvider` | Root DI container |
+
+### Execution Methods
+
+| Method | Description |
+|---|---|
+| `QueryAsync<T>(IQuery<T>, configure?)` | Execute query, unwrap to `T` |
+| `CommandAsync<T>(ICommand<T>, configure?)` | Execute command, unwrap to `T` |
+| `ExecuteAsync(IOperation, configure?)` | Execute any operation, return raw `OperationResult` |
+| `BackgroundTaskAsync(IBackgroundTask, configure?)` | Execute task (no ambient auth applied) |
+| `MessageAsync(IOperation, configure?, retries?)` | Execute message handler with optional retry |
+
+### Service Resolution
+
+| Method | Description |
+|---|---|
+| `GetRequiredService<T>()` | Resolve service from DI |
+| `GetOptions<T>()` | Resolve `IOptions<T>.Value` |
+| `GetServiceAs<TService, TImpl>()` | Resolve interface, cast to impl (for test doubles) |
+
+### Lifecycle
+
+| Method | Description |
+|---|---|
+| `ClearCollectors()` | Reset all test doubles (tasks, messages, UoW) |
+| `DisposeAsync()` | Clean up host and DI container |
+
+---
+
+## Quick Reference: S365 → Blueprint API Mapping
+
+| S365 (`ApiFixture`) | Blueprint (`BlueprintTestFixture`) | Churn |
+|---|---|---|
+| `fixture.CommandAsync(cmd)` | `fixture.CommandAsync(cmd)` | ✅ None |
+| `fixture.QueryAsync(query)` | `fixture.QueryAsync(query)` | ✅ None |
+| `fixture.BackgroundTaskAsync(task)` | `fixture.BackgroundTaskAsync(task)` | ✅ None |
+| `fixture.MessageAsync(msg)` | `fixture.MessageAsync(msg)` | ✅ None |
+| `fixture.Authentication.Set(identity)` | `fixture.Authentication.Set(identity)` | ✅ None |
+| `fixture.Authentication.As(identity)` | `fixture.Authentication.As(identity)` | ✅ None |
+| `fixture.Authentication.MakeAnonymous()` | `fixture.Authentication.MakeAnonymous()` | ✅ None |
+| `fixture.GetRequiredService<T>()` | `fixture.GetRequiredService<T>()` | ✅ None |
+| `fixture.GetOptions<T>()` | `fixture.GetOptions<T>()` | ✅ None |
+| `fixture.Bus` (returns `FakeBus`) | `fixture.GetServiceAs<IBus, FakeBus>()` | ⚠️ Minor |
+| `fixture.Tasks.Enqueued` | `fixture.Tasks.Enqueued` | ✅ None |
+| `fixture.CreateClient()` | Use `BlueprintHttpTestHost` | 🔄 Separate |
+| `fixture.Bus.Should().HavePublishedSingle<T>()` | `fakeBus.Events.OfType<MessagePublished<T>>()` | ⚠️ Minor |
+
+> **Tip:** S365 can eliminate the `Bus` churn by adding a one-liner property
+> to its derived fixture: `public FakeBus Bus => GetServiceAs<IBus, FakeBus>();`
