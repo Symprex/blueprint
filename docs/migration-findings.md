@@ -50,13 +50,16 @@
 | `[DoNotSaveChanges]` | ✅ Verified | Already supported with BPP001 diagnostic for misuse on non-commands |
 | Task (void) handler returns | ✅ Verified | 65 S365 Rebus handlers returning Task → NoResult normalization |
 | S365 body reading pattern | ✅ Verified | Operations-as-body pattern matches Blueprint exactly; 160 POST/PUT ops |
-| Custom JsonConverters | ⚠️ Needs review | S365 uses `ObjectValueJsonConverter`, `DictionaryStringObjectJsonConverter` |
+| Custom JsonConverters | ✅ S365-owned | `ObjectValueJsonConverter`, `DictionaryStringObjectJsonConverter` are S365-specific; registered in S365 DI |
 | QueryAsync/CommandAsync shims | ✅ Done | Already on BlueprintTestHost and BlueprintTestFixture |
 | S365 TenantId type on operations | ✅ Compatible | HTTP ops use `string TenantId` (TenantModule handles); `ApiId` only on domain events |
 | S365 ICurrentTenantAccessor pattern | ✅ Compatible | AsyncLocal-based, matches Blueprint ITenantAccessor exactly |
-| S365 Marten tenant isolation | ⚠️ Needs integration | `TenancyStyle.Conjoined` via IHaveTenantId; session created with tenant ID from accessor |
+| S365 Marten tenant isolation | ✅ S365-owned | `TenancyStyle.Conjoined` via IHaveTenantId; S365 creates tenant-scoped session in DI registration |
 | S365 SetTenantMiddleware → TenantModule | ✅ Compatible | SetTenantMiddleware sets accessor + populates TenantId property — TenantModule does both |
-| S365 partner vs tenant distinction | ⚠️ S365-owned | PartnerId claim handling stays in S365's ITenantResolver implementation |
+| S365 partner vs tenant distinction | ✅ S365-owned | PartnerId claim handling stays in S365's ITenantResolver implementation |
+| InvokeAsync inline handlers | ✅ Verified | HandlerDiscovery supports Invoke/InvokeAsync/Handle/HandleAsync on operation class |
+| x-links OpenAPI extension | ✅ Verified | Blueprint emits x-links with rel/operationId/method; matches S365 Handlebars templates |
+| Pipeline helper: UoW/Outbox/Tasks | ✅ Done | `SaveUnitOfWorkAsync`, `CommitMessageOutboxAsync`, `FlushBackgroundTasksAsync` extracted |
 
 ---
 
@@ -252,12 +255,9 @@ Successfully ran Blueprint codemod against `Signature365.sln` (158 projects). Fo
 3. ~~**Tenant middleware ordering**: Should tenant resolution be ASP.NET middleware or pipeline stage?~~ → **Resolved**: TenantModule in pipeline
 4. ~~**Property populator elimination**: Can ALL S365 property populators become compile-time?~~ → **Resolved**: Yes, PropertyOwnershipModule + TenantModule
 5. ~~**Resource key template**: How should `{Auth:AccountId}` expansion integrate with generated code?~~ → **Resolved**: `FromResource` template override
-6. **Handlebars template compatibility**: What specific OpenAPI shape properties do the templates expect?
-   - Need to compare `operationId` naming between legacy and new Blueprint
-   - Templates use `x-links` extension — Blueprint must emit matching extension data
-   - `pathGenerator` helper interpolates route params — path format must be `{paramName}` style
+6. ~~**Handlebars template compatibility**: What specific OpenAPI shape properties do the templates expect?~~ → **Resolved**: Blueprint emits `x-links` with `rel`, `operationId`, `method` — matches S365 template expectations exactly. `$links` serialized via `[JsonPropertyName("$links")]` on `ApiResource.Links`. `operationId` = class name (same convention). Path format `{paramName}` compatible.
 7. ~~**StateBasedLinkChecker**: S365 uses state-based link checkers for conditional HATEOAS links~~ → **Resolved**: Fully implemented with identical API
-8. **InvokeAsync convention**: S365 operations can have `InvokeAsync()` directly — Blueprint source-gen expects separate handlers
+8. ~~**InvokeAsync convention**: S365 operations can have `InvokeAsync()` directly~~ → **Resolved**: `HandlerDiscovery.FindInlineHandler()` supports `Invoke`, `InvokeAsync`, `Handle`, `HandleAsync` method names
 
 ---
 
@@ -327,3 +327,4 @@ S365 testing uses `WebApiFixtureFactory<TStartup>` → `ApiFixture` with:
 | 2025-07 | Initial | S365 proof project, codemod tool, .NET 10 upgrade, testing helpers |
 | 2025-07 | Session 2 | Resource auth builtin, tenant first-class, migration findings doc |
 | 2025-07 | Current | ReadJsonBodyAsync static lambda, S365 test fixture compat shims (typed overloads, anonymous BackgroundTask/Message, auth API match, factory pattern, GetOptions), migration-findings updates |
+| 2025-07 | Pipeline extraction | UoW/Outbox/BackgroundTask helper extraction, x-links/InvokeAsync/JsonConverter gap resolution, comprehensive S365 compatibility verification |
