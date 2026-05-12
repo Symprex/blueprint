@@ -363,4 +363,74 @@ public class LinkPopulationModuleTests
 
         result.Diagnostics.Should().ContainSingle(static d => d.Id == "BPLG005");
     }
+
+    [Fact]
+    public void When_multiple_operations_declare_same_self_link_url_for_resource_then_pipeline_emits_single_AddLink()
+    {
+        // Two operations declare [SelfLink] for the same resource type with the same URL.
+        // The generated pipeline for either operation should emit only ONE AddLink("self", ...) call.
+        const string source = """
+            using Blueprint;
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using Blueprint.Runtime.Exec;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace
+            {
+                [BlueprintAppScan]
+                public partial class TestApp : BlueprintApp { }
+
+                public partial class ItemApiResource : ApiResource
+                {
+                    public override string Object => "item_api_resource";
+                    public string Id { get; set; }
+                    public string Name { get; set; }
+                }
+
+                [SelfLink(typeof(ItemApiResource), "/items/{Id}")]
+                public partial class GetItemQuery : IQuery<ItemApiResource>
+                {
+                    public string Id { get; set; }
+                    public static Task<ItemApiResource> HandleAsync(GetItemQuery op) =>
+                        Task.FromResult(new ItemApiResource { Id = op.Id, Name = "test" });
+                }
+
+                [SelfLink(typeof(ItemApiResource), "/items/{Id}")]
+                public partial class UpdateItemCommand : ICommand<ResourceEventResult<ItemApiResource>>
+                {
+                    public string Id { get; set; }
+                    public string Name { get; set; }
+                    public static Task<ResourceEventResult<ItemApiResource>> HandleAsync(UpdateItemCommand op)
+                    {
+                        var resource = new ItemApiResource { Id = op.Id, Name = op.Name };
+                        return Task.FromResult(new ResourceEventResult<ItemApiResource>(ChangeType.Updated, "updated", op.Id, resource));
+                    }
+                }
+            }
+            """;
+
+        var generators = new[]
+        {
+            TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>(),
+            TestHelpers.CreateTrackedGenerator<OperationExecutorPipelineSourceGenerator>(),
+        };
+
+        var result = TestHelpers.CompileWithTrackedGenerators(
+            generators,
+            [source],
+            ["Input0.cs"]);
+
+        result.Diagnostics.Should().BeEmpty("no diagnostics expected when self-link URLs are identical");
+
+        var pipelineSources = result.GetGeneratedSources(nameof(OperationExecutorPipelineSourceGenerator));
+        var updatePipeline = pipelineSources
+            .FirstOrDefault(s => s.HintName.Contains("UpdateItemCommand"));
+
+        updatePipeline.Should().NotBeNull("UpdateItemCommand pipeline should be generated");
+
+        var pipelineText = updatePipeline!.SourceText;
+        var selfLinkCount = System.Text.RegularExpressions.Regex.Matches(pipelineText, @"AddLink\(""self""").Count;
+        selfLinkCount.Should().Be(1, "only one AddLink(\"self\", ...) should be emitted even when multiple operations declare the same self-link URL");
+    }
 }
