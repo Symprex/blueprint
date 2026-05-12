@@ -99,6 +99,7 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
         var redirectResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Http.RedirectResult");
         var fileStreamResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.FileStreamResult");
         var statusCodeResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.StatusCodeResult");
+        var resourceEventType = context.FindTypeByMetadataName("Blueprint.Http.ResourceEvent");
         if (operationResultType is null || okResultType is null || noResultType is null)
         {
             return [];
@@ -128,7 +129,7 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
         var responses = ImmutableArray.CreateBuilder<HttpResponseMetadataRegistration>(flattenedResults.Length);
         foreach (var flattenedResult in flattenedResults)
         {
-            if (OperationResultContractHelper.TryGetHttpOperationResultResponseShape(flattenedResult, okResultType, acceptedResultType, conflictResultType, notFoundResultType, createdResultType, validationFailedResultType, noResultType, keyOnlyResourceEventResultType, resourceEventResultType, httpNoContentResultType, out var statusCode, out var hasResponseBody, plainTextResultType, redirectResultType, fileStreamResultType, statusCodeResultType) == false)
+            if (OperationResultContractHelper.TryGetHttpOperationResultResponseShape(flattenedResult, okResultType, acceptedResultType, conflictResultType, notFoundResultType, createdResultType, validationFailedResultType, noResultType, keyOnlyResourceEventResultType, resourceEventResultType, httpNoContentResultType, out var statusCode, out var hasResponseBody, plainTextResultType, redirectResultType, fileStreamResultType, statusCodeResultType, resourceEventType) == false)
             {
                 continue;
             }
@@ -159,6 +160,7 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
         var redirectResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Http.RedirectResult");
         var fileStreamResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.FileStreamResult");
         var unhandledExceptionResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.UnhandledExceptionResult");
+        var resourceEventType = context.FindTypeByMetadataName("Blueprint.Http.ResourceEvent");
         if (okResultType is null || noResultType is null)
         {
             return [];
@@ -187,7 +189,8 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
                     out var bodyTypeNames,
                     plainTextResultType,
                     redirectResultType,
-                    fileStreamResultType))
+                    fileStreamResultType,
+                    resourceEventType))
             {
                 responses.Add(CreateResponse(statusCode, hasResponseBody, failureOutcome.ResultTypeName, bodyTypeNames));
             }
@@ -246,11 +249,12 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
         out ImmutableArray<string> bodyTypeNames,
         INamedTypeSymbol? plainTextResultType = null,
         INamedTypeSymbol? redirectResultType = null,
-        INamedTypeSymbol? fileStreamResultType = null)
+        INamedTypeSymbol? fileStreamResultType = null,
+        INamedTypeSymbol? resourceEventType = null)
     {
         var resultType = context.FindTypeByMetadataName(resultTypeName);
         if (resultType is not null
-            && OperationResultContractHelper.TryGetHttpOperationResultResponseShape(resultType, okResultType, acceptedResultType, conflictResultType, notFoundResultType, createdResultType, validationFailedResultType, noResultType, keyOnlyResourceEventResultType, resourceEventResultType, httpNoContentResultType, out statusCode, out hasResponseBody, plainTextResultType, redirectResultType, fileStreamResultType))
+            && OperationResultContractHelper.TryGetHttpOperationResultResponseShape(resultType, okResultType, acceptedResultType, conflictResultType, notFoundResultType, createdResultType, validationFailedResultType, noResultType, keyOnlyResourceEventResultType, resourceEventResultType, httpNoContentResultType, out statusCode, out hasResponseBody, plainTextResultType, redirectResultType, fileStreamResultType, resourceEventType: resourceEventType))
         {
             bodyTypeNames = GetResponseBodyTypeNames(resultType, hasResponseBody, validationFailedResultType, unhandledExceptionResultType);
             return true;
@@ -330,14 +334,22 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
     {
         for (var current = resultType as INamedTypeSymbol; current is not null; current = current.BaseType)
         {
-            if (current.IsGenericType == false
-                || current.TypeArguments.Length != 1
-                || string.Equals(current.ContainingNamespace.ToDisplayString(), "Blueprint.Runtime.Exec", StringComparison.Ordinal) == false)
+            if (current.IsGenericType == false || current.TypeArguments.Length != 1)
             {
                 continue;
             }
 
-            if (current.Name is "OkResult" or "AcceptedResult" or "ConflictResult" or "NotFoundResult" or "CreatedResult" or "ResourceEventResult")
+            var ns = current.ContainingNamespace.ToDisplayString();
+
+            if (string.Equals(ns, "Blueprint.Runtime.Exec", StringComparison.Ordinal)
+                && current.Name is "OkResult" or "AcceptedResult" or "ConflictResult" or "NotFoundResult" or "CreatedResult" or "ResourceEventResult")
+            {
+                return current.TypeArguments[0];
+            }
+
+            // Legacy Blueprint.Http.ResourceEvent<T> carries Data as the resource body
+            if (string.Equals(ns, "Blueprint.Http", StringComparison.Ordinal)
+                && string.Equals(current.Name, "ResourceEvent", StringComparison.Ordinal))
             {
                 return current.TypeArguments[0];
             }

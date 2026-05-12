@@ -123,12 +123,17 @@ internal sealed class ResourceEventManifestModule : IBlueprintSourceGeneratorMod
     {
         for (var current = resultType; current is not null; current = current.BaseType)
         {
-            if (current.IsGenericType
-                && current.TypeArguments.Length == 1
-                && string.Equals(current.ContainingNamespace.ToDisplayString(), "Blueprint.Runtime.Exec", StringComparison.Ordinal)
-                && string.Equals(current.Name, "ResourceEventResult", StringComparison.Ordinal))
+            if (current.IsGenericType && current.TypeArguments.Length == 1)
             {
-                return current.TypeArguments[0];
+                var ns = current.ContainingNamespace.ToDisplayString();
+
+                if ((string.Equals(ns, "Blueprint.Runtime.Exec", StringComparison.Ordinal)
+                        && string.Equals(current.Name, "ResourceEventResult", StringComparison.Ordinal))
+                    || (string.Equals(ns, "Blueprint.Http", StringComparison.Ordinal)
+                        && string.Equals(current.Name, "ResourceEvent", StringComparison.Ordinal)))
+                {
+                    return current.TypeArguments[0];
+                }
             }
         }
 

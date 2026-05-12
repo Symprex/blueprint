@@ -203,4 +203,52 @@ public class OperationDescriptorSourceGeneratorTestsHostExecutorAvailabilityTest
             .Should()
             .Contain(static source => source.Contains("MixedUnionHttpResultOperationDescriptor"));
     }
+
+    [Fact]
+    public void When_http_exposed_operation_declares_legacy_resource_event_result_then_generator_treats_it_as_supported_by_current_http_executor()
+    {
+        var result = OperationDescriptorSourceGeneratorTests.Compile("""
+            using Blueprint.Http;
+
+            public partial class TestResource : Blueprint.Model.ApiResource
+            {
+                public override string Object => "test-resource";
+                public string Id { get; set; } = "";
+            }
+
+            [RootLink("/host-aware/legacy-resource-event")]
+            public partial class LegacyResourceEventOperation : ICommand<ResourceEvent<TestResource>> {}
+            """);
+
+        result.Diagnostics.Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+            .Should()
+            .BeEmpty();
+        result.Diagnostics.Select(static diagnostic => diagnostic.Id)
+            .Should()
+            .NotContain("BP108");
+    }
+
+    [Fact]
+    public void When_http_exposed_operation_declares_legacy_resource_updated_result_then_generator_treats_it_as_supported_by_current_http_executor()
+    {
+        var result = OperationDescriptorSourceGeneratorTests.Compile("""
+            using Blueprint.Http;
+
+            public partial class TestResource2 : Blueprint.Model.ApiResource
+            {
+                public override string Object => "test-resource-2";
+                public string Id { get; set; } = "";
+            }
+
+            [RootLink("/host-aware/legacy-resource-updated")]
+            public partial class LegacyResourceUpdatedOperation : ICommand<ResourceUpdated<TestResource2>> {}
+            """);
+
+        result.Diagnostics.Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+            .Should()
+            .BeEmpty();
+        result.Diagnostics.Select(static diagnostic => diagnostic.Id)
+            .Should()
+            .NotContain("BP108");
+    }
 }
