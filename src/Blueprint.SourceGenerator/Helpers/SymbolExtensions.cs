@@ -17,12 +17,19 @@ namespace Blueprint.SourceGenerator.Helpers
         /// <returns>Whether a concrete property implementation exists.</returns>
         public static bool HasConcreteProperty(this INamedTypeSymbol symbol, string propertyName)
         {
-            foreach (var member in symbol.GetMembers())
+            // Walk the type hierarchy — an inherited non-abstract override satisfies the check.
+            var current = symbol;
+            while (current != null)
             {
-                if (member is IPropertySymbol { IsAbstract: false } property && property.Name == propertyName)
+                foreach (var member in current.GetMembers())
                 {
-                    return true;
+                    if (member is IPropertySymbol { IsAbstract: false } property && property.Name == propertyName)
+                    {
+                        return true;
+                    }
                 }
+
+                current = current.BaseType;
             }
 
             return false;
