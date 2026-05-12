@@ -546,8 +546,9 @@ public class HttpEndToEndIntegrationTests
         response.StatusCode.Should().Be(StatusCodes.Status201Created);
         response.ContentType.Should().StartWith("application/json");
         response.Body.Should().Contain("evt-001");
-        response.Body.Should().Contain("res-001");
         response.Body.Should().Contain("test-event");
+        response.Body.Should().Contain("\"$object\":\"event\"");
+        response.Body.Should().Contain("\"changeType\":\"Created\"");
     }
 
     [Fact]

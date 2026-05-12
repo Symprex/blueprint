@@ -230,8 +230,9 @@ public class ReferenceAppHttpEndToEndIntegrationTests
         response.LocationHeader.Should().NotBeNull("201 Created responses must include a Location header per RFC 7231");
         response.LocationHeader.Should().Contain("/templates/", "Location should point to the created resource's self-link URL");
         response.Body.Should().Contain("\"eventId\":\"template.created\"");
-        response.Body.Should().Contain("\"resourceId\":\"template-");
-        response.Body.Should().Contain("\"content\":");
+        response.Body.Should().Contain("\"$object\":\"event\"");
+        response.Body.Should().Contain("\"changeType\":\"Created\"");
+        response.Body.Should().Contain("\"data\":");
         response.Body.Should().Contain("My Template");
     }
 
@@ -346,7 +347,8 @@ public class ReferenceAppHttpEndToEndIntegrationTests
         response.StatusCode.Should().Be(StatusCodes.Status200OK);
         response.ContentType.Should().Be("application/json; charset=utf-8");
         response.Body.Should().Contain("\"eventId\":\"template.updated\"");
-        response.Body.Should().Contain("\"resourceId\":\"template-001\"");
+        response.Body.Should().Contain("\"$object\":\"event\"");
+        response.Body.Should().Contain("\"changeType\":\"Updated\"");
         response.Body.Should().Contain("Renamed Template");
         response.Body.Should().Contain("New content");
     }

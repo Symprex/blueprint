@@ -851,9 +851,46 @@ public sealed record OpenApiSchemaProjectionContext(
 
     private static string FormatTypeName(Type type)
     {
-        return type == typeof(string)
-            ? "string"
-            : type.FullName ?? type.Name;
+        if (type == typeof(string))
+        {
+            return "string";
+        }
+
+        // Generic types: produce "OuterOfInner" (e.g. ResourceEventOfTemplate) instead of the CLR
+        // backtick notation that breaks JSON $ref pointers and is unreadable by TypeScript generators.
+        if (type.IsGenericType)
+        {
+            var baseName = type.Name;
+            var backtickIndex = baseName.IndexOf('`');
+            if (backtickIndex > 0)
+            {
+                baseName = baseName[..backtickIndex];
+            }
+
+            var args = type.GetGenericArguments();
+            var argNames = string.Join("And", args.Select(static a => StripSuffix(a.Name)));
+            return $"{baseName}Of{argNames}";
+        }
+
+        return type.FullName ?? type.Name;
+    }
+
+    /// <summary>
+    /// Strips common API resource suffixes (ApiResource, Resource, DTO, Response) for concise schema names.
+    /// </summary>
+    private static string StripSuffix(string name)
+    {
+        ReadOnlySpan<string> suffixes = ["ApiResource", "Resource", "DTO", "Response"];
+
+        foreach (var suffix in suffixes)
+        {
+            if (name.EndsWith(suffix, StringComparison.Ordinal) && name.Length > suffix.Length)
+            {
+                return name[..^suffix.Length];
+            }
+        }
+
+        return name;
     }
 }
 

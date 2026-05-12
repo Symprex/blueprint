@@ -94,6 +94,8 @@
 | HATEOAS ResourceEvent link fix | ✅ Done | `LinkGeneratorHandler` now extracts content from `ResourceEvent.Data` for link population |
 | ScopePairClaimAuthorizationProvider | ✅ Done | Production-ready provider: JWT scope-pair matching with ignored-scope filtering, FrozenSet perf |
 | Testing infrastructure complete | ✅ Verified | QueryAsync, CommandAsync, BackgroundTaskAsync, MessageAsync, factory, ambient auth — all S365 patterns covered |
+| ResourceEventEnvelope shape fix | ✅ Done | Aligned `ResourceEventResult` HTTP envelope with S365's full `ResourceEvent` shape: `$object`, `eventId`, `changeType`, `created`, `resourceObject`, `data`, `metadata` |
+| TypeScript client generation | ✅ Analysed | Custom Handlebars templates in 3 apps; relies on `operationId`, `x-links`, `tags`, `ResourceEventOf{Type}` schema naming — all compatible |
 
 ---
 
