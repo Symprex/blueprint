@@ -1,9 +1,11 @@
+using Blueprint.Authorization;
 using Blueprint.Model;
 using Blueprint.Model.Attributes;
 using Blueprint.Runtime.Exec;
 using Blueprint.SourceGenerator.Tests.Integration.Generators.OperationDescriptors;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines;
@@ -117,6 +119,25 @@ public class HandlerExecutionModuleIntegrationTests
         ContextAwareHandlerQuery.HandlerCallCount.Should().Be(1);
         ContextAwareHandlerQuery.LastContext.Should().BeSameAs(context);
         ContextAwareHandlerQuery.LastOperation.Should().BeSameAs(context.Operation);
+    }
+
+    [Fact]
+    public async Task When_external_handler_has_base_class_properties_then_generated_pipeline_injects_them()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
+        var pipeline = executor.GetPipeline(typeof(PropertyInjectedHandlerQuery));
+        var context = CreateContext(app, PropertyInjectedHandlerQuery.Configure(), new PropertyInjectedHandlerQuery { Value = "injected" });
+
+        PropertyInjectedHandlerQueryHandler.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<OkResult<string>>();
+        ((OkResult<string>)result).Content.Should().Be("injected");
+        PropertyInjectedHandlerQueryHandler.LastContext.Should().BeSameAs(context);
+        PropertyInjectedHandlerQueryHandler.LastCancellationToken.Should().Be(CancellationToken.None);
+        PropertyInjectedHandlerQueryHandler.LastLogger.Should().NotBeNull();
     }
 
     private static ApiOperationContext CreateContext(BlueprintApp app, ApiOperationDescriptor descriptor, object operation, IServiceProvider? serviceProvider = null)
@@ -286,5 +307,55 @@ public sealed class RecordingFormatter(string prefix) : IHandlerExecutionFormatt
         this.CallCount++;
         this.LastValue = value;
         return prefix + value;
+    }
+}
+
+/// <summary>
+/// Base class that mirrors the S365 <c>ApiOperations</c> pattern — properties are set by
+/// the generated pipeline after handler instantiation.
+/// </summary>
+public abstract class TestApiOperationsBase
+{
+    public ApiOperationContext Context { get; set; } = default!;
+
+    public IUserAuthorisationContext Identity { get; set; } = default!;
+
+    public ILogger Logger { get; set; } = default!;
+
+    public CancellationToken CancellationToken { get; set; }
+}
+
+[AllowAnonymous]
+[RootLink("/handler/property-injected")]
+public partial class PropertyInjectedHandlerQuery : IQuery<string>
+{
+    public string Value { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// External handler that reads injected base-class properties, proving the pipeline
+/// sets <c>Context</c>, <c>Logger</c>, and <c>CancellationToken</c> at runtime.
+/// </summary>
+public class PropertyInjectedHandlerQueryHandler : TestApiOperationsBase
+{
+    public static ApiOperationContext? LastContext { get; private set; }
+
+    public static CancellationToken LastCancellationToken { get; private set; }
+
+    public static ILogger? LastLogger { get; private set; }
+
+    public static void Reset()
+    {
+        LastContext = null;
+        LastCancellationToken = default;
+        LastLogger = null;
+    }
+
+    public Task<string> HandleAsync(PropertyInjectedHandlerQuery query)
+    {
+        LastContext = this.Context;
+        LastCancellationToken = this.CancellationToken;
+        LastLogger = this.Logger;
+        return Task.FromResult(query.Value);
     }
 }
