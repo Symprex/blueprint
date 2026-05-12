@@ -60,6 +60,7 @@
 | InvokeAsync inline handlers | ✅ Verified | HandlerDiscovery supports Invoke/InvokeAsync/Handle/HandleAsync on operation class |
 | x-links OpenAPI extension | ✅ Verified | Blueprint emits x-links with rel/operationId/method; matches S365 Handlebars templates |
 | Pipeline helper: UoW/Outbox/Tasks | ✅ Done | `SaveUnitOfWorkAsync`, `CommitMessageOutboxAsync`, `FlushBackgroundTasksAsync` extracted |
+| Singleton result types | ✅ Done | `ForbiddenResult.Instance`, `UnauthenticatedResult.Instance`, `UnsupportedMediaTypeResult.Instance` — zero allocation on auth/content-type failure paths |
 
 ---
 
