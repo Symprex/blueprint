@@ -10,14 +10,14 @@
 | Compile-time proof | ✅ Done | `.scratch/s365-proof/` compiles, 46 generated files |
 | Codemod tool | ✅ Done | Per-project SARIF, lenient build failure handling |
 | .NET 10 upgrade | ✅ Done | All projects target net10.0 |
-| Blueprint.Testing | ✅ Done | BlueprintTestFixture with ambient auth, QueryAsync/CommandAsync |
+| Blueprint.Testing | ✅ Done | BlueprintTestFixture with ambient auth, S365 compat shims |
 | Blueprint.Marten | ✅ Done | IUnitOfWork, outbox, multi-tenancy session scoping |
 | Blueprint.Rebus | ✅ Done | Companion generator, transaction scope |
 | Blueprint.Tasks.Hangfire | ✅ Done | Schedule provider, recurring tasks |
 | `[Resource]` built-in | ✅ Done | Noun/verb with FromResource template override |
 | First-class tenancy | ✅ Done | TenantModule in pipeline, claim-based resolution |
 | Pipeline body extraction | ✅ Done | `PipelineHelpers.ReadJsonBodyAsync` (~80 lines → 1 line) |
-| Minimize test churn | ✅ Done | BlueprintTestFixture with ambient auth, extension methods |
+| Minimize test churn | ✅ Done | Typed overloads, anonymous BackgroundTask/Message, factory pattern |
 | OpenAPI well-known endpoint | ✅ Done | RFC 9727 `/.well-known/openapi` |
 | Compile-time populators | ✅ Done | PropertyOwnershipModule + TenantModule handle all at compile time |
 | TypeScript generation compat | ✅ Documented | Custom Handlebars templates analysed (see below) |
@@ -29,7 +29,8 @@
 | Route deduplication | ✅ Done | `HashSet<(Route, Type)>` dedup in endpoint registration |
 | StateBasedLinkChecker | ✅ Done | Identical API to S365, sample + integration tests |
 | Gateway sample + HTTP client E2E | ✅ Done | `Blueprint.SourceGenerator.Sample.Gateway` with 6 E2E tests |
-| Permission removal | ✅ N/A | Codebase only has `[Resource]`-based auth — no Permission attrs exist |
+| Test fixture factory | ✅ Done | `BlueprintTestFixtureFactory` mirrors S365 `WebApiFixtureFactory` |
+| Test auth S365 compat | ✅ Done | `Set(ClaimsIdentity)`, `As(identity)`, `MakeAnonymous()` API match |
 
 ---
 
@@ -170,7 +171,7 @@ Successfully ran Blueprint codemod against `Signature365.sln` (158 projects). Fo
    - Need to compare `operationId` naming between legacy and new Blueprint
    - Templates use `x-links` extension — Blueprint must emit matching extension data
    - `pathGenerator` helper interpolates route params — path format must be `{paramName}` style
-7. **StateBasedLinkChecker**: S365 uses state-based link checkers for conditional HATEOAS links — need to verify Blueprint supports this pattern
+7. ~~**StateBasedLinkChecker**: S365 uses state-based link checkers for conditional HATEOAS links~~ → **Resolved**: Fully implemented with identical API
 8. **InvokeAsync convention**: S365 operations can have `InvokeAsync()` directly — Blueprint source-gen expects separate handlers
 
 ---
@@ -181,27 +182,33 @@ S365 testing uses `WebApiFixtureFactory<TStartup>` → `ApiFixture` with:
 
 | S365 Pattern | Blueprint.Testing Equivalent | Notes |
 |---|---|---|
-| `WebApiFixtureFactory<TStartup>` | `BlueprintTestHostBuilder` | Builder pattern, `WithTestDefaults()` |
-| `apiFactory.Create()` | `builder.BuildFixture()` | Returns `BlueprintTestFixture` |
-| `fixture.CommandAsync<T>(cmd)` | `fixture.CommandAsync<T>(cmd)` | ✅ Direct match |
-| `fixture.QueryAsync<T>(query)` | `fixture.QueryAsync<T>(query)` | ✅ Direct match |
-| `fixture.BackgroundTaskAsync(task)` | `fixture.ExecuteAsync(task)` | Different name but same concept |
-| `fixture.MessageAsync(msg)` | `fixture.ExecuteAsync(msg)` | Different name but same concept |
-| `fixture.Authentication.Set(identity)` | `fixture.Authentication.SetIdentity(identity)` | ✅ Ambient auth supported |
-| `AuthenticateAsTenantAdministrator()` | Extension method needed | S365-specific, keep in S365 test helpers |
-| `fixture.Bus` (FakeBus) | `fixture.Messages` (TestMessageCollector) | Different assertion API |
-| `Bus.Should().HavePublishedSingle<T>()` | Need fluent assertion extensions | S365-specific FakeBus assertions |
+| `WebApiFixtureFactory<TStartup>` | `BlueprintTestFixtureFactory<TApp,TExec>` | ✅ Abstract factory, `Create()` returns fixture |
+| `apiFactory.Create()` | `factory.Create()` | ✅ Direct match |
+| `apiFactory.Create(s => ...)` | `factory.Create(s => ...)` | ✅ Per-test DI overrides |
+| `fixture.CommandAsync<T>(ICommand<T>)` | `fixture.CommandAsync<T>(ICommand<T>)` | ✅ Typed overload added |
+| `fixture.QueryAsync<T>(IQuery<T>)` | `fixture.QueryAsync<T>(IQuery<T>)` | ✅ Typed overload added |
+| `fixture.BackgroundTaskAsync(task)` | `fixture.BackgroundTaskAsync(task)` | ✅ Runs anonymous, IBackgroundTask overload |
+| `fixture.MessageAsync(msg, retry)` | `fixture.MessageAsync(msg, retry)` | ✅ Retry support added |
+| `fixture.Authentication.Set(identity)` | `fixture.Authentication.Set(identity)` | ✅ S365 API match |
+| `fixture.Authentication.As(identity)` | `fixture.Authentication.As(identity)` | ✅ IDisposable scope |
+| `fixture.Authentication.MakeAnonymous()` | `fixture.Authentication.MakeAnonymous()` | ✅ S365 API match |
+| `fixture.Authentication.AsAnonymous()` | `fixture.Authentication.AsAnonymous()` | ✅ IDisposable scope |
+| `fixture.GetOptions<T>()` | `fixture.GetOptions<T>()` | ✅ Added |
+| `AuthenticateAs*()` extensions | Extension methods stay in S365 test helpers | S365-specific |
+| `fixture.Bus` (FakeBus) | `(FakeBus)fixture.Services.GetRequiredService<IBus>()` | S365 extension method |
 | `fixture.Tasks` | `fixture.Tasks` (BackgroundTaskCollector) | ✅ Direct match |
-| `apiFactory.Create(s => s.AddSingleton(...))` | `builder.Configure(s => ...)` then `BuildFixture()` | Per-test DI overrides |
-| `IntegrationTestDatabase` | External to Blueprint | S365-specific DB management |
-| `fixture.WithDatabaseAsync(tenant, ...)` | External extension method | Marten-specific, keep in S365 |
+| `fixture.Messages` | `fixture.Messages` (TestMessageCollector) | Bus-agnostic capture |
+| `ConfigureOnce()` | `ConfigureOnceAsync()` | ✅ Factory pattern |
 
 **Key decisions to minimize S365 test churn:**
-- `BlueprintTestFixture` already has `CommandAsync`/`QueryAsync` matching S365's `ApiFixture`
-- Ambient auth via `fixture.Authentication` matches S365's `Authentication` class pattern
-- `BackgroundTaskAsync` and `MessageAsync` could be added as convenience aliases
-- FakeBus fluent assertions are S365-specific — keep as extension methods in S365 test helpers
-- `WebApiFixtureFactory<T>` could be provided as a thin S365-side wrapper that creates `BlueprintTestHostBuilder`
+- `BlueprintTestFixture` has `ICommand<T>`/`IQuery<T>` typed overloads matching S365's `ApiFixture` exactly
+- `BackgroundTaskAsync` runs anonymously (no auth) matching S365 behaviour
+- `MessageAsync` supports `retryAttempts` parameter matching S365's Polly-based retry
+- `TestAuthenticationManager` has `Set(ClaimsIdentity)`, `As(identity)`, `MakeAnonymous()` matching S365's `Authentication`
+- `BlueprintTestFixtureFactory` mirrors `WebApiFixtureFactory` — xUnit `IClassFixture`, `Create()`, `ConfigureOnceAsync`
+- S365 `AuthenticateAs*()` extension methods stay in S365 test helpers (they target `BlueprintTestFixture` instead of `ApiFixture`)
+- FakeBus access: S365 adds an extension method `fixture.Bus` that resolves from DI
+- `GetOptions<T>()` added to fixture directly
 
 ---
 
@@ -234,4 +241,4 @@ S365 testing uses `WebApiFixtureFactory<TStartup>` → `ApiFixture` with:
 |------|---------|-------------|
 | 2025-07 | Initial | S365 proof project, codemod tool, .NET 10 upgrade, testing helpers |
 | 2025-07 | Session 2 | Resource auth builtin, tenant first-class, migration findings doc |
-| 2025-07 | Current | BlueprintTestFixture, FromResource override, well-known OpenAPI, body reading extraction, S365 deep analysis (632 ops, test infra mapping, TypeScript gen) |
+| 2025-07 | Current | ReadJsonBodyAsync static lambda, S365 test fixture compat shims (typed overloads, anonymous BackgroundTask/Message, auth API match, factory pattern, GetOptions), migration-findings updates |
