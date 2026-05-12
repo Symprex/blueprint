@@ -727,6 +727,155 @@ public class AuthorizationModuleTests
             "[FromResource] should not follow transitive chains");
     }
 
+    // ── [FromResource] template override tests ─────────────────────
+
+    [Fact]
+    public void When_FromResource_has_template_override_then_descriptor_uses_override_template()
+    {
+        var result = CompileDescriptor(
+            """
+            [RootLink("/accounts/{Id}")]
+            [Resource("account", "read", "/tenants/{TenantId}/accounts/{Id}")]
+            public partial class GetAccountQuery : IQuery<string>
+            {
+                public string Id { get; set; }
+                public string TenantId { get; set; }
+
+                public static Task<string> HandleAsync(GetAccountQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+
+            [RootLink("/accounts/{AccountId}/details")]
+            [FromResource(typeof(GetAccountQuery), "/partners/{PartnerId}/accounts/{AccountId}")]
+            public partial class GetAccountDetailsQuery : IQuery<string>
+            {
+                public string AccountId { get; set; }
+                public string PartnerId { get; set; }
+
+                public static Task<string> HandleAsync(GetAccountDetailsQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var descriptorSource = result.Output
+            .Select(static t => t.ToString())
+            .FirstOrDefault(static s => s.Contains("GetAccountDetailsQueryDescriptor"));
+
+        descriptorSource.Should().NotBeNull();
+
+        // Should inherit noun+verb from source
+        descriptorSource!.Should().Contain("\"account\"");
+        descriptorSource.Should().Contain("\"read\"");
+
+        // Should use the OVERRIDE template, not the source template
+        descriptorSource.Should().Contain("/partners/{PartnerId}/accounts/{AccountId}");
+        descriptorSource.Should().NotContain("/tenants/{TenantId}");
+    }
+
+    [Fact]
+    public void When_FromResource_has_template_override_with_multiple_Resources_then_all_use_override()
+    {
+        var result = CompileDescriptor(
+            """
+            [RootLink("/accounts/{Id}")]
+            [Resource("account", "read", "/tenants/{TenantId}/accounts/{Id}")]
+            [Resource("tenant", "manage", "/tenants/{TenantId}")]
+            public partial class GetAccountQuery : IQuery<string>
+            {
+                public string Id { get; set; }
+                public string TenantId { get; set; }
+
+                public static Task<string> HandleAsync(GetAccountQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+
+            [RootLink("/accounts/{AccountId}/details")]
+            [FromResource(typeof(GetAccountQuery), "/partners/{PartnerId}/accounts/{AccountId}")]
+            public partial class GetAccountDetailsQuery : IQuery<string>
+            {
+                public string AccountId { get; set; }
+                public string PartnerId { get; set; }
+
+                public static Task<string> HandleAsync(GetAccountDetailsQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var descriptorSource = result.Output
+            .Select(static t => t.ToString())
+            .FirstOrDefault(static s => s.Contains("GetAccountDetailsQueryDescriptor"));
+
+        descriptorSource.Should().NotBeNull();
+
+        // Should inherit both noun+verb pairs
+        descriptorSource!.Should().Contain("\"account\"");
+        descriptorSource.Should().Contain("\"read\"");
+        descriptorSource.Should().Contain("\"tenant\"");
+        descriptorSource.Should().Contain("\"manage\"");
+
+        // ALL scope pairs should use override template, none of the originals
+        descriptorSource.Should().Contain("/partners/{PartnerId}/accounts/{AccountId}");
+        descriptorSource.Should().NotContain("/tenants/{TenantId}");
+    }
+
+    [Fact]
+    public void When_FromResource_without_template_override_then_descriptor_keeps_source_templates()
+    {
+        var result = CompileDescriptor(
+            """
+            [RootLink("/accounts/{Id}")]
+            [Resource("account", "read", "/tenants/{TenantId}/accounts/{Id}")]
+            public partial class GetAccountQuery : IQuery<string>
+            {
+                public string Id { get; set; }
+                public string TenantId { get; set; }
+
+                public static Task<string> HandleAsync(GetAccountQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+
+            [RootLink("/accounts/{Id}/details")]
+            [FromResource(typeof(GetAccountQuery))]
+            public partial class GetAccountDetailsQuery : IQuery<string>
+            {
+                public string Id { get; set; }
+                public string TenantId { get; set; }
+
+                public static Task<string> HandleAsync(GetAccountDetailsQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var descriptorSource = result.Output
+            .Select(static t => t.ToString())
+            .FirstOrDefault(static s => s.Contains("GetAccountDetailsQueryDescriptor"));
+
+        descriptorSource.Should().NotBeNull();
+        descriptorSource!.Should().Contain("\"account\"");
+        descriptorSource.Should().Contain("\"read\"");
+
+        // Without override, it keeps the original template
+        descriptorSource.Should().Contain("/tenants/{TenantId}/accounts/{Id}");
+    }
+
     // ── Resource key template validation tests ──────────────────────
 
     [Fact]
