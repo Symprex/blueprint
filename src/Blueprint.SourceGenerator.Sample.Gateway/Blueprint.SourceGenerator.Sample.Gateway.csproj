@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <!-- Uncomment to inspect generated source files:
+    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+    <CompilerGeneratedFilesOutputPath>.scratch/gen-output</CompilerGeneratedFilesOutputPath> -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Own contract -->
+    <ProjectReference Include="..\Blueprint.SourceGenerator.Sample.Gateway.Contract\Blueprint.SourceGenerator.Sample.Gateway.Contract.csproj" />
+
+    <!-- Upstream contract for BlueprintHttpClient operation discovery -->
+    <ProjectReference Include="..\Blueprint.SourceGenerator.Sample.Contract\Blueprint.SourceGenerator.Sample.Contract.csproj" />
+
+    <!-- Upstream app type for BlueprintHttpClient<SampleBlueprintApp> -->
+    <ProjectReference Include="..\Blueprint.SourceGenerator.Sample\Blueprint.SourceGenerator.Sample.csproj" />
+
+    <!-- Blueprint runtime and source generator -->
+    <ProjectReference Include="..\Blueprint.Runtime.Model\Blueprint.Runtime.Model.csproj" />
+    <ProjectReference Include="..\Blueprint.Runtime\Blueprint.Runtime.csproj" />
+    <ProjectReference Include="..\Blueprint.SourceGenerator\Blueprint.SourceGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+
+    <!-- HTTP client for inter-service communication -->
+    <ProjectReference Include="..\Blueprint.HttpClient\Blueprint.HttpClient.csproj" />
+  </ItemGroup>
+
+</Project>
