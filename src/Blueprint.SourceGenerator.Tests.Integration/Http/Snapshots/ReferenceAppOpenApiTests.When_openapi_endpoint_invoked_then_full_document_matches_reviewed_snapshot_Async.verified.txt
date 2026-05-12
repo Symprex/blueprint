@@ -17,34 +17,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "properties": {
-                  "currentPassword": {
-                    "type": "string",
-                    "nullable": true,
-                    "description": "The current password.",
-                    "writeOnly": true
-                  },
-                  "newPassword": {
-                    "type": "string",
-                    "nullable": true,
-                    "description": "The new password.",
-                    "minLength": 8,
-                    "maxLength": 128,
-                    "writeOnly": true
-                  },
-                  "confirmNewPassword": {
-                    "type": "string",
-                    "nullable": true,
-                    "description": "Re-enter the new password for confirmation.",
-                    "writeOnly": true
-                  }
-                },
-                "required": [
-                  "currentPassword",
-                  "newPassword",
-                  "confirmNewPassword"
-                ]
+                "$ref": "#/components/schemas/ChangePasswordCommand"
               }
             }
           }
@@ -334,97 +307,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "properties": {
-                  "name": {
-                    "type": "string",
-                    "nullable": true,
-                    "description": "The display name for the template.",
-                    "maxLength": 200,
-                    "example": "Welcome Email"
-                  },
-                  "slug": {
-                    "type": "string",
-                    "nullable": true,
-                    "description": "URL-safe slug for the template (lowercase letters, digits, hyphens). Reserved values: admin, api, system, health.",
-                    "maxLength": 100,
-                    "pattern": "^[a-z0-9]\u002B(?:-[a-z0-9]\u002B)*$"
-                  },
-                  "visibility": {
-                    "type": "string",
-                    "nullable": true,
-                    "description": "Visibility level: public, internal, or private.",
-                    "enum": [
-                      "public",
-                      "internal",
-                      "private"
-                    ],
-                    "x-enum-varnames": [
-                      "public",
-                      "internal",
-                      "private"
-                    ]
-                  },
-                  "priority": {
-                    "type": "integer",
-                    "format": "int32",
-                    "description": "Priority for template ordering (1-1000).",
-                    "minimum": 1,
-                    "maximum": 1000,
-                    "default": 100,
-                    "example": 42
-                  },
-                  "htmlSource": {
-                    "type": "string",
-                    "nullable": true,
-                    "description": "The HTML source content of the template.",
-                    "maxLength": 50000
-                  },
-                  "plainTextSource": {
-                    "type": "string",
-                    "nullable": true,
-                    "description": "The plain text fallback content of the template.",
-                    "maxLength": 10000
-                  },
-                  "authorEmail": {
-                    "type": "string",
-                    "format": "email",
-                    "nullable": true,
-                    "description": "Email address of the template author."
-                  },
-                  "callbackUrl": {
-                    "type": "string",
-                    "format": "uri",
-                    "nullable": true,
-                    "description": "Callback URL for template lifecycle events."
-                  },
-                  "legacyCategory": {
-                    "type": "string",
-                    "nullable": true,
-                    "description": "Legacy category \u2014 use Tags instead.",
-                    "deprecated": true,
-                    "x-deprecated-reason": "Use Tags instead."
-                  },
-                  "tags": {
-                    "type": "array",
-                    "nullable": true,
-                    "description": "Freeform tags for categorizing the template.",
-                    "items": {
-                      "type": "string"
-                    }
-                  },
-                  "mergeFields": {
-                    "type": "array",
-                    "nullable": true,
-                    "description": "Merge field definitions available in the template.",
-                    "items": {
-                      "type": "object"
-                    }
-                  }
-                },
-                "required": [
-                  "name"
-                ]
+                "$ref": "#/components/schemas/CreateTemplateCommand"
               }
             }
           }
@@ -528,27 +411,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "properties": {
-                  "ids": {
-                    "type": "array",
-                    "description": "Template IDs to archive.",
-                    "items": {
-                      "type": "string"
-                    },
-                    "minItems": 1,
-                    "maxItems": 100
-                  },
-                  "reason": {
-                    "type": "string",
-                    "nullable": true,
-                    "description": "Optional reason for the bulk archive.",
-                    "maxLength": 500
-                  }
-                },
-                "required": [
-                  "ids"
-                ]
+                "$ref": "#/components/schemas/BulkArchiveTemplatesCommand"
               }
             }
           }
@@ -712,24 +575,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "properties": {
-                  "nameFilter": {
-                    "type": "string",
-                    "nullable": true,
-                    "description": "Optional name filter to restrict exported templates."
-                  },
-                  "notifyOnCompletion": {
-                    "type": "boolean",
-                    "description": "Send an email notification when the export completes."
-                  },
-                  "notifyEmail": {
-                    "type": "string",
-                    "format": "email",
-                    "nullable": true,
-                    "description": "Email address to notify on export completion. Required when NotifyOnCompletion is true."
-                  }
-                }
+                "$ref": "#/components/schemas/ExportTemplatesCommand"
               }
             }
           }
@@ -1295,30 +1141,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "properties": {
-                  "name": {
-                    "type": "string",
-                    "nullable": true,
-                    "description": "The new display name for the template.",
-                    "maxLength": 200
-                  },
-                  "htmlSource": {
-                    "type": "string",
-                    "nullable": true,
-                    "description": "The updated HTML source content.",
-                    "maxLength": 50000
-                  },
-                  "plainTextSource": {
-                    "type": "string",
-                    "nullable": true,
-                    "description": "The updated plain text content.",
-                    "maxLength": 10000
-                  }
-                },
-                "required": [
-                  "name"
-                ]
+                "$ref": "#/components/schemas/UpdateTemplateCommand"
               }
             }
           }
@@ -1433,18 +1256,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "properties": {
-                  "newName": {
-                    "type": "string",
-                    "nullable": true,
-                    "description": "The display name for the new cloned template.",
-                    "maxLength": 200
-                  }
-                },
-                "required": [
-                  "newName"
-                ]
+                "$ref": "#/components/schemas/CloneTemplateCommand"
               }
             }
           }
@@ -1827,19 +1639,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "properties": {
-                  "mergeFields": {
-                    "type": "object",
-                    "description": "Merge-field name/value pairs for template rendering.",
-                    "additionalProperties": {
-                      "type": "string"
-                    }
-                  }
-                },
-                "required": [
-                  "mergeFields"
-                ]
+                "$ref": "#/components/schemas/PreviewTemplateCommand"
               }
             }
           }
@@ -2041,40 +1841,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "properties": {
-                  "opacity": {
-                    "type": "number",
-                    "format": "double",
-                    "nullable": true,
-                    "description": "Display opacity for the template preview (0.0 = fully transparent, 1.0 = fully opaque).",
-                    "minimum": 0,
-                    "maximum": 1
-                  },
-                  "minWeight": {
-                    "type": "integer",
-                    "format": "int32",
-                    "nullable": true,
-                    "description": "Minimum display weight (0-100).",
-                    "minimum": 0,
-                    "maximum": 100
-                  },
-                  "maxWeight": {
-                    "type": "integer",
-                    "format": "int32",
-                    "nullable": true,
-                    "description": "Maximum display weight (0-100). Must be greater than MinWeight.",
-                    "minimum": 0,
-                    "maximum": 100
-                  },
-                  "cssClassName": {
-                    "type": "string",
-                    "nullable": true,
-                    "description": "Optional CSS class name for custom template styling.",
-                    "maxLength": 50,
-                    "pattern": "^[a-zA-Z][a-zA-Z0-9\\-_]*$"
-                  }
-                }
+                "$ref": "#/components/schemas/PatchTemplateSettingsCommand"
               }
             }
           }
@@ -2189,14 +1956,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "properties": {
-                  "name": {
-                    "type": "string",
-                    "nullable": true,
-                    "description": "Gets or sets the template name to validate. \u0022INVALID\u0022 triggers a validation exception, \u0022BAD\u0022 triggers a bad-request exception."
-                  }
-                }
+                "$ref": "#/components/schemas/ValidateTemplateCommand"
               }
             }
           }
@@ -2375,14 +2135,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "properties": {
-                  "displayName": {
-                    "type": "string",
-                    "nullable": true,
-                    "description": "The new display name."
-                  }
-                }
+                "$ref": "#/components/schemas/UpdateTemplateSettingsCommand"
               }
             }
           }
@@ -2649,6 +2402,191 @@
           }
         }
       },
+      "BulkArchiveTemplatesCommand": {
+        "title": "BulkArchiveTemplatesCommand",
+        "type": "object",
+        "required": [
+          "ids"
+        ],
+        "properties": {
+          "ids": {
+            "type": "array",
+            "description": "Template IDs to archive.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "maxItems": 100
+          },
+          "reason": {
+            "type": "string",
+            "nullable": true,
+            "description": "Optional reason for the bulk archive.",
+            "maxLength": 500
+          }
+        }
+      },
+      "ChangePasswordCommand": {
+        "title": "ChangePasswordCommand",
+        "type": "object",
+        "required": [
+          "currentPassword",
+          "newPassword",
+          "confirmNewPassword"
+        ],
+        "properties": {
+          "currentPassword": {
+            "type": "string",
+            "nullable": true,
+            "description": "The current password.",
+            "writeOnly": true
+          },
+          "newPassword": {
+            "type": "string",
+            "nullable": true,
+            "description": "The new password.",
+            "minLength": 8,
+            "maxLength": 128,
+            "writeOnly": true
+          },
+          "confirmNewPassword": {
+            "type": "string",
+            "nullable": true,
+            "description": "Re-enter the new password for confirmation.",
+            "writeOnly": true
+          }
+        }
+      },
+      "CloneTemplateCommand": {
+        "title": "CloneTemplateCommand",
+        "type": "object",
+        "required": [
+          "newName"
+        ],
+        "properties": {
+          "newName": {
+            "type": "string",
+            "nullable": true,
+            "description": "The display name for the new cloned template.",
+            "maxLength": 200
+          }
+        }
+      },
+      "CreateTemplateCommand": {
+        "title": "CreateTemplateCommand",
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "nullable": true,
+            "description": "The display name for the template.",
+            "maxLength": 200,
+            "example": "Welcome Email"
+          },
+          "slug": {
+            "type": "string",
+            "nullable": true,
+            "description": "URL-safe slug for the template (lowercase letters, digits, hyphens). Reserved values: admin, api, system, health.",
+            "maxLength": 100,
+            "pattern": "^[a-z0-9]\u002B(?:-[a-z0-9]\u002B)*$"
+          },
+          "visibility": {
+            "type": "string",
+            "nullable": true,
+            "description": "Visibility level: public, internal, or private.",
+            "enum": [
+              "public",
+              "internal",
+              "private"
+            ],
+            "x-enum-varnames": [
+              "public",
+              "internal",
+              "private"
+            ]
+          },
+          "priority": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Priority for template ordering (1-1000).",
+            "minimum": 1,
+            "maximum": 1000,
+            "default": 100,
+            "example": 42
+          },
+          "htmlSource": {
+            "type": "string",
+            "nullable": true,
+            "description": "The HTML source content of the template.",
+            "maxLength": 50000
+          },
+          "plainTextSource": {
+            "type": "string",
+            "nullable": true,
+            "description": "The plain text fallback content of the template.",
+            "maxLength": 10000
+          },
+          "authorEmail": {
+            "type": "string",
+            "nullable": true,
+            "format": "email",
+            "description": "Email address of the template author."
+          },
+          "callbackUrl": {
+            "type": "string",
+            "nullable": true,
+            "format": "uri",
+            "description": "Callback URL for template lifecycle events."
+          },
+          "legacyCategory": {
+            "type": "string",
+            "nullable": true,
+            "description": "Legacy category \u2014 use Tags instead.",
+            "deprecated": true,
+            "x-deprecated-reason": "Use Tags instead."
+          },
+          "tags": {
+            "type": "array",
+            "nullable": true,
+            "description": "Freeform tags for categorizing the template.",
+            "items": {
+              "type": "string"
+            }
+          },
+          "mergeFields": {
+            "type": "array",
+            "nullable": true,
+            "description": "Merge field definitions available in the template.",
+            "items": {
+              "type": "object"
+            }
+          }
+        }
+      },
+      "ExportTemplatesCommand": {
+        "title": "ExportTemplatesCommand",
+        "type": "object",
+        "properties": {
+          "nameFilter": {
+            "type": "string",
+            "nullable": true,
+            "description": "Optional name filter to restrict exported templates."
+          },
+          "notifyOnCompletion": {
+            "type": "boolean",
+            "description": "Send an email notification when the export completes."
+          },
+          "notifyEmail": {
+            "type": "string",
+            "nullable": true,
+            "format": "email",
+            "description": "Email address to notify on export completion. Required when NotifyOnCompletion is true."
+          }
+        }
+      },
       "Microsoft_AspNetCore_Mvc_ProblemDetails": {
         "title": "ProblemDetails",
         "type": "object",
@@ -2712,6 +2650,108 @@
           "type": {
             "type": "string",
             "nullable": true
+          }
+        }
+      },
+      "PatchTemplateSettingsCommand": {
+        "title": "PatchTemplateSettingsCommand",
+        "type": "object",
+        "properties": {
+          "opacity": {
+            "type": "number",
+            "nullable": true,
+            "format": "double",
+            "description": "Display opacity for the template preview (0.0 = fully transparent, 1.0 = fully opaque).",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "minWeight": {
+            "type": "integer",
+            "nullable": true,
+            "format": "int32",
+            "description": "Minimum display weight (0-100).",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "maxWeight": {
+            "type": "integer",
+            "nullable": true,
+            "format": "int32",
+            "description": "Maximum display weight (0-100). Must be greater than MinWeight.",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "cssClassName": {
+            "type": "string",
+            "nullable": true,
+            "description": "Optional CSS class name for custom template styling.",
+            "maxLength": 50,
+            "pattern": "^[a-zA-Z][a-zA-Z0-9\\-_]*$"
+          }
+        }
+      },
+      "PreviewTemplateCommand": {
+        "title": "PreviewTemplateCommand",
+        "type": "object",
+        "required": [
+          "mergeFields"
+        ],
+        "properties": {
+          "mergeFields": {
+            "type": "object",
+            "description": "Merge-field name/value pairs for template rendering.",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "UpdateTemplateCommand": {
+        "title": "UpdateTemplateCommand",
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "nullable": true,
+            "description": "The new display name for the template.",
+            "maxLength": 200
+          },
+          "htmlSource": {
+            "type": "string",
+            "nullable": true,
+            "description": "The updated HTML source content.",
+            "maxLength": 50000
+          },
+          "plainTextSource": {
+            "type": "string",
+            "nullable": true,
+            "description": "The updated plain text content.",
+            "maxLength": 10000
+          }
+        }
+      },
+      "UpdateTemplateSettingsCommand": {
+        "title": "UpdateTemplateSettingsCommand",
+        "type": "object",
+        "properties": {
+          "displayName": {
+            "type": "string",
+            "nullable": true,
+            "description": "The new display name."
+          }
+        }
+      },
+      "ValidateTemplateCommand": {
+        "title": "ValidateTemplateCommand",
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "nullable": true,
+            "description": "Gets or sets the template name to validate. \u0022INVALID\u0022 triggers a validation exception, \u0022BAD\u0022 triggers a bad-request exception."
           }
         }
       }

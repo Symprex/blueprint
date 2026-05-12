@@ -29,7 +29,12 @@ public sealed record OpenApiDocumentRenderingContext(
         var paths = pathItemRendering.PathItems
             .OrderBy(static pathItem => pathItem.UrlFormat, StringComparer.Ordinal)
             .ToImmutableArray();
-        var schemaComponents = pathItemRendering.OperationRendering.ResponseObjects.SchemaComponents.Components
+        var responseSchemaComponents = pathItemRendering.OperationRendering.ResponseObjects.SchemaComponents.Components
+            .OrderBy(static component => component.BodyTypeName, StringComparer.Ordinal)
+            .ToImmutableArray();
+
+        var requestBodySchemaComponents = CollectRequestBodySchemaComponents(paths);
+        var schemaComponents = responseSchemaComponents.AddRange(requestBodySchemaComponents)
             .OrderBy(static component => component.BodyTypeName, StringComparer.Ordinal)
             .ToImmutableArray();
 
@@ -37,6 +42,78 @@ public sealed record OpenApiDocumentRenderingContext(
         schemaComponents = EnrichWithResourceLinks(schemaComponents, app);
 
         return new OpenApiDocumentRenderingContext(pathItemRendering, paths, schemaComponents);
+    }
+
+    /// <summary>
+    /// Walks the assembled path items to find operations with request bodies and converts each into a reusable
+    /// <see cref="OpenApiSchemaComponentModel"/> so the request body can be referenced as
+    /// <c>$ref: #/components/schemas/{OperationName}</c> instead of being rendered inline.
+    /// Only the primary operation per method slot is considered (matching the operation that the output renderer uses).
+    /// </summary>
+    private static ImmutableArray<OpenApiSchemaComponentModel> CollectRequestBodySchemaComponents(
+        ImmutableArray<OpenApiPathItemModel> paths)
+    {
+        var builder = ImmutableArray.CreateBuilder<OpenApiSchemaComponentModel>();
+
+        foreach (var path in paths)
+        {
+            foreach (var method in path.Methods)
+            {
+                var primaryOperation = method.Operations.IsEmpty ? null : method.Operations[0];
+
+                if (primaryOperation?.RequestBody is not { } requestBody || requestBody.Properties.IsEmpty)
+                {
+                    continue;
+                }
+
+                var requiredNames = ImmutableArray.CreateBuilder<string>();
+                var properties = ImmutableArray.CreateBuilder<OpenApiSchemaComponentPropertyModel>();
+
+                foreach (var bodyProperty in requestBody.Properties)
+                {
+                    if (bodyProperty.IsRequired)
+                    {
+                        requiredNames.Add(bodyProperty.Name);
+                    }
+
+                    properties.Add(new OpenApiSchemaComponentPropertyModel(
+                        bodyProperty.Name,
+                        bodyProperty.SchemaType,
+                        IsExtensionData: false,
+                        bodyProperty.IsNullable,
+                        bodyProperty.SchemaFormat,
+                        bodyProperty.EnumValues,
+                        bodyProperty.Description,
+                        bodyProperty.MinLength,
+                        bodyProperty.MaxLength,
+                        bodyProperty.Pattern,
+                        bodyProperty.Minimum,
+                        bodyProperty.Maximum,
+                        bodyProperty.ExclusiveMinimum,
+                        bodyProperty.ExclusiveMaximum,
+                        bodyProperty.ItemsType,
+                        bodyProperty.ItemsFormat,
+                        bodyProperty.AdditionalPropertiesType,
+                        bodyProperty.AdditionalPropertiesFormat,
+                        bodyProperty.ItemsSchemaRef,
+                        bodyProperty.AdditionalPropertiesSchemaRef,
+                        bodyProperty.IsDeprecated,
+                        bodyProperty.DeprecationReason,
+                        bodyProperty.DefaultValue,
+                        bodyProperty.ExampleValue,
+                        IsReadOnly: false,
+                        bodyProperty.IsWriteOnly));
+                }
+
+                builder.Add(new OpenApiSchemaComponentModel(
+                    primaryOperation.OperationName,
+                    "object",
+                    requiredNames.ToImmutable(),
+                    properties.ToImmutable()));
+            }
+        }
+
+        return builder.ToImmutable();
     }
 
     /// <summary>

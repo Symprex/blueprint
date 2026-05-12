@@ -271,34 +271,45 @@ configureOpenApiOperations: operations =>
 
 ---
 
-## NSwag Configuration
+## S365 Custom TypeScript Generator
 
-S365 uses NSwag 14.2.0 for TypeScript client generation. Key configuration settings:
+> **S365 does NOT use NSwag.** It uses custom Handlebars templates in each frontend app.
 
-```json
-{
-  "runtime": "Net80",
-  "documentGenerator": {
-    "fromDocument": {
-      "url": "http://localhost:5000/api/.blueprint/openapi.json"
-    }
-  },
-  "codeGenerators": {
-    "openApiToTypeScriptClient": {
-      "className": "{controller}Client",
-      "template": "Fetch",
-      "operationGenerationMode": "MultipleClientsFromOperationId",
-      "generateClientClasses": true,
-      "generateOptionalParameters": true,
-      "useTransformOptionsMethod": true,
-      "dateTimeType": "string",
-      "nullValue": "Undefined"
-    }
-  }
-}
-```
+### Generator Architecture
 
-**Ensure these settings produce equivalent output before and after migration.**
+| Component | Location |
+|-----------|----------|
+| Orchestrator | `frontend/apps/{portal,admin,partners}/src/openapi/generator/index.mts` |
+| API template | `apiInner.handlebars` — generates `<Tag>Api` classes |
+| Model template | `model.handlebars` — generates TypeScript interfaces |
+| Entry point | `npm run openapi` — loads OpenAPI JSON from disk |
+
+### Key Generator Behaviors
+
+- **`determineDataType()`** resolves schema types — **throws on plain `type: object` without `$ref`**
+- **Groups operations** by `tags` into `export class <Tag>Api`
+- **Reads `operationId`** for method names, URL builders, and lookup keys
+- **Uses `x-links`** to generate typed resource methods on model classes
+- **Only reads `responses["200"]`** for return type — ignores `201`, `202`
+- **Iterates only** `GET/POST/PUT/DELETE/HEAD/OPTIONS` — **skips `PATCH`**
+
+### Compatibility Gaps (Blueprint-side Fixes)
+
+| Gap | Description | Status |
+|-----|-------------|--------|
+| Inline request body schemas | `determineDataType()` rejects inline `type: object` | ✅ Fixed — now emits `$ref` to component schemas |
+| Inline enum naming | Enums need component-level `title` or named types | Investigate during migration |
+
+### Compatibility Gaps (S365 Template-side Fixes)
+
+| Gap | Description | Effort |
+|-----|-------------|--------|
+| PATCH operations skipped | Add `patch` to HTTP method iteration | Trivial |
+| 201 responses treated as void | Read first `2xx` response with content | Small |
+| Array query param serialization | Handle `style: form, explode: true` | Small |
+| Opaque `type: object` properties | Map to `Record<string, unknown>` | Small |
+
+These template changes are backwards-compatible with legacy Blueprint OpenAPI output.
 
 ---
 
@@ -309,8 +320,9 @@ Before declaring a service migration "OpenAPI compatible":
 - [ ] Captured baseline OpenAPI JSON from current service
 - [ ] Generated candidate OpenAPI JSON from migrated service
 - [ ] Ran `oasdiff breaking` with zero breaking changes
-- [ ] Generated TypeScript client from both and diffed
-- [ ] Client method signatures are identical (or changes are documented)
+- [ ] Generated TypeScript client from candidate (`npm run openapi`)
+- [ ] TypeScript client compiles cleanly (`npx tsc --noEmit`)
+- [ ] Client method signatures equivalent (or changes documented)
 - [ ] Verified NodaTime serialization format matches
 - [ ] Verified enum serialization format matches
 - [ ] Verified nullable/required property alignment

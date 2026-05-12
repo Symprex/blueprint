@@ -157,9 +157,7 @@ public class AppModelOpenApiParameterProjectionTests
         postMethod.TryGetProperty("requestBody", out var requestBody).Should().BeTrue();
         requestBody.GetProperty("required").GetBoolean().Should().BeTrue();
 
-        var schema = requestBody.GetProperty("content")
-            .GetProperty("application/json")
-            .GetProperty("schema");
+        var schema = ResolveRequestBodySchema(requestBody, doc.RootElement);
 
         schema.GetProperty("type").GetString().Should().Be("object");
 
@@ -198,6 +196,20 @@ public class AppModelOpenApiParameterProjectionTests
 
         operation.Parameters.Should().BeEmpty();
         operation.RequestBody.Should().BeNull();
+    }
+
+    private static JsonElement ResolveRequestBodySchema(JsonElement requestBody, JsonElement root)
+    {
+        var schemaElement = requestBody.GetProperty("content").GetProperty("application/json").GetProperty("schema");
+
+        if (schemaElement.TryGetProperty("$ref", out var refElement))
+        {
+            var refPath = refElement.GetString()!;
+            var schemaName = refPath.Split('/').Last();
+            return root.GetProperty("components").GetProperty("schemas").GetProperty(schemaName);
+        }
+
+        return schemaElement;
     }
 
     private static OpenApiOperationRenderingContext BuildOperationContext(BlueprintApp app)

@@ -33,6 +33,7 @@
 | Test auth S365 compat | ✅ Done | `Set(ClaimsIdentity)`, `As(identity)`, `MakeAnonymous()` API match |
 | `[Link]` attribute support | ✅ Done | Source gen processes runtime `LinkAttribute` (292 S365 usages) |
 | HttpHostExposure centralisation | ✅ Done | 13 modules refactored to shared `HttpHostExposureHelper` |
+| OpenAPI request body `$ref` | ✅ Done | Request body schemas now use `$ref` to component schemas |
 | `[FromResource]` compatibility | ✅ Verified | S365 2-arg form fully compatible, compile-time traversal |
 | PropertyOwnership route extraction | ✅ Done | Now includes `LinkAttribute` routes via shared helper |
 | Handler discovery compat | ✅ Verified | InvokeAsync/Handle/HandleAsync all recognised |

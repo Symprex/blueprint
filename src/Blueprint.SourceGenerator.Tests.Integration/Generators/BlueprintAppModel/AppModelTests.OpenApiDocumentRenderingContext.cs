@@ -14,7 +14,9 @@ public class AppModelOpenApiDocumentRenderingContextTests
         var context = CreateDocumentContext(new IntegrationTestBlueprintApp());
 
         context.Paths.Select(static path => path.UrlFormat).Should().Contain("/openapi/http-response-metadata");
-        context.SchemaComponents.Select(static component => component.BodyTypeName).Should().Equal(
+
+        var schemaComponentNames = context.SchemaComponents.Select(static component => component.BodyTypeName).ToArray();
+        schemaComponentNames.Should().Contain(
             "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.AlwaysExpandTestEmployee",
             "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.CatchAllFolderApiResource",
             "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.ExpandableTestEmployee",
@@ -28,6 +30,14 @@ public class AppModelOpenApiDocumentRenderingContextTests
             "Microsoft.AspNetCore.Mvc.ValidationProblemDetails",
             "System.Guid",
             "string");
+
+        var requestBodyOperationNames = context.Paths
+            .SelectMany(static path => path.Methods)
+            .SelectMany(static method => method.Operations)
+            .Where(static operation => operation.RequestBody is not null)
+            .Select(static operation => operation.OperationName)
+            .ToArray();
+        schemaComponentNames.Should().Contain(requestBodyOperationNames);
 
         var path = context.Paths.Single(static item => item.UrlFormat == "/openapi/http-response-metadata");
         path.Methods.Select(static method => method.HttpMethod).Should().Equal("GET");

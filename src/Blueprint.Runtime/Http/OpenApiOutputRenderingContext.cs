@@ -267,7 +267,7 @@ public sealed record OpenApiOutputRenderingContext(
 
             WriteTags(writer, primaryOperation.Tags);
             WriteParameters(writer, primaryOperation.Parameters);
-            WriteRequestBody(writer, primaryOperation.RequestBody, schemaNameFormatter);
+            WriteRequestBody(writer, primaryOperation.OperationName, primaryOperation.RequestBody, schemaNameFormatter);
             WriteResponses(writer, primaryOperation.Responses, schemaNameFormatter);
 
             if (primaryOperation.Deprecated)
@@ -417,7 +417,7 @@ public sealed record OpenApiOutputRenderingContext(
         writer.WriteEndArray();
     }
 
-    private static void WriteRequestBody(Utf8JsonWriter writer, OpenApiRequestBodyModel? requestBody, Func<string, string>? schemaNameFormatter)
+    private static void WriteRequestBody(Utf8JsonWriter writer, string operationName, OpenApiRequestBodyModel? requestBody, Func<string, string>? schemaNameFormatter)
     {
         if (requestBody is null)
         {
@@ -435,145 +435,16 @@ public sealed record OpenApiOutputRenderingContext(
 
         writer.WritePropertyName("schema");
         writer.WriteStartObject();
-        writer.WriteString("type", "object");
 
         if (!requestBody.Properties.IsEmpty)
         {
-            writer.WritePropertyName("properties");
-            writer.WriteStartObject();
-
-            foreach (var property in requestBody.Properties)
-            {
-                writer.WritePropertyName(property.Name);
-                writer.WriteStartObject();
-                writer.WriteString("type", property.SchemaType);
-
-                if (property.SchemaFormat is not null)
-                {
-                    writer.WriteString("format", property.SchemaFormat);
-                }
-
-                // nullable and required are orthogonal in OpenAPI 3.0: a required body
-                // property can still accept null values.
-                if (property.IsNullable)
-                {
-                    writer.WriteBoolean("nullable", true);
-                }
-
-                if (property.Description is not null)
-                {
-                    writer.WriteString("description", property.Description);
-                }
-
-                WriteEnumValues(writer, property.EnumValues);
-
-                if (property.ItemsSchemaRef is not null)
-                {
-                    writer.WritePropertyName("items");
-                    writer.WriteStartObject();
-                    writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(property.ItemsSchemaRef, schemaNameFormatter)}");
-                    writer.WriteEndObject();
-                }
-                else if (property.ItemsType is not null)
-                {
-                    writer.WritePropertyName("items");
-                    writer.WriteStartObject();
-                    writer.WriteString("type", property.ItemsType);
-
-                    if (property.ItemsFormat is not null)
-                    {
-                        writer.WriteString("format", property.ItemsFormat);
-                    }
-
-                    writer.WriteEndObject();
-                }
-
-                if (property.AdditionalPropertiesSchemaRef is not null)
-                {
-                    writer.WritePropertyName("additionalProperties");
-                    writer.WriteStartObject();
-                    writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(property.AdditionalPropertiesSchemaRef, schemaNameFormatter)}");
-                    writer.WriteEndObject();
-                }
-                else if (property.AdditionalPropertiesType is not null)
-                {
-                    writer.WritePropertyName("additionalProperties");
-                    writer.WriteStartObject();
-                    writer.WriteString("type", property.AdditionalPropertiesType);
-
-                    if (property.AdditionalPropertiesFormat is not null)
-                    {
-                        writer.WriteString("format", property.AdditionalPropertiesFormat);
-                    }
-
-                    writer.WriteEndObject();
-                }
-
-                WriteNumericConstraints(writer, property.Minimum, property.Maximum, property.ExclusiveMinimum, property.ExclusiveMaximum);
-
-                // For array types, [MinLength]/[MaxLength]/[Length] map to minItems/maxItems rather than minLength/maxLength.
-                if (string.Equals(property.SchemaType, "array", StringComparison.Ordinal))
-                {
-                    WriteArrayItemConstraints(writer, property.MinLength, property.MaxLength);
-                }
-                else
-                {
-                    WriteStringConstraints(writer, property.MinLength, property.MaxLength, property.Pattern);
-                }
-
-                if (property.IsDeprecated)
-                {
-                    writer.WriteBoolean("deprecated", true);
-
-                    if (property.DeprecationReason is not null)
-                    {
-                        writer.WriteString("x-deprecated-reason", property.DeprecationReason);
-                    }
-                }
-
-                if (property.IsWriteOnly)
-                {
-                    writer.WriteBoolean("writeOnly", true);
-                }
-
-                if (property.DefaultValue is not null)
-                {
-                    WriteDefaultValue(writer, property.DefaultValue);
-                }
-
-                if (property.ExampleValue is not null)
-                {
-                    WriteExampleValue(writer, property.ExampleValue);
-                }
-
-                writer.WriteEndObject();
-            }
-
-            writer.WriteEndObject();
-
-            // Write required array inline without intermediate allocation — check, then write
-            var hasRequired = false;
-
-            foreach (var property in requestBody.Properties)
-            {
-                if (property.IsRequired)
-                {
-                    if (!hasRequired)
-                    {
-                        writer.WritePropertyName("required");
-                        writer.WriteStartArray();
-                        hasRequired = true;
-                    }
-
-                    writer.WriteStringValue(property.Name);
-                }
-            }
-
-            if (hasRequired)
-            {
-
-                writer.WriteEndArray();
-            }
+            // Emit a $ref to the corresponding component schema keyed by the operation name.
+            // The request body schema component is assembled in OpenApiDocumentRenderingContext.
+            writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(operationName, schemaNameFormatter)}");
+        }
+        else
+        {
+            writer.WriteString("type", "object");
         }
 
         writer.WriteEndObject();

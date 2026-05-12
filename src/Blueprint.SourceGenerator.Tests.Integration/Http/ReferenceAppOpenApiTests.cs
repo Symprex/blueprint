@@ -197,7 +197,7 @@ public class ReferenceAppOpenApiTests
 
         var templatesPath = doc.RootElement.GetProperty("paths").GetProperty("/templates");
         var requestBody = templatesPath.GetProperty("post").GetProperty("requestBody");
-        var schema = requestBody.GetProperty("content").GetProperty("application/json").GetProperty("schema");
+        var schema = ResolveRequestBodySchema(requestBody, doc.RootElement);
 
         schema.GetProperty("required").EnumerateArray()
             .Select(static e => e.GetString())
@@ -246,7 +246,7 @@ public class ReferenceAppOpenApiTests
 
         var templatesPath = doc.RootElement.GetProperty("paths").GetProperty("/templates");
         var requestBody = templatesPath.GetProperty("post").GetProperty("requestBody");
-        var schema = requestBody.GetProperty("content").GetProperty("application/json").GetProperty("schema");
+        var schema = ResolveRequestBodySchema(requestBody, doc.RootElement);
 
         var nameProperty = schema.GetProperty("properties").GetProperty("name");
         nameProperty.GetProperty("description").GetString()
@@ -483,10 +483,8 @@ public class ReferenceAppOpenApiTests
         // CreateTemplateCommand has HtmlSource as string? without [Required]
         var createPath = doc.RootElement.GetProperty("paths").GetProperty("/templates");
         var postOp = createPath.GetProperty("post");
-        var bodySchema = postOp.GetProperty("requestBody")
-            .GetProperty("content")
-            .GetProperty("application/json")
-            .GetProperty("schema")
+        var requestBody = postOp.GetProperty("requestBody");
+        var bodySchema = ResolveRequestBodySchema(requestBody, doc.RootElement)
             .GetProperty("properties");
 
         // HtmlSource is nullable and not required → should have nullable: true
@@ -706,8 +704,8 @@ public class ReferenceAppOpenApiTests
         // CreateTemplateCommand (POST /templates) has [EmailAddress] on AuthorEmail and [Url] on CallbackUrl
         var templatesPath = doc.RootElement.GetProperty("paths").GetProperty("/templates");
         var requestBody = templatesPath.GetProperty("post").GetProperty("requestBody");
-        var properties = requestBody.GetProperty("content").GetProperty("application/json")
-            .GetProperty("schema").GetProperty("properties");
+        var properties = ResolveRequestBodySchema(requestBody, doc.RootElement)
+            .GetProperty("properties");
 
         properties.GetProperty("authorEmail").GetProperty("format").GetString()
             .Should().Be("email");
@@ -724,8 +722,8 @@ public class ReferenceAppOpenApiTests
         // CreateTemplateCommand (POST /templates) has [Obsolete] on LegacyCategory
         var templatesPath = doc.RootElement.GetProperty("paths").GetProperty("/templates");
         var requestBody = templatesPath.GetProperty("post").GetProperty("requestBody");
-        var properties = requestBody.GetProperty("content").GetProperty("application/json")
-            .GetProperty("schema").GetProperty("properties");
+        var properties = ResolveRequestBodySchema(requestBody, doc.RootElement)
+            .GetProperty("properties");
 
         // LegacyCategory is marked [Obsolete]
         properties.GetProperty("legacyCategory").GetProperty("deprecated").GetBoolean()
@@ -783,8 +781,8 @@ public class ReferenceAppOpenApiTests
         // CreateTemplateCommand (POST /templates) has [DefaultValue(100)] on Priority
         var templatesPath = doc.RootElement.GetProperty("paths").GetProperty("/templates");
         var requestBody = templatesPath.GetProperty("post").GetProperty("requestBody");
-        var properties = requestBody.GetProperty("content").GetProperty("application/json")
-            .GetProperty("schema").GetProperty("properties");
+        var properties = ResolveRequestBodySchema(requestBody, doc.RootElement)
+            .GetProperty("properties");
 
         properties.GetProperty("priority").GetProperty("default").GetInt32()
             .Should().Be(100);
@@ -804,8 +802,8 @@ public class ReferenceAppOpenApiTests
         // and [OpenApiExample(42)] on Priority
         var templatesPath = doc.RootElement.GetProperty("paths").GetProperty("/templates");
         var requestBody = templatesPath.GetProperty("post").GetProperty("requestBody");
-        var properties = requestBody.GetProperty("content").GetProperty("application/json")
-            .GetProperty("schema").GetProperty("properties");
+        var properties = ResolveRequestBodySchema(requestBody, doc.RootElement)
+            .GetProperty("properties");
 
         properties.GetProperty("name").GetProperty("example").GetString()
             .Should().Be("Welcome Email");
@@ -853,8 +851,8 @@ public class ReferenceAppOpenApiTests
         // ChangePasswordCommand (PUT /account/password) has [OpenApiWriteOnly] on all password fields
         var passwordPath = doc.RootElement.GetProperty("paths").GetProperty("/account/password");
         var requestBody = passwordPath.GetProperty("put").GetProperty("requestBody");
-        var properties = requestBody.GetProperty("content").GetProperty("application/json")
-            .GetProperty("schema").GetProperty("properties");
+        var properties = ResolveRequestBodySchema(requestBody, doc.RootElement)
+            .GetProperty("properties");
 
         properties.GetProperty("currentPassword").GetProperty("writeOnly").GetBoolean()
             .Should().BeTrue("password fields marked with [OpenApiWriteOnly] should emit writeOnly: true");
@@ -873,8 +871,8 @@ public class ReferenceAppOpenApiTests
         // BulkArchiveTemplatesCommand (POST /templates/bulk-archive) has string[] Ids with [MinLength(1)] [MaxLength(100)]
         var bulkArchivePath = doc.RootElement.GetProperty("paths").GetProperty("/templates/bulk-archive");
         var requestBody = bulkArchivePath.GetProperty("post").GetProperty("requestBody");
-        var properties = requestBody.GetProperty("content").GetProperty("application/json")
-            .GetProperty("schema").GetProperty("properties");
+        var properties = ResolveRequestBodySchema(requestBody, doc.RootElement)
+            .GetProperty("properties");
 
         var idsProperty = properties.GetProperty("ids");
         idsProperty.GetProperty("type").GetString().Should().Be("array");
@@ -899,8 +897,8 @@ public class ReferenceAppOpenApiTests
         // CreateTemplateCommand (POST /templates) has List<string> Tags
         var templatesPath = doc.RootElement.GetProperty("paths").GetProperty("/templates");
         var requestBody = templatesPath.GetProperty("post").GetProperty("requestBody");
-        var properties = requestBody.GetProperty("content").GetProperty("application/json")
-            .GetProperty("schema").GetProperty("properties");
+        var properties = ResolveRequestBodySchema(requestBody, doc.RootElement)
+            .GetProperty("properties");
 
         var tagsProperty = properties.GetProperty("tags");
         tagsProperty.GetProperty("type").GetString().Should().Be("array");
@@ -917,8 +915,8 @@ public class ReferenceAppOpenApiTests
         // CreateTemplateCommand (POST /templates) has List<TemplateMergeFieldDto> MergeFields
         var templatesPath = doc.RootElement.GetProperty("paths").GetProperty("/templates");
         var requestBody = templatesPath.GetProperty("post").GetProperty("requestBody");
-        var properties = requestBody.GetProperty("content").GetProperty("application/json")
-            .GetProperty("schema").GetProperty("properties");
+        var properties = ResolveRequestBodySchema(requestBody, doc.RootElement)
+            .GetProperty("properties");
 
         var mergeFieldsProperty = properties.GetProperty("mergeFields");
         mergeFieldsProperty.GetProperty("type").GetString().Should().Be("array");
@@ -939,8 +937,8 @@ public class ReferenceAppOpenApiTests
         // CreateTemplateCommand has [Obsolete("Use Tags instead.")] on LegacyCategory
         var templatesPath = doc.RootElement.GetProperty("paths").GetProperty("/templates");
         var requestBody = templatesPath.GetProperty("post").GetProperty("requestBody");
-        var properties = requestBody.GetProperty("content").GetProperty("application/json")
-            .GetProperty("schema").GetProperty("properties");
+        var properties = ResolveRequestBodySchema(requestBody, doc.RootElement)
+            .GetProperty("properties");
 
         var legacyCategoryProperty = properties.GetProperty("legacyCategory");
         legacyCategoryProperty.GetProperty("deprecated").GetBoolean().Should().BeTrue();
@@ -976,6 +974,25 @@ public class ReferenceAppOpenApiTests
         var templateSchema = schemas.GetProperty("Blueprint_SourceGenerator_Sample_Contract_Api_TemplateApiResource");
         templateSchema.GetProperty("title").GetString().Should().Be("Email Template",
             "[DisplayName(\"Email Template\")] should override the default CLR type name in the schema title");
+    }
+
+    /// <summary>
+    /// Resolves a request body's <c>$ref</c> schema pointer to the actual component schema element.
+    /// After the request-body-to-$ref refactor, request body schemas live in <c>components/schemas</c>
+    /// rather than inline.
+    /// </summary>
+    private static JsonElement ResolveRequestBodySchema(JsonElement requestBody, JsonElement root)
+    {
+        var schemaElement = requestBody.GetProperty("content").GetProperty("application/json").GetProperty("schema");
+
+        if (schemaElement.TryGetProperty("$ref", out var refElement))
+        {
+            var refPath = refElement.GetString()!;
+            var schemaName = refPath.Split('/').Last();
+            return root.GetProperty("components").GetProperty("schemas").GetProperty(schemaName);
+        }
+
+        return schemaElement;
     }
 
     private static async Task<(string Json, int StatusCode)> InvokeOpenApiEndpointAsync(
