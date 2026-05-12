@@ -1,4 +1,5 @@
 using Blueprint.Model;
+using Blueprint.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Blueprint.Testing;
@@ -39,6 +40,26 @@ public sealed class BlueprintTestHostBuilder<TApp, TExec>
     }
 
     /// <summary>
+    /// Registers a standard set of test doubles into the DI container:
+    /// <see cref="BackgroundTaskCollector"/> (as <see cref="IBackgroundTaskScheduleProvider"/>),
+    /// <see cref="TestMessageCollector"/>, <see cref="InMemoryUnitOfWork"/>, and
+    /// <see cref="NullRecurringTaskProvider"/>. These are accessible directly from
+    /// <see cref="BlueprintTestFixture{TApp,TExec}"/> properties when using <see cref="BuildFixture"/>.
+    /// </summary>
+    /// <returns>This builder for chaining.</returns>
+    public BlueprintTestHostBuilder<TApp, TExec> WithTestDefaults()
+    {
+        return this.ConfigureServices(static services =>
+        {
+            services.AddSingleton<BackgroundTaskCollector>();
+            services.AddSingleton<IBackgroundTaskScheduleProvider>(sp => sp.GetRequiredService<BackgroundTaskCollector>());
+            services.AddSingleton<TestMessageCollector>();
+            services.AddSingleton<InMemoryUnitOfWork>();
+            services.AddSingleton<IRecurringTaskProvider>(NullRecurringTaskProvider.Instance);
+        });
+    }
+
+    /// <summary>
     /// Builds the <see cref="BlueprintTestHost{TApp,TExec}"/> with all configured services.
     /// The host is ready to execute operations immediately after construction.
     /// </summary>
@@ -66,5 +87,20 @@ public sealed class BlueprintTestHostBuilder<TApp, TExec>
         var executor = rootProvider.GetRequiredService<TExec>();
 
         return new BlueprintTestHost<TApp, TExec>(rootProvider, app, executor);
+    }
+
+    /// <summary>
+    /// Builds a <see cref="BlueprintTestFixture{TApp,TExec}"/> that wraps the host with ambient
+    /// authentication, direct test-double access, and convenience methods. This is the
+    /// recommended entry point for consumer tests that follow the S365 fixture pattern.
+    /// <para>
+    /// Consider calling <see cref="WithTestDefaults"/> before this method to auto-register
+    /// the standard test doubles.
+    /// </para>
+    /// </summary>
+    /// <returns>A fully configured test fixture.</returns>
+    public BlueprintTestFixture<TApp, TExec> BuildFixture()
+    {
+        return new BlueprintTestFixture<TApp, TExec>(this.Build());
     }
 }

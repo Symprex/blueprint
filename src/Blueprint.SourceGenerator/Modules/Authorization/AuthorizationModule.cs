@@ -57,10 +57,10 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
     {
         var operationType = context.GetOperationTypeSymbol();
         var directResourceAttributes = GetResourceAttributes(operationType);
-        var fromResourceTarget = GetFromResourceTarget(operationType);
+        var fromResourceResult = GetFromResourceTarget(operationType);
 
         // BPAU005: Both [FromResource] and [Resource] on the same operation
-        if (fromResourceTarget is not null && directResourceAttributes.Count > 0)
+        if (fromResourceResult is not null && directResourceAttributes.Count > 0)
         {
             context.AddDiagnostic(
                 new DiagnosticInfo(
@@ -74,10 +74,12 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
         // Resolve the effective scope pairs — either direct or inherited
         List<(string Noun, string Verb, string? ResourceKeyTemplate)> effectiveScopePairs;
 
-        if (fromResourceTarget is not null)
+        if (fromResourceResult is not null)
         {
+            var (fromTarget, templateOverride) = fromResourceResult.Value;
+
             // [FromResource(typeof(X))] — inherit from the referenced type's direct [Resource] attrs
-            var targetResourceAttributes = GetResourceAttributes(fromResourceTarget);
+            var targetResourceAttributes = GetResourceAttributes(fromTarget);
 
             if (targetResourceAttributes.Count == 0)
             {
@@ -85,12 +87,22 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
                     new DiagnosticInfo(
                         AuthorizationDiagnosticDescriptors.FromResourceTargetHasNoResource,
                         operationType.Locations.FirstOrDefault(),
-                        [operationType.Name, fromResourceTarget.Name]));
+                        [operationType.Name, fromTarget.Name]));
 
                 return;
             }
 
-            effectiveScopePairs = targetResourceAttributes;
+            // When [FromResource] specifies a template override, apply it to all inherited pairs
+            if (templateOverride is not null)
+            {
+                effectiveScopePairs = targetResourceAttributes
+                    .Select(sp => (sp.Noun, sp.Verb, (string?)templateOverride))
+                    .ToList();
+            }
+            else
+            {
+                effectiveScopePairs = targetResourceAttributes;
+            }
         }
         else if (directResourceAttributes.Count > 0)
         {
@@ -102,7 +114,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
         }
 
         // Validate noun/verb values (only for direct [Resource]; inherited values were validated on the source)
-        if (fromResourceTarget is null)
+        if (fromResourceResult is null)
         {
             var hasValidationErrors = false;
 
@@ -189,10 +201,10 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
     {
         var operationType = context.Operation.TypeSymbol;
         var directResourceAttributes = GetResourceAttributes(operationType);
-        var fromResourceTarget = GetFromResourceTarget(operationType);
+        var fromResourceResult = GetFromResourceTarget(operationType);
 
         // Determine if this operation has effective resource authorization
-        var hasResourceAuthorization = directResourceAttributes.Count > 0 || fromResourceTarget is not null;
+        var hasResourceAuthorization = directResourceAttributes.Count > 0 || fromResourceResult is not null;
 
         if (!hasResourceAuthorization)
         {
@@ -200,7 +212,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
         }
 
         // BPAU005 conflict → no pipeline contribution
-        if (fromResourceTarget is not null && directResourceAttributes.Count > 0)
+        if (fromResourceResult is not null && directResourceAttributes.Count > 0)
         {
             return;
         }
@@ -216,16 +228,27 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
 
         // For [FromResource], property tokens are resolved against the current operation type
         // (which may differ from the template source operation)
-        if (fromResourceTarget is not null)
+        if (fromResourceResult is not null)
         {
-            var targetResourceAttributes = GetResourceAttributes(fromResourceTarget);
+            var (fromTarget, templateOverride) = fromResourceResult.Value;
+            var targetResourceAttributes = GetResourceAttributes(fromTarget);
 
             if (targetResourceAttributes.Count == 0)
             {
                 return;
             }
 
-            effectiveScopePairs = targetResourceAttributes;
+            // When [FromResource] specifies a template override, apply it to all inherited pairs
+            if (templateOverride is not null)
+            {
+                effectiveScopePairs = targetResourceAttributes
+                    .Select(sp => (sp.Noun, sp.Verb, (string?)templateOverride))
+                    .ToList();
+            }
+            else
+            {
+                effectiveScopePairs = targetResourceAttributes;
+            }
         }
         else
         {
@@ -513,11 +536,11 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
     }
 
     /// <summary>
-    /// Resolves the <c>[FromResource(typeof(X))]</c> attribute on the operation, returning the
-    /// referenced <see cref="INamedTypeSymbol"/> or <c>null</c> if the attribute is not present
-    /// or the type argument cannot be resolved.
+    /// Resolves the <c>[FromResource(typeof(X))]</c> or <c>[FromResource(typeof(X), "template")]</c>
+    /// attribute on the operation, returning the referenced <see cref="INamedTypeSymbol"/> and an
+    /// optional resource key template override, or <c>null</c> if the attribute is not present.
     /// </summary>
-    private static INamedTypeSymbol? GetFromResourceTarget(INamedTypeSymbol operationType)
+    private static (INamedTypeSymbol Target, string? TemplateOverride)? GetFromResourceTarget(INamedTypeSymbol operationType)
     {
         foreach (var attribute in operationType.GetAttributes())
         {
@@ -553,7 +576,17 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
                 continue;
             }
 
-            return targetType;
+            // Check for optional second constructor argument (resource key template override)
+            string? templateOverride = null;
+
+            if (attribute.ConstructorArguments.Length >= 2 &&
+                attribute.ConstructorArguments[1].Value is string template &&
+                !string.IsNullOrWhiteSpace(template))
+            {
+                templateOverride = template;
+            }
+
+            return (targetType, templateOverride);
         }
 
         return null;
