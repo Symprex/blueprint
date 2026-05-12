@@ -205,3 +205,52 @@ the fallback path, the overhead is still only ~4.5µs per attribute invocation.
 
 **Conclusion:** Pipeline performance is already excellent. Further optimization effort
 should focus on HTTP layer (serialization, routing) rather than pipeline execution.
+
+---
+
+## Source Generator Compiler Benchmarks
+
+These benchmarks measure how fast the source generators run during Roslyn compilation.
+They use `SyntheticBlueprintFixtureGenerator` to create realistic N-operation apps and
+time the full generator pipeline (descriptor + pipeline + app registration generators).
+
+### Results
+
+| Benchmark | Mean | Allocated | Notes |
+|-----------|-----:|-----------:|-------|
+| AppRegistration (100 ops) | 3.4 ms | 2.2 MB | Cheapest generator — simple registration codegen |
+| InitialRun (10 ops) | 8.1 ms | 3.9 MB | Baseline fixed overhead for all 3 generators |
+| PipelineOnly (100 ops) | 11.1 ms | 19.8 MB | Pipeline codegen is allocation-heavy |
+| DescriptorOnly (100 ops) | 27.9 ms | 12.1 MB | Descriptor analysis is the most CPU-intensive |
+| InitialRun (50 ops) | 29.6 ms | 18.1 MB | ~3.6x over 10 ops — roughly linear |
+| InitialRun (100 ops) | 60.6 ms | 36.1 MB | S365 medium service size |
+| IncrementalCached (100 ops) | 86.7 ms | 57.6 MB | Cache re-run — see analysis below |
+| InitialRun (250 ops) | 156.0 ms | 89.7 MB | S365 largest service (Portal ~70 ops) |
+
+### Analysis
+
+**Scaling:** Generator cost scales roughly linearly with operation count:
+- 10 ops → 8.1ms (baseline)
+- 50 ops → 29.6ms (~3.6x)
+- 100 ops → 60.6ms (~7.5x)
+- 250 ops → 156ms (~19x)
+
+For S365's largest service (Portal, ~70 operations), expect ~45ms generation time per
+build. This is well within acceptable IDE feedback latency.
+
+**Generator breakdown (100 ops):**
+- App registration: 3.4ms (cheapest — simple type listing)
+- Pipeline codegen: 11.1ms (moderate — generates full executor pipelines)
+- Descriptor analysis: 27.9ms (most expensive — attribute analysis, validation, planning)
+
+**Incremental cache concern:** The cached re-run (86.7ms) is slower than the initial run
+(60.6ms). This suggests the incremental pipeline overhead (driver setup, cache lookup,
+equality comparison) exceeds the generation cost for medium-sized apps. This is expected
+when the benchmark creates a fresh driver per iteration — in real IDE usage the driver
+is long-lived and incremental caching prevents redundant work on unchanged files.
+
+**Memory:** At 100 operations, all three generators together allocate ~36 MB. This is
+Roslyn-typical for source generators and is reclaimed after compilation. The pipeline
+generator is the most allocation-heavy (19.8 MB for 100 ops) due to code-emission
+string building.
+

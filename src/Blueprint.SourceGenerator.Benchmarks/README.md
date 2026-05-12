@@ -28,6 +28,8 @@ dotnet run -c Release --project src/Blueprint.SourceGenerator.Benchmarks -- --li
 | `BlueprintAppBenchmarks` | App registration scaling (10–500 operations) |
 | `BlueprintEndpointMappingBenchmarks` | ASP.NET Core endpoint mapping scaling (10–500 operations) |
 | `PopulationPipelineBenchmarks` | Property population from route, query, headers, and JSON body |
+| `FullPipelineBenchmarks` | End-to-end pipeline execution: validation → handler → result |
+| `SourceGeneratorCompilationBenchmarks` | Source generator compile-time cost across 10–250 operation apps |
 
 ## Synthetic fixture generator
 

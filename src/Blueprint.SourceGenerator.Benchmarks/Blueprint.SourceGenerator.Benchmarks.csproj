@@ -8,13 +8,21 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="BenchmarkDotNet" Version="0.14.0" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.11.0" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Blueprint.Runtime.Model\Blueprint.Runtime.Model.csproj" />
     <ProjectReference Include="..\Blueprint.Runtime\Blueprint.Runtime.csproj" />
-    <ProjectReference Include="..\Blueprint.SourceGenerator\Blueprint.SourceGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\Blueprint.HttpClient\Blueprint.HttpClient.csproj" />
+    <ProjectReference Include="..\Blueprint.Rebus\Blueprint.Rebus.csproj" />
+    <ProjectReference Include="..\Blueprint.Marten\Blueprint.Marten.csproj" />
+    <ProjectReference Include="..\Blueprint.SourceGenerator\Blueprint.SourceGenerator.csproj" OutputItemType="Analyzer" />
   </ItemGroup>
 
 </Project>
