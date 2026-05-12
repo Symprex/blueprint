@@ -11,7 +11,7 @@ public readonly struct EquatableList<T> : IEquatable<EquatableList<T>>, IEnumera
     where T : IEquatable<T>
 {
     /// <summary>
-    /// The underlying <typeparamref name="T"/> array.
+    /// The underlying <typeparamref name="T"/> list.
     /// </summary>
     private readonly List<T> _list;
 
@@ -75,9 +75,25 @@ public readonly struct EquatableList<T> : IEquatable<EquatableList<T>>, IEnumera
     }
 
     /// <inheritdoc/>
-    public bool Equals(EquatableList<T> list)
+    public bool Equals(EquatableList<T> other)
     {
-        return this.AsSpan().SequenceEqual(list.AsSpan());
+        var left = this._list;
+        var right = other._list;
+
+        if (left.Count != right.Count)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < left.Count; i++)
+        {
+            if (!left[i].Equals(right[i]))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /// <inheritdoc/>
@@ -89,34 +105,25 @@ public readonly struct EquatableList<T> : IEquatable<EquatableList<T>>, IEnumera
     /// <inheritdoc/>
     public override int GetHashCode()
     {
-        if (this._list is not { } array)
+        if (this._list is not { } items)
         {
             return 0;
         }
 
         HashCode hashCode = default;
 
-        foreach (var item in array)
+        for (var i = 0; i < items.Count; i++)
         {
-            hashCode.Add(item);
+            hashCode.Add(items[i]);
         }
 
         return hashCode.ToHashCode();
     }
 
     /// <summary>
-    /// Returns a <see cref="ReadOnlySpan{T}"/> wrapping the current items.
+    /// Returns a copy of the underlying items as a new array.
     /// </summary>
-    /// <returns>A <see cref="ReadOnlySpan{T}"/> wrapping the current items.</returns>
-    public ReadOnlySpan<T> AsSpan()
-    {
-        return this._list.ToArray().AsSpan();
-    }
-
-    /// <summary>
-    /// Returns the underlying wrapped array.
-    /// </summary>
-    /// <returns>Returns the underlying array.</returns>
+    /// <returns>A new array containing the items.</returns>
     public T[] AsArray()
     {
         return this._list.ToArray();
