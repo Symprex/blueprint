@@ -6,26 +6,13 @@ namespace Blueprint.Testing;
 /// Manages authentication state for test scenarios, providing scoped auth contexts
 /// that automatically apply to <see cref="BlueprintTestContext"/> configurations.
 /// <para>
-/// Typical usage: create an instance in a test fixture, set the default identity, and
-/// use <see cref="AsAnonymous"/> or <see cref="AsUser(ClaimsPrincipal)"/> to temporarily change identity
-/// within a <c>using</c> block.
+/// <strong>S365 compatibility</strong>: this class provides both the original
+/// <see cref="SetDefaultUser(ClaimsPrincipal)"/> / <see cref="AsUser(ClaimsPrincipal)"/> API
+/// and the S365 <c>Authentication</c> shape — <see cref="Set(ClaimsIdentity)"/>,
+/// <see cref="As(ClaimsIdentity)"/>, <see cref="MakeAnonymous"/>. Migrating test helpers
+/// can call either surface without code changes.
 /// </para>
 /// </summary>
-/// <example>
-/// <code>
-/// var auth = new TestAuthenticationManager();
-/// auth.SetDefaultUser(claims => claims.Add(new Claim("sub", "user-1")));
-///
-/// // Uses default user
-/// await host.ExecuteAsync(query, ctx => auth.Apply(ctx));
-///
-/// // Temporarily anonymous
-/// using (auth.AsAnonymous())
-/// {
-///     await host.ExecuteAsync(query, ctx => auth.Apply(ctx));
-/// }
-/// </code>
-/// </example>
 public sealed class TestAuthenticationManager
 {
     private ClaimsPrincipal? _currentPrincipal;
@@ -36,6 +23,10 @@ public sealed class TestAuthenticationManager
     /// Returns <c>null</c> when anonymous (no identity).
     /// </summary>
     public ClaimsPrincipal? CurrentPrincipal => this._currentPrincipal ?? this._defaultPrincipal;
+
+    // ──────────────────────────────────────────────
+    //  Original Blueprint API
+    // ──────────────────────────────────────────────
 
     /// <summary>
     /// Sets the default user identity that applies when no scoped override is active.
@@ -64,9 +55,63 @@ public sealed class TestAuthenticationManager
         this.SetDefaultUser(new ClaimsPrincipal(identity));
     }
 
+    // ──────────────────────────────────────────────
+    //  S365 Authentication compatibility API
+    // ──────────────────────────────────────────────
+
+    /// <summary>
+    /// Sets the ambient identity from a <see cref="ClaimsIdentity"/>. This matches the S365
+    /// <c>Authentication.Set(ClaimsIdentity)</c> pattern used by <c>AuthenticateAs*</c> helpers.
+    /// </summary>
+    /// <param name="identity">The identity to set as the ambient user.</param>
+    public void Set(ClaimsIdentity identity)
+    {
+        this._defaultPrincipal = new ClaimsPrincipal(identity);
+        this._currentPrincipal = null;
+    }
+
+    /// <summary>
+    /// Sets the ambient identity from a <see cref="ClaimsPrincipal"/>. Passing <c>null</c> clears
+    /// the ambient identity (equivalent to <see cref="MakeAnonymous"/>). This matches the S365
+    /// <c>Authentication.Set(ClaimsPrincipal?)</c> pattern.
+    /// </summary>
+    /// <param name="principal">The principal to set, or <c>null</c> to go anonymous.</param>
+    public void Set(ClaimsPrincipal? principal)
+    {
+        this._defaultPrincipal = principal;
+        this._currentPrincipal = null;
+    }
+
+    /// <summary>
+    /// Temporarily switches to the specified identity. Dispose the returned scope to restore
+    /// the previous state. This matches the S365 <c>Authentication.As(ClaimsIdentity)</c> pattern
+    /// used by <c>PerformOperationAsUserAsync</c>.
+    /// </summary>
+    /// <param name="identity">The temporary identity.</param>
+    /// <returns>A disposable scope that restores the previous identity on disposal.</returns>
+    public IDisposable As(ClaimsIdentity identity)
+    {
+        return this.AsUser(new ClaimsPrincipal(identity));
+    }
+
+    /// <summary>
+    /// Permanently clears the ambient identity, making all subsequent operations anonymous.
+    /// This matches the S365 <c>Authentication.MakeAnonymous()</c> pattern.
+    /// </summary>
+    public void MakeAnonymous()
+    {
+        this._defaultPrincipal = null;
+        this._currentPrincipal = null;
+    }
+
+    // ──────────────────────────────────────────────
+    //  Shared API
+    // ──────────────────────────────────────────────
+
     /// <summary>
     /// Applies the current authentication state to the given <see cref="BlueprintTestContext"/>.
-    /// Call this from the <c>configure</c> callback of <see cref="BlueprintTestHost{TApp,TExec}.ExecuteAsync"/>.
+    /// Called automatically by <see cref="BlueprintTestFixture{TApp,TExec}"/>; can also be called
+    /// manually from the <c>configure</c> callback.
     /// </summary>
     /// <param name="context">The test context to apply authentication to.</param>
     public void Apply(BlueprintTestContext context)
@@ -90,7 +135,6 @@ public sealed class TestAuthenticationManager
         var previous = this._currentPrincipal;
         this._currentPrincipal = null;
 
-        // Clear the default too so CurrentPrincipal returns null
         var previousDefault = this._defaultPrincipal;
         this._defaultPrincipal = null;
 

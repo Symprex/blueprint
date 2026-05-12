@@ -1,5 +1,7 @@
 using Blueprint.Model;
 using Blueprint.Runtime.Exec;
+using Blueprint.Tasks;
+using Microsoft.Extensions.Options;
 
 namespace Blueprint.Testing;
 
@@ -77,6 +79,10 @@ public sealed class BlueprintTestFixture<TApp, TExec> : IDisposable, IAsyncDispo
     /// </summary>
     public InMemoryUnitOfWork? UnitOfWork { get; }
 
+    // ──────────────────────────────────────────────
+    //  Core execution methods
+    // ──────────────────────────────────────────────
+
     /// <summary>
     /// Executes the given operation through the source-generated pipeline, returning the raw
     /// <see cref="OperationResult"/>. Ambient authentication is applied automatically before
@@ -127,9 +133,12 @@ public sealed class BlueprintTestFixture<TApp, TExec> : IDisposable, IAsyncDispo
         return this._host.ExecuteExpectingValidationFailureAsync(operation, this.WrapConfigure(configure), cancellationToken);
     }
 
+    // ──────────────────────────────────────────────
+    //  QueryAsync — typed and untyped overloads
+    // ──────────────────────────────────────────────
+
     /// <summary>
-    /// Executes a query operation and unwraps the result. Convenience alias that mirrors
-    /// the S365 <c>QueryAsync</c> pattern.
+    /// Executes a query operation and unwraps the result. Accepts any <see cref="IOperation"/>.
     /// </summary>
     /// <typeparam name="TResult">The expected result type.</typeparam>
     /// <param name="query">The query operation instance.</param>
@@ -145,8 +154,29 @@ public sealed class BlueprintTestFixture<TApp, TExec> : IDisposable, IAsyncDispo
     }
 
     /// <summary>
-    /// Executes a command operation and unwraps the result. Convenience alias that mirrors
-    /// the S365 <c>CommandAsync</c> pattern.
+    /// Executes a query operation constrained to <see cref="IQuery{TResult}"/> and unwraps the result.
+    /// This overload matches the S365 <c>ApiFixture.QueryAsync&lt;TResult&gt;(IQuery&lt;TResult&gt;)</c>
+    /// signature so migrated tests compile without changes.
+    /// </summary>
+    /// <typeparam name="TResult">The query result type.</typeparam>
+    /// <param name="query">The strongly-typed query.</param>
+    /// <param name="configure">Optional per-call context configuration (applied after ambient auth).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The unwrapped query result.</returns>
+    public Task<TResult> QueryAsync<TResult>(
+        IQuery<TResult> query,
+        Action<BlueprintTestContext>? configure = null,
+        CancellationToken cancellationToken = default)
+    {
+        return this._host.ExecuteAsync<TResult>(query, this.WrapConfigure(configure), cancellationToken);
+    }
+
+    // ──────────────────────────────────────────────
+    //  CommandAsync — typed and untyped overloads
+    // ──────────────────────────────────────────────
+
+    /// <summary>
+    /// Executes a command operation and unwraps the result. Accepts any <see cref="IOperation"/>.
     /// </summary>
     /// <typeparam name="TResult">The expected result type.</typeparam>
     /// <param name="command">The command operation instance.</param>
@@ -155,6 +185,24 @@ public sealed class BlueprintTestFixture<TApp, TExec> : IDisposable, IAsyncDispo
     /// <returns>The unwrapped command result.</returns>
     public Task<TResult> CommandAsync<TResult>(
         IOperation command,
+        Action<BlueprintTestContext>? configure = null,
+        CancellationToken cancellationToken = default)
+    {
+        return this._host.ExecuteAsync<TResult>(command, this.WrapConfigure(configure), cancellationToken);
+    }
+
+    /// <summary>
+    /// Executes a command constrained to <see cref="ICommand{TResult}"/> and unwraps the result.
+    /// This overload matches the S365 <c>ApiFixture.CommandAsync&lt;TResult&gt;(ICommand&lt;TResult&gt;)</c>
+    /// signature so migrated tests compile without changes.
+    /// </summary>
+    /// <typeparam name="TResult">The command result type.</typeparam>
+    /// <param name="command">The strongly-typed command.</param>
+    /// <param name="configure">Optional per-call context configuration (applied after ambient auth).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The unwrapped command result.</returns>
+    public Task<TResult> CommandAsync<TResult>(
+        ICommand<TResult> command,
         Action<BlueprintTestContext>? configure = null,
         CancellationToken cancellationToken = default)
     {
@@ -177,13 +225,18 @@ public sealed class BlueprintTestFixture<TApp, TExec> : IDisposable, IAsyncDispo
         return this._host.ExecuteAsync(command, this.WrapConfigure(configure), cancellationToken);
     }
 
+    // ──────────────────────────────────────────────
+    //  BackgroundTaskAsync — clears auth by default
+    // ──────────────────────────────────────────────
+
     /// <summary>
-    /// Executes a background task operation through the pipeline, returning the raw
-    /// <see cref="OperationResult"/>. This is a convenience alias for operations that
-    /// are semantically background work (e.g. Hangfire-scheduled tasks).
+    /// Executes a background task operation through the pipeline. Background tasks run without
+    /// authentication context — the ambient auth identity is temporarily cleared for the duration
+    /// of the call, matching the S365 <c>BackgroundTaskAsync</c> behavior where
+    /// <c>ClaimsIdentity</c> and <c>UserAuthorisationContext</c> are nulled.
     /// </summary>
     /// <param name="task">The background task operation instance.</param>
-    /// <param name="configure">Optional per-call context configuration (applied after ambient auth).</param>
+    /// <param name="configure">Optional per-call context configuration (applied after auth clearing).</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The raw operation result.</returns>
     public Task<OperationResult> BackgroundTaskAsync(
@@ -191,25 +244,79 @@ public sealed class BlueprintTestFixture<TApp, TExec> : IDisposable, IAsyncDispo
         Action<BlueprintTestContext>? configure = null,
         CancellationToken cancellationToken = default)
     {
-        return this._host.ExecuteAsync(task, this.WrapConfigure(configure), cancellationToken);
+        return this._host.ExecuteAsync(task, this.WrapConfigureAnonymous(configure), cancellationToken);
     }
 
     /// <summary>
-    /// Executes a message/event handler operation through the pipeline, returning the raw
-    /// <see cref="OperationResult"/>. This is a convenience alias for Rebus message handler
-    /// operations that are triggered by incoming bus messages.
+    /// Executes a background task constrained to <see cref="IBackgroundTask"/>. This overload
+    /// matches the S365 <c>ApiFixture.BackgroundTaskAsync(IBackgroundTask)</c> signature.
+    /// Authentication is automatically cleared for the execution.
     /// </summary>
-    /// <param name="message">The message operation instance.</param>
-    /// <param name="configure">Optional per-call context configuration (applied after ambient auth).</param>
+    /// <param name="task">The strongly-typed background task.</param>
+    /// <param name="configure">Optional per-call context configuration (applied after auth clearing).</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The raw operation result.</returns>
-    public Task<OperationResult> MessageAsync(
-        IOperation message,
+    public Task<OperationResult> BackgroundTaskAsync(
+        IBackgroundTask task,
         Action<BlueprintTestContext>? configure = null,
         CancellationToken cancellationToken = default)
     {
-        return this._host.ExecuteAsync(message, this.WrapConfigure(configure), cancellationToken);
+        return this._host.ExecuteAsync(task, this.WrapConfigureAnonymous(configure), cancellationToken);
     }
+
+    // ──────────────────────────────────────────────
+    //  MessageAsync — with optional retry
+    // ──────────────────────────────────────────────
+
+    /// <summary>
+    /// Executes a message/event handler operation through the pipeline, returning the raw
+    /// <see cref="OperationResult"/>. Messages execute anonymously (no authentication) matching
+    /// the S365 pattern where message handlers run as system operations. Failed results
+    /// (<see cref="ValidationFailedResult"/> or <see cref="UnhandledExceptionOperationResult"/>)
+    /// automatically throw so tests fail fast.
+    /// </summary>
+    /// <param name="message">The message operation instance.</param>
+    /// <param name="configure">Optional per-call context configuration (applied after auth clearing).</param>
+    /// <param name="retryAttempts">
+    /// Number of retry attempts for transient failures (default 0 = no retries). When greater
+    /// than zero, <see cref="UnhandledExceptionOperationResult"/> triggers a retry with 1-second
+    /// constant back-off. Useful for concurrency tests.
+    /// </param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The raw operation result.</returns>
+    public async Task<OperationResult> MessageAsync(
+        IOperation message,
+        Action<BlueprintTestContext>? configure = null,
+        int retryAttempts = 0,
+        CancellationToken cancellationToken = default)
+    {
+        var wrappedConfigure = this.WrapConfigureAnonymous(configure);
+
+        OperationResult result;
+
+        if (retryAttempts <= 0)
+        {
+            result = await this._host.ExecuteAsync(message, wrappedConfigure, cancellationToken);
+        }
+        else
+        {
+            result = await ExecuteWithRetryAsync(
+                () => this._host.ExecuteAsync(message, wrappedConfigure, cancellationToken),
+                retryAttempts,
+                cancellationToken);
+        }
+
+        if (result is ValidationFailedResult or UnhandledExceptionOperationResult)
+        {
+            result.Unwrap<object>();
+        }
+
+        return result;
+    }
+
+    // ──────────────────────────────────────────────
+    //  Service and configuration helpers
+    // ──────────────────────────────────────────────
 
     /// <summary>
     /// Resolves a service from the root DI container.
@@ -219,6 +326,17 @@ public sealed class BlueprintTestFixture<TApp, TExec> : IDisposable, IAsyncDispo
     public T GetRequiredService<T>() where T : notnull
     {
         return this.Services.GetRequiredService<T>();
+    }
+
+    /// <summary>
+    /// Resolves <see cref="IOptions{T}"/> from the root DI container and returns the
+    /// <see cref="IOptions{T}.Value"/>. Matches the S365 <c>ApiFixture.GetOptions&lt;T&gt;()</c> pattern.
+    /// </summary>
+    /// <typeparam name="T">The options type.</typeparam>
+    /// <returns>The configured options value.</returns>
+    public T GetOptions<T>() where T : class
+    {
+        return this.Services.GetRequiredService<IOptions<T>>().Value;
     }
 
     /// <summary>
@@ -232,19 +350,59 @@ public sealed class BlueprintTestFixture<TApp, TExec> : IDisposable, IAsyncDispo
         this.UnitOfWork?.Reset();
     }
 
+    // ──────────────────────────────────────────────
+    //  Internal helpers
+    // ──────────────────────────────────────────────
+
     /// <summary>
     /// Wraps the user-supplied configure callback to prepend ambient authentication.
     /// </summary>
-    /// <param name="configure">The optional user-supplied callback.</param>
-    /// <returns>A callback that applies ambient auth then the user callback.</returns>
     private Action<BlueprintTestContext> WrapConfigure(Action<BlueprintTestContext>? configure)
     {
         return ctx =>
         {
-            // Apply ambient auth first — per-call configure can override
             this.Authentication.Apply(ctx);
             configure?.Invoke(ctx);
         };
+    }
+
+    /// <summary>
+    /// Wraps the user-supplied configure callback with anonymous execution semantics:
+    /// no ambient auth is applied. Used by background task and message methods where the
+    /// operation runs without a user identity.
+    /// </summary>
+    private Action<BlueprintTestContext> WrapConfigureAnonymous(Action<BlueprintTestContext>? configure)
+    {
+        return ctx =>
+        {
+            // Do NOT apply ambient auth — background tasks and messages run anonymously
+            configure?.Invoke(ctx);
+        };
+    }
+
+    /// <summary>
+    /// Executes an async operation with simple constant-delay retry for
+    /// <see cref="UnhandledExceptionOperationResult"/> outcomes.
+    /// </summary>
+    private static async Task<OperationResult> ExecuteWithRetryAsync(
+        Func<Task<OperationResult>> execute,
+        int maxRetryAttempts,
+        CancellationToken cancellationToken)
+    {
+        var attempt = 0;
+
+        while (true)
+        {
+            var result = await execute();
+
+            if (result is not UnhandledExceptionOperationResult || attempt >= maxRetryAttempts)
+            {
+                return result;
+            }
+
+            attempt++;
+            await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
+        }
     }
 
     /// <inheritdoc />
