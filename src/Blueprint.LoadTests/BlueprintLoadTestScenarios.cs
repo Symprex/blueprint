@@ -90,7 +90,6 @@ public static class BlueprintLoadTestScenarios
                         blueprint.AddMessageOutbox<SampleRebusMessageOutbox>();
                         blueprint.AddUserAuthorisationContextFactory<SampleUserAuthorisationContextFactory>();
                         blueprint.AddOperationAuthoriser<TenantIsolationApiAuthoriser>();
-                        blueprint.AddClaimsAuthorisation();
                         blueprint.AddContextMetadataProvider<SampleContextMetadataProvider>();
                         blueprint.AddLinkVisibilityAuthoriser<ArchiveTemplateLinkChecker>();
                         blueprint.AddRecurringTaskScheduler<SampleRecurringTaskScheduler>();

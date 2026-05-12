@@ -86,7 +86,7 @@ public class AuthorizationModuleIntegrationTests
         var pipeline = executor.GetPipeline(typeof(GetMyAccountAuthorizationQuery));
 
         // The {Auth:AccountId} token resolves from IUserAuthorisationContext.AccountId
-        // (which is "account-1" in TestClaimsUserContext), falling back to claims if no context.
+        // (which is "account-1" in TestUserContext), falling back to claims if no context.
         var context = CreateHttpContext(
             app,
             GetMyAccountAuthorizationQuery.Configure(),
@@ -183,7 +183,7 @@ public class AuthorizationModuleIntegrationTests
             Operation = operation,
             HttpContext = httpContext,
             UserPrincipal = principal,
-            UserAuthorisationContext = new TestClaimsUserContext(principal.Claims.Select(static claim => new Blueprint.Authorization.Claim(claim.Type, claim.Value, claim.ValueType)).ToArray()),
+            UserAuthorisationContext = principal.Identity?.IsAuthenticated == true ? new TestUserContext() : null,
         };
         return context;
     }
@@ -198,11 +198,11 @@ public class AuthorizationModuleIntegrationTests
         return new System.Security.Claims.ClaimsPrincipal(new System.Security.Claims.ClaimsIdentity());
     }
 
-    private sealed class TestClaimsUserContext(IReadOnlyList<Blueprint.Authorization.Claim> claims) : IUserAuthorisationContext, IClaimsHolder
+    private sealed class TestUserContext : IUserAuthorisationContext
     {
         public bool IsActive => true;
 
-        public bool IsAnonymous => claims.Count == 0;
+        public bool IsAnonymous => false;
 
         public string Id => "user-1";
 
@@ -213,11 +213,6 @@ public class AuthorizationModuleIntegrationTests
         public string Email => "user@example.com";
 
         public string Name => "Integration User";
-
-        public IEnumerable<Blueprint.Authorization.Claim> GetClaimsByValueType(string valueType)
-        {
-            return claims.Where(claim => string.Equals(claim.ValueType, valueType, StringComparison.Ordinal));
-        }
 
         public void PopulateMetadata(Action<string, object> add)
         {

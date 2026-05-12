@@ -1,18 +1,15 @@
 using System.Security.Claims;
 using Blueprint.Authorization;
-using BlueprintClaimTypes = Blueprint.Runtime.Authorization.ClaimTypes;
 
 namespace Blueprint.SourceGenerator.Sample.Api;
 
 /// <summary>
 /// Demonstrates how a consumer converts ASP.NET Core's <see cref="ClaimsIdentity"/> into an
-/// application-specific <see cref="IUserAuthorisationContext"/> that also implements
-/// <see cref="IClaimsHolder"/> for compile-time claims authorization checks.
+/// application-specific <see cref="IUserAuthorisationContext"/> used by resource authorization and handlers.
 /// </summary>
 /// <remarks>
 /// In a real Signature365-style consumer, this would query the user/account store or decode
-/// a JWT to build the full user context. This sample extracts standard claims and maps
-/// permission claims (with type <c>urn:claims/permission</c>) into the Blueprint claims model.
+/// a JWT to build the full user context. This sample extracts standard identity and account claims.
 /// </remarks>
 public sealed class SampleUserAuthorisationContextFactory(ILogger<SampleUserAuthorisationContextFactory> logger) : IUserAuthorisationContextFactory
 {
@@ -31,39 +28,19 @@ public sealed class SampleUserAuthorisationContextFactory(ILogger<SampleUserAuth
         var accountId = identity.FindFirst("account_id")?.Value ?? "default-account";
         var email = identity.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value ?? $"{userId}@example.com";
         var name = identity.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value ?? identity.Name ?? "Unknown";
-
-        // Map ASP.NET Core permission claims to Blueprint's Claim model for IClaimsHolder.
-        // JWT claims with type "urn:claims/permission" carry "{ValueType}:{ResourceKey}" values.
-        // When the incoming value omits a resource key, the sample treats it as a wildcard claim.
-        var permissionClaims = identity.Claims
-            .Where(static c => c.Type == BlueprintClaimTypes.Permission)
-            .Select(static c =>
-            {
-                var parts = c.Value.Split(':', 2);
-                return parts.Length == 2
-                    ? new Authorization.Claim(BlueprintClaimTypes.Permission, parts[1], parts[0])
-                    : new Authorization.Claim(BlueprintClaimTypes.Permission, "*", c.Value);
-            })
-            .ToList();
-
-        var context = new SampleUserContext(userId, accountId, email, name, permissionClaims);
-        logger.LogDebug("Created user context: {UserId} / {AccountId} with {ClaimCount} permission claims", userId, accountId, permissionClaims.Count);
+        var context = new SampleUserContext(userId, accountId, email, name);
+        logger.LogDebug("Created user context: {UserId} / {AccountId}", userId, accountId);
 
         return Task.FromResult<IUserAuthorisationContext?>(context);
     }
 }
 
 /// <summary>
-/// A minimal <see cref="IUserAuthorisationContext"/> and <see cref="IClaimsHolder"/> implementation
-/// that carries the user's identity, account, and permission claims extracted from JWT claims.
-/// Implementing <see cref="IClaimsHolder"/> enables claims-based authorisers such as
-/// <see cref="ClaimsRequiredApiAuthoriser"/> or consumer-defined <see cref="ClaimRequiredAttribute"/> flows.
+/// A minimal <see cref="IUserAuthorisationContext"/> implementation that carries the user's identity
+/// and account information extracted from JWT claims for resource authorization and auditing flows.
 /// </summary>
-public sealed class SampleUserContext(string id, string accountId, string email, string name, IReadOnlyList<Authorization.Claim> claims) : IUserAuthorisationContext, IClaimsHolder
+public sealed class SampleUserContext(string id, string accountId, string email, string name) : IUserAuthorisationContext
 {
-    private readonly ILookup<string, Authorization.Claim> _claimsByValueType =
-        claims.ToLookup(static c => c.ValueType, StringComparer.Ordinal);
-
     /// <inheritdoc />
     public bool IsActive => true;
 
@@ -84,12 +61,6 @@ public sealed class SampleUserContext(string id, string accountId, string email,
 
     /// <inheritdoc />
     public string Name => name;
-
-    /// <inheritdoc />
-    public IEnumerable<Authorization.Claim> GetClaimsByValueType(string valueType)
-    {
-        return this._claimsByValueType[valueType];
-    }
 
     /// <inheritdoc />
     public void PopulateMetadata(Action<string, object> add)

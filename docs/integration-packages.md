@@ -294,10 +294,10 @@ result.ShouldBeCreated<TemplateResource>();
 ### Auth Testing
 
 ```csharp
-// Test with specific claims
+// Test with specific scope pairs
 var result = await host.ExecuteAsync(query, ctx => ctx
     .WithUser("user-1")
-    .WithPermissions("Template.Read", "Template.Write")
+    .WithScopePairs("Template.Read", "Template.Write")
     .WithTenant("tenant-123"));
 
 // Test without auth (should return 401)

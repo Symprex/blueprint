@@ -174,7 +174,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
             context.AddMetadata(new AuthenticationDescriptorRegistration(RequiresIdentityCheck: true));
         }
 
-        context.AddMetadata(new AuthorizationDescriptorRegistration(RequiresPermissionCheck: true));
+        context.AddMetadata(new AuthorizationDescriptorRegistration(RequiresResourceAuthorization: true));
 
         // Project scope pairs and authentication feature data
         var scopePairEntries = string.Join(

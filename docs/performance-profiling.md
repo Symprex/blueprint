@@ -216,7 +216,7 @@ public class PipelineExecutionBenchmarks
     {
         return await _host.ExecuteAsync(_query, ctx => ctx
             .WithUser("user-1")
-            .WithPermissions("Template.Read"));
+            .WithScopePairs("Template.Read"));
     }
 
     [Benchmark]

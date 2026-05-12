@@ -1299,9 +1299,9 @@ S365's async expander is a consumer-level concern. The async expansion runs INSI
 #### 4. Removed `[Permission]`/`[PermissionFor]` from Blueprint
 
 S365 exclusively uses `[Resource]`-based authorization, so Blueprint no longer carries built-in
-`[Permission]` or `[PermissionFor]` attribute support. The framework now keeps the reusable
-`ClaimRequiredAttribute` / `ClaimsRequiredApiAuthoriser` seam for consumers that need custom
-claims attributes while the built-in generator and sample flows stay focused on `[Resource]`.
+`[Permission]` or `[PermissionFor]` attribute support. The framework now stays focused on
+resource-based authorization through `[Resource]`, `IResourceAuthorizationProvider`, and
+consumer-defined `IApiAuthoriser` seams.
 
 `[Resource]` remains the preferred hot path:
 

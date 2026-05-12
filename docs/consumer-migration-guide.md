@@ -243,26 +243,6 @@ For authorisers that need **both** execution and link visibility, implement `IAp
 blueprint.AddApiAuthoriser<FullAuthoriser>();
 ```
 
-#### Claims-based authorization
-
-If your application uses claims-based access control beyond `[Resource]`, derive a reusable attribute from `ClaimRequiredAttribute` and register the built-in claims authoriser:
-
-```csharp
-public sealed class DepartmentAccessAttribute(string department)
-    : ClaimRequiredAttribute("urn:claims/department", "*", department)
-{
-}
-
-[DepartmentAccess("finance")]
-public partial class GetFinanceReportQuery : IQuery<OkResult<FinanceReport>> { }
-```
-
-Register the claims authoriser:
-
-```csharp
-blueprint.AddClaimsAuthorisation();
-```
-
 #### State-based link visibility
 
 Use `StateBasedLinkChecker<TOperation, TResource>` (which implements `ILinkVisibilityAuthoriser`) for state-based link hiding:
@@ -868,7 +848,7 @@ This section documents what has been optimized and what remains runtime by desig
 |------|--------|
 | Authorization checks (`CanShowLinkAsync`) | Depend on current user's claims and context |
 | `IApiAuthoriser` / `IOperationAuthoriser` | Business-rule authorizers are DI-resolved by design |
-| `IResourceKeyExpander` | Hierarchical key expansion depends on runtime data |
+| `ResourceKeyTemplateExpander` | Resource key expansion depends on runtime data and the current principal/context |
 | HATEOAS link population (non-self) | Auth-gated link visibility requires runtime user context |
 | `IUnitOfWork.SaveChangesAsync` | Database persistence is inherently runtime |
 | `IMessageOutbox.CommitAsync` | Message bus interaction is runtime |
@@ -949,7 +929,6 @@ public class Startup
             blueprint.AddMessageOutbox<RebusMessageOutbox>();
             blueprint.AddPropertyPopulator<TenantPropertyPopulator>();
             blueprint.AddApiAuthoriser<TenantIsolationAuthoriser>();
-            blueprint.AddClaimsAuthorisation();
 
             blueprint.ConfigureHttp(http =>
             {
@@ -1059,7 +1038,7 @@ The generated pipeline executes consumer seams in this order:
 
 1. **Authentication** → identity check
 2. **Property population** → `IPropertyPopulator` (e.g. set TenantId from JWT)
-3. **Authorization** → `[Resource]`, `ClaimRequiredAttribute`, `IApiAuthoriser`
+3. **Authorization** → `[Resource]`, `IApiAuthoriser`
 4. **Validation** → data annotation + `IValidator` checks
 5. **Handler execution** → `HandleAsync()`
 6. **Unit of work** → `IUnitOfWork.SaveChangesAsync()` (commands only, on success)

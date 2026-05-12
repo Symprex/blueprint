@@ -81,7 +81,6 @@ A background task (`SendTemplateSharedNotificationTask`) demonstrates non-HTTP e
 - **Status code results** — `StatusCodeResult.Accepted` for fire-and-forget HTTP 202 patterns
 - **Auth manifest** — `GetMyAuthManifestQuery` with `IApiAuthoriserAggregator` for SPA permission manifests
 - **Tenant-scoped routes** — `/tenants/{TenantId}/templates/{Id}/settings` with multi-segment route binding
-- **Claims authorization** — `AddClaimsAuthorisation()` for `ClaimRequiredAttribute`-based access control when a consumer defines custom claim attributes
 - **Context metadata** — `IContextMetadataProvider` for enriching resource events with ambient context
 - **Resource expansion** — `Expandable<T>` properties with `?expand=` query parameter support (comma-separated, repeated keys, array syntax)
 - **Always-expand** — `[AlwaysExpand]` for properties that load unconditionally
@@ -110,7 +109,6 @@ those libraries as core Blueprint dependencies:
 | **User context** | `SampleUserAuthorisationContextFactory` | JWT→`IUserAuthorisationContext` mapping |
 | **Business auth** | `TenantIsolationApiAuthoriser` | Tenant isolation, role-based access |
 | **Link visibility** | `ArchiveTemplateLinkChecker` | State-based link hiding (e.g. hide archive on archived) |
-| **Claims auth** | `AddClaimsAuthorisation()` | `ClaimRequiredAttribute`-based claims evaluation |
 | **Recurring tasks** | `SampleRecurringTaskScheduler` | Hangfire `RecurringJob.AddOrUpdate` |
 | **Context metadata** | `SampleContextMetadataProvider` | Enrich resource events with tenant/correlation context |
 | **Resource expansion** | `OwnerResourceExpander` (`IResourceExpander`) | S365's `AzureAdGroupApiResourceExpander` |

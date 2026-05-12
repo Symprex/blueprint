@@ -219,7 +219,7 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
         }
 
         // Authorization-driven short-circuit: 403 when [Resource] scopes are declared.
-        if (context.GetMetadata<AuthorizationDescriptorRegistration>().Any(static r => r.RequiresPermissionCheck))
+        if (context.GetMetadata<AuthorizationDescriptorRegistration>().Any(static r => r.RequiresResourceAuthorization))
         {
             responses.Add(CreateResponse(403, true, "Blueprint.Runtime.Exec.ForbiddenResult", problemDetailsBody));
         }

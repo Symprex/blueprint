@@ -74,7 +74,7 @@ internal sealed class AuthorizationManifestModule : IBlueprintSourceGeneratorMod
 
         // Permissioned operations have authorization registration
         var hasAuthorization = context.GetMetadata<AuthorizationDescriptorRegistration>()
-            .Any(static r => r.RequiresPermissionCheck);
+            .Any(static r => r.RequiresResourceAuthorization);
 
         if (hasAuthorization)
         {

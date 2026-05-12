@@ -318,33 +318,6 @@ public sealed class BlueprintServiceBuilder
     }
 
     /// <summary>
-    /// Registers the claims-based authorization pipeline including <see cref="Blueprint.Authorization.ClaimsRequiredApiAuthoriser"/>,
-    /// the default <see cref="Blueprint.Authorization.ClaimInspector"/>, and optionally any <see cref="Blueprint.Authorization.IResourceKeyExpander"/>
-    /// implementations. Operations decorated with <see cref="Blueprint.Authorization.ClaimRequiredAttribute"/> or
-    /// consumer-defined derivatives will be enforced automatically.
-    /// </summary>
-    /// <returns>This builder for chaining.</returns>
-    public BlueprintServiceBuilder AddClaimsAuthorisation()
-    {
-        this.Services.TryAddSingleton<Blueprint.Authorization.IClaimInspector, Blueprint.Authorization.ClaimInspector>();
-        this.AddApiAuthoriser<Blueprint.Authorization.ClaimsRequiredApiAuthoriser>();
-        return this;
-    }
-
-    /// <summary>
-    /// Registers an <see cref="Blueprint.Authorization.IResourceKeyExpander"/> for hierarchical
-    /// resource key expansion during claims-based authorization.
-    /// </summary>
-    /// <typeparam name="T">The expander implementation type.</typeparam>
-    /// <returns>This builder for chaining.</returns>
-    public BlueprintServiceBuilder AddResourceKeyExpander<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] T>()
-        where T : class, Blueprint.Authorization.IResourceKeyExpander
-    {
-        this.Services.TryAddEnumerable(ServiceDescriptor.Singleton<Blueprint.Authorization.IResourceKeyExpander, T>());
-        return this;
-    }
-
-    /// <summary>
     /// Registers a context metadata provider that enriches resource events and audit records
     /// with ambient context data (tenant ID, correlation ID, user info, etc.).
     /// Multiple providers are supported and each will be called to contribute metadata.

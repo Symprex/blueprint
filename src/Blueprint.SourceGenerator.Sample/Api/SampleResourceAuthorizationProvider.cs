@@ -22,8 +22,7 @@ namespace Blueprint.SourceGenerator.Sample.Api;
 /// uses <see cref="ResourceKeyTemplateExpander"/> to expand the template (substituting
 /// <c>{PropertyName}</c> tokens from the operation and <c>{Auth:ClaimType}</c> tokens from
 /// the principal's claims), then checks whether the caller holds a matching hierarchical
-/// resource key claim. This mirrors legacy Blueprint's <c>ClaimsRequiredApiAuthoriser</c>
-/// with <c>IResourceKeyExpander</c> and <c>IClaimInspector</c>.
+/// resource key claim.
 /// </para>
 /// </remarks>
 public sealed class SampleResourceAuthorizationProvider(ILogger<SampleResourceAuthorizationProvider> logger) : IResourceAuthorizationProvider

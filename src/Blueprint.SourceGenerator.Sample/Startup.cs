@@ -60,10 +60,6 @@ public class Startup
             // user's AccountId to the operation's TenantId property
             blueprint.AddOperationAuthoriser<TenantIsolationApiAuthoriser>();
 
-            // Claims-based authorization: registers the reusable ClaimRequiredAttribute pipeline
-            // for consumers that define custom claim-demand attributes.
-            blueprint.AddClaimsAuthorisation();
-
             // Context metadata: enriches resource events with tenant context
             blueprint.AddContextMetadataProvider<SampleContextMetadataProvider>();
 
