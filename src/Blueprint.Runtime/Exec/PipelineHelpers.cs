@@ -121,28 +121,40 @@ public static class PipelineHelpers
     }
 
     /// <summary>
-    /// Reads and buffers the HTTP request body, validates the content type is JSON, then calls the
-    /// supplied <paramref name="populate"/> delegate with the raw bytes. This extracts the ~80 lines
-    /// of body-reading boilerplate (pooled buffer management, chunked-transfer fallback, content-type
-    /// guard, JSON exception translation) into a single runtime method so generated pipelines emit
-    /// only a one-line call instead of duplicating the pattern per operation.
+    /// Delegate signature for the operation-specific JSON body population.
+    /// Called by <see cref="ReadJsonBodyAsync{TOperation}"/> after the body has been buffered.
+    /// The operation instance is passed through so the delegate can be <c>static</c> (zero allocation).
     /// </summary>
+    /// <typeparam name="TOperation">The concrete operation type.</typeparam>
+    /// <param name="bodyBytes">The raw request body bytes, ready for <see cref="System.Text.Json.Utf8JsonReader"/>.</param>
+    /// <param name="operation">The operation instance whose body properties will be populated.</param>
+    public delegate void PopulateFromBodyDelegate<in TOperation>(ReadOnlySpan<byte> bodyBytes, TOperation operation);
+
+    /// <summary>
+    /// Reads and buffers the HTTP request body, validates the content type is JSON, then calls the
+    /// supplied <paramref name="populate"/> delegate with the raw bytes and the <paramref name="operation"/>
+    /// instance. Passing the operation through as a parameter enables the delegate to be <c>static</c>,
+    /// avoiding closure allocation on every request.
+    /// </summary>
+    /// <typeparam name="TOperation">The concrete operation type.</typeparam>
     /// <param name="httpContext">The current HTTP context to read the request body from.</param>
     /// <param name="cancellationToken">Cancellation token to observe during body reads.</param>
+    /// <param name="operation">The operation instance whose body properties will be populated by the delegate.</param>
     /// <param name="populate">
-    /// A delegate that receives the buffered body bytes as a <see cref="ReadOnlySpan{T}"/> and
-    /// populates the operation properties (typically via <c>Utf8JsonReader</c>). This is the only
-    /// operation-specific code; all buffering/error handling is shared.
+    /// A <c>static</c> delegate that receives the buffered body bytes and the operation, then populates
+    /// body properties (typically via <c>Utf8JsonReader</c>). Because the operation is passed as a
+    /// parameter rather than captured, the delegate is allocation-free.
     /// </param>
     /// <returns>
     /// <c>null</c> when the body was read and populated successfully (or was empty/absent),
     /// or an <see cref="OperationResult"/> representing the failure (unsupported media type,
     /// invalid JSON, etc.).
     /// </returns>
-    public static async Task<OperationResult?> ReadJsonBodyAsync(
+    public static async Task<OperationResult?> ReadJsonBodyAsync<TOperation>(
         HttpContext httpContext,
         CancellationToken cancellationToken,
-        PopulateFromBodyDelegate populate)
+        TOperation operation,
+        PopulateFromBodyDelegate<TOperation> populate)
     {
         // No body to read — skip silently
         if (httpContext.Request.ContentLength is null or 0 && httpContext.Request.ContentType is null)
@@ -181,7 +193,7 @@ public static class PipelineHelpers
             {
                 try
                 {
-                    populate(new ReadOnlySpan<byte>(rentedBuffer, 0, totalRead));
+                    populate(new ReadOnlySpan<byte>(rentedBuffer, 0, totalRead), operation);
                 }
                 catch (System.Text.Json.JsonException)
                 {
@@ -212,7 +224,7 @@ public static class PipelineHelpers
         {
             try
             {
-                populate(new ReadOnlySpan<byte>(bodyStream.GetBuffer(), 0, (int)bodyStream.Length));
+                populate(new ReadOnlySpan<byte>(bodyStream.GetBuffer(), 0, (int)bodyStream.Length), operation);
             }
             catch (System.Text.Json.JsonException)
             {
@@ -230,11 +242,4 @@ public static class PipelineHelpers
 
         return null;
     }
-
-    /// <summary>
-    /// Delegate signature for the operation-specific JSON body population.
-    /// Called by <see cref="ReadJsonBodyAsync"/> after the body has been buffered.
-    /// </summary>
-    /// <param name="bodyBytes">The raw request body bytes, ready for <see cref="System.Text.Json.Utf8JsonReader"/>.</param>
-    public delegate void PopulateFromBodyDelegate(ReadOnlySpan<byte> bodyBytes);
 }

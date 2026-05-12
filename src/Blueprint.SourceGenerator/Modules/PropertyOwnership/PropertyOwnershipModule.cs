@@ -877,11 +877,11 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
 
         // Body binding: delegate stream buffering, content-type check, and exception handling
         // to the shared PipelineHelpers.ReadJsonBodyAsync runtime method. The generated pipeline
-        // only provides the operation-specific PopulateFromJsonBody call as a delegate.
+        // only provides the operation-specific PopulateFromJsonBody call as a static delegate.
         if (bodyEntries.Length > 0)
         {
             context.WriteStatement(
-                $"var _bodyResult = await Blueprint.Runtime.Exec.PipelineHelpers.ReadJsonBodyAsync(httpContext, context.OperationCancelled, _bodyBytes => PopulateFromJsonBody(_bodyBytes, {operationExpr})).ConfigureAwait(false);");
+                $"var _bodyResult = await Blueprint.Runtime.Exec.PipelineHelpers.ReadJsonBodyAsync(httpContext, context.OperationCancelled, {operationExpr}, static (_bodyBytes, _op) => PopulateFromJsonBody(_bodyBytes, _op)).ConfigureAwait(false);");
             context.If("_bodyResult != null", earlyReturnCtx =>
             {
                 earlyReturnCtx.Return("_bodyResult");

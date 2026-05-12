@@ -347,7 +347,7 @@ namespace Blueprint.Generated
 
             var httpContext = ((Blueprint.Runtime.Http.IHttpOperationContext)context).HttpContext;
 
-            var _bodyResult = await Blueprint.Runtime.Exec.PipelineHelpers.ReadJsonBodyAsync(httpContext, context.OperationCancelled, _bodyBytes => PopulateFromJsonBody(_bodyBytes, operation)).ConfigureAwait(false);
+            var _bodyResult = await Blueprint.Runtime.Exec.PipelineHelpers.ReadJsonBodyAsync(httpContext, context.OperationCancelled, operation, static (_bodyBytes, _op) => PopulateFromJsonBody(_bodyBytes, _op)).ConfigureAwait(false);
             if (_bodyResult != null)
             {
                 return _bodyResult;
