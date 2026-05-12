@@ -61,6 +61,8 @@
 | x-links OpenAPI extension | ✅ Verified | Blueprint emits x-links with rel/operationId/method; matches S365 Handlebars templates |
 | Pipeline helper: UoW/Outbox/Tasks | ✅ Done | `SaveUnitOfWorkAsync`, `CommitMessageOutboxAsync`, `FlushBackgroundTasksAsync` extracted |
 | Singleton result types | ✅ Done | `ForbiddenResult.Instance`, `UnauthenticatedResult.Instance`, `UnsupportedMediaTypeResult.Instance` — zero allocation on auth/content-type failure paths |
+| GetServiceAs test double accessor | ✅ Done | `GetServiceAs<TService, TImpl>()` for safe casting to test doubles (e.g. FakeBus) |
+| WrapConfigureAnonymous optimization | ✅ Done | Cached static no-op delegate eliminates closure allocation for background task/message tests |
 
 ---
 

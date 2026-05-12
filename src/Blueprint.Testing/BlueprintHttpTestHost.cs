@@ -34,6 +34,17 @@ public sealed class BlueprintHttpTestHost<TApp, TExec> : IDisposable, IAsyncDisp
     public System.Net.Http.HttpClient Client { get; }
 
     /// <summary>
+    /// Creates a new <see cref="System.Net.Http.HttpClient"/> that sends requests to the in-memory test server.
+    /// This is an alias for the <see cref="Client"/> property that matches the S365 <c>CreateClient()</c>
+    /// convention. Each call returns the same underlying client instance.
+    /// </summary>
+    /// <returns>An HTTP client connected to the test server.</returns>
+    public System.Net.Http.HttpClient CreateClient()
+    {
+        return this.Client;
+    }
+
+    /// <summary>
     /// Gets the root service provider of the test host. Useful for resolving services
     /// registered alongside Blueprint (e.g. to seed test data or verify side effects).
     /// </summary>
