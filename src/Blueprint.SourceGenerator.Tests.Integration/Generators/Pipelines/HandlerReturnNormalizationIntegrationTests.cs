@@ -1,4 +1,5 @@
 using Blueprint.Model;
+using Blueprint.Model.Attributes;
 using Blueprint.Runtime.Exec;
 using Blueprint.SourceGenerator.Tests.Integration.Generators.OperationDescriptors;
 using FluentAssertions;
@@ -90,6 +91,38 @@ public class HandlerReturnNormalizationIntegrationTests
         result.Should().BeOfType<UnhandledExceptionResult>();
         ((UnhandledExceptionResult)result).Exception.Should().BeSameAs(ThrowingHandlerOperation.LastThrownException);
         ThrowingHandlerOperation.HandlerCallCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task When_handler_returns_status_code_result_accepted_then_pipeline_returns_it_directly()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
+        var pipeline = executor.GetPipeline(typeof(AcceptedStatusCodeOperation));
+        var context = CreateContext(app, AcceptedStatusCodeOperation.Configure());
+
+        AcceptedStatusCodeOperation.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeSameAs(StatusCodeResult.Accepted.Instance);
+        AcceptedStatusCodeOperation.HandlerCallCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task When_handler_returns_status_code_result_no_content_then_pipeline_returns_it_directly()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
+        var pipeline = executor.GetPipeline(typeof(NoContentStatusCodeOperation));
+        var context = CreateContext(app, NoContentStatusCodeOperation.Configure());
+
+        NoContentStatusCodeOperation.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeSameAs(StatusCodeResult.NoContent.Instance);
+        NoContentStatusCodeOperation.HandlerCallCount.Should().Be(1);
     }
 
     private static ApiOperationContext CreateContext(BlueprintApp app, ApiOperationDescriptor descriptor)
@@ -188,5 +221,46 @@ public partial class ThrowingHandlerOperation : ICommand<string>
         HandlerCallCount++;
         LastThrownException = new InvalidOperationException("Boom");
         return Task.FromException<string>(LastThrownException);
+    }
+}
+
+/// <summary>
+/// Proves the S365 pattern where a command handler returns <c>StatusCodeResult.Accepted</c> —
+/// the most common return type in S365 with 85 usages.
+/// </summary>
+[AllowAnonymous]
+public partial class AcceptedStatusCodeOperation : ICommand<StatusCodeResult.Accepted>
+{
+    public static int HandlerCallCount { get; private set; }
+
+    public static void Reset()
+    {
+        HandlerCallCount = 0;
+    }
+
+    public static Task<StatusCodeResult.Accepted> HandleAsync(AcceptedStatusCodeOperation operation)
+    {
+        HandlerCallCount++;
+        return Task.FromResult(StatusCodeResult.Accepted.Instance);
+    }
+}
+
+/// <summary>
+/// Proves the S365 pattern for <c>StatusCodeResult.NoContent</c> returns (10 usages in S365).
+/// </summary>
+[AllowAnonymous]
+public partial class NoContentStatusCodeOperation : ICommand<StatusCodeResult.NoContent>
+{
+    public static int HandlerCallCount { get; private set; }
+
+    public static void Reset()
+    {
+        HandlerCallCount = 0;
+    }
+
+    public static Task<StatusCodeResult.NoContent> HandleAsync(NoContentStatusCodeOperation operation)
+    {
+        HandlerCallCount++;
+        return Task.FromResult(StatusCodeResult.NoContent.Instance);
     }
 }
