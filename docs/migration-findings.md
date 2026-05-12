@@ -20,10 +20,16 @@
 | Minimize test churn | ✅ Done | BlueprintTestFixture with ambient auth, extension methods |
 | OpenAPI well-known endpoint | ✅ Done | RFC 9727 `/.well-known/openapi` |
 | Compile-time populators | ✅ Done | PropertyOwnershipModule + TenantModule handle all at compile time |
-| TypeScript generation compat | 🔄 Documented | Custom Handlebars templates analysed (see below) |
-| Codemod S365 run | 🔄 In progress | Running against S365 solution |
-| Load tests (NBomber) | ⬜ Not started | Old vs new comparison |
-| Runtime benchmarks | ⬜ Not started | BenchmarkDotNet pipeline benchmarks |
+| TypeScript generation compat | ✅ Documented | Custom Handlebars templates analysed (see below) |
+| Codemod S365 run | ✅ Done | 10 BPMIG diagnostics found (3 auto-fixable, 2 config, 2 rewrite, 3 manual) |
+| Load tests (NBomber) | ✅ Done | 9 scenarios: GET/POST/PUT/DELETE, validation, auth, OpenAPI, health |
+| Runtime benchmarks | ✅ Done | 7 benchmark classes: pipeline, validation, population, scaling, compilation |
+| Profiling guide | ✅ Done | `docs/performance-profiling.md` (308 lines) |
+| ReadJsonBodyAsync static lambda | ✅ Done | Generic delegate eliminates closure allocation per request |
+| Route deduplication | ✅ Done | `HashSet<(Route, Type)>` dedup in endpoint registration |
+| StateBasedLinkChecker | ✅ Done | Identical API to S365, sample + integration tests |
+| Gateway sample + HTTP client E2E | ✅ Done | `Blueprint.SourceGenerator.Sample.Gateway` with 6 E2E tests |
+| Permission removal | ✅ N/A | Codebase only has `[Resource]`-based auth — no Permission attrs exist |
 
 ---
 
