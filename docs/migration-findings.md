@@ -117,6 +117,12 @@
 | S365 `WebApiFixtureFactory` match | ✅ Verified | `BlueprintTestFixtureFactory` mirrors `WebApiFixtureFactory<T>`: `Create()`, `ConfigureServices`, `ConfigureOnceAsync`, `ConfigureOnceTimeout`, thread-safe singleton init |
 | OpenAPI security schemes | ✅ Already exists | `OpenApiInfoOptions.SecuritySchemes` configurable; default `bearerAuth` JWT scheme; S365 can add OAuth2 or custom schemes |
 | OpenAPI nullable handling | ✅ Already exists | `NullabilityInfoContext` for NRT annotations + `Nullable<T>` unwrapping; fully compatible with S365 TypeScript codegen |
+| ResourceEvent [Obsolete] removal | ✅ Done | Removed `[Obsolete]` from `ResourceCreated<T>`, `ResourceUpdated<T>`, `ResourceDeleted<T>` in `Exec` namespace — prevents hundreds of CS0618 warnings during S365 migration |
+| ApiOperationResourceConvention | ✅ Not needed | S365 runtime convention reads `[Resource]`/`[FromResource]` and stores scope pairs in feature data — Blueprint source-gen does this at compile time via `AuthorizationModule` |
+| Sig365LinkGeneratorMiddleware | ✅ Not needed | Portal-specific custom link middleware; source-gen auto-generates link population — replaces this entirely |
+| Custom middleware → modules | ✅ Verified | All 6 S365 middleware types (Tenant, Rebus TX, Marten Save, Marten Outbox, ResourceExpand, Links) have compile-time module equivalents |
+| Health checks | ✅ Not Blueprint | S365 health checks are standard ASP.NET Core (`MapHealthChecks`); Blueprint-agnostic, no migration needed |
+| PlainTextResult compat | ✅ Verified | 14 S365 usages; extends `HttpResult` which is a supported result type in Blueprint |
 
 ---
 
@@ -398,8 +404,8 @@ S365 testing uses `WebApiFixtureFactory<TStartup>` → `ApiFixture` with:
 |---|---|---|
 | Separate `IApiOperationHandler<T>` | Primary pattern | ✅ Supported via handler discovery |
 | `InvokeAsync()` on operation class | Secondary pattern (e.g. `DeleteBusQueueMessagesCommand`) | ✅ Supported via convention |
-| Multi-operation handlers | Occasional | Need to verify |
-| `StateBasedLinkChecker<TOp, TResource>` | Conditional HATEOAS links | Need to verify/implement |
+| Multi-operation handlers | Occasional | ✅ Supported via handler discovery (one handler class, multiple operation types) |
+| `StateBasedLinkChecker<TOp, TResource>` | Conditional HATEOAS links | ✅ Implemented with identical API (migration-findings line 30) |
 
 ---
 
@@ -414,3 +420,5 @@ S365 testing uses `WebApiFixtureFactory<TStartup>` → `ApiFixture` with:
 | 2025-07 | ResourceEventAudit | Extracted inline resource-event audit code to PipelineHelpers.ExecuteResourceEventAuditSinkAsync; self-link dedup test added; pipeline optimization analysis confirmed most code paths well-optimized |
 | 2025-07 | Gap analysis | OpenAPI version configurable, Link schema component, comprehensive S365 pattern verification: all control attributes, collection types, validation fast-paths, tenancy, ResourceEvent backward compat confirmed |
 | 2025-07 | Deep compat | Rebus handler analysis (47 handlers fully compatible), test infrastructure deep verification (S365 auth helpers, FakeBus assertions, BackgroundTaskCollector.All), TestMessageCollector.Should() chain compat, OpenAPI security/nullable verified |
+| 2025-07 | Final gap analysis | ResourceEvent `[Obsolete]` removal (prevents CS0618 warnings), ApiOperationResourceConvention confirmed superseded by compile-time modules, Sig365LinkGeneratorMiddleware confirmed replaced by source-gen, all 6 S365 middleware types verified compatible, health checks confirmed Blueprint-agnostic, PlainTextResult verified |
+| 2025-07 | Auth + remaining patterns | Full auth analysis: dual authorizer merge into IResourceAuthorizationProvider (consumer responsibility), special permissions = [AllowAnonymous]/[MustBeAuthenticated] (BPAU003 compile-time), verb expansion consumer-owned, AccountId well-known property ✅. Patterns: 0 IPropertyPopulator (middleware instead), 11 IBackgroundTask (all standard), 70 Rebus subscriptions (all IHandleMessages<T>), 100+ NodaTime usages (consumer config), 5 custom validators (runtime fallback), ApiId TenantId→string TenantId migration step needed |
