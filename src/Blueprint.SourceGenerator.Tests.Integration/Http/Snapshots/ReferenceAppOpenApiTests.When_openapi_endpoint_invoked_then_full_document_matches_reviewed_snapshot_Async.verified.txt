@@ -2527,13 +2527,11 @@
           },
           "HtmlSource": {
             "type": "string",
-            "description": "The full HTML source content of this template.",
-            "readOnly": true
+            "description": "The full HTML source content of this template."
           },
           "Id": {
             "type": "string",
             "description": "The unique identifier for this template.",
-            "readOnly": true,
             "example": "tmpl-abc-123"
           },
           "IsArchived": {
@@ -2542,8 +2540,7 @@
           },
           "Name": {
             "type": "string",
-            "description": "The human-readable display name of this template.",
-            "readOnly": true
+            "description": "The human-readable display name of this template."
           },
           "Object": {
             "type": "string",
@@ -2556,8 +2553,7 @@
           },
           "PlainTextSource": {
             "type": "string",
-            "description": "The plain text fallback content of this template.",
-            "readOnly": true
+            "description": "The plain text fallback content of this template."
           },
           "ResourceKey": {
             "type": "string",

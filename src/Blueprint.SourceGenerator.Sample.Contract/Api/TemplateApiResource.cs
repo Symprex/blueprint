@@ -10,7 +10,7 @@ namespace Blueprint.SourceGenerator.Sample.Contract.Api;
 [DisplayName("Email Template")]
 public partial class TemplateApiResource : ApiResource
 {
-    // For JSON
+    [System.Text.Json.Serialization.JsonConstructor]
     private TemplateApiResource()
     {
     }
@@ -37,25 +37,25 @@ public partial class TemplateApiResource : ApiResource
     /// </summary>
     [Description("The unique identifier for this template.")]
     [OpenApiExample("tmpl-abc-123")]
-    public string Id { get; private set; } = null!;
+    public string Id { get; init; } = null!;
 
     /// <summary>
     /// The display name of this template.
     /// </summary>
     [Description("The human-readable display name of this template.")]
-    public string Name { get; private set; } = null!;
+    public string Name { get; init; } = null!;
 
     /// <summary>
     /// The HTML source of this template.
     /// </summary>
     [Description("The full HTML source content of this template.")]
-    public string HtmlSource { get; private set; } = null!;
+    public string HtmlSource { get; init; } = null!;
 
     /// <summary>
     /// The plain text source of this template.
     /// </summary>
     [Description("The plain text fallback content of this template.")]
-    public string PlainTextSource { get; private set; } = null!;
+    public string PlainTextSource { get; init; } = null!;
 
     /// <summary>
     /// Gets or sets a value indicating whether the template is archived (soft-deleted).

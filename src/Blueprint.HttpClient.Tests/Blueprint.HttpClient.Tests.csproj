@@ -19,6 +19,8 @@
     <ProjectReference Include="..\Blueprint.HttpClient\Blueprint.HttpClient.csproj" />
     <ProjectReference Include="..\Blueprint.SourceGenerator.Sample\Blueprint.SourceGenerator.Sample.csproj" />
     <ProjectReference Include="..\Blueprint.SourceGenerator.Sample.Contract\Blueprint.SourceGenerator.Sample.Contract.csproj" />
+    <ProjectReference Include="..\Blueprint.SourceGenerator.Sample.Gateway\Blueprint.SourceGenerator.Sample.Gateway.csproj" />
+    <ProjectReference Include="..\Blueprint.SourceGenerator.Sample.Gateway.Contract\Blueprint.SourceGenerator.Sample.Gateway.Contract.csproj" />
     <ProjectReference Include="..\Blueprint.SourceGenerator\Blueprint.SourceGenerator.csproj"
                       OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
   </ItemGroup>
