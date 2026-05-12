@@ -830,6 +830,10 @@ public sealed record OpenApiOutputRenderingContext(
                 WriteSchemaComponent(writer, ProcessSchemaComponent(component, schemaProcessorOptions), schemaNameFormatter);
             }
 
+            // Emit the well-known "Link" schema for HATEOAS $links dictionary values.
+            // This enables TypeScript/client generators to produce typed link objects.
+            WriteLinkSchemaComponent(writer);
+
             writer.WriteEndObject();
         }
 
@@ -988,6 +992,42 @@ public sealed record OpenApiOutputRenderingContext(
 
         writer.WriteEndObject();
         writer.WriteEndArray();
+    }
+
+    /// <summary>
+    /// Writes the well-known <c>Link</c> schema component that describes the shape of HATEOAS link
+    /// objects in <c>$links</c> dictionary values. This allows TypeScript and other client generators
+    /// to produce typed link objects rather than treating links as opaque <c>object</c>.
+    /// </summary>
+    private static void WriteLinkSchemaComponent(Utf8JsonWriter writer)
+    {
+        writer.WritePropertyName("Link");
+        writer.WriteStartObject();
+        writer.WriteString("title", "Link");
+        writer.WriteString("type", "object");
+
+        writer.WritePropertyName("required");
+        writer.WriteStartArray();
+        writer.WriteStringValue("href");
+        writer.WriteEndArray();
+
+        writer.WritePropertyName("properties");
+        writer.WriteStartObject();
+
+        writer.WritePropertyName("href");
+        writer.WriteStartObject();
+        writer.WriteString("type", "string");
+        writer.WriteString("description", "The URL of this link.");
+        writer.WriteEndObject();
+
+        writer.WritePropertyName("type");
+        writer.WriteStartObject();
+        writer.WriteString("type", "string");
+        writer.WriteString("description", "The type of resource this link will return.");
+        writer.WriteEndObject();
+
+        writer.WriteEndObject(); // properties
+        writer.WriteEndObject(); // Link
     }
 
     private static void WriteSchemaComponent(Utf8JsonWriter writer, OpenApiSchemaComponentModel component, Func<string, string>? schemaNameFormatter)

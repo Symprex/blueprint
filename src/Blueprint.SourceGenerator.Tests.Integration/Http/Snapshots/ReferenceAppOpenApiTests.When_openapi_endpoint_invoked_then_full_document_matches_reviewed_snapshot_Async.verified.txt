@@ -2221,6 +2221,9 @@
         "properties": {
           "$links": {
             "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Link"
+            },
             "readOnly": true
           },
           "$object": {
@@ -2537,6 +2540,9 @@
         "properties": {
           "$links": {
             "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Link"
+            },
             "readOnly": true
           },
           "$object": {
@@ -2588,6 +2594,9 @@
         "properties": {
           "$links": {
             "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Link"
+            },
             "readOnly": true
           },
           "$object": {
@@ -2625,6 +2634,9 @@
         "properties": {
           "$links": {
             "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Link"
+            },
             "readOnly": true
           },
           "$object": {
@@ -2740,6 +2752,23 @@
           "type": {
             "type": "string",
             "nullable": true
+          }
+        }
+      },
+      "Link": {
+        "title": "Link",
+        "type": "object",
+        "required": [
+          "href"
+        ],
+        "properties": {
+          "href": {
+            "type": "string",
+            "description": "The URL of this link."
+          },
+          "type": {
+            "type": "string",
+            "description": "The type of resource this link will return."
           }
         }
       }

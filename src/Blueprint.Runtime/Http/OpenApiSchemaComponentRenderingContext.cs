@@ -51,6 +51,16 @@ public sealed record OpenApiSchemaComponentRenderingContext(
 
     private static OpenApiSchemaComponentPropertyModel CreateProperty(OpenApiSchemaPropertyModel property)
     {
+        // The well-known $links property (IDictionary<string, Link> from ILinkableResource) should
+        // reference the Link schema component rather than rendering as bare "type: object".
+        var additionalPropertiesSchemaRef = property.AdditionalPropertiesSchemaName;
+        if (additionalPropertiesSchemaRef is null
+            && string.Equals(property.Name, "$links", StringComparison.Ordinal)
+            && property.Kind == OpenApiSchemaKind.Object)
+        {
+            additionalPropertiesSchemaRef = "Link";
+        }
+
         return new OpenApiSchemaComponentPropertyModel(
             property.Name,
             MapType(property.Kind),
@@ -71,7 +81,7 @@ public sealed record OpenApiSchemaComponentRenderingContext(
             property.AdditionalPropertiesKind.HasValue ? MapType(property.AdditionalPropertiesKind.Value) : null,
             property.AdditionalPropertiesFormat,
             property.ItemsSchemaName,
-            property.AdditionalPropertiesSchemaName,
+            additionalPropertiesSchemaRef,
             property.IsDeprecated,
             property.DeprecationReason,
             property.DefaultValue,
