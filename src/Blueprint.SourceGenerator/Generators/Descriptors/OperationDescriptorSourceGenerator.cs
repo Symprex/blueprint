@@ -95,7 +95,7 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
 
         var classProvider = context.SyntaxProvider
             .CreateSyntaxProvider(
-                predicate: static (s, _) => s is ClassDeclarationSyntax,
+                predicate: static (s, _) => s is ClassDeclarationSyntax { BaseList: not null },
                 transform: static (ctx, _) => Transform(ctx))
             .Where(static m => m != null)
             .Select(static (m, _) => m!)

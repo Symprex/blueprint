@@ -32,7 +32,7 @@ public sealed class ApiResourceSourceGenerator : IIncrementalGenerator, ITracked
     {
         var classDeclarations = context.SyntaxProvider
             .CreateSyntaxProvider(
-                predicate: static (s, _) => s is ClassDeclarationSyntax,
+                predicate: static (s, _) => s is ClassDeclarationSyntax { BaseList: not null },
                 transform: static (ctx, _) => Transform(ctx))
             .Where(static m => m != null)
             .WithTrackingName(Stages.InitialExtraction);
