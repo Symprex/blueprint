@@ -52,6 +52,8 @@
 | Resource auth helper extraction | ✅ Done | `PipelineHelpers.CheckResourceAuthorizationAsync` — two overloads (resolved + legacy) reduce 19→16 / 8→3 lines per pipeline |
 | S365 middleware gap analysis | ✅ Done | No blocking gaps: all 6 S365 middleware types have Blueprint equivalents |
 | Pipeline optimization audit | ✅ Done | No further extraction opportunities remain; pipelines are already well-optimized |
+| S365 source generators | ✅ Analysed | 3 custom generators (DTO, Metrics, ServiceApi) — orthogonal to Blueprint, must coexist |
+| Blueprint.Compiler (legacy) | ✅ Analysed | Runtime Roslyn compiler, not source-gen — superseded by Blueprint source-gen |
 | GetHttpContext() compat method | ✅ Done | Instance method on ApiOperationContext for S365 HttpContext access |
 | StatusCodeResult returns | ✅ Verified | Accepted (85 S365 usages), NoContent (10), Created (12) all work |
 | `[DoNotSaveChanges]` | ✅ Verified | Already supported with BPP001 diagnostic for misuse on non-commands |
@@ -127,6 +129,28 @@
 ### SMTP Subsystem
 - 59 projects, does NOT use Blueprint — only an HTTP client
 - **Excluded from migration scope**
+
+### S365 Custom Source Generators (Coexist with Blueprint)
+S365 has **3 custom source generators** in `Symprex.Signature365.SourceGenerators` that are **orthogonal** to Blueprint source-gen. They MUST coexist during and after migration.
+
+| Generator | Trigger Attribute | Output | Blueprint Equivalent |
+|-----------|-------------------|--------|---------------------|
+| `DtoSourceGenerator` | `[DtoMap(Type)]` | `{DtoName}.g.cs` with `MapFrom(source)` method | None — DTO mapping is S365-specific |
+| `MetricsSourceGenerator` | `[AppCounter<T>]` | `{Class}.MetricInstances.g.cs` with `IAppMetrics<T>` | None — OpenTelemetry metrics are S365-specific |
+| `ServiceApiSourceGenerator` | `[ServiceApiInclude(typeof(Op))]` | `ServicesApis.g.cs` with interface + implementation | Partial overlap: generates HTTP client wrappers for inter-service calls using `BlueprintHttpClient` |
+
+**Key points:**
+- Both generator toolchains emit `.g.cs` files to same `generated` folder — **no name collisions**
+- Both use standard Roslyn incremental generation — **no tooling conflicts**
+- `ServiceApiSourceGenerator` generates service client classes that call `BlueprintHttpClient.CallAsync(operation, options)` — these wrap Blueprint's HTTP client for S365-specific patterns (JWT management, `ModifyOptionsFor` per-operation customisation)
+- During migration, S365 generators keep running unchanged; Blueprint source-gen is additive
+
+### Blueprint.Compiler (Legacy)
+- Located at `D:\Projects\Signature365\src\Blueprint\Blueprint.Compiler`
+- **Runtime Roslyn compiler** for dynamic code emission (NOT a source generator)
+- Uses `Frame`-based code generation to produce in-memory assemblies at runtime
+- **Superseded entirely** by Blueprint source-gen (compile-time generation replaces runtime compilation)
+- **Migration action**: Remove `Blueprint.Compiler` project reference once Blueprint source-gen is integrated
 
 ### Link Attributes
 - S365 has **193 `[SelfLink]`** and **292 `[Link]`** usages (99 non-self HATEOAS links)
