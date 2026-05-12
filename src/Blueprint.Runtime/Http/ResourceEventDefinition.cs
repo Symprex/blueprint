@@ -272,6 +272,21 @@ public static class ResourceEventDefinition
     }
 
     /// <summary>
+    /// Creates a factory that produces mapper-backed definitions using a fixed typed query instance.
+    /// This overload allows type inference when the query's result type matches the resource type
+    /// (e.g. <c>ResourceEventDefinition.For(new GetSettingsQuery())</c> where <c>GetSettingsQuery : IQuery&lt;SettingsApiResource&gt;</c>).
+    /// </summary>
+    /// <typeparam name="TResource">The API resource type, inferred from the query's result type.</typeparam>
+    /// <param name="query">An existing query instance to use as the self-query.</param>
+    /// <returns>A factory that produces mapper-backed definitions.</returns>
+    public static ResourceEventDefinitionFactoryWithMapper<TResource> For<TResource>(
+        IQuery<TResource> query)
+        where TResource : ApiResource
+    {
+        return new ResourceEventDefinitionFactoryWithMapper<TResource>(() => query);
+    }
+
+    /// <summary>
     /// Creates a factory that produces domain-mapper definitions using a domain-to-query mapper.
     /// The mapper is inherited by every definition the factory creates.
     /// </summary>
