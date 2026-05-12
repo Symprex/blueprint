@@ -8,7 +8,6 @@ namespace Blueprint.Runtime.Exec;
 /// into a 201 Created response with an appropriate <c>Location</c> header.
 /// </summary>
 /// <typeparam name="T">The type of resource that was created.</typeparam>
-[Obsolete("Use [ResourceEventFamily] source-generated events instead for compile-time safe event IDs and implicit conversion operators. See consumer migration guide for details.")]
 public sealed class ResourceCreated<T> : ResourceEventResult<T> where T : notnull
 {
     /// <summary>
@@ -40,7 +39,6 @@ public sealed class ResourceCreated<T> : ResourceEventResult<T> where T : notnul
 /// translates into a 200 OK response.
 /// </summary>
 /// <typeparam name="T">The type of resource that was updated.</typeparam>
-[Obsolete("Use [ResourceEventFamily] source-generated events instead for compile-time safe event IDs and implicit conversion operators. See consumer migration guide for details.")]
 public sealed class ResourceUpdated<T> : ResourceEventResult<T> where T : notnull
 {
     /// <summary>
@@ -72,7 +70,6 @@ public sealed class ResourceUpdated<T> : ResourceEventResult<T> where T : notnul
 /// into a 200 OK response (with the deleted resource as body) or 204 No Content.
 /// </summary>
 /// <typeparam name="T">The type of resource that was deleted.</typeparam>
-[Obsolete("Use [ResourceEventFamily] source-generated events instead for compile-time safe event IDs and implicit conversion operators. See consumer migration guide for details.")]
 public sealed class ResourceDeleted<T> : ResourceEventResult<T> where T : notnull
 {
     /// <summary>
