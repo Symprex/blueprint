@@ -237,6 +237,16 @@ Cross-referenced S365 codebase patterns against Blueprint source-gen support. **
 
 **Gateway migration note:** `ServiceApiInclude` is replaced by Blueprint's `TypedHttpClientExtensionsGenerator`, which automatically generates strongly-typed extension methods on `BlueprintHttpClient<TApp>` for every operation registered through `[BlueprintAppScan]`. Gateway projects inject `BlueprintHttpClient<TargetApp>` and call the generated methods directly — no separate interface/implementation classes needed. The S365 pattern of `IServiceApi` + `ServiceApi` class is simplified to just `BlueprintHttpClient<TargetApp>.OperationNameAsync(params)`. JWT propagation uses `CallOptions` or HttpClient message handler configuration.
 
+**S365 custom source generator coexistence:** S365 has 3 custom generators in `Symprex.Signature365.SourceGenerators` that are **orthogonal** to Blueprint source-gen and **must coexist** during and after migration:
+
+| S365 Generator | Trigger | What It Generates | Blueprint Equivalent |
+|---|---|---|---|
+| `DtoSourceGenerator` | `[DtoMap(Type)]` | DTO mapping classes with `MapFrom(source)` | None — S365-specific |
+| `MetricsSourceGenerator` | `[AppCounter<T>]` | OpenTelemetry counter classes | None — S365-specific |
+| `ServiceApiSourceGenerator` | `[ServiceApiInclude(typeof(Op))]` | Service client interface + implementation | Partially: `TypedHttpClientExtensionsGenerator` |
+
+Both toolchains emit `.g.cs` files with no name collisions. During migration, S365 generators keep running unchanged; Blueprint source-gen is additive. **Do not remove S365 generators.**
+
 ### Critical (Must Fix)
 
 | Gap | Description | Status |

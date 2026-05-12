@@ -86,15 +86,7 @@ namespace Blueprint.Generated
             }
 
             // Populate full HATEOAS links (skip 304 Not Modified)
-            if (handlerResult is not global::Blueprint.Runtime.Exec.INotModifiedResult)
-            {
-                var apiLinkGenerator = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Http.IApiLinkGenerator>(context.ServiceProvider);
-                if (apiLinkGenerator != null)
-                {
-                    var resourceLinkGenerators = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<System.Collections.Generic.IEnumerable<Blueprint.Http.IResourceLinkGenerator>>(context.ServiceProvider);
-                    await Blueprint.Http.LinkGeneratorHandler.AddLinksAsync(apiLinkGenerator, resourceLinkGenerators, context, handlerResult).ConfigureAwait(false);
-                }
-            }
+            await Blueprint.Runtime.Exec.PipelineHelpers.PopulateHateoasLinksAsync(context.ServiceProvider, context, handlerResult).ConfigureAwait(false);
 
             if (handlerResult.WasSuccessful)
             {

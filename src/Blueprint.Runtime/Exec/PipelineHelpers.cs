@@ -547,4 +547,39 @@ public static class PipelineHelpers
             RecordAuditFailureEvent(activity, "blueprint.resource_event_audit.failed", operationTypeName, resourceEventAuditException, eventId, resourceId);
         }
     }
+
+    /// <summary>
+    /// Resolves <c>IApiLinkGenerator</c> and <c>IResourceLinkGenerator</c> from DI and invokes
+    /// <see cref="Blueprint.Http.LinkGeneratorHandler"/> to populate all HATEOAS links on the
+    /// returned resource. Skips link population entirely for <see cref="INotModifiedResult"/>
+    /// responses or when link generation is not registered. Replaces the 10-line inline block
+    /// that was previously emitted per-pipeline.
+    /// </summary>
+    /// <param name="serviceProvider">The scoped service provider for the current request.</param>
+    /// <param name="context">The operation context for the current pipeline execution.</param>
+    /// <param name="handlerResult">The handler result to enrich with links.</param>
+    /// <returns>A task that completes when link population has finished (or been skipped).</returns>
+    public static async Task PopulateHateoasLinksAsync(
+        IServiceProvider serviceProvider,
+        ApiOperationContext context,
+        OperationResult handlerResult)
+    {
+        if (handlerResult is INotModifiedResult)
+        {
+            return;
+        }
+
+        var apiLinkGenerator = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions
+            .GetService<Blueprint.Http.IApiLinkGenerator>(serviceProvider);
+
+        if (apiLinkGenerator == null)
+        {
+            return;
+        }
+
+        var resourceLinkGenerators = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions
+            .GetRequiredService<IEnumerable<Blueprint.Http.IResourceLinkGenerator>>(serviceProvider);
+
+        await Blueprint.Http.LinkGeneratorHandler.AddLinksAsync(apiLinkGenerator, resourceLinkGenerators, context, handlerResult).ConfigureAwait(false);
+    }
 }

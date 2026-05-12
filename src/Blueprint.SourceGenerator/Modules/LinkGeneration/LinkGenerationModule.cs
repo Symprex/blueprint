@@ -825,34 +825,16 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
     }
 
     /// <summary>
-    /// Generates the pipeline step that resolves <c>IResourceLinkGenerator</c> and
-    /// <c>IApiLinkGenerator</c> from DI and calls <c>LinkGeneratorHandler.AddLinksAsync</c>
-    /// to populate all HATEOAS links (root links, self links from other operations) on the
-    /// returned resource. This replaces the legacy <c>LinkGeneratorMiddlewareBuilder</c>.
+    /// Generates a single call to <c>PipelineHelpers.PopulateHateoasLinksAsync</c> which resolves
+    /// <c>IApiLinkGenerator</c> and <c>IResourceLinkGenerator</c> from DI and calls
+    /// <c>LinkGeneratorHandler.AddLinksAsync</c> to populate all HATEOAS links on the result.
+    /// Replaces a 10-line inline block that was previously emitted per-pipeline.
     /// </summary>
     private static void RenderFullHateoasLinkPopulation(PipelineRenderContext context)
     {
         context.WriteBlankLine();
         context.WriteStatement("// Populate full HATEOAS links (skip 304 Not Modified)");
-        context.If(
-            "handlerResult is not global::Blueprint.Runtime.Exec.INotModifiedResult",
-            hateoasBranch =>
-            {
-                hateoasBranch.DeclareVariable(
-                    "apiLinkGenerator",
-                    context.GetOptionalServiceExpression("Blueprint.Http.IApiLinkGenerator"));
-
-                hateoasBranch.If(
-                    "apiLinkGenerator != null",
-                    branch =>
-                    {
-                        branch.DeclareVariable(
-                            "resourceLinkGenerators",
-                            "Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<System.Collections.Generic.IEnumerable<Blueprint.Http.IResourceLinkGenerator>>(context.ServiceProvider)");
-
-                        branch.WriteStatement("await Blueprint.Http.LinkGeneratorHandler.AddLinksAsync(apiLinkGenerator, resourceLinkGenerators, context, handlerResult).ConfigureAwait(false);");
-                    });
-            });
+        context.WriteStatement("await Blueprint.Runtime.Exec.PipelineHelpers.PopulateHateoasLinksAsync(context.ServiceProvider, context, handlerResult).ConfigureAwait(false);");
     }
 
     private static string BuildHrefInterpolation(string urlTemplate)
