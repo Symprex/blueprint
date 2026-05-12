@@ -537,7 +537,7 @@ public static class PipelineHelpers
 
         try
         {
-            await auditSink.RecordAsync(eventId, resourceId, context, CancellationToken.None).ConfigureAwait(false);
+            await auditSink.RecordAsync(eventId, resourceId, handlerResult, context, CancellationToken.None).ConfigureAwait(false);
 
             activity?.AddEvent(new ActivityEvent(
                 "blueprint.resource_event_audit.succeeded",

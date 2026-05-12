@@ -177,7 +177,7 @@ public sealed class TestResourceEventAuditSink : IResourceEventAuditSink
     public ApiOperationContext? LastContext { get; private set; }
 
     /// <inheritdoc />
-    public Task RecordAsync(string eventId, string resourceId, ApiOperationContext context, CancellationToken cancellationToken)
+    public Task RecordAsync(string eventId, string resourceId, OperationResult handlerResult, ApiOperationContext context, CancellationToken cancellationToken)
     {
         this.RecordCallCount++;
         this.LastEventId = eventId;
@@ -193,7 +193,7 @@ public sealed class TestResourceEventAuditSink : IResourceEventAuditSink
 public sealed class ThrowingResourceEventAuditSink : IResourceEventAuditSink
 {
     /// <inheritdoc />
-    public Task RecordAsync(string eventId, string resourceId, ApiOperationContext context, CancellationToken cancellationToken)
+    public Task RecordAsync(string eventId, string resourceId, OperationResult handlerResult, ApiOperationContext context, CancellationToken cancellationToken)
     {
         throw new InvalidOperationException("Simulated resource event audit sink failure");
     }

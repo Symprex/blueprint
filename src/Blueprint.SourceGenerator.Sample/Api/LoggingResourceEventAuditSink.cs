@@ -15,7 +15,7 @@ namespace Blueprint.SourceGenerator.Sample.Api;
 public sealed class LoggingResourceEventAuditSink(ILogger<LoggingResourceEventAuditSink> logger) : IResourceEventAuditSink
 {
     /// <inheritdoc />
-    public Task RecordAsync(string eventId, string resourceId, ApiOperationContext context, CancellationToken cancellationToken)
+    public Task RecordAsync(string eventId, string resourceId, OperationResult handlerResult, ApiOperationContext context, CancellationToken cancellationToken)
     {
         logger.LogInformation(
             "Resource event audit: EventId={EventId}, ResourceId={ResourceId}, Operation={OperationType}",
