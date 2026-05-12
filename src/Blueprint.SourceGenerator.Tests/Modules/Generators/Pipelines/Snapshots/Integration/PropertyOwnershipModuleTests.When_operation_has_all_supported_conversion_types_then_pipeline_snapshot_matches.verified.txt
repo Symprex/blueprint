@@ -364,28 +364,65 @@ namespace Blueprint.Generated
                     return new Blueprint.Runtime.Exec.UnsupportedMediaTypeResult();
                 }
 
-                using var bodyStream = httpContext.Request.ContentLength.HasValue
-                    ? new System.IO.MemoryStream((int)httpContext.Request.ContentLength.Value)
-                    : new System.IO.MemoryStream();
-                await httpContext.Request.Body.CopyToAsync(bodyStream, context.OperationCancelled).ConfigureAwait(false);
-
-                if (bodyStream.Length > 0)
+                if (httpContext.Request.ContentLength.HasValue && httpContext.Request.ContentLength.Value > 0)
                 {
-                    try
+                    var _bodyLength = (int)httpContext.Request.ContentLength.Value;
+                    var _rentedBuffer = System.Buffers.ArrayPool<byte>.Shared.Rent(_bodyLength);
+                    int _totalRead = 0;
+                    while (_totalRead < _bodyLength)
                     {
-                        PopulateFromJsonBody(new System.ReadOnlySpan<byte>(bodyStream.GetBuffer(), 0, (int)bodyStream.Length), operation);
+                        int _bytesRead = await httpContext.Request.Body.ReadAsync(new System.Memory<byte>(_rentedBuffer, _totalRead, _bodyLength - _totalRead), context.OperationCancelled).ConfigureAwait(false);
+                        if (_bytesRead == 0) break;
+                        _totalRead += _bytesRead;
                     }
-                    catch (System.Text.Json.JsonException)
+
+                    if (_totalRead > 0)
                     {
-                        return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid JSON body");
+                        try
+                        {
+                            PopulateFromJsonBody(new System.ReadOnlySpan<byte>(_rentedBuffer, 0, _totalRead), operation);
+                        }
+                        catch (System.Text.Json.JsonException)
+                        {
+                            System.Buffers.ArrayPool<byte>.Shared.Return(_rentedBuffer);
+                            return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid JSON body");
+                        }
+                        catch (System.InvalidOperationException)
+                        {
+                            System.Buffers.ArrayPool<byte>.Shared.Return(_rentedBuffer);
+                            return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid JSON body");
+                        }
+                        catch (System.NotSupportedException)
+                        {
+                            System.Buffers.ArrayPool<byte>.Shared.Return(_rentedBuffer);
+                            return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid JSON body");
+                        }
                     }
-                    catch (System.InvalidOperationException)
+                    System.Buffers.ArrayPool<byte>.Shared.Return(_rentedBuffer);
+                }
+                else
+                {
+                    using var bodyStream = new System.IO.MemoryStream();
+                    await httpContext.Request.Body.CopyToAsync(bodyStream, context.OperationCancelled).ConfigureAwait(false);
+
+                    if (bodyStream.Length > 0)
                     {
-                        return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid JSON body");
-                    }
-                    catch (System.NotSupportedException)
-                    {
-                        return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid JSON body");
+                        try
+                        {
+                            PopulateFromJsonBody(new System.ReadOnlySpan<byte>(bodyStream.GetBuffer(), 0, (int)bodyStream.Length), operation);
+                        }
+                        catch (System.Text.Json.JsonException)
+                        {
+                            return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid JSON body");
+                        }
+                        catch (System.InvalidOperationException)
+                        {
+                            return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid JSON body");
+                        }
+                        catch (System.NotSupportedException)
+                        {
+                            return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid JSON body");
+                        }
                     }
                 }
             }
