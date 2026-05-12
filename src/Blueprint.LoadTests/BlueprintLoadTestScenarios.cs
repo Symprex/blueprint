@@ -39,7 +39,10 @@ public static class BlueprintLoadTestScenarios
         var getTemplatesScenario = CreateGetTemplatesScenario(httpClient);
         var getTemplateByIdScenario = CreateGetTemplateByIdScenario(httpClient);
         var createTemplateScenario = CreateCreateTemplateScenario(httpClient);
+        var updateTemplateScenario = CreateUpdateTemplateScenario(httpClient);
+        var deleteTemplateScenario = CreateDeleteTemplateScenario(httpClient);
         var validationFailureScenario = CreateValidationFailureScenario(httpClient);
+        var unauthorizedScenario = CreateUnauthorizedScenario(httpClient);
         var openApiScenario = CreateOpenApiScenario(httpClient);
         var healthCheckScenario = CreateHealthCheckScenario(httpClient);
 
@@ -48,7 +51,10 @@ public static class BlueprintLoadTestScenarios
                 getTemplatesScenario,
                 getTemplateByIdScenario,
                 createTemplateScenario,
+                updateTemplateScenario,
+                deleteTemplateScenario,
                 validationFailureScenario,
+                unauthorizedScenario,
                 openApiScenario,
                 healthCheckScenario)
             .WithReportFolder("reports")
@@ -179,6 +185,58 @@ public static class BlueprintLoadTestScenarios
             .WithWarmUpDuration(TimeSpan.FromSeconds(3))
             .WithLoadSimulations(
                 Simulation.Inject(rate: 300, interval: TimeSpan.FromSeconds(1), during: TimeSpan.FromSeconds(30)));
+    }
+
+    private static NBomber.Contracts.ScenarioProps CreateUpdateTemplateScenario(global::System.Net.Http.HttpClient httpClient)
+    {
+        return Scenario.Create("update_template_put", async context =>
+            {
+                var id = TemplateIds[context.ScenarioInfo.ThreadNumber % TemplateIds.Length];
+                var payload = $$"""
+                    {
+                        "name": "Updated Template {{context.ScenarioInfo.ThreadNumber}}",
+                        "htmlSource": "<p>Updated content</p>",
+                        "plainTextSource": "Updated content"
+                    }
+                    """;
+
+                using var response = await httpClient.PutAsync(
+                    $"http://localhost/api/templates/{id}",
+                    new StringContent(payload, Encoding.UTF8, "application/json"));
+                return NBomber.CSharp.Response.Ok(statusCode: ((int)response.StatusCode).ToString());
+            })
+            .WithWarmUpDuration(TimeSpan.FromSeconds(3))
+            .WithLoadSimulations(
+                Simulation.Inject(rate: 75, interval: TimeSpan.FromSeconds(1), during: TimeSpan.FromSeconds(30)));
+    }
+
+    private static NBomber.Contracts.ScenarioProps CreateDeleteTemplateScenario(global::System.Net.Http.HttpClient httpClient)
+    {
+        return Scenario.Create("delete_template", async context =>
+            {
+                // Delete the same ids repeatedly — handler should handle idempotently
+                var id = TemplateIds[context.ScenarioInfo.ThreadNumber % TemplateIds.Length];
+                using var response = await httpClient.DeleteAsync($"http://localhost/api/templates/{id}");
+                return NBomber.CSharp.Response.Ok(statusCode: ((int)response.StatusCode).ToString());
+            })
+            .WithWarmUpDuration(TimeSpan.FromSeconds(3))
+            .WithLoadSimulations(
+                Simulation.Inject(rate: 50, interval: TimeSpan.FromSeconds(1), during: TimeSpan.FromSeconds(30)));
+    }
+
+    private static NBomber.Contracts.ScenarioProps CreateUnauthorizedScenario(global::System.Net.Http.HttpClient httpClient)
+    {
+        return Scenario.Create("authorization_denied", async context =>
+            {
+                // Use a custom client that sends no auth header to exercise the 401 fast-path
+                using var request = new HttpRequestMessage(HttpMethod.Get, "http://localhost/api/templates");
+                request.Headers.Add("X-Skip-Auth", "true");
+                using var response = await httpClient.SendAsync(request);
+                return NBomber.CSharp.Response.Ok(statusCode: ((int)response.StatusCode).ToString());
+            })
+            .WithWarmUpDuration(TimeSpan.FromSeconds(3))
+            .WithLoadSimulations(
+                Simulation.Inject(rate: 200, interval: TimeSpan.FromSeconds(1), during: TimeSpan.FromSeconds(30)));
     }
 
     private static NBomber.Contracts.ScenarioProps CreateOpenApiScenario(global::System.Net.Http.HttpClient httpClient)

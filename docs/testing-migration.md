@@ -501,8 +501,97 @@ For each of the 42 S365 test projects:
 - [ ] Replace `fixture.CommandAsync` / `fixture.QueryAsync` with `host.ExecuteAsync`
 - [ ] Replace auth helpers with `BlueprintTestContext` fluent API
 - [ ] Replace result assertions with `ResultAssertionExtensions`
-- [ ] Replace `FakeBus` with test double registration
+- [ ] Replace `FakeBus` with `TestMessageCollector` registration
 - [ ] Replace `BackgroundTaskCollector` usage (same concept, different access path)
-- [ ] Verify Marten test session isolation approach
+- [ ] Replace Marten UoW with `InMemoryUnitOfWork` for pure logic tests
+- [ ] Verify Marten test session isolation approach for persistence tests
 - [ ] Verify OpenAPI snapshot tests still match (if applicable)
 - [ ] Run all tests in the project and confirm green
+
+---
+
+## Built-in Test Doubles
+
+Blueprint.Testing ships with several test doubles that replace real infrastructure in tests:
+
+### InMemoryUnitOfWork
+
+Replaces `MartenUnitOfWork` (or any `IUnitOfWork`) to verify the generated pipeline calls
+`SaveChangesAsync` at the right point without needing a real database.
+
+```csharp
+var uow = new InMemoryUnitOfWork();
+
+var host = new BlueprintTestHostBuilder<PortalApp, PortalAppExecutor>()
+    .ConfigureServices(services =>
+    {
+        services.AddSingleton<IUnitOfWork>(uow);
+    })
+    .Build();
+
+await host.ExecuteAsync(new CreateTemplateCommand { Name = "Test" },
+    ctx => ctx.SkipAuthorisation());
+
+uow.WasSaved.Should().BeTrue();
+uow.SaveCount.Should().Be(1);
+
+// Reset between tests in shared fixtures
+uow.Reset();
+```
+
+### TestMessageCollector
+
+Captures published and sent messages during operation execution, replacing `FakeBus`.
+The collector is bus-agnostic — it works whether the handler uses Rebus, MassTransit, or
+a custom message abstraction.
+
+```csharp
+var messages = new TestMessageCollector();
+
+// Register as a singleton so handlers can resolve it
+var host = new BlueprintTestHostBuilder<PortalApp, PortalAppExecutor>()
+    .ConfigureServices(services =>
+    {
+        services.AddSingleton(messages);
+        // Replace real IBus with a thin wrapper that calls messages.Publish<T>()
+    })
+    .Build();
+
+await host.ExecuteAsync(new CreateTemplateCommand { Name = "Test" },
+    ctx => ctx.SkipAuthorisation());
+
+// Assert a specific event was published
+var evt = messages.GetSinglePublished<TemplateCreatedEvent>();
+evt.TemplateId.Should().Be("tmpl-1");
+
+// Assert nothing was sent point-to-point
+messages.AssertNoneSent<SendEmailCommand>();
+
+// Clear between tests
+messages.ClearAll();
+```
+
+### BackgroundTaskCollector
+
+Captures enqueued background tasks without dispatching them to Hangfire:
+
+```csharp
+// Already registered by default in BlueprintTestHostBuilder
+var host = new BlueprintTestHostBuilder<PortalApp, PortalAppExecutor>()
+    .Build();
+
+await host.ExecuteAsync(new CreateTemplateCommand { Name = "Test" },
+    ctx => ctx.SkipAuthorisation());
+
+var task = host.Services
+    .GetRequiredService<IBackgroundTaskScheduleProvider>()
+    .As<BackgroundTaskCollector>()
+    .GetSingleEnqueued<SendNotificationTask>();
+
+task.TemplateId.Should().Be("tmpl-1");
+```
+
+### NullRecurringTaskProvider
+
+A no-op `IRecurringTaskProvider` that prevents recurring task registration from
+attempting to connect to Hangfire during tests. Registered automatically.
