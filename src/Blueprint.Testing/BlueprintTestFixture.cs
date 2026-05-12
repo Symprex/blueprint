@@ -75,6 +75,12 @@ public sealed class BlueprintTestFixture<TApp, TExec> : IDisposable, IAsyncDispo
     public TestMessageCollector? Messages { get; }
 
     /// <summary>
+    /// Alias for <see cref="Messages"/> that mirrors the S365 <c>ApiFixture.Bus</c> property,
+    /// reducing churn when migrating tests that use <c>api.Bus.Should().HavePublished&lt;T&gt;()</c>.
+    /// </summary>
+    public TestMessageCollector? Bus => this.Messages;
+
+    /// <summary>
     /// Gets the in-memory unit of work tracker, or <c>null</c> if not registered.
     /// </summary>
     public InMemoryUnitOfWork? UnitOfWork { get; }

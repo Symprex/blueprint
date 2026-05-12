@@ -171,6 +171,70 @@ public sealed class TestMessageCollector
         }
     }
 
+    /// <summary>
+    /// S365-compatible alias for <see cref="GetSinglePublished{T}"/>. Returns the single
+    /// published message of the specified type, throwing if zero or more than one exist.
+    /// </summary>
+    /// <typeparam name="T">The expected message type.</typeparam>
+    /// <returns>The message instance.</returns>
+    public T HavePublishedSingle<T>() where T : notnull
+    {
+        return this.GetSinglePublished<T>();
+    }
+
+    /// <summary>
+    /// S365-compatible alias for <see cref="GetAllPublished{T}"/>. Returns all published
+    /// messages of the specified type.
+    /// </summary>
+    /// <typeparam name="T">The message type to filter by.</typeparam>
+    /// <returns>All matching message instances.</returns>
+    public IReadOnlyList<T> HavePublished<T>() where T : notnull
+    {
+        return this.GetAllPublished<T>();
+    }
+
+    /// <summary>
+    /// S365-compatible alias for <see cref="AssertNonePublished{T}"/>. Throws if any
+    /// messages of the specified type were published.
+    /// </summary>
+    /// <typeparam name="T">The message type that should not have been published.</typeparam>
+    public void NotHavePublished<T>() where T : notnull
+    {
+        this.AssertNonePublished<T>();
+    }
+
+    /// <summary>
+    /// S365-compatible alias for <see cref="GetSingleSent{T}"/>. Returns the single
+    /// sent message of the specified type, throwing if zero or more than one exist.
+    /// </summary>
+    /// <typeparam name="T">The expected message type.</typeparam>
+    /// <returns>The message instance.</returns>
+    public T HaveSentSingle<T>() where T : notnull
+    {
+        return this.GetSingleSent<T>();
+    }
+
+    /// <summary>
+    /// S365-compatible alias for <see cref="GetAllSent{T}"/>. Returns all sent
+    /// messages of the specified type.
+    /// </summary>
+    /// <typeparam name="T">The message type to filter by.</typeparam>
+    /// <returns>All matching message instances.</returns>
+    public IReadOnlyList<T> HaveSent<T>() where T : notnull
+    {
+        return this.GetAllSent<T>();
+    }
+
+    /// <summary>
+    /// S365-compatible alias for <see cref="AssertNoneSent{T}"/>. Throws if any
+    /// messages of the specified type were sent.
+    /// </summary>
+    /// <typeparam name="T">The message type that should not have been sent.</typeparam>
+    public void NotHaveSent<T>() where T : notnull
+    {
+        this.AssertNoneSent<T>();
+    }
+
     private static string FormatMessageTypes(List<MessageEnvelope> envelopes)
     {
         if (envelopes.Count == 0)

@@ -73,6 +73,11 @@
 | Singleton result types | ✅ Done | `ForbiddenResult.Instance`, `UnauthenticatedResult.Instance`, `UnsupportedMediaTypeResult.Instance` — zero allocation on auth/content-type failure paths |
 | GetServiceAs test double accessor | ✅ Done | `GetServiceAs<TService, TImpl>()` for safe casting to test doubles (e.g. FakeBus) |
 | WrapConfigureAnonymous optimization | ✅ Done | Cached static no-op delegate eliminates closure allocation for background task/message tests |
+| HATEOAS link population extraction | ✅ Done | `PipelineHelpers.PopulateHateoasLinksAsync` — replaces 10-line inline block per pipeline (~6,320 lines saved for 632 ops) |
+| `Bus` property alias on test fixture | ✅ Done | `BlueprintTestFixture.Bus` aliases `Messages` — mirrors S365 `ApiFixture.Bus` for minimal test churn |
+| S365-compatible message assertions | ✅ Done | `HavePublishedSingle<T>()`, `HavePublished<T>()`, `NotHavePublished<T>()` etc. on `TestMessageCollector` |
+| Handler DI parameter injection | ✅ Verified | S365 `HandleAsync(op, IDocumentSession, IMapper)` pattern — Blueprint resolves from DI automatically |
+| Handler return type normalization | ✅ Verified | Plain value → `OkResult<T>`, `ResourceEvent<T>` → direct, `Task` → `NoResult`, `OperationResult` → direct |
 
 ---
 
