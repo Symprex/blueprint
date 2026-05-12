@@ -119,4 +119,122 @@ public static class PipelineHelpers
 
         activity.AddEvent(new ActivityEvent(eventName, default, tags));
     }
+
+    /// <summary>
+    /// Reads and buffers the HTTP request body, validates the content type is JSON, then calls the
+    /// supplied <paramref name="populate"/> delegate with the raw bytes. This extracts the ~80 lines
+    /// of body-reading boilerplate (pooled buffer management, chunked-transfer fallback, content-type
+    /// guard, JSON exception translation) into a single runtime method so generated pipelines emit
+    /// only a one-line call instead of duplicating the pattern per operation.
+    /// </summary>
+    /// <param name="httpContext">The current HTTP context to read the request body from.</param>
+    /// <param name="cancellationToken">Cancellation token to observe during body reads.</param>
+    /// <param name="populate">
+    /// A delegate that receives the buffered body bytes as a <see cref="ReadOnlySpan{T}"/> and
+    /// populates the operation properties (typically via <c>Utf8JsonReader</c>). This is the only
+    /// operation-specific code; all buffering/error handling is shared.
+    /// </param>
+    /// <returns>
+    /// <c>null</c> when the body was read and populated successfully (or was empty/absent),
+    /// or an <see cref="OperationResult"/> representing the failure (unsupported media type,
+    /// invalid JSON, etc.).
+    /// </returns>
+    public static async Task<OperationResult?> ReadJsonBodyAsync(
+        HttpContext httpContext,
+        CancellationToken cancellationToken,
+        PopulateFromBodyDelegate populate)
+    {
+        // No body to read — skip silently
+        if (httpContext.Request.ContentLength is null or 0 && httpContext.Request.ContentType is null)
+        {
+            return null;
+        }
+
+        // Content-type guard: reject non-JSON bodies early
+        if (httpContext.Request.ContentType is not null &&
+            !httpContext.Request.ContentType.Contains("json", StringComparison.OrdinalIgnoreCase))
+        {
+            return new UnsupportedMediaTypeResult();
+        }
+
+        // Fast path: Content-Length is known — rent a pooled buffer and read directly
+        if (httpContext.Request.ContentLength.HasValue && httpContext.Request.ContentLength.Value > 0)
+        {
+            var bodyLength = (int)httpContext.Request.ContentLength.Value;
+            var rentedBuffer = System.Buffers.ArrayPool<byte>.Shared.Rent(bodyLength);
+            var totalRead = 0;
+
+            while (totalRead < bodyLength)
+            {
+                var bytesRead = await httpContext.Request.Body.ReadAsync(
+                    new Memory<byte>(rentedBuffer, totalRead, bodyLength - totalRead),
+                    cancellationToken).ConfigureAwait(false);
+                if (bytesRead == 0)
+                {
+                    break;
+                }
+
+                totalRead += bytesRead;
+            }
+
+            if (totalRead > 0)
+            {
+                try
+                {
+                    populate(new ReadOnlySpan<byte>(rentedBuffer, 0, totalRead));
+                }
+                catch (System.Text.Json.JsonException)
+                {
+                    System.Buffers.ArrayPool<byte>.Shared.Return(rentedBuffer);
+                    return new BindingFailureResult("Invalid JSON body");
+                }
+                catch (InvalidOperationException)
+                {
+                    System.Buffers.ArrayPool<byte>.Shared.Return(rentedBuffer);
+                    return new BindingFailureResult("Invalid JSON body");
+                }
+                catch (NotSupportedException)
+                {
+                    System.Buffers.ArrayPool<byte>.Shared.Return(rentedBuffer);
+                    return new BindingFailureResult("Invalid JSON body");
+                }
+            }
+
+            System.Buffers.ArrayPool<byte>.Shared.Return(rentedBuffer);
+            return null;
+        }
+
+        // Slow path: chunked transfer or unknown Content-Length — use MemoryStream
+        using var bodyStream = new MemoryStream();
+        await httpContext.Request.Body.CopyToAsync(bodyStream, cancellationToken).ConfigureAwait(false);
+
+        if (bodyStream.Length > 0)
+        {
+            try
+            {
+                populate(new ReadOnlySpan<byte>(bodyStream.GetBuffer(), 0, (int)bodyStream.Length));
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                return new BindingFailureResult("Invalid JSON body");
+            }
+            catch (InvalidOperationException)
+            {
+                return new BindingFailureResult("Invalid JSON body");
+            }
+            catch (NotSupportedException)
+            {
+                return new BindingFailureResult("Invalid JSON body");
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Delegate signature for the operation-specific JSON body population.
+    /// Called by <see cref="ReadJsonBodyAsync"/> after the body has been buffered.
+    /// </summary>
+    /// <param name="bodyBytes">The raw request body bytes, ready for <see cref="System.Text.Json.Utf8JsonReader"/>.</param>
+    public delegate void PopulateFromBodyDelegate(ReadOnlySpan<byte> bodyBytes);
 }

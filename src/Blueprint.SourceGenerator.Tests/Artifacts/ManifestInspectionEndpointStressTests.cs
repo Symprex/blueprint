@@ -22,7 +22,7 @@ public class ManifestInspectionEndpointStressTests
     public async Task When_mapping_blueprint_api_repeatedly_then_stress_harness_reports_shared_synthetic_fixture_endpoint_counts_and_all_hosted_manifest_routes()
     {
         var descriptors = BlueprintAppBenchmarkScenarioFactory.CreateDescriptors(operationCount: 10);
-        var expectedEndpointCount = descriptors.Count + 5;
+        var expectedEndpointCount = descriptors.Count + 6;
         var requiredRoutePatterns = new[]
         {
             "api/.blueprint/openapi.json",
@@ -30,6 +30,7 @@ public class ManifestInspectionEndpointStressTests
             "api/.blueprint/manifests/operations.md",
             "api/.blueprint/manifests/operations.schema.json",
             "api/.blueprint/manifests/operations.html",
+            "/.well-known/openapi",
         };
         var originalDescriptors = SharedSyntheticManifestInspectionBlueprintApp.Descriptors;
 

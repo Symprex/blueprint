@@ -875,97 +875,17 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         context.GetHttpContextExpression();
         context.WriteBlankLine();
 
-        // Body binding: buffer stream async, then parse with Utf8JsonReader
+        // Body binding: delegate stream buffering, content-type check, and exception handling
+        // to the shared PipelineHelpers.ReadJsonBodyAsync runtime method. The generated pipeline
+        // only provides the operation-specific PopulateFromJsonBody call as a delegate.
         if (bodyEntries.Length > 0)
         {
-            context.If(
-                "httpContext.Request.ContentLength > 0 || httpContext.Request.ContentType != null",
-                bodyContext =>
-                {
-                    bodyContext.If(
-                        "httpContext.Request.ContentType != null && !httpContext.Request.ContentType.Contains(\"json\", System.StringComparison.OrdinalIgnoreCase)",
-                        unsupportedCtx =>
-                        {
-                            unsupportedCtx.Return("new Blueprint.Runtime.Exec.UnsupportedMediaTypeResult()");
-                        });
-
-                    bodyContext.WriteBlankLine();
-
-                    // Fast path: when Content-Length is known, rent a pooled buffer and read
-                    // directly, avoiding MemoryStream overhead. Falls back to MemoryStream for
-                    // chunked-transfer requests without Content-Length.
-                    bodyContext.If("httpContext.Request.ContentLength.HasValue && httpContext.Request.ContentLength.Value > 0", knownLenCtx =>
-                    {
-                        knownLenCtx.WriteStatement("var _bodyLength = (int)httpContext.Request.ContentLength.Value;");
-                        knownLenCtx.WriteStatement("var _rentedBuffer = System.Buffers.ArrayPool<byte>.Shared.Rent(_bodyLength);");
-                        knownLenCtx.WriteStatement("int _totalRead = 0;");
-                        knownLenCtx.WriteStatement("while (_totalRead < _bodyLength)");
-                        knownLenCtx.WriteStatement("{");
-                        knownLenCtx.WriteStatement("    int _bytesRead = await httpContext.Request.Body.ReadAsync(new System.Memory<byte>(_rentedBuffer, _totalRead, _bodyLength - _totalRead), context.OperationCancelled).ConfigureAwait(false);");
-                        knownLenCtx.WriteStatement("    if (_bytesRead == 0) break;");
-                        knownLenCtx.WriteStatement("    _totalRead += _bytesRead;");
-                        knownLenCtx.WriteStatement("}");
-                        knownLenCtx.WriteBlankLine();
-                        knownLenCtx.If("_totalRead > 0", parseCtx =>
-                        {
-                            parseCtx.Try(innerTryCtx =>
-                            {
-                                innerTryCtx.WriteStatement($"PopulateFromJsonBody(new System.ReadOnlySpan<byte>(_rentedBuffer, 0, _totalRead), {operationExpr});");
-                            });
-
-                            parseCtx.Catch("System.Text.Json.JsonException", catchCtx =>
-                            {
-                                catchCtx.WriteStatement("System.Buffers.ArrayPool<byte>.Shared.Return(_rentedBuffer);");
-                                catchCtx.Return("new Blueprint.Runtime.Exec.BindingFailureResult(\"Invalid JSON body\")");
-                            });
-
-                            parseCtx.Catch("System.InvalidOperationException", catchCtx =>
-                            {
-                                catchCtx.WriteStatement("System.Buffers.ArrayPool<byte>.Shared.Return(_rentedBuffer);");
-                                catchCtx.Return("new Blueprint.Runtime.Exec.BindingFailureResult(\"Invalid JSON body\")");
-                            });
-
-                            parseCtx.Catch("System.NotSupportedException", catchCtx =>
-                            {
-                                catchCtx.WriteStatement("System.Buffers.ArrayPool<byte>.Shared.Return(_rentedBuffer);");
-                                catchCtx.Return("new Blueprint.Runtime.Exec.BindingFailureResult(\"Invalid JSON body\")");
-                            });
-                        });
-
-                        // Return to pool after successful parse. Error paths return early above.
-                        knownLenCtx.WriteStatement("System.Buffers.ArrayPool<byte>.Shared.Return(_rentedBuffer);");
-                    });
-
-                    bodyContext.Else(unknownLenCtx =>
-                    {
-                        unknownLenCtx.WriteStatement("using var bodyStream = new System.IO.MemoryStream();");
-                        unknownLenCtx.WriteStatement("await httpContext.Request.Body.CopyToAsync(bodyStream, context.OperationCancelled).ConfigureAwait(false);");
-                        unknownLenCtx.WriteBlankLine();
-
-                        unknownLenCtx.If("bodyStream.Length > 0", lengthCtx =>
-                        {
-                            lengthCtx.Try(tryCtx =>
-                            {
-                                tryCtx.WriteStatement($"PopulateFromJsonBody(new System.ReadOnlySpan<byte>(bodyStream.GetBuffer(), 0, (int)bodyStream.Length), {operationExpr});");
-                            });
-
-                            lengthCtx.Catch("System.Text.Json.JsonException", catchCtx =>
-                            {
-                                catchCtx.Return("new Blueprint.Runtime.Exec.BindingFailureResult(\"Invalid JSON body\")");
-                            });
-
-                            lengthCtx.Catch("System.InvalidOperationException", catchCtx =>
-                            {
-                                catchCtx.Return("new Blueprint.Runtime.Exec.BindingFailureResult(\"Invalid JSON body\")");
-                            });
-
-                            lengthCtx.Catch("System.NotSupportedException", catchCtx =>
-                            {
-                                catchCtx.Return("new Blueprint.Runtime.Exec.BindingFailureResult(\"Invalid JSON body\")");
-                            });
-                        });
-                    });
-                });
+            context.WriteStatement(
+                $"var _bodyResult = await Blueprint.Runtime.Exec.PipelineHelpers.ReadJsonBodyAsync(httpContext, context.OperationCancelled, _bodyBytes => PopulateFromJsonBody(_bodyBytes, {operationExpr})).ConfigureAwait(false);");
+            context.If("_bodyResult != null", earlyReturnCtx =>
+            {
+                earlyReturnCtx.Return("_bodyResult");
+            });
 
             context.WriteBlankLine();
         }
