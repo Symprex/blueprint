@@ -5,8 +5,8 @@
 - **.NET Version:** 10.0
 - **OS:** Windows 11
 - **Hardware:** Development workstation
-- **Date:** 2025-07-14 (updated 2025-07-17)
-- **BenchmarkDotNet:** InProcessEmitToolchain, ShortRun (5 iterations, 1 warmup)
+- **Date:** 2025-07-14 (updated 2025-07-18)
+- **BenchmarkDotNet:** InProcessEmitToolchain, MediumRun
 
 ## Full Pipeline Benchmarks
 
@@ -16,26 +16,26 @@ code path that runs in production HTTP requests (minus HTTP I/O and serializatio
 
 | Benchmark | Mean | Error | StdDev | Ratio | Gen0 | Allocated | Alloc Ratio |
 |-----------|-----:|------:|-------:|------:|-----:|----------:|------------:|
-| MinimalQuery (baseline) | 1.61 µs | 0.601 µs | 0.398 µs | 1.00 | 0.2022 | 2.51 KB | 1.00 |
-| ValidatedQuery (valid input) | 10.42 µs | 2.195 µs | 1.306 µs | 6.81 | 0.4120 | 5.12 KB | 2.04 |
-| ValidatedQuery (invalid input) | 11.20 µs | 2.826 µs | 1.869 µs | 7.32 | 0.4120 | 5.12 KB | 2.04 |
-| FullStackCommand (validation failure) | 12.49 µs | 5.039 µs | 2.998 µs | 8.17 | 0.4578 | 5.73 KB | 2.28 |
-| FullStackCommand (valid input) | 13.83 µs | 3.806 µs | 2.517 µs | 9.05 | 0.4578 | 5.73 KB | 2.28 |
+| MinimalQuery (baseline) | 1.20 µs | 0.037 µs | 0.052 µs | 1.00 | 0.2041 | 2.51 KB | 1.00 |
+| ValidatedQuery (invalid input) | 8.93 µs | 0.967 µs | 1.386 µs | 7.46 | 0.3967 | 5.12 KB | 2.04 |
+| FullStackCommand (validation failure) | 9.50 µs | 0.405 µs | 0.580 µs | 7.93 | 0.4578 | 5.73 KB | 2.28 |
+| ValidatedQuery (valid input) | 9.62 µs | 1.459 µs | 2.183 µs | 8.03 | 0.4120 | 5.12 KB | 2.04 |
+| FullStackCommand (valid input) | 9.65 µs | 0.372 µs | 0.534 µs | 8.05 | 0.4578 | 5.73 KB | 2.28 |
 
 ### Analysis
 
-**Baseline (MinimalQuery):** ~1.6 µs / 2.51 KB
+**Baseline (MinimalQuery):** ~1.2 µs / 2.51 KB
 - This is the absolute minimum pipeline overhead — no validation, just handler invocation
 - The 2.51 KB includes `ApiOperationContext` allocation and the operation instance
 - **This is the floor.** Any production operation will add to this baseline
 
-**Validation cost:** ~9-11 µs / 2.6 KB additional
-- Validation adds ~9-11 µs latency and ~2.6 KB allocation over the baseline
+**Validation cost:** ~8-10 µs / 2.6 KB additional
+- Validation adds ~8-10 µs latency and ~2.6 KB allocation over the baseline
 - Both valid and invalid paths have similar cost — the generated validation code runs
   the same checks either way, just with different outcomes
 - The 2.6 KB is primarily from `ValidationFailedOperationResult` and error message strings
 
-**Command overhead:** ~2-3 µs / 0.6 KB additional (over validated query)
+**Command overhead:** ~0.7 µs / 0.6 KB additional (over validated query)
 - Commands have slightly more pipeline stages (e.g., success guards, result wrapping)
 - The additional allocation is from command-specific result types
 
@@ -60,6 +60,10 @@ Even the heaviest validated command pipeline (~10 µs) is faster than typical JS
    intermediate `List<string>`.
 4. **Validation error grouping (commit 7b14e3b)** — Build `string[]` values directly
    instead of `Dictionary<string, List<string>>` then copy.
+5. **ArrayPool body deserialization (commit 22b1ece)** — When Content-Length is known
+   (99%+ of real requests), rent from `ArrayPool<byte>.Shared` instead of allocating
+   a `MemoryStream`. This eliminates a per-request heap allocation for the body buffer.
+   Chunked transfer (unknown Content-Length) falls back to `MemoryStream`.
 
 ---
 
@@ -96,15 +100,16 @@ Request binding overhead for different property population strategies.
 
 | Method | Mean | Error | StdDev | Gen0 | Allocated |
 |--------|-----:|------:|-------:|-----:|----------:|
-| RouteOnlyGetAsync (baseline) | 2.00 µs | 0.11 µs | 0.07 µs | 0.37 | 4.60 KB |
-| BodyOnly3StringsPostAsync | 3.46 µs | 0.70 µs | 0.46 µs | 0.46 | 5.63 KB |
-| MixedRouteAndBodyPostAsync | 3.55 µs | 1.02 µs | 0.60 µs | 0.46 | 5.63 KB |
-| TypedBodyPostAsync | 3.85 µs | 0.22 µs | 0.11 µs | 0.50 | 6.15 KB |
-| LargeBody10PropsPostAsync | 5.71 µs | 0.14 µs | 0.09 µs | 0.66 | 8.13 KB |
+| RouteOnlyGetAsync (baseline) | 2.74 µs | 0.42 µs | 0.63 µs | 0.37 | 4.60 KB |
+| MixedRouteAndBodyPostAsync | 3.72 µs | 0.22 µs | 0.33 µs | 0.45 | 5.50 KB |
+| TypedBodyPostAsync | 4.26 µs | 0.15 µs | 0.21 µs | 0.48 | 5.98 KB |
+| BodyOnly3StringsPostAsync | 4.97 µs | 0.65 µs | 0.93 µs | 0.44 | 5.47 KB |
+| LargeBody10PropsPostAsync | 8.13 µs | 0.77 µs | 1.05 µs | 0.64 | 7.91 KB |
 
-**Key insight:** Route-only binding is cheapest (~2.2µs). Body binding adds ~1µs
-regardless of source (inline vs typed). A 10-property operation body costs ~6.6µs
-total — still well under HTTP I/O noise.
+**Key insight:** Route-only binding is cheapest (~2.7µs). Body binding adds ~1-2µs
+regardless of source (inline vs typed). A 10-property operation body costs ~8µs
+total — still well under HTTP I/O noise. The ArrayPool optimization (commit 22b1ece)
+reduced body-binding allocations by eliminating MemoryStream when Content-Length is known.
 
 ---
 

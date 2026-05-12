@@ -111,15 +111,19 @@ public class ResourceEvent : OperationResult
     /// <summary>
     /// Gets the metadata dictionary, a free-form bag of key-value pairs that can be stored
     /// against an event and may be persisted (for example for auditing).
+    /// Lazy-initialized to avoid a ~200-byte dictionary allocation per event when not used.
     /// </summary>
     [JsonInclude]
-    public Dictionary<string, object> Metadata { get; internal set; } = new();
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public Dictionary<string, object>? Metadata { get; internal set; }
 
     /// <summary>
     /// Gets a dictionary of security-related data that will NOT be persisted anywhere.
+    /// Lazy-initialized to avoid a ~200-byte dictionary allocation per event when not used.
     /// </summary>
     [JsonInclude]
-    public Dictionary<string, object> SecureData { get; internal set; } = new();
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public Dictionary<string, object>? SecureData { get; internal set; }
 
     /// <summary>
     /// Gets or sets the correlation id for this event, tying it back to the initial request.
@@ -186,6 +190,7 @@ public class ResourceEvent : OperationResult
     /// <returns>This <see cref="ResourceEvent"/> to support further chaining.</returns>
     public ResourceEvent WithMetadata(string key, object value)
     {
+        this.Metadata ??= new Dictionary<string, object>();
         this.Metadata[key] = value;
         return this;
     }
@@ -199,6 +204,7 @@ public class ResourceEvent : OperationResult
     /// <returns>This <see cref="ResourceEvent"/> to support further chaining.</returns>
     public ResourceEvent WithSecureData(string key, object value)
     {
+        this.SecureData ??= new Dictionary<string, object>();
         this.SecureData[key] = value;
         return this;
     }
