@@ -808,8 +808,16 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
             {
                 branch.DeclareVariable("linkableResource", $"({resourceTypeName}){binding.ContentAccessExpression}");
 
+                // Deduplicate by URL template: multiple operations may declare [SelfLink] for the
+                // same resource type with the same URL, but we only emit AddLink("self", ...) once.
+                var emittedUrls = new HashSet<string>(StringComparer.Ordinal);
                 foreach (var selfLink in selfLinks)
                 {
+                    if (!emittedUrls.Add(selfLink.UrlTemplate))
+                    {
+                        continue;
+                    }
+
                     var hrefExpression = BuildHrefInterpolation(selfLink.UrlTemplate);
                     branch.WriteStatement($"linkableResource.AddLink(\"self\", new global::Blueprint.Model.Link {{ Href = {hrefExpression} }});");
                 }
