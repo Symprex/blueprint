@@ -82,6 +82,13 @@
 | IQuery<T> type inference overload | ✅ Done | `ResourceEventDefinition.For(new GetSettingsQuery())` infers `TResource` from `IQuery<TResource>` — matches legacy API |
 | HttpResult BP108 compat | ✅ Done | `Blueprint.Http.HttpResult` now recognized as valid declared result contract — 3 S365 operations unblocked |
 | QueryOrderDefinition bool? compat | ✅ Done | Added `(string, bool?)` constructor overload — S365 passes nullable descending flag |
+| ResourceEvent convenience types | ✅ Already exists | `ResourceCreated<T>(data)`, `ResourceUpdated<T>(data)`, `ResourceDeleted<T>(data)` all in `Blueprint.Http` |
+| ResourceEventDefinition factory | ✅ Already exists | Full factory pattern with domain→query mapper, `.New(domainObject)`, matches S365 |
+| IQuery selfQuery constructors | ✅ Already exists | `ResourceCreated<T>(IQuery selfQuery)` — used by all S365 delete operations |
+| IResourceEventAuditRepository | ✅ Already exists | `AddAsync(object)` — S365 `BusResourceEventAuditRepository` implements directly |
+| ResourceExpansionModule | ✅ Already exists | Post-execution resource expansion via `IResourceExpander<T>` |
+| ApiResource.GetTypeName caching | ✅ Done | `ConcurrentDictionary` cache, DTO suffix strip, delegates from `ResourceEvent.GetResourceTypeName` |
+| ApiId IParsable not required | ✅ Verified | S365 `ApiId` is only in body JSON or auto-hydrated from claims — never in route params |
 
 ---
 

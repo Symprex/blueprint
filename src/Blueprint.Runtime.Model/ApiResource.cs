@@ -51,6 +51,49 @@ public abstract class ApiResource : ILinkableResource, IHaveResourceKey
     }
 
     /// <summary>
+    /// Derives a conventional resource-type name from a CLR <paramref name="resourceType"/> by stripping
+    /// common suffixes (<c>ApiResource</c>, <c>Resource</c>, <c>DTO</c>) and camelCasing the first character.
+    /// Results are cached per type for zero-allocation repeated lookups.
+    /// </summary>
+    /// <param name="resourceType">The CLR type to derive the name from.</param>
+    /// <returns>A camelCase type name suitable for API serialization (e.g. <c>"tenant"</c> from <c>TenantApiResource</c>).</returns>
+    public static string GetTypeName(Type resourceType)
+    {
+        ArgumentNullException.ThrowIfNull(resourceType);
+
+        return _typeNameCache.GetOrAdd(resourceType, static t =>
+        {
+            var name = t.Name;
+
+            if (name.EndsWith("ApiResource", StringComparison.Ordinal) && name.Length > "ApiResource".Length)
+            {
+                name = name[..^"ApiResource".Length];
+            }
+            else if (name.EndsWith("Resource", StringComparison.Ordinal) && name.Length > "Resource".Length)
+            {
+                name = name[..^"Resource".Length];
+            }
+            else if (name.EndsWith("DTO", StringComparison.OrdinalIgnoreCase) && name.Length > 3)
+            {
+                name = name[..^3];
+            }
+
+            if (name.Length > 0 && char.IsUpper(name[0]))
+            {
+                return string.Create(name.Length, name, static (span, src) =>
+                {
+                    span[0] = char.ToLowerInvariant(src[0]);
+                    src.AsSpan(1).CopyTo(span[1..]);
+                });
+            }
+
+            return name;
+        });
+    }
+
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, string> _typeNameCache = new();
+
+    /// <summary>
     /// Adds a new link with the specific rel (relation) and <see cref="Link"/>
     /// definition, throwing an exception if a link with the specific relation already
     /// exists.

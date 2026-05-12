@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Text.Json.Serialization;
 using Blueprint.Model;
 using Blueprint.Runtime.Exec;
@@ -14,7 +13,6 @@ namespace Blueprint.Http;
 /// </summary>
 public class ResourceEvent : OperationResult
 {
-    private static readonly ConcurrentDictionary<Type, string> _typeNameCache = new();
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ResourceEvent"/> class with an inline resource body.
@@ -146,40 +144,13 @@ public class ResourceEvent : OperationResult
     /// <summary>
     /// Derives a conventional resource-type name from a <see cref="Type"/>, stripping common
     /// suffixes (<c>ApiResource</c>, <c>Resource</c>, <c>DTO</c>) and camelCasing the result.
+    /// Delegates to <see cref="ApiResource.GetTypeName"/> for the canonical, cached implementation.
     /// </summary>
     /// <param name="resourceType">The CLR type to derive the resource name from.</param>
     /// <returns>The camelCased resource type name (e.g. <c>"tenant"</c> from <c>TenantApiResource</c>).</returns>
     public static string GetResourceTypeName(Type resourceType)
     {
-        return _typeNameCache.GetOrAdd(resourceType, static t =>
-        {
-            var name = t.Name;
-
-            if (name.EndsWith("ApiResource", StringComparison.Ordinal))
-            {
-                name = name[..^"ApiResource".Length];
-            }
-            else if (name.EndsWith("Resource", StringComparison.Ordinal))
-            {
-                name = name[..^"Resource".Length];
-            }
-            else if (name.EndsWith("DTO", StringComparison.OrdinalIgnoreCase))
-            {
-                name = name[..^3];
-            }
-
-            // CamelCase: lowercase the first character
-            if (name.Length > 0 && char.IsUpper(name[0]))
-            {
-                return string.Create(name.Length, name, static (span, source) =>
-                {
-                    span[0] = char.ToLowerInvariant(source[0]);
-                    source.AsSpan(1).CopyTo(span[1..]);
-                });
-            }
-
-            return name;
-        });
+        return ApiResource.GetTypeName(resourceType);
     }
 
     /// <summary>
