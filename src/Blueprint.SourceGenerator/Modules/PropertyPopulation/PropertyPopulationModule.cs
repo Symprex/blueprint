@@ -56,25 +56,9 @@ public sealed class PropertyPopulationModule : IBlueprintSourceGeneratorModule, 
     {
         context.WriteBlankLine();
 
-        // Single-populator fast path: direct indexed call avoids enumerator allocation.
-        context.If(
-            $"this.{FieldName}.Length == 1",
-            singleBranch =>
-            {
-                singleBranch.WriteStatement($"await this.{FieldName}[0].PopulateAsync(context, context.OperationCancelled).ConfigureAwait(false);");
-            });
-        context.Else(elseBranch =>
-        {
-            elseBranch.If(
-                $"this.{FieldName}.Length > 1",
-                multiBranch =>
-                {
-                    multiBranch.ForEach("var populator", $"this.{FieldName}", foreachBody =>
-                    {
-                        foreachBody.WriteStatement("await populator.PopulateAsync(context, context.OperationCancelled).ConfigureAwait(false);");
-                    });
-                });
-        });
+        // Delegate to shared helper — avoids duplicating the if/else/foreach across every pipeline.
+        context.WriteStatement(
+            $"await Blueprint.Runtime.Exec.PipelineHelpers.PopulatePropertiesAsync(this.{FieldName}, context).ConfigureAwait(false);");
     }
 }
 

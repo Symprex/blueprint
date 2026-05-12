@@ -34,38 +34,13 @@ namespace Blueprint.Generated
             var operation = (global::TestNamespace.TestQuery)context.Operation;
 
 
-            if (this._propertyPopulators.Length == 1)
-            {
-                await this._propertyPopulators[0].PopulateAsync(context, context.OperationCancelled).ConfigureAwait(false);
-            }
-            else
-            {
-                if (this._propertyPopulators.Length > 1)
-                {
-                    foreach (var populator in this._propertyPopulators)
-                    {
-                        await populator.PopulateAsync(context, context.OperationCancelled).ConfigureAwait(false);
-                    }
-                }
-            }
+            await Blueprint.Runtime.Exec.PipelineHelpers.PopulatePropertiesAsync(this._propertyPopulators, context).ConfigureAwait(false);
             var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<int>(global::TestNamespace.TestQuery.Invoke());
 
             if (handlerResult.WasSuccessful)
             {
 
-                if (this._auditSink != null)
-                {
-                    context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent("blueprint.audit.started", default, _auditTags_TestQuery));
-                    try
-                    {
-                        await this._auditSink.RecordAsync(context, handlerResult, System.Threading.CancellationToken.None).ConfigureAwait(false);
-                        context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent("blueprint.audit.succeeded", default, _auditTags_TestQuery));
-                    }
-                    catch (System.Exception auditException)
-                    {
-                        context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent("blueprint.audit.failed", default, new System.Diagnostics.ActivityTagsCollection { { "blueprint.operation.type", "TestQuery" }, { "exception.type", auditException.GetType().FullName }, { "exception.message", auditException.Message }, { "exception.stacktrace", auditException.StackTrace } }));
-                    }
-                }
+                await Blueprint.Runtime.Exec.PipelineHelpers.ExecuteAuditSinkAsync(this._auditSink, context, handlerResult, _auditTags_TestQuery, "TestQuery").ConfigureAwait(false);
 
                 var backgroundTaskScheduler = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Tasks.IBackgroundTaskScheduler>(context.ServiceProvider);
                 if (backgroundTaskScheduler != null)

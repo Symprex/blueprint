@@ -94,30 +94,10 @@ public sealed class AuditingModule : IBlueprintSourceGeneratorModule, IPipelineC
     {
         context.WriteBlankLine();
 
-        context.If(
-            "this._auditSink != null",
-            innerBranch =>
-            {
-                // Reuse static readonly tag collection — zero per-request allocation for constant tags
-                innerBranch.WriteStatement(
-                    $"context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent(\"blueprint.audit.started\", default, {cachedTagsFieldName}));");
-
-                innerBranch.Try(tryBranch =>
-                {
-                    tryBranch.WriteStatement(
-                        "await this._auditSink.RecordAsync(context, handlerResult, System.Threading.CancellationToken.None).ConfigureAwait(false);");
-
-                    tryBranch.WriteStatement(
-                        $"context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent(\"blueprint.audit.succeeded\", default, {cachedTagsFieldName}));");
-                });
-
-                // Failed event has dynamic exception details — allocation acceptable since exceptions are exceptional
-                innerBranch.Catch("System.Exception auditException", catchBranch =>
-                {
-                    catchBranch.WriteStatement(
-                        $"context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent(\"blueprint.audit.failed\", default, new System.Diagnostics.ActivityTagsCollection {{ {{ \"blueprint.operation.type\", \"{operationTypeName}\" }}, {{ \"exception.type\", auditException.GetType().FullName }}, {{ \"exception.message\", auditException.Message }}, {{ \"exception.stacktrace\", auditException.StackTrace }} }}));");
-                });
-            });
+        // Delegate to shared helper — avoids duplicating the null-check, try/catch, and activity
+        // event recording across every auditable pipeline.
+        context.WriteStatement(
+            $"await Blueprint.Runtime.Exec.PipelineHelpers.ExecuteAuditSinkAsync(this._auditSink, context, handlerResult, {cachedTagsFieldName}, \"{operationTypeName}\").ConfigureAwait(false);");
     }
 
     private static bool HasDoNotAuditAttribute(INamedTypeSymbol operationType)

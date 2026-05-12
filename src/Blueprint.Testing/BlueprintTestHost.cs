@@ -156,6 +156,65 @@ public sealed class BlueprintTestHost<TApp, TExec> : IDisposable, IAsyncDisposab
                 result);
     }
 
+    /// <summary>
+    /// Executes a query operation and unwraps the result to the expected type.
+    /// This is a convenience alias for <see cref="ExecuteAsync{TResult}"/> that mirrors
+    /// the S365 <c>QueryAsync</c> test pattern to minimise migration churn.
+    /// </summary>
+    /// <typeparam name="TResult">The expected result type.</typeparam>
+    /// <param name="query">The query operation instance.</param>
+    /// <param name="configure">
+    /// An optional callback to configure the <see cref="BlueprintTestContext"/> before execution.
+    /// </param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The unwrapped query result.</returns>
+    public Task<TResult> QueryAsync<TResult>(
+        IOperation query,
+        Action<BlueprintTestContext>? configure = null,
+        CancellationToken cancellationToken = default)
+    {
+        return this.ExecuteAsync<TResult>(query, configure, cancellationToken);
+    }
+
+    /// <summary>
+    /// Executes a command operation and unwraps the result to the expected type.
+    /// This is a convenience alias for <see cref="ExecuteAsync{TResult}"/> that mirrors
+    /// the S365 <c>CommandAsync</c> test pattern to minimise migration churn.
+    /// </summary>
+    /// <typeparam name="TResult">The expected result type.</typeparam>
+    /// <param name="command">The command operation instance.</param>
+    /// <param name="configure">
+    /// An optional callback to configure the <see cref="BlueprintTestContext"/> before execution.
+    /// </param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The unwrapped command result.</returns>
+    public Task<TResult> CommandAsync<TResult>(
+        IOperation command,
+        Action<BlueprintTestContext>? configure = null,
+        CancellationToken cancellationToken = default)
+    {
+        return this.ExecuteAsync<TResult>(command, configure, cancellationToken);
+    }
+
+    /// <summary>
+    /// Executes a command operation that has no meaningful result payload (e.g., commands that
+    /// return <c>NoResultOperationResult</c> or <c>AcceptedResult</c>). Returns the raw
+    /// <see cref="OperationResult"/> for status assertions.
+    /// </summary>
+    /// <param name="command">The command operation instance.</param>
+    /// <param name="configure">
+    /// An optional callback to configure the <see cref="BlueprintTestContext"/> before execution.
+    /// </param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The raw operation result.</returns>
+    public Task<OperationResult> CommandAsync(
+        IOperation command,
+        Action<BlueprintTestContext>? configure = null,
+        CancellationToken cancellationToken = default)
+    {
+        return this.ExecuteAsync(command, configure, cancellationToken);
+    }
+
     private static string FormatValidationErrors(ValidationFailedResult validationFailed)
     {
         var errors = validationFailed.Errors;

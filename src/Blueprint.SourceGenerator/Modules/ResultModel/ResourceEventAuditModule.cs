@@ -96,10 +96,11 @@ public sealed class ResourceEventAuditModule : IBlueprintSourceGeneratorModule, 
                                 $"context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent(\"blueprint.resource_event_audit.succeeded\", default, new System.Diagnostics.ActivityTagsCollection {{ {{ \"blueprint.operation.type\", \"{operationTypeName}\" }}, {{ \"blueprint.resource_event.id\", _reAuditResult.EventId }} }}));");
                         });
 
+                        // Use shared helper for exception recording to avoid duplicating the tags construction
                         innerBranch.Catch("System.Exception resourceEventAuditException", catchBranch =>
                         {
                             catchBranch.WriteStatement(
-                                $"context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent(\"blueprint.resource_event_audit.failed\", default, new System.Diagnostics.ActivityTagsCollection {{ {{ \"blueprint.operation.type\", \"{operationTypeName}\" }}, {{ \"blueprint.resource_event.id\", _reAuditResult.EventId }}, {{ \"exception.type\", resourceEventAuditException.GetType().FullName }}, {{ \"exception.message\", resourceEventAuditException.Message }}, {{ \"exception.stacktrace\", resourceEventAuditException.StackTrace }} }}));");
+                                $"Blueprint.Runtime.Exec.PipelineHelpers.RecordAuditFailureEvent(context.Activity, \"blueprint.resource_event_audit.failed\", \"{operationTypeName}\", resourceEventAuditException, _reAuditResult.EventId, _reAuditResult.ResourceId);");
                         });
                     });
             });
