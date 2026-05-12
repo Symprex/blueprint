@@ -204,46 +204,42 @@ public static class PipelineHelpers
         {
             var bodyLength = (int)httpContext.Request.ContentLength.Value;
             var rentedBuffer = System.Buffers.ArrayPool<byte>.Shared.Rent(bodyLength);
-            var totalRead = 0;
 
-            while (totalRead < bodyLength)
+            try
             {
-                var bytesRead = await httpContext.Request.Body.ReadAsync(
-                    new Memory<byte>(rentedBuffer, totalRead, bodyLength - totalRead),
-                    cancellationToken).ConfigureAwait(false);
-                if (bytesRead == 0)
+                var totalRead = 0;
+
+                while (totalRead < bodyLength)
                 {
-                    break;
+                    var bytesRead = await httpContext.Request.Body.ReadAsync(
+                        new Memory<byte>(rentedBuffer, totalRead, bodyLength - totalRead),
+                        cancellationToken).ConfigureAwait(false);
+                    if (bytesRead == 0)
+                    {
+                        break;
+                    }
+
+                    totalRead += bytesRead;
                 }
 
-                totalRead += bytesRead;
-            }
+                if (totalRead > 0)
+                {
+                    try
+                    {
+                        populate(new ReadOnlySpan<byte>(rentedBuffer, 0, totalRead), operation);
+                    }
+                    catch (Exception ex) when (ex is System.Text.Json.JsonException or InvalidOperationException or NotSupportedException)
+                    {
+                        return new BindingFailureResult("Invalid JSON body");
+                    }
+                }
 
-            if (totalRead > 0)
+                return null;
+            }
+            finally
             {
-                try
-                {
-                    populate(new ReadOnlySpan<byte>(rentedBuffer, 0, totalRead), operation);
-                }
-                catch (System.Text.Json.JsonException)
-                {
-                    System.Buffers.ArrayPool<byte>.Shared.Return(rentedBuffer);
-                    return new BindingFailureResult("Invalid JSON body");
-                }
-                catch (InvalidOperationException)
-                {
-                    System.Buffers.ArrayPool<byte>.Shared.Return(rentedBuffer);
-                    return new BindingFailureResult("Invalid JSON body");
-                }
-                catch (NotSupportedException)
-                {
-                    System.Buffers.ArrayPool<byte>.Shared.Return(rentedBuffer);
-                    return new BindingFailureResult("Invalid JSON body");
-                }
+                System.Buffers.ArrayPool<byte>.Shared.Return(rentedBuffer);
             }
-
-            System.Buffers.ArrayPool<byte>.Shared.Return(rentedBuffer);
-            return null;
         }
 
         // Slow path: chunked transfer or unknown Content-Length — use MemoryStream
