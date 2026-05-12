@@ -56,7 +56,7 @@ namespace Blueprint.Generated
         {
             this._tenantAccessor = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Tenancy.ITenantAccessor>(serviceProvider);
             this._tenantResolver = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Tenancy.ITenantResolver>(serviceProvider);
-            this._propertyPopulators = (Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Runtime.Middleware.IPropertyPopulator>>(serviceProvider) is { } populators ? System.Linq.Enumerable.ToArray(populators) : System.Array.Empty<Blueprint.Runtime.Middleware.IPropertyPopulator>());
+            this._propertyPopulators = Blueprint.Runtime.Exec.PipelineHelpers.ResolveServiceArray<Blueprint.Runtime.Middleware.IPropertyPopulator>(serviceProvider);
             this._auditSink = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Auditing.IAuditSink>(serviceProvider);
         }
 

@@ -13,4 +13,4 @@ namespace Blueprint.Model;
 /// operation instance, and <c>{Auth:ClaimType}</c> tokens from the authenticated principal's claims.
 /// When <see langword="null"/>, only the noun+verb scope pair is checked.
 /// </param>
-public sealed record ScopePair(string Noun, string Verb, string? ResourceKeyTemplate = null);
+public readonly record struct ScopePair(string Noun, string Verb, string? ResourceKeyTemplate = null);

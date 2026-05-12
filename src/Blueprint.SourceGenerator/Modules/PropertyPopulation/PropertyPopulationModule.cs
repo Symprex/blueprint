@@ -41,11 +41,11 @@ public sealed class PropertyPopulationModule : IBlueprintSourceGeneratorModule, 
     public void ContributeToPipeline(PipelineContributorContext context)
     {
         // Resolve populators once at construction time — they are registered as singletons.
-        // Uses GetService<IEnumerable<T>> (nullable) rather than GetServices (throws when empty).
+        // Uses ResolveServiceArray which returns Array.Empty<T>() when none are registered.
         context.CacheService(
             FieldName,
             ServiceType,
-            "(Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Runtime.Middleware.IPropertyPopulator>>(serviceProvider) is { } populators ? System.Linq.Enumerable.ToArray(populators) : System.Array.Empty<Blueprint.Runtime.Middleware.IPropertyPopulator>())",
+            "Blueprint.Runtime.Exec.PipelineHelpers.ResolveServiceArray<Blueprint.Runtime.Middleware.IPropertyPopulator>(serviceProvider)",
             isNullable: false);
 
         context.RequireAsync();

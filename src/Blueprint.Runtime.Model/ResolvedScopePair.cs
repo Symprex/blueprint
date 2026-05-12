@@ -16,7 +16,7 @@ namespace Blueprint.Model;
 /// The fully-expanded resource key with all <c>{PropertyName}</c> and <c>{Auth:ClaimType}</c>
 /// tokens substituted, or <see langword="null"/> when no template was declared.
 /// </param>
-public sealed record ResolvedScopePair(
+public readonly record struct ResolvedScopePair(
     string Noun,
     string Verb,
     string? ResourceKeyTemplate,

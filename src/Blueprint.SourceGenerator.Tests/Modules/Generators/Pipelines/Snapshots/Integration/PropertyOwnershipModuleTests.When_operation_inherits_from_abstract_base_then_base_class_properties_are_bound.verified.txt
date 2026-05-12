@@ -30,12 +30,12 @@ namespace Blueprint.Generated
         public CreateDisclaimerCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, System.IServiceProvider serviceProvider)
             : base(loggerFactory, "CreateDisclaimerCommand")
         {
-            this._apiAuthorisers = (Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Authorization.IApiAuthoriser>>(serviceProvider) is { } aa ? System.Linq.Enumerable.ToArray(aa) : System.Array.Empty<Blueprint.Authorization.IApiAuthoriser>());
-            this._operationAuthorisers = (Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Authorization.IOperationAuthoriser>>(serviceProvider) is { } oa ? System.Linq.Enumerable.ToArray(oa) : System.Array.Empty<Blueprint.Authorization.IOperationAuthoriser>());
+            this._apiAuthorisers = Blueprint.Runtime.Exec.PipelineHelpers.ResolveServiceArray<Blueprint.Authorization.IApiAuthoriser>(serviceProvider);
+            this._operationAuthorisers = Blueprint.Runtime.Exec.PipelineHelpers.ResolveServiceArray<Blueprint.Authorization.IOperationAuthoriser>(serviceProvider);
             this._userContextFactory = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Authorization.IUserAuthorisationContextFactory>(serviceProvider);
             this._tenantAccessor = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Tenancy.ITenantAccessor>(serviceProvider);
             this._tenantResolver = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Tenancy.ITenantResolver>(serviceProvider);
-            this._propertyPopulators = (Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Runtime.Middleware.IPropertyPopulator>>(serviceProvider) is { } populators ? System.Linq.Enumerable.ToArray(populators) : System.Array.Empty<Blueprint.Runtime.Middleware.IPropertyPopulator>());
+            this._propertyPopulators = Blueprint.Runtime.Exec.PipelineHelpers.ResolveServiceArray<Blueprint.Runtime.Middleware.IPropertyPopulator>(serviceProvider);
             this._auditSink = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Auditing.IAuditSink>(serviceProvider);
         }
 

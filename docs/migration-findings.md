@@ -46,6 +46,9 @@
 | Pipeline helper extraction | ✅ Done | `LoadUserContextAsync`, `RunAuthorisersAsync` reduce IL per pipeline |
 | Handler property injection | ✅ Done | ApiOperations base-class pattern (Context, Identity, Logger, CT) auto-detected |
 | Self-link dedup in pipelines | ✅ Done | Multiple ops declaring same `[SelfLink]` URL no longer emit duplicate `AddLink("self")` calls |
+| ResourceEventAudit extraction | ✅ Done | ~15 lines inline per pipeline → `PipelineHelpers.ExecuteResourceEventAuditSinkAsync` (saves ~4,110 lines for S365's ~274 ResourceEvent ops) |
+| ScopePair/ResolvedScopePair structs | ✅ Done | Changed from `sealed record` to `readonly record struct` — eliminates per-element heap allocations in auth paths |
+| Constructor service array helper | ✅ Done | `PipelineHelpers.ResolveServiceArray<T>()` replaces ~180-char inline expression across all pipelines |
 | GetHttpContext() compat method | ✅ Done | Instance method on ApiOperationContext for S365 HttpContext access |
 | StatusCodeResult returns | ✅ Verified | Accepted (85 S365 usages), NoContent (10), Created (12) all work |
 | `[DoNotSaveChanges]` | ✅ Verified | Already supported with BPP001 diagnostic for misuse on non-commands |
@@ -332,3 +335,4 @@ S365 testing uses `WebApiFixtureFactory<TStartup>` → `ApiFixture` with:
 | 2025-07 | Session 2 | Resource auth builtin, tenant first-class, migration findings doc |
 | 2025-07 | Current | ReadJsonBodyAsync static lambda, S365 test fixture compat shims (typed overloads, anonymous BackgroundTask/Message, auth API match, factory pattern, GetOptions), migration-findings updates |
 | 2025-07 | Pipeline extraction | UoW/Outbox/BackgroundTask helper extraction, x-links/InvokeAsync/JsonConverter gap resolution, comprehensive S365 compatibility verification |
+| 2025-07 | ResourceEventAudit | Extracted inline resource-event audit code to PipelineHelpers.ExecuteResourceEventAuditSinkAsync; self-link dedup test added; pipeline optimization analysis confirmed most code paths well-optimized |

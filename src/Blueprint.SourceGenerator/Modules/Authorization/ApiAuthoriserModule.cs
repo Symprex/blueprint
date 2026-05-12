@@ -73,13 +73,13 @@ public sealed class ApiAuthoriserModule : IBlueprintSourceGeneratorModule, IPipe
         context.CacheService(
             "_apiAuthorisers",
             "Blueprint.Authorization.IApiAuthoriser[]",
-            "(Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Authorization.IApiAuthoriser>>(serviceProvider) is { } aa ? System.Linq.Enumerable.ToArray(aa) : System.Array.Empty<Blueprint.Authorization.IApiAuthoriser>())",
+            "Blueprint.Runtime.Exec.PipelineHelpers.ResolveServiceArray<Blueprint.Authorization.IApiAuthoriser>(serviceProvider)",
             isNullable: false);
 
         context.CacheService(
             "_operationAuthorisers",
             "Blueprint.Authorization.IOperationAuthoriser[]",
-            "(Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Authorization.IOperationAuthoriser>>(serviceProvider) is { } oa ? System.Linq.Enumerable.ToArray(oa) : System.Array.Empty<Blueprint.Authorization.IOperationAuthoriser>())",
+            "Blueprint.Runtime.Exec.PipelineHelpers.ResolveServiceArray<Blueprint.Authorization.IOperationAuthoriser>(serviceProvider)",
             isNullable: false);
 
         context.RequireAsync();

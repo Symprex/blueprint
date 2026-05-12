@@ -17,6 +17,24 @@ namespace Blueprint.Runtime.Exec;
 public static class PipelineHelpers
 {
     /// <summary>
+    /// Resolves a collection of services from the DI container and materialises them into an
+    /// array. Returns <see cref="Array.Empty{T}"/> when no services of the requested type are
+    /// registered. Generated pipelines call this at construction time to cache singleton or
+    /// scoped service arrays as instance fields, replacing the previous inline expression:
+    /// <c>(GetService&lt;IEnumerable&lt;T&gt;&gt;(sp) is { } x ? x.ToArray() : Array.Empty&lt;T&gt;())</c>.
+    /// </summary>
+    /// <typeparam name="T">The service type to resolve.</typeparam>
+    /// <param name="serviceProvider">The root or scoped service provider.</param>
+    /// <returns>A materialised array of all registered implementations, or an empty array.</returns>
+    public static T[] ResolveServiceArray<T>(IServiceProvider serviceProvider)
+    {
+        return Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions
+            .GetService<IEnumerable<T>>(serviceProvider) is { } items
+            ? items.ToArray()
+            : Array.Empty<T>();
+    }
+
+    /// <summary>
     /// Invokes registered <see cref="IPropertyPopulator"/> instances in order, using an optimised
     /// single-populator fast path to avoid enumerator allocation when only one is registered.
     /// </summary>
