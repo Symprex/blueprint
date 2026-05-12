@@ -89,6 +89,11 @@
 | ResourceExpansionModule | ✅ Already exists | Post-execution resource expansion via `IResourceExpander<T>` |
 | ApiResource.GetTypeName caching | ✅ Done | `ConcurrentDictionary` cache, DTO suffix strip, delegates from `ResourceEvent.GetResourceTypeName` |
 | ApiId IParsable not required | ✅ Verified | S365 `ApiId` is only in body JSON or auto-hydrated from claims — never in route params |
+| IResourceEventAuditSink enhanced | ✅ Done | `RecordAsync` now includes full `OperationResult` — S365 can cast to `ResourceEvent` for bus publish |
+| ResourceEvent audit sink fix | ✅ Done | Pipeline now matches `ResourceEvent` (not just `ResourceEventResult`) for audit recording |
+| HATEOAS ResourceEvent link fix | ✅ Done | `LinkGeneratorHandler` now extracts content from `ResourceEvent.Data` for link population |
+| ScopePairClaimAuthorizationProvider | ✅ Done | Production-ready provider: JWT scope-pair matching with ignored-scope filtering, FrozenSet perf |
+| Testing infrastructure complete | ✅ Verified | QueryAsync, CommandAsync, BackgroundTaskAsync, MessageAsync, factory, ambient auth — all S365 patterns covered |
 
 ---
 
