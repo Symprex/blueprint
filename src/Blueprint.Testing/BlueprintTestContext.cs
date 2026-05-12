@@ -129,6 +129,44 @@ public sealed class BlueprintTestContext
     }
 
     /// <summary>
+    /// Convenience method that creates an authenticated user with a tenant claim and optional permissions.
+    /// The generated user will have <c>sub</c>, <c>tenant_id</c> (or custom claim type), and
+    /// optional permission claims. Property populators that read tenant context from JWT claims
+    /// will see the tenant claim automatically.
+    /// </summary>
+    /// <param name="tenantId">The tenant identifier to assign.</param>
+    /// <param name="permissions">Optional permissions to include.</param>
+    /// <returns>This context for chaining.</returns>
+    public BlueprintTestContext WithTenant(string tenantId, params string[] permissions)
+    {
+        return this.WithTenant("tenant_id", tenantId, permissions);
+    }
+
+    /// <summary>
+    /// Convenience method that creates an authenticated user with a custom tenant claim type and optional permissions.
+    /// </summary>
+    /// <param name="tenantClaimType">The claim type for the tenant identifier.</param>
+    /// <param name="tenantId">The tenant identifier value.</param>
+    /// <param name="permissions">Optional permissions to include.</param>
+    /// <returns>This context for chaining.</returns>
+    public BlueprintTestContext WithTenant(string tenantClaimType, string tenantId, params string[] permissions)
+    {
+        var claims = new List<System.Security.Claims.Claim>(permissions.Length + 2)
+        {
+            new("sub", "test-user-" + Guid.NewGuid().ToString("N")[..8]),
+            new(tenantClaimType, tenantId),
+        };
+
+        foreach (var permission in permissions)
+        {
+            claims.Add(new System.Security.Claims.Claim("permission", permission));
+        }
+
+        var identity = new ClaimsIdentity(claims, "TestAuth");
+        return this.WithUser(new ClaimsPrincipal(identity));
+    }
+
+    /// <summary>
     /// Convenience method that creates an authenticated user with scope-pair claims.
     /// This matches the Signature 365 authorization model where users hold scope pairs
     /// (noun.verb combinations such as <c>"Template.Read"</c> or <c>"SentEmail.Create"</c>)
