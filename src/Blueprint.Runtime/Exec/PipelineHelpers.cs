@@ -1,5 +1,7 @@
 using System.Diagnostics;
+using System.Security.Claims;
 using Blueprint.Auditing;
+using Blueprint.Model;
 using Blueprint.Runtime.Middleware;
 
 namespace Blueprint.Runtime.Exec;
@@ -409,6 +411,69 @@ public static class PipelineHelpers
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Checks resource authorization using the compile-time-expanded
+    /// <see cref="Authorization.IResolvedResourceAuthorizationProvider"/>. Returns
+    /// <see cref="ForbiddenResult.Instance"/> when the provider denies access, or <c>null</c>
+    /// when the caller is authorized or the provider is not registered (permissive default).
+    /// </summary>
+    /// <remarks>
+    /// Generated pipelines call this overload inside the <c>if (_resolvedResourceAuthorizationProvider != null)</c>
+    /// branch so resolved scope-pair construction (which contains compile-time expanded expressions)
+    /// is lazy and only runs when a resolved provider is actually registered.
+    /// </remarks>
+    /// <param name="context">The current operation execution context.</param>
+    /// <param name="principal">The authenticated caller's claims principal.</param>
+    /// <param name="resolvedProvider">The resolved resource authorization provider, or <c>null</c> if none is registered.</param>
+    /// <param name="resolvedScopes">The compile-time expanded scope pairs for this operation.</param>
+    /// <param name="cancellationToken">Cancellation token for the authorization evaluation.</param>
+    /// <returns><c>null</c> when authorized; <see cref="ForbiddenResult.Instance"/> when denied.</returns>
+    public static async Task<OperationResult?> CheckResourceAuthorizationAsync(
+        ApiOperationContext context,
+        ClaimsPrincipal principal,
+        Authorization.IResolvedResourceAuthorizationProvider? resolvedProvider,
+        IReadOnlyList<ResolvedScopePair> resolvedScopes,
+        CancellationToken cancellationToken)
+    {
+        if (resolvedProvider == null)
+        {
+            return null;
+        }
+
+        var isAuthorized = await resolvedProvider.IsAuthorizedAsync(context, principal, resolvedScopes, cancellationToken).ConfigureAwait(false);
+
+        return isAuthorized ? null : ForbiddenResult.Instance;
+    }
+
+    /// <summary>
+    /// Checks resource authorization using the legacy <see cref="Authorization.IResourceAuthorizationProvider"/>
+    /// with raw template strings. Returns <see cref="ForbiddenResult.Instance"/> when the provider
+    /// denies access, or <c>null</c> when the caller is authorized or the provider is not registered
+    /// (permissive default).
+    /// </summary>
+    /// <param name="context">The current operation execution context.</param>
+    /// <param name="principal">The authenticated caller's claims principal.</param>
+    /// <param name="legacyProvider">The resource authorization provider, or <c>null</c> if none is registered.</param>
+    /// <param name="legacyScopes">The static scope pairs for this operation (raw template strings).</param>
+    /// <param name="cancellationToken">Cancellation token for the authorization evaluation.</param>
+    /// <returns><c>null</c> when authorized; <see cref="ForbiddenResult.Instance"/> when denied.</returns>
+    public static async Task<OperationResult?> CheckResourceAuthorizationAsync(
+        ApiOperationContext context,
+        ClaimsPrincipal principal,
+        Authorization.IResourceAuthorizationProvider? legacyProvider,
+        IReadOnlyList<ScopePair> legacyScopes,
+        CancellationToken cancellationToken)
+    {
+        if (legacyProvider == null)
+        {
+            return null;
+        }
+
+        var isAuthorized = await legacyProvider.IsAuthorizedAsync(context, principal, legacyScopes, cancellationToken).ConfigureAwait(false);
+
+        return isAuthorized ? null : ForbiddenResult.Instance;
     }
 
     /// <summary>

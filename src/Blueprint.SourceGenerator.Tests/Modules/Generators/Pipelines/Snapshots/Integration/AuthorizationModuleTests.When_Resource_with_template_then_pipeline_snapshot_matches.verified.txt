@@ -76,21 +76,18 @@ namespace Blueprint.Generated
 
             if (this._resolvedResourceAuthorizationProvider != null)
             {
-                var isAuthorized = await this._resolvedResourceAuthorizationProvider.IsAuthorizedAsync(context, httpContext.User, new Blueprint.Model.ResolvedScopePair[] { new Blueprint.Model.ResolvedScopePair("account", "read", "/tenants/{Auth:AccountId}/accounts/{Id}", $"/tenants/{context.UserAuthorisationContext?.AccountId ?? httpContext.User.FindFirst("AccountId")?.Value ?? ""}/accounts/{operation.Id?.ToString() ?? ""}") }, httpContext.RequestAborted).ConfigureAwait(false);
-                if (!isAuthorized)
+                var authorizationDenial = await Blueprint.Runtime.Exec.PipelineHelpers.CheckResourceAuthorizationAsync(context, httpContext.User, this._resolvedResourceAuthorizationProvider, new Blueprint.Model.ResolvedScopePair[] { new Blueprint.Model.ResolvedScopePair("account", "read", "/tenants/{Auth:AccountId}/accounts/{Id}", $"/tenants/{context.UserAuthorisationContext?.AccountId ?? httpContext.User.FindFirst("AccountId")?.Value ?? ""}/accounts/{operation.Id?.ToString() ?? ""}") }, httpContext.RequestAborted).ConfigureAwait(false);
+                if (authorizationDenial != null)
                 {
-                    return Blueprint.Runtime.Exec.ForbiddenResult.Instance;
+                    return authorizationDenial;
                 }
             }
             else
             {
-                if (this._resourceAuthorizationProvider != null)
+                var authorizationDenial = await Blueprint.Runtime.Exec.PipelineHelpers.CheckResourceAuthorizationAsync(context, httpContext.User, this._resourceAuthorizationProvider, _scopePairs_GetAccountQuery, httpContext.RequestAborted).ConfigureAwait(false);
+                if (authorizationDenial != null)
                 {
-                    var isAuthorized = await this._resourceAuthorizationProvider.IsAuthorizedAsync(context, httpContext.User, _scopePairs_GetAccountQuery, httpContext.RequestAborted).ConfigureAwait(false);
-                    if (!isAuthorized)
-                    {
-                        return Blueprint.Runtime.Exec.ForbiddenResult.Instance;
-                    }
+                    return authorizationDenial;
                 }
             }
 

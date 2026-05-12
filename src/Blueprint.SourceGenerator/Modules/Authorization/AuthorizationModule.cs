@@ -363,7 +363,9 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
     /// <summary>
     /// Generates pipeline code that uses <c>IResolvedResourceAuthorizationProvider</c> with
     /// compile-time expanded resource keys. Falls back to <c>IResourceAuthorizationProvider</c>
-    /// when the resolved provider is not registered.
+    /// when the resolved provider is not registered. The resolved scope-pair array is constructed
+    /// lazily inside the <c>if</c> branch so that template expansion only runs when the resolved
+    /// provider is registered.
     /// </summary>
     private static void RenderResolvedAuthorizationCheck(
         PipelineRenderContext context,
@@ -397,24 +399,21 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
                     }));
 
                 resolvedBranch.DeclareVariable(
-                    "isAuthorized",
-                    $"await this._resolvedResourceAuthorizationProvider.IsAuthorizedAsync(context, {principalExpr}, new Blueprint.Model.ResolvedScopePair[] {{ {resolvedElements} }}, {httpContextExpr}.RequestAborted).ConfigureAwait(false)");
+                    "authorizationDenial",
+                    $"await Blueprint.Runtime.Exec.PipelineHelpers.CheckResourceAuthorizationAsync(context, {principalExpr}, this._resolvedResourceAuthorizationProvider, new Blueprint.Model.ResolvedScopePair[] {{ {resolvedElements} }}, {httpContextExpr}.RequestAborted).ConfigureAwait(false)");
 
                 resolvedBranch.If(
-                    "!isAuthorized",
+                    "authorizationDenial != null",
                     deniedBranch =>
                     {
-                        deniedBranch.Return(
-                            context.IsPipelineAsync()
-                                ? "Blueprint.Runtime.Exec.ForbiddenResult.Instance"
-                                : "System.Threading.Tasks.Task.FromResult<Blueprint.OperationResult>(Blueprint.Runtime.Exec.ForbiddenResult.Instance)");
+                        deniedBranch.Return("authorizationDenial");
                     });
             });
 
         // Fallback to legacy provider
         context.Else(elseBranch =>
         {
-            RenderLegacyAuthorizationCheckBody(elseBranch, scopePairFieldName);
+            RenderLegacyHelperCall(elseBranch, scopePairFieldName);
         });
 
         context.WriteBlankLine();
@@ -422,64 +421,38 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
 
     /// <summary>
     /// Generates pipeline code that uses the legacy <c>IResourceAuthorizationProvider</c> with
-    /// raw template strings (runtime expansion via regex/reflection).
+    /// raw template strings (runtime expansion via regex/reflection). The helper handles the
+    /// null-provider permissive fallback internally.
     /// </summary>
     private static void RenderLegacyAuthorizationCheck(
         PipelineRenderContext context,
         string scopePairFieldName)
     {
-        // Use cached IResourceAuthorizationProvider — permissive when not registered
-        context.If(
-            "this._resourceAuthorizationProvider != null",
-            branch =>
-            {
-                RenderLegacyAuthorizationCheckInner(branch, context, scopePairFieldName);
-            });
-
+        RenderLegacyHelperCall(context, scopePairFieldName);
         context.WriteBlankLine();
     }
 
-    private static void RenderLegacyAuthorizationCheckBody(
+    /// <summary>
+    /// Emits a single <c>PipelineHelpers.CheckResourceAuthorizationAsync</c> call for the
+    /// legacy <c>IResourceAuthorizationProvider</c> path. Reused by both <see cref="RenderLegacyAuthorizationCheck"/>
+    /// (standalone) and <see cref="RenderResolvedAuthorizationCheck"/> (inside the else branch).
+    /// </summary>
+    private static void RenderLegacyHelperCall(
         PipelineRenderContext context,
         string scopePairFieldName)
     {
+        var httpContextExpr = context.GetHttpContextExpression();
+        var principalExpr = $"{httpContextExpr}.User";
+
+        context.DeclareVariable(
+            "authorizationDenial",
+            $"await Blueprint.Runtime.Exec.PipelineHelpers.CheckResourceAuthorizationAsync(context, {principalExpr}, this._resourceAuthorizationProvider, {scopePairFieldName}, {httpContextExpr}.RequestAborted).ConfigureAwait(false)");
+
         context.If(
-            "this._resourceAuthorizationProvider != null",
-            branch =>
-            {
-                branch.DeclareVariable(
-                    "isAuthorized",
-                    $"await this._resourceAuthorizationProvider.IsAuthorizedAsync(context, {context.GetHttpContextExpression()}.User, {scopePairFieldName}, {context.GetHttpContextExpression()}.RequestAborted).ConfigureAwait(false)");
-
-                branch.If(
-                    "!isAuthorized",
-                    deniedBranch =>
-                    {
-                        deniedBranch.Return(
-                            context.IsPipelineAsync()
-                                ? "Blueprint.Runtime.Exec.ForbiddenResult.Instance"
-                                : "System.Threading.Tasks.Task.FromResult<Blueprint.OperationResult>(Blueprint.Runtime.Exec.ForbiddenResult.Instance)");
-                    });
-            });
-    }
-
-    private static void RenderLegacyAuthorizationCheckInner(
-        PipelineRenderContext branch,
-        PipelineRenderContext context,
-        string scopePairFieldName)
-    {
-        branch.DeclareVariable(
-            "isAuthorized",
-            $"await this._resourceAuthorizationProvider.IsAuthorizedAsync(context, {context.GetHttpContextExpression()}.User, {scopePairFieldName}, {context.GetHttpContextExpression()}.RequestAborted).ConfigureAwait(false)");
-
-        branch.If(
-            "!isAuthorized",
+            "authorizationDenial != null",
             deniedBranch =>
             {
-                deniedBranch.Return(
-                    context.IsPipelineAsync()
-                        ? "Blueprint.Runtime.Exec.ForbiddenResult.Instance"
-                        : "System.Threading.Tasks.Task.FromResult<Blueprint.OperationResult>(Blueprint.Runtime.Exec.ForbiddenResult.Instance)");
+                deniedBranch.Return("authorizationDenial");
             });
     }
 
