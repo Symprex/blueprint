@@ -5,8 +5,8 @@
 - **.NET Version:** 10.0
 - **OS:** Windows 11
 - **Hardware:** Development workstation
-- **Date:** 2025-07-14 (updated 2025-07-15)
-- **BenchmarkDotNet:** InProcessEmitToolchain, MediumRun (15 iterations, 2 warmups, 10 invocations)
+- **Date:** 2025-07-14 (updated 2025-07-17)
+- **BenchmarkDotNet:** InProcessEmitToolchain, ShortRun (5 iterations, 1 warmup)
 
 ## Full Pipeline Benchmarks
 
@@ -16,26 +16,26 @@ code path that runs in production HTTP requests (minus HTTP I/O and serializatio
 
 | Benchmark | Mean | Error | StdDev | Ratio | Gen0 | Allocated | Alloc Ratio |
 |-----------|-----:|------:|-------:|------:|-----:|----------:|------------:|
-| MinimalQuery (baseline) | 2.06 µs | 0.175 µs | 0.116 µs | 1.00 | 0.2022 | 2.51 KB | 1.00 |
-| ValidatedQuery (invalid input) | 8.07 µs | 0.171 µs | 0.090 µs | 3.92 | 0.4120 | 5.12 KB | 2.04 |
-| FullStackCommand (valid input) | 8.98 µs | 0.326 µs | 0.216 µs | 4.37 | 0.4578 | 5.73 KB | 2.28 |
-| FullStackCommand (validation failure) | 9.02 µs | 0.283 µs | 0.187 µs | 4.39 | 0.4578 | 5.73 KB | 2.28 |
-| ValidatedQuery (valid input) | 10.27 µs | 3.812 µs | 2.269 µs | 4.99 | 0.4120 | 5.12 KB | 2.04 |
+| MinimalQuery (baseline) | 1.61 µs | 0.601 µs | 0.398 µs | 1.00 | 0.2022 | 2.51 KB | 1.00 |
+| ValidatedQuery (valid input) | 10.42 µs | 2.195 µs | 1.306 µs | 6.81 | 0.4120 | 5.12 KB | 2.04 |
+| ValidatedQuery (invalid input) | 11.20 µs | 2.826 µs | 1.869 µs | 7.32 | 0.4120 | 5.12 KB | 2.04 |
+| FullStackCommand (validation failure) | 12.49 µs | 5.039 µs | 2.998 µs | 8.17 | 0.4578 | 5.73 KB | 2.28 |
+| FullStackCommand (valid input) | 13.83 µs | 3.806 µs | 2.517 µs | 9.05 | 0.4578 | 5.73 KB | 2.28 |
 
 ### Analysis
 
-**Baseline (MinimalQuery):** ~2 µs / 2.51 KB
+**Baseline (MinimalQuery):** ~1.6 µs / 2.51 KB
 - This is the absolute minimum pipeline overhead — no validation, just handler invocation
 - The 2.51 KB includes `ApiOperationContext` allocation and the operation instance
 - **This is the floor.** Any production operation will add to this baseline
 
-**Validation cost:** ~6-8 µs / 2.6 KB additional
-- Validation adds ~6-8 µs latency and ~2.6 KB allocation over the baseline
+**Validation cost:** ~9-11 µs / 2.6 KB additional
+- Validation adds ~9-11 µs latency and ~2.6 KB allocation over the baseline
 - Both valid and invalid paths have similar cost — the generated validation code runs
   the same checks either way, just with different outcomes
 - The 2.6 KB is primarily from `ValidationFailedOperationResult` and error message strings
 
-**Command overhead:** ~1-2 µs / 0.6 KB additional (over validated query)
+**Command overhead:** ~2-3 µs / 0.6 KB additional (over validated query)
 - Commands have slightly more pipeline stages (e.g., success guards, result wrapping)
 - The additional allocation is from command-specific result types
 
@@ -74,14 +74,14 @@ Pipeline resolution and dispatch overhead, measured at different operation count
 | ExecutePipelineDirectAsync | 10 | 28.4 ns | 20.0 ns | 7.1 ns | 144 B |
 | ExecuteThroughExecutorShellAsync | 10 | 27.1 ns | 2.6 ns | 0.9 ns | 144 B |
 | ResolveRegisteredPipeline | 100 | 6.8 ns | 3.9 ns | 1.4 ns | 0 B |
-| ExecutePipelineDirectAsync | 100 | 25.8 ns | 13.6 ns | 4.9 ns | 144 B |
-| ExecuteThroughExecutorShellAsync | 100 | 26.9 ns | 2.6 ns | 0.9 ns | 144 B |
-| ResolveRegisteredPipeline | 250 | 6.9 ns | 2.3 ns | 0.8 ns | 0 B |
-| ExecutePipelineDirectAsync | 250 | 23.3 ns | 3.0 ns | 1.1 ns | 144 B |
-| ExecuteThroughExecutorShellAsync | 250 | 43.2 ns | 25.6 ns | 9.1 ns | 144 B |
-| ResolveRegisteredPipeline | 500 | 11.2 ns | 5.6 ns | 2.0 ns | 0 B |
-| ExecutePipelineDirectAsync | 500 | 28.7 ns | 28.0 ns | 10.0 ns | 144 B |
-| ExecuteThroughExecutorShellAsync | 500 | 32.5 ns | 21.4 ns | 7.6 ns | 144 B |
+| ExecutePipelineDirectAsync | 100 | 28.5 ns | 5.7 ns | 3.4 ns | 144 B |
+| ExecuteThroughExecutorShellAsync | 100 | 25.6 ns | 1.4 ns | 0.8 ns | 144 B |
+| ResolveRegisteredPipeline | 250 | 7.5 ns | 3.6 ns | 2.2 ns | 0 B |
+| ExecutePipelineDirectAsync | 250 | 36.2 ns | 12.4 ns | 8.2 ns | 144 B |
+| ExecuteThroughExecutorShellAsync | 250 | 32.9 ns | 5.0 ns | 3.0 ns | 144 B |
+| ResolveRegisteredPipeline | 500 | 7.0 ns | 1.9 ns | 1.3 ns | 0 B |
+| ExecutePipelineDirectAsync | 500 | 30.7 ns | 13.3 ns | 7.9 ns | 144 B |
+| ExecuteThroughExecutorShellAsync | 500 | 38.4 ns | 13.7 ns | 8.2 ns | 144 B |
 
 **Key insight:** Pipeline resolution is ~7-11ns with **zero allocations** regardless
 of operation count (dictionary lookup). Pipeline dispatch is ~25-43ns with a fixed
@@ -96,11 +96,11 @@ Request binding overhead for different property population strategies.
 
 | Method | Mean | Error | StdDev | Gen0 | Allocated |
 |--------|-----:|------:|-------:|-----:|----------:|
-| RouteOnlyGetAsync (baseline) | 2.20 µs | 0.26 µs | 0.09 µs | 0.37 | 4.60 KB |
-| BodyOnly3StringsPostAsync | 3.35 µs | 0.35 µs | 0.13 µs | 0.46 | 5.63 KB |
-| MixedRouteAndBodyPostAsync | 3.57 µs | 2.03 µs | 0.72 µs | 0.46 | 5.63 KB |
-| TypedBodyPostAsync | 3.90 µs | 0.22 µs | 0.08 µs | 0.50 | 6.15 KB |
-| LargeBody10PropsPostAsync | 6.59 µs | 3.19 µs | 1.14 µs | 0.66 | 8.13 KB |
+| RouteOnlyGetAsync (baseline) | 2.00 µs | 0.11 µs | 0.07 µs | 0.37 | 4.60 KB |
+| BodyOnly3StringsPostAsync | 3.46 µs | 0.70 µs | 0.46 µs | 0.46 | 5.63 KB |
+| MixedRouteAndBodyPostAsync | 3.55 µs | 1.02 µs | 0.60 µs | 0.46 | 5.63 KB |
+| TypedBodyPostAsync | 3.85 µs | 0.22 µs | 0.11 µs | 0.50 | 6.15 KB |
+| LargeBody10PropsPostAsync | 5.71 µs | 0.14 µs | 0.09 µs | 0.66 | 8.13 KB |
 
 **Key insight:** Route-only binding is cheapest (~2.2µs). Body binding adds ~1µs
 regardless of source (inline vs typed). A 10-property operation body costs ~6.6µs
