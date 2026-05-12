@@ -1754,8 +1754,14 @@ to support a smooth S365 migration.
 3. ✅ **Permission/PermissionFor removal** — S365 only uses `[Resource]`. **Done.**
 
 ### Before Tier 3 migration
-4. **Verify Blueprint.Marten outbox + Rebus transaction ordering** — Must match S365's
-   pipeline: Handler → Commit Rebus Transaction → Save Marten Changes.
+4. ✅ **Verify Blueprint.Marten outbox + Rebus transaction ordering** — **Verified.**
+   The Category-based ordering (Core=0 < Consumer=1) ensures all core PostExecution
+   steps (UoW.SaveChanges → MessageOutbox.Commit → Audit.Record → BackgroundTask.Flush)
+   complete BEFORE RebusTransactionScope.CompleteAsync(). The `using var` scope wraps
+   everything from Setup through PostExecution. Generated code confirmed in snapshot:
+   `RebusTransactionModuleTests.When_composed_with_pipeline_generator_then_snapshot_includes_rebus_scope`.
+   Plan-level ordering proven by:
+   `When_composed_with_core_modules_then_rebus_complete_is_after_uow_and_outbox`.
 5. ✅ **Verify Blueprint.Testing ApiFixture** — Must support CommandAsync, QueryAsync,
    MessageAsync, BackgroundTaskAsync, tenant auth context switching.
    **Done.** `BlueprintTestHost` provides `ExecuteAsync`, `ExecuteAsync<T>`,
@@ -1818,7 +1824,7 @@ should be recorded in the `docs/` folder:
 | Auth/tenant semantics change silently | **HIGH** | Early auth spike (Tier 2), 401/403 behavior tests, claim expansion tests |
 | OpenAPI shape change breaks TS clients | **HIGH** | Hard gate: OpenAPI diff + NSwag generation per service before shipping |
 | Multi-tenancy context loss | **HIGH** | ASP.NET Core middleware approach, integration tests with tenant context |
-| Marten outbox + Rebus ordering change | **MEDIUM** | Integration tests: handler → save → outbox commit → bus publish |
+| Marten outbox + Rebus ordering change | **LOW** ✅ | Verified: Category sorting ensures UoW→Outbox before Rebus.CompleteAsync |
 | Performance regression | **MEDIUM** | NBomber baselines before/after, BenchmarkDotNet per-stage |
 | Gateway calls break | **MEDIUM** | Migrate gateways AFTER target services are stable (Tier 4+) |
 | SMTP subsystem entangled | **LOW** | Separate discovery track — may not need migration |

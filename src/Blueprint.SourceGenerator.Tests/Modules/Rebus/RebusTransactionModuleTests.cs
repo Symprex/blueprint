@@ -125,6 +125,58 @@ public class RebusTransactionModuleTests
     }
 
     [Fact]
+    public void When_composed_with_core_modules_then_rebus_complete_is_after_uow_and_outbox()
+    {
+        var compilation = CreateCompilation(
+            """
+            using Blueprint.Model;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace;
+
+            public partial class PlaceOrderCommand : ICommand<string>
+            {
+                public static Task<string> HandleAsync(PlaceOrderCommand operation)
+                {
+                    return Task.FromResult("done");
+                }
+            }
+            """);
+
+        var config = new BlueprintSourceGenerationConfig(
+        [
+            new RebusTransactionModule(),
+            new PropertyPopulationModule(),
+            new HandlerExecutionModule(),
+            new UnitOfWorkModule(),
+            new MessageOutboxModule(),
+            new AuditingModule(),
+            new BackgroundTaskFlushModule(),
+            new PipelineReturnModule(),
+        ]);
+        var result = config.BuildPipelinePlan("TestNamespace.PlaceOrderCommand", compilation);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Value.Should().NotBeNull();
+
+        var postExecutionContributions = result.Value!.Contributions
+            .Where(static c => c.Stage == PipelineStage.PostExecution)
+            .Select(static c => c.ContributorId)
+            .ToList();
+
+        // Rebus is a Consumer module (Category=1), core modules are Category=0.
+        // The ordering invariant is: core PostExecution steps complete BEFORE
+        // RebusTransactionScope.CompleteAsync(), ensuring data is persisted and
+        // outbox is committed before Rebus messages are dispatched.
+        postExecutionContributions.Should().ContainInOrder(
+            nameof(UnitOfWorkModule),
+            nameof(MessageOutboxModule),
+            nameof(AuditingModule),
+            nameof(BackgroundTaskFlushModule),
+            nameof(RebusTransactionModule));
+    }
+
+    [Fact]
     public async Task When_composed_with_pipeline_generator_then_snapshot_includes_rebus_scope()
     {
         const string source = """
