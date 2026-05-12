@@ -69,41 +69,17 @@ public sealed class ResourceEventAuditModule : IBlueprintSourceGeneratorModule, 
             requiredBy: PipelineStage.PostExecution);
 
         context.RequireAsync();
-        context.AddSuccessGuardedRenderStep(PipelineStage.PostExecution, ctx => RenderResourceEventAudit(ctx, operationTypeName, castTypeName));
+        context.AddSuccessGuardedRenderStep(PipelineStage.PostExecution, ctx => RenderResourceEventAudit(ctx, operationTypeName));
     }
 
-    private static void RenderResourceEventAudit(PipelineRenderContext context, string operationTypeName, string castTypeName)
+    private static void RenderResourceEventAudit(PipelineRenderContext context, string operationTypeName)
     {
         context.WriteBlankLine();
 
-        context.If(
-            $"handlerResult is {castTypeName} _reAuditResult",
-            branch =>
-            {
-                branch.If(
-                    "this._resourceEventAuditSink != null",
-                    innerBranch =>
-                    {
-                        innerBranch.WriteStatement(
-                            $"context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent(\"blueprint.resource_event_audit.started\", default, new System.Diagnostics.ActivityTagsCollection {{ {{ \"blueprint.operation.type\", \"{operationTypeName}\" }}, {{ \"blueprint.resource_event.id\", _reAuditResult.EventId }}, {{ \"blueprint.resource_event.resource_id\", _reAuditResult.ResourceId }} }}));");
-
-                        innerBranch.Try(tryBranch =>
-                        {
-                            tryBranch.WriteStatement(
-                                "await this._resourceEventAuditSink.RecordAsync(_reAuditResult.EventId, _reAuditResult.ResourceId, context, System.Threading.CancellationToken.None).ConfigureAwait(false);");
-
-                            tryBranch.WriteStatement(
-                                $"context.Activity?.AddEvent(new System.Diagnostics.ActivityEvent(\"blueprint.resource_event_audit.succeeded\", default, new System.Diagnostics.ActivityTagsCollection {{ {{ \"blueprint.operation.type\", \"{operationTypeName}\" }}, {{ \"blueprint.resource_event.id\", _reAuditResult.EventId }} }}));");
-                        });
-
-                        // Use shared helper for exception recording to avoid duplicating the tags construction
-                        innerBranch.Catch("System.Exception resourceEventAuditException", catchBranch =>
-                        {
-                            catchBranch.WriteStatement(
-                                $"Blueprint.Runtime.Exec.PipelineHelpers.RecordAuditFailureEvent(context.Activity, \"blueprint.resource_event_audit.failed\", \"{operationTypeName}\", resourceEventAuditException, _reAuditResult.EventId, _reAuditResult.ResourceId);");
-                        });
-                    });
-            });
+        // Delegate to shared helper — avoids duplicating the pattern match, null check,
+        // try/catch, and activity event recording across every resource-event pipeline.
+        context.WriteStatement(
+            $"await Blueprint.Runtime.Exec.PipelineHelpers.ExecuteResourceEventAuditSinkAsync(this._resourceEventAuditSink, context, handlerResult, \"{operationTypeName}\").ConfigureAwait(false);");
     }
 
     /// <summary>

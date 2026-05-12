@@ -45,6 +45,7 @@
 | S365 auth compatibility | ✅ Verified | 3-arg `[Resource]` matches S365 pattern; verb expansion stays in provider |
 | Pipeline helper extraction | ✅ Done | `LoadUserContextAsync`, `RunAuthorisersAsync` reduce IL per pipeline |
 | Handler property injection | ✅ Done | ApiOperations base-class pattern (Context, Identity, Logger, CT) auto-detected |
+| Self-link dedup in pipelines | ✅ Done | Multiple ops declaring same `[SelfLink]` URL no longer emit duplicate `AddLink("self")` calls |
 | GetHttpContext() compat method | ✅ Done | Instance method on ApiOperationContext for S365 HttpContext access |
 | StatusCodeResult returns | ✅ Verified | Accepted (85 S365 usages), NoContent (10), Created (12) all work |
 | `[DoNotSaveChanges]` | ✅ Verified | Already supported with BPP001 diagnostic for misuse on non-commands |

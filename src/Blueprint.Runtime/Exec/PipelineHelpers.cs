@@ -392,4 +392,76 @@ public static class PipelineHelpers
 
         return null;
     }
+
+    /// <summary>
+    /// Executes the resource-event audit sink with best-effort semantics when the handler result
+    /// is a <see cref="ResourceEventResult"/> or <see cref="KeyOnlyResourceEventResult"/>.
+    /// Extracts the event/resource identity from the result, records started/succeeded/failed
+    /// activity events, and swallows sink exceptions. When the sink is <c>null</c> or the result
+    /// is not a resource-event type, the method returns immediately with no overhead.
+    /// </summary>
+    /// <param name="auditSink">The resource-event audit sink, or <c>null</c> if none is registered.</param>
+    /// <param name="context">The operation context for the current pipeline execution.</param>
+    /// <param name="handlerResult">The handler result — only processed if it is a resource-event result type.</param>
+    /// <param name="operationTypeName">The operation type name for activity event tags.</param>
+    /// <returns>A task that completes when the audit sink has finished (or been skipped).</returns>
+    public static async Task ExecuteResourceEventAuditSinkAsync(
+        IResourceEventAuditSink? auditSink,
+        ApiOperationContext context,
+        OperationResult handlerResult,
+        string operationTypeName)
+    {
+        if (auditSink == null)
+        {
+            return;
+        }
+
+        string? eventId;
+        string? resourceId;
+
+        if (handlerResult is ResourceEventResult reResult)
+        {
+            eventId = reResult.EventId;
+            resourceId = reResult.ResourceId;
+        }
+        else if (handlerResult is KeyOnlyResourceEventResult koResult)
+        {
+            eventId = koResult.EventId;
+            resourceId = koResult.ResourceId;
+        }
+        else
+        {
+            return;
+        }
+
+        var activity = context.Activity;
+
+        activity?.AddEvent(new ActivityEvent(
+            "blueprint.resource_event_audit.started",
+            default,
+            new ActivityTagsCollection
+            {
+                { "blueprint.operation.type", operationTypeName },
+                { "blueprint.resource_event.id", eventId },
+                { "blueprint.resource_event.resource_id", resourceId },
+            }));
+
+        try
+        {
+            await auditSink.RecordAsync(eventId, resourceId, context, CancellationToken.None).ConfigureAwait(false);
+
+            activity?.AddEvent(new ActivityEvent(
+                "blueprint.resource_event_audit.succeeded",
+                default,
+                new ActivityTagsCollection
+                {
+                    { "blueprint.operation.type", operationTypeName },
+                    { "blueprint.resource_event.id", eventId },
+                }));
+        }
+        catch (Exception resourceEventAuditException)
+        {
+            RecordAuditFailureEvent(activity, "blueprint.resource_event_audit.failed", operationTypeName, resourceEventAuditException, eventId, resourceId);
+        }
+    }
 }
