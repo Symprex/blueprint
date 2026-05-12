@@ -34,6 +34,15 @@ public sealed class BackgroundTaskCollector : IBackgroundTaskScheduleProvider
     public IReadOnlyList<(BackgroundTaskEnvelope Envelope, string ParentId, BackgroundTaskContinuationOptions Options)> ChildEnqueued
         => this._childEnqueued;
 
+    /// <summary>
+    /// Gets all collected tasks (enqueued + scheduled + child) as a combined sequence.
+    /// Mirrors the S365 <c>BackgroundTaskCollector.All</c> property.
+    /// </summary>
+    public IEnumerable<object> All =>
+        this._enqueued.Select(static e => (object)e.Task)
+            .Concat(this._scheduled.Select(static s => (object)s.Envelope.Task))
+            .Concat(this._childEnqueued.Select(static c => (object)c.Envelope.Task));
+
     private readonly List<BackgroundTaskEnvelope> _enqueued = new();
     private readonly List<(BackgroundTaskEnvelope Envelope, TimeSpan Delay)> _scheduled = new();
     private readonly List<(BackgroundTaskEnvelope Envelope, string ParentId, BackgroundTaskContinuationOptions Options)> _childEnqueued = new();

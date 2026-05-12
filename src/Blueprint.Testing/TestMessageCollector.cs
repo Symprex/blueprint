@@ -246,6 +246,18 @@ public sealed class TestMessageCollector
     }
 
     /// <summary>
+    /// Returns <c>this</c> collector for FluentAssertions-style chaining, so S365 test code
+    /// like <c>api.Bus.Should().HavePublishedSingle&lt;T&gt;()</c> works without modification.
+    /// The assertion methods (<see cref="HavePublishedSingle{T}"/>, <see cref="HavePublished{T}"/>,
+    /// <see cref="NotHavePublished{T}"/>, etc.) are already defined on this class.
+    /// </summary>
+    /// <returns>This collector, for method chaining.</returns>
+    public TestMessageCollector Should()
+    {
+        return this;
+    }
+
+    /// <summary>
     /// Wraps a captured message with its declared type for accurate type filtering.
     /// </summary>
     /// <param name="MessageType">The declared message type (the <c>T</c> in <c>Publish&lt;T&gt;</c>).</param>

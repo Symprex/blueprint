@@ -109,6 +109,14 @@
 | Tenancy first-class complete | ✅ Verified | `TenantModule` replaces `SetTenantMiddleware` entirely: claim resolution via `ITenantResolver`, direct `TenantId` assignment (no reflection), `ITenantAccessor.Current` ambient context — all compile-time generated |
 | ResourceEvent backward compat | ✅ Verified | `ICommand<ResourceEvent<T>>` works unchanged; S365 `BusResourceEventAuditRepository` → Blueprint `IResourceEventAuditSink`; `[DoNotAudit]` opt-out works; `ResourceCreated/Updated/Deleted<T>` all supported |
 | ReadJsonBodyAsync static delegate | ✅ Already done | `PopulateFromBodyDelegate<TOperation>` takes operation as parameter; generated code uses `static (_bodyBytes, _op) => PopulateFromJsonBody(_bodyBytes, _op)` — zero closure allocation |
+| Rebus handler patterns (47 handlers) | ✅ Verified | All S365 Rebus patterns supported: `IHandleMessages<T>` (47 handlers), `Subscribe<T>()` (20 services), `bus.Publish/Send`, `IMessageContext`, one-way clients — no sagas, no exotic attributes |
+| Rebus outbox pattern | ✅ S365-owned | Marten outbox with `OutboxForwarder`/`MartenOutboxStorage` — stays S365-owned DI registration, Blueprint provides `IMessageOutbox` integration |
+| Test `Should()` chain compat | ✅ Done | `TestMessageCollector.Should()` returns `this` for FluentAssertions-style chaining: `api.Bus.Should().HavePublishedSingle<T>()` |
+| BackgroundTaskCollector.All | ✅ Done | Combined `IEnumerable<object>` of all enqueued + scheduled + child tasks — mirrors S365 pattern (30 test usages) |
+| S365 test auth helpers | ✅ S365-owned | `AuthenticateAsTenantAdministrator`, `AuthenticateAsPartnerUser` etc. are S365 extension methods that call `Authentication.Set(identity)` — Blueprint provides the underlying API |
+| S365 `WebApiFixtureFactory` match | ✅ Verified | `BlueprintTestFixtureFactory` mirrors `WebApiFixtureFactory<T>`: `Create()`, `ConfigureServices`, `ConfigureOnceAsync`, `ConfigureOnceTimeout`, thread-safe singleton init |
+| OpenAPI security schemes | ✅ Already exists | `OpenApiInfoOptions.SecuritySchemes` configurable; default `bearerAuth` JWT scheme; S365 can add OAuth2 or custom schemes |
+| OpenAPI nullable handling | ✅ Already exists | `NullabilityInfoContext` for NRT annotations + `Nullable<T>` unwrapping; fully compatible with S365 TypeScript codegen |
 
 ---
 
@@ -405,3 +413,4 @@ S365 testing uses `WebApiFixtureFactory<TStartup>` → `ApiFixture` with:
 | 2025-07 | Pipeline extraction | UoW/Outbox/BackgroundTask helper extraction, x-links/InvokeAsync/JsonConverter gap resolution, comprehensive S365 compatibility verification |
 | 2025-07 | ResourceEventAudit | Extracted inline resource-event audit code to PipelineHelpers.ExecuteResourceEventAuditSinkAsync; self-link dedup test added; pipeline optimization analysis confirmed most code paths well-optimized |
 | 2025-07 | Gap analysis | OpenAPI version configurable, Link schema component, comprehensive S365 pattern verification: all control attributes, collection types, validation fast-paths, tenancy, ResourceEvent backward compat confirmed |
+| 2025-07 | Deep compat | Rebus handler analysis (47 handlers fully compatible), test infrastructure deep verification (S365 auth helpers, FakeBus assertions, BackgroundTaskCollector.All), TestMessageCollector.Should() chain compat, OpenAPI security/nullable verified |
