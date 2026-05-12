@@ -60,32 +60,35 @@ public class TemplateApiTests : IClassFixture<WebApiFixtureFactory<Startup>>
 }
 
 // ─── AFTER (Blueprint) ────────────────────────────────────────
-public class TemplateApiTests : IAsyncLifetime
+// Option A: Factory pattern (RECOMMENDED — mirrors S365 shape, minimal churn)
+// Create one per-app factory class:
+public class TemplateTestFixtureFactory
+    : BlueprintTestFixtureFactory<TemplateApp, TemplateAppExecutor>
 {
-    private BlueprintTestHost<PortalApp, PortalAppExecutor> _host = null!;
-
-    public Task InitializeAsync()
+    protected override void ConfigureServices(IServiceCollection services)
     {
-        _host = new BlueprintTestHostBuilder<PortalApp, PortalAppExecutor>()
-            .ConfigureServices(services =>
-            {
-                services.AddSingleton<IUnitOfWork, InMemoryUnitOfWork>();
-                services.AddSingleton<IDocumentStore>(TestMartenStore.Create());
-            })
-            .Build();
-        return Task.CompletedTask;
+        services.AddSingleton<IUnitOfWork, InMemoryUnitOfWork>();
+        services.AddSingleton<IDocumentStore>(TestMartenStore.Create());
     }
+}
 
-    public Task DisposeAsync() => _host.DisposeAsync().AsTask();
+// Tests keep the same shape as S365:
+public class TemplateApiTests : IClassFixture<TemplateTestFixtureFactory>
+{
+    private readonly BlueprintTestFixture<TemplateApp, TemplateAppExecutor> _fixture;
+
+    public TemplateApiTests(TemplateTestFixtureFactory factory)
+    {
+        _fixture = factory.Create();
+    }
 
     [Fact]
     public async Task Can_create_template()
     {
-        var result = await _host.ExecuteAsync(
-            new CreateTemplateCommand { Name = "Test" },
-            ctx => ctx
-                .WithTenant("tenant-1")
-                .WithUser("admin", roles: ["TenantAdmin"]));
+        _fixture.Authentication.Set(TestIdentities.TenantAdmin("tenant-1"));
+
+        var result = await _fixture.CommandAsync(
+            new CreateTemplateCommand { Name = "Test" });
 
         result.ShouldBeCreated<TemplateResource>();
     }
@@ -139,10 +142,10 @@ var template = await fixture.QueryAsync(new GetTemplateQuery { Id = "1" });
 var list = await fixture.QueryAsync(new ListTemplatesQuery { Page = 1 });
 
 // ─── AFTER (Blueprint) ────────────────────────────────────────
-// All operations use the same method — the pipeline determines behavior
-var result = await _host.ExecuteAsync(new CreateTemplateCommand { Name = "Test" }, authContext);
-var template = await _host.ExecuteAsync(new GetTemplateQuery { Id = "1" }, authContext);
-var list = await _host.ExecuteAsync(new ListTemplatesQuery { Page = 1 }, authContext);
+// QueryAsync and CommandAsync are available directly on the fixture:
+var result = await _fixture.CommandAsync(new CreateTemplateCommand { Name = "Test" });
+var template = await _fixture.QueryAsync(new GetTemplateQuery { Id = "1" });
+var list = await _fixture.QueryAsync(new ListTemplatesQuery { Page = 1 });
 ```
 
 ### Step 4: Migrate Result Assertions
@@ -189,9 +192,9 @@ var tasks = fixture.GetEnqueuedBackgroundTasks();
 tasks.Should().ContainSingle().Which.Should().BeOfType<SendNotificationTask>();
 
 // ─── AFTER (Blueprint) ────────────────────────────────────────
-var collector = _host.Services.GetRequiredService<BackgroundTaskCollector>();
-collector.EnqueuedTasks.Should().ContainSingle()
-    .Which.Should().BeOfType<SendNotificationTask>();
+// Accessed directly from the fixture:
+_fixture.Tasks.GetSingleEnqueued<SendNotificationTask>()
+    .Should().NotBeNull();
 ```
 
 ### Step 6: Migrate Message Bus Assertions
@@ -203,15 +206,16 @@ fakeBus.PublishedMessages.Should().ContainSingle()
     .Which.Should().BeOfType<TemplateCreatedEvent>();
 
 // ─── AFTER (Blueprint) ────────────────────────────────────────
-// If using Blueprint.Rebus with test doubles:
-var fakeBus = _host.Services.GetRequiredService<IBus>() as FakeBus;
-fakeBus!.PublishedMessages.Should().ContainSingle()
-    .Which.Should().BeOfType<TemplateCreatedEvent>();
+// Direct access via fixture.Bus (S365-compatible alias for Messages):
+var createdEvent = _fixture.Bus!.HavePublishedSingle<TemplateCreatedEvent>();
+createdEvent.TemplateId.Should().NotBeEmpty();
 
-// Or via domain event publisher mock:
-var publisher = _host.Services.GetRequiredService<IDomainEventPublisher>() as TestDomainEventPublisher;
-publisher!.PublishedEvents.Should().ContainSingle()
-    .Which.Should().BeOfType<TemplateCreatedEvent>();
+// Or using the Messages property directly:
+_fixture.Messages!.GetSinglePublished<TemplateCreatedEvent>()
+    .TemplateId.Should().NotBeEmpty();
+
+// Assert nothing was published:
+_fixture.Bus!.NotHavePublished<TemplateDeletedEvent>();
 ```
 
 ---
@@ -333,15 +337,31 @@ using (api.Authentication.As(tenantAdminIdentity))
 }
 
 // ─── AFTER (Blueprint) ────────────────────────────────────────
-// Use BlueprintTestContext
-var result = await host.ExecuteAsync(
+// Ambient auth on the fixture — matches S365 exactly:
+_fixture.Authentication.Set(new ClaimsIdentity(
+    new[]
+    {
+        new Claim("sub", "user-1"),
+        new Claim("sig365_tenant_id", "tenant-1"),
+        new Claim("sig365_assigned_scope_pair", "Signature.Read"),
+    },
+    "Bearer"));
+
+// Scoped (reverts on dispose) — same API as S365:
+using (_fixture.Authentication.As(tenantAdminIdentity))
+{
+    var result = await _fixture.QueryAsync(new GetSignaturesQuery());
+    // ...
+}
+
+// Or per-call context:
+var result = await _fixture.ExecuteAsync(
     new GetSignaturesQuery(),
     ctx => ctx.WithUser(new ClaimsIdentity(
         new[]
         {
             new Claim("sub", "user-1"),
             new Claim("sig365_tenant_id", "tenant-1"),
-            new Claim("sig365_assigned_scope_pair", "Signature.Read"),
         },
         "Bearer")));
 ```
@@ -358,15 +378,18 @@ api.Bus.Should().NotHavePublished<TenantDeletedEvent>();
 api.Bus.Should().HaveSent<ProcessImportTask>();
 
 // ─── AFTER (Blueprint) ────────────────────────────────────────
-// Use GetServiceAs<TService, TImpl>() for safe casting to test doubles
-var fakeBus = fixture.GetServiceAs<IBus, FakeBus>();
-fakeBus.Events.OfType<MessagePublished<UserCreatedEvent>>().Should().ContainSingle();
-fakeBus.Events.OfType<MessagePublished<SignatureUpdatedEvent>>().Should().NotBeEmpty();
-fakeBus.Events.OfType<MessagePublished<TenantDeletedEvent>>().Should().BeEmpty();
-fakeBus.Events.OfType<MessageSent<ProcessImportTask>>().Should().ContainSingle();
+// The fixture.Bus property is an alias for fixture.Messages with
+// S365-compatible assertion method names:
+var evt = fixture.Bus!.HavePublishedSingle<UserCreatedEvent>();
+var events = fixture.Bus!.HavePublished<SignatureUpdatedEvent>();
+fixture.Bus!.NotHavePublished<TenantDeletedEvent>();
+var sent = fixture.Bus!.HaveSent<ProcessImportTask>();
 
-// S365 can add a derived fixture with a Bus property for zero-churn migration:
-// public FakeBus Bus => GetServiceAs<IBus, FakeBus>();
+// Note: S365 uses FluentAssertions `.Should().HavePublishedSingle<T>()`.
+// Blueprint uses direct method calls: `fixture.Bus!.HavePublishedSingle<T>()`.
+// The migration is a regex-replaceable transformation:
+//   api.Bus.Should().HavePublishedSingle  →  fixture.Bus!.HavePublishedSingle
+//   api.Bus.Should().NotHavePublished     →  fixture.Bus!.NotHavePublished
 ```
 
 ### Background Task Assertion Migration
@@ -380,11 +403,13 @@ tasks.Should().HaveCount(1);
 tasks.First().UserId.Should().Be("user-1");
 
 // ─── AFTER (Blueprint) ────────────────────────────────────────
-var collector = host.Services.GetRequiredService<IBackgroundTaskScheduleProvider>()
-    as BackgroundTaskCollector;
-var tasks = collector.Enqueued.OfType<SendWelcomeEmailTask>();
+// Access directly from fixture.Tasks property:
+var task = _fixture.Tasks!.GetSingleEnqueued<SendWelcomeEmailTask>();
+task.UserId.Should().Be("user-1");
+
+// Or iterate all:
+var tasks = _fixture.Tasks!.GetAllEnqueued<SendWelcomeEmailTask>();
 tasks.Should().HaveCount(1);
-tasks.First().UserId.Should().Be("user-1");
 ```
 
 ### Authorization Test Fixture Migration
