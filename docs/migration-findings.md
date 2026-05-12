@@ -123,6 +123,12 @@
 | Custom middleware → modules | ✅ Verified | All 6 S365 middleware types (Tenant, Rebus TX, Marten Save, Marten Outbox, ResourceExpand, Links) have compile-time module equivalents |
 | Health checks | ✅ Not Blueprint | S365 health checks are standard ASP.NET Core (`MapHealthChecks`); Blueprint-agnostic, no migration needed |
 | PlainTextResult compat | ✅ Verified | 14 S365 usages; extends `HttpResult` which is a supported result type in Blueprint |
+| BlueprintHttpClient optimization | ✅ Done | PropertyInfo cache per type, lazy StringBuilder for query params, span-based placeholder parsing — eliminates per-request reflection and string allocations |
+| PipelineHelpers.ResolveServiceArray | ✅ Done | Fast-path `is T[]` check avoids `ToArray()` copy when DI returns arrays directly |
+| ResourceEvent JSON envelope fix | ✅ Done | `SendResourceEventAsync` + `SeedTemplateAsync` now check `data` property before `content` — matches `ResourceEventEnvelope` serialization shape |
+| ArrayPool buffer leak fix | ✅ Done | `ReadJsonBodyAsync` fast-path uses try/finally to guarantee `ArrayPool.Return` on all exception paths |
+| RunAllPublishedMessagesAsync | ✅ Done | Test fixture dispatches captured published messages through pipeline — mirrors S365 `ApiFixtureExtensions.RunAllPublishedMessagesAsync` |
+| RunAndConsumeAllPublishedMessagesAsync | ✅ Done | Dispatches then clears — prevents re-processing on subsequent calls |
 
 ---
 
@@ -422,3 +428,4 @@ S365 testing uses `WebApiFixtureFactory<TStartup>` → `ApiFixture` with:
 | 2025-07 | Deep compat | Rebus handler analysis (47 handlers fully compatible), test infrastructure deep verification (S365 auth helpers, FakeBus assertions, BackgroundTaskCollector.All), TestMessageCollector.Should() chain compat, OpenAPI security/nullable verified |
 | 2025-07 | Final gap analysis | ResourceEvent `[Obsolete]` removal (prevents CS0618 warnings), ApiOperationResourceConvention confirmed superseded by compile-time modules, Sig365LinkGeneratorMiddleware confirmed replaced by source-gen, all 6 S365 middleware types verified compatible, health checks confirmed Blueprint-agnostic, PlainTextResult verified |
 | 2025-07 | Auth + remaining patterns | Full auth analysis: dual authorizer merge into IResourceAuthorizationProvider (consumer responsibility), special permissions = [AllowAnonymous]/[MustBeAuthenticated] (BPAU003 compile-time), verb expansion consumer-owned, AccountId well-known property ✅. Patterns: 0 IPropertyPopulator (middleware instead), 11 IBackgroundTask (all standard), 70 Rebus subscriptions (all IHandleMessages<T>), 100+ NodaTime usages (consumer config), 5 custom validators (runtime fallback), ApiId TenantId→string TenantId migration step needed |
+| 2025-07 | Runtime optimizations | BlueprintHttpClient: PropertyInfo cache, StringBuilder query strings, span-based placeholder parsing. PipelineHelpers: ResolveServiceArray fast-path for arrays. ResourceEvent JSON: fix `data` vs `content` envelope property name. ArrayPool buffer leak fix in ReadJsonBodyAsync (try/finally). RunAllPublishedMessagesAsync/RunAndConsumeAllPublishedMessagesAsync added to test fixture. |

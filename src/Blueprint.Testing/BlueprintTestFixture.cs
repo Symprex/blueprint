@@ -385,6 +385,83 @@ public sealed class BlueprintTestFixture<TApp, TExec> : IDisposable, IAsyncDispo
     }
 
     // ──────────────────────────────────────────────
+    //  Message dispatch helpers (for integration tests)
+    // ──────────────────────────────────────────────
+
+    /// <summary>
+    /// Re-executes all published messages through the pipeline, simulating bus delivery.
+    /// Each published message is executed via <see cref="MessageAsync"/> (anonymous, no auth).
+    /// Failures from individual messages are silently swallowed to mirror the S365
+    /// <c>RunAllPublishedMessagesAsync</c> pattern where bus handlers tolerate individual failures.
+    /// </summary>
+    /// <returns>The published messages that were dispatched.</returns>
+    public async Task<IReadOnlyList<TestMessageCollector.MessageEnvelope>> RunAllPublishedMessagesAsync()
+    {
+        if (this.Messages == null)
+        {
+            return Array.Empty<TestMessageCollector.MessageEnvelope>();
+        }
+
+        var published = this.Messages.Published.ToList();
+
+        foreach (var envelope in published)
+        {
+            if (envelope.Message is IOperation operation)
+            {
+                try
+                {
+                    await this.MessageAsync(operation).ConfigureAwait(false);
+                }
+                catch
+                {
+                    // Swallow: mirrors S365 pattern where individual handler failures don't
+                    // stop the remaining messages from being dispatched.
+                }
+            }
+        }
+
+        return published;
+    }
+
+    /// <summary>
+    /// Re-executes all sent (point-to-point) messages through the pipeline, simulating
+    /// local bus delivery. Each sent message is executed via <see cref="MessageAsync"/>.
+    /// </summary>
+    /// <returns>The sent messages that were dispatched.</returns>
+    public async Task<IReadOnlyList<TestMessageCollector.MessageEnvelope>> RunAllSentMessagesAsync()
+    {
+        if (this.Messages == null)
+        {
+            return Array.Empty<TestMessageCollector.MessageEnvelope>();
+        }
+
+        var sent = this.Messages.Sent.ToList();
+
+        foreach (var envelope in sent)
+        {
+            if (envelope.Message is IOperation operation)
+            {
+                await this.MessageAsync(operation).ConfigureAwait(false);
+            }
+        }
+
+        return sent;
+    }
+
+    /// <summary>
+    /// Re-executes all published messages and then clears the message collector, preventing
+    /// re-processing on subsequent calls. This matches the S365
+    /// <c>RunAndConsumeAllPublishedMessagesAsync</c> pattern for multi-step integration tests.
+    /// </summary>
+    /// <returns>The published messages that were dispatched.</returns>
+    public async Task<IReadOnlyList<TestMessageCollector.MessageEnvelope>> RunAndConsumeAllPublishedMessagesAsync()
+    {
+        var published = await this.RunAllPublishedMessagesAsync().ConfigureAwait(false);
+        this.Messages?.ClearAll();
+        return published;
+    }
+
+    // ──────────────────────────────────────────────
     //  Internal helpers
     // ──────────────────────────────────────────────
 
