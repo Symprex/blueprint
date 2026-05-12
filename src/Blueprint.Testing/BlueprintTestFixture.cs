@@ -178,6 +178,40 @@ public sealed class BlueprintTestFixture<TApp, TExec> : IDisposable, IAsyncDispo
     }
 
     /// <summary>
+    /// Executes a background task operation through the pipeline, returning the raw
+    /// <see cref="OperationResult"/>. This is a convenience alias for operations that
+    /// are semantically background work (e.g. Hangfire-scheduled tasks).
+    /// </summary>
+    /// <param name="task">The background task operation instance.</param>
+    /// <param name="configure">Optional per-call context configuration (applied after ambient auth).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The raw operation result.</returns>
+    public Task<OperationResult> BackgroundTaskAsync(
+        IOperation task,
+        Action<BlueprintTestContext>? configure = null,
+        CancellationToken cancellationToken = default)
+    {
+        return this._host.ExecuteAsync(task, this.WrapConfigure(configure), cancellationToken);
+    }
+
+    /// <summary>
+    /// Executes a message/event handler operation through the pipeline, returning the raw
+    /// <see cref="OperationResult"/>. This is a convenience alias for Rebus message handler
+    /// operations that are triggered by incoming bus messages.
+    /// </summary>
+    /// <param name="message">The message operation instance.</param>
+    /// <param name="configure">Optional per-call context configuration (applied after ambient auth).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The raw operation result.</returns>
+    public Task<OperationResult> MessageAsync(
+        IOperation message,
+        Action<BlueprintTestContext>? configure = null,
+        CancellationToken cancellationToken = default)
+    {
+        return this._host.ExecuteAsync(message, this.WrapConfigure(configure), cancellationToken);
+    }
+
+    /// <summary>
     /// Resolves a service from the root DI container.
     /// </summary>
     /// <typeparam name="T">The service type.</typeparam>

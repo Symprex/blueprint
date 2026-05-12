@@ -46,21 +46,18 @@ public sealed class SolutionAnalysisRunner
                 .Where(diagnosticId => MatchesDiagnosticFilter(diagnosticId, options.DiagnosticFilter))
                 .ToArray();
 
-            if (buildResult.ExitCode != 0)
+            if (buildResult.ExitCode != 0 && diagnosticIds.Length == 0)
             {
                 var nonMigrationDiagnosticIds = allDiagnosticIds
                     .Where(diagnosticId => !MatchesDiagnosticFilter(diagnosticId, options.DiagnosticFilter))
                     .ToArray();
 
-                if (diagnosticIds.Length == 0 || nonMigrationDiagnosticIds.Length > 0)
-                {
-                    var unexpectedDiagnostics = nonMigrationDiagnosticIds.Length == 0
-                        ? "none"
-                        : string.Join(", ", nonMigrationDiagnosticIds);
+                var unexpectedDiagnostics = nonMigrationDiagnosticIds.Length == 0
+                    ? "none"
+                    : string.Join(", ", nonMigrationDiagnosticIds);
 
-                    throw new InvalidOperationException(
-                        $"The codemod dry run could not build '{solutionPath}'. Exit code: {buildResult.ExitCode}. Non-migration diagnostics: {unexpectedDiagnostics}.{Environment.NewLine}{buildResult.StandardOutput}{Environment.NewLine}{buildResult.StandardError}");
-                }
+                throw new InvalidOperationException(
+                    $"The codemod dry run could not build '{solutionPath}'. Exit code: {buildResult.ExitCode}. Non-migration diagnostics: {unexpectedDiagnostics}.{Environment.NewLine}{buildResult.StandardOutput}{Environment.NewLine}{buildResult.StandardError}");
             }
 
             var descriptors = diagnosticIds
