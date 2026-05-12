@@ -40,6 +40,9 @@
 | ResourceEvent compat | ✅ Verified | Identical interface between S365 and Blueprint |
 | IFormFile / multipart | ✅ Not needed | No S365 operations use IFormFile (only SMTP, excluded) |
 | IPropertyPopulator | ✅ Not needed | S365 has none; TenantModule handles TenantId at compile time |
+| Claims-based auth removal | ✅ Done | Removed 9 files, 775 lines; only Resource-based auth remains |
+| `RequiresPermissionCheck` rename | ✅ Done | → `RequiresResourceAuthorization` for clarity |
+| S365 auth compatibility | ✅ Verified | 3-arg `[Resource]` matches S365 pattern; verb expansion stays in provider |
 
 ---
 
@@ -53,11 +56,17 @@
 - NodaTime types are used extensively; `NodaTime.Serialization.SystemTextJson` is available
 
 ### Authorization Model
-- S365 exclusively uses `[Resource(Noun, Verb)]` — no `[Permission]`/`[PermissionFor]`
-- `ScopeApiAuthoriser` checks JWT `scope` claims against expected `{Noun}.{Verb}` pairs
+- S365 exclusively uses `[Resource(Noun, Verb, ResourceKeyTemplate)]` — all 3 params always provided
+- `[Permission]` / `[PermissionFor]` exist in legacy Blueprint but are NOT used in S365 production code
+- Blueprint's claims-based auth layer has been removed; only Resource-based auth remains
+- `ScopeApiAuthoriser` checks JWT `scope` claims against expected `{Noun}.{Verb}` pairs (legacy path)
+- `S365ClaimsApiAuthoriser` is the modern path using role/scope pair-based checks with claim expansion
 - `AccountId = TenantId ?? PartnerId ?? "Symprex"` — tenant-first hierarchy
-- `IS365ResourceKeyExpander` does hierarchical resource key expansion via Marten queries
-- Ignored scopes: `openid`, `profile`, `Signature365.ReadWrite.All`, `Signature365Admin.ReadWrite.All`
+- S365 verb expansion: "Manage" includes Create, Read, Update, Delete — handled by `IResourceAuthorizationProvider`
+- `{Auth:AccountId}` and `{Auth:Id}` template tokens are supported by `ResourceKeyTemplateExpander`
+- `{PropertyName}` tokens are expanded via compile-time generated property access (no reflection)
+- S365 `AuthResourceKeyTemplateExpander` → Blueprint `ResourceKeyTemplateExpander` (static, already works)
+- S365 `PropertyResourceKeyTemplateExpander` (reflection-based) → Blueprint compile-time expansion (superior)
 
 ### Multi-Tenancy
 - `ICurrentTenantAccessor.Current` is set by ASP.NET Core middleware before Blueprint pipeline
