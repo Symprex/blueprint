@@ -842,6 +842,23 @@ public class HttpEndToEndIntegrationTests
     }
 
     [Fact]
+    public async Task When_handler_returns_HttpResult_then_status_and_custom_headers_are_applied()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/e2e/http-result");
+        endpoint.Should().NotBeNull("the HttpResult command route should be registered");
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider);
+
+        response.StatusCode.Should().Be(StatusCodes.Status202Accepted);
+        response.Body.Should().BeEmpty();
+        response.CustomHeaders.Should().ContainKey("X-Custom-E2E");
+        response.CustomHeaders["X-Custom-E2E"].Should().Be("test-value");
+    }
+
+    [Fact]
     public async Task When_conditional_RequiredIf_is_satisfied_and_field_missing_then_returns_422()
     {
         var endpoints = CreateEndpoints();
@@ -1411,12 +1428,17 @@ public class HttpEndToEndIntegrationTests
         await endpoint.RequestDelegate!(context);
         body.Position = 0;
 
+        var customHeaders = context.Response.Headers
+            .Where(static h => h.Key.StartsWith("X-", StringComparison.OrdinalIgnoreCase))
+            .ToDictionary(static h => h.Key, static h => h.Value.ToString());
+
         return new TestHttpResponse(
             context.Response.StatusCode,
             context.Response.ContentType,
             Encoding.UTF8.GetString(body.ToArray()),
             context.Response.Headers.Location.ToString() is { Length: > 0 } loc ? loc : null,
-            context.Response.Headers.ContentDisposition.ToString() is { Length: > 0 } cd ? cd : null);
+            context.Response.Headers.ContentDisposition.ToString() is { Length: > 0 } cd ? cd : null,
+            customHeaders);
     }
 
     private static RouteEndpoint? FindEndpoint(TestEndpointRouteBuilder builder, string routePattern)
@@ -1485,7 +1507,7 @@ public class HttpEndToEndIntegrationTests
         }
     }
 
-    private sealed record TestHttpResponse(int StatusCode, string? ContentType, string Body, string? LocationHeader, string? ContentDisposition);
+    private sealed record TestHttpResponse(int StatusCode, string? ContentType, string Body, string? LocationHeader, string? ContentDisposition, Dictionary<string, string> CustomHeaders);
 }
 
 // ─── E2E test operations ──────────────────────────────────────────────────────
@@ -2717,5 +2739,34 @@ internal sealed class TestTenantPropertyPopulator : Blueprint.Runtime.Middleware
         }
 
         return Task.CompletedTask;
+    }
+}
+
+/// <summary>
+/// Anonymous POST returning an <see cref="Blueprint.Http.HttpResult" /> — proves the
+/// self-executing HTTP result path works end-to-end in the generated pipeline (S365 pattern).
+/// </summary>
+[Blueprint.Model.Attributes.AllowAnonymous]
+[Blueprint.Model.Attributes.RootLink("/e2e/http-result")]
+[Blueprint.Model.Attributes.HttpPost]
+public partial class E2EHttpResultCommand : ICommand<Blueprint.Http.HttpResult>
+{
+    public static Task<Blueprint.Http.HttpResult> HandleAsync(E2EHttpResultCommand command)
+    {
+        return Task.FromResult<Blueprint.Http.HttpResult>(
+            new E2ECustomHttpResult(System.Net.HttpStatusCode.Accepted));
+    }
+}
+
+/// <summary>
+/// Concrete <see cref="Blueprint.Http.HttpResult" /> subclass for testing that sets status
+/// and a custom header without writing a body.
+/// </summary>
+internal sealed class E2ECustomHttpResult : Blueprint.Http.HttpResult
+{
+    public E2ECustomHttpResult(System.Net.HttpStatusCode statusCode)
+        : base(statusCode)
+    {
+        this.Headers["X-Custom-E2E"] = "test-value";
     }
 }

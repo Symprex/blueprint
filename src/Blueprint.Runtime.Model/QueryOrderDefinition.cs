@@ -22,6 +22,18 @@ public sealed class QueryOrderDefinition
     }
 
     /// <summary>
+    /// Initializes a new instance of the <see cref="QueryOrderDefinition"/> class
+    /// with a nullable descending flag (legacy S365 compatibility overload).
+    /// </summary>
+    /// <param name="orderBy">The property name to order by.</param>
+    /// <param name="descending">Whether to order descending; <c>null</c> defaults to <c>true</c>.</param>
+    public QueryOrderDefinition(string orderBy, bool? descending)
+    {
+        this.OrderBy = orderBy;
+        this.Descending = descending ?? true;
+    }
+
+    /// <summary>
     /// The property name to order by.
     /// </summary>
     public string OrderBy { get; }

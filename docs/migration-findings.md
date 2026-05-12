@@ -80,6 +80,8 @@
 | Handler return type normalization | ✅ Verified | Plain value → `OkResult<T>`, `ResourceEvent<T>` → direct, `Task` → `NoResult`, `OperationResult` → direct |
 | ResourceEvent<T> BP108 compat | ✅ Done | `Blueprint.Http.ResourceEvent<T>` now recognized as valid declared result contract — 50+ S365 commands unblocked |
 | IQuery<T> type inference overload | ✅ Done | `ResourceEventDefinition.For(new GetSettingsQuery())` infers `TResource` from `IQuery<TResource>` — matches legacy API |
+| HttpResult BP108 compat | ✅ Done | `Blueprint.Http.HttpResult` now recognized as valid declared result contract — 3 S365 operations unblocked |
+| QueryOrderDefinition bool? compat | ✅ Done | Added `(string, bool?)` constructor overload — S365 passes nullable descending flag |
 
 ---
 
