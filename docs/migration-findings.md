@@ -96,6 +96,9 @@
 | Testing infrastructure complete | ✅ Verified | QueryAsync, CommandAsync, BackgroundTaskAsync, MessageAsync, factory, ambient auth — all S365 patterns covered |
 | ResourceEventEnvelope shape fix | ✅ Done | Aligned `ResourceEventResult` HTTP envelope with S365's full `ResourceEvent` shape: `$object`, `eventId`, `changeType`, `created`, `resourceObject`, `data`, `metadata` |
 | TypeScript client generation | ✅ Analysed | Custom Handlebars templates in 3 apps; relies on `operationId`, `x-links`, `tags`, `ResourceEventOf{Type}` schema naming — all compatible |
+| OpenAPI version configurable | ✅ Done | `OpenApiInfoOptions.OpenApiVersion` defaults to `3.0.4`; set to `3.0.0` for older tooling compatibility |
+| OpenAPI short schema names | ✅ Done | Schema component keys now use short type names (e.g. `TemplateApiResource`) instead of fully-qualified CLR names |
+| Link schema component | ✅ Done | Well-known `Link` schema emitted in `components/schemas` with `href` (required) + `type`; `$links` property uses `additionalProperties: { $ref: Link }` |
 
 ---
 
