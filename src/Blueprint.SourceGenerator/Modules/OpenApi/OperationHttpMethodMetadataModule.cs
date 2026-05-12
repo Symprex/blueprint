@@ -40,7 +40,8 @@ public sealed class OperationHttpMethodMetadataModule : IBlueprintSourceGenerato
     /// <inheritdoc />
     public void ContributeToDescriptor(DescriptorContributorContext context)
     {
-        if (HasHttpHostExposure(context) == false)
+        var operationType = context.GetOperationTypeSymbol();
+        if (HttpHostExposureHelper.HasHttpHostExposure(operationType) == false)
         {
             return;
         }
@@ -56,12 +57,6 @@ public sealed class OperationHttpMethodMetadataModule : IBlueprintSourceGenerato
         }
 
         context.AddRenderStep(writer => RenderDescriptor(writer, context.GetMetadata<OperationHttpMethodMetadataRegistration>()));
-    }
-
-    private static bool HasHttpHostExposure(DescriptorContributorContext context)
-    {
-        return context.GetMetadata<HostExposureRegistration>()
-            .Any(static registration => string.Equals(registration.HostName, HostExposureRegistration.Http.HostName, StringComparison.Ordinal));
     }
 
     private static bool TryResolveHttpMethods(DescriptorContributorContext context, out string[] httpMethods)

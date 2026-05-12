@@ -116,7 +116,7 @@ public sealed class AuthenticationModule : IBlueprintSourceGeneratorModule, IDes
         }
 
         // Non-HTTP operations don't get pipeline auth checks
-        if (!HasHttpHostExposure(operationType))
+        if (!HttpHostExposureHelper.HasHttpHostExposure(operationType))
         {
             return;
         }
@@ -143,12 +143,6 @@ public sealed class AuthenticationModule : IBlueprintSourceGeneratorModule, IDes
                        AttributeNamespace,
                        StringComparison.Ordinal);
         });
-    }
-
-    private static bool HasHttpHostExposure(INamedTypeSymbol operationType)
-    {
-        return operationType.GetAttributes()
-            .Any(static a => a.AttributeClass?.Name is "RootLinkAttribute" or "SelfLinkAttribute");
     }
 
     private static void RenderAnonymousFeatureData(CodeWriter.ICodeWriter writer)

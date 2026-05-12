@@ -255,7 +255,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
             effectiveScopePairs = directResourceAttributes;
         }
 
-        if (!HasHttpHostExposure(operationType))
+        if (!HttpHostExposureHelper.HasHttpHostExposure(operationType))
         {
             return;
         }
@@ -339,12 +339,6 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
         context.AddRenderStep(
             PipelineStage.Authorisation,
             ctx => RenderAuthorizationCheck(ctx, effectiveScopePairs, hasTemplateValidationErrors, scopePairFieldName));
-    }
-
-    private static bool HasHttpHostExposure(INamedTypeSymbol operationType)
-    {
-        return operationType.GetAttributes()
-            .Any(static a => a.AttributeClass?.Name is "RootLinkAttribute" or "SelfLinkAttribute");
     }
 
     private static void RenderAuthorizationCheck(

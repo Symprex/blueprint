@@ -1,3 +1,4 @@
+using Blueprint.SourceGenerator.Helpers;
 using Blueprint.SourceGenerator.Modules.Authentication;
 using Blueprint.SourceGenerator.Planning;
 using Microsoft.CodeAnalysis;
@@ -63,7 +64,7 @@ public sealed class ApiAuthoriserModule : IBlueprintSourceGeneratorModule, IPipe
         }
 
         // Non-HTTP operations don't get IApiAuthoriser checks
-        if (!HasHttpHostExposure(operationType))
+        if (!HttpHostExposureHelper.HasHttpHostExposure(operationType))
         {
             return;
         }
@@ -118,12 +119,6 @@ public sealed class ApiAuthoriserModule : IBlueprintSourceGeneratorModule, IPipe
                        AttributeNamespace,
                        StringComparison.Ordinal);
         });
-    }
-
-    private static bool HasHttpHostExposure(INamedTypeSymbol operationType)
-    {
-        return operationType.GetAttributes()
-            .Any(static a => a.AttributeClass?.Name is "RootLinkAttribute" or "SelfLinkAttribute");
     }
 
     private static void RenderUserContextLoading(PipelineRenderContext context)

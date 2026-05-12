@@ -1,4 +1,5 @@
 using Blueprint.SourceGenerator.CodeWriter;
+using Blueprint.SourceGenerator.Helpers;
 using Blueprint.SourceGenerator.Planning;
 using Microsoft.CodeAnalysis;
 using CSharpSymbolDisplay = Microsoft.CodeAnalysis.CSharp.SymbolDisplay;
@@ -37,7 +38,8 @@ public sealed class OperationGroupMetadataModule : IBlueprintSourceGeneratorModu
     /// <inheritdoc />
     public void ContributeToDescriptor(DescriptorContributorContext context)
     {
-        if (HasHttpHostExposure(context) == false)
+        var operationType = context.GetOperationTypeSymbol();
+        if (HttpHostExposureHelper.HasHttpHostExposure(operationType) == false)
         {
             return;
         }
@@ -50,12 +52,6 @@ public sealed class OperationGroupMetadataModule : IBlueprintSourceGeneratorModu
 
         context.AddMetadata(new OperationGroupMetadataRegistration(groupName!, groupDescription));
         context.AddRenderStep(writer => RenderDescriptor(writer, context.GetMetadata<OperationGroupMetadataRegistration>()));
-    }
-
-    private static bool HasHttpHostExposure(DescriptorContributorContext context)
-    {
-        return context.GetMetadata<HostExposureRegistration>()
-            .Any(static registration => string.Equals(registration.HostName, HostExposureRegistration.Http.HostName, StringComparison.Ordinal));
     }
 
     private static (string? GroupName, string? GroupDescription) TryResolveGroup(DescriptorContributorContext context)

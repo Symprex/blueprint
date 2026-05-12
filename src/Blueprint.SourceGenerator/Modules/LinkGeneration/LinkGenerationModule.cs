@@ -67,6 +67,14 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
+    private static readonly DiagnosticDescriptor _linkMissingRelError = new(
+        id: "BPLG006",
+        title: "Link missing Rel value",
+        messageFormat: "The [Link] attribute on '{0}' must specify a non-empty Rel value. Use [SelfLink] for self-links or provide Rel = \"relName\".",
+        category: "OperationLinks",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
     private static readonly Regex _placeholderRegex = new(@"\{\*{0,2}[A-Za-z0-9]+\}", RegexOptions.Compiled);
     private static readonly Regex _mappedPlaceholderRegex = new(@"\{(?<catchAll>\*{0,2})(?<routeName>[A-Za-z0-9]+)(:(?<resourcePropName>.*?))?(\((?<format>.*)\))?\}", RegexOptions.Compiled);
 
@@ -82,6 +90,7 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
     {
         LookForRootLinks(context);
         LookForSelfLinks(context);
+        LookForLinks(context);
 
         context.AddRenderStep(codeWriter => RenderDescriptor(codeWriter, context.GetMetadata<UrlRegistration>(), context.GetMetadata<LinkRegistration>()));
     }
@@ -147,6 +156,8 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
             codeWriter.AppendLine($"this.AddUrl(new global::Blueprint.Model.ApiOperationUrl(\"{r.Url}\"));");
         }
 
+        var linkIndex = 0;
+
         foreach (var r in linkRegistrations)
         {
             if (r.PlaceholderMappings.Count > 0)
@@ -154,15 +165,18 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
                 // Generate a link with a compiled URL builder that uses direct property access
                 var resourceTypeFqn = r.ResourceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
                 var urlBuilder = BuildCompiledUrlBuilderLambda(r.Url, r.PlaceholderMappings, resourceTypeFqn);
+                var varName = $"link_{linkIndex}";
 
-                codeWriter.AppendLine($"var link_{r.Rel} = new global::Blueprint.Model.ApiOperationLink(this, \"{r.Url}\", \"{r.Url}\", \"{r.Rel}\", typeof({r.ResourceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}));");
-                codeWriter.AppendLine($"link_{r.Rel}.CompiledUrlBuilder = {urlBuilder};");
-                codeWriter.AppendLine($"this.AddLink(link_{r.Rel});");
+                codeWriter.AppendLine($"var {varName} = new global::Blueprint.Model.ApiOperationLink(this, \"{r.Url}\", \"{r.Url}\", \"{r.Rel}\", typeof({r.ResourceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}));");
+                codeWriter.AppendLine($"{varName}.CompiledUrlBuilder = {urlBuilder};");
+                codeWriter.AppendLine($"this.AddLink({varName});");
             }
             else
             {
                 codeWriter.AppendLine($"this.AddLink(new global::Blueprint.Model.ApiOperationLink(this, \"{r.Url}\", \"{r.Url}\", \"{r.Rel}\", typeof({r.ResourceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)})));");
             }
+
+            linkIndex++;
         }
     }
 
@@ -398,7 +412,196 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
         }
     }
 
-    private static bool TryFindMember(INamedTypeSymbol namedTypeSymbol, string placeholderName, LocationInfo argumentLocationInfo, DescriptorContributorContext context)
+    /// <summary>
+    /// Discovers <c>[Link(typeof(X), "/path", Rel = "relName")]</c> attributes from
+    /// the runtime model <c>LinkAttribute</c> base class.
+    /// These represent non-self HATEOAS links that also register an HTTP endpoint.
+    /// </summary>
+    private static void LookForLinks(DescriptorContributorContext context)
+    {
+        var operationType = context.GetOperationTypeSymbol();
+
+        foreach (var attribute in operationType.GetAttributes())
+        {
+            var attrClass = attribute.AttributeClass;
+
+            if (attrClass is null)
+            {
+                continue;
+            }
+
+            // Match LinkAttribute but NOT its derived SelfLinkAttribute/RootLinkAttribute
+            // (those are already handled by LookForSelfLinks/LookForRootLinks).
+            if (attrClass.Name != "LinkAttribute" ||
+                !string.Equals(attrClass.ContainingNamespace?.ToDisplayString(), "Blueprint.Model.Attributes", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            // LinkAttribute(Type? resourceType, string routePattern, string? rel = null)
+            if (attribute.ConstructorArguments.Length < 2)
+            {
+                continue;
+            }
+
+            var resourceTypeArg = attribute.ConstructorArguments[0];
+            var routePatternArg = attribute.ConstructorArguments[1];
+            var url = routePatternArg.Value as string;
+
+            // Use the attribute's application syntax for location when available
+            var attributeLocation = attribute.ApplicationSyntaxReference?.GetSyntax().GetLocation();
+            var locationInfo = attributeLocation is not null
+                ? LocationInfo.CreateFrom(attributeLocation)
+                : operationType.Locations.FirstOrDefault() is { } loc
+                    ? LocationInfo.CreateFrom(loc)
+                    : null;
+
+            if (string.IsNullOrWhiteSpace(url))
+            {
+                if (locationInfo is not null)
+                {
+                    context.AddDiagnostic(
+                        new DiagnosticInfo(
+                            _emptyRouteTemplateError,
+                            locationInfo,
+                            [operationType.Name]));
+                }
+
+                continue;
+            }
+
+            // Resolve the Rel value — third constructor arg or named argument
+            string? rel = null;
+
+            if (attribute.ConstructorArguments.Length >= 3)
+            {
+                rel = attribute.ConstructorArguments[2].Value as string;
+            }
+
+            // Also check named arguments (Rel can be set via property syntax: Rel = "relName")
+            foreach (var namedArg in attribute.NamedArguments)
+            {
+                if (namedArg.Key == "Rel" && namedArg.Value.Value is string namedRel)
+                {
+                    rel = namedRel;
+                }
+            }
+
+            // When resourceType is null, treat as root-link semantics (URL registration only)
+            if (resourceTypeArg.IsNull)
+            {
+                if (url!.Contains("{"))
+                {
+                    var placeholders = _placeholderRegex.Matches(url);
+
+                    foreach (var placeholder in placeholders.Cast<Match>())
+                    {
+                        var placeholderName = placeholder.Value.Trim('{', '}', '*');
+
+                        if (!operationType.GetAllMembers().Any(m => m.Name == placeholderName))
+                        {
+                            context.AddDiagnostic(CreatePlaceholderMissingDiagnostic(
+                                operationType,
+                                placeholderName,
+                                locationInfo?.WithSubRange(placeholder.Index + 2, placeholder.Length - 2)));
+                        }
+                    }
+                }
+
+                context.AddMetadata(new UrlRegistration(url!, locationInfo));
+                context.AddMetadata(HostExposureRegistration.HttpAt(locationInfo));
+
+                continue;
+            }
+
+            // Non-null resourceType: require a Rel value for non-self links
+            if (string.IsNullOrWhiteSpace(rel))
+            {
+                var diagLocation = locationInfo ?? (operationType.Locations.FirstOrDefault() is { } fallbackLoc
+                    ? LocationInfo.CreateFrom(fallbackLoc) : null);
+
+                context.AddDiagnostic(
+                    new DiagnosticInfo(
+                        _linkMissingRelError,
+                        diagLocation,
+                        [operationType.Name]));
+
+                continue;
+            }
+
+            if (resourceTypeArg.Value is not INamedTypeSymbol resourceTypeSymbol || resourceTypeSymbol.TypeKind == TypeKind.Error)
+            {
+                continue;
+            }
+
+            // Verify resource type implements ILinkableResource
+            if (!resourceTypeSymbol.AllInterfaces.Any(static i => i.Name == "ILinkableResource"))
+            {
+                var diagLocation = locationInfo ?? (operationType.Locations.FirstOrDefault() is { } fallbackLoc2
+                    ? LocationInfo.CreateFrom(fallbackLoc2) : null);
+
+                context.AddDiagnostic(
+                    new DiagnosticInfo(
+                        _notLinkableResourceError,
+                        diagLocation,
+                        [resourceTypeSymbol.ToDisplayString(), operationType.ToDisplayString()]));
+
+                continue;
+            }
+
+            var normalisedUrl = url!;
+            var placeholderMappings = new List<LinkPlaceholderMapping>();
+
+            if (normalisedUrl.Contains("{"))
+            {
+                normalisedUrl = _mappedPlaceholderRegex.Replace(
+                    normalisedUrl,
+                    match =>
+                    {
+                        var routePropertyName = match.Groups["routeName"].Value;
+                        var resourcePropertyName = match.Groups["resourcePropName"]?.Value;
+
+                        var argumentLocationInfo = locationInfo?.WithSubRange(
+                            match.Index + 2,
+                            match.Length - 2);
+
+                        if (TryFindMember(operationType, routePropertyName, argumentLocationInfo, context))
+                        {
+                            if (string.IsNullOrEmpty(resourcePropertyName))
+                            {
+                                TryFindMember(resourceTypeSymbol, routePropertyName, argumentLocationInfo, context);
+
+                                var isValueType = IsResourcePropertyValueType(resourceTypeSymbol, routePropertyName);
+                                placeholderMappings.Add(new LinkPlaceholderMapping(routePropertyName, routePropertyName, isValueType));
+                            }
+                            else
+                            {
+                                TryFindMember(resourceTypeSymbol, resourcePropertyName!, argumentLocationInfo, context);
+
+                                var isValueType = IsResourcePropertyValueType(resourceTypeSymbol, resourcePropertyName!);
+                                placeholderMappings.Add(new LinkPlaceholderMapping(routePropertyName, resourcePropertyName!, isValueType));
+                            }
+                        }
+
+                        return "{" + match.Groups["catchAll"].Value + routePropertyName + "}";
+                    });
+            }
+
+            if (context.HasDiagnostics())
+            {
+                return;
+            }
+
+            var urlRegistration = new UrlRegistration(normalisedUrl, locationInfo);
+            var linkRegistration = new LinkRegistration(normalisedUrl, rel!, resourceTypeSymbol, locationInfo!, new EquatableList<LinkPlaceholderMapping>(placeholderMappings.ToArray()));
+
+            context.AddMetadata(urlRegistration);
+            context.AddMetadata(linkRegistration);
+            context.AddMetadata(HostExposureRegistration.HttpAt(locationInfo));
+        }
+    }
+
+    private static bool TryFindMember(INamedTypeSymbol namedTypeSymbol, string placeholderName, LocationInfo? argumentLocationInfo, DescriptorContributorContext context)
     {
         var memberExists = namedTypeSymbol.GetAllMembers().Any(m => m.Name == placeholderName);
 
@@ -432,7 +635,7 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
         return false;
     }
 
-    private static DiagnosticInfo CreatePlaceholderMissingDiagnostic(ITypeSymbol namedType, string placeholderName, LocationInfo argumentLocationInfo)
+    private static DiagnosticInfo CreatePlaceholderMissingDiagnostic(ITypeSymbol namedType, string placeholderName, LocationInfo? argumentLocationInfo)
     {
         return new DiagnosticInfo(
             _missingPlaceholderError,

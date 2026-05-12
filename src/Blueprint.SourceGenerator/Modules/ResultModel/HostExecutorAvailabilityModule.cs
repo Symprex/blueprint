@@ -31,7 +31,8 @@ public sealed class HostExecutorAvailabilityModule : IBlueprintSourceGeneratorMo
     /// <inheritdoc />
     public void ContributeToDescriptor(DescriptorContributorContext context)
     {
-        if (HasHttpHostExposure(context) == false)
+        var operationType = context.GetOperationTypeSymbol();
+        if (HttpHostExposureHelper.HasHttpHostExposure(operationType) == false)
         {
             return;
         }
@@ -56,7 +57,7 @@ public sealed class HostExecutorAvailabilityModule : IBlueprintSourceGeneratorMo
             return;
         }
 
-        var declaredContractType = OperationResultContractHelper.GetDeclaredOperationResultType(context.GetOperationTypeSymbol());
+        var declaredContractType = OperationResultContractHelper.GetDeclaredOperationResultType(operationType);
         if (declaredContractType is null)
         {
             return;
@@ -69,7 +70,7 @@ public sealed class HostExecutorAvailabilityModule : IBlueprintSourceGeneratorMo
         }
 
         var diagnosticLocation = GetDiagnosticLocation(context);
-        var operationName = context.GetOperationTypeSymbol().Name;
+        var operationName = operationType.Name;
         foreach (var flattenedResult in flattenedResults)
         {
             if (OperationResultContractHelper.IsSupportedByHttpOperationResultExecutor(flattenedResult, okResultType, acceptedResultType, conflictResultType, notFoundResultType, createdResultType, validationFailedResultType, noResultType, keyOnlyResourceEventResultType, resourceEventResultType, httpNoContentResultType, plainTextResultType, redirectResultType, fileStreamResultType, statusCodeResultType))
@@ -91,12 +92,6 @@ public sealed class HostExecutorAvailabilityModule : IBlueprintSourceGeneratorMo
             .FirstOrDefault(static registration => string.Equals(registration.HostName, HostExposureRegistration.Http.HostName, StringComparison.Ordinal))
             ?.LocationInfo
             ?? GetOperationLocation(context.GetOperationTypeSymbol());
-    }
-
-    private static bool HasHttpHostExposure(DescriptorContributorContext context)
-    {
-        return context.GetMetadata<HostExposureRegistration>()
-            .Any(static registration => string.Equals(registration.HostName, HostExposureRegistration.Http.HostName, StringComparison.Ordinal));
     }
 
     private static LocationInfo? GetOperationLocation(INamedTypeSymbol operationType)

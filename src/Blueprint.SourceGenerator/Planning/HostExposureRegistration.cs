@@ -40,9 +40,9 @@ public sealed record HostExposureRegistration(string HostName)
     /// </summary>
     /// <param name="locationInfo">The host-exposure source location.</param>
     /// <returns>The HTTP host registration.</returns>
-    public static HostExposureRegistration HttpAt(LocationInfo locationInfo)
+    public static HostExposureRegistration HttpAt(LocationInfo? locationInfo)
     {
-        return new("http", locationInfo);
+        return locationInfo is not null ? new("http", locationInfo) : Http;
     }
 
     /// <summary>

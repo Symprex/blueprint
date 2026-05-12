@@ -36,12 +36,11 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
     /// <inheritdoc />
     public void ContributeToDescriptor(DescriptorContributorContext context)
     {
-        if (!HasHttpHostExposure(context))
+        var operationType = context.GetOperationTypeSymbol();
+        if (!HttpHostExposureHelper.HasHttpHostExposure(operationType))
         {
             return;
         }
-
-        var operationType = context.GetOperationTypeSymbol();
         var routePlaceholders = ExtractRoutePlaceholders(operationType);
         ValidateRoutePlaceholderSyntax(operationType, context);
         var httpMethods = ResolveHttpMethods(context, operationType);
@@ -77,7 +76,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
     {
         var operationType = context.Operation.TypeSymbol;
 
-        if (!HasHttpHostExposure(operationType))
+        if (!HttpHostExposureHelper.HasHttpHostExposure(operationType))
         {
             return;
         }
@@ -123,20 +122,6 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             context.AddDeferredClassMember(pipelineClass =>
                 WritePopulateFromJsonBodyMethod(pipelineClass, operationTypeFull, bodyEntries));
         }
-    }
-
-    private static bool HasHttpHostExposure(DescriptorContributorContext context)
-    {
-        return context.GetMetadata<HostExposureRegistration>()
-            .Any(static r => string.Equals(r.HostName, HostExposureRegistration.Http.HostName, StringComparison.Ordinal));
-    }
-
-    private static bool HasHttpHostExposure(INamedTypeSymbol operationType)
-    {
-        // In the pipeline context we don't have descriptor metadata.
-        // Detect HTTP exposure by checking for RootLink or SelfLink attributes.
-        return operationType.GetAttributes().Any(static a =>
-            a.AttributeClass?.Name is "RootLinkAttribute" or "SelfLinkAttribute");
     }
 
     private static List<string> ExtractRoutePlaceholders(INamedTypeSymbol operationType)

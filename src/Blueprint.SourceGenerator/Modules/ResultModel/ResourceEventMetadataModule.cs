@@ -39,7 +39,8 @@ public sealed class ResourceEventMetadataModule : IBlueprintSourceGeneratorModul
     /// <inheritdoc />
     public void ContributeToDescriptor(DescriptorContributorContext context)
     {
-        if (HasHttpHostExposure(context) == false)
+        var operationType = context.GetOperationTypeSymbol();
+        if (HttpHostExposureHelper.HasHttpHostExposure(operationType) == false)
         {
             return;
         }
@@ -50,7 +51,7 @@ public sealed class ResourceEventMetadataModule : IBlueprintSourceGeneratorModul
             return;
         }
 
-        var declaredContractType = OperationResultContractHelper.GetDeclaredOperationResultType(context.GetOperationTypeSymbol());
+        var declaredContractType = OperationResultContractHelper.GetDeclaredOperationResultType(operationType);
         if (declaredContractType is null)
         {
             return;
@@ -74,12 +75,6 @@ public sealed class ResourceEventMetadataModule : IBlueprintSourceGeneratorModul
         }
 
         context.AddRenderStep(writer => RenderDescriptor(writer, context.GetMetadata<ResourceEventMetadataRegistration>()));
-    }
-
-    private static bool HasHttpHostExposure(DescriptorContributorContext context)
-    {
-        return context.GetMetadata<HostExposureRegistration>()
-            .Any(static registration => string.Equals(registration.HostName, HostExposureRegistration.Http.HostName, StringComparison.Ordinal));
     }
 
     private static ResourceEventMetadataRegistration? TryCreateRegistration(INamedTypeSymbol resultType)

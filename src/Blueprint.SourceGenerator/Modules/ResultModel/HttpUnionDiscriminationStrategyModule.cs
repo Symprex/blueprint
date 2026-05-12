@@ -32,7 +32,8 @@ public sealed class HttpUnionDiscriminationStrategyModule : IBlueprintSourceGene
     /// <inheritdoc />
     public void ContributeToDescriptor(DescriptorContributorContext context)
     {
-        if (HasHttpHostExposure(context) == false)
+        var operationType = context.GetOperationTypeSymbol();
+        if (HttpHostExposureHelper.HasHttpHostExposure(operationType) == false)
         {
             return;
         }
@@ -56,7 +57,6 @@ public sealed class HttpUnionDiscriminationStrategyModule : IBlueprintSourceGene
             return;
         }
 
-        var operationType = context.GetOperationTypeSymbol();
         var declaredContractType = OperationResultContractHelper.GetDeclaredOperationResultType(operationType);
         if (declaredContractType is null
             || OperationResultContractHelper.TryGetResultsUnionMembers(declaredContractType, out var unionMembers) == false)
@@ -96,12 +96,6 @@ public sealed class HttpUnionDiscriminationStrategyModule : IBlueprintSourceGene
             .FirstOrDefault(static registration => string.Equals(registration.HostName, HostExposureRegistration.Http.HostName, StringComparison.Ordinal))
             ?.LocationInfo
             ?? GetOperationLocation(context.GetOperationTypeSymbol());
-    }
-
-    private static bool HasHttpHostExposure(DescriptorContributorContext context)
-    {
-        return context.GetMetadata<HostExposureRegistration>()
-            .Any(static registration => string.Equals(registration.HostName, HostExposureRegistration.Http.HostName, StringComparison.Ordinal));
     }
 
     private static LocationInfo? GetOperationLocation(INamedTypeSymbol operationType)
