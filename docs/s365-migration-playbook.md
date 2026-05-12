@@ -1159,10 +1159,10 @@ We need to provide:
 
 ### New Blueprint Integration
 
-Create `Blueprint.Rebus` package:
+`Blueprint.Rebus` and its companion source generator are already implemented:
 
 ```csharp
-// New registration
+// Registration — Rebus subscriptions are registered alongside Blueprint
 services.AddBlueprintApi<MyApp, MyAppExecutor>(blueprint =>
 {
     blueprint.AddRebus(rebus =>
@@ -1173,18 +1173,25 @@ services.AddBlueprintApi<MyApp, MyAppExecutor>(blueprint =>
 });
 ```
 
-**Implementation:**
-- Rebus message handler that dispatches to Blueprint pipeline
-- Message types registered as Blueprint operations
-- Outbox pattern integration with `IMessageOutbox`
-- Transaction coordination with UnitOfWork
+**Implementation (already complete):**
+- Rebus companion source generator adds transaction start/commit steps to pipeline
+- `[NoRebusTransaction]` attribute to opt out of transaction wrapping per operation
+- Message types registered as Blueprint operations via `IHandleMessages<T>` discovery
+- Outbox pattern integration with `IMessageOutbox` + `Blueprint.Marten`
+- Transaction coordination with UnitOfWork via `OutboxPublishingSessionListener`
+
+**S365 Rebus scale (measured):**
+- 54+ `IHandleMessages<T>` implementations across all services
+- `BlueprintRebusConfiguration.Subscribe<T>()` pattern for message subscriptions
+- `RebusHandleMessageOperationExecutorBuilderScanner` auto-discovers handlers
+- Portal has the most subscriptions (~17+ event types)
 
 ### Action Items
-- [ ] Create `Blueprint.Rebus` project
-- [ ] Implement `BlueprintRebusMessageHandler`
-- [ ] Implement `AddRebus()` extension on `BlueprintServiceBuilder`
-- [ ] Add Rebus integration tests to sample app
-- [ ] Test with Azure Service Bus transport
+- [x] Create `Blueprint.Rebus` project — **Done**
+- [x] Implement `BlueprintRebusMessageHandler` — **Done** (companion generator)
+- [x] Implement `AddRebus()` extension on `BlueprintServiceBuilder` — **Done**
+- [x] Add Rebus integration tests — **Done** (Blueprint.Rebus has test coverage)
+- [ ] Test with Azure Service Bus transport (requires S365 infrastructure)
 
 ---
 
@@ -1199,7 +1206,7 @@ services.AddBlueprintApi<MyApp, MyAppExecutor>(blueprint =>
 
 ### New Blueprint Integration
 
-Create `Blueprint.Tasks.Hangfire` package:
+`Blueprint.Tasks.Hangfire` and `Blueprint.Hangfire` are already implemented:
 
 ```csharp
 services.AddBlueprintApi<MyApp, MyAppExecutor>(blueprint =>
@@ -1209,10 +1216,16 @@ services.AddBlueprintApi<MyApp, MyAppExecutor>(blueprint =>
 });
 ```
 
+**S365 Hangfire patterns (measured):**
+- Custom `RecurringJobPartitionedSqlServerStorage` for multi-tenant job isolation
+- `RecurringJobManagerRegistrationHostedService` registers recurring jobs at startup
+- `TriggerScheduledMessageCommand` operation for Hangfire job management
+- The custom storage class is S365-specific and stays in S365
+
 ### Action Items
-- [ ] Create `Blueprint.Tasks.Hangfire` project
-- [ ] Implement `HangfireBackgroundTaskScheduler : IBackgroundTaskScheduler`
-- [ ] Implement recurring task support
+- [x] Create `Blueprint.Tasks.Hangfire` project — **Done** (also `Blueprint.Hangfire` for scheduling)
+- [x] Implement `HangfireBackgroundTaskScheduler : IBackgroundTaskScheduler` — **Done**
+- [x] Implement recurring task support — **Done** (`HangfireRecurringTaskProvider`)
 
 ---
 
@@ -1333,6 +1346,43 @@ The generated pipeline calls `IUnitOfWork.CommitAsync()` after successful handle
 > **Status:** `Blueprint.Marten`, `Blueprint.Tasks.Hangfire`, and `Blueprint.Rebus`
 > all exist with tests. No new packages needed — only S365-specific implementations of
 > the unit-of-work and auth provider interfaces.
+
+---
+
+## S365 Middleware → Blueprint Module Mapping
+
+S365 uses 10+ custom `IMiddlewareBuilder` implementations registered in the Blueprint pipeline.
+In the source-generated Blueprint, these become **compile-time pipeline modules** — the source generator
+emits the correct pipeline steps directly, so no runtime middleware discovery or registration is needed.
+
+| S365 Middleware | Pipeline Stage | Blueprint Module/Replacement | Notes |
+|---|---|---|---|
+| `SetTenantMiddleware` | Authentication | ASP.NET Core middleware (before Blueprint) | See [Multi-Tenancy Migration](#multi-tenancy-migration) |
+| `AuthenticationMiddlewareBuilder` | Authentication | `AuthenticationModule` (built-in) | Auto-generated; checks `[MustBeAuthenticated]` / presence of `[Resource]` |
+| `UserContextLoaderMiddlewareBuilder` | Authentication | `UserContextModule` (built-in) | Auto-generated; calls `IUserAuthorisationContextFactory` |
+| `AuthorisationMiddlewareBuilder` | Authorisation | `AuthorizationModule` (built-in) | Auto-generated; compile-time resource key expansion via `ResourceKeyTemplateParser` |
+| `ValidationMiddlewareBuilder` | Validation | `ValidationModule` (built-in) | Auto-generated; source-gen emits typed validation calls per property |
+| `LoggingMiddlewareBuilder` | Setup | Activity/structured logging (built-in) | Auto-generated; OpenTelemetry-compatible activity spans per operation |
+| `AuditMiddleware` | Setup | `AuditModule` (built-in) | Auto-generated; resource event tracking |
+| `ResourceEventHandlerMiddlewareBuilder` | PostExecution | `ResourceEventModule` (built-in) | Auto-generated; publishes `ResourceEvent` to `IResourceEventAuditRepository` |
+| `BackgroundTaskRunnerMiddleware` | PostExecution | `BackgroundTaskFlushModule` (built-in) | Auto-generated; flushes enqueued tasks on success |
+| `LinkGeneratorMiddlewareBuilder` | PostExecution | `LinkGenerationModule` (built-in) | Auto-generated; compile-time `CompiledUrlBuilder` lambdas |
+| `ResourceExpandMiddleware` | PostExecution | `ResourceExpansionModule` (built-in) | Auto-generated; compile-time `Expandable<T>` discovery |
+| `SaveMartenChangesMiddleware` | PostExecution | `UnitOfWorkModule` (built-in) | Auto-generated; calls `IUnitOfWork.CommitAsync()` / `RollbackAsync()` |
+| `UseMartenAsOutboxMiddleware` | PostExecution | `MessageOutboxModule` (built-in) | Auto-generated; commits `IMessageOutbox` on success |
+| `StartRebusTransactionScopeMiddleware` | Execution | `Blueprint.Rebus` companion generator | Companion generator adds Rebus transaction start/commit steps |
+| `CommitRebusTransactionScopeMiddleware` | Execution | `Blueprint.Rebus` companion generator | Same as above; unless `[NoRebusTransaction]` attribute present |
+| `Sig365LinkGeneratorMiddleware` | PostExecution | Custom `IResourceLinkGenerator` | S365-specific link generation; port to `IResourceLinkGenerator` implementation |
+
+**Key insight:** In legacy Blueprint, middleware classes are discovered and registered at runtime.
+In source-generated Blueprint, the source generator statically analyses each operation's attributes
+and interfaces at compile time, then emits only the relevant pipeline steps. This means:
+
+- **No middleware registration code needed** — the generator decides which steps to include.
+- **Zero runtime discovery overhead** — no reflection, no middleware builder scanning.
+- **Custom pipeline behavior** uses `IResourceLinkGenerator`, `IResourceExpander`,
+  `IResourceAuthorizationProvider`, `IUserAuthorisationContextFactory`, etc. — interface
+  implementations registered in DI, invoked by generated pipeline code.
 
 ---
 
@@ -1699,24 +1749,29 @@ These items should be tracked and implemented in the `blueprint-source-gen` repo
 to support a smooth S365 migration.
 
 ### Immediate (blocks migration proof)
-1. **Route deduplication** — One ASP.NET endpoint per unique route+operation pair.
-2. **Auth spike integration test** — Prove tenant/partner/internal auth flow end-to-end.
+1. ✅ **Route deduplication** — One ASP.NET endpoint per unique route+operation pair. **Done.**
+2. ✅ **Auth spike integration test** — Prove tenant/partner/internal auth flow end-to-end. **Done.** Integration tests cover auth, 401/403, and resource key expansion.
+3. ✅ **Permission/PermissionFor removal** — S365 only uses `[Resource]`. **Done.**
 
 ### Before Tier 3 migration
 4. **Verify Blueprint.Marten outbox + Rebus transaction ordering** — Must match S365's
    pipeline: Handler → Commit Rebus Transaction → Save Marten Changes.
-5. **Verify Blueprint.Testing ApiFixture** — Must support CommandAsync, QueryAsync,
+5. ✅ **Verify Blueprint.Testing ApiFixture** — Must support CommandAsync, QueryAsync,
    MessageAsync, BackgroundTaskAsync, tenant auth context switching.
-6. **Serialization guide** — `docs/serialization-migration.md` covering
+   **Done.** `BlueprintTestHost` provides `ExecuteAsync`, `ExecuteAsync<T>`,
+   `ExecuteExpectingValidationFailureAsync`. `BlueprintTestContext` supports
+   `WithUser`, `WithTenant`, `WithPermissions`, `SkipAuthorisation`, `WithAuthorisationContext`.
+   Test doubles: `BackgroundTaskCollector`, `TestMessageCollector`, `InMemoryUnitOfWork`,
+   `NullRecurringTaskProvider`.
+6. ✅ **Serialization guide** — `docs/serialization-migration.md` covering
    `JsonSerializerContext` setup, NodaTime STJ integration, and `BP006`/`BP007`
-   diagnostics. Note: S365 already uses STJ for API serialization — Newtonsoft
-   is only used for Marten document storage.
+   diagnostics. **Done.**
 
 ### Before Tier 4 migration (gateways)
 7. **Second sample project** — `Blueprint.SourceGenerator.Sample.Client` using
    `BlueprintHttpClient` to call main sample. Integration tests.
-8. **OpenAPI shape comparison** — `docs/openapi-migration.md` with diff analysis,
-   NSwag compatibility notes, and TypeScript generation verification.
+8. ✅ **OpenAPI shape comparison** — `docs/openapi-migration.md` with diff analysis,
+   NSwag compatibility notes, and TypeScript generation verification. **Done.**
 
 ### Ongoing
 9. **NBomber load tests** — Add to Blueprint.LoadTests:
@@ -1750,7 +1805,7 @@ should be recorded in the `docs/` folder:
 | `docs/testing-migration.md` | ✅ S365 test pattern → Blueprint.Testing mapping |
 | `docs/performance-profiling.md` | ✅ Profiling guide with dotnet-trace/counters/gcdump |
 | `docs/integration-packages.md` | ✅ Marten/Rebus/Hangfire/HttpClient/Testing package reference |
-| `docs/benchmark-results.md` | 🔲 BenchmarkDotNet pipeline/serialization results (after benchmarks run) |
+| `docs/benchmark-results.md` | ✅ BenchmarkDotNet compiler, pipeline, and link generation benchmark results |
 | `docs/performance-results.md` | 🔲 NBomber load test results (after load tests run) |
 
 ---
