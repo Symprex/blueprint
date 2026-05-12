@@ -13,7 +13,7 @@ internal static class PropertyOwnershipDiagnosticDescriptors
     public static readonly DiagnosticDescriptor UnsupportedRoutePropertyType = new(
         id: "BPPO001",
         title: "Unsupported route property type",
-        messageFormat: "Property '{0}' on operation '{1}' is bound from route placeholder '{{{0}}}' but its type '{2}' cannot be converted from a string route value",
+        messageFormat: "Property '{0}' on operation '{1}' is bound from route placeholder '{{{0}}}' but its type '{2}' cannot be converted from a string route value. Implement IParsable<{2}> or add a static TryParse(string, out {2}) method.",
         category: "PropertyOwnership",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
@@ -36,7 +36,7 @@ internal static class PropertyOwnershipDiagnosticDescriptors
     public static readonly DiagnosticDescriptor UnsupportedQueryPropertyType = new(
         id: "BPPO003",
         title: "Unsupported query property type",
-        messageFormat: "Property '{0}' on operation '{1}' would be bound from query string but its type '{2}' cannot be converted from a string value",
+        messageFormat: "Property '{0}' on operation '{1}' would be bound from query string but its type '{2}' cannot be converted from a string value. Implement IParsable<{2}> or add a static TryParse method.",
         category: "PropertyOwnership",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);

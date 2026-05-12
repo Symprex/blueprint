@@ -54,6 +54,7 @@
 | Pipeline optimization audit | ✅ Done | No further extraction opportunities remain; pipelines are already well-optimized |
 | S365 source generators | ✅ Analysed | 3 custom generators (DTO, Metrics, ServiceApi) — orthogonal to Blueprint, must coexist |
 | Blueprint.Compiler (legacy) | ✅ Analysed | Runtime Roslyn compiler, not source-gen — superseded by Blueprint source-gen |
+| S365 `ApiId` route binding | ⚠️ S365 action needed | `ApiId` needs `IParsable<ApiId>` — currently has only `TypeConverter` + `Hydrate()`. Blueprint catches at compile time (BPPO001) |
 | GetHttpContext() compat method | ✅ Done | Instance method on ApiOperationContext for S365 HttpContext access |
 | StatusCodeResult returns | ✅ Verified | Accepted (85 S365 usages), NoContent (10), Created (12) all work |
 | `[DoNotSaveChanges]` | ✅ Verified | Already supported with BPP001 diagnostic for misuse on non-commands |
