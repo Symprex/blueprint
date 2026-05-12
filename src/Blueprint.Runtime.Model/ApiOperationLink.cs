@@ -130,10 +130,17 @@ public sealed class ApiOperationLink
             return null;
         }
 
-        // Fast path: use source-generated compiled builder when available
+        // Fast path: use source-generated compiled builder when available.
+        // Falls through to reflection when the builder returns null (e.g. when
+        // the caller passes an anonymous object instead of the expected resource type).
         if (this.CompiledUrlBuilder is not null)
         {
-            return this.CompiledUrlBuilder(values);
+            var compiled = this.CompiledUrlBuilder(values);
+
+            if (compiled is not null)
+            {
+                return compiled;
+            }
         }
 
         // Fallback: reflection-based placeholder resolution

@@ -253,3 +253,35 @@ Roslyn-typical for source generators and is reclaimed after compilation. The pip
 generator is the most allocation-heavy (19.8 MB for 100 ops) due to code-emission
 string building.
 
+---
+
+## Link Generation Benchmarks
+
+Measures the cost of generating HATEOAS self-links via `ApiLinkGenerator.CreateSelfLink<T>()`.
+Three paths are compared: compiled (source-generated URL builder), and two convenience
+overloads that pass anonymous objects and fall through to reflection.
+
+| Method | Mean | Error | StdDev | Ratio | Gen0 | Allocated | Alloc Ratio |
+|--------|-----:|------:|-------:|------:|-----:|----------:|------------:|
+| CreateSelfLink_TypedResource (compiled) | 45.4 ns | 8.4 ns | 12.6 ns | 1.00 | 0.0166 | 208 B | 1.00 |
+| CreateSelfLink_StringId (reflection) | 81.7 ns | 1.6 ns | 2.4 ns | 1.90 | 0.0210 | 264 B | 1.27 |
+| CreateSelfLink_GuidId (reflection) | 164.4 ns | 15.1 ns | 22.6 ns | 3.83 | 0.0408 | 512 B | 2.46 |
+
+### Analysis
+
+The **compiled path** (passing the actual resource instance) is the baseline at ~45ns / 208B.
+The `CreateSelfLink<T>(string id)` convenience overload creates `new { id }` and falls through
+to reflection-based URL construction — **1.9x slower, 27% more allocation**.
+
+The `CreateSelfLink<T>(Guid id)` overload is worst at **3.8x slower, 2.5x more allocation**
+because `Guid.ToString()` adds a string allocation on top of the anonymous object and reflection.
+
+**Bug fix (commit in this session):** The reflection fallback was previously unreachable when
+a `CompiledUrlBuilder` was set — `CreateRelativeUrl` returned `null` instead of falling through
+to `CreateRelativeUrlViaReflection`. This caused `CreateSelfLink<T>(string/Guid id)` to throw
+`InvalidOperationException` at runtime when calling operations that had source-generated URL builders.
+
+**Future optimization:** Source-generate typed `CreateSelfLink<T>(string id)` / `CreateSelfLink<T>(Guid id)`
+overloads per resource that construct the URL directly without anonymous objects or reflection.
+This would bring convenience overloads to compiled-path performance.
+
