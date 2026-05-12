@@ -1774,30 +1774,26 @@ to support a smooth S365 migration.
    diagnostics. **Done.**
 
 ### Before Tier 4 migration (gateways)
-7. **Second sample project** — `Blueprint.SourceGenerator.Sample.Client` using
-   `BlueprintHttpClient` to call main sample. Integration tests.
+7. ✅ **Second sample project** — `Blueprint.SourceGenerator.Sample.Gateway` +
+   `Blueprint.SourceGenerator.Sample.Gateway.Contract` with 3 operations
+   (Create, Get, List templates). Wired to upstream via `BlueprintHttpClient<SampleBlueprintApp>`.
+   E2E tests in `Blueprint.HttpClient.Tests/GatewayEndToEndTests.cs` prove the full
+   gateway→upstream flow (6 tests covering list, get, create, validation, 404, round-trip).
+   **Done.**
 8. ✅ **OpenAPI shape comparison** — `docs/openapi-migration.md` with diff analysis,
    NSwag compatibility notes, and TypeScript generation verification. **Done.**
 
 ### Ongoing
-9. **NBomber load tests** — Add to Blueprint.LoadTests:
-   - Simple query scenario (baseline throughput)
-   - Command with validation (validation overhead)
-   - Command with persistence + background task (full pipeline)
-   - Auth-required operation (auth overhead)
-   - Compare old Blueprint vs new Blueprint source-gen
-10. **BenchmarkDotNet runtime benchmarks** — Complement compiler benchmarks:
-    - Pipeline execution latency (per stage)
-    - Request binding (route, query, body, header)
-    - Response serialization (STJ source-gen vs reflection)
-    - Link generation for resources with many links
-    - OpenAPI document rendering
-11. **Profiling guide** — `docs/performance-profiling.md`:
-    - `dotnet-trace collect` against running pipelines
-    - `dotnet-counters monitor` for live metrics
-    - `dotnet-gcdump` for allocation analysis
-    - Profile source generator compiler performance
-    - Use AI-assisted profiling skills for best practices
+9. ✅ **NBomber load tests** — `Blueprint.LoadTests` with 9 scenarios:
+   get_templates_list, get_template_by_id, create_template_command, update_template_put,
+   delete_template, validation_failure_fast_path, authorization_denied, openapi_spec_fetch,
+   health_check. Uses `TestServer` with real ASP.NET Core pipeline. **Done.**
+10. ✅ **BenchmarkDotNet runtime benchmarks** — 8 benchmark suites:
+    BlueprintApp registration, endpoint mapping, link generation, executor dispatch,
+    full pipeline, property population, source generator compilation, validation pipeline.
+    Results in `docs/benchmark-results.md`. **Done.**
+11. ✅ **Profiling guide** — `docs/performance-profiling.md` with dotnet-trace,
+    dotnet-counters, dotnet-gcdump, and compiler profiling guidance. **Done.**
 
 ### Record All Results
 All benchmarks, load test results, profiling findings, and migration learnings
@@ -1812,7 +1808,7 @@ should be recorded in the `docs/` folder:
 | `docs/performance-profiling.md` | ✅ Profiling guide with dotnet-trace/counters/gcdump |
 | `docs/integration-packages.md` | ✅ Marten/Rebus/Hangfire/HttpClient/Testing package reference |
 | `docs/benchmark-results.md` | ✅ BenchmarkDotNet compiler, pipeline, and link generation benchmark results |
-| `docs/performance-results.md` | 🔲 NBomber load test results (after load tests run) |
+| `docs/performance-results.md` | 🔲 NBomber load test results (run `Blueprint.LoadTests` to capture) |
 
 ---
 
