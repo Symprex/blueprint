@@ -23,6 +23,12 @@ namespace Blueprint.SourceGenerator.Generators.Pipelines.Model;
 /// a direct <c>new Handler(...)</c> call instead of <c>ActivatorUtilities.CreateInstance</c>.
 /// Null for inline handlers or when the constructor cannot be statically resolved.
 /// </param>
+/// <param name="PropertyInjections">
+/// For external handlers, any settable base-class properties that should be populated from
+/// well-known pipeline expressions after handler instantiation (e.g., <c>Context</c>,
+/// <c>Identity</c>, <c>Logger</c>, <c>CancellationToken</c>). Empty for inline handlers
+/// or handlers without such properties.
+/// </param>
 public sealed record OperationHandlerModel(
     string OperationTypeName,
     string OperationTypeFullName,
@@ -36,7 +42,8 @@ public sealed record OperationHandlerModel(
     string? HandlerClassFullName,
     string? HandlerClassNamespace,
     EquatableList<HandlerParameter> Parameters,
-    EquatableList<ConstructorParameterInfo>? ConstructorParameters = null) : IEquatable<OperationHandlerModel>
+    EquatableList<ConstructorParameterInfo>? ConstructorParameters = null,
+    EquatableList<HandlerPropertyInjection>? PropertyInjections = null) : IEquatable<OperationHandlerModel>
 {
     /// <summary>
     /// Gets the name to use for the generated executor pipeline class.
@@ -72,7 +79,8 @@ public sealed record OperationHandlerModel(
                this.HandlerClassFullName == other.HandlerClassFullName &&
                this.HandlerClassNamespace == other.HandlerClassNamespace &&
                this.Parameters == other.Parameters &&
-               this.ConstructorParameters == other.ConstructorParameters;
+               this.ConstructorParameters == other.ConstructorParameters &&
+               this.PropertyInjections == other.PropertyInjections;
     }
 
     /// <inheritdoc />
@@ -92,6 +100,7 @@ public sealed record OperationHandlerModel(
         hash.Add(this.HandlerClassNamespace);
         hash.Add(this.Parameters);
         hash.Add(this.ConstructorParameters);
+        hash.Add(this.PropertyInjections);
         return hash.ToHashCode();
     }
 }

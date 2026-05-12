@@ -273,12 +273,152 @@ public class HandlerDiscoveryTests
         result.Diagnostics.Should().BeEmpty();
     }
 
+    [Fact]
+    public void FindHandler_WithBaseClassProperties_DetectsPropertyInjections()
+    {
+        // Arrange — mirrors the S365 ApiOperations pattern
+        var source = """
+            using Blueprint.Model;
+            using Blueprint.Runtime.Exec;
+            using Blueprint.Authorization;
+            using Microsoft.Extensions.Logging;
+            using System.Threading;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace;
+
+            public abstract class ApiOperationsBase
+            {
+                public ApiOperationContext Context { get; set; }
+                public IUserAuthorisationContext Identity { get; set; }
+                public ILogger Logger { get; set; }
+                public CancellationToken CancellationToken { get; set; }
+            }
+
+            public partial class TestQuery : IQuery<string> { }
+
+            public class TestQueryHandler : ApiOperationsBase
+            {
+                public Task<string> HandleAsync(TestQuery query)
+                {
+                    return Task.FromResult("handled");
+                }
+            }
+            """;
+
+        var (compilation, operationType) = CompileAndGetOperationType(
+            source,
+            "TestQuery",
+            [
+                typeof(Blueprint.Runtime.Exec.ApiOperationContext).Assembly,
+                typeof(Microsoft.Extensions.Logging.ILogger).Assembly,
+            ]);
+
+        // Act
+        var result = HandlerDiscovery.FindHandler(operationType, compilation);
+
+        // Assert
+        result.Value.Should().NotBeNull();
+        result.Value.HandlerType.Should().Be(HandlerType.External);
+        result.Value.PropertyInjections.Should().NotBeNull();
+
+        var injections = result.Value.PropertyInjections!.Value.ToList();
+        injections.Should().HaveCount(4);
+        injections.Should().Contain(
+            static p => p.PropertyName == "Context" && p.SourceExpression == "context");
+        injections.Should().Contain(
+            static p => p.PropertyName == "Identity" && p.SourceExpression == "context.UserAuthorisationContext");
+        injections.Should().Contain(
+            static p => p.PropertyName == "Logger" && p.SourceExpression == "this.Logger");
+        injections.Should().Contain(
+            static p => p.PropertyName == "CancellationToken" && p.SourceExpression == "context.OperationCancelled");
+    }
+
+    [Fact]
+    public void FindHandler_WithoutBaseClassProperties_HasNullPropertyInjections()
+    {
+        // Arrange — plain handler with no settable well-known properties
+        var source = """
+            using Blueprint.Model;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace;
+
+            public partial class TestQuery : IQuery<string> { }
+
+            public class TestQueryHandler
+            {
+                public Task<string> HandleAsync(TestQuery query)
+                {
+                    return Task.FromResult("handled");
+                }
+            }
+            """;
+
+        var (compilation, operationType) = CompileAndGetOperationType(source, "TestQuery");
+
+        // Act
+        var result = HandlerDiscovery.FindHandler(operationType, compilation);
+
+        // Assert
+        result.Value.Should().NotBeNull();
+        result.Value.PropertyInjections.Should().BeNull();
+    }
+
+    [Fact]
+    public void FindHandler_WithReadOnlyProperties_DoesNotDetectPropertyInjections()
+    {
+        // Arrange — read-only properties should be ignored
+        var source = """
+            using Blueprint.Model;
+            using Blueprint.Runtime.Exec;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace;
+
+            public abstract class ReadOnlyBase
+            {
+                public ApiOperationContext Context { get; }
+            }
+
+            public partial class TestQuery : IQuery<string> { }
+
+            public class TestQueryHandler : ReadOnlyBase
+            {
+                public Task<string> HandleAsync(TestQuery query)
+                {
+                    return Task.FromResult("handled");
+                }
+            }
+            """;
+
+        var (compilation, operationType) = CompileAndGetOperationType(
+            source,
+            "TestQuery",
+            [typeof(Blueprint.Runtime.Exec.ApiOperationContext).Assembly]);
+
+        // Act
+        var result = HandlerDiscovery.FindHandler(operationType, compilation);
+
+        // Assert
+        result.Value.Should().NotBeNull();
+        result.Value.PropertyInjections.Should().BeNull();
+    }
+
     /// <summary>
     /// Helper method to compile source and get the operation type symbol.
     /// </summary>
     private static (Compilation Compilation, INamedTypeSymbol OperationType) CompileAndGetOperationType(
         string source,
         string typeName)
+    {
+        return CompileAndGetOperationType(source, typeName, additionalAssemblies: []);
+    }
+
+    private static (Compilation Compilation, INamedTypeSymbol OperationType) CompileAndGetOperationType(
+        string source,
+        string typeName,
+        System.Reflection.Assembly[] additionalAssemblies)
     {
         var parseOptions = new CSharpParseOptions(LanguageVersion.Preview);
         var syntaxTree = CSharpSyntaxTree.ParseText(source, parseOptions);
@@ -289,6 +429,11 @@ public class HandlerDiscoveryTests
             .ToList();
 
         references.Add(MetadataReference.CreateFromFile(typeof(Blueprint.Model.ICommand).Assembly.Location));
+
+        foreach (var asm in additionalAssemblies)
+        {
+            references.Add(MetadataReference.CreateFromFile(asm.Location));
+        }
 
         var compilation = CSharpCompilation.Create(
             "TestAssembly",

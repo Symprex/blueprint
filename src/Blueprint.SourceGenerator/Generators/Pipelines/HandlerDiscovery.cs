@@ -203,7 +203,8 @@ public static class HandlerDiscovery
             HandlerClassFullName: handlerClass.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
             HandlerClassNamespace: handlerClass.ContainingNamespace.ToDisplayString(),
             Parameters: parameters,
-            ConstructorParameters: ExtractConstructorParameters(handlerClass));
+            ConstructorParameters: ExtractConstructorParameters(handlerClass),
+            PropertyInjections: DetectPropertyInjections(handlerClass));
 
         return (model, null);
     }
@@ -249,5 +250,69 @@ public static class HandlerDiscovery
         }
 
         return new EquatableList<ConstructorParameterInfo>(parameters.ToArray());
+    }
+
+    /// <summary>
+    /// Detects settable properties on an external handler class that match well-known pipeline types.
+    /// These properties will be assigned from pipeline context after handler instantiation, supporting
+    /// the Signature 365 <c>ApiOperations</c> base class pattern where <c>Context</c>, <c>Identity</c>,
+    /// <c>Logger</c>, and <c>CancellationToken</c> are injected as properties.
+    /// </summary>
+    private static EquatableList<HandlerPropertyInjection>? DetectPropertyInjections(INamedTypeSymbol handlerClass)
+    {
+        var injections = new List<HandlerPropertyInjection>();
+
+        // Walk the type hierarchy to find settable properties (including inherited ones)
+        var currentType = handlerClass;
+        while (currentType != null)
+        {
+            foreach (var member in currentType.GetMembers())
+            {
+                if (member is not IPropertySymbol property)
+                {
+                    continue;
+                }
+
+                // Must be a public settable instance property
+                if (property.IsStatic || property.IsReadOnly || property.SetMethod is null)
+                {
+                    continue;
+                }
+
+                if (property.SetMethod.DeclaredAccessibility != Accessibility.Public)
+                {
+                    continue;
+                }
+
+                var typeName = property.Type.ToDisplayString();
+                var sourceExpression = GetPropertyInjectionSource(property.Name, typeName);
+                if (sourceExpression != null)
+                {
+                    injections.Add(new HandlerPropertyInjection(property.Name, sourceExpression));
+                }
+            }
+
+            currentType = currentType.BaseType;
+        }
+
+        return injections.Count > 0
+            ? new EquatableList<HandlerPropertyInjection>(injections.ToArray())
+            : null;
+    }
+
+    /// <summary>
+    /// Maps well-known handler property types and names to pipeline source expressions.
+    /// </summary>
+    private static string? GetPropertyInjectionSource(string propertyName, string typeName)
+    {
+        // Exact type matches
+        return typeName switch
+        {
+            "Blueprint.Runtime.Exec.ApiOperationContext" => "context",
+            "Blueprint.Authorization.IUserAuthorisationContext" => "context.UserAuthorisationContext",
+            "System.Threading.CancellationToken" => "context.OperationCancelled",
+            "Microsoft.Extensions.Logging.ILogger" => "this.Logger",
+            _ => null,
+        };
     }
 }

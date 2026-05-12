@@ -294,6 +294,17 @@ public sealed class PipelineRenderContext
     }
 
     /// <summary>
+    /// Gets the property injection list for the current external handler, or <c>null</c> when
+    /// the handler has no well-known settable base-class properties. Each entry contains
+    /// the property name and the pipeline expression to assign.
+    /// </summary>
+    /// <returns>The property injections or <c>null</c>.</returns>
+    public EquatableList<HandlerPropertyInjection>? GetPropertyInjections()
+    {
+        return this._handler.PropertyInjections;
+    }
+
+    /// <summary>
     /// Gets the in-scope API operation context expression.
     /// </summary>
     /// <returns>The context expression.</returns>

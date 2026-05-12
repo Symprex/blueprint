@@ -131,6 +131,17 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
                         branch.GetCompiledHandlerConstructorExpression(handlerClassFullName));
                 });
 
+            // Populate well-known base-class properties (e.g., S365 ApiOperations: Context, Identity, Logger, CancellationToken)
+            var propertyInjections = context.GetPropertyInjections();
+            if (propertyInjections is { Count: > 0 })
+            {
+                context.WriteBlankLine();
+                foreach (var injection in propertyInjections)
+                {
+                    context.WriteStatement($"{handlerVarName}.{injection.PropertyName} = {injection.SourceExpression};");
+                }
+            }
+
             context.WriteBlankLine();
 
             var allParams = new List<string> { context.GetOperationExpression() };

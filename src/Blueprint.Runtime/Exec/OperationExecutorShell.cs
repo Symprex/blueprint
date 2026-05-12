@@ -35,6 +35,13 @@ public abstract class OperationExecutorShell : IOperationExecutorPipeline
     private readonly bool _suppressActivity;
 
     /// <summary>
+    /// Gets the pipeline-scoped logger created from the <see cref="ILoggerFactory"/> supplied at construction time.
+    /// Generated pipelines use this when injecting <c>ILogger</c> into handler base-class properties
+    /// (e.g., the <c>ApiOperations.Logger</c> pattern used by Signature 365 handlers).
+    /// </summary>
+    protected ILogger Logger => this._logger;
+
+    /// <summary>
     /// Initialises a new instance of <see cref="OperationExecutorShell"/> with the supplied logger factory and
     /// operation type name used for activity tracing and structured log entries.
     /// </summary>

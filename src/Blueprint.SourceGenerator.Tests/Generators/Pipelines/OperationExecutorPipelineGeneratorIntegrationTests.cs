@@ -717,6 +717,60 @@ public class OperationExecutorPipelineGeneratorIntegrationTests
     }
 
     [Fact]
+    public async Task External_handler_with_base_class_property_injection_generates_correctly()
+    {
+        var source = """
+                     using Blueprint;
+                     using Blueprint.Model;
+                     using Blueprint.Runtime.Exec;
+                     using Blueprint.Authorization;
+                     using Microsoft.Extensions.Logging;
+                     using System.Threading;
+                     using System.Threading.Tasks;
+
+                     namespace TestNamespace;
+
+                     [BlueprintAppScan]
+                     public partial class TestApp : BlueprintApp
+                     {
+                         public TestApp()
+                         {
+                             this.Register(TestQuery.Configure());
+                         }
+                     }
+
+                     public abstract class ApiOperationsBase
+                     {
+                         public ApiOperationContext Context { get; set; }
+                         public IUserAuthorisationContext Identity { get; set; }
+                         public ILogger Logger { get; set; }
+                         public CancellationToken CancellationToken { get; set; }
+                     }
+
+                     public class TestQuery : IQuery<string>
+                     {
+                         public static ApiOperationDescriptor Configure()
+                         {
+                             return new ApiOperationDescriptor(typeof(TestQuery), nameof(TestQuery), "Tests");
+                         }
+
+                         public string Id { get; set; }
+                     }
+
+                     public class TestQueryHandler : ApiOperationsBase
+                     {
+                         public Task<string> HandleAsync(TestQuery query)
+                         {
+                             return Task.FromResult("Result for " + query.Id);
+                         }
+                     }
+                     """;
+
+        await Compile(source)
+            .VerifySuccessAsync(SnapshotsFolder);
+    }
+
+    [Fact]
     public async Task Synchronous_handler_generates_correctly()
     {
         var source = """
