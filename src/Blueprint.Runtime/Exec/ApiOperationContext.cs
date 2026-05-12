@@ -185,4 +185,18 @@ public class ApiOperationContext : IHttpOperationContext
     HttpContext IHttpOperationContext.HttpContext =>
         this.HttpContext ?? throw new InvalidOperationException(
             "HttpContext is not available. This operation is not being executed via the HTTP host.");
+
+    /// <summary>
+    /// Gets the <see cref="Microsoft.AspNetCore.Http.HttpContext"/> for the current operation,
+    /// throwing <see cref="InvalidOperationException"/> when the operation is not being executed
+    /// via the HTTP host. This mirrors the legacy Blueprint <c>GetHttpContext()</c> extension
+    /// method for Signature 365 compatibility.
+    /// </summary>
+    /// <returns>The non-null HTTP context.</returns>
+    /// <exception cref="InvalidOperationException">The operation is not HTTP-hosted.</exception>
+    public HttpContext GetHttpContext()
+    {
+        return this.HttpContext ?? throw new InvalidOperationException(
+            "HttpContext is not available. This operation is not being executed via the HTTP host.");
+    }
 }

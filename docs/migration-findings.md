@@ -43,6 +43,8 @@
 | Claims-based auth removal | ✅ Done | Removed 9 files, 775 lines; only Resource-based auth remains |
 | `RequiresPermissionCheck` rename | ✅ Done | → `RequiresResourceAuthorization` for clarity |
 | S365 auth compatibility | ✅ Verified | 3-arg `[Resource]` matches S365 pattern; verb expansion stays in provider |
+| Pipeline helper extraction | ✅ Done | `LoadUserContextAsync`, `RunAuthorisersAsync` reduce IL per pipeline |
+| Handler property injection | ✅ Done | ApiOperations base-class pattern (Context, Identity, Logger, CT) auto-detected |
 
 ---
 
@@ -129,6 +131,30 @@
 - S365 has `FormBodyParser` for multipart/form-data in Blueprint.Http
 - **No S365 operations use IFormFile** — only the parser infrastructure references it
 - Blueprint can defer multipart support — not blocking migration
+
+### Handler Property Injection (ApiOperations Base Class)
+- S365 handlers inherit from `ApiOperations` base class with settable properties:
+  - `Context` (`ApiOperationContext`) — pipeline context
+  - `Identity` (`IUserAuthorisationContext`) — resolved user context
+  - `Logger` (`ILogger`) — pipeline-scoped logger
+  - `CancellationToken` — request cancellation token
+  - Derived: `HttpContext`, `HttpRequest`, `HttpResponse` (computed from `Context`)
+- Legacy Blueprint generates property assignments after handler instantiation
+- **New Blueprint source-gen now auto-detects** these properties via `DetectPropertyInjections`
+  in `HandlerDiscovery.FindExternalHandler` — walks class hierarchy for settable properties
+  matching well-known types
+- Generated pipeline emits: `handler.Context = context;`, `handler.Identity = context.UserAuthorisationContext;`, etc.
+- `OperationExecutorShell` now exposes `protected ILogger Logger` for generated pipelines to use
+- **Impact**: Handlers extending ApiOperations work without code changes — no migration churn
+
+### Pipeline Helper Extraction
+- `LoadUserContextAsync` extracted from per-pipeline inline code (~15 lines saved per pipeline)
+  - Identity check → factory call → APM activity tags
+- `RunAuthorisersAsync` extracted from per-pipeline inline code (~35 lines saved per pipeline)
+  - IApiAuthoriser[] + IOperationAuthoriser[] loops with indexed `for` (no enumerator)
+  - Returns `OperationResult?` (null = pass, non-null = 401/403 denial)
+- Both are `public static` on `PipelineHelpers` for cross-assembly access
+- **Impact for S365**: With 632 operations, this saves ~31,600 lines of generated IL
 
 ---
 
