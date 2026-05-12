@@ -214,7 +214,7 @@ A compile-time proof project (`.scratch/s365-proof/`) validated S365 patterns ag
 
 ### S365 Pattern Compatibility (Gap Analysis)
 
-Cross-referenced S365 codebase patterns against Blueprint source-gen support. **Result: 13/14 patterns fully supported.** Only `ServiceApiInclude` (gateway API client declarations) is missing.
+Cross-referenced S365 codebase patterns against Blueprint source-gen support. **Result: 14/14 patterns fully supported.** All S365 patterns have Blueprint equivalents.
 
 | S365 Pattern | Status | Blueprint Location |
 |---|---|---|
@@ -223,7 +223,7 @@ Cross-referenced S365 codebase patterns against Blueprint source-gen support. **
 | `HttpResult` | ✅ | Runtime/Http/HttpResult.cs |
 | `IPropertyPopulator` (SetTenantMiddleware equiv) | ✅ | Runtime/Middleware/IPropertyPopulator.cs |
 | Handler discovery (OperationsHandlerScanner equiv) | ✅ | SourceGenerator/Generators/Pipelines/HandlerDiscovery.cs |
-| `ServiceApiInclude` (gateway API client decl) | ❌ Missing | Not yet implemented — needed for gateway projects |
+| `ServiceApiInclude` (gateway API client decl) | ✅ | SourceGenerator/Generators/App/TypedHttpClientExtensionsGenerator.cs |
 | `PagedApiResource`/`OrderedPagedQuery` | ✅ | Runtime.Model/PagedApiResource.cs |
 | `ResourceEventDefinition` factory | ✅ | Runtime/Http/ResourceEventDefinition.cs |
 | `IApiAuthoriser` | ✅ | Runtime/Authorization/IApiAuthoriser.cs |
@@ -235,7 +235,7 @@ Cross-referenced S365 codebase patterns against Blueprint source-gen support. **
 
 **Resource expansion note:** Blueprint source-gen has **compile-time** resource expansion support that replaces S365's runtime `ResourceExpandMiddleware`. The `ResourceExpansionModule` discovers `Expandable<T>` properties at compile time and generates typed expansion calls in the `PostExecution` pipeline stage. S365's `IResourceExpander` implementations (e.g., `AzureAdGroupApiResourceExpander`) can be ported directly — the interface is identical. The `?expand=` and `?expand[]=` query parameter parsing, comma-separated values, and case-insensitive matching are all handled by `ResourceExpansionRuntime`.
 
-**Gateway migration note:** `ServiceApiInclude` is only needed for Tier 4+ (gateway projects). All Tier 1–3 services can migrate without it. Gateway migration can use a workaround of manually referencing the contract assembly's operations.
+**Gateway migration note:** `ServiceApiInclude` is replaced by Blueprint's `TypedHttpClientExtensionsGenerator`, which automatically generates strongly-typed extension methods on `BlueprintHttpClient<TApp>` for every operation registered through `[BlueprintAppScan]`. Gateway projects inject `BlueprintHttpClient<TargetApp>` and call the generated methods directly — no separate interface/implementation classes needed. The S365 pattern of `IServiceApi` + `ServiceApi` class is simplified to just `BlueprintHttpClient<TargetApp>.OperationNameAsync(params)`. JWT propagation uses `CallOptions` or HttpClient message handler configuration.
 
 ### Critical (Must Fix)
 
@@ -530,17 +530,19 @@ This section walks through the actual Analytics service migration using real cod
 
 ### Current State
 
-Analytics has 2 HTTP operations (both queries) + ~25 Rebus event handlers:
+Analytics has 3 HTTP operations + ~25 Rebus event handlers:
 
-| Operation | Type | Route |
-|---|---|---|
-| `GetSentEmailQuery` | `IQuery<SentEmailApiResource>` | `GET /tenants/{TenantId}/sent-emails/{Id}` |
-| `FindSentEmailsQuery` | `TenantOrderedPagedQuery<SentEmailApiResource>` | `GET /tenants/{TenantId}/sent-emails` |
+| Operation | Type | Route | Auth |
+|---|---|---|---|
+| `IngestCampaignEventCommand` | `ICommand<StatusCodeResult>` | `POST /track/{type}` | `[AllowAnonymous]` |
+| `GetSentEmailQuery` | `IQuery<SentEmailApiResource>` | `GET /tenants/{TenantId}/sent-emails/{Id}` | `[Resource(SentEmail, Read)]` |
+| `FindSentEmailsQuery` | `TenantOrderedPagedQuery<SentEmailApiResource>` | `GET /tenants/{TenantId}/sent-emails` | `[Resource(SentEmail, Read)]` |
 
-**Handler pattern:** Separate handler classes extending `ApiOperations` (e.g. `GetSentEmailQueryHandler`).
+**Handler pattern:** `InvokeAsync` on operation class (IngestCampaignEventCommand) and separate handler classes (queries).
 **Auth:** `[Resource(S365Nouns.SentEmail, S365VerbNames.Read, "/Tenants/{TenantId}/SentEmails/{Id}")]`
 **Serialization:** Already using `SystemTextJson` with NodaTime — no Newtonsoft migration needed.
 **DB:** Dapper + PostgreSQL (no Marten).
+**Rebus handlers:** CampaignEventHandler, DisclaimerEventHandler, EmailSentEventHandler, GroupEventHandler, SignatureEventHandler, UserEventHandler, etc. — these are `IHandleMessages<T>` implementations (not Blueprint operations) and continue to work via `Blueprint.Rebus`.
 
 ### Step-by-Step Transformation
 
@@ -668,6 +670,234 @@ app.UseEndpoints(endpoints =>
 1. `dotnet build` — should compile with source-gen generating executor + descriptors
 2. Compare OpenAPI output against baseline
 3. Run existing tests (update test infrastructure if needed)
+
+---
+
+## Concrete Example: EventStore Service Migration
+
+EventStore has 2 HTTP operations (both queries), focused on audit event retrieval.
+
+### Current State
+
+| Operation | Type | Route | Auth |
+|---|---|---|---|
+| `GetApiEventQuery` | `IQuery<ApiEventApiResource>` | `GET /tenants/{TenantId}/apiEvents/{Id}` | `[Resource(ApiEvent, Read)]` |
+| `GetApiEventsQuery` | `IQuery<ApiEventListApiResource>` | `GET /tenants/{TenantId}/apiEvents` | `[Resource(ApiEvent, Read)]` |
+
+**Handler pattern:** `HandleAsync` on separate handler classes.
+**Auth:** `[Resource(S365Nouns.ApiEvent, S365VerbNames.Read, "/Tenants/{TenantId}")]`
+**DB:** Repository pattern (IApiEventRepository).
+**Rebus:** `BusResourceEventAuditRepository` publishes `ResourceEventCreatedEvent` via Rebus.
+
+### Step-by-Step Transformation
+
+#### A. Create BlueprintApp
+
+```csharp
+[BlueprintAppScan(FromAssemblyOf = typeof(GetApiEventQuery))]
+public partial class EventStoreBlueprintApp : BlueprintApp { }
+```
+
+#### B. Make Operations Partial
+
+```csharp
+// GetApiEventQuery.cs
+[SelfLink(typeof(ApiEventApiResource), "/tenants/{TenantId}/apiEvents/{Id}")]
+[Resource("ApiEvent", "Read")]
+public partial class GetApiEventQuery : IQuery<ApiEventApiResource>
+{
+    [Required] public string TenantId { get; set; } = null!;
+    [Required] public string Id { get; set; } = null!;
+
+    public async Task<ApiEventApiResource> HandleAsync(IApiEventRepository repository)
+    {
+        // Port handler logic from GetApiEventQueryHandler
+    }
+}
+```
+
+#### C. Startup Changes
+
+```csharp
+services.AddBlueprintApi<EventStoreBlueprintApp, EventStoreBlueprintAppExecutor>(blueprint =>
+{
+    blueprint.AddResourceAuthorizationProvider<S365ResourceAuthorizationProvider>();
+});
+
+app.MapBlueprintApi<EventStoreBlueprintApp, EventStoreBlueprintAppExecutor>("api/",
+    configureOpenApi: info => { info.Title = "EventStore API"; info.Version = "1.0"; });
+```
+
+#### D. Verify
+
+Same as Analytics: build, OpenAPI diff, test migration.
+
+---
+
+## Concrete Example: Templates Service Migration
+
+Templates is the simplest service — one single query operation.
+
+### Current State
+
+| Operation | Type | Route | Auth |
+|---|---|---|---|
+| `GetTemplatesQuery` | `IQuery<TemplateApiResource[]>` | `GET /templates` | `[MustBeAuthenticated]` |
+
+**Handler pattern:** `HandleAsync` on separate handler class.
+**Auth:** `[MustBeAuthenticated]` (no resource-based auth).
+**DB:** Custom `TemplateLoader` service.
+**Dependencies:** Minimal — good canary for basic migration.
+
+### Step-by-Step Transformation
+
+#### A. Create BlueprintApp
+
+```csharp
+[BlueprintAppScan(FromAssemblyOf = typeof(GetTemplatesQuery))]
+public partial class TemplatesBlueprintApp : BlueprintApp { }
+```
+
+#### B. Make Operations Partial
+
+```csharp
+[SelfLink(typeof(PagedApiResource<TemplateApiResource>), "/templates")]
+[HttpGet]
+[MustBeAuthenticated]
+public partial class GetTemplatesQuery : IQuery<TemplateApiResource[]>
+{
+    public async Task<TemplateApiResource[]> HandleAsync(TemplateLoader templateLoader)
+    {
+        // Port handler logic
+    }
+}
+```
+
+#### C. Startup Changes
+
+```csharp
+services.AddBlueprintApi<TemplatesBlueprintApp, TemplatesBlueprintAppExecutor>(blueprint =>
+{
+    // No resource auth needed — only [MustBeAuthenticated]
+    blueprint.ConfigureHttp(http =>
+    {
+        http.JsonSerializerOptions.ConfigureForNodaTime(DateTimeZoneProviders.Tzdb);
+    });
+});
+
+app.MapBlueprintApi<TemplatesBlueprintApp, TemplatesBlueprintAppExecutor>("api/",
+    configureOpenApi: info => { info.Title = "Templates API"; info.Version = "1.0"; });
+```
+
+#### D. Verify
+
+This is the ideal "smoke test" service — if Templates migrates cleanly, the basic
+infrastructure is correct.
+
+---
+
+## Concrete Example: Generation Service Migration
+
+Generation is medium complexity — 6 operations with Marten, Rebus, and Hangfire.
+
+### Current State
+
+| Operation | Type | Route | Auth |
+|---|---|---|---|
+| `GenerateSignatureCommand` | `IQuery<GeneratedSignatureApiResource>` | `POST /signatures/generate` | `[AllowAnonymous]` |
+| `GenerateUserTemplateCommand` | `ICommand<GeneratedUserTemplateApiResource>` | `POST /templates/tenants/{TenantId}/users/{UserId}/generate` | `[AllowAnonymous]` |
+| `GetGenerationLogQuery` | `IQuery<GenerationLogApiResource>` | `GET /logs/{TenantId}/{Id}` | `[Resource(GenerationLog, Read)]` |
+| `GetTenantMetadataCommand` | `IQuery<TenantMetadataApiResource>` | `POST /tenant-metadata` | `[AllowAnonymous]` |
+| `GetTenantRelayStatusQuery` | `IQuery<OkResult<TenantRelayStatusApiResource>>` | `GET /tenant-metadata/relay-status` | `[AllowAnonymous]` |
+| `MatchSignaturesQuery` | `IQuery<SignaturePreviewApiResource>` | `POST /signatures/match` | `[Resource(CompiledSignature, Read)]` + `[Resource(MyCompiledSignature, Read)]` |
+
+**Handler pattern:** Mixed — `InvokeAsync` and `HandleAsync`.
+**Auth:** Mix of `[AllowAnonymous]` and `[Resource]` with multiple scope pairs on MatchSignaturesQuery.
+**DB:** Marten (`IDocumentSession`) for document queries and batch operations.
+**Rebus:** `IBus` for publishing events (UserSeenForInjectionEvent, etc.).
+**Hangfire:** Background job processing for signature generation.
+
+### Key Migration Notes
+
+1. **MatchSignaturesQuery has dual `[Resource]` attributes** — both CompiledSignature/Read and MyCompiledSignature/Read.
+   Blueprint handles this with any-of semantics: if the user has either scope, authorization passes.
+
+2. **GenerateSignatureCommand is typed as IQuery but uses POST** — this is because it has side effects
+   (generating signatures) but returns a result. Use `[HttpPost]` to keep the POST method.
+
+3. **Marten IDocumentSession** — inject directly via handler DI parameters. Blueprint.Marten's
+   `MartenUnitOfWork` handles `SaveChangesAsync` in the UnitOfWork pipeline stage.
+
+4. **Complex handler dependencies** (5-7 parameters) — Blueprint's handler DI injection supports this.
+   Example: `InvokeAsync(GenerateSignatureCommand, IDocumentSession, IOptions<InjectionOptions>,
+   ITenantDetailsLoader, VerboseLoggingManager, ISignatureGenerator, IBus, ISignatureGenerationLogStore)`.
+
+5. **Rebus event handler** (`EnableVerboseGenerationLoggingHandler`) — this is an `IHandleMessages<T>`
+   implementation, not a Blueprint operation. It continues to work via Blueprint.Rebus.
+
+### Step-by-Step Transformation
+
+#### A. Create BlueprintApp
+
+```csharp
+[BlueprintAppScan(FromAssemblyOf = typeof(GenerateSignatureCommand))]
+public partial class GenerationBlueprintApp : BlueprintApp { }
+```
+
+#### B. Operations (example: MatchSignaturesQuery)
+
+```csharp
+[RootLink("/signatures/match")]
+[HttpPost]
+[Resource("CompiledSignature", "Read")]
+[Resource("MyCompiledSignature", "Read")]
+public partial class MatchSignaturesQuery : IQuery<SignaturePreviewApiResource>
+{
+    // Properties...
+
+    public async Task<SignaturePreviewApiResource> InvokeAsync(
+        MatchSignaturesQuery query,
+        IDocumentSession db,
+        ISignatureGenerator generator,
+        IBus bus,
+        BillingApiStateLoader billingLoader)
+    {
+        // Existing handler logic
+    }
+}
+```
+
+#### C. Startup Changes
+
+```csharp
+services.AddBlueprintApi<GenerationBlueprintApp, GenerationBlueprintAppExecutor>(blueprint =>
+{
+    blueprint.AddResourceAuthorizationProvider<S365ResourceAuthorizationProvider>();
+    blueprint.AddUnitOfWork<MartenUnitOfWork>();
+    blueprint.AddBackgroundTaskScheduler<HangfireTaskScheduler>();
+
+    blueprint.ConfigureHttp(http =>
+    {
+        http.JsonSerializerOptions.ConfigureForNodaTime(DateTimeZoneProviders.Tzdb);
+    });
+});
+
+services.AddBlueprintRebus(rebus =>
+{
+    rebus.Subscribe<EnableVerboseGenerationLogging>();
+});
+
+app.MapBlueprintApi<GenerationBlueprintApp, GenerationBlueprintAppExecutor>("api/",
+    configureOpenApi: info => { info.Title = "Generation API"; info.Version = "1.0"; });
+```
+
+#### D. Verify
+
+In addition to standard checks, Generation requires:
+- Marten document session injection works
+- Hangfire background task scheduling works
+- Multiple `[Resource]` attributes produce correct any-of authorization
+- `OkResult<T>.WithCacheControl()` cache headers are preserved
 
 ---
 
