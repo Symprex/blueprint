@@ -102,6 +102,27 @@ public class AppModelOpenApiOutputRenderingContextTests
         doc.RootElement.GetProperty("paths").EnumerateObject().Should().BeEmpty();
     }
 
+    [Theory]
+    [InlineData("3.0.0")]
+    [InlineData("3.0.4")]
+    [InlineData("3.1.0")]
+    public void When_openapi_version_is_configured_then_output_emits_that_version(string version)
+    {
+        var context = CreateSyntheticOutputContextWithInfoOptions([], new OpenApiInfoOptions { OpenApiVersion = version });
+        var doc = JsonDocument.Parse(context.Json);
+
+        doc.RootElement.GetProperty("openapi").GetString().Should().Be(version);
+    }
+
+    [Fact]
+    public void When_openapi_version_is_not_configured_then_output_emits_default_version()
+    {
+        var context = CreateSyntheticOutputContext([], []);
+        var doc = JsonDocument.Parse(context.Json);
+
+        doc.RootElement.GetProperty("openapi").GetString().Should().Be("3.0.4");
+    }
+
     [Fact]
     public void When_document_has_schema_components_then_components_are_emitted_with_correct_type()
     {

@@ -17,7 +17,11 @@ public sealed record OpenApiOutputRenderingContext(
     OpenApiDocumentRenderingContext DocumentRendering,
     string Json)
 {
-    private const string OpenApiVersion = "3.0.4";
+    /// <summary>
+    /// Default OpenAPI specification version emitted when no override is provided via
+    /// <see cref="OpenApiInfoOptions.OpenApiVersion"/>.
+    /// </summary>
+    private const string DefaultOpenApiVersion = "3.0.4";
 
     /// <summary>
     /// Converts a raw CLR type name into a safe OpenAPI schema component key by replacing <c>.</c> with <c>_</c>.
@@ -120,7 +124,7 @@ public sealed record OpenApiOutputRenderingContext(
                 ? [OpenApiSecurityScheme.BearerJwt()]
                 : [];
 
-        writer.WriteString("openapi", OpenApiVersion);
+        writer.WriteString("openapi", string.IsNullOrWhiteSpace(infoOptions.OpenApiVersion) ? DefaultOpenApiVersion : infoOptions.OpenApiVersion);
         WriteInfo(writer, infoOptions);
         WriteServers(writer, infoOptions.Servers);
         WritePaths(writer, document.Paths, allRequireAuth, effectiveSchemes, infoOptions.SchemaNameFormatter);

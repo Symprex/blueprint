@@ -14,6 +14,13 @@ public sealed class OpenApiInfoOptions
     public string Version { get; set; } = "1.0.0";
 
     /// <summary>
+    /// Gets or sets the OpenAPI specification version to declare in the rendered document.
+    /// Defaults to <c>"3.0.4"</c>. Set to <c>"3.0.0"</c> for maximum tooling compatibility
+    /// (e.g. older code generators or TypeScript client generators that reject newer minor versions).
+    /// </summary>
+    public string OpenApiVersion { get; set; } = "3.0.4";
+
+    /// <summary>
     /// Gets or sets an optional description for the API.
     /// When <see langword="null"/> or empty the <c>description</c> property is omitted from the rendered output.
     /// </summary>
