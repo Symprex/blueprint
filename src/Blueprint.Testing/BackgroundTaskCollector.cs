@@ -19,20 +19,27 @@ public sealed class BackgroundTaskCollector : IBackgroundTaskScheduleProvider
     private int _nextId;
 
     /// <summary>
-    /// Gets the list of tasks enqueued via <see cref="EnqueueAsync"/>.
+    /// Gets the unwrapped tasks enqueued via <see cref="EnqueueAsync"/>. Each element is the raw
+    /// <c>IBackgroundTask</c> instance — typed as <see cref="object"/> because <c>IBackgroundTask</c>
+    /// carries <c>static abstract</c> members that prevent use as a generic type argument (CS8920).
+    /// Use <c>.OfType&lt;T&gt;()</c> or casting to retrieve specific task types.
     /// </summary>
-    public IReadOnlyList<BackgroundTaskEnvelope> Enqueued => this._enqueued;
+    /// <remarks>
+    /// Mirrors S365's <c>BackgroundTaskCollector.Enqueued</c> which returns <c>IEnumerable&lt;IBackgroundTask&gt;</c>.
+    /// </remarks>
+    public IEnumerable<object> Enqueued => this._enqueued.Select(static e => (object)e.Task);
 
     /// <summary>
-    /// Gets the list of tasks scheduled via <see cref="ScheduleAsync"/> with their delays.
+    /// Gets the unwrapped tasks scheduled via <see cref="ScheduleAsync"/> with their delays.
     /// </summary>
-    public IReadOnlyList<(BackgroundTaskEnvelope Envelope, TimeSpan Delay)> Scheduled => this._scheduled;
+    public IEnumerable<(object Task, TimeSpan Delay)> Scheduled =>
+        this._scheduled.Select(static s => ((object)s.Envelope.Task, s.Delay));
 
     /// <summary>
-    /// Gets the list of child tasks enqueued via <see cref="EnqueueChildAsync"/> with their parent IDs.
+    /// Gets the unwrapped child tasks enqueued via <see cref="EnqueueChildAsync"/> with their parent IDs.
     /// </summary>
-    public IReadOnlyList<(BackgroundTaskEnvelope Envelope, string ParentId, BackgroundTaskContinuationOptions Options)> ChildEnqueued
-        => this._childEnqueued;
+    public IEnumerable<(object Task, string ParentId, BackgroundTaskContinuationOptions Options)> ChildEnqueued =>
+        this._childEnqueued.Select(static c => ((object)c.Envelope.Task, c.ParentId, c.Options));
 
     /// <summary>
     /// Gets all collected tasks (enqueued + scheduled + child) as a combined sequence.
@@ -42,6 +49,23 @@ public sealed class BackgroundTaskCollector : IBackgroundTaskScheduleProvider
         this._enqueued.Select(static e => (object)e.Task)
             .Concat(this._scheduled.Select(static s => (object)s.Envelope.Task))
             .Concat(this._childEnqueued.Select(static c => (object)c.Envelope.Task));
+
+    /// <summary>
+    /// Gets the raw envelopes for tasks enqueued via <see cref="EnqueueAsync"/>.
+    /// Use this when you need access to envelope metadata (headers, etc.) rather than just the task.
+    /// </summary>
+    public IReadOnlyList<BackgroundTaskEnvelope> EnqueuedEnvelopes => this._enqueued;
+
+    /// <summary>
+    /// Gets the raw envelopes for tasks scheduled via <see cref="ScheduleAsync"/> with their delays.
+    /// </summary>
+    public IReadOnlyList<(BackgroundTaskEnvelope Envelope, TimeSpan Delay)> ScheduledEnvelopes => this._scheduled;
+
+    /// <summary>
+    /// Gets the raw envelopes for child tasks enqueued via <see cref="EnqueueChildAsync"/> with their parent IDs.
+    /// </summary>
+    public IReadOnlyList<(BackgroundTaskEnvelope Envelope, string ParentId, BackgroundTaskContinuationOptions Options)> ChildEnqueuedEnvelopes
+        => this._childEnqueued;
 
     private readonly List<BackgroundTaskEnvelope> _enqueued = new();
     private readonly List<(BackgroundTaskEnvelope Envelope, TimeSpan Delay)> _scheduled = new();

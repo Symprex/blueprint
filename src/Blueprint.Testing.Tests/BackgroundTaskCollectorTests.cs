@@ -21,7 +21,7 @@ public class BackgroundTaskCollectorTests
 
         id.Should().StartWith("test-job-");
         this._collector.Enqueued.Should().HaveCount(1);
-        this._collector.Enqueued[0].Task.Should().BeSameAs(task);
+        this._collector.EnqueuedEnvelopes[0].Task.Should().BeSameAs(task);
     }
 
     [Fact]
@@ -33,9 +33,9 @@ public class BackgroundTaskCollectorTests
 
         await this._collector.ScheduleAsync(envelope, delay);
 
-        this._collector.Scheduled.Should().HaveCount(1);
-        this._collector.Scheduled[0].Delay.Should().Be(delay);
-        this._collector.Scheduled[0].Envelope.Task.Should().BeSameAs(task);
+        this._collector.ScheduledEnvelopes.Should().HaveCount(1);
+        this._collector.ScheduledEnvelopes[0].Delay.Should().Be(delay);
+        this._collector.ScheduledEnvelopes[0].Envelope.Task.Should().BeSameAs(task);
     }
 
     [Fact]
@@ -49,9 +49,9 @@ public class BackgroundTaskCollectorTests
         var childEnvelope = new BackgroundTaskEnvelope(childTask);
         await this._collector.EnqueueChildAsync(childEnvelope, parentId, BackgroundTaskContinuationOptions.OnlyOnSucceededState);
 
-        this._collector.ChildEnqueued.Should().HaveCount(1);
-        this._collector.ChildEnqueued[0].ParentId.Should().Be(parentId);
-        this._collector.ChildEnqueued[0].Options.Should().Be(BackgroundTaskContinuationOptions.OnlyOnSucceededState);
+        this._collector.ChildEnqueuedEnvelopes.Should().HaveCount(1);
+        this._collector.ChildEnqueuedEnvelopes[0].ParentId.Should().Be(parentId);
+        this._collector.ChildEnqueuedEnvelopes[0].Options.Should().Be(BackgroundTaskContinuationOptions.OnlyOnSucceededState);
     }
 
     [Fact]
@@ -136,5 +136,34 @@ public class BackgroundTaskCollectorTests
         }
 
         ids.Should().HaveCount(10, "each enqueue should produce a unique ID");
+    }
+
+    [Fact]
+    public async Task Enqueued_supports_OfType_filtering()
+    {
+        await this._collector.EnqueueAsync(new BackgroundTaskEnvelope(
+            new SendTemplateSharedNotificationTask { TemplateId = "a", RecipientEmail = "a@b.com" }));
+
+        var matches = this._collector.Enqueued.OfType<SendTemplateSharedNotificationTask>().ToList();
+
+        matches.Should().ContainSingle();
+        matches[0].TemplateId.Should().Be("a");
+    }
+
+    [Fact]
+    public async Task All_combines_all_task_categories()
+    {
+        await this._collector.EnqueueAsync(new BackgroundTaskEnvelope(
+            new SendTemplateSharedNotificationTask { TemplateId = "e1" }));
+        await this._collector.ScheduleAsync(
+            new BackgroundTaskEnvelope(new SendTemplateSharedNotificationTask { TemplateId = "s1" }),
+            TimeSpan.FromMinutes(5));
+
+        this._collector.All.Should().HaveCount(2);
+        this._collector.All.OfType<SendTemplateSharedNotificationTask>().Should().HaveCount(2);
+
+        var tasks = this._collector.All.OfType<SendTemplateSharedNotificationTask>().ToList();
+        tasks.Should().Contain(t => t.TemplateId == "e1");
+        tasks.Should().Contain(t => t.TemplateId == "s1");
     }
 }

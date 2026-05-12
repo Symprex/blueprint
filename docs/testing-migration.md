@@ -188,34 +188,51 @@ result.ShouldBeForbidden();
 
 ```csharp
 // ─── BEFORE (S365) ─────────────────────────────────────────────
-var tasks = fixture.GetEnqueuedBackgroundTasks();
-tasks.Should().ContainSingle().Which.Should().BeOfType<SendNotificationTask>();
+// S365 uses .Tasks.All with FluentAssertions:
+api.Tasks.All.Should().Contain(t => t is SendNotificationTask);
+api.Tasks.All.Should().ContainEquivalentOf(new UpdateDomainInfoBackgroundTask { TenantId = id });
+api.Tasks.All.Should().BeEmpty();
+api.Tasks.All.OfType<ImportEntraIdBackgroundTask>().Should().HaveCount(2);
+api.Tasks.Enqueued.OfType<SendNotificationTask>().Single();
 
 // ─── AFTER (Blueprint) ────────────────────────────────────────
-// Accessed directly from the fixture:
-_fixture.Tasks.GetSingleEnqueued<SendNotificationTask>()
-    .Should().NotBeNull();
+// .All property works the same way (returns IEnumerable<object>):
+_fixture.Tasks!.All.Should().Contain(t => t is SendNotificationTask);
+_fixture.Tasks!.All.Should().BeEmpty();
+_fixture.Tasks!.All.OfType<ImportEntraIdBackgroundTask>().Should().HaveCount(2);
+_fixture.Tasks!.Enqueued.Select(e => e.Task).OfType<SendNotificationTask>().Should().ContainSingle();
+
+// Or use typed assertion helpers (framework-agnostic):
+_fixture.Tasks!.GetSingleEnqueued<SendNotificationTask>()
+    .TemplateId.Should().NotBeEmpty();
+_fixture.Tasks!.AssertNoneEnqueued<DeletedNotificationTask>();
 ```
 
 ### Step 6: Migrate Message Bus Assertions
 
 ```csharp
 // ─── BEFORE (S365) ─────────────────────────────────────────────
-var fakeBus = fixture.GetService<FakeBus>();
-fakeBus.PublishedMessages.Should().ContainSingle()
-    .Which.Should().BeOfType<TemplateCreatedEvent>();
+// S365 uses FakeBus (Rebus.TestHelpers) with custom Should() assertions:
+api.Bus.Should().HavePublishedSingle<TemplateCreatedEvent>();
+api.Bus.Should().NotHavePublished<TemplateDeletedEvent>();
+var events = api.Bus.Should().HavePublished<TemplateEditedEvent>();
+
+// Raw Rebus event access:
+var msg = api.Bus.Events.OfType<MessagePublished>()
+    .SingleOrDefault(m => m.EventMessage is TemplateCreatedEvent);
 
 // ─── AFTER (Blueprint) ────────────────────────────────────────
-// Direct access via fixture.Bus (S365-compatible alias for Messages):
-var createdEvent = _fixture.Bus!.HavePublishedSingle<TemplateCreatedEvent>();
+// S365-compatible Should() chain works directly (zero churn):
+_fixture.Bus!.Should().HavePublishedSingle<TemplateCreatedEvent>();
+_fixture.Bus!.Should().NotHavePublished<TemplateDeletedEvent>();
+var events = _fixture.Bus!.Should().HavePublished<TemplateEditedEvent>();
+
+// Direct access also works:
+var createdEvent = _fixture.Bus!.GetSinglePublished<TemplateCreatedEvent>();
 createdEvent.TemplateId.Should().NotBeEmpty();
 
-// Or using the Messages property directly:
-_fixture.Messages!.GetSinglePublished<TemplateCreatedEvent>()
-    .TemplateId.Should().NotBeEmpty();
-
-// Assert nothing was published:
-_fixture.Bus!.NotHavePublished<TemplateDeletedEvent>();
+// Assert nothing published (framework-agnostic):
+_fixture.Bus!.AssertNonePublished<TemplateDeletedEvent>();
 ```
 
 ---
