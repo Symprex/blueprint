@@ -15,7 +15,7 @@ namespace Blueprint.SourceGenerator.Sample.Contract.Api;
 /// operation can execute.
 /// </remarks>
 [ApiOperations("Templates")]
-[RootLink("/templates/{Id}")]
+[Link(typeof(TemplateApiResource), "/templates/{Id}", Rel = "archive")]
 [HttpDelete]
 [Resource("template", "write")]
 [Description("Archive (soft-delete) a template.")]

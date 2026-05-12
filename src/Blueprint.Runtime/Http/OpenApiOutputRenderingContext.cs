@@ -1167,6 +1167,23 @@ public sealed record OpenApiOutputRenderingContext(
             writer.WriteEndObject();
         }
 
+        if (!component.Links.IsDefaultOrEmpty)
+        {
+            writer.WritePropertyName("x-links");
+            writer.WriteStartArray();
+
+            foreach (var link in component.Links)
+            {
+                writer.WriteStartObject();
+                writer.WriteString("rel", link.Rel);
+                writer.WriteString("operationId", link.OperationId);
+                writer.WriteString("method", link.Method);
+                writer.WriteEndObject();
+            }
+
+            writer.WriteEndArray();
+        }
+
         writer.WriteEndObject();
     }
 

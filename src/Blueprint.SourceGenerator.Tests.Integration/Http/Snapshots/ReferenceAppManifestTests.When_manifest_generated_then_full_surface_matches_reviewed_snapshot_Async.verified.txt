@@ -23,6 +23,8 @@
     - 403: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
     - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
     - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+  Links:
+    - rel=archive url=/templates/{Id} resource=TemplateApiResource
 
 ### BulkArchiveTemplatesCommand
   Type: BulkArchiveTemplatesCommand
@@ -94,6 +96,8 @@
     - 415: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
     - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
     - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+  Links:
+    - rel=clone url=/templates/{Id}/clone resource=TemplateApiResource
 
 ### CreateTemplateCommand
   Type: CreateTemplateCommand
@@ -548,6 +552,8 @@
 ## Resource Links
 
   AuthManifestApiResource [self] -> /me/authManifest (GetMyAuthManifestQuery)
+  TemplateApiResource [archive] -> /templates/{Id} (ArchiveTemplateCommand)
+  TemplateApiResource [clone] -> /templates/{Id}/clone (CloneTemplateCommand)
   TemplateApiResource [self] -> /templates/{Id} (GetTemplateQuery)
   TemplateListApiResource [self] -> /templates (GetTemplatesQuery)
 

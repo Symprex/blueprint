@@ -2559,7 +2559,19 @@
             "type": "string",
             "readOnly": true
           }
-        }
+        },
+        "x-links": [
+          {
+            "rel": "archive",
+            "operationId": "ArchiveTemplateCommand",
+            "method": "DELETE"
+          },
+          {
+            "rel": "clone",
+            "operationId": "CloneTemplateCommand",
+            "method": "POST"
+          }
+        ]
       },
       "Blueprint_SourceGenerator_Sample_Contract_Api_TemplatePreviewApiResource": {
         "title": "TemplatePreviewApiResource",

@@ -11,7 +11,7 @@ namespace Blueprint.SourceGenerator.Sample.Contract.Api;
 /// both route parameters and a request body, producing a resource-event result (template.cloned).
 /// </summary>
 [ApiOperations("Templates")]
-[RootLink("/templates/{Id}/clone")]
+[Link(typeof(TemplateApiResource), "/templates/{Id}/clone", Rel = "clone")]
 [HttpPost]
 [FromResource(typeof(CreateTemplateCommand))]
 [Description("Clone a template with a new name.")]

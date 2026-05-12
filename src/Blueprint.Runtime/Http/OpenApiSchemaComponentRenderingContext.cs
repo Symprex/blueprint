@@ -105,13 +105,28 @@ public sealed record OpenApiSchemaComponentRenderingContext(
 /// <param name="Properties">The ordered rendered property contracts for object schemas.</param>
 /// <param name="Description">The schema-level description from <see cref="System.ComponentModel.DescriptionAttribute"/> when specified.</param>
 /// <param name="Title">The schema-level title from <see cref="System.ComponentModel.DisplayNameAttribute"/> when specified.</param>
+/// <param name="Links">
+/// The vendor <c>x-links</c> extension entries for this schema when the body type is an <c>ILinkableResource</c>
+/// with registered non-self HATEOAS links. Empty when the resource has no non-self links or is not linkable.
+/// </param>
 public sealed record OpenApiSchemaComponentModel(
     string BodyTypeName,
     string? Type,
     ImmutableArray<string> RequiredPropertyNames,
     ImmutableArray<OpenApiSchemaComponentPropertyModel> Properties,
     string? Description = null,
-    string? Title = null);
+    string? Title = null,
+    ImmutableArray<OpenApiSchemaLinkExtension> Links = default);
+
+/// <summary>
+/// Represents one entry in the <c>x-links</c> vendor extension array for an OpenAPI schema component.
+/// Each entry captures a registered HATEOAS link relationship (excluding "self") so downstream tooling
+/// (e.g. TypeScript client generators) can create typed resource methods from the OpenAPI spec.
+/// </summary>
+/// <param name="Rel">The relationship name (e.g. "details", "delete", "activate").</param>
+/// <param name="OperationId">The <c>operationId</c> of the linked operation (its class name).</param>
+/// <param name="Method">The HTTP method of the linked operation (e.g. "GET", "POST", "DELETE").</param>
+public sealed record OpenApiSchemaLinkExtension(string Rel, string OperationId, string Method);
 
 /// <summary>
 /// Captures one rendered property within a reusable OpenAPI schema component.
