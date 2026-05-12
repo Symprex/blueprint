@@ -74,7 +74,7 @@ public static class BlueprintLoadTestScenarios
                     var env = hostContext.HostingEnvironment;
                     services.AddLogging();
                     services.AddSingleton<TemplateStore>();
-                    services.AddSingleton<ITenantAccessor, AsyncLocalTenantAccessor>();
+                    services.AddSingleton<Blueprint.Tenancy.ITenantAccessor, Blueprint.Tenancy.AsyncLocalTenantAccessor>();
 
                     services.AddAuthentication("LoadTest")
                         .AddScheme<AuthenticationSchemeOptions, LoadTestAuthHandler>("LoadTest", _ => { });
@@ -94,7 +94,7 @@ public static class BlueprintLoadTestScenarios
                         blueprint.AddContextMetadataProvider<SampleContextMetadataProvider>();
                         blueprint.AddLinkVisibilityAuthoriser<ArchiveTemplateLinkChecker>();
                         blueprint.AddRecurringTaskScheduler<SampleRecurringTaskScheduler>();
-                        blueprint.AddPropertyPopulator<TenantPropertyPopulator>();
+                        blueprint.AddTenancy<Blueprint.Tenancy.AsyncLocalTenantAccessor, SampleTenantResolver>();
                         blueprint.AddResourceExpander<OwnerResourceExpander>();
                         blueprint.AddETagSupport();
 

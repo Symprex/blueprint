@@ -17,12 +17,14 @@ namespace Blueprint.Generated
     {
         readonly Blueprint.Authorization.IApiAuthoriser[] _apiAuthorisers;
         static readonly string[] _appliedModuleIds =
-            new string[] { "PropertyOwnershipModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "HandlerExecutionModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
+            new string[] { "PropertyOwnershipModule", "TenantModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "HandlerExecutionModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
         readonly Blueprint.Auditing.IAuditSink _auditSink;
         private static readonly System.Diagnostics.ActivityTagsCollection _auditTags_AllTypesGetQuery =
             new System.Diagnostics.ActivityTagsCollection { { "blueprint.operation.type", "AllTypesGetQuery" } };
         readonly Blueprint.Authorization.IOperationAuthoriser[] _operationAuthorisers;
         readonly Blueprint.Runtime.Middleware.IPropertyPopulator[] _propertyPopulators;
+        readonly Blueprint.Tenancy.ITenantAccessor _tenantAccessor;
+        readonly Blueprint.Tenancy.ITenantResolver _tenantResolver;
         readonly Blueprint.Authorization.IUserAuthorisationContextFactory _userContextFactory;
 
         public AllTypesGetQueryExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, System.IServiceProvider serviceProvider)
@@ -31,6 +33,8 @@ namespace Blueprint.Generated
             this._apiAuthorisers = (Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Authorization.IApiAuthoriser>>(serviceProvider) is { } aa ? System.Linq.Enumerable.ToArray(aa) : System.Array.Empty<Blueprint.Authorization.IApiAuthoriser>());
             this._operationAuthorisers = (Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Authorization.IOperationAuthoriser>>(serviceProvider) is { } oa ? System.Linq.Enumerable.ToArray(oa) : System.Array.Empty<Blueprint.Authorization.IOperationAuthoriser>());
             this._userContextFactory = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Authorization.IUserAuthorisationContextFactory>(serviceProvider);
+            this._tenantAccessor = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Tenancy.ITenantAccessor>(serviceProvider);
+            this._tenantResolver = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Tenancy.ITenantResolver>(serviceProvider);
             this._propertyPopulators = (Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Runtime.Middleware.IPropertyPopulator>>(serviceProvider) is { } populators ? System.Linq.Enumerable.ToArray(populators) : System.Array.Empty<Blueprint.Runtime.Middleware.IPropertyPopulator>());
             this._auditSink = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Auditing.IAuditSink>(serviceProvider);
         }
@@ -202,6 +206,13 @@ namespace Blueprint.Generated
                 operation.CategoryIds = _arr_CategoryIds;
             }
 
+            // Tenant resolution (compile-time, no reflection)
+            if (this._tenantResolver != null && this._tenantAccessor != null)
+            {
+                var resolvedTenantId = this._tenantResolver.ResolveTenantId(context.UserPrincipal);
+                this._tenantAccessor.Current = resolvedTenantId;
+            }
+
             await Blueprint.Runtime.Exec.PipelineHelpers.PopulatePropertiesAsync(this._propertyPopulators, context).ConfigureAwait(false);
             if (httpContext.User.Identity?.IsAuthenticated != true)
             {
@@ -308,12 +319,14 @@ namespace Blueprint.Generated
     {
         readonly Blueprint.Authorization.IApiAuthoriser[] _apiAuthorisers;
         static readonly string[] _appliedModuleIds =
-            new string[] { "PropertyOwnershipModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "HandlerExecutionModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
+            new string[] { "PropertyOwnershipModule", "TenantModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "HandlerExecutionModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
         readonly Blueprint.Auditing.IAuditSink _auditSink;
         private static readonly System.Diagnostics.ActivityTagsCollection _auditTags_AllTypesPostCommand =
             new System.Diagnostics.ActivityTagsCollection { { "blueprint.operation.type", "AllTypesPostCommand" } };
         readonly Blueprint.Authorization.IOperationAuthoriser[] _operationAuthorisers;
         readonly Blueprint.Runtime.Middleware.IPropertyPopulator[] _propertyPopulators;
+        readonly Blueprint.Tenancy.ITenantAccessor _tenantAccessor;
+        readonly Blueprint.Tenancy.ITenantResolver _tenantResolver;
         readonly Blueprint.Authorization.IUserAuthorisationContextFactory _userContextFactory;
 
         public AllTypesPostCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, System.IServiceProvider serviceProvider)
@@ -322,6 +335,8 @@ namespace Blueprint.Generated
             this._apiAuthorisers = (Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Authorization.IApiAuthoriser>>(serviceProvider) is { } aa ? System.Linq.Enumerable.ToArray(aa) : System.Array.Empty<Blueprint.Authorization.IApiAuthoriser>());
             this._operationAuthorisers = (Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Authorization.IOperationAuthoriser>>(serviceProvider) is { } oa ? System.Linq.Enumerable.ToArray(oa) : System.Array.Empty<Blueprint.Authorization.IOperationAuthoriser>());
             this._userContextFactory = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Authorization.IUserAuthorisationContextFactory>(serviceProvider);
+            this._tenantAccessor = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Tenancy.ITenantAccessor>(serviceProvider);
+            this._tenantResolver = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Tenancy.ITenantResolver>(serviceProvider);
             this._propertyPopulators = (Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Runtime.Middleware.IPropertyPopulator>>(serviceProvider) is { } populators ? System.Linq.Enumerable.ToArray(populators) : System.Array.Empty<Blueprint.Runtime.Middleware.IPropertyPopulator>());
             this._auditSink = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Auditing.IAuditSink>(serviceProvider);
         }
@@ -424,6 +439,13 @@ namespace Blueprint.Generated
                 {
                     return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid route parameter 'ItemGuid'");
                 }
+            }
+
+            // Tenant resolution (compile-time, no reflection)
+            if (this._tenantResolver != null && this._tenantAccessor != null)
+            {
+                var resolvedTenantId = this._tenantResolver.ResolveTenantId(context.UserPrincipal);
+                this._tenantAccessor.Current = resolvedTenantId;
             }
 
             await Blueprint.Runtime.Exec.PipelineHelpers.PopulatePropertiesAsync(this._propertyPopulators, context).ConfigureAwait(false);

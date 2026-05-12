@@ -1964,12 +1964,12 @@ public class ReferenceAppHttpEndToEndIntegrationTests
     }
 
     [Fact]
-    public async Task When_property_populator_registered_then_tenant_id_auto_populated_from_jwt_claim()
+    public async Task When_tenant_resolver_registered_then_tenant_id_auto_populated_from_jwt_claim()
     {
         var endpoints = CreateEndpointsWithPropertyPopulator();
         endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
 
-        // UpdateTemplateSettings requires TenantId — property populator should fill it from claim
+        // UpdateTemplateSettings requires TenantId — TenantModule fills it from the claim via ITenantResolver
         var endpoint = FindEndpoint(endpoints, "api/tenants/{TenantId}/templates/{Id}/settings", "PUT");
         endpoint.Should().NotBeNull("tenant-scoped template settings route should be registered");
 
@@ -1996,7 +1996,7 @@ public class ReferenceAppHttpEndToEndIntegrationTests
         });
 
         response.StatusCode.Should().Be(StatusCodes.Status200OK,
-            "property populator should fill TenantId from JWT claim, allowing the request to proceed");
+            "TenantModule should fill TenantId from JWT claim via ITenantResolver, allowing the request to proceed");
     }
 
     [Fact]
@@ -2717,8 +2717,8 @@ public class ReferenceAppHttpEndToEndIntegrationTests
             .AddScoped<Blueprint.Tasks.IBackgroundTaskScheduler, InProcessBackgroundTaskScheduler>()
             .AddScoped<SampleMartenUnitOfWork>()
             .AddScoped<Blueprint.Persistence.IUnitOfWork>(sp => sp.GetRequiredService<SampleMartenUnitOfWork>())
-            .AddSingleton<ITenantAccessor, AsyncLocalTenantAccessor>()
-            .AddSingleton<Blueprint.Runtime.Middleware.IPropertyPopulator, TenantPropertyPopulator>();
+            .AddSingleton<Blueprint.Tenancy.ITenantAccessor, Blueprint.Tenancy.AsyncLocalTenantAccessor>()
+            .AddSingleton<Blueprint.Tenancy.ITenantResolver, SampleTenantResolver>();
 
         return new TestEndpointRouteBuilder(services.BuildServiceProvider());
     }

@@ -463,4 +463,31 @@ public sealed class BlueprintServiceBuilder
         this.Services.AddSingleton<Blueprint.Runtime.Expansion.IResourceExpander, T>();
         return this;
     }
+
+    /// <summary>
+    /// Registers first-class tenant support: an <see cref="Blueprint.Tenancy.ITenantAccessor"/> that
+    /// stores the current tenant per async context, and an <see cref="Blueprint.Tenancy.ITenantResolver"/>
+    /// that extracts the tenant identifier from the authenticated user's claims.
+    /// <para>
+    /// The generated pipeline's <c>TenantModule</c> calls the resolver during the Population stage,
+    /// sets the accessor, and directly assigns <c>TenantId</c> properties on operations that have one
+    /// — all without runtime reflection.
+    /// </para>
+    /// </summary>
+    /// <typeparam name="TAccessor">The <see cref="Blueprint.Tenancy.ITenantAccessor"/> implementation type.
+    /// Use <see cref="Blueprint.Tenancy.AsyncLocalTenantAccessor"/> for the default <see cref="AsyncLocal{T}"/>-backed
+    /// implementation.</typeparam>
+    /// <typeparam name="TResolver">The <see cref="Blueprint.Tenancy.ITenantResolver"/> implementation that
+    /// knows how to extract the tenant identifier from a <see cref="System.Security.Claims.ClaimsPrincipal"/>.</typeparam>
+    /// <returns>This builder for chaining.</returns>
+    public BlueprintServiceBuilder AddTenancy<
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TAccessor,
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TResolver>()
+        where TAccessor : class, Blueprint.Tenancy.ITenantAccessor
+        where TResolver : class, Blueprint.Tenancy.ITenantResolver
+    {
+        this.Services.AddSingleton<Blueprint.Tenancy.ITenantAccessor, TAccessor>();
+        this.Services.AddSingleton<Blueprint.Tenancy.ITenantResolver, TResolver>();
+        return this;
+    }
 }

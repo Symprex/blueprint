@@ -29,8 +29,10 @@ public class Startup
         services.AddLogging();
         services.AddSingleton<TemplateStore>();
 
-        // Multi-tenancy: AsyncLocal-backed ambient tenant context (like Signature365's ICurrentTenantAccessor)
-        services.AddSingleton<ITenantAccessor, AsyncLocalTenantAccessor>();
+        // Multi-tenancy: first-class compile-time tenant support.
+        // TenantModule in the generated pipeline resolves tenant from claims via ITenantResolver
+        // and directly assigns TenantId properties (no reflection, no IPropertyPopulator needed).
+        services.AddSingleton<Blueprint.Tenancy.ITenantAccessor, Blueprint.Tenancy.AsyncLocalTenantAccessor>();
 
         // ASP.NET Core authentication must be configured so that HttpContext.User is
         // populated before Blueprint's generated [MustBeAuthenticated] / [Resource]
@@ -72,9 +74,9 @@ public class Startup
             // registers for periodic execution. This proves the recurring task consumer seam.
             blueprint.AddRecurringTaskScheduler<SampleRecurringTaskScheduler>();
 
-            // Property population: auto-populate TenantId from JWT claims
-            // (like Signature365's SetTenantMiddleware at Authentication stage)
-            blueprint.AddPropertyPopulator<TenantPropertyPopulator>();
+            // First-class tenancy: resolve tenant from JWT claims at compile time.
+            // Replaces the old IPropertyPopulator-based TenantPropertyPopulator that used reflection.
+            blueprint.AddTenancy<Blueprint.Tenancy.AsyncLocalTenantAccessor, SampleTenantResolver>();
 
             // Resource expansion: populate Expandable<OwnerApiResource> when client
             // requests ?expand=Owner (like Signature365's AzureAdGroupApiResourceExpander).
@@ -135,7 +137,7 @@ public class Startup
                 configureOpenApiOperations: ops =>
                 {
                     // Remove auto-populated TenantId parameters from public API docs.
-                    // In production, TenantId is set by TenantPropertyPopulator from JWT claims,
+                    // In production, TenantId is set by the TenantModule from JWT claims,
                     // so external callers should not see it in the OpenAPI spec.
                     ops.Processors.Add(static (operation, descriptor) =>
                     {

@@ -134,15 +134,19 @@ namespace Blueprint.Generated
     public sealed partial class GetOrderStatusExecutorPipeline : Blueprint.OperationExecutorShell
     {
         static readonly string[] _appliedModuleIds =
-            new string[] { "PropertyPopulationModule", "HandlerExecutionModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
+            new string[] { "TenantModule", "PropertyPopulationModule", "HandlerExecutionModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
         readonly Blueprint.Auditing.IAuditSink _auditSink;
         private static readonly System.Diagnostics.ActivityTagsCollection _auditTags_GetOrderStatus =
             new System.Diagnostics.ActivityTagsCollection { { "blueprint.operation.type", "GetOrderStatus" } };
         readonly Blueprint.Runtime.Middleware.IPropertyPopulator[] _propertyPopulators;
+        readonly Blueprint.Tenancy.ITenantAccessor _tenantAccessor;
+        readonly Blueprint.Tenancy.ITenantResolver _tenantResolver;
 
         public GetOrderStatusExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, System.IServiceProvider serviceProvider)
             : base(loggerFactory, "GetOrderStatus")
         {
+            this._tenantAccessor = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Tenancy.ITenantAccessor>(serviceProvider);
+            this._tenantResolver = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Tenancy.ITenantResolver>(serviceProvider);
             this._propertyPopulators = (Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Runtime.Middleware.IPropertyPopulator>>(serviceProvider) is { } populators ? System.Linq.Enumerable.ToArray(populators) : System.Array.Empty<Blueprint.Runtime.Middleware.IPropertyPopulator>());
             this._auditSink = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Auditing.IAuditSink>(serviceProvider);
         }
@@ -151,6 +155,13 @@ namespace Blueprint.Generated
         {
             var operation = (global::TestNamespace.GetOrderStatus)context.Operation;
 
+
+            // Tenant resolution (compile-time, no reflection)
+            if (this._tenantResolver != null && this._tenantAccessor != null)
+            {
+                var resolvedTenantId = this._tenantResolver.ResolveTenantId(context.UserPrincipal);
+                this._tenantAccessor.Current = resolvedTenantId;
+            }
 
             await Blueprint.Runtime.Exec.PipelineHelpers.PopulatePropertiesAsync(this._propertyPopulators, context).ConfigureAwait(false);
             var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<string>(await global::TestNamespace.GetOrderStatus.HandleAsync(operation).ConfigureAwait(false));
@@ -196,15 +207,19 @@ namespace Blueprint.Generated
     public sealed partial class ProcessOrderMessageExecutorPipeline : Blueprint.OperationExecutorShell
     {
         static readonly string[] _appliedModuleIds =
-            new string[] { "TestMessagingPipelineModule", "PropertyPopulationModule", "HandlerExecutionModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
+            new string[] { "TestMessagingPipelineModule", "TenantModule", "PropertyPopulationModule", "HandlerExecutionModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
         readonly Blueprint.Auditing.IAuditSink _auditSink;
         private static readonly System.Diagnostics.ActivityTagsCollection _auditTags_ProcessOrderMessage =
             new System.Diagnostics.ActivityTagsCollection { { "blueprint.operation.type", "ProcessOrderMessage" } };
         readonly Blueprint.Runtime.Middleware.IPropertyPopulator[] _propertyPopulators;
+        readonly Blueprint.Tenancy.ITenantAccessor _tenantAccessor;
+        readonly Blueprint.Tenancy.ITenantResolver _tenantResolver;
 
         public ProcessOrderMessageExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, System.IServiceProvider serviceProvider)
             : base(loggerFactory, "ProcessOrderMessage")
         {
+            this._tenantAccessor = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Tenancy.ITenantAccessor>(serviceProvider);
+            this._tenantResolver = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Tenancy.ITenantResolver>(serviceProvider);
             this._propertyPopulators = (Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<System.Collections.Generic.IEnumerable<Blueprint.Runtime.Middleware.IPropertyPopulator>>(serviceProvider) is { } populators ? System.Linq.Enumerable.ToArray(populators) : System.Array.Empty<Blueprint.Runtime.Middleware.IPropertyPopulator>());
             this._auditSink = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Auditing.IAuditSink>(serviceProvider);
         }
@@ -215,6 +230,13 @@ namespace Blueprint.Generated
 
             // [MessagingPipeline] Deserialize message envelope
             context.Activity?.AddTag("messaging.deserialized", true);
+
+            // Tenant resolution (compile-time, no reflection)
+            if (this._tenantResolver != null && this._tenantAccessor != null)
+            {
+                var resolvedTenantId = this._tenantResolver.ResolveTenantId(context.UserPrincipal);
+                this._tenantAccessor.Current = resolvedTenantId;
+            }
 
             await Blueprint.Runtime.Exec.PipelineHelpers.PopulatePropertiesAsync(this._propertyPopulators, context).ConfigureAwait(false);
             var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<string>(await global::TestNamespace.ProcessOrderMessage.HandleAsync(operation).ConfigureAwait(false));

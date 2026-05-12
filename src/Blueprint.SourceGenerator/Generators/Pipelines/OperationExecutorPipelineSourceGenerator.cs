@@ -6,6 +6,7 @@ using Blueprint.SourceGenerator.Modules.Auditing;
 using Blueprint.SourceGenerator.Modules.Authentication;
 using Blueprint.SourceGenerator.Modules.Authorization;
 using Blueprint.SourceGenerator.Modules.Observability;
+using Blueprint.SourceGenerator.Modules.Tenancy;
 using Blueprint.SourceGenerator.Planning;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -148,6 +149,7 @@ public partial class OperationExecutorPipelineSourceGenerator : IIncrementalGene
         [
             new PerformanceMetricsModule(),
             new PropertyOwnershipModule(),
+            new TenantModule(),
             new PropertyPopulationModule(),
             new AuthenticationModule(),
             new AuthorizationModule(),

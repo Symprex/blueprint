@@ -1,4 +1,5 @@
 using Blueprint.Model;
+using Blueprint.Tenancy;
 
 namespace Blueprint.SourceGenerator.Sample.Api;
 
