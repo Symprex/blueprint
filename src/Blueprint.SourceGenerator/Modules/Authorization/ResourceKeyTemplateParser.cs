@@ -89,6 +89,9 @@ internal static class ResourceKeyTemplateParser
     /// <summary>
     /// Generates a C# string interpolation expression that expands the resource key template
     /// inline, using direct property access for operation properties and <c>FindFirst</c> for claims.
+    /// Well-known <c>{Auth:...}</c> tokens (<c>AccountId</c>, <c>Id</c>, <c>IdentityId</c>,
+    /// <c>Email</c>, <c>Name</c>) resolve from <c>context.UserAuthorisationContext</c> first,
+    /// falling back to claims for unknown token names.
     /// </summary>
     /// <param name="template">The resource key template string.</param>
     /// <param name="tokens">The parsed tokens from <see cref="ParseTokens"/>.</param>
@@ -99,12 +102,17 @@ internal static class ResourceKeyTemplateParser
     /// The expression that accesses the <see cref="System.Security.Claims.ClaimsPrincipal"/>
     /// (e.g., <c>"principal"</c>).
     /// </param>
+    /// <param name="contextExpression">
+    /// Optional expression that accesses the <c>ApiOperationContext</c> (e.g., <c>"context"</c>).
+    /// When provided, well-known claim tokens resolve from the user authorization context first.
+    /// </param>
     /// <returns>A C# expression string that evaluates to the expanded resource key.</returns>
     public static string GenerateExpansionExpression(
         string template,
         List<ResourceKeyToken> tokens,
         string operationExpression,
-        string principalExpression)
+        string principalExpression,
+        string? contextExpression = null)
     {
         if (tokens.Count == 0)
         {
@@ -120,7 +128,17 @@ internal static class ResourceKeyTemplateParser
 
             if (token.IsClaimToken)
             {
-                replacement = $"{{{principalExpression}.FindFirst(\"{token.Name}\")?.Value ?? \"\"}}";
+                // Well-known IUserAuthorisationContext properties resolve from the context
+                // first (e.g., AccountId is TenantId ?? PartnerId ?? "Symprex" — a computed
+                // value that doesn't correspond to any single JWT claim).
+                if (contextExpression is not null && IsWellKnownContextProperty(token.Name))
+                {
+                    replacement = $"{{{contextExpression}.UserAuthorisationContext?.{token.Name} ?? {principalExpression}.FindFirst(\"{token.Name}\")?.Value ?? \"\"}}";
+                }
+                else
+                {
+                    replacement = $"{{{principalExpression}.FindFirst(\"{token.Name}\")?.Value ?? \"\"}}";
+                }
             }
             else
             {
@@ -139,5 +157,20 @@ internal static class ResourceKeyTemplateParser
         }
 
         return $"$\"{result}\"";
+    }
+
+    /// <summary>
+    /// Returns <see langword="true"/> if the token name matches a property defined on
+    /// <c>IUserAuthorisationContext</c> that should be resolved from the context rather than
+    /// from JWT claims. This covers computed properties like <c>AccountId</c> which may not
+    /// correspond to any single claim.
+    /// </summary>
+    private static bool IsWellKnownContextProperty(string name)
+    {
+        return name.Equals("AccountId", StringComparison.OrdinalIgnoreCase)
+            || name.Equals("Id", StringComparison.OrdinalIgnoreCase)
+            || name.Equals("IdentityId", StringComparison.OrdinalIgnoreCase)
+            || name.Equals("Email", StringComparison.OrdinalIgnoreCase)
+            || name.Equals("Name", StringComparison.OrdinalIgnoreCase);
     }
 }

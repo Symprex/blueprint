@@ -166,4 +166,60 @@ public class ResourceKeyTemplateParserTests
         expression.Should().Contain("principal.FindFirst(\"AccountId\")?.Value ?? \"\"");
         expression.Should().Contain("operation.TenantId?.Id");
     }
+
+    // ── Context-aware claim resolution tests ─────────────────────────────
+
+    [Fact]
+    public void GenerateExpansionExpression_with_context_resolves_AccountId_from_context()
+    {
+        var template = "/tenants/{Auth:AccountId}";
+        var tokens = ResourceKeyTemplateParser.ParseTokens(template);
+
+        var expression = ResourceKeyTemplateParser.GenerateExpansionExpression(
+            template, tokens, "operation", "principal", "context");
+
+        // Should resolve from context.UserAuthorisationContext first, then fall back to claims
+        expression.Should().Contain("context.UserAuthorisationContext?.AccountId");
+        expression.Should().Contain("principal.FindFirst(\"AccountId\")?.Value");
+    }
+
+    [Fact]
+    public void GenerateExpansionExpression_with_context_resolves_Id_from_context()
+    {
+        var template = "/users/{Auth:Id}";
+        var tokens = ResourceKeyTemplateParser.ParseTokens(template);
+
+        var expression = ResourceKeyTemplateParser.GenerateExpansionExpression(
+            template, tokens, "operation", "principal", "context");
+
+        expression.Should().Contain("context.UserAuthorisationContext?.Id");
+    }
+
+    [Fact]
+    public void GenerateExpansionExpression_with_context_falls_back_for_unknown_claim()
+    {
+        var template = "/raw/{Auth:s365_tenant_id}";
+        var tokens = ResourceKeyTemplateParser.ParseTokens(template);
+
+        var expression = ResourceKeyTemplateParser.GenerateExpansionExpression(
+            template, tokens, "operation", "principal", "context");
+
+        // s365_tenant_id is NOT a well-known context property, so no context resolution
+        expression.Should().NotContain("UserAuthorisationContext");
+        expression.Should().Contain("principal.FindFirst(\"s365_tenant_id\")?.Value");
+    }
+
+    [Fact]
+    public void GenerateExpansionExpression_without_context_uses_claims_only()
+    {
+        var template = "/tenants/{Auth:AccountId}";
+        var tokens = ResourceKeyTemplateParser.ParseTokens(template);
+
+        // No context expression — backwards compatible
+        var expression = ResourceKeyTemplateParser.GenerateExpansionExpression(
+            template, tokens, "operation", "principal");
+
+        expression.Should().NotContain("UserAuthorisationContext");
+        expression.Should().Contain("principal.FindFirst(\"AccountId\")?.Value");
+    }
 }

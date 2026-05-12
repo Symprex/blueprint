@@ -362,7 +362,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
                         {
                             var tokens = ResourceKeyTemplateParser.ParseTokens(sp.ResourceKeyTemplate);
                             var expandedExpr = ResourceKeyTemplateParser.GenerateExpansionExpression(
-                                sp.ResourceKeyTemplate, tokens, operationExpr, principalExpr);
+                                sp.ResourceKeyTemplate, tokens, operationExpr, principalExpr, "context");
 
                             return $"new Blueprint.Model.ResolvedScopePair(\"{sp.Noun}\", \"{sp.Verb}\", \"{sp.ResourceKeyTemplate}\", {expandedExpr})";
                         }

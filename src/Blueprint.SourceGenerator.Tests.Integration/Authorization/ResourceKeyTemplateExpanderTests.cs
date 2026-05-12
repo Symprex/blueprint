@@ -112,6 +112,96 @@ public class ResourceKeyTemplateExpanderTests
         pair.ResourceKeyTemplate.Should().BeNull();
     }
 
+    [Fact]
+    public void Expand_resolves_auth_AccountId_from_user_context_not_claims()
+    {
+        // S365 pattern: {Auth:AccountId} resolves from IUserAuthorisationContext.AccountId,
+        // which is a computed property (TenantId ?? PartnerId ?? "Symprex") — not a JWT claim.
+        var template = "/Tenants/{Auth:AccountId}/Items/{Id}";
+        var operation = new SampleTenantOperation { Id = "I-42" };
+        var principal = new ClaimsPrincipal(new ClaimsIdentity([], "Test"));
+        var userContext = new TestUserAuthorisationContext
+        {
+            AccountId = "computed-tenant-123",
+            Id = "user-456",
+        };
+
+        var result = ResourceKeyTemplateExpander.Expand(template, operation, principal, userContext);
+
+        result.Should().Be("/Tenants/computed-tenant-123/Items/I-42");
+    }
+
+    [Fact]
+    public void Expand_resolves_auth_Id_from_user_context()
+    {
+        var template = "/Users/{Auth:Id}/Documents/{Id}";
+        var operation = new SampleTenantOperation { Id = "D-100" };
+        var principal = new ClaimsPrincipal(new ClaimsIdentity([], "Test"));
+        var userContext = new TestUserAuthorisationContext { Id = "user-789" };
+
+        var result = ResourceKeyTemplateExpander.Expand(template, operation, principal, userContext);
+
+        result.Should().Be("/Users/user-789/Documents/D-100");
+    }
+
+    [Fact]
+    public void Expand_user_context_takes_precedence_over_claims()
+    {
+        // When both a context property and a claim exist, the context property wins
+        var template = "/Tenants/{Auth:AccountId}";
+        var operation = new SampleTenantOperation();
+        var identity = new ClaimsIdentity([new System.Security.Claims.Claim("AccountId", "from-claim")], "Test");
+        var principal = new ClaimsPrincipal(identity);
+        var userContext = new TestUserAuthorisationContext { AccountId = "from-context" };
+
+        var result = ResourceKeyTemplateExpander.Expand(template, operation, principal, userContext);
+
+        result.Should().Be("/Tenants/from-context");
+    }
+
+    [Fact]
+    public void Expand_falls_back_to_claims_for_non_context_auth_tokens()
+    {
+        // {Auth:s365_tenant_id} is not a well-known context property, so falls back to claims
+        var template = "/Raw/{Auth:s365_tenant_id}";
+        var operation = new SampleTenantOperation();
+        var identity = new ClaimsIdentity([new System.Security.Claims.Claim("s365_tenant_id", "T-CLAIM")], "Test");
+        var principal = new ClaimsPrincipal(identity);
+        var userContext = new TestUserAuthorisationContext { AccountId = "ignored" };
+
+        var result = ResourceKeyTemplateExpander.Expand(template, operation, principal, userContext);
+
+        result.Should().Be("/Raw/T-CLAIM");
+    }
+
+    [Fact]
+    public void ExpandAll_passes_user_context_through_to_Expand()
+    {
+        var scopePairs = new ScopePair[]
+        {
+            new("template", "read", "/Tenants/{Auth:AccountId}/Templates/{Id}"),
+        };
+
+        var operation = new SampleTenantOperation { Id = "TPL-1" };
+        var principal = new ClaimsPrincipal(new ClaimsIdentity([], "Test"));
+
+        var services = new ServiceCollection().BuildServiceProvider();
+        var app = new BlueprintApp();
+        var descriptor = new ApiOperationDescriptor(typeof(SampleTenantOperation), "SampleTenantOperation", "test");
+        app.Register(descriptor);
+        var context = new Blueprint.Runtime.Exec.ApiOperationContext(services, app, descriptor, CancellationToken.None)
+        {
+            UserPrincipal = principal,
+            Operation = operation,
+            UserAuthorisationContext = new TestUserAuthorisationContext { AccountId = "ctx-tenant" },
+        };
+
+        var results = ResourceKeyTemplateExpander.ExpandAll(context, principal, scopePairs);
+
+        results.Should().HaveCount(1);
+        results[0].Should().Be("/Tenants/ctx-tenant/Templates/TPL-1");
+    }
+
     private class SampleTenantOperation
     {
         public string TenantId { get; set; } = string.Empty;
@@ -119,5 +209,28 @@ public class ResourceKeyTemplateExpanderTests
         public string CampaignId { get; set; } = string.Empty;
 
         public string Id { get; set; } = string.Empty;
+    }
+
+    private class TestUserAuthorisationContext : IUserAuthorisationContext
+    {
+        public bool IsActive { get; set; } = true;
+
+        public bool IsAnonymous { get; set; }
+
+        public string Id { get; set; } = "test-user";
+
+        public string IdentityId { get; set; } = "test-identity";
+
+        public string AccountId { get; set; } = "test-account";
+
+        public string Email { get; set; } = "test@example.com";
+
+        public string Name { get; set; } = "Test User";
+
+        public void PopulateMetadata(Action<string, object> add)
+        {
+            add("user_id", this.Id);
+            add("account_id", this.AccountId);
+        }
     }
 }

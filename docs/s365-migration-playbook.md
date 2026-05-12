@@ -1246,6 +1246,181 @@ declared link relations.
 
 ---
 
+## Authorization Migration (Detailed)
+
+### S365 Authorization Architecture
+
+S365 uses a layered authorization model with four distinct concerns:
+
+```
+JWT Token (Sig365 Bearer)
+  ↓
+ClaimsIdentity extracted
+  ↓
+Signature365UserAuthorisationContext built from claims
+  ↓
+SetTenantMiddleware sets ICurrentTenantAccessor
+  ↓
+ScopeApiAuthoriser validates OAuth scope claims
+  ↓
+S365ClaimsApiAuthoriser checks [Resource] attribute claims
+  ↓
+IS365ClaimInspector validates demanded claim against user claims
+```
+
+### S365 JWT Claim Types
+
+The custom claim types used by S365 (defined in `Signature365JwtClaimTypes`):
+
+| Claim Type | Example Value | Purpose |
+|---|---|---|
+| `s365_tenant_id` | `"tenant-abc-123"` | Tenant context |
+| `s365_partner_id` | `"partner-xyz"` | Partner context |
+| `s365_identity_id` | `"user-456"` | Identity Server user ID |
+| `s365_assigned_role` | `"Admin:Resource/Key"` | Role + resource key pair |
+| `s365_assigned_scope_pair` | `"Template:Read:/Tenants/abc/Templates"` | Noun:Verb:ResourceKey |
+| `s365_language` | `"en-GB"` | User language preference |
+| `s365_theme` | `"dark"` | UI theme |
+
+### AccountId Resolution
+
+```csharp
+// S365 pattern — falls back through three levels:
+string AccountId => TenantId ?? PartnerId ?? "Symprex";
+```
+
+This is critical for `{Auth:AccountId}` template expansion in resource keys.
+
+### Migration: S365ClaimsApiAuthoriser → IResourceAuthorizationProvider
+
+The `S365ClaimsApiAuthoriser` and `ScopeApiAuthoriser` collapse into a single
+`IResourceAuthorizationProvider` implementation:
+
+```csharp
+/// <summary>
+/// Replaces both S365ClaimsApiAuthoriser and ScopeApiAuthoriser in the new Blueprint.
+/// The generated pipeline calls this with pre-extracted scope pairs from [Resource] attributes.
+/// </summary>
+public class S365ResourceAuthorizationProvider : IResourceAuthorizationProvider
+{
+    private readonly IS365ClaimInspector _claimInspector;
+
+    public S365ResourceAuthorizationProvider(IS365ClaimInspector claimInspector)
+    {
+        _claimInspector = claimInspector;
+    }
+
+    public async Task<bool> IsAuthorizedAsync(
+        ApiOperationContext context,
+        ClaimsPrincipal principal,
+        IReadOnlyList<ScopePair> requiredScopePairs,
+        CancellationToken ct)
+    {
+        var identity = principal.Identity as ClaimsIdentity;
+        if (identity is not { IsAuthenticated: true })
+            return false;
+
+        // Port ScopeApiAuthoriser logic — check OAuth scope claims
+        var scopeClaims = identity.FindAll("scope").Select(c => c.Value).ToHashSet();
+        if (scopeClaims.Count > 0)
+        {
+            // Filter out well-known OpenID scopes
+            scopeClaims.ExceptWith(["openid", "profile"]);
+
+            // Check if any scope matches the required noun:verb pairs
+            bool scopeMatch = false;
+            foreach (var pair in requiredScopePairs)
+            {
+                if (scopeClaims.Contains($"{pair.Noun}:{pair.Verb}") ||
+                    scopeClaims.Contains($"{pair.Noun}.ReadWrite.All"))
+                {
+                    scopeMatch = true;
+                    break;
+                }
+            }
+
+            if (!scopeMatch)
+                return false;
+        }
+
+        // Port S365ClaimsApiAuthoriser logic — check resource claims
+        var authContext = context.UserAuthorisationContext as Signature365UserAuthorisationContext;
+        if (authContext == null)
+            return false;
+
+        foreach (var pair in requiredScopePairs)
+        {
+            // Build demanded claim from scope pair + resource key template
+            var demandedClaim = new Claim("resource", $"{pair.Noun}/{pair.Verb}");
+            if (await _claimInspector.IsDemandedClaimFulfilledAsync(authContext, demandedClaim))
+                return true;
+        }
+
+        return false;
+    }
+}
+```
+
+### Migration: AuthResourceKeyTemplateExpander
+
+S365 uses `AuthResourceKeyTemplateExpander` to expand `{Auth:AccountId}` and `{Auth:Id}`
+in resource key templates. Blueprint's `ResourceKeyTemplateExpander` already supports this:
+
+```csharp
+// S365 expander (migrate as-is):
+public class S365ResourceKeyTemplateExpander : IResourceKeyTemplateExpander
+{
+    public string Expand(string template, ApiOperationContext context, object resource)
+    {
+        var authContext = context.UserAuthorisationContext as Signature365UserAuthorisationContext;
+
+        return template
+            .Replace("{Auth:AccountId}", authContext?.AccountId ?? "anonymous")
+            .Replace("{Auth:Id}", authContext?.Id ?? "anonymous");
+    }
+}
+```
+
+### Migration: Signature365UserAuthorisationContextFactory
+
+This factory is performance-critical (called on every request). Keep the existing
+implementation and register it via Blueprint's `AddUserAuthorisationContextFactory<T>()`:
+
+```csharp
+// In Startup.cs registration:
+blueprint.AddUserAuthorisationContextFactory<Signature365UserAuthorisationContextFactory>();
+```
+
+The factory parses JWT claims using direct loops (not LINQ) for performance:
+- `sub` → Id
+- `s365_tenant_id` → TenantId
+- `s365_partner_id` → PartnerId
+- `s365_identity_id` → IdentityId
+- `s365_assigned_role` → AssignedRole list
+- `s365_assigned_scope_pair` → AssignedScopePair list
+
+### What Changes
+
+| Aspect | Old S365 | New Blueprint |
+|---|---|---|
+| Resource attribute | `[Resource(noun, verb, "/path")]` | `[Resource("noun", "verb")]` — path removed |
+| Scope authoriser | `ScopeApiAuthoriser` (separate class) | Merged into `IResourceAuthorizationProvider` |
+| Resource authoriser | `S365ClaimsApiAuthoriser` (separate class) | Merged into `IResourceAuthorizationProvider` |
+| Template expansion | `AuthResourceKeyTemplateExpander` | `IResourceKeyTemplateExpander` (same pattern) |
+| User context factory | `Signature365UserAuthorisationContextFactory` | Same class, registered via `AddUserAuthorisationContextFactory<T>()` |
+| Claim inspector | `IS365ClaimInspector` | Reuse existing implementation |
+| Pipeline stages | Separate middleware classes | Source-generated pipeline steps |
+
+### What Stays the Same
+
+- JWT Bearer scheme (`Sig365`) — unchanged, runs in ASP.NET Core pipeline
+- `Signature365UserAuthorisationContext` — unchanged, reuse existing class
+- `IS365ClaimInspector` — unchanged, reuse existing implementation
+- Claim types (`s365_tenant_id`, etc.) — unchanged
+- AccountId resolution logic — unchanged
+
+---
+
 ## Multi-Tenancy Migration
 
 ### Current S365 Pattern

@@ -86,7 +86,7 @@ namespace Blueprint.Generated
             var resolvedAuthProvider = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Authorization.IResolvedResourceAuthorizationProvider>(context.ServiceProvider);
             if (resolvedAuthProvider != null)
             {
-                var isAuthorized = await resolvedAuthProvider.IsAuthorizedAsync(context, httpContext.User, new Blueprint.Model.ResolvedScopePair[] { new Blueprint.Model.ResolvedScopePair("account", "read", "/tenants/{Auth:AccountId}/accounts/{Id}", $"/tenants/{httpContext.User.FindFirst("AccountId")?.Value ?? ""}/accounts/{operation.Id?.ToString() ?? ""}") }, httpContext.RequestAborted).ConfigureAwait(false);
+                var isAuthorized = await resolvedAuthProvider.IsAuthorizedAsync(context, httpContext.User, new Blueprint.Model.ResolvedScopePair[] { new Blueprint.Model.ResolvedScopePair("account", "read", "/tenants/{Auth:AccountId}/accounts/{Id}", $"/tenants/{context.UserAuthorisationContext?.AccountId ?? httpContext.User.FindFirst("AccountId")?.Value ?? ""}/accounts/{operation.Id?.ToString() ?? ""}") }, httpContext.RequestAborted).ConfigureAwait(false);
                 if (!isAuthorized)
                 {
                     return new Blueprint.Runtime.Exec.ForbiddenResult();

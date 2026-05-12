@@ -85,14 +85,15 @@ public class AuthorizationModuleIntegrationTests
         var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
         var pipeline = executor.GetPipeline(typeof(GetMyAccountAuthorizationQuery));
 
-        // The {Auth:AccountId} token should be expanded from the principal's "AccountId" claim
+        // The {Auth:AccountId} token resolves from IUserAuthorisationContext.AccountId
+        // (which is "account-1" in TestClaimsUserContext), falling back to claims if no context.
         var context = CreateHttpContext(
             app,
             GetMyAccountAuthorizationQuery.Configure(),
             new GetMyAccountAuthorizationQuery(),
             CreateAuthenticatedPrincipal(
-                new System.Security.Claims.Claim("AccountId", "acct-99"),
-                new System.Security.Claims.Claim("resource-access", "account:read:/accounts/acct-99")),
+                new System.Security.Claims.Claim("AccountId", "account-1"),
+                new System.Security.Claims.Claim("resource-access", "account:read:/accounts/account-1")),
             serviceProvider);
 
         GetMyAccountAuthorizationQuery.Reset();
@@ -113,13 +114,13 @@ public class AuthorizationModuleIntegrationTests
         var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
         var pipeline = executor.GetPipeline(typeof(GetMyAccountAuthorizationQuery));
 
-        // Wrong AccountId claim should fail resource authorization
+        // AccountId resolves from context ("account-1") but resource-access claim expects wrong key
         var context = CreateHttpContext(
             app,
             GetMyAccountAuthorizationQuery.Configure(),
             new GetMyAccountAuthorizationQuery(),
             CreateAuthenticatedPrincipal(
-                new System.Security.Claims.Claim("AccountId", "acct-99"),
+                new System.Security.Claims.Claim("AccountId", "account-1"),
                 new System.Security.Claims.Claim("resource-access", "account:read:/accounts/acct-WRONG")),
             serviceProvider);
 
