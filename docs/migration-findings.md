@@ -31,6 +31,14 @@
 | Gateway sample + HTTP client E2E | ✅ Done | `Blueprint.SourceGenerator.Sample.Gateway` with 6 E2E tests |
 | Test fixture factory | ✅ Done | `BlueprintTestFixtureFactory` mirrors S365 `WebApiFixtureFactory` |
 | Test auth S365 compat | ✅ Done | `Set(ClaimsIdentity)`, `As(identity)`, `MakeAnonymous()` API match |
+| `[Link]` attribute support | ✅ Done | Source gen processes runtime `LinkAttribute` (292 S365 usages) |
+| HttpHostExposure centralisation | ✅ Done | 13 modules refactored to shared `HttpHostExposureHelper` |
+| `[FromResource]` compatibility | ✅ Verified | S365 2-arg form fully compatible, compile-time traversal |
+| PropertyOwnership route extraction | ✅ Done | Now includes `LinkAttribute` routes via shared helper |
+| Handler discovery compat | ✅ Verified | InvokeAsync/Handle/HandleAsync all recognised |
+| ResourceEvent compat | ✅ Verified | Identical interface between S365 and Blueprint |
+| IFormFile / multipart | ✅ Not needed | No S365 operations use IFormFile (only SMTP, excluded) |
+| IPropertyPopulator | ✅ Not needed | S365 has none; TenantModule handles TenantId at compile time |
 
 ---
 
@@ -82,6 +90,35 @@
 ### SMTP Subsystem
 - 59 projects, does NOT use Blueprint — only an HTTP client
 - **Excluded from migration scope**
+
+### Link Attributes
+- S365 has **193 `[SelfLink]`** and **292 `[Link]`** usages (99 non-self HATEOAS links)
+- Blueprint source-gen now processes all three: `[RootLink]`, `[SelfLink]`, `[Link]`
+- `[Link]` requires explicit `Rel` value (BPLG006 diagnostic if missing)
+- Null resource type on `[Link]` treated as root-link semantics (URL only, no link registration)
+- Index-based variable names (`link_0`, `link_1`) used in generated code for safe C# identifiers
+- PropertyOwnershipModule now extracts route placeholders from `[Link]` URLs too
+- 13 modules refactored to use centralised `HttpHostExposureHelper` (was duplicate per-module)
+
+### OpenAPI Compatibility
+- Blueprint uses `operationId` = operation class name (e.g., `GetTemplateQuery`)
+- S365 legacy also uses class name — **compatible**
+- Custom Handlebars templates use `operation.operationId` for lookup — works unchanged
+- `pathGenerator` helper builds URL interpolation from path — uses standard `{paramName}` format
+- Templates group operations by `tags` — Blueprint's OpenAPI groups by namespace, configurable
+- **Critical**: `x-links` extension must be present in Blueprint OpenAPI output for model resource methods
+
+### Background Tasks (Hangfire)
+- S365 uses `[Queue("portal")]` attribute on background tasks — **already supported**
+- `BackgroundTaskEnvelope.GetQueueName()` reads attribute (cached reflection, functional)
+- Custom `RecurringJobPartitionedSqlServerStorage` — S365 provides, Blueprint compatible
+- `IRecurringTaskScheduler` discovery — S365 configures in startup, not auto-discovered
+- No compile-time gaps for background tasks
+
+### Form Body Parsing
+- S365 has `FormBodyParser` for multipart/form-data in Blueprint.Http
+- **No S365 operations use IFormFile** — only the parser infrastructure references it
+- Blueprint can defer multipart support — not blocking migration
 
 ---
 
