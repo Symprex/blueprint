@@ -242,4 +242,103 @@ public static class PipelineHelpers
 
         return null;
     }
+
+    /// <summary>
+    /// Loads the <see cref="Authorization.IUserAuthorisationContext"/> from the authenticated principal
+    /// when an <see cref="Authorization.IUserAuthorisationContextFactory"/> is registered. Also sets
+    /// OpenTelemetry activity tags for the authenticated user. This replaces the per-pipeline inline
+    /// block that was previously emitted by <c>ApiAuthoriserModule</c>.
+    /// </summary>
+    /// <param name="context">The operation execution context.</param>
+    /// <param name="httpContext">The HTTP context for the current request.</param>
+    /// <param name="userContextFactory">The cached user authorization context factory, or <c>null</c> if not registered.</param>
+    /// <returns>A task that completes when the user context has been loaded (or skipped).</returns>
+    public static async Task LoadUserContextAsync(
+        ApiOperationContext context,
+        HttpContext httpContext,
+        Authorization.IUserAuthorisationContextFactory? userContextFactory)
+    {
+        if (userContextFactory != null)
+        {
+            if (httpContext.User.Identity is System.Security.Claims.ClaimsIdentity { IsAuthenticated: true } userIdentity)
+            {
+                context.UserAuthorisationContext = await userContextFactory
+                    .CreateContextAsync(userIdentity, context.OperationCancelled)
+                    .ConfigureAwait(false);
+            }
+        }
+
+        if (context.UserAuthorisationContext != null && context.Activity != null)
+        {
+            var activity = context.Activity;
+            activity.SetTag("enduser.id", context.UserAuthorisationContext.Id);
+            activity.SetTag("enduser.account_id", context.UserAuthorisationContext.AccountId);
+            context.UserAuthorisationContext.PopulateMetadata((key, value) => activity.SetTag(key, value));
+        }
+    }
+
+    /// <summary>
+    /// Runs the pre-cached <see cref="Authorization.IApiAuthoriser"/> and
+    /// <see cref="Authorization.IOperationAuthoriser"/> arrays against the current operation.
+    /// Returns <c>null</c> when all authorisers pass, or an <see cref="UnauthenticatedResult"/>
+    /// / <see cref="ForbiddenResult"/> when an authoriser denies execution.
+    /// </summary>
+    /// <remarks>
+    /// This replaces the per-pipeline inline foreach loops that the source generator previously
+    /// emitted into every authenticated pipeline's Authorisation stage. The authoriser arrays
+    /// are resolved once at pipeline construction time and cached as fields, so this method
+    /// receives them by reference with zero per-request allocation.
+    /// </remarks>
+    /// <param name="context">The current operation execution context.</param>
+    /// <param name="apiAuthorisers">Pre-cached array of <see cref="Authorization.IApiAuthoriser"/> instances (combined execution and link-visibility).</param>
+    /// <param name="operationAuthorisers">Pre-cached array of <see cref="Authorization.IOperationAuthoriser"/> instances (execution-only).</param>
+    /// <returns><c>null</c> when all authorisers pass; otherwise an <see cref="UnauthenticatedResult"/> or <see cref="ForbiddenResult"/>.</returns>
+    public static async Task<OperationResult?> RunAuthorisersAsync(
+        ApiOperationContext context,
+        Authorization.IApiAuthoriser[] apiAuthorisers,
+        Authorization.IOperationAuthoriser[] operationAuthorisers)
+    {
+        if (context.SkipAuthorisation)
+        {
+            return null;
+        }
+
+        for (var i = 0; i < apiAuthorisers.Length; i++)
+        {
+            var authoriser = apiAuthorisers[i];
+
+            if (authoriser.AppliesTo(context.Descriptor))
+            {
+                var result = await authoriser.CanExecuteOperationAsync(context, context.Descriptor, context.Operation)
+                    .ConfigureAwait(false);
+
+                if (!result.IsAllowed)
+                {
+                    return result.FailureType == Authorization.ExecutionAllowedFailureType.Authentication
+                        ? new UnauthenticatedResult()
+                        : new ForbiddenResult();
+                }
+            }
+        }
+
+        for (var i = 0; i < operationAuthorisers.Length; i++)
+        {
+            var authoriser = operationAuthorisers[i];
+
+            if (authoriser.AppliesTo(context.Descriptor))
+            {
+                var result = await authoriser.CanExecuteOperationAsync(context, context.Descriptor, context.Operation)
+                    .ConfigureAwait(false);
+
+                if (!result.IsAllowed)
+                {
+                    return result.FailureType == Authorization.ExecutionAllowedFailureType.Authentication
+                        ? new UnauthenticatedResult()
+                        : new ForbiddenResult();
+                }
+            }
+        }
+
+        return null;
+    }
 }

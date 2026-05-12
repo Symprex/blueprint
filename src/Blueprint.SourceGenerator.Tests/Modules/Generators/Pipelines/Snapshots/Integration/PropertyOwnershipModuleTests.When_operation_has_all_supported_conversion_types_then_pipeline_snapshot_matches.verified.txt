@@ -219,60 +219,12 @@ namespace Blueprint.Generated
                 return new Blueprint.Runtime.Exec.UnauthenticatedResult();
             }
 
-            if (this._userContextFactory != null)
-            {
-                var userIdentity = httpContext.User.Identity as System.Security.Claims.ClaimsIdentity;
-                if (userIdentity != null && userIdentity.IsAuthenticated)
-                {
-                    context.UserAuthorisationContext = await this._userContextFactory.CreateContextAsync(userIdentity, context.OperationCancelled).ConfigureAwait(false);
-                }
-            }
-            if (context.UserAuthorisationContext != null && context.Activity != null)
-            {
-                var _activity = context.Activity;
-                _activity.SetTag("enduser.id", context.UserAuthorisationContext.Id);
-                _activity.SetTag("enduser.account_id", context.UserAuthorisationContext.AccountId);
-                context.UserAuthorisationContext.PopulateMetadata((key, value) => _activity.SetTag(key, value));
-            }
+            await Blueprint.Runtime.Exec.PipelineHelpers.LoadUserContextAsync(context, httpContext, this._userContextFactory).ConfigureAwait(false);
 
-            if (!context.SkipAuthorisation)
+            var authoriserDenial = await Blueprint.Runtime.Exec.PipelineHelpers.RunAuthorisersAsync(context, this._apiAuthorisers, this._operationAuthorisers).ConfigureAwait(false);
+            if (authoriserDenial != null)
             {
-                if (this._apiAuthorisers.Length > 0)
-                {
-                    foreach (var authoriser in this._apiAuthorisers)
-                    {
-                        if (authoriser.AppliesTo(context.Descriptor))
-                        {
-                            var authoriseResult = await authoriser.CanExecuteOperationAsync(context, context.Descriptor, context.Operation).ConfigureAwait(false);
-                            if (!authoriseResult.IsAllowed)
-                            {
-                                if (authoriseResult.FailureType == Blueprint.Authorization.ExecutionAllowedFailureType.Authentication)
-                                {
-                                    return new Blueprint.Runtime.Exec.UnauthenticatedResult();
-                                }
-                                return new Blueprint.Runtime.Exec.ForbiddenResult();
-                            }
-                        }
-                    }
-                }
-                if (this._operationAuthorisers.Length > 0)
-                {
-                    foreach (var authoriser in this._operationAuthorisers)
-                    {
-                        if (authoriser.AppliesTo(context.Descriptor))
-                        {
-                            var authoriseResult = await authoriser.CanExecuteOperationAsync(context, context.Descriptor, context.Operation).ConfigureAwait(false);
-                            if (!authoriseResult.IsAllowed)
-                            {
-                                if (authoriseResult.FailureType == Blueprint.Authorization.ExecutionAllowedFailureType.Authentication)
-                                {
-                                    return new Blueprint.Runtime.Exec.UnauthenticatedResult();
-                                }
-                                return new Blueprint.Runtime.Exec.ForbiddenResult();
-                            }
-                        }
-                    }
-                }
+                return authoriserDenial;
             }
 
             var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<string>(await global::TestNamespace.AllTypesGetQuery.HandleAsync(operation).ConfigureAwait(false));
@@ -390,60 +342,12 @@ namespace Blueprint.Generated
                 return new Blueprint.Runtime.Exec.UnauthenticatedResult();
             }
 
-            if (this._userContextFactory != null)
-            {
-                var userIdentity = httpContext.User.Identity as System.Security.Claims.ClaimsIdentity;
-                if (userIdentity != null && userIdentity.IsAuthenticated)
-                {
-                    context.UserAuthorisationContext = await this._userContextFactory.CreateContextAsync(userIdentity, context.OperationCancelled).ConfigureAwait(false);
-                }
-            }
-            if (context.UserAuthorisationContext != null && context.Activity != null)
-            {
-                var _activity = context.Activity;
-                _activity.SetTag("enduser.id", context.UserAuthorisationContext.Id);
-                _activity.SetTag("enduser.account_id", context.UserAuthorisationContext.AccountId);
-                context.UserAuthorisationContext.PopulateMetadata((key, value) => _activity.SetTag(key, value));
-            }
+            await Blueprint.Runtime.Exec.PipelineHelpers.LoadUserContextAsync(context, httpContext, this._userContextFactory).ConfigureAwait(false);
 
-            if (!context.SkipAuthorisation)
+            var authoriserDenial = await Blueprint.Runtime.Exec.PipelineHelpers.RunAuthorisersAsync(context, this._apiAuthorisers, this._operationAuthorisers).ConfigureAwait(false);
+            if (authoriserDenial != null)
             {
-                if (this._apiAuthorisers.Length > 0)
-                {
-                    foreach (var authoriser in this._apiAuthorisers)
-                    {
-                        if (authoriser.AppliesTo(context.Descriptor))
-                        {
-                            var authoriseResult = await authoriser.CanExecuteOperationAsync(context, context.Descriptor, context.Operation).ConfigureAwait(false);
-                            if (!authoriseResult.IsAllowed)
-                            {
-                                if (authoriseResult.FailureType == Blueprint.Authorization.ExecutionAllowedFailureType.Authentication)
-                                {
-                                    return new Blueprint.Runtime.Exec.UnauthenticatedResult();
-                                }
-                                return new Blueprint.Runtime.Exec.ForbiddenResult();
-                            }
-                        }
-                    }
-                }
-                if (this._operationAuthorisers.Length > 0)
-                {
-                    foreach (var authoriser in this._operationAuthorisers)
-                    {
-                        if (authoriser.AppliesTo(context.Descriptor))
-                        {
-                            var authoriseResult = await authoriser.CanExecuteOperationAsync(context, context.Descriptor, context.Operation).ConfigureAwait(false);
-                            if (!authoriseResult.IsAllowed)
-                            {
-                                if (authoriseResult.FailureType == Blueprint.Authorization.ExecutionAllowedFailureType.Authentication)
-                                {
-                                    return new Blueprint.Runtime.Exec.UnauthenticatedResult();
-                                }
-                                return new Blueprint.Runtime.Exec.ForbiddenResult();
-                            }
-                        }
-                    }
-                }
+                return authoriserDenial;
             }
 
             var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<string>(await global::TestNamespace.AllTypesPostCommand.HandleAsync(operation).ConfigureAwait(false));

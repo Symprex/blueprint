@@ -1766,7 +1766,7 @@ to support a smooth S365 migration.
    MessageAsync, BackgroundTaskAsync, tenant auth context switching.
    **Done.** `BlueprintTestHost` provides `ExecuteAsync`, `ExecuteAsync<T>`,
    `ExecuteExpectingValidationFailureAsync`. `BlueprintTestContext` supports
-   `WithUser`, `WithTenant`, `WithPermissions`, `SkipAuthorisation`, `WithAuthorisationContext`.
+   `WithUser`, `WithTenant`, `WithScopePairs`, `SkipAuthorisation`, `WithAuthorisationContext`.
    Test doubles: `BackgroundTaskCollector`, `TestMessageCollector`, `InMemoryUnitOfWork`,
    `NullRecurringTaskProvider`.
 6. ✅ **Serialization guide** — `docs/serialization-migration.md` covering

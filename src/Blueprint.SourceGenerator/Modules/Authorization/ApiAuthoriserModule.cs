@@ -123,104 +123,27 @@ public sealed class ApiAuthoriserModule : IBlueprintSourceGeneratorModule, IPipe
 
     private static void RenderUserContextLoading(PipelineRenderContext context)
     {
-        // Use cached singleton IUserAuthorisationContextFactory field
-        context.If(
-            "this._userContextFactory != null",
-            branch =>
-            {
-                branch.DeclareVariable(
-                    "userIdentity",
-                    $"{context.GetHttpContextExpression()}.User.Identity as System.Security.Claims.ClaimsIdentity");
+        var httpContextExpr = context.GetHttpContextExpression();
 
-                branch.If(
-                    "userIdentity != null && userIdentity.IsAuthenticated",
-                    innerBranch =>
-                    {
-                        innerBranch.WriteStatement(
-                            "context.UserAuthorisationContext = await this._userContextFactory.CreateContextAsync(userIdentity, context.OperationCancelled).ConfigureAwait(false);");
-                    });
-            });
-
-        // Populate APM activity tags with user identity metadata when available
-        context.If(
-            "context.UserAuthorisationContext != null && context.Activity != null",
-            branch =>
-            {
-                branch.DeclareVariable("_activity", "context.Activity");
-                branch.WriteStatement(
-                    "_activity.SetTag(\"enduser.id\", context.UserAuthorisationContext.Id);");
-                branch.WriteStatement(
-                    "_activity.SetTag(\"enduser.account_id\", context.UserAuthorisationContext.AccountId);");
-                branch.WriteStatement(
-                    "context.UserAuthorisationContext.PopulateMetadata((key, value) => _activity.SetTag(key, value));");
-            });
+        context.WriteStatement(
+            $"await Blueprint.Runtime.Exec.PipelineHelpers.LoadUserContextAsync(context, {httpContextExpr}, this._userContextFactory).ConfigureAwait(false);");
 
         context.WriteBlankLine();
     }
 
     private static void RenderAuthoriserInvocation(PipelineRenderContext context)
     {
-        // Skip authorisation for nested operations that have already been authorised
+        context.DeclareVariable(
+            "authoriserDenial",
+            "await Blueprint.Runtime.Exec.PipelineHelpers.RunAuthorisersAsync(context, this._apiAuthorisers, this._operationAuthorisers).ConfigureAwait(false)");
+
         context.If(
-            "!context.SkipAuthorisation",
+            "authoriserDenial != null",
             branch =>
             {
-                // Use cached IApiAuthoriser[] (combined execution + link-visibility).
-                branch.If(
-                    "this._apiAuthorisers.Length > 0",
-                    innerBranch =>
-                    {
-                        innerBranch.ForEach("var authoriser", "this._apiAuthorisers", foreachBody =>
-                        {
-                            foreachBody.If(
-                                "authoriser.AppliesTo(context.Descriptor)",
-                                appliesBody =>
-                                {
-                                    RenderDenialCheck(appliesBody, "authoriser");
-                                });
-                        });
-                    });
-
-                // Use cached IOperationAuthoriser[] (execution-only).
-                branch.If(
-                    "this._operationAuthorisers.Length > 0",
-                    innerBranch =>
-                    {
-                        innerBranch.ForEach("var authoriser", "this._operationAuthorisers", foreachBody =>
-                        {
-                            foreachBody.If(
-                                "authoriser.AppliesTo(context.Descriptor)",
-                                appliesBody =>
-                                {
-                                    RenderDenialCheck(appliesBody, "authoriser");
-                                });
-                        });
-                    });
+                branch.Return("authoriserDenial");
             });
 
         context.WriteBlankLine();
-    }
-
-    private static void RenderDenialCheck(PipelineRenderContext context, string authoriserVar)
-    {
-        context.DeclareVariable(
-            "authoriseResult",
-            $"await {authoriserVar}.CanExecuteOperationAsync(context, context.Descriptor, context.Operation).ConfigureAwait(false)");
-
-        context.If(
-            "!authoriseResult.IsAllowed",
-            deniedBody =>
-            {
-                deniedBody.If(
-                    "authoriseResult.FailureType == Blueprint.Authorization.ExecutionAllowedFailureType.Authentication",
-                    authBranch =>
-                    {
-                        authBranch.Return(
-                            "new Blueprint.Runtime.Exec.UnauthenticatedResult()");
-                    });
-
-                deniedBody.Return(
-                    "new Blueprint.Runtime.Exec.ForbiddenResult()");
-            });
     }
 }
