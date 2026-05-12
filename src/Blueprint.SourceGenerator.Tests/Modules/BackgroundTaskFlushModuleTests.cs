@@ -6,8 +6,8 @@ namespace Blueprint.SourceGenerator.Tests.Modules;
 
 /// <summary>
 /// Proves the <c>BackgroundTaskFlushModule</c> contributes a post-execution render step
-/// that flushes background tasks only after successful handler execution, with graceful
-/// null-guarding when no <c>IBackgroundTaskScheduler</c> is registered.
+/// that flushes background tasks only after successful handler execution via the extracted
+/// <c>PipelineHelpers.FlushBackgroundTasksAsync</c> helper method.
 /// </summary>
 public class BackgroundTaskFlushModuleTests
 {
@@ -47,14 +47,11 @@ public class BackgroundTaskFlushModuleTests
         var pipelineSources = result.GetGeneratedSources(nameof(OperationExecutorPipelineSourceGenerator));
         var pipelineSource = string.Join("\n", pipelineSources.Select(static s => s.SourceText));
 
-        // BackgroundTaskFlushModule resolves the scheduler from DI
-        pipelineSource.Should().Contain("IBackgroundTaskScheduler");
+        // Delegates to extracted PipelineHelpers.FlushBackgroundTasksAsync
+        pipelineSource.Should().Contain("PipelineHelpers.FlushBackgroundTasksAsync(context.ServiceProvider)");
 
         // Only flushes when handler result was successful
         pipelineSource.Should().Contain("handlerResult.WasSuccessful");
-
-        // Calls RunNowAsync to dispatch queued tasks
-        pipelineSource.Should().Contain("RunNowAsync");
     }
 
     [Fact]
@@ -93,8 +90,8 @@ public class BackgroundTaskFlushModuleTests
         var pipelineSources = result.GetGeneratedSources(nameof(OperationExecutorPipelineSourceGenerator));
         var pipelineSource = string.Join("\n", pipelineSources.Select(static s => s.SourceText));
 
-        // Scheduler is optional — null-guarded before calling
-        pipelineSource.Should().Contain("backgroundTaskScheduler != null");
+        // Null-guarding is handled inside PipelineHelpers.FlushBackgroundTasksAsync
+        pipelineSource.Should().Contain("FlushBackgroundTasksAsync");
     }
 
     [Fact]
@@ -134,7 +131,6 @@ public class BackgroundTaskFlushModuleTests
         var pipelineSource = string.Join("\n", pipelineSources.Select(static s => s.SourceText));
 
         // Background task flush applies to all operation types, not just commands
-        pipelineSource.Should().Contain("IBackgroundTaskScheduler");
-        pipelineSource.Should().Contain("RunNowAsync");
+        pipelineSource.Should().Contain("PipelineHelpers.FlushBackgroundTasksAsync");
     }
 }

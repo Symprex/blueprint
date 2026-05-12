@@ -278,6 +278,57 @@ public static class PipelineHelpers
     }
 
     /// <summary>
+    /// Saves unit-of-work changes when an <see cref="Blueprint.Persistence.IUnitOfWork"/> is registered.
+    /// Extracted from per-pipeline inline code to reduce IL size across hundreds of generated pipelines.
+    /// </summary>
+    /// <param name="serviceProvider">The scoped service provider for the current operation.</param>
+    /// <param name="cancellationToken">Cancellation token to observe during the save.</param>
+    /// <returns>A task that completes when changes are saved (or immediately when no unit of work is registered).</returns>
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+    public static Task SaveUnitOfWorkAsync(IServiceProvider serviceProvider, CancellationToken cancellationToken)
+    {
+        var unitOfWork = serviceProvider.GetService<Blueprint.Persistence.IUnitOfWork>();
+
+        return unitOfWork != null
+            ? unitOfWork.SaveChangesAsync(cancellationToken)
+            : Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Commits queued outbox messages when an <see cref="Blueprint.Messaging.IMessageOutbox"/> is registered.
+    /// Extracted from per-pipeline inline code to reduce IL size across hundreds of generated pipelines.
+    /// </summary>
+    /// <param name="serviceProvider">The scoped service provider for the current operation.</param>
+    /// <param name="cancellationToken">Cancellation token to observe during the commit.</param>
+    /// <returns>A task that completes when messages are committed (or immediately when no outbox is registered).</returns>
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+    public static Task CommitMessageOutboxAsync(IServiceProvider serviceProvider, CancellationToken cancellationToken)
+    {
+        var outbox = serviceProvider.GetService<Blueprint.Messaging.IMessageOutbox>();
+
+        return outbox != null
+            ? outbox.CommitAsync(cancellationToken)
+            : Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Flushes background tasks when an <see cref="Blueprint.Tasks.IBackgroundTaskScheduler"/> is registered.
+    /// Extracted from per-pipeline inline code to reduce IL size across hundreds of generated pipelines.
+    /// </summary>
+    /// <param name="serviceProvider">The scoped service provider for the current operation.</param>
+    /// <returns>A task that completes when tasks are flushed (or immediately when no scheduler is registered).</returns>
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+    public static async Task FlushBackgroundTasksAsync(IServiceProvider serviceProvider)
+    {
+        var scheduler = serviceProvider.GetService<Blueprint.Tasks.IBackgroundTaskScheduler>();
+
+        if (scheduler != null)
+        {
+            await scheduler.RunNowAsync().ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
     /// Runs the pre-cached <see cref="Authorization.IApiAuthoriser"/> and
     /// <see cref="Authorization.IOperationAuthoriser"/> arrays against the current operation.
     /// Returns <c>null</c> when all authorisers pass, or an <see cref="UnauthenticatedResult"/>

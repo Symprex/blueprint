@@ -57,25 +57,13 @@ namespace Blueprint.Generated
             if (handlerResult.WasSuccessful)
             {
 
-                var unitOfWork = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Persistence.IUnitOfWork>(context.ServiceProvider);
-                if (unitOfWork != null)
-                {
-                    await unitOfWork.SaveChangesAsync(context.OperationCancelled).ConfigureAwait(false);
-                }
+                await Blueprint.Runtime.Exec.PipelineHelpers.SaveUnitOfWorkAsync(context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);
 
-                var messageOutbox = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Messaging.IMessageOutbox>(context.ServiceProvider);
-                if (messageOutbox != null)
-                {
-                    await messageOutbox.CommitAsync(context.OperationCancelled).ConfigureAwait(false);
-                }
+                await Blueprint.Runtime.Exec.PipelineHelpers.CommitMessageOutboxAsync(context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);
 
                 await Blueprint.Runtime.Exec.PipelineHelpers.ExecuteAuditSinkAsync(this._auditSink, context, handlerResult, _auditTags_TestCommand, "TestCommand").ConfigureAwait(false);
 
-                var backgroundTaskScheduler = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Tasks.IBackgroundTaskScheduler>(context.ServiceProvider);
-                if (backgroundTaskScheduler != null)
-                {
-                    await backgroundTaskScheduler.RunNowAsync().ConfigureAwait(false);
-                }
+                await Blueprint.Runtime.Exec.PipelineHelpers.FlushBackgroundTasksAsync(context.ServiceProvider).ConfigureAwait(false);
             }
 
             return handlerResult;

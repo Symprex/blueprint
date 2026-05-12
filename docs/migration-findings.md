@@ -45,6 +45,18 @@
 | S365 auth compatibility | ✅ Verified | 3-arg `[Resource]` matches S365 pattern; verb expansion stays in provider |
 | Pipeline helper extraction | ✅ Done | `LoadUserContextAsync`, `RunAuthorisersAsync` reduce IL per pipeline |
 | Handler property injection | ✅ Done | ApiOperations base-class pattern (Context, Identity, Logger, CT) auto-detected |
+| GetHttpContext() compat method | ✅ Done | Instance method on ApiOperationContext for S365 HttpContext access |
+| StatusCodeResult returns | ✅ Verified | Accepted (85 S365 usages), NoContent (10), Created (12) all work |
+| `[DoNotSaveChanges]` | ✅ Verified | Already supported with BPP001 diagnostic for misuse on non-commands |
+| Task (void) handler returns | ✅ Verified | 65 S365 Rebus handlers returning Task → NoResult normalization |
+| S365 body reading pattern | ✅ Verified | Operations-as-body pattern matches Blueprint exactly; 160 POST/PUT ops |
+| Custom JsonConverters | ⚠️ Needs review | S365 uses `ObjectValueJsonConverter`, `DictionaryStringObjectJsonConverter` |
+| QueryAsync/CommandAsync shims | ✅ Done | Already on BlueprintTestHost and BlueprintTestFixture |
+| S365 TenantId type on operations | ✅ Compatible | HTTP ops use `string TenantId` (TenantModule handles); `ApiId` only on domain events |
+| S365 ICurrentTenantAccessor pattern | ✅ Compatible | AsyncLocal-based, matches Blueprint ITenantAccessor exactly |
+| S365 Marten tenant isolation | ⚠️ Needs integration | `TenancyStyle.Conjoined` via IHaveTenantId; session created with tenant ID from accessor |
+| S365 SetTenantMiddleware → TenantModule | ✅ Compatible | SetTenantMiddleware sets accessor + populates TenantId property — TenantModule does both |
+| S365 partner vs tenant distinction | ⚠️ S365-owned | PartnerId claim handling stays in S365's ITenantResolver implementation |
 
 ---
 

@@ -53,11 +53,7 @@ namespace Blueprint.Generated
 
                 await Blueprint.Runtime.Exec.PipelineHelpers.ExecuteAuditSinkAsync(this._auditSink, context, handlerResult, _auditTags_GetTopQuery, "GetTopQuery").ConfigureAwait(false);
 
-                var backgroundTaskScheduler = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Tasks.IBackgroundTaskScheduler>(context.ServiceProvider);
-                if (backgroundTaskScheduler != null)
-                {
-                    await backgroundTaskScheduler.RunNowAsync().ConfigureAwait(false);
-                }
+                await Blueprint.Runtime.Exec.PipelineHelpers.FlushBackgroundTasksAsync(context.ServiceProvider).ConfigureAwait(false);
             }
 
             if (handlerResult is global::Blueprint.Runtime.Exec.OkResult<global::TestNamespace.TopResource> okResult_A2EBCF80)

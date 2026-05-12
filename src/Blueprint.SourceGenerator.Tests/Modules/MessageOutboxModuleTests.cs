@@ -47,14 +47,11 @@ public class MessageOutboxModuleTests
         var pipelineSources = result.GetGeneratedSources(nameof(OperationExecutorPipelineSourceGenerator));
         var pipelineSource = string.Join("\n", pipelineSources.Select(static s => s.SourceText));
 
-        // MessageOutboxModule resolves the outbox from DI
-        pipelineSource.Should().Contain("IMessageOutbox");
+        // Delegates to extracted PipelineHelpers.CommitMessageOutboxAsync
+        pipelineSource.Should().Contain("PipelineHelpers.CommitMessageOutboxAsync(context.ServiceProvider, context.OperationCancelled)");
 
         // Only commits when handler result was successful
         pipelineSource.Should().Contain("handlerResult.WasSuccessful");
-
-        // Commits pending messages
-        pipelineSource.Should().Contain("CommitAsync");
     }
 
     [Fact]
