@@ -22,17 +22,16 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <inheritdoc/>
         void IBuilder.Write(in CodeWriter writer)
         {
-            var warnings = string.Join(", ", this._pragmaWarnings.Distinct());
-            if (this._pragmaWarnings.Any())
+            if (this._pragmaWarnings.Count > 0)
             {
+                var warnings = string.Join(", ", this._pragmaWarnings.Distinct());
                 writer.AppendUnindentedLine($"#pragma warning disable {warnings}");
-            }
-
-            this.Write(writer);
-
-            if (this._pragmaWarnings.Any())
-            {
+                this.Write(writer);
                 writer.AppendUnindentedLine($"#pragma warning restore {warnings}");
+            }
+            else
+            {
+                this.Write(writer);
             }
         }
     }

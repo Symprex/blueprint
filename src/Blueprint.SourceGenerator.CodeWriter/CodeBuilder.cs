@@ -21,6 +21,10 @@ the code is regenerated.";
         private readonly List<string> _namespaceImports = new List<string>();
         private readonly List<string> _assemblyAttributes = new List<string>();
         private readonly Queue<IBuilder> _builders = new Queue<IBuilder>();
+        private readonly List<ClassBuilder> _classes = new List<ClassBuilder>();
+        private readonly List<RecordBuilder> _records = new List<RecordBuilder>();
+        private readonly List<EnumBuilder> _enums = new List<EnumBuilder>();
+        private readonly List<DelegateBuilder> _delegates = new List<DelegateBuilder>();
         private bool _topLevel;
         private NullableState _nullable = NullableState.Default;
 
@@ -43,22 +47,22 @@ the code is regenerated.";
         /// <summary>
         /// Gets the class declarations currently queued on the file builder.
         /// </summary>
-        public IReadOnlyList<ClassBuilder> Classes => this._builders.OfType<ClassBuilder>().ToList();
+        public IReadOnlyList<ClassBuilder> Classes => this._classes;
 
         /// <summary>
         /// Gets the record declarations currently queued on the file builder.
         /// </summary>
-        public IReadOnlyList<RecordBuilder> Records => this._builders.OfType<RecordBuilder>().ToList();
+        public IReadOnlyList<RecordBuilder> Records => this._records;
 
         /// <summary>
         /// Gets the enum declarations currently queued on the file builder.
         /// </summary>
-        public IReadOnlyList<EnumBuilder> Enums => this._builders.OfType<EnumBuilder>().ToList();
+        public IReadOnlyList<EnumBuilder> Enums => this._enums;
 
         /// <summary>
         /// Gets the delegate declarations currently queued on the file builder.
         /// </summary>
-        public IReadOnlyList<DelegateBuilder> Delegates => this._builders.OfType<DelegateBuilder>().ToList();
+        public IReadOnlyList<DelegateBuilder> Delegates => this._delegates;
 
         /// <summary>
         /// Switches the generated file to file-scoped namespace syntax.
@@ -203,6 +207,7 @@ the code is regenerated.";
         {
             var builder = new ClassBuilder(name, this);
             this._builders.Enqueue(builder);
+            this._classes.Add(builder);
             return builder;
         }
 
@@ -224,6 +229,7 @@ the code is regenerated.";
         internal ClassBuilder AddClass(ClassBuilder builder)
         {
             this._builders.Enqueue(builder);
+            this._classes.Add(builder);
             builder.Builder = this;
             return builder;
         }
@@ -237,6 +243,7 @@ the code is regenerated.";
         {
             var builder = new RecordBuilder(name, this);
             this._builders.Enqueue(builder);
+            this._records.Add(builder);
             return builder;
         }
 
@@ -248,6 +255,7 @@ the code is regenerated.";
         internal RecordBuilder AddRecord(RecordBuilder builder)
         {
             this._builders.Enqueue(builder);
+            this._records.Add(builder);
             builder.Builder = this;
             return builder;
         }
@@ -261,6 +269,7 @@ the code is regenerated.";
         {
             var builder = new EnumBuilder(name, this);
             this._builders.Enqueue(builder);
+            this._enums.Add(builder);
             return builder;
         }
 
@@ -272,6 +281,7 @@ the code is regenerated.";
         internal EnumBuilder AddEnum(EnumBuilder builder)
         {
             this._builders.Enqueue(builder);
+            this._enums.Add(builder);
             builder.Builder = this;
             return builder;
         }
@@ -285,6 +295,7 @@ the code is regenerated.";
         {
             var builder = new DelegateBuilder(name, this);
             this._builders.Enqueue(builder);
+            this._delegates.Add(builder);
             return builder;
         }
 
@@ -307,6 +318,10 @@ the code is regenerated.";
             this._namespaceImports.Clear();
             this._assemblyAttributes.Clear();
             this._builders.Clear();
+            this._classes.Clear();
+            this._records.Clear();
+            this._enums.Clear();
+            this._delegates.Clear();
         }
 
         private CodeWriter BuildInternal()
