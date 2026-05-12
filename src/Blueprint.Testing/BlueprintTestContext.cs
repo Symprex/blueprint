@@ -125,25 +125,41 @@ public sealed class BlueprintTestContext
     /// <returns>This context for chaining.</returns>
     public BlueprintTestContext WithPermissions(params string[] permissions)
     {
-        return this.WithPermissions("permission", permissions);
+        return this.WithScopePairs("permission", permissions);
     }
 
     /// <summary>
-    /// Convenience method that creates an authenticated user with permissions stored under a custom claim type.
+    /// Convenience method that creates an authenticated user with scope-pair claims.
+    /// This matches the Signature 365 authorization model where users hold scope pairs
+    /// (noun.verb combinations such as <c>"Template.Read"</c> or <c>"SentEmail.Create"</c>)
+    /// that the generated <c>IResourceAuthorizationProvider</c> checks at runtime.
     /// </summary>
-    /// <param name="claimType">The claim type used for permission storage (e.g., <c>"permission"</c>, <c>"scope"</c>).</param>
-    /// <param name="permissions">The permission identifiers to grant the test user.</param>
+    /// <param name="scopePairs">The scope-pair strings to grant (e.g. <c>"Template.Read"</c>).</param>
     /// <returns>This context for chaining.</returns>
-    public BlueprintTestContext WithPermissions(string claimType, params string[] permissions)
+    public BlueprintTestContext WithScopePairs(params string[] scopePairs)
     {
-        var claims = new List<System.Security.Claims.Claim>(permissions.Length + 1)
+        return this.WithScopePairs("scope", scopePairs);
+    }
+
+    /// <summary>
+    /// Convenience method that creates an authenticated user with scope-pair claims stored under
+    /// a custom claim type plus a tenant claim. This covers the common Signature 365 test pattern
+    /// where every operation runs in a tenant context with specific scope pairs.
+    /// </summary>
+    /// <param name="tenantId">The tenant identifier to assign.</param>
+    /// <param name="scopePairs">The scope-pair strings to grant.</param>
+    /// <returns>This context for chaining.</returns>
+    public BlueprintTestContext WithTenantScopePairs(string tenantId, params string[] scopePairs)
+    {
+        var claims = new List<System.Security.Claims.Claim>(scopePairs.Length + 2)
         {
             new("sub", "test-user-" + Guid.NewGuid().ToString("N")[..8]),
+            new("tenant_id", tenantId),
         };
 
-        foreach (var permission in permissions)
+        foreach (var scopePair in scopePairs)
         {
-            claims.Add(new System.Security.Claims.Claim(claimType, permission));
+            claims.Add(new System.Security.Claims.Claim("scope", scopePair));
         }
 
         var identity = new ClaimsIdentity(claims, "TestAuth");
@@ -151,40 +167,21 @@ public sealed class BlueprintTestContext
     }
 
     /// <summary>
-    /// Convenience method that creates an authenticated user with a tenant claim and optional permissions.
-    /// This matches the S365 pattern where every user belongs to a tenant identified by an account/tenant ID.
-    /// <para>
-    /// The generated user will have <c>sub</c>, <c>tenant_id</c> (or custom claim type), and
-    /// optional permission claims. Property populators that read tenant context from JWT claims
-    /// will see the tenant claim automatically.
-    /// </para>
+    /// Convenience method that creates an authenticated user with scope-pair claims under a custom claim type.
     /// </summary>
-    /// <param name="tenantId">The tenant identifier to assign.</param>
-    /// <param name="permissions">Optional permissions to include.</param>
+    /// <param name="claimType">The claim type for scope pair storage (e.g. <c>"scope"</c>).</param>
+    /// <param name="scopePairs">The scope-pair strings to grant.</param>
     /// <returns>This context for chaining.</returns>
-    public BlueprintTestContext WithTenant(string tenantId, params string[] permissions)
+    public BlueprintTestContext WithScopePairs(string claimType, params string[] scopePairs)
     {
-        return this.WithTenant("tenant_id", tenantId, permissions);
-    }
-
-    /// <summary>
-    /// Convenience method that creates an authenticated user with a custom tenant claim type and optional permissions.
-    /// </summary>
-    /// <param name="tenantClaimType">The claim type for the tenant identifier (e.g., <c>"tenant_id"</c>, <c>"account_id"</c>).</param>
-    /// <param name="tenantId">The tenant identifier value.</param>
-    /// <param name="permissions">Optional permissions to include.</param>
-    /// <returns>This context for chaining.</returns>
-    public BlueprintTestContext WithTenant(string tenantClaimType, string tenantId, params string[] permissions)
-    {
-        var claims = new List<System.Security.Claims.Claim>(permissions.Length + 2)
+        var claims = new List<System.Security.Claims.Claim>(scopePairs.Length + 1)
         {
             new("sub", "test-user-" + Guid.NewGuid().ToString("N")[..8]),
-            new(tenantClaimType, tenantId),
         };
 
-        foreach (var permission in permissions)
+        foreach (var scopePair in scopePairs)
         {
-            claims.Add(new System.Security.Claims.Claim("permission", permission));
+            claims.Add(new System.Security.Claims.Claim(claimType, scopePair));
         }
 
         var identity = new ClaimsIdentity(claims, "TestAuth");

@@ -101,21 +101,30 @@ fixture.AuthenticateAsPartner("partner-1");
 fixture.AuthenticateAsInternalUser();
 
 // ─── AFTER (Blueprint) ────────────────────────────────────────
-// Tenant admin
-ctx => ctx
-    .WithTenant("tenant-1")
-    .WithUser("admin", roles: ["TenantAdmin"])
-    .WithPermissions("Template.Read", "Template.Write", "Template.Manage")
+// Tenant admin — scope pairs match S365's ScopeApiAuthoriser model
+ctx => ctx.WithTenantScopePairs("tenant-1", "Template.Read", "Template.Create", "Template.Delete")
 
-// Partner
-ctx => ctx
-    .WithUser("partner-user", claims: [("partner_id", "partner-1")])
-    .WithPermissions("Partner.Read")
+// Partner — custom claims
+ctx => ctx.WithUser(claims =>
+{
+    claims.Add(new Claim("sub", "partner-user"));
+    claims.Add(new Claim("sig365_partner_id", "partner-1"));
+    claims.Add(new Claim("scope", "Partner.Read"));
+})
 
 // Internal user
-ctx => ctx
-    .WithUser("internal-user", roles: ["Internal"])
-    .WithPermissions("*")  // all permissions
+ctx => ctx.WithUser(claims =>
+{
+    claims.Add(new Claim("sub", "internal-user"));
+    claims.Add(new Claim("sig365_role_group", "Internal"));
+    claims.Add(new Claim("scope", "Signature365Admin.ReadWrite.All"));
+})
+
+// Machine user
+ctx => ctx.WithScopePairs("api:read", "api:write")
+
+// Skip auth entirely (focus on handler logic)
+ctx => ctx.SkipAuthorisation()
 
 // Unauthenticated (default — no context setup needed)
 await _host.ExecuteAsync(query);  // no context = anonymous
