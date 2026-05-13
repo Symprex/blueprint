@@ -327,11 +327,28 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             var fromBody = FindAttribute(member, "FromBodyAttribute", "Blueprint.Model.Attributes");
             var fromHeader = FindAttribute(member, "FromHeaderAttribute", "Blueprint.Model.Attributes");
             var fromCookie = FindAttribute(member, "FromCookieAttribute", "Blueprint.Model.Attributes");
+            var fromAuthContext = FindAttribute(member, "FromAuthContextAttribute", "Blueprint.Model.Attributes");
 
-            var explicitCount = (fromRoute != null ? 1 : 0) + (fromQuery != null ? 1 : 0) + (fromBody != null ? 1 : 0) + (fromHeader != null ? 1 : 0) + (fromCookie != null ? 1 : 0);
+            var httpBindingCount = (fromRoute != null ? 1 : 0) + (fromQuery != null ? 1 : 0) + (fromBody != null ? 1 : 0) + (fromHeader != null ? 1 : 0) + (fromCookie != null ? 1 : 0);
 
-            // Step 2 — conflict: more than one [FromX] attribute on the same property
-            if (explicitCount > 1)
+            // [FromAuthContext] conflicts with any HTTP binding attribute except [FromRoute]
+            if (fromAuthContext != null && httpBindingCount > 0 && fromRoute == null)
+            {
+                if (diagnostics != null)
+                {
+                    var conflicting = BuildConflictingAttributeList(null, fromQuery, fromBody, fromHeader, fromCookie);
+                    var location = member.Locations.FirstOrDefault(static l => l.IsInSource);
+                    diagnostics.Add(new DiagnosticInfo(
+                        PropertyOwnershipDiagnosticDescriptors.ConflictingFromAttributes,
+                        location is not null ? LocationInfo.CreateFrom(location) : null,
+                        [member.Name, operationType.Name, $"[FromAuthContext], {conflicting}"]));
+                }
+
+                continue;
+            }
+
+            // Step 2 — conflict: more than one HTTP [FromX] attribute on the same property
+            if (httpBindingCount > 1)
             {
                 if (diagnostics != null)
                 {
@@ -346,8 +363,23 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
                 continue;
             }
 
-            // Step 3 — exactly one explicit attribute: validate and add entry
-            if (explicitCount == 1)
+            // Step 3 — [FromAuthContext] without route: property excluded from HTTP binding,
+            // recorded as AuthContext in descriptor metadata for OpenAPI visibility.
+            if (fromAuthContext != null && fromRoute == null)
+            {
+                // Route placeholder match takes precedence even when [FromAuthContext] is present,
+                // so check convention route fallback below. If there IS no route match, own it here.
+                if (!routePlaceholders.Contains(member.Name, StringComparer.Ordinal))
+                {
+                    entries.Add(new PropertyOwnershipEntry(member.Name, member.Type, PropertyOwnershipSource.AuthContext, null, isInitOnly));
+                    continue;
+                }
+
+                // Fall through to route binding below — route wins over auth-context
+            }
+
+            // Step 4 — exactly one explicit HTTP binding attribute: validate and add entry
+            if (httpBindingCount == 1)
             {
                 if (fromRoute != null)
                 {
