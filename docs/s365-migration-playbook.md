@@ -192,7 +192,7 @@ A compile-time proof project (`.scratch/s365-proof/`) validated S365 patterns ag
 - **`[ResourceEventFamily]`** with source-generated event records (Created, Updated, Deleted)
 - **`[Resource]` authorization** with noun/verb constants
 - **`[FromHeader]` binding** (e.g. idempotency keys)
-- **`ApiId` value-type route parameters** with `IParsable<T>`
+- **`ApiId` value-type route parameters** (handled via `[TypeConverter]` — no S365 changes needed)
 - **Validation attributes** (`[Required]`, `[MaxLength]`, `[StringLength]`, `[MinLength]`)
 - **`IValidatableObject`** cross-property validation (e.g. conditional required fields)
 - **`ApiOperations` external handler classes** with `InvokeAsync` methods
@@ -203,14 +203,13 @@ A compile-time proof project (`.scratch/s365-proof/`) validated S365 patterns ag
 | Requirement | Details |
 |---|---|
 | **`partial` keyword** | All operation classes must be `partial` (BP001 diagnostic) |
-| **`IParsable<T>` or `static TryParse` for custom route types** | `ApiId` must implement `IParsable<ApiId>` or expose a `static TryParse(string, out T)` method. The source generator checks for `IParsable<T>`, then falls back to detecting a static `TryParse` method. |
-| **NodaTime Instant query parameters** | NodaTime's `Instant` doesn't implement `IParsable<T>` or expose a conventional `TryParse`. Use `string?` for NodaTime query parameters and parse in the handler using `InstantPattern`. This matches how HTTP query strings naturally work — they arrive as strings. |
+| **`[TypeConverter]` types work automatically** | `ApiId`, `FolderReference`, `Role`, and NodaTime `Instant` all have `[TypeConverter]` attributes — Blueprint generates `TypeDescriptor.GetConverter()` calls for route/query binding with try/catch error handling. **No IParsable or TryParse needed.** |
 | **Abstract generic bases must NOT implement IOperation** | `TenantOrderedPagedQuery<T>` must NOT extend `IQuery<T>` — only concrete leaf classes should, because `IOperation` requires `static abstract Configure()` which cannot be satisfied by an open generic. |
 | **ResourceAttribute namespace ambiguity** | If S365 imports both its own `ResourceAttribute` namespace and `Blueprint.Model.Attributes`, a CS0104 ambiguity error occurs. Solution: use explicit `using S365Resource = Symprex.Signature365.Common.Authorisation.ResourceAttribute;` or only import one namespace. |
 | **ProblemDetails in JsonSerializerContext** | The `JsonSerializerContext` must include `ProblemDetails` and `ValidationProblemDetails` for HTTP error responses (BP006 diagnostic). |
 | **Value-type link properties** | Fixed in source generator: custom struct types like `ApiId` in link URL placeholders now generate correct code without `?.` operator or `== null` checks. |
-| **ResourceEvent → ResourceEventResult** | S365's `ResourceEvent<T>` return type must change to `ResourceEventResult<T>` (or `KeyOnlyResourceEventResult`). Use `[ResourceEventFamily]` attribute with generated event records instead of `ResourceEventDefinitionFactory`. |
-| **Handler migration** | Handlers change from `ApiOperations` base class (property injection) to plain classes with constructor DI injection. Method name changes from `InvokeAsync` to `Handle`/`HandleAsync`. |
+| **ResourceEvent<T> works unchanged** | `ICommand<ResourceEvent<T>>` return types work as-is. No migration to `ResourceEventResult<T>` needed. JSON serialization includes `$object`, `data`, and enum string values matching legacy shape. |
+| **Handler migration** | Handlers using `ApiOperations` base class (property injection) continue to work — Blueprint discovers `InvokeAsync`, `HandleAsync`, `Handle`, and `Invoke` methods. External handler classes with constructor DI are also supported. **No method renaming required.** |
 
 ### S365 Pattern Compatibility (Gap Analysis)
 

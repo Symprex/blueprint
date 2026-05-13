@@ -163,6 +163,13 @@
 | S365 app test projects | ✅ None exist | Non-SMTP S365 apps have ZERO test projects — all 42 test projects are either SMTP or legacy Blueprint framework tests. Test migration is NOT a factor for S365 app migration. |
 | TS codegen x-links | ✅ Compatible | Blueprint emits `x-links` with identical shape (`rel`, `operationId`, `method`) — S365 Handlebars templates work unchanged |
 | TS codegen operationId | ✅ Compatible | Blueprint uses operation class name (minus suffix) for `operationId` — matches S365 NSwag convention |
+| NodaTime.Instant query params | ✅ Done | NodaTime.Instant has `[TypeConverter(typeof(InstantTypeConverter))]` — works with new TypeConverter support automatically |
+| FolderReference TypeConverter | ✅ Done | S365 `FolderReference` has `[TypeConverter]` — works with new TypeConverter support automatically |
+| Role TypeConverter | ✅ Done | S365 `Role` has `[TypeConverter]` — works with new TypeConverter support automatically |
+| IHandleMessages<T> (80+) | ✅ Compatible | ~80 Rebus message handlers across non-SMTP apps; Blueprint.Rebus scanner handles these |
+| Custom S365 middleware (6) | ✅ Compatible | SetTenantMiddleware, ResourceExpandMiddleware, Rebus TX scope (start/commit), SaveMarten, MartenOutbox — all register via startup |
+| Property populators | ✅ Not needed | S365 uses middleware (SetTenantMiddleware) instead of IPropertyPopulator — no populator migration needed |
+| Background tasks | ✅ Compatible | IBackgroundTaskScheduler patterns across Generation, VCard, EventStore, AdminPortal, Portal — all standard |
 
 ---
 
@@ -513,3 +520,4 @@ S365 testing uses `WebApiFixtureFactory<TStartup>` → `ApiFixture` with:
 | 2025-07 | Runtime optimizations | BlueprintHttpClient: PropertyInfo cache, StringBuilder query strings, span-based placeholder parsing. PipelineHelpers: ResolveServiceArray fast-path for arrays. ResourceEvent JSON: fix `data` vs `content` envelope property name. ArrayPool buffer leak fix in ReadJsonBodyAsync (try/finally). RunAllPublishedMessagesAsync/RunAndConsumeAllPublishedMessagesAsync added to test fixture. |
 | 2025-07 | Compatibility deep-dive | Added HttpContext/ClaimsPrincipal handler property injection. Verified S365 TenantOrderedPagedQuery/TenantPagedApiResource already extend Blueprint base classes. Confirmed ApiId stays S365-owned. Verified ApiOperations base class property injection. NotFoundException→ProblemDetails(404) confirmed. TypeScript codegen flow fully analysed (custom Handlebars, x-links compatible). |
 | 2025-07 | ResourceEvent JSON fix | Fixed `$object` property and `ResourceEventChangeType` string serialization on `ResourceEvent`. Added 5 JSON serialization tests. Updated playbook: ResourceEvent<T> works unchanged (no migration to ResourceEventResult needed). Updated return type mapping: StatusCodeResult subtypes identical. Fixed stale handler rename advice (all 4 conventions supported). |
+| 2025-07 | TypeConverter support | Added [TypeConverter] support for route/query parameter binding (matching legacy Blueprint behavior). S365 ApiId, FolderReference, Role, NodaTime.Instant all have [TypeConverter] attributes — all work automatically. Fixed Nullable<T> unwrapping for TypeConverter query types. Updated BPPO001/BPPO003 diagnostics. Corrected stale ApiId entries. |
