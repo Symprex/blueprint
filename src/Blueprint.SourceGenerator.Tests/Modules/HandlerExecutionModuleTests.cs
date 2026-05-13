@@ -187,4 +187,96 @@ public class HandlerExecutionModuleTests
         pipelineSource.Should().Contain("HandleAsync");
         pipelineSource.Should().Contain("context");
     }
+
+    [Fact]
+    public void When_handler_takes_HttpRequest_parameter_then_pipeline_resolves_from_context()
+    {
+        const string source = """
+            using Blueprint;
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using Blueprint.Runtime.Exec;
+            using Microsoft.AspNetCore.Http;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace
+            {
+                [BlueprintAppScan]
+                public partial class TestApp : BlueprintApp { }
+
+                [AllowAnonymous]
+                [RootLink("/stripe/webhooks")]
+                public partial class HandleWebhookCommand : ICommand<string>
+                {
+                    public static Task<string> InvokeAsync(HttpRequest httpRequest)
+                    {
+                        return Task.FromResult("ok");
+                    }
+                }
+            }
+            """;
+
+        var generators = new[]
+        {
+            TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>(),
+            TestHelpers.CreateTrackedGenerator<OperationExecutorPipelineSourceGenerator>(),
+        };
+
+        var result = TestHelpers.CompileWithTrackedGenerators(generators, [source], ["Input0.cs"]);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var pipelineSources = result.GetGeneratedSources(nameof(OperationExecutorPipelineSourceGenerator));
+        var pipelineSource = string.Join("\n", pipelineSources.Select(static s => s.SourceText));
+
+        // HttpRequest resolved from context.HttpContext.Request, not from DI
+        pipelineSource.Should().Contain("context.HttpContext!.Request");
+        pipelineSource.Should().NotContain("GetRequiredService<Microsoft.AspNetCore.Http.HttpRequest>");
+    }
+
+    [Fact]
+    public void When_handler_takes_ClaimsPrincipal_parameter_then_pipeline_resolves_from_context()
+    {
+        const string source = """
+            using Blueprint;
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using Blueprint.Runtime.Exec;
+            using System.Security.Claims;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace
+            {
+                [BlueprintAppScan]
+                public partial class TestApp : BlueprintApp { }
+
+                [AllowAnonymous]
+                [RootLink("/test/principal")]
+                public partial class PrincipalQuery : IQuery<string>
+                {
+                    public static Task<string> HandleAsync(ClaimsPrincipal principal)
+                    {
+                        return Task.FromResult(principal.Identity?.Name ?? "anonymous");
+                    }
+                }
+            }
+            """;
+
+        var generators = new[]
+        {
+            TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>(),
+            TestHelpers.CreateTrackedGenerator<OperationExecutorPipelineSourceGenerator>(),
+        };
+
+        var result = TestHelpers.CompileWithTrackedGenerators(generators, [source], ["Input0.cs"]);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var pipelineSources = result.GetGeneratedSources(nameof(OperationExecutorPipelineSourceGenerator));
+        var pipelineSource = string.Join("\n", pipelineSources.Select(static s => s.SourceText));
+
+        // ClaimsPrincipal resolved from context.UserPrincipal, not from DI
+        pipelineSource.Should().Contain("context.UserPrincipal!");
+        pipelineSource.Should().NotContain("GetRequiredService<System.Security.Claims.ClaimsPrincipal>");
+    }
 }

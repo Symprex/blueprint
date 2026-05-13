@@ -91,6 +91,11 @@ public static class ParameterAnalyzer
             case "Blueprint.Model.BlueprintApp":
             case "System.Threading.CancellationToken":
             case "Blueprint.Authorization.IUserAuthorisationContext":
+            case "Microsoft.AspNetCore.Http.HttpContext":
+            case "Microsoft.AspNetCore.Http.HttpRequest":
+            case "Microsoft.AspNetCore.Http.HttpResponse":
+            case "System.Security.Claims.ClaimsPrincipal":
+            case "System.Security.Claims.ClaimsIdentity":
                 return true;
         }
 
@@ -115,6 +120,11 @@ public static class ParameterAnalyzer
             "Blueprint.Model.BlueprintApp" => "App",
             "System.Threading.CancellationToken" => "OperationCancelled",
             "Blueprint.Authorization.IUserAuthorisationContext" => "UserAuthorisationContext!",
+            "Microsoft.AspNetCore.Http.HttpContext" => "HttpContext!",
+            "Microsoft.AspNetCore.Http.HttpRequest" => "HttpContext!.Request",
+            "Microsoft.AspNetCore.Http.HttpResponse" => "HttpContext!.Response",
+            "System.Security.Claims.ClaimsPrincipal" => "UserPrincipal!",
+            "System.Security.Claims.ClaimsIdentity" => "(System.Security.Claims.ClaimsIdentity)UserPrincipal!.Identity!",
             _ => param.Name.ToLowerInvariant() switch
             {
                 "datamodel" or "app" => "App",

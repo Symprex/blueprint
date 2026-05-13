@@ -5,7 +5,7 @@
 - **.NET Version:** 10.0
 - **OS:** Windows 11
 - **Hardware:** Development workstation
-- **Date:** 2025-07-14 (updated 2025-07-19)
+- **Date:** 2025-07-14 (updated 2025-07-24)
 - **BenchmarkDotNet:** InProcessEmitToolchain, MediumRun
 
 ## Full Pipeline Benchmarks
@@ -16,15 +16,15 @@ code path that runs in production HTTP requests (minus HTTP I/O and serializatio
 
 | Benchmark | Mean | Error | StdDev | Ratio | Gen0 | Allocated | Alloc Ratio |
 |-----------|-----:|------:|-------:|------:|-----:|----------:|------------:|
-| MinimalQuery (baseline) | 1.20 µs | 0.037 µs | 0.052 µs | 1.00 | 0.2041 | 2.51 KB | 1.00 |
-| ValidatedQuery (invalid input) | 8.93 µs | 0.967 µs | 1.386 µs | 7.46 | 0.3967 | 5.12 KB | 2.04 |
-| FullStackCommand (validation failure) | 9.50 µs | 0.405 µs | 0.580 µs | 7.93 | 0.4578 | 5.73 KB | 2.28 |
-| ValidatedQuery (valid input) | 9.62 µs | 1.459 µs | 2.183 µs | 8.03 | 0.4120 | 5.12 KB | 2.04 |
-| FullStackCommand (valid input) | 9.65 µs | 0.372 µs | 0.534 µs | 8.05 | 0.4578 | 5.73 KB | 2.28 |
+| MinimalQuery (baseline) | 1.65 µs | 0.223 µs | 0.334 µs | 1.00 | 0.2041 | 2.51 KB | 1.00 |
+| ValidatedQuery (invalid input) | 10.20 µs | 0.964 µs | 1.382 µs | 6.42 | 0.4120 | 5.12 KB | 2.04 |
+| ValidatedQuery (valid input) | 10.64 µs | 1.168 µs | 1.711 µs | 6.70 | 0.4120 | 5.12 KB | 2.04 |
+| FullStackCommand (valid input) | 11.65 µs | 1.246 µs | 1.787 µs | 7.33 | 0.4578 | 5.73 KB | 2.28 |
+| FullStackCommand (validation failure) | 12.62 µs | 1.619 µs | 2.423 µs | 7.95 | 0.4578 | 5.73 KB | 2.28 |
 
 ### Analysis
 
-**Baseline (MinimalQuery):** ~1.2 µs / 2.51 KB
+**Baseline (MinimalQuery):** ~1.6 µs / 2.51 KB
 - This is the absolute minimum pipeline overhead — no validation, just handler invocation
 - The 2.51 KB includes `ApiOperationContext` allocation and the operation instance
 - **This is the floor.** Any production operation will add to this baseline
@@ -100,11 +100,11 @@ Request binding overhead for different property population strategies.
 
 | Method | Mean | Error | StdDev | Gen0 | Allocated |
 |--------|-----:|------:|-------:|-----:|----------:|
-| RouteOnlyGetAsync (baseline) | 2.74 µs | 0.42 µs | 0.63 µs | 0.37 | 4.60 KB |
-| MixedRouteAndBodyPostAsync | 3.72 µs | 0.22 µs | 0.33 µs | 0.45 | 5.50 KB |
-| TypedBodyPostAsync | 4.26 µs | 0.15 µs | 0.21 µs | 0.48 | 5.98 KB |
-| BodyOnly3StringsPostAsync | 4.97 µs | 0.65 µs | 0.93 µs | 0.44 | 5.47 KB |
-| LargeBody10PropsPostAsync | 8.13 µs | 0.77 µs | 1.05 µs | 0.64 | 7.91 KB |
+| RouteOnlyGetAsync (baseline) | 2.63 µs | 0.25 µs | 0.35 µs | 0.37 | 4.58 KB |
+| BodyOnly3StringsPostAsync | 4.13 µs | 0.33 µs | 0.47 µs | 0.44 | 5.45 KB |
+| MixedRouteAndBodyPostAsync | 5.22 µs | 0.92 µs | 1.37 µs | 0.44 | 5.48 KB |
+| TypedBodyPostAsync | 6.16 µs | 0.90 µs | 1.35 µs | 0.48 | 5.95 KB |
+| LargeBody10PropsPostAsync | 9.15 µs | 0.90 µs | 1.35 µs | 0.64 | 7.88 KB |
 
 **Key insight:** Route-only binding is cheapest (~2.7µs). Body binding adds ~1-2µs
 regardless of source (inline vs typed). A 10-property operation body costs ~8µs
@@ -128,6 +128,22 @@ One-time startup cost for `MapBlueprintApi()` at different API surface sizes.
 ~240 operations, startup mapping would take ~1.8ms and allocate ~1.2MB. This is a
 one-time cost at app startup, negligible compared to DI container build and Kestrel
 initialization.
+
+---
+
+## Link Generation Benchmarks
+
+HATEOAS self-link creation cost for S365's heavily-used link pattern.
+
+| Method | Mean | Error | StdDev | Gen0 | Allocated |
+|--------|-----:|------:|-------:|-----:|----------:|
+| CreateSelfLink_TypedResource | 59 ns | 12.9 ns | 19.3 ns | 0.017 | 208 B |
+| CreateSelfLink_StringId | 64 ns | 8.8 ns | 13.2 ns | 0.017 | 208 B |
+| CreateSelfLink_GuidId | 73 ns | 9.4 ns | 13.7 ns | 0.033 | 416 B |
+
+**Key insight:** Compiled URL builders generate self-links in **59-73ns**. The Guid variant
+allocates 2x (416B vs 208B) due to `Guid.ToString()`. For S365's typical 3-5 links per
+resource response, the total link generation cost is ~200-350ns — invisible in production.
 
 ---
 
