@@ -1134,6 +1134,75 @@ public class ReferenceAppOpenApiTests
         wellKnownJson.Should().Be(blueprintJson, "both endpoints should serve the same pre-rendered document");
     }
 
+    [Fact]
+    public void When_blueprint_api_mapped_then_api_catalog_endpoint_is_registered()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var apiCatalog = FindEndpoint(endpoints, "/.well-known/api-catalog", "GET");
+        apiCatalog.Should().NotBeNull("RFC 9727 api-catalog well-known endpoint should be registered");
+    }
+
+    [Fact]
+    public async Task When_api_catalog_invoked_then_returns_linkset_json_pointing_to_openapi()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var apiCatalog = FindEndpoint(endpoints, "/.well-known/api-catalog", "GET")!;
+
+        await using var body = new MemoryStream();
+        var ctx = new DefaultHttpContext { RequestServices = endpoints.ServiceProvider, Response = { Body = body } };
+        ctx.SetEndpoint(apiCatalog);
+        ctx.Request.Method = HttpMethods.Get;
+        ctx.Request.Path = "/.well-known/api-catalog";
+        ctx.Request.Scheme = "https";
+        ctx.Request.Host = new HostString("api.example.com");
+
+        await apiCatalog.RequestDelegate!(ctx);
+        body.Position = 0;
+        var json = await new StreamReader(body).ReadToEndAsync();
+
+        ctx.Response.ContentType.Should().Contain("application/linkset+json");
+        ctx.Response.ContentType.Should().Contain("rfc9727");
+
+        using var doc = JsonDocument.Parse(json);
+        var linkset = doc.RootElement.GetProperty("linkset");
+        linkset.GetArrayLength().Should().BeGreaterOrEqualTo(1);
+
+        var first = linkset[0];
+        first.GetProperty("anchor").GetString().Should().Be("https://api.example.com/");
+
+        var serviceDesc = first.GetProperty("service-desc");
+        serviceDesc.GetArrayLength().Should().Be(1);
+        serviceDesc[0].GetProperty("href").GetString().Should().Be("https://api.example.com/api/.blueprint/openapi.json");
+        serviceDesc[0].GetProperty("type").GetString().Should().Contain("openapi");
+    }
+
+    [Fact]
+    public async Task When_api_catalog_invoked_with_head_then_returns_empty_body_with_link_header()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
+
+        var apiCatalog = FindEndpoint(endpoints, "/.well-known/api-catalog", "GET")!;
+
+        await using var body = new MemoryStream();
+        var ctx = new DefaultHttpContext { RequestServices = endpoints.ServiceProvider, Response = { Body = body } };
+        ctx.SetEndpoint(apiCatalog);
+        ctx.Request.Method = HttpMethods.Head;
+        ctx.Request.Path = "/.well-known/api-catalog";
+        ctx.Request.Scheme = "https";
+        ctx.Request.Host = new HostString("api.example.com");
+
+        await apiCatalog.RequestDelegate!(ctx);
+
+        body.Length.Should().Be(0, "HEAD responses should have no body");
+        ctx.Response.Headers.Link.ToString().Should().Contain("rel=\"service-desc\"");
+        ctx.Response.Headers.Link.ToString().Should().Contain("api/.blueprint/openapi.json");
+    }
+
     private static RouteEndpoint? FindEndpoint(TestEndpointRouteBuilder builder, string routePattern, string httpMethod)
     {
         return builder.DataSources

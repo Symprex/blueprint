@@ -100,8 +100,8 @@ public static class EndpointRouteBuilderExtensions
 
         builders.Add(openApiBuilder);
 
-        // RFC 9264 well-known endpoint for API discovery. Serves the same pre-rendered
-        // document at the IETF-standard location so tooling can auto-discover the spec.
+        // Serves the same pre-rendered document at a well-known location so tooling
+        // can auto-discover the spec without knowing the Blueprint-specific base path.
         var wellKnownBuilder = endpoints.Map(
             RoutePatternFactory.Parse("/.well-known/openapi"),
             openApiDelegate);
@@ -109,6 +109,19 @@ public static class EndpointRouteBuilderExtensions
         wellKnownBuilder.WithMetadata(new HttpMethodMetadata([HttpMethods.Get]));
 
         builders.Add(wellKnownBuilder);
+
+        // RFC 9727 (June 2025) — api-catalog well-known endpoint for API discovery.
+        // Returns a Linkset JSON document (application/linkset+json) pointing to the
+        // OpenAPI spec, enabling standardised machine-readable API catalogue discovery.
+        var openApiPath = "/" + basePath.TrimStart('/').TrimEnd('/') + "/.blueprint/openapi.json";
+        var apiCatalogTitle = infoOptions?.Title ?? "Blueprint API";
+        var apiCatalogBuilder = endpoints.Map(
+            RoutePatternFactory.Parse("/.well-known/api-catalog"),
+            CreateApiCatalogDelegate(openApiPath, apiCatalogTitle));
+        apiCatalogBuilder.WithDisplayName("GET API catalog (RFC 9727)");
+        apiCatalogBuilder.WithMetadata(new HttpMethodMetadata([HttpMethods.Get, HttpMethods.Head]));
+
+        builders.Add(apiCatalogBuilder);
 
         // Track mapped (route, operationType) pairs to deduplicate. Multiple HATEOAS links per
         // operation are valid, but each unique route+operation pair should produce only one ASP.NET
@@ -222,6 +235,55 @@ public static class EndpointRouteBuilderExtensions
         }
 
         return new BlueprintEndpointRouteBuilder(builders);
+    }
+
+    /// <summary>
+    /// Creates an RFC 9727 api-catalog endpoint delegate that returns a Linkset JSON document
+    /// pointing to the OpenAPI specification. The response uses <c>application/linkset+json</c>
+    /// content type with the RFC 9727 profile.
+    /// </summary>
+    private static RequestDelegate CreateApiCatalogDelegate(string openApiPath, string title)
+    {
+        return context =>
+        {
+            var request = context.Request;
+            var baseUri = $"{request.Scheme}://{request.Host}{request.PathBase}";
+            var openApiHref = baseUri + openApiPath;
+
+            context.Response.ContentType = "application/linkset+json; profile=\"https://www.rfc-editor.org/info/rfc9727\"";
+            context.Response.Headers["Link"] = $"<{openApiHref}>; rel=\"service-desc\"; type=\"application/openapi+json;version=3.0\"";
+
+            if (HttpMethods.IsHead(request.Method))
+            {
+                return Task.CompletedTask;
+            }
+
+            // RFC 9264 Linkset JSON format pointing to the OpenAPI document
+            var json = $$"""
+                {
+                  "linkset": [
+                    {
+                      "anchor": "{{baseUri}}/",
+                      "service-desc": [
+                        {
+                          "href": "{{openApiHref}}",
+                          "type": "application/openapi+json;version=3.0"
+                        }
+                      ],
+                      "service-doc": [
+                        {
+                          "href": "{{openApiHref}}",
+                          "type": "application/openapi+json;version=3.0",
+                          "title": "{{title}}"
+                        }
+                      ]
+                    }
+                  ]
+                }
+                """;
+
+            return context.Response.WriteAsync(json);
+        };
     }
 
     private class BlueprintApiRouter<TExec> where TExec : BlueprintAppExecutor
