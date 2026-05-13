@@ -98,6 +98,8 @@
 | TypeScript client generation | ✅ Analysed | Custom Handlebars templates in 3 apps; relies on `operationId`, `x-links`, `tags`, `ResourceEventOf{Type}` schema naming — all compatible |
 | OpenAPI version configurable | ✅ Done | `OpenApiInfoOptions.OpenApiVersion` defaults to `3.0.4`; set to `3.0.0` for older tooling compatibility |
 | OpenAPI short schema names | ✅ Done | Schema component keys now use short type names (e.g. `TemplateApiResource`) instead of fully-qualified CLR names |
+| OperationId suffix stripping | ✅ Done | `GetSentEmailQuery` → `GetSentEmail` in descriptor Name; flows to OpenAPI `operationId` and TypeScript client generation |
+| BP009 duplicate descriptor name | ✅ Done | Compile-time error when two operations strip to the same name (e.g. `FooQuery` + `FooCommand` → both `Foo`) |
 | Link schema component | ✅ Done | Well-known `Link` schema emitted in `components/schemas` with `href` (required) + `type`; `$links` property uses `additionalProperties: { $ref: Link }` |
 | `[DoNotAudit]` compile-time | ✅ Already exists | `AuditingModule` skips code generation when attribute present; manifest records `auditing.enabled=false`; integration test proves audit sink NOT called |
 | `[NoRebusTransaction]` compile-time | ✅ Already exists | `RebusTransactionModule` skips transaction wrapping; both runtime and source-gen paths handle opt-out |

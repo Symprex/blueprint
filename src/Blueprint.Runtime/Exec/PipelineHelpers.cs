@@ -252,15 +252,7 @@ public static class PipelineHelpers
             {
                 populate(new ReadOnlySpan<byte>(bodyStream.GetBuffer(), 0, (int)bodyStream.Length), operation);
             }
-            catch (System.Text.Json.JsonException)
-            {
-                return new BindingFailureResult("Invalid JSON body");
-            }
-            catch (InvalidOperationException)
-            {
-                return new BindingFailureResult("Invalid JSON body");
-            }
-            catch (NotSupportedException)
+            catch (Exception ex) when (ex is System.Text.Json.JsonException or InvalidOperationException or NotSupportedException)
             {
                 return new BindingFailureResult("Invalid JSON body");
             }
