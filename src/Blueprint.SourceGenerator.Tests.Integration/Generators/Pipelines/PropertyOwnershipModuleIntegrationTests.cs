@@ -184,6 +184,102 @@ public class PropertyOwnershipModuleIntegrationTests
     }
 
     [Fact]
+    public async Task When_route_parameter_type_has_TypeConverter_then_pipeline_converts_from_route_value()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
+        var pipeline = executor.GetPipeline(typeof(GetItemByTypeConverterIdPopulationQuery));
+        var descriptor = GetItemByTypeConverterIdPopulationQuery.Configure();
+        var httpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+
+        var testId = TypeConverterId.Create();
+        httpContext.Request.RouteValues["TenantId"] = testId.ToString();
+        httpContext.Request.RouteValues["Id"] = "doc-123";
+
+        var context = new Blueprint.Runtime.Exec.ApiOperationContext(new EmptyServiceProvider(), app, descriptor, CancellationToken.None)
+        {
+            Operation = new GetItemByTypeConverterIdPopulationQuery(),
+            HttpContext = httpContext,
+        };
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<Blueprint.Runtime.Exec.OkResult<string>>();
+        ((Blueprint.Runtime.Exec.OkResult<string>)result).Content.Should().Be($"{testId}:doc-123");
+    }
+
+    [Fact]
+    public async Task When_route_parameter_type_has_TypeConverter_and_value_invalid_then_binding_failure()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
+        var pipeline = executor.GetPipeline(typeof(GetItemByTypeConverterIdPopulationQuery));
+        var descriptor = GetItemByTypeConverterIdPopulationQuery.Configure();
+        var httpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+
+        httpContext.Request.RouteValues["TenantId"] = "NOT-A-VALID-GUID";
+        httpContext.Request.RouteValues["Id"] = "doc-123";
+
+        var context = new Blueprint.Runtime.Exec.ApiOperationContext(new EmptyServiceProvider(), app, descriptor, CancellationToken.None)
+        {
+            Operation = new GetItemByTypeConverterIdPopulationQuery(),
+            HttpContext = httpContext,
+        };
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<Blueprint.Runtime.Exec.BindingFailureResult>();
+    }
+
+    [Fact]
+    public async Task When_query_parameter_type_has_TypeConverter_and_value_provided_then_converts()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
+        var pipeline = executor.GetPipeline(typeof(SearchByTypeConverterIdPopulationQuery));
+        var descriptor = SearchByTypeConverterIdPopulationQuery.Configure();
+
+        var testId = TypeConverterId.Create();
+        var httpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        httpContext.Request.Method = "GET";
+        httpContext.Request.QueryString = new Microsoft.AspNetCore.Http.QueryString($"?FilterId={testId}");
+
+        var context = new Blueprint.Runtime.Exec.ApiOperationContext(new EmptyServiceProvider(), app, descriptor, CancellationToken.None)
+        {
+            Operation = new SearchByTypeConverterIdPopulationQuery(),
+            HttpContext = httpContext,
+        };
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<Blueprint.Runtime.Exec.OkResult<string>>();
+        ((Blueprint.Runtime.Exec.OkResult<string>)result).Content.Should().Be(testId.ToString());
+    }
+
+    [Fact]
+    public async Task When_query_parameter_type_has_TypeConverter_and_not_provided_then_stays_null()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
+        var pipeline = executor.GetPipeline(typeof(SearchByTypeConverterIdPopulationQuery));
+        var descriptor = SearchByTypeConverterIdPopulationQuery.Configure();
+
+        var httpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        httpContext.Request.Method = "GET";
+
+        var context = new Blueprint.Runtime.Exec.ApiOperationContext(new EmptyServiceProvider(), app, descriptor, CancellationToken.None)
+        {
+            Operation = new SearchByTypeConverterIdPopulationQuery(),
+            HttpContext = httpContext,
+        };
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<Blueprint.Runtime.Exec.OkResult<string>>();
+        ((Blueprint.Runtime.Exec.OkResult<string>)result).Content.Should().Be("none");
+    }
+
+    [Fact]
     public void When_http_method_metadata_set_then_descriptor_reports_correct_methods()
     {
         var descriptor = UpdateUserPopulationCommand.Configure();
@@ -981,5 +1077,102 @@ public partial class GetTenantReportsPopulationQuery : TenantPagedOperation, IQu
     public static Task<string> HandleAsync(GetTenantReportsPopulationQuery operation)
     {
         return Task.FromResult($"{operation.TenantId}:{operation.Category}:p{operation.Page}:s{operation.PageSize}");
+    }
+}
+
+// --- TypeConverter route/query binding test types ---
+
+/// <summary>
+/// A custom value type with <see cref="System.ComponentModel.TypeConverter"/> but no <c>IParsable</c> or
+/// <c>TryParse</c>. Simulates S365's <c>ApiId</c> pattern.
+/// </summary>
+[System.ComponentModel.TypeConverter(typeof(TypeConverterIdConverter))]
+public readonly struct TypeConverterId : IEquatable<TypeConverterId>
+{
+    private readonly Guid _value;
+
+    private TypeConverterId(Guid value)
+    {
+        this._value = value;
+    }
+
+    public static TypeConverterId Create()
+    {
+        return new(Guid.NewGuid());
+    }
+
+    public static TypeConverterId Hydrate(string raw)
+    {
+        return new(Guid.Parse(raw));
+    }
+
+    public bool Equals(TypeConverterId other)
+    {
+        return this._value == other._value;
+    }
+
+    public override bool Equals(object? obj)
+    {
+        return obj is TypeConverterId other && this.Equals(other);
+    }
+
+    public override int GetHashCode()
+    {
+        return this._value.GetHashCode();
+    }
+
+    public override string ToString()
+    {
+        return this._value.ToString("N");
+    }
+}
+
+/// <summary>
+/// TypeConverter for <see cref="TypeConverterId"/> that enables string-to-struct conversion at runtime.
+/// </summary>
+public sealed class TypeConverterIdConverter : System.ComponentModel.TypeConverter
+{
+    public override bool CanConvertFrom(System.ComponentModel.ITypeDescriptorContext? context, Type sourceType)
+    {
+        return sourceType == typeof(string) || base.CanConvertFrom(context, sourceType);
+    }
+
+    public override object? ConvertFrom(System.ComponentModel.ITypeDescriptorContext? context, System.Globalization.CultureInfo? culture, object value)
+    {
+        return value is string s ? TypeConverterId.Hydrate(s) : base.ConvertFrom(context, culture, value);
+    }
+}
+
+/// <summary>
+/// GET with <c>[TypeConverter]</c> route parameter — proves the generated <c>TypeDescriptor.GetConverter()</c>
+/// code path works at runtime.
+/// </summary>
+[Blueprint.Model.Attributes.AllowAnonymous]
+[Blueprint.Model.Attributes.RootLink("/population-test/tenants/{TenantId}/tc-items/{Id}")]
+public partial class GetItemByTypeConverterIdPopulationQuery : IQuery<string>
+{
+    public TypeConverterId TenantId { get; set; }
+
+    public string Id { get; set; } = string.Empty;
+
+    public static Task<string> HandleAsync(GetItemByTypeConverterIdPopulationQuery operation)
+    {
+        return Task.FromResult($"{operation.TenantId}:{operation.Id}");
+    }
+}
+
+/// <summary>
+/// GET with nullable <c>[TypeConverter]</c> query parameter — proves nullable TypeConverter
+/// query binding works at runtime.
+/// </summary>
+[Blueprint.Model.Attributes.AllowAnonymous]
+[Blueprint.Model.Attributes.RootLink("/population-test/tc-search")]
+public partial class SearchByTypeConverterIdPopulationQuery : IQuery<string>
+{
+    public TypeConverterId? FilterId { get; set; }
+
+    public static Task<string> HandleAsync(SearchByTypeConverterIdPopulationQuery operation)
+    {
+        return Task.FromResult(operation.FilterId?.ToString() ?? "none");
     }
 }
