@@ -131,7 +131,7 @@ public static class EndpointRouteBuilderExtensions
 
             // Resolve HTTP methods from compile-time feature data, falling back to GET for safety.
             var httpMethods = operation.TryGetFeatureData<OperationHttpMethodMetadataFeatureData>(out var methodData)
-                ? methodData.HttpMethods.ToArray()
+                ? methodData.HttpMethodsArray
                 : ["GET"];
 
             foreach (var url in operation.Urls)
