@@ -96,4 +96,28 @@ internal static class PropertyOwnershipDiagnosticDescriptors
         category: "PropertyOwnership",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
+
+    /// <summary>
+    /// BPPO009: <c>[FromAuthContext(ClaimType = "...")]</c> is specified on a non-string property.
+    /// Only string properties support compile-time claim mapping.
+    /// </summary>
+    public static readonly DiagnosticDescriptor ClaimTypeOnNonStringProperty = new(
+        id: "BPPO009",
+        title: "[FromAuthContext] ClaimType on non-string property",
+        messageFormat: "Property '{0}' on operation '{1}' has [FromAuthContext(ClaimType = \"{2}\")] but its type '{3}' is not string. ClaimType mapping only supports string properties.",
+        category: "PropertyOwnership",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    /// <summary>
+    /// BPPO010: <c>[FromAuthContext(ClaimType = "...")]</c> is specified on a property that is also
+    /// bound from a route placeholder. Route binding takes precedence, so the ClaimType is dead configuration.
+    /// </summary>
+    public static readonly DiagnosticDescriptor ClaimTypeOnRouteOwnedProperty = new(
+        id: "BPPO010",
+        title: "[FromAuthContext] ClaimType on route-owned property",
+        messageFormat: "Property '{0}' on operation '{1}' has [FromAuthContext(ClaimType = \"{2}\")] but is also bound from a route placeholder. Route binding takes precedence; remove ClaimType to avoid confusion.",
+        category: "PropertyOwnership",
+        DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
 }

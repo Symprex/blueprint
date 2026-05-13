@@ -398,4 +398,137 @@ public class FromAuthContextPropertyOwnershipTests
 
         return count;
     }
+
+    [Fact]
+    public void When_property_has_FromAuthContext_with_ClaimType_then_authentication_stage_contribution()
+    {
+        var compilation = CreateCompilation(
+            """
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace;
+
+            [RootLink("/items/{Id}")]
+            public partial class GetItemQuery : IQuery<string>
+            {
+                public string Id { get; set; }
+
+                [FromAuthContext(ClaimType = "tenant_id")]
+                public string? TenantId { get; set; }
+
+                public static Task<string> HandleAsync(GetItemQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        var config = new BlueprintSourceGenerationConfig([new PropertyOwnershipModule()]);
+        var result = config.BuildPipelinePlan("TestNamespace.GetItemQuery", compilation);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Value.Should().NotBeNull();
+
+        var plan = result.Value!;
+
+        // Should have both Population (for route/body binding) AND Authentication (for claim mapping)
+        plan.Contributions.Should().Contain(
+            new PipelineContribution(PipelineStage.Population, nameof(PropertyOwnershipModule)),
+            "route and body properties need Population stage");
+
+        plan.Contributions.Should().Contain(
+            new PipelineContribution(PipelineStage.Authentication, nameof(PropertyOwnershipModule)),
+            "ClaimType-mapped properties need Authentication stage for inline claim reading");
+    }
+
+    [Fact]
+    public void When_property_has_FromAuthContext_with_ClaimType_on_non_string_then_diagnostic_BPPO009()
+    {
+        var result = CompileDescriptor(
+            """
+            [global::Blueprint.Model.Attributes.RootLink("/items/{Id}")]
+            public partial class GetItemQuery : IQuery<string>
+            {
+                public string Id { get; set; }
+
+                [global::Blueprint.Model.Attributes.FromAuthContext(ClaimType = "tenant_id")]
+                public int TenantLevel { get; set; }
+
+                public static Task<string> HandleAsync(GetItemQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().ContainSingle(static d => d.Id == "BPPO009",
+            "ClaimType on non-string property should produce BPPO009 diagnostic");
+    }
+
+    [Fact]
+    public void When_property_has_FromAuthContext_with_ClaimType_and_is_route_owned_then_warning_BPPO010()
+    {
+        var result = CompileDescriptor(
+            """
+            [global::Blueprint.Model.Attributes.RootLink("/tenants/{TenantId}/items")]
+            public partial class ListItemsQuery : IQuery<string>
+            {
+                [global::Blueprint.Model.Attributes.FromAuthContext(ClaimType = "tenant_id")]
+                public string TenantId { get; set; }
+
+                public static Task<string> HandleAsync(ListItemsQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().ContainSingle(static d => d.Id == "BPPO010",
+            "ClaimType on route-owned property should produce BPPO010 warning");
+    }
+
+    [Fact]
+    public void When_property_has_FromAuthContext_without_ClaimType_then_no_authentication_contribution()
+    {
+        var compilation = CreateCompilation(
+            """
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace;
+
+            [RootLink("/items/{Id}")]
+            public partial class GetItemQuery : IQuery<string>
+            {
+                public string Id { get; set; }
+
+                [FromAuthContext]
+                public string? TenantId { get; set; }
+
+                public static Task<string> HandleAsync(GetItemQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        var config = new BlueprintSourceGenerationConfig([new PropertyOwnershipModule()]);
+        var result = config.BuildPipelinePlan("TestNamespace.GetItemQuery", compilation);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Value.Should().NotBeNull();
+
+        var plan = result.Value!;
+
+        // Population should exist (for route binding), but NOT Authentication (no ClaimType)
+        plan.Contributions.Should().Contain(
+            new PipelineContribution(PipelineStage.Population, nameof(PropertyOwnershipModule)));
+
+        plan.Contributions.Should().NotContain(
+            new PipelineContribution(PipelineStage.Authentication, nameof(PropertyOwnershipModule)),
+            "without ClaimType, no Authentication stage contribution should exist");
+    }
 }

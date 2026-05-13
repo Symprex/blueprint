@@ -103,6 +103,14 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
 
         context.AddRenderStep(PipelineStage.Population, renderContext => RenderPopulation(renderContext, entries));
 
+        // Compile-time claim mapping: when [FromAuthContext(ClaimType = "...")] is specified,
+        // emit inline claim reading in the Authentication stage (after identity check).
+        var claimMappedEntries = entries.Where(static e => e.Source == PropertyOwnershipSource.AuthContext && e.ClaimType is not null).ToList();
+        if (claimMappedEntries.Count > 0)
+        {
+            context.AddRenderStep(PipelineStage.Authentication, renderContext => RenderClaimMappings(renderContext, claimMappedEntries));
+        }
+
         // Generate [UnsafeAccessor] setter methods for init-only properties so the pipeline can
         // assign route/query/header/cookie/body values after construction.
         var initEntries = entries.Where(static e => e.IsInitOnly).ToList();
@@ -367,12 +375,38 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             // recorded as AuthContext in descriptor metadata for OpenAPI visibility.
             if (fromAuthContext != null && fromRoute == null)
             {
+                // Extract optional ClaimType named argument for compile-time claim mapping.
+                var claimType = fromAuthContext.NamedArguments
+                    .FirstOrDefault(static a => a.Key == "ClaimType").Value.Value as string;
+
                 // Route placeholder match takes precedence even when [FromAuthContext] is present,
                 // so check convention route fallback below. If there IS no route match, own it here.
                 if (!routePlaceholders.Contains(member.Name, StringComparer.Ordinal))
                 {
-                    entries.Add(new PropertyOwnershipEntry(member.Name, member.Type, PropertyOwnershipSource.AuthContext, null, isInitOnly));
+                    // Validate: ClaimType is only supported on string properties.
+                    if (claimType != null && member.Type.SpecialType != SpecialType.System_String)
+                    {
+                        diagnostics?.Add(new DiagnosticInfo(
+                            PropertyOwnershipDiagnosticDescriptors.ClaimTypeOnNonStringProperty,
+                            member.Locations.FirstOrDefault(static l => l.IsInSource),
+                            [member.Name, operationType.Name, claimType, member.Type.ToDisplayString()]));
+
+                        // Still record as AuthContext (no HTTP binding), but without ClaimType.
+                        entries.Add(new PropertyOwnershipEntry(member.Name, member.Type, PropertyOwnershipSource.AuthContext, null, isInitOnly));
+                        continue;
+                    }
+
+                    entries.Add(new PropertyOwnershipEntry(member.Name, member.Type, PropertyOwnershipSource.AuthContext, null, isInitOnly, claimType));
                     continue;
+                }
+
+                // Route wins over auth-context — warn if ClaimType was specified.
+                if (claimType != null)
+                {
+                    diagnostics?.Add(new DiagnosticInfo(
+                        PropertyOwnershipDiagnosticDescriptors.ClaimTypeOnRouteOwnedProperty,
+                        member.Locations.FirstOrDefault(static l => l.IsInSource),
+                        [member.Name, operationType.Name, claimType]));
                 }
 
                 // Fall through to route binding below — route wins over auth-context
@@ -854,6 +888,44 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         writer.AppendLine(
             "this.SetFeatureData(new global::Blueprint.Model.OperationPropertyOwnershipFeatureData("
             + $"global::System.Collections.Immutable.ImmutableArray.Create({string.Join(", ", entryExpressions)})));");
+    }
+
+    /// <summary>
+    /// Emits inline claim reading for <c>[FromAuthContext(ClaimType = "...")]</c> properties.
+    /// Runs in the <see cref="PipelineStage.Authentication"/> stage after identity verification,
+    /// providing compile-time claim mapping without runtime <c>IPropertyPopulator</c> overhead.
+    /// Uses guarded assignment to avoid overwriting values already set by route binding.
+    /// </summary>
+    private static void RenderClaimMappings(PipelineRenderContext context, List<PropertyOwnershipEntry> claimEntries)
+    {
+        var operationExpr = context.GetOperationExpression();
+
+        context.WriteBlankLine();
+        context.WriteStatement("// Compile-time claim mapping ([FromAuthContext(ClaimType = \"...\")]), no reflection");
+
+        foreach (var entry in claimEntries)
+        {
+            var claimType = entry.ClaimType!;
+            var escapedClaimType = claimType.Replace("\"", "\\\"");
+
+            // Guarded assignment: only set if claim is present and property is empty/null.
+            // Uses context.UserPrincipal (canonical pipeline identity) rather than httpContext.User.
+            context.If(
+                $"string.IsNullOrEmpty({operationExpr}.{entry.PropertyName})",
+                guardCtx =>
+                {
+                    guardCtx.DeclareVariable(
+                        $"_claim_{entry.PropertyName}",
+                        $"context.UserPrincipal?.FindFirst(\"{escapedClaimType}\")");
+
+                    guardCtx.If(
+                        $"_claim_{entry.PropertyName} is not null",
+                        innerCtx =>
+                        {
+                            innerCtx.WriteStatement($"{operationExpr}.{entry.PropertyName} = _claim_{entry.PropertyName}.Value;");
+                        });
+                });
+        }
     }
 
     /// <summary>
@@ -1391,7 +1463,8 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         ITypeSymbol TypeSymbol,
         PropertyOwnershipSource Source,
         string? BindingName,
-        bool IsInitOnly = false);
+        bool IsInitOnly = false,
+        string? ClaimType = null);
 
     /// <summary>
     /// The binding source for a property during the ownership analysis phase.

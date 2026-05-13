@@ -773,6 +773,109 @@ public class PropertyOwnershipModuleIntegrationTests
             "no AuthContext entries expected when route wins");
     }
 
+    [Fact]
+    public void When_FromAuthContext_has_ClaimType_then_descriptor_records_AuthContext_source()
+    {
+        var descriptor = GetClaimMappedItemQuery.Configure();
+
+        descriptor.TryGetFeatureData<OperationPropertyOwnershipFeatureData>(out var ownershipData)
+            .Should().BeTrue();
+
+        ownershipData!.Entries.Should().Contain(
+            static e => e.PropertyName == "PartnerId" && e.Source == PropertyBindingSource.AuthContext,
+            "[FromAuthContext(ClaimType)] property should be AuthContext-owned");
+
+        ownershipData.Entries.Should().Contain(
+            static e => e.PropertyName == "Id" && e.Source == PropertyBindingSource.Route);
+    }
+
+    [Fact]
+    public async Task When_claim_mapped_property_and_claim_present_then_property_populated_from_claim()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
+        var pipeline = executor.GetPipeline(typeof(GetClaimMappedItemQuery));
+        var descriptor = GetClaimMappedItemQuery.Configure();
+
+        var httpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        httpContext.Request.RouteValues["Id"] = "item-42";
+
+        // Set up authenticated user with partner_id claim
+        var identity = new System.Security.Claims.ClaimsIdentity("TestAuth");
+        identity.AddClaim(new System.Security.Claims.Claim("partner_id", "partner-abc"));
+        httpContext.User = new System.Security.Claims.ClaimsPrincipal(identity);
+
+        var operation = new GetClaimMappedItemQuery();
+
+        var context = new Blueprint.Runtime.Exec.ApiOperationContext(new EmptyServiceProvider(), app, descriptor, CancellationToken.None)
+        {
+            Operation = operation,
+            HttpContext = httpContext,
+            UserPrincipal = httpContext.User,
+        };
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<Blueprint.Runtime.Exec.OkResult<string>>();
+        ((Blueprint.Runtime.Exec.OkResult<string>)result).Content.Should().Be("id=item-42,partner=partner-abc");
+    }
+
+    [Fact]
+    public async Task When_claim_mapped_property_and_claim_missing_then_property_stays_null()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
+        var pipeline = executor.GetPipeline(typeof(GetClaimMappedItemQuery));
+        var descriptor = GetClaimMappedItemQuery.Configure();
+
+        var httpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        httpContext.Request.RouteValues["Id"] = "item-42";
+
+        // Authenticated user WITHOUT the partner_id claim
+        var identity = new System.Security.Claims.ClaimsIdentity("TestAuth");
+        identity.AddClaim(new System.Security.Claims.Claim("sub", "user-123"));
+        httpContext.User = new System.Security.Claims.ClaimsPrincipal(identity);
+
+        var operation = new GetClaimMappedItemQuery();
+
+        var context = new Blueprint.Runtime.Exec.ApiOperationContext(new EmptyServiceProvider(), app, descriptor, CancellationToken.None)
+        {
+            Operation = operation,
+            HttpContext = httpContext,
+            UserPrincipal = httpContext.User,
+        };
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<Blueprint.Runtime.Exec.OkResult<string>>();
+        ((Blueprint.Runtime.Exec.OkResult<string>)result).Content.Should().Be("id=item-42,partner=null");
+    }
+
+    [Fact]
+    public async Task When_claim_mapped_property_and_user_not_authenticated_then_returns_401()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
+        var pipeline = executor.GetPipeline(typeof(GetClaimMappedItemQuery));
+        var descriptor = GetClaimMappedItemQuery.Configure();
+
+        var httpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        httpContext.Request.RouteValues["Id"] = "item-42";
+
+        // Anonymous user — no ClaimsIdentity with auth type
+        var operation = new GetClaimMappedItemQuery();
+
+        var context = new Blueprint.Runtime.Exec.ApiOperationContext(new EmptyServiceProvider(), app, descriptor, CancellationToken.None)
+        {
+            Operation = operation,
+            HttpContext = httpContext,
+        };
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<Blueprint.Runtime.Exec.UnauthenticatedResult>();
+    }
+
     private static Blueprint.Runtime.Exec.ApiOperationContext CreateContext(BlueprintApp app, ApiOperationDescriptor descriptor, object operation, Microsoft.AspNetCore.Http.HttpContext httpContext)
     {
         return new Blueprint.Runtime.Exec.ApiOperationContext(new EmptyServiceProvider(), app, descriptor, CancellationToken.None)
@@ -1467,5 +1570,27 @@ public partial class SearchByEnumStatusPopulationQuery : IQuery<string>
     public static Task<string> HandleAsync(SearchByEnumStatusPopulationQuery operation)
     {
         return Task.FromResult(operation.Status?.ToString() ?? "none");
+    }
+}
+
+// --- FromAuthContext ClaimType test types ---
+
+/// <summary>
+/// GET query with <c>[FromAuthContext(ClaimType = "partner_id")]</c> on PartnerId — proves the
+/// compile-time claim mapping reads the specified claim from the authenticated principal and
+/// populates the property without runtime reflection or IPropertyPopulator.
+/// </summary>
+[Blueprint.Model.Attributes.MustBeAuthenticated]
+[Blueprint.Model.Attributes.RootLink("/population-test/claim-mapped-items/{Id}")]
+public partial class GetClaimMappedItemQuery : IQuery<string>
+{
+    public string? Id { get; set; }
+
+    [Blueprint.Model.Attributes.FromAuthContext(ClaimType = "partner_id")]
+    public string? PartnerId { get; set; }
+
+    public static Task<string> HandleAsync(GetClaimMappedItemQuery operation)
+    {
+        return Task.FromResult($"id={operation.Id},partner={operation.PartnerId ?? "null"}");
     }
 }
