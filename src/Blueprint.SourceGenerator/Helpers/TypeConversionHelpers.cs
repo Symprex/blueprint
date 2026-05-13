@@ -103,4 +103,36 @@ internal static class TypeConversionHelpers
             _ => $"int.TryParse({stringExpression}, out var {outVariable})", // fallback — should not be reached for supported types
         };
     }
+
+    /// <summary>
+    /// Returns a static lambda expression compatible with <c>TryParseFunc&lt;T&gt;</c>
+    /// for use with <c>PipelineHelpers.BindRouteValue</c> and similar binding helpers.
+    /// The lambda wraps the type-specific TryParse call so the delegate can be cached by the compiler.
+    /// </summary>
+    /// <param name="typeSymbol">The target type to generate a parse lambda for.</param>
+    /// <returns>A C# source string containing a <c>static</c> lambda expression.</returns>
+    internal static string GetTryParseLambda(ITypeSymbol typeSymbol)
+    {
+        var typeDisplay = typeSymbol.WithNullableAnnotation(NullableAnnotation.NotAnnotated).ToDisplayString();
+
+        return typeDisplay switch
+        {
+            "int" => "static (string _s, out int _v) => int.TryParse(_s, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out _v)",
+            "long" => "static (string _s, out long _v) => long.TryParse(_s, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out _v)",
+            "double" => "static (string _s, out double _v) => double.TryParse(_s, System.Globalization.NumberStyles.Float | System.Globalization.NumberStyles.AllowThousands, System.Globalization.CultureInfo.InvariantCulture, out _v)",
+            "float" => "static (string _s, out float _v) => float.TryParse(_s, System.Globalization.NumberStyles.Float | System.Globalization.NumberStyles.AllowThousands, System.Globalization.CultureInfo.InvariantCulture, out _v)",
+            "bool" => "static (string _s, out bool _v) => bool.TryParse(_s, out _v)",
+            "decimal" => "static (string _s, out decimal _v) => decimal.TryParse(_s, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out _v)",
+            "System.Guid" => "static (string _s, out System.Guid _v) => System.Guid.TryParse(_s, out _v)",
+            "System.DateTime" => "static (string _s, out System.DateTime _v) => System.DateTime.TryParse(_s, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out _v)",
+            "System.DateTimeOffset" => "static (string _s, out System.DateTimeOffset _v) => System.DateTimeOffset.TryParse(_s, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out _v)",
+            _ when typeSymbol.TypeKind == TypeKind.Enum =>
+                $"static (string _s, out {typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)} _v) => System.Enum.TryParse(_s, out _v)",
+            _ when ImplementsIParsable(typeSymbol) =>
+                $"static (string _s, out {typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)} _v) => {typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}.TryParse(_s, null, out _v)",
+            _ when HasStaticTryParseMethod(typeSymbol) =>
+                $"static (string _s, out {typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)} _v) => {typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}.TryParse(_s, out _v)",
+            _ => "static (string _s, out int _v) => int.TryParse(_s, out _v)", // fallback
+        };
+    }
 }

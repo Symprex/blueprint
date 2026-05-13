@@ -718,6 +718,178 @@ public static class PipelineHelpers
         await Blueprint.Http.LinkGeneratorHandler.AddLinksAsync(apiLinkGenerator, resourceLinkGenerators, context, handlerResult).ConfigureAwait(false);
     }
 
+    // ────────────────────────────────────────────────────────────────────
+    //  Parameter binding helpers — replace multi-line inline TryParse
+    //  blocks in generated pipelines with single-call shared methods.
+    // ────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Parses a typed route value. Route parameters are always present (enforced by routing).
+    /// Returns <see langword="null"/> on success, or a <see cref="BindingFailureResult"/> when unparseable.
+    /// </summary>
+    /// <typeparam name="T">The target value type.</typeparam>
+    /// <param name="routeValues">The route value dictionary from the current request.</param>
+    /// <param name="name">The route parameter name to extract.</param>
+    /// <param name="value">The parsed value on success.</param>
+    /// <param name="tryParse">A static delegate that wraps the type-specific TryParse method.</param>
+    /// <returns><see langword="null"/> on success; a <see cref="BindingFailureResult"/> on parse failure.</returns>
+    public static OperationResult? BindRouteValue<T>(
+        Microsoft.AspNetCore.Routing.RouteValueDictionary routeValues,
+        string name,
+        out T value,
+        TryParseFunc<T> tryParse)
+    {
+        if (routeValues[name] is string s && tryParse(s, out value))
+        {
+            return null;
+        }
+
+        value = default!;
+        return new BindingFailureResult($"Invalid route parameter '{name}'");
+    }
+
+    /// <summary>
+    /// Parses a typed scalar query parameter. When absent, <paramref name="found"/> is <see langword="false"/>
+    /// and the caller skips assignment. When present but unparseable, returns a <see cref="BindingFailureResult"/>.
+    /// </summary>
+    /// <typeparam name="T">The target value type.</typeparam>
+    /// <param name="query">The query collection from the current request.</param>
+    /// <param name="name">The query parameter name to extract.</param>
+    /// <param name="value">The parsed value on success.</param>
+    /// <param name="found">Whether the query parameter was present in the request.</param>
+    /// <param name="tryParse">A static delegate that wraps the type-specific TryParse method.</param>
+    /// <returns><see langword="null"/> on success or absent; a <see cref="BindingFailureResult"/> on parse failure.</returns>
+    public static OperationResult? BindQueryValue<T>(
+        Microsoft.AspNetCore.Http.IQueryCollection query,
+        string name,
+        out T value,
+        out bool found,
+        TryParseFunc<T> tryParse)
+    {
+        var sv = query[name];
+        if (sv.Count > 0)
+        {
+            found = true;
+            if (tryParse(sv[0]!, out value))
+            {
+                return null;
+            }
+
+            value = default!;
+            return new BindingFailureResult($"Invalid query parameter '{name}'");
+        }
+
+        found = false;
+        value = default!;
+        return null;
+    }
+
+    /// <summary>
+    /// Parses a typed array query parameter. When absent, <paramref name="values"/> is <see langword="null"/>.
+    /// When any element fails to parse, returns a <see cref="BindingFailureResult"/>.
+    /// </summary>
+    /// <typeparam name="T">The array element type.</typeparam>
+    /// <param name="query">The query collection from the current request.</param>
+    /// <param name="name">The query parameter name to extract.</param>
+    /// <param name="values">The parsed array on success, or <see langword="null"/> when absent.</param>
+    /// <param name="tryParse">A static delegate that wraps the type-specific TryParse method.</param>
+    /// <returns><see langword="null"/> on success or absent; a <see cref="BindingFailureResult"/> on parse failure.</returns>
+    public static OperationResult? BindQueryArray<T>(
+        Microsoft.AspNetCore.Http.IQueryCollection query,
+        string name,
+        out T[]? values,
+        TryParseFunc<T> tryParse)
+    {
+        var sv = query[name];
+        if (sv.Count > 0)
+        {
+            var arr = new T[sv.Count];
+            for (var i = 0; i < sv.Count; i++)
+            {
+                if (!tryParse(sv[i]!, out arr[i]))
+                {
+                    values = null;
+                    return new BindingFailureResult($"Invalid query parameter '{name}'");
+                }
+            }
+
+            values = arr;
+            return null;
+        }
+
+        values = null;
+        return null;
+    }
+
+    /// <summary>
+    /// Parses a typed header value. When absent, <paramref name="found"/> is <see langword="false"/>.
+    /// </summary>
+    /// <typeparam name="T">The target value type.</typeparam>
+    /// <param name="headers">The header dictionary from the current request.</param>
+    /// <param name="name">The header name to extract.</param>
+    /// <param name="value">The parsed value on success.</param>
+    /// <param name="found">Whether the header was present in the request.</param>
+    /// <param name="tryParse">A static delegate that wraps the type-specific TryParse method.</param>
+    /// <returns><see langword="null"/> on success or absent; a <see cref="BindingFailureResult"/> on parse failure.</returns>
+    public static OperationResult? BindHeaderValue<T>(
+        Microsoft.AspNetCore.Http.IHeaderDictionary headers,
+        string name,
+        out T value,
+        out bool found,
+        TryParseFunc<T> tryParse)
+    {
+        var sv = headers[name];
+        if (sv.Count > 0)
+        {
+            found = true;
+            if (tryParse(sv[0]!, out value))
+            {
+                return null;
+            }
+
+            value = default!;
+            return new BindingFailureResult($"Invalid header '{name}'");
+        }
+
+        found = false;
+        value = default!;
+        return null;
+    }
+
+    /// <summary>
+    /// Parses a typed cookie value. When absent, <paramref name="found"/> is <see langword="false"/>.
+    /// </summary>
+    /// <typeparam name="T">The target value type.</typeparam>
+    /// <param name="cookies">The cookie collection from the current request.</param>
+    /// <param name="name">The cookie name to extract.</param>
+    /// <param name="value">The parsed value on success.</param>
+    /// <param name="found">Whether the cookie was present in the request.</param>
+    /// <param name="tryParse">A static delegate that wraps the type-specific TryParse method.</param>
+    /// <returns><see langword="null"/> on success or absent; a <see cref="BindingFailureResult"/> on parse failure.</returns>
+    public static OperationResult? BindCookieValue<T>(
+        Microsoft.AspNetCore.Http.IRequestCookieCollection cookies,
+        string name,
+        out T value,
+        out bool found,
+        TryParseFunc<T> tryParse)
+    {
+        if (cookies.TryGetValue(name, out var cookieStr))
+        {
+            found = true;
+            if (tryParse(cookieStr, out value))
+            {
+                return null;
+            }
+
+            value = default!;
+            return new BindingFailureResult($"Invalid cookie '{name}'");
+        }
+
+        found = false;
+        value = default!;
+        return null;
+    }
+
     /// <summary>
     /// A stack-allocated <see cref="IReadOnlyList{T}"/> that holds exactly one element,
     /// avoiding the heap allocation of a single-element <c>T[]</c> array. Generated pipelines
@@ -759,3 +931,14 @@ public static class PipelineHelpers
         }
     }
 }
+
+/// <summary>
+/// Delegate used by <see cref="PipelineHelpers"/> binding methods to perform type-specific
+/// string-to-<typeparamref name="T"/> conversion without reflection. Generated pipelines
+/// pass static lambdas wrapping the appropriate <c>TryParse</c> call for each property type.
+/// </summary>
+/// <typeparam name="T">The target type.</typeparam>
+/// <param name="input">The raw string value to parse.</param>
+/// <param name="result">When <see langword="true"/> is returned, contains the parsed value.</param>
+/// <returns><see langword="true"/> when parsing succeeds.</returns>
+public delegate bool TryParseFunc<T>(string input, out T result);

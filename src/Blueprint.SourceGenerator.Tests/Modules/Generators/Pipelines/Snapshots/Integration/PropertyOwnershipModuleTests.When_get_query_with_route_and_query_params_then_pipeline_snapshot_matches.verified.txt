@@ -36,33 +36,22 @@ namespace Blueprint.Generated
             {
                 operation.Filter = _qv_Filter[0];
             }
-            var _qv_PageSize = httpContext.Request.Query["pageSize"];
-            if (_qv_PageSize.Count > 0)
+            var _qvErr_PageSize = Blueprint.Runtime.Exec.PipelineHelpers.BindQueryValue(httpContext.Request.Query, "pageSize", out var _parsed_PageSize, out var _qvFound_PageSize, static (string _s, out int _v) => int.TryParse(_s, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out _v));
+            if (_qvErr_PageSize != null)
             {
-                if (int.TryParse(_qv_PageSize[0], System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var _parsed_PageSize))
-                {
-                    operation.PageSize = _parsed_PageSize;
-                }
-                else
-                {
-                    return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid query parameter 'pageSize'");
-                }
+                return _qvErr_PageSize;
             }
-            var _qv_TagIds = httpContext.Request.Query["tagIds"];
-            if (_qv_TagIds.Count > 0)
+            if (_qvFound_PageSize)
             {
-                var _arr_TagIds = new int[_qv_TagIds.Count];
-                for (var _i = 0; _i < _qv_TagIds.Count; _i++)
-                {
-                    if (int.TryParse(_qv_TagIds[_i], System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var _parsed_TagIds))
-                    {
-                        _arr_TagIds[_i] = _parsed_TagIds;
-                    }
-                    else
-                    {
-                        return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid query parameter 'tagIds'");
-                    }
-                }
+                operation.PageSize = _parsed_PageSize;
+            }
+            var _qaErr_TagIds = Blueprint.Runtime.Exec.PipelineHelpers.BindQueryArray(httpContext.Request.Query, "tagIds", out var _arr_TagIds, static (string _s, out int _v) => int.TryParse(_s, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out _v));
+            if (_qaErr_TagIds != null)
+            {
+                return _qaErr_TagIds;
+            }
+            if (_arr_TagIds != null)
+            {
                 operation.TagIds = _arr_TagIds;
             }
 

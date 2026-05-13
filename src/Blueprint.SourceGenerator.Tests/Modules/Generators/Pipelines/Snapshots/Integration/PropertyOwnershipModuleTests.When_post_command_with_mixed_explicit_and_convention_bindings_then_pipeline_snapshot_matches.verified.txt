@@ -47,17 +47,14 @@ namespace Blueprint.Generated
             {
                 operation.TenantId = _hv_TenantId[0];
             }
-            var _hv_Priority = httpContext.Request.Headers["X-Request-Priority"];
-            if (_hv_Priority.Count > 0)
+            var _hvErr_Priority = Blueprint.Runtime.Exec.PipelineHelpers.BindHeaderValue(httpContext.Request.Headers, "X-Request-Priority", out var _parsed_Priority, out var _hvFound_Priority, static (string _s, out int _v) => int.TryParse(_s, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out _v));
+            if (_hvErr_Priority != null)
             {
-                if (int.TryParse(_hv_Priority[0], System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var _parsed_Priority))
-                {
-                    operation.Priority = _parsed_Priority;
-                }
-                else
-                {
-                    return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid header 'X-Request-Priority'");
-                }
+                return _hvErr_Priority;
+            }
+            if (_hvFound_Priority)
+            {
+                operation.Priority = _parsed_Priority;
             }
             var _cv_SessionToken = httpContext.Request.Cookies["session_token"];
             if (_cv_SessionToken != null)

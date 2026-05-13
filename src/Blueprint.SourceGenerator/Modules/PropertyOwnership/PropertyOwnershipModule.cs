@@ -1080,19 +1080,19 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         }
         else
         {
-            var tryParseExpr = GetScalarTryParseExpression(entry.TypeSymbol, $"routeStr_{entry.PropertyName}", $"_parsed_{entry.PropertyName}");
+            var lambda = TypeConversionHelpers.GetTryParseLambda(entry.TypeSymbol);
+            var errVar = $"_routeErr_{entry.PropertyName}";
+            var parsedVar = $"_parsed_{entry.PropertyName}";
 
-            context.If($"{routeValueExpr} is string routeStr_{entry.PropertyName}", ifCtx =>
+            context.WriteStatement(
+                $"var {errVar} = Blueprint.Runtime.Exec.PipelineHelpers.BindRouteValue(httpContext.Request.RouteValues, \"{entry.BindingName}\", out var {parsedVar}, {lambda});");
+
+            context.If($"{errVar} != null", errCtx =>
             {
-                ifCtx.If(tryParseExpr, parsedCtx =>
-                {
-                    parsedCtx.WriteStatement(FormatPropertyAssignment(operationExpr, entry, $"_parsed_{entry.PropertyName}"));
-                });
-                ifCtx.Else(elseCtx =>
-                {
-                    elseCtx.Return($"new Blueprint.Runtime.Exec.BindingFailureResult(\"Invalid route parameter '{entry.BindingName}'\")");
-                });
+                errCtx.Return(errVar);
             });
+
+            context.WriteStatement(FormatPropertyAssignment(operationExpr, entry, parsedVar));
         }
     }
 
@@ -1100,11 +1100,10 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
     {
         var typeSymbol = entry.TypeSymbol;
         var queryParamName = entry.BindingName!;
-        var queryVar = $"_qv_{entry.PropertyName}";
 
         if (typeSymbol is IArrayTypeSymbol arrayType)
         {
-            WriteArrayQueryExtraction(context, operationExpr, entry, arrayType, queryVar, queryParamName);
+            WriteArrayQueryExtraction(context, operationExpr, entry, arrayType, queryParamName);
             return;
         }
 
@@ -1117,10 +1116,11 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
 
         var effectiveDisplay = effectiveType.WithNullableAnnotation(NullableAnnotation.NotAnnotated).ToDisplayString();
 
-        context.WriteStatement($"var {queryVar} = httpContext.Request.Query[\"{queryParamName}\"];");
-
         if (effectiveDisplay == "string")
         {
+            var queryVar = $"_qv_{entry.PropertyName}";
+            context.WriteStatement($"var {queryVar} = httpContext.Request.Query[\"{queryParamName}\"];");
+
             context.If($"{queryVar}.Count > 0", ifCtx =>
             {
                 ifCtx.WriteStatement(FormatPropertyAssignment(operationExpr, entry, $"{queryVar}[0]"));
@@ -1128,7 +1128,10 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         }
         else if (IsTypeConverterOnlyType(effectiveType))
         {
+            var queryVar = $"_qv_{entry.PropertyName}";
             var fqType = effectiveType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+            context.WriteStatement($"var {queryVar} = httpContext.Request.Query[\"{queryParamName}\"];");
 
             context.If($"{queryVar}.Count > 0", ifCtx =>
             {
@@ -1148,18 +1151,22 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         }
         else
         {
-            var tryParseExpr = GetScalarTryParseExpression(effectiveType, $"{queryVar}[0]", $"_parsed_{entry.PropertyName}");
+            var lambda = TypeConversionHelpers.GetTryParseLambda(effectiveType);
+            var errVar = $"_qvErr_{entry.PropertyName}";
+            var parsedVar = $"_parsed_{entry.PropertyName}";
+            var foundVar = $"_qvFound_{entry.PropertyName}";
 
-            context.If($"{queryVar}.Count > 0", ifCtx =>
+            context.WriteStatement(
+                $"var {errVar} = Blueprint.Runtime.Exec.PipelineHelpers.BindQueryValue(httpContext.Request.Query, \"{queryParamName}\", out var {parsedVar}, out var {foundVar}, {lambda});");
+
+            context.If($"{errVar} != null", errCtx =>
             {
-                ifCtx.If(tryParseExpr, parsedCtx =>
-                {
-                    parsedCtx.WriteStatement(FormatPropertyAssignment(operationExpr, entry, $"_parsed_{entry.PropertyName}"));
-                });
-                ifCtx.Else(elseCtx =>
-                {
-                    elseCtx.Return($"new Blueprint.Runtime.Exec.BindingFailureResult(\"Invalid query parameter '{entry.BindingName}'\")");
-                });
+                errCtx.Return(errVar);
+            });
+
+            context.If(foundVar, foundCtx =>
+            {
+                foundCtx.WriteStatement(FormatPropertyAssignment(operationExpr, entry, parsedVar));
             });
         }
     }
@@ -1169,40 +1176,40 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         string operationExpr,
         PropertyOwnershipEntry entry,
         IArrayTypeSymbol arrayType,
-        string queryVar,
         string queryParamName)
     {
         var elementType = arrayType.ElementType;
         var elementDisplay = elementType.WithNullableAnnotation(NullableAnnotation.NotAnnotated).ToDisplayString();
 
-        context.WriteStatement($"var {queryVar} = httpContext.Request.Query[\"{queryParamName}\"];");
-
-        context.If($"{queryVar}.Count > 0", ifCtx =>
+        if (elementDisplay == "string")
         {
-            if (elementDisplay == "string")
+            var queryVar = $"_qv_{entry.PropertyName}";
+            context.WriteStatement($"var {queryVar} = httpContext.Request.Query[\"{queryParamName}\"];");
+
+            context.If($"{queryVar}.Count > 0", ifCtx =>
             {
                 ifCtx.WriteStatement(FormatPropertyAssignment(operationExpr, entry, $"{queryVar}.ToArray()"));
-            }
-            else
+            });
+        }
+        else
+        {
+            var lambda = TypeConversionHelpers.GetTryParseLambda(elementType);
+            var errVar = $"_qaErr_{entry.PropertyName}";
+            var arrVar = $"_arr_{entry.PropertyName}";
+
+            context.WriteStatement(
+                $"var {errVar} = Blueprint.Runtime.Exec.PipelineHelpers.BindQueryArray(httpContext.Request.Query, \"{queryParamName}\", out var {arrVar}, {lambda});");
+
+            context.If($"{errVar} != null", errCtx =>
             {
-                var tryParseExpr = GetScalarTryParseExpression(elementType, $"{queryVar}[_i]", $"_parsed_{entry.PropertyName}");
+                errCtx.Return(errVar);
+            });
 
-                ifCtx.WriteStatement($"var _arr_{entry.PropertyName} = new {elementDisplay}[{queryVar}.Count];");
-                ifCtx.Block($"for (var _i = 0; _i < {queryVar}.Count; _i++)", forCtx =>
-                {
-                    forCtx.If($"{tryParseExpr}", parsedCtx =>
-                    {
-                        parsedCtx.WriteStatement($"_arr_{entry.PropertyName}[_i] = _parsed_{entry.PropertyName};");
-                    });
-
-                    forCtx.Else(elseCtx =>
-                    {
-                        elseCtx.Return($"new Blueprint.Runtime.Exec.BindingFailureResult(\"Invalid query parameter '{entry.BindingName}'\")");
-                    });
-                });
-                ifCtx.WriteStatement(FormatPropertyAssignment(operationExpr, entry, $"_arr_{entry.PropertyName}"));
-            }
-        });
+            context.If($"{arrVar} != null", foundCtx =>
+            {
+                foundCtx.WriteStatement(FormatPropertyAssignment(operationExpr, entry, arrVar));
+            });
+        }
     }
 
     /// <summary>
@@ -1212,12 +1219,12 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
     private static void WriteHeaderExtraction(PipelineRenderContext context, string operationExpr, PropertyOwnershipEntry entry)
     {
         var headerName = entry.BindingName!;
-        var headerVar = $"_hv_{entry.PropertyName}";
-
-        context.WriteStatement($"var {headerVar} = httpContext.Request.Headers[\"{headerName}\"];");
 
         if (IsStringType(entry.TypeSymbol))
         {
+            var headerVar = $"_hv_{entry.PropertyName}";
+            context.WriteStatement($"var {headerVar} = httpContext.Request.Headers[\"{headerName}\"];");
+
             context.If($"{headerVar}.Count > 0", ifCtx =>
             {
                 ifCtx.WriteStatement(FormatPropertyAssignment(operationExpr, entry, $"{headerVar}[0]"));
@@ -1231,18 +1238,22 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
                 effectiveType = namedType.TypeArguments[0];
             }
 
-            var tryParseExpr = GetScalarTryParseExpression(effectiveType, $"{headerVar}[0]", $"_parsed_{entry.PropertyName}");
+            var lambda = TypeConversionHelpers.GetTryParseLambda(effectiveType);
+            var errVar = $"_hvErr_{entry.PropertyName}";
+            var parsedVar = $"_parsed_{entry.PropertyName}";
+            var foundVar = $"_hvFound_{entry.PropertyName}";
 
-            context.If($"{headerVar}.Count > 0", ifCtx =>
+            context.WriteStatement(
+                $"var {errVar} = Blueprint.Runtime.Exec.PipelineHelpers.BindHeaderValue(httpContext.Request.Headers, \"{headerName}\", out var {parsedVar}, out var {foundVar}, {lambda});");
+
+            context.If($"{errVar} != null", errCtx =>
             {
-                ifCtx.If(tryParseExpr, parsedCtx =>
-                {
-                    parsedCtx.WriteStatement(FormatPropertyAssignment(operationExpr, entry, $"_parsed_{entry.PropertyName}"));
-                });
-                ifCtx.Else(elseCtx =>
-                {
-                    elseCtx.Return($"new Blueprint.Runtime.Exec.BindingFailureResult(\"Invalid header '{entry.BindingName}'\")");
-                });
+                errCtx.Return(errVar);
+            });
+
+            context.If(foundVar, foundCtx =>
+            {
+                foundCtx.WriteStatement(FormatPropertyAssignment(operationExpr, entry, parsedVar));
             });
         }
     }
@@ -1254,12 +1265,12 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
     private static void WriteCookieExtraction(PipelineRenderContext context, string operationExpr, PropertyOwnershipEntry entry)
     {
         var cookieName = entry.BindingName!;
-        var cookieVar = $"_cv_{entry.PropertyName}";
-
-        context.WriteStatement($"var {cookieVar} = httpContext.Request.Cookies[\"{cookieName}\"];");
 
         if (IsStringType(entry.TypeSymbol))
         {
+            var cookieVar = $"_cv_{entry.PropertyName}";
+            context.WriteStatement($"var {cookieVar} = httpContext.Request.Cookies[\"{cookieName}\"];");
+
             context.If($"{cookieVar} != null", ifCtx =>
             {
                 ifCtx.WriteStatement(FormatPropertyAssignment(operationExpr, entry, cookieVar));
@@ -1273,18 +1284,22 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
                 effectiveType = namedType.TypeArguments[0];
             }
 
-            var tryParseExpr = GetScalarTryParseExpression(effectiveType, cookieVar, $"_parsed_{entry.PropertyName}");
+            var lambda = TypeConversionHelpers.GetTryParseLambda(effectiveType);
+            var errVar = $"_cvErr_{entry.PropertyName}";
+            var parsedVar = $"_parsed_{entry.PropertyName}";
+            var foundVar = $"_cvFound_{entry.PropertyName}";
 
-            context.If($"{cookieVar} != null", ifCtx =>
+            context.WriteStatement(
+                $"var {errVar} = Blueprint.Runtime.Exec.PipelineHelpers.BindCookieValue(httpContext.Request.Cookies, \"{cookieName}\", out var {parsedVar}, out var {foundVar}, {lambda});");
+
+            context.If($"{errVar} != null", errCtx =>
             {
-                ifCtx.If(tryParseExpr, parsedCtx =>
-                {
-                    parsedCtx.WriteStatement(FormatPropertyAssignment(operationExpr, entry, $"_parsed_{entry.PropertyName}"));
-                });
-                ifCtx.Else(elseCtx =>
-                {
-                    elseCtx.Return($"new Blueprint.Runtime.Exec.BindingFailureResult(\"Invalid cookie '{entry.BindingName}'\")");
-                });
+                errCtx.Return(errVar);
+            });
+
+            context.If(foundVar, foundCtx =>
+            {
+                foundCtx.WriteStatement(FormatPropertyAssignment(operationExpr, entry, parsedVar));
             });
         }
     }
