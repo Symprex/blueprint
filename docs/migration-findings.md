@@ -98,6 +98,7 @@
 | ApiId route/query binding | ✅ Done | S365 `ApiId` IS used in route params (e.g. `GetSentEmailQuery.TenantId`). Blueprint now handles `[TypeConverter]` types natively — no S365 changes needed |
 | IResourceEventAuditSink enhanced | ✅ Done | `RecordAsync` now includes full `OperationResult` — S365 can cast to `ResourceEvent` for bus publish |
 | ResourceEvent audit sink fix | ✅ Done | Pipeline now matches `ResourceEvent` (not just `ResourceEventResult`) for audit recording |
+| ApiExceptionFactory compile-time | ✅ Done | `ApiExceptionFactoryModule` scans operation fields for `ApiExceptionFactory` at compile time; extracts HTTP status codes (enum, int, cast) into OpenAPI response metadata. BP010 diagnostic for non-evaluable initializers. Replaces legacy `ApiExceptionFactoryResponseConvention` runtime reflection (~8-10 S365 operations affected) |
 | HATEOAS ResourceEvent link fix | ✅ Done | `LinkGeneratorHandler` now extracts content from `ResourceEvent.Data` for link population |
 | ScopePairClaimAuthorizationProvider | ✅ Done | Production-ready provider: JWT scope-pair matching with ignored-scope filtering, FrozenSet perf |
 | Testing infrastructure complete | ✅ Verified | QueryAsync, CommandAsync, BackgroundTaskAsync, MessageAsync, factory, ambient auth — all S365 patterns covered |
