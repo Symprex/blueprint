@@ -108,6 +108,44 @@ public static class PipelineHelpers
     }
 
     /// <summary>
+    /// Runs the <see cref="System.ComponentModel.DataAnnotations.IValidatableObject.Validate"/> tail call
+    /// for operations that implement <c>IValidatableObject</c>. Extracted from per-pipeline inline code
+    /// to reduce IL size across hundreds of generated pipelines — each pipeline now emits a single helper
+    /// call instead of the full foreach/lazy-list/check block.
+    /// </summary>
+    /// <typeparam name="TOperation">The concrete operation type (constrained to <c>IValidatableObject</c>).</typeparam>
+    /// <param name="context">The operation context (used for telemetry tagging on failure).</param>
+    /// <param name="operation">The operation instance to validate.</param>
+    /// <returns>
+    /// A <see cref="ValidationFailedResult"/> when one or more validation results are failures,
+    /// or <see langword="null"/> when all results are <see cref="ValidationResult.Success"/>.
+    /// </returns>
+    [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2026:Members annotated with 'RequiresUnreferencedCodeAttribute' require dynamic access otherwise can break functionality when trimming application code",
+        Justification = "The operation type is always preserved — it is instantiated by source-generated pipeline code.")]
+    public static OperationResult? ValidateIValidatableObject<TOperation>(
+        ApiOperationContext context,
+        TOperation operation)
+        where TOperation : System.ComponentModel.DataAnnotations.IValidatableObject
+    {
+        var ivoContext = new System.ComponentModel.DataAnnotations.ValidationContext(operation);
+        var ivoResults = operation.Validate(ivoContext);
+        List<ValidationResult>? ivoFailures = null;
+
+        foreach (var ivoResult in ivoResults)
+        {
+            if (ivoResult != ValidationResult.Success)
+            {
+                ivoFailures ??= new List<ValidationResult>();
+                ivoFailures.Add(ivoResult);
+            }
+        }
+
+        return ivoFailures is not null ? CreateValidationFailure(context, ivoFailures) : null;
+    }
+
+    /// <summary>
     /// Invokes registered <see cref="IPropertyPopulator"/> instances in order, using an optimised
     /// single-populator fast path to avoid enumerator allocation when only one is registered.
     /// </summary>

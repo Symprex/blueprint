@@ -1621,10 +1621,10 @@ public class ValidationModuleTests
         result.Diagnostics.Should().BeEmpty();
         var pipelineSource = result.Output.Single(static tree => tree.FilePath.EndsWith("CreateUserCommandExecutorPipeline.g.cs", StringComparison.Ordinal)).ToString();
 
-        pipelineSource.Should().Contain("((global::System.ComponentModel.DataAnnotations.IValidatableObject)",
-            "IValidatableObject should be called directly instead of TryValidateObject fallback");
-        pipelineSource.Should().Contain("ivoFailures");
-        pipelineSource.Should().Contain("return Blueprint.Runtime.Exec.PipelineHelpers.CreateValidationFailure(context, ivoFailures);");
+        pipelineSource.Should().Contain("Blueprint.Runtime.Exec.PipelineHelpers.ValidateIValidatableObject(context, operation)",
+            "IValidatableObject should be delegated to the shared PipelineHelpers method");
+        pipelineSource.Should().Contain("_ivoResult != null",
+            "pipeline should guard on the IValidatableObject result");
         pipelineSource.Should().NotContain("global::System.ComponentModel.DataAnnotations.Validator.TryValidateObject",
             "IValidatableObject-only types should use direct Validate() call, not whole-object TryValidateObject fallback");
         pipelineSource.Should().NotContain("throw new global::Blueprint.Validation.ValidationException(validationResults);");
@@ -1687,10 +1687,11 @@ public class ValidationModuleTests
         pipelineSource.Should().Contain("operation.Age",
             "property-level [Range] check should be generated even when IValidatableObject is implemented");
 
-        // IValidatableObject.Validate() should be called as a tail call after property checks
-        pipelineSource.Should().Contain("((global::System.ComponentModel.DataAnnotations.IValidatableObject)",
-            "IValidatableObject.Validate() should be called after generated property checks");
-        pipelineSource.Should().Contain("ivoFailures");
+        // IValidatableObject.Validate() should be delegated to shared helper after property checks
+        pipelineSource.Should().Contain("Blueprint.Runtime.Exec.PipelineHelpers.ValidateIValidatableObject(context, operation)",
+            "IValidatableObject.Validate() should be delegated to PipelineHelpers after generated property checks");
+        pipelineSource.Should().Contain("_ivoResult != null",
+            "pipeline should guard on the IValidatableObject result");
 
         // Should NOT use the whole-object TryValidateObject fallback
         pipelineSource.Should().NotContain("global::System.ComponentModel.DataAnnotations.Validator.TryValidateObject",

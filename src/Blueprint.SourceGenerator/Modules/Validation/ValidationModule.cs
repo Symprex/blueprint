@@ -645,43 +645,26 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
     }
 
     /// <summary>
-    /// Emits a targeted IValidatableObject.Validate() tail call that runs after generated property-level checks.
-    /// Unlike <see cref="RenderGenericValidation"/> which delegates ALL validation to runtime, this only invokes
-    /// the custom cross-property logic the type author wrote, while property-level DataAnnotations have already
-    /// been checked by generated code.
+    /// Emits a single call to <c>PipelineHelpers.ValidateIValidatableObject</c> that runs after generated
+    /// property-level checks. Unlike <see cref="RenderGenericValidation"/> which delegates ALL validation to
+    /// runtime, this only invokes the custom cross-property logic the type author wrote, while property-level
+    /// DataAnnotations have already been checked by generated code.
     /// </summary>
     /// <remarks>
-    /// Uses lazy list allocation so the success path (no validation errors) avoids
-    /// allocating a <c>List&lt;ValidationResult&gt;</c> entirely.
+    /// The validation loop, lazy list allocation, and failure-result creation are all handled by the shared
+    /// runtime helper, keeping each pipeline to a 2-line call + guard instead of ~10 lines of inline code.
     /// </remarks>
     private static void RenderIValidatableObjectTailCall(PipelineRenderContext context)
     {
         var operation = context.GetOperationExpression();
 
         context.DeclareVariable(
-            "ivoContext",
-            $"new global::System.ComponentModel.DataAnnotations.ValidationContext({operation})");
-        context.DeclareVariable(
-            "ivoResults",
-            $"((global::System.ComponentModel.DataAnnotations.IValidatableObject){operation}).Validate(ivoContext)");
-        context.DeclareVariable(
-            "ivoFailures",
-            "default(global::System.Collections.Generic.List<global::System.ComponentModel.DataAnnotations.ValidationResult>)");
-        context.ForEach("var ivoResult", "ivoResults", branch =>
+            "_ivoResult",
+            $"Blueprint.Runtime.Exec.PipelineHelpers.ValidateIValidatableObject(context, {operation})");
+        context.If("_ivoResult != null", branch =>
         {
-            branch.If(
-                "ivoResult != global::System.ComponentModel.DataAnnotations.ValidationResult.Success",
-                static innerBranch =>
-                {
-                    innerBranch.Assign(
-                        "ivoFailures",
-                        "ivoFailures ?? new global::System.Collections.Generic.List<global::System.ComponentModel.DataAnnotations.ValidationResult>()");
-                    innerBranch.WriteStatement("ivoFailures.Add(ivoResult);");
-                });
+            branch.Return("_ivoResult");
         });
-        context.If(
-            "ivoFailures is not null",
-            static branch => ReturnValidationFailure(branch, "ivoFailures"));
         context.WriteBlankLine();
     }
 
