@@ -160,20 +160,21 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
 
         foreach (var r in linkRegistrations)
         {
+            var resourceTypeFqn = r.ResourceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
             if (r.PlaceholderMappings.Count > 0)
             {
                 // Generate a link with a compiled URL builder that uses direct property access
-                var resourceTypeFqn = r.ResourceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
                 var urlBuilder = BuildCompiledUrlBuilderLambda(r.Url, r.PlaceholderMappings, resourceTypeFqn);
                 var varName = $"link_{linkIndex}";
 
-                codeWriter.AppendLine($"var {varName} = new global::Blueprint.Model.ApiOperationLink(this, \"{r.Url}\", \"{r.Url}\", \"{r.Rel}\", typeof({r.ResourceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}));");
+                codeWriter.AppendLine($"var {varName} = new global::Blueprint.Model.ApiOperationLink(this, \"{r.Url}\", \"{r.Url}\", \"{r.Rel}\", typeof({resourceTypeFqn}));");
                 codeWriter.AppendLine($"{varName}.CompiledUrlBuilder = {urlBuilder};");
                 codeWriter.AppendLine($"this.AddLink({varName});");
             }
             else
             {
-                codeWriter.AppendLine($"this.AddLink(new global::Blueprint.Model.ApiOperationLink(this, \"{r.Url}\", \"{r.Url}\", \"{r.Rel}\", typeof({r.ResourceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)})));");
+                codeWriter.AppendLine($"this.AddLink(new global::Blueprint.Model.ApiOperationLink(this, \"{r.Url}\", \"{r.Url}\", \"{r.Rel}\", typeof({resourceTypeFqn})));");
             }
 
             linkIndex++;
