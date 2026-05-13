@@ -149,6 +149,17 @@
 | Enum handling | ✅ Compatible | S365 uses string properties; Blueprint uses `JsonStringEnumConverter` by default — both produce string values |
 | x-enumNames OpenAPI ext | ✅ Done | Blueprint emits both `x-enumNames` (NSwag) and `x-enum-varnames` (OpenAPI Generator) for maximum tooling compat |
 | RFC 9264 well-known endpoint | ✅ Done | Corrected from RFC 9727 → RFC 9264; `/.well-known/openapi` serves same pre-rendered document |
+| Validation attribute compat | ✅ Compatible | All 14 S365 custom validators (`RequiredIf`, `GreaterThan`, `NotAllowedIf`, etc.) already in `Blueprint.Runtime.Validation`; `IValidatableObject` supported with BPV013 warning |
+| Validation error shape | ✅ Compatible | Both return HTTP 422 with `ValidationProblemDetails`; `errors` dictionary shape identical |
+| FluentValidation not used | ✅ Confirmed | S365 uses only DataAnnotations — no FluentValidation; Blueprint's compile-time fast paths cover all S365 patterns |
+| S365 custom validators (4) | ✅ S365-owned | `ObjectStringLengthAttribute`, `ValidImageContentTypeAttribute`, `SupportedCountryAttribute`, `SupportedRegionAttribute` — domain-specific, stay in S365 |
+| TestMessageCollector `HaveSent` fix | ✅ Done | `HaveSent<T>()` now returns single T (matching S365 `FakeBus.Should().HaveSent<T>()`) instead of `IReadOnlyList<T>` |
+| TestMessageCollector `HavePublished` | ✅ Done | `HavePublished<T>()` now asserts at least one published (matching S365); `HavePublishedAny<T>()` added |
+| TestMessageCollector `Clear()` | ✅ Done | Added `Clear()` alias for `ClearAll()` — S365 uses `api.Bus.Clear()` in 56 test call sites |
+| FakeBus `.Events` access | ⚠️ 9 files | S365 has 9 helper/extension files accessing `api.Bus.Events.OfType<>()` directly — these must use `Messages.Published`/`Sent` instead; limited to test infrastructure, not individual test files |
+| FakeBus `.Publish()` in tests | ⚠️ 2 files | S365 IdentityServer tests call `api.Bus.Publish()` for test setup — must use real FakeBus or `TestMessageCollector.Publish()` |
+| TS codegen x-links | ✅ Compatible | Blueprint emits `x-links` with identical shape (`rel`, `operationId`, `method`) — S365 Handlebars templates work unchanged |
+| TS codegen operationId | ✅ Compatible | Blueprint uses operation class name (minus suffix) for `operationId` — matches S365 NSwag convention |
 
 ---
 

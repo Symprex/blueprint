@@ -172,8 +172,18 @@ public sealed class TestMessageCollector
     }
 
     /// <summary>
-    /// S365-compatible alias for <see cref="GetSinglePublished{T}"/>. Returns the single
-    /// published message of the specified type, throwing if zero or more than one exist.
+    /// S365-compatible alias for <see cref="ClearAll"/>. S365 tests use <c>api.Bus.Clear()</c>
+    /// (56+ call sites) to reset collected events between operations within a single test.
+    /// </summary>
+    public void Clear()
+    {
+        this.ClearAll();
+    }
+
+    /// <summary>
+    /// S365-compatible: returns the single published message of the specified type,
+    /// throwing if zero or more than one exist. Matches S365's
+    /// <c>bus.Should().HavePublishedSingle&lt;T&gt;()</c>.
     /// </summary>
     /// <typeparam name="T">The expected message type.</typeparam>
     /// <returns>The message instance.</returns>
@@ -183,19 +193,50 @@ public sealed class TestMessageCollector
     }
 
     /// <summary>
-    /// S365-compatible alias for <see cref="GetAllPublished{T}"/>. Returns all published
-    /// messages of the specified type.
+    /// S365-compatible: returns all published messages of the specified type, asserting
+    /// at least one exists. Matches S365's <c>bus.Should().HavePublished&lt;T&gt;()</c>
+    /// (the overload that returns <c>List&lt;T&gt;</c>).
     /// </summary>
     /// <typeparam name="T">The message type to filter by.</typeparam>
-    /// <returns>All matching message instances.</returns>
+    /// <returns>All matching message instances (guaranteed non-empty).</returns>
     public IReadOnlyList<T> HavePublished<T>() where T : notnull
     {
-        return this.GetAllPublished<T>();
+        var matches = this.GetAllPublished<T>();
+
+        if (matches.Count == 0)
+        {
+            throw new InvalidOperationException(
+                $"Expected at least one published message of type {typeof(T).Name} but none were published. " +
+                $"Published types: {FormatMessageTypes(this._published)}");
+        }
+
+        return matches;
     }
 
     /// <summary>
-    /// S365-compatible alias for <see cref="AssertNonePublished{T}"/>. Throws if any
-    /// messages of the specified type were published.
+    /// S365-compatible: returns all published messages of the specified type (zero or more).
+    /// Unlike <see cref="HavePublished{T}"/> this does not assert a minimum count.
+    /// Matches S365's <c>bus.Should().HavePublishedAny&lt;T&gt;()</c> but also allows empty.
+    /// </summary>
+    /// <typeparam name="T">The message type to filter by.</typeparam>
+    /// <returns>All matching message instances.</returns>
+    public IEnumerable<T> HavePublishedAny<T>() where T : notnull
+    {
+        var matches = this.GetAllPublished<T>();
+
+        if (matches.Count == 0)
+        {
+            throw new InvalidOperationException(
+                $"Expected at least one published message of type {typeof(T).Name} but none were published. " +
+                $"Published types: {FormatMessageTypes(this._published)}");
+        }
+
+        return matches;
+    }
+
+    /// <summary>
+    /// S365-compatible: throws if any messages of the specified type were published.
+    /// Matches S365's <c>bus.Should().NotHavePublished&lt;T&gt;()</c>.
     /// </summary>
     /// <typeparam name="T">The message type that should not have been published.</typeparam>
     public void NotHavePublished<T>() where T : notnull
@@ -204,8 +245,20 @@ public sealed class TestMessageCollector
     }
 
     /// <summary>
-    /// S365-compatible alias for <see cref="GetSingleSent{T}"/>. Returns the single
-    /// sent message of the specified type, throwing if zero or more than one exist.
+    /// S365-compatible: returns the single sent message of the specified type,
+    /// throwing if zero or more than one exist. Matches S365's
+    /// <c>bus.Should().HaveSent&lt;T&gt;()</c> which returns a single T.
+    /// </summary>
+    /// <typeparam name="T">The expected message type.</typeparam>
+    /// <returns>The message instance.</returns>
+    public T HaveSent<T>() where T : notnull
+    {
+        return this.GetSingleSent<T>();
+    }
+
+    /// <summary>
+    /// Returns the single sent message of the specified type. Identical to
+    /// <see cref="HaveSent{T}"/> but with an explicit "Single" name for clarity.
     /// </summary>
     /// <typeparam name="T">The expected message type.</typeparam>
     /// <returns>The message instance.</returns>
@@ -215,19 +268,8 @@ public sealed class TestMessageCollector
     }
 
     /// <summary>
-    /// S365-compatible alias for <see cref="GetAllSent{T}"/>. Returns all sent
-    /// messages of the specified type.
-    /// </summary>
-    /// <typeparam name="T">The message type to filter by.</typeparam>
-    /// <returns>All matching message instances.</returns>
-    public IReadOnlyList<T> HaveSent<T>() where T : notnull
-    {
-        return this.GetAllSent<T>();
-    }
-
-    /// <summary>
-    /// S365-compatible alias for <see cref="AssertNoneSent{T}"/>. Throws if any
-    /// messages of the specified type were sent.
+    /// S365-compatible: throws if any messages of the specified type were sent.
+    /// Matches S365's <c>bus.Should().NotHaveSent&lt;T&gt;()</c>.
     /// </summary>
     /// <typeparam name="T">The message type that should not have been sent.</typeparam>
     public void NotHaveSent<T>() where T : notnull
