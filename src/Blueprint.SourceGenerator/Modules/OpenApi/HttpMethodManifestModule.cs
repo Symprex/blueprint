@@ -16,12 +16,7 @@ namespace Blueprint.SourceGenerator.Modules.OpenApi;
 /// </remarks>
 internal sealed class HttpMethodManifestModule : IBlueprintSourceGeneratorModule, IDebugManifestContributor
 {
-    private const string HttpMethodAttributeMetadataName = "Blueprint.Model.Attributes.HttpMethodAttribute";
-    private const string HttpGetAttributeMetadataName = "Blueprint.Model.Attributes.HttpGetAttribute";
-    private const string HttpPostAttributeMetadataName = "Blueprint.Model.Attributes.HttpPostAttribute";
-    private const string HttpPutAttributeMetadataName = "Blueprint.Model.Attributes.HttpPutAttribute";
-    private const string HttpPatchAttributeMetadataName = "Blueprint.Model.Attributes.HttpPatchAttribute";
-    private const string HttpDeleteAttributeMetadataName = "Blueprint.Model.Attributes.HttpDeleteAttribute";
+    private const string HttpMethodAttributeNamespace = "Blueprint.Model.Attributes";
 
     /// <inheritdoc />
     public string ModuleId => nameof(HttpMethodManifestModule);
@@ -84,8 +79,8 @@ internal sealed class HttpMethodManifestModule : IBlueprintSourceGeneratorModule
 
         for (var current = attributeClass; current is not null; current = current.BaseType)
         {
-            var metadataName = current.ContainingNamespace.ToDisplayString() + "." + current.Name;
-            if (string.Equals(metadataName, HttpMethodAttributeMetadataName, StringComparison.Ordinal))
+            if (current.Name == "HttpMethodAttribute"
+                && current.ContainingNamespace.ToDisplayString() == HttpMethodAttributeNamespace)
             {
                 return true;
             }
@@ -96,15 +91,21 @@ internal sealed class HttpMethodManifestModule : IBlueprintSourceGeneratorModule
 
     private static string? ResolveHttpMethodValue(AttributeData attribute)
     {
-        var metadataName = attribute.AttributeClass?.ContainingNamespace.ToDisplayString() + "." + attribute.AttributeClass?.Name;
-
-        return metadataName switch
+        if (attribute.AttributeClass is not { } attrClass
+            || attrClass.ContainingNamespace.ToDisplayString() != HttpMethodAttributeNamespace)
         {
-            HttpGetAttributeMetadataName => "GET",
-            HttpPostAttributeMetadataName => "POST",
-            HttpPutAttributeMetadataName => "PUT",
-            HttpPatchAttributeMetadataName => "PATCH",
-            HttpDeleteAttributeMetadataName => "DELETE",
+            return attribute.ConstructorArguments.Length > 0
+                ? attribute.ConstructorArguments[0].Value as string
+                : null;
+        }
+
+        return attrClass.Name switch
+        {
+            "HttpGetAttribute" => "GET",
+            "HttpPostAttribute" => "POST",
+            "HttpPutAttribute" => "PUT",
+            "HttpPatchAttribute" => "PATCH",
+            "HttpDeleteAttribute" => "DELETE",
             _ => attribute.ConstructorArguments.Length > 0
                 ? attribute.ConstructorArguments[0].Value as string
                 : null,
@@ -114,7 +115,7 @@ internal sealed class HttpMethodManifestModule : IBlueprintSourceGeneratorModule
     private static bool IsCommand(INamedTypeSymbol operationType)
     {
         return operationType.AllInterfaces.Any(static candidate =>
-            candidate.ContainingNamespace.ToDisplayString() == "Blueprint.Model"
-            && candidate.Name == "ICommand");
+            candidate.Name == "ICommand"
+            && candidate.ContainingNamespace.ToDisplayString() == "Blueprint.Model");
     }
 }
