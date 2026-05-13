@@ -854,6 +854,119 @@ the **actual** gap status between Blueprint source-gen and S365 requirements.
    OpenAPI JSON that the existing templates can consume.
    **Status: Hard gate** — Must validate per-service before shipping.
 
+---
+
+## 9. Value Type and Enum Binding Verification
+
+### 9.1 Enum Binding (100+ S365 usages)
+
+✅ **Fully supported** — Enum types in route, query, header, and cookie parameters are
+bound via `System.Enum.TryParse<T>()` with zero reflection or allocation overhead.
+
+**Binding paths verified:**
+- Route parameters: `static (string _s, out EnumType _v) => System.Enum.TryParse(_s, out _v)`
+- Query parameters: Same TryParse lambda, nullable `T?` support included
+- Header/cookie: Same pattern via `PipelineHelpers.BindHeaderValue<T>` / `BindCookieValue<T>`
+- Invalid values: Return `BindingFailureResult` with descriptive message
+
+**Integration tests added** (commit `9d1d095`):
+- `When_route_parameter_is_enum_then_pipeline_parses_enum_value`
+- `When_route_parameter_is_enum_and_value_invalid_then_binding_failure`
+- `When_query_parameter_is_nullable_enum_and_value_provided_then_parses`
+- `When_query_parameter_is_nullable_enum_and_not_provided_then_stays_null`
+
+**S365 impact**: No migration work needed for enum properties. All 100+ usages work as-is.
+
+### 9.2 ApiId Custom Value Type Binding
+
+⚠️ **Works but suboptimal** — `ApiId` is a `readonly struct` with `[TypeConverter]` but
+without `TryParse(string, out ApiId)` or `IParsable<ApiId>`.
+
+**Current binding path:**
+1. Blueprint detects `[TypeConverter(typeof(TypeConverter))]` attribute
+2. Falls into `IsTypeConverterOnlyType()` classification
+3. Generates `TypeDescriptor.GetConverter(typeof(ApiId)).ConvertFromInvariantString()` with try/catch
+4. `TypeDescriptor` caches converters internally — per-request overhead is cache lookup only
+5. Invalid values caught via exception (less efficient than TryParse but functionally correct)
+
+**Integration tests exist** (`PropertyOwnershipModuleIntegrationTests`):
+- Route binding: valid value converts, invalid value returns BindingFailureResult
+- Query binding: valid/null nullable TypeConverter query parameters
+- Test type `TypeConverterId` mirrors ApiId's exact pattern (struct + TypeConverter, no TryParse)
+
+**Recommended S365 change** (optional performance improvement):
+```csharp
+// Add to ApiId struct:
+public static bool TryParse(string value, out ApiId apiId)
+{
+    if (TryHydrate(value, out var result) && result.HasValue)
+    {
+        apiId = result.Value;
+        return true;
+    }
+    apiId = default;
+    return false;
+}
+```
+This upgrades binding from exception-based TypeConverter to allocation-free TryParse.
+Alternatively, implement `IParsable<ApiId>` for the same effect.
+
+### 9.3 Comprehensive S365 Pattern Gap Analysis
+
+All S365 patterns assessed as **LOW risk**:
+
+| Pattern | S365 Count | Blueprint Support | Risk |
+|---------|-----------|-------------------|------|
+| IValidatableObject | 5 | ✅ Built-in | LOW |
+| Custom middleware | 25+ | ✅ Module system | LOW |
+| IBackgroundTask | 50+ | ✅ Built-in | LOW |
+| IHandleMessages<T> | 60+ | ✅ Rebus scanning | LOW |
+| Hangfire recurring | Abstracted | ✅ HangfireRecurringTaskProvider | LOW |
+| HttpContext access | Minimal | ✅ Well-abstracted | LOW |
+| Custom result executors | Framework-only | ✅ Built-in | LOW |
+| File uploads (IFormFile) | 1 | ✅ FormBodyParser | LOW |
+| Streaming responses | 0 | N/A | NONE |
+| JsonConverter on properties | 2 | ✅ STJ compatible | LOW |
+| Abstract base operations | 8+ (2-level) | ✅ Hierarchy supported | LOW |
+| Enum properties | 100+ | ✅ Enum.TryParse | LOW |
+| TypeConverter types (ApiId) | Throughout | ✅ TypeConverter fallback | LOW |
+
+### 9.4 Pipeline Architecture — Singleton Lifecycle
+
+Confirmed that generated pipelines are **singletons**, not per-request:
+- `BlueprintAppExecutor` stores pipelines in `FrozenDictionary<Type, IOperationExecutorPipeline>`
+- Pipeline instances created once at startup in `AppExecutor` constructor
+- `GetPipeline(type)` returns the same instance for every request
+- String concatenation in `OperationExecutorShell` constructor is one-time startup cost
+- `Activity?.AddEvent(new ActivityEvent(...))` does NOT allocate when Activity is null
+  (C# `?.` operator short-circuits argument evaluation)
+
+### 9.5 Testing Infrastructure S365 Compatibility
+
+✅ **No shims needed** — Blueprint.Testing already matches S365 test patterns:
+
+| S365 Pattern | Blueprint Equivalent |
+|-------------|---------------------|
+| `WebApiFixtureFactory<T>` | `BlueprintTestFixtureFactory` |
+| `fixture.QueryAsync<T>(query)` | `fixture.QueryAsync<T>(query)` |
+| `fixture.CommandAsync<T>(cmd)` | `fixture.CommandAsync<T>(cmd)` |
+| `fixture.BackgroundTaskAsync(task)` | `fixture.BackgroundTaskAsync(task)` |
+| `fixture.MessageAsync(msg)` | `fixture.MessageAsync(msg)` |
+| `Authentication.Set(claims)` | `TestAuthenticationManager.Set(claims)` |
+| `Authentication.As(identity)` | `TestAuthenticationManager.As(identity)` |
+| `Authentication.MakeAnonymous()` | `TestAuthenticationManager.MakeAnonymous()` |
+| `FakeBus` | `TestMessageCollector` (with `.Bus` alias) |
+| `BackgroundTaskCollector` | `BackgroundTaskCollector` |
+
+### 9.6 Route Deduplication
+
+✅ **Already fully implemented** in `ApplicationBuilderExtensions.cs`:
+- `HashSet<(string Route, Type OperationType)>` deduplicates endpoints
+- Cross-operation collision detection with structured logging
+- `ApiOperationDescriptor.AddUrl()` prevents duplicate URL formats per operation
+
+---
+
 ### Key Migration Insight
 
 The analysis reveals that S365 migration is primarily a **mechanical transformation** rather
@@ -865,6 +978,7 @@ natively or through well-defined extension points. The migration effort is domin
 3. Creating `BlueprintApp` + `JsonSerializerContext` per service
 4. Replacing `Startup.cs` registration boilerplate
 5. Validating OpenAPI output per service
+6. Optional: Adding `IParsable<ApiId>` for optimal binding performance
 
 ### HttpClient Gateway Support (Commit 7eb8840)
 
