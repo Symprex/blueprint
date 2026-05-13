@@ -5,10 +5,13 @@ namespace Blueprint.SourceGenerator.Modules;
 
 /// <summary>
 /// Handles <c>RegularExpressionAttribute</c> when the pattern is a compile-time string literal and the property is
-/// a simple string, emitting a generated <c>Regex.IsMatch</c> check that avoids the runtime reflection path.
+/// a simple string, emitting a generated check against a cached <c>Regex</c> instance that avoids per-request
+/// pattern compilation overhead from the <c>Regex.IsMatch(string, string)</c> static method.
 /// </summary>
 internal sealed class RegularExpressionValidationFastPathStrategy : IValidationFastPathStrategy
 {
+    private const string RegexFieldPlaceholder = "__CACHED_REGEX__";
+
     /// <inheritdoc />
     public bool TryCreateRule(
         IPropertySymbol property,
@@ -28,13 +31,22 @@ internal sealed class RegularExpressionValidationFastPathStrategy : IValidationF
 
         var escapedPattern = EscapeCSharpStringLiteral(pattern);
 
+        // Use a placeholder that EmitCachedRegexFields will replace with the actual static field name.
+        var regexExpression = $"new global::System.Text.RegularExpressions.Regex(@\"{escapedPattern}\", global::System.Text.RegularExpressions.RegexOptions.Compiled)";
+
         rule = new ValidationFastPathRule(
-            $"global::System.Text.RegularExpressions.Regex.IsMatch({propertyAccess}, @\"{escapedPattern}\") == false",
+            $"{RegexFieldPlaceholder}.IsMatch({propertyAccess}) == false",
             $"new global::System.ComponentModel.DataAnnotations.RegularExpressionAttribute(@\"{escapedPattern}\")",
             GuardCondition: $"{propertyAccess} is not null",
-            CachedAttributeTypeName: "System.ComponentModel.DataAnnotations.RegularExpressionAttribute");
+            CachedAttributeTypeName: "System.ComponentModel.DataAnnotations.RegularExpressionAttribute",
+            CachedRegexExpression: regexExpression);
         return true;
     }
+
+    /// <summary>
+    /// Gets the placeholder token that <see cref="ValidationModule"/> replaces with the actual cached regex field name.
+    /// </summary>
+    internal static string FieldPlaceholder => RegexFieldPlaceholder;
 
     private static bool TryGetSupportedPattern(AttributeData attribute, out string pattern)
     {

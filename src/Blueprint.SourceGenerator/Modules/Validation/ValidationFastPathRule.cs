@@ -19,10 +19,17 @@ namespace Blueprint.SourceGenerator.Modules;
 /// in both <see cref="FailureCondition"/> and the generated <c>FormatErrorMessage</c> call. This eliminates
 /// per-request allocation for attributes whose <c>IsValid</c> call appears on the success path.
 /// </param>
+/// <param name="CachedRegexExpression">
+/// When non-null, a <c>new Regex(pattern, RegexOptions.Compiled)</c> constructor expression that will be
+/// hoisted to a <c>private static readonly Regex</c> field. The corresponding placeholder in
+/// <see cref="FailureCondition"/> is replaced with the cached field reference, avoiding per-request regex
+/// compilation overhead from the <c>Regex.IsMatch(string, string)</c> static method.
+/// </param>
 internal sealed record ValidationFastPathRule(
     string FailureCondition,
     string ValidationAttributeExpression,
     string? SuccessCondition = null,
     string? GuardCondition = null,
     bool WrapValidationAttributeExpression = false,
-    string? CachedAttributeTypeName = null);
+    string? CachedAttributeTypeName = null,
+    string? CachedRegexExpression = null);

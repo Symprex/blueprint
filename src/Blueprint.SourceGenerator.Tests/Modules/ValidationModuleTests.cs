@@ -2016,9 +2016,10 @@ public class ValidationModuleTests
         var pipelineSource = result.Output.Single(static tree => tree.FilePath.EndsWith("CreateUserCommandExecutorPipeline.g.cs", StringComparison.Ordinal)).ToString();
 
         pipelineSource.Should().NotContain("global::System.ComponentModel.DataAnnotations.Validator.TryValidateObject");
-        pipelineSource.Should().Contain("Regex.IsMatch(operation.Code,");
+        pipelineSource.Should().Contain(".IsMatch(operation.Code)");
         pipelineSource.Should().Contain("global::System.ComponentModel.DataAnnotations.RegularExpressionAttribute");
-        pipelineSource.IndexOf("Regex.IsMatch(operation.Code,", StringComparison.Ordinal)
+        pipelineSource.Should().Contain("RegexOptions.Compiled", "regex pattern should be compiled for fast matching");
+        pipelineSource.IndexOf(".IsMatch(operation.Code)", StringComparison.Ordinal)
             .Should()
             .BeLessThan(pipelineSource.IndexOf("var handlerResult", StringComparison.Ordinal));
     }

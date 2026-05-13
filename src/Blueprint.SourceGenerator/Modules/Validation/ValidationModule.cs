@@ -52,15 +52,15 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
             return;
         }
 
-        // Hoist validation attributes that are used in FailureCondition checks to static readonly fields.
-        // This eliminates per-request allocation for attributes whose IsValid() call runs on the success path.
-        var cachedAttributeFields = EmitCachedAttributeFields(context, validationPlan.Properties);
+        // Hoist validation attributes and compiled regex patterns to static readonly fields.
+        // This eliminates per-request allocation for attributes and avoids per-request pattern compilation.
+        var cachedFields = EmitCachedAttributeFields(context, validationPlan.Properties);
 
         context.AddRenderStep(PipelineStage.Validation, renderContext =>
         {
             if (validationPlan.Properties.Count > 0)
             {
-                RenderPropertyValidation(renderContext, validationPlan.Properties, cachedAttributeFields);
+                RenderPropertyValidation(renderContext, validationPlan.Properties, cachedFields);
             }
 
             if (validationPlan.ImplementsIValidatableObject)
@@ -401,15 +401,18 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
     }
 
     /// <summary>
-    /// Scans validation rules for attributes that need to be cached as static readonly fields. Attributes
-    /// with <see cref="ValidationFastPathRule.CachedAttributeTypeName"/> set have their <c>IsValid</c> call
-    /// on the success path, so hoisting them avoids per-request allocation.
+    /// Scans validation rules for attributes and regex patterns that should be cached as static readonly fields.
+    /// Attributes with <see cref="ValidationFastPathRule.CachedAttributeTypeName"/> set have their error-message
+    /// call on the success path, so hoisting them avoids per-request allocation. Rules with
+    /// <see cref="ValidationFastPathRule.CachedRegexExpression"/> set emit a compiled <c>Regex</c> instance
+    /// field, eliminating per-request pattern compilation from the static <c>Regex.IsMatch(string, string)</c>.
     /// </summary>
-    private static Dictionary<string, string> EmitCachedAttributeFields(
+    private static CachedFieldMaps EmitCachedAttributeFields(
         PipelineContributorContext context,
         IReadOnlyList<PropertyValidationPlan> properties)
     {
-        var fieldMap = new Dictionary<string, string>();
+        var attributeFieldMap = new Dictionary<string, string>();
+        var regexFieldMap = new Dictionary<string, string>();
 
         foreach (var property in properties)
         {
@@ -418,56 +421,92 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
                 continue;
             }
 
-            CacheRuleIfNeeded(context, fastPath.MemberName, fastPath.RequiredRule, fieldMap);
+            CacheRuleIfNeeded(context, fastPath.MemberName, fastPath.RequiredRule, attributeFieldMap, regexFieldMap);
 
             foreach (var rule in fastPath.OtherRules)
             {
-                CacheRuleIfNeeded(context, fastPath.MemberName, rule, fieldMap);
+                CacheRuleIfNeeded(context, fastPath.MemberName, rule, attributeFieldMap, regexFieldMap);
             }
         }
 
-        return fieldMap;
+        return new CachedFieldMaps(attributeFieldMap, regexFieldMap);
 
         static void CacheRuleIfNeeded(
             PipelineContributorContext context,
             string memberName,
             ValidationFastPathRule? rule,
-            Dictionary<string, string> fieldMap)
+            Dictionary<string, string> attributeFieldMap,
+            Dictionary<string, string> regexFieldMap)
         {
-            if (rule?.CachedAttributeTypeName is null)
+            if (rule is null)
             {
                 return;
             }
 
-            var expression = rule.ValidationAttributeExpression;
-
-            if (fieldMap.ContainsKey(expression))
+            // Cache the validation attribute as a static readonly field when it has a type name.
+            if (rule.CachedAttributeTypeName is not null)
             {
-                return;
+                var expression = rule.ValidationAttributeExpression;
+
+                if (!attributeFieldMap.ContainsKey(expression))
+                {
+                    var fieldName = $"_va_{memberName}";
+
+                    if (attributeFieldMap.ContainsValue(fieldName))
+                    {
+                        fieldName = $"_va_{memberName}_{attributeFieldMap.Count}";
+                    }
+
+                    attributeFieldMap[expression] = fieldName;
+
+                    var typeName = rule.CachedAttributeTypeName;
+                    context.AddDeferredClassMember(classBuilder =>
+                    {
+                        classBuilder.AddProperty(fieldName, Accessibility.Private)
+                            .SetType(typeName)
+                            .MakeStatic()
+                            .WithReadonlyValue(expression);
+                    });
+                }
             }
 
-            var fieldName = $"_va_{memberName}";
-
-            // Disambiguate if the same property somehow has multiple cached attributes
-            if (fieldMap.ContainsValue(fieldName))
+            // Cache compiled Regex instances as static readonly fields to avoid per-request pattern compilation.
+            if (rule.CachedRegexExpression is not null)
             {
-                fieldName = $"_va_{memberName}_{fieldMap.Count}";
+                var regexExpression = rule.CachedRegexExpression;
+
+                if (!regexFieldMap.ContainsKey(regexExpression))
+                {
+                    var fieldName = $"_vr_{memberName}";
+
+                    if (regexFieldMap.ContainsValue(fieldName))
+                    {
+                        fieldName = $"_vr_{memberName}_{regexFieldMap.Count}";
+                    }
+
+                    regexFieldMap[regexExpression] = fieldName;
+
+                    context.AddDeferredClassMember(classBuilder =>
+                    {
+                        classBuilder.AddProperty(fieldName, Accessibility.Private)
+                            .SetType("System.Text.RegularExpressions.Regex")
+                            .MakeStatic()
+                            .WithReadonlyValue(regexExpression);
+                    });
+                }
             }
-
-            fieldMap[expression] = fieldName;
-
-            var typeName = rule.CachedAttributeTypeName;
-            context.AddDeferredClassMember(classBuilder =>
-            {
-                classBuilder.AddProperty(fieldName, Accessibility.Private)
-                    .SetType(typeName)
-                    .MakeStatic()
-                    .WithReadonlyValue(expression);
-            });
         }
     }
 
-    private static void RenderPropertyValidation(PipelineRenderContext context, IReadOnlyList<PropertyValidationPlan> properties, Dictionary<string, string> cachedAttributeFields)
+    /// <summary>
+    /// Holds the mappings from inline constructor expressions to their cached static field names for
+    /// both validation attributes and compiled regex instances.
+    /// </summary>
+    private readonly record struct CachedFieldMaps(
+        Dictionary<string, string> AttributeFields,
+        Dictionary<string, string> RegexFields);
+
+    private static void RenderPropertyValidation(PipelineRenderContext context, IReadOnlyList<PropertyValidationPlan> properties, CachedFieldMaps cachedFields)
     {
         context.DeclareVariable(
             "validationResults",
@@ -478,7 +517,7 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
             switch (property)
             {
                 case FastPathPropertyValidationPlan fastPathProperty:
-                    RenderFastPathValidation(context, fastPathProperty, cachedAttributeFields);
+                    RenderFastPathValidation(context, fastPathProperty, cachedFields);
                     break;
                 case RuntimeFallbackPropertyValidationPlan runtimeFallbackProperty:
                     RenderRuntimeFallbackValidation(context, runtimeFallbackProperty);
@@ -500,22 +539,22 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
         context.WriteBlankLine();
     }
 
-    private static void RenderFastPathValidation(PipelineRenderContext context, FastPathPropertyValidationPlan property, Dictionary<string, string> cachedAttributeFields)
+    private static void RenderFastPathValidation(PipelineRenderContext context, FastPathPropertyValidationPlan property, CachedFieldMaps cachedFields)
     {
         if (property.RequiredRule is not null)
         {
-            RenderValidationFailure(context, ResolveFailureCondition(property.RequiredRule, cachedAttributeFields), property.RequiredRule, property, cachedAttributeFields);
+            RenderValidationFailure(context, ResolveFailureCondition(property.RequiredRule, cachedFields), property.RequiredRule, property, cachedFields);
         }
 
         foreach (var rule in property.OtherRules)
         {
-            var failureOperand = WrapConditionOperand(ResolveFailureCondition(rule, cachedAttributeFields));
+            var failureOperand = WrapConditionOperand(ResolveFailureCondition(rule, cachedFields));
             var failureCondition = property.RequiredRule?.SuccessCondition is string successCondition
                 ? $"{WrapConditionOperand(successCondition)} && {failureOperand}"
                 : rule.GuardCondition is string guardCondition
                     ? $"{WrapConditionOperand(guardCondition)} && {failureOperand}"
-                    : ResolveFailureCondition(rule, cachedAttributeFields);
-            RenderValidationFailure(context, failureCondition, rule, property, cachedAttributeFields);
+                    : ResolveFailureCondition(rule, cachedFields);
+            RenderValidationFailure(context, failureCondition, rule, property, cachedFields);
         }
 
         static string WrapConditionOperand(string condition)
@@ -553,7 +592,7 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
         string failureCondition,
         ValidationFastPathRule rule,
         FastPathPropertyValidationPlan property,
-        Dictionary<string, string> cachedAttributeFields)
+        CachedFieldMaps cachedFields)
     {
         context.If(
             failureCondition,
@@ -563,7 +602,7 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
                     "validationResults",
                     "validationResults ?? new global::System.Collections.Generic.List<global::System.ComponentModel.DataAnnotations.ValidationResult>()");
 
-                var attrExpression = ResolveAttributeExpression(rule, cachedAttributeFields);
+                var attrExpression = ResolveAttributeExpression(rule, cachedFields.AttributeFields);
                 var validationAttributeExpression = rule.WrapValidationAttributeExpression
                     ? $"({attrExpression})"
                     : attrExpression;
@@ -576,25 +615,38 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
     /// Returns the attribute reference to use in generated code. When the rule has a cached static field,
     /// returns the field name; otherwise returns the inline constructor expression.
     /// </summary>
-    private static string ResolveAttributeExpression(ValidationFastPathRule rule, Dictionary<string, string> cachedAttributeFields)
+    private static string ResolveAttributeExpression(ValidationFastPathRule rule, Dictionary<string, string> attributeFields)
     {
-        return cachedAttributeFields.TryGetValue(rule.ValidationAttributeExpression, out var fieldName)
+        return attributeFields.TryGetValue(rule.ValidationAttributeExpression, out var fieldName)
             ? fieldName
             : rule.ValidationAttributeExpression;
     }
 
     /// <summary>
-    /// Returns the failure condition with any cached attribute expression replaced by its static field reference.
+    /// Returns the failure condition with any cached attribute or regex expression replaced by its static field reference.
     /// </summary>
-    private static string ResolveFailureCondition(ValidationFastPathRule rule, Dictionary<string, string> cachedAttributeFields)
+    private static string ResolveFailureCondition(ValidationFastPathRule rule, CachedFieldMaps cachedFields)
     {
-        if (rule.CachedAttributeTypeName is null
-            || !cachedAttributeFields.TryGetValue(rule.ValidationAttributeExpression, out var fieldName))
+        var condition = rule.FailureCondition;
+
+        // Replace the regex placeholder with the cached Regex field name.
+        if (rule.CachedRegexExpression is not null
+            && cachedFields.RegexFields.TryGetValue(rule.CachedRegexExpression, out var regexFieldName))
         {
-            return rule.FailureCondition;
+            condition = condition.Replace(
+                RegularExpressionValidationFastPathStrategy.FieldPlaceholder,
+                regexFieldName,
+                StringComparison.Ordinal);
         }
 
-        return rule.FailureCondition.Replace(rule.ValidationAttributeExpression, fieldName, StringComparison.Ordinal);
+        // Replace the attribute constructor expression with the cached attribute field name.
+        if (rule.CachedAttributeTypeName is not null
+            && cachedFields.AttributeFields.TryGetValue(rule.ValidationAttributeExpression, out var attrFieldName))
+        {
+            condition = condition.Replace(rule.ValidationAttributeExpression, attrFieldName, StringComparison.Ordinal);
+        }
+
+        return condition;
     }
 
     /// <summary>

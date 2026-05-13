@@ -25,6 +25,8 @@ namespace Blueprint.Generated
         readonly Blueprint.Tenancy.ITenantResolver _tenantResolver;
         private static readonly System.ComponentModel.DataAnnotations.RegularExpressionAttribute _va_Code =
             new global::System.ComponentModel.DataAnnotations.RegularExpressionAttribute(@"^[A-Z]{2,5}$");
+        private static readonly System.Text.RegularExpressions.Regex _vr_Code =
+            new global::System.Text.RegularExpressions.Regex(@"^[A-Z]{2,5}$", global::System.Text.RegularExpressions.RegexOptions.Compiled);
 
         public CreateUserCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, System.IServiceProvider serviceProvider)
             : base(loggerFactory, "CreateUserCommand")
@@ -48,7 +50,7 @@ namespace Blueprint.Generated
 
             await Blueprint.Runtime.Exec.PipelineHelpers.PopulatePropertiesAsync(this._propertyPopulators, context).ConfigureAwait(false);
             var validationResults = default(global::System.Collections.Generic.List<global::System.ComponentModel.DataAnnotations.ValidationResult>);
-            if (operation.Code is not null && global::System.Text.RegularExpressions.Regex.IsMatch(operation.Code, @"^[A-Z]{2,5}$") == false)
+            if (operation.Code is not null && _vr_Code.IsMatch(operation.Code) == false)
             {
                 validationResults = validationResults ?? new global::System.Collections.Generic.List<global::System.ComponentModel.DataAnnotations.ValidationResult>();
                 validationResults.Add(new global::System.ComponentModel.DataAnnotations.ValidationResult(_va_Code.FormatErrorMessage("Code"), ["Code"]));
