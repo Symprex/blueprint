@@ -184,6 +184,29 @@ public class HandlerExecutionModuleIntegrationTests
         PropertyInjectedHandlerQueryHandler.LastLogger.Should().NotBeNull();
     }
 
+    [Fact]
+    public async Task When_handler_inherits_real_ApiOperations_base_class_then_all_properties_injected()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
+        var pipeline = executor.GetPipeline(typeof(RealApiOperationsQuery));
+        var context = CreateContext(app, RealApiOperationsQuery.Configure(), new RealApiOperationsQuery { Input = "real-base" });
+
+        RealApiOperationsQueryHandler.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<OkResult<string>>();
+        ((OkResult<string>)result).Content.Should().Be("real-base");
+        RealApiOperationsQueryHandler.LastContext.Should().BeSameAs(context);
+        RealApiOperationsQueryHandler.LastCancellationToken.Should().Be(CancellationToken.None);
+        RealApiOperationsQueryHandler.LastLogger.Should().NotBeNull();
+
+        // Identity should fall back to AnonymousUserAuthorisationContext when no auth context is set
+        RealApiOperationsQueryHandler.LastIdentity.Should().NotBeNull();
+        RealApiOperationsQueryHandler.LastIdentity.Should().BeSameAs(AnonymousUserAuthorisationContext.Instance);
+    }
+
     private static ApiOperationContext CreateContext(BlueprintApp app, ApiOperationDescriptor descriptor, object operation, IServiceProvider? serviceProvider = null)
     {
         var effectiveServiceProvider = serviceProvider ?? EmptyServiceProvider.Instance;
@@ -447,5 +470,47 @@ public partial class ClaimsPrincipalHandlerQuery : IQuery<string>
         HandlerCallCount++;
         var sub = principal.FindFirst("sub")?.Value ?? "unknown";
         return Task.FromResult(sub);
+    }
+}
+
+/// <summary>
+/// Operation for testing the real <see cref="Blueprint.Runtime.Exec.ApiOperations"/> base class.
+/// </summary>
+[AllowAnonymous]
+[RootLink("/handler/real-api-operations")]
+public partial class RealApiOperationsQuery : IQuery<string>
+{
+    public string Input { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Handler inheriting from the real <see cref="Blueprint.Runtime.Exec.ApiOperations"/> base class,
+/// proving the generated pipeline injects all properties including the Identity fallback.
+/// </summary>
+public class RealApiOperationsQueryHandler : Blueprint.Runtime.Exec.ApiOperations
+{
+    public static ApiOperationContext? LastContext { get; private set; }
+
+    public static CancellationToken LastCancellationToken { get; private set; }
+
+    public static ILogger? LastLogger { get; private set; }
+
+    public static IUserAuthorisationContext? LastIdentity { get; private set; }
+
+    public static void Reset()
+    {
+        LastContext = null;
+        LastCancellationToken = default;
+        LastLogger = null;
+        LastIdentity = null;
+    }
+
+    public Task<string> HandleAsync(RealApiOperationsQuery query)
+    {
+        LastContext = this.Context;
+        LastCancellationToken = this.CancellationToken;
+        LastLogger = this.Logger;
+        LastIdentity = this.Identity;
+        return Task.FromResult(query.Input);
     }
 }

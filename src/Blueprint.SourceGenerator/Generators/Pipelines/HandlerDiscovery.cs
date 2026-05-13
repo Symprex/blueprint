@@ -312,7 +312,8 @@ public static class HandlerDiscovery
         return typeName switch
         {
             "Blueprint.Runtime.Exec.ApiOperationContext" => "context",
-            "Blueprint.Authorization.IUserAuthorisationContext" => "context.UserAuthorisationContext",
+            "Blueprint.Authorization.IUserAuthorisationContext" =>
+                "context.UserAuthorisationContext ?? Blueprint.Authorization.AnonymousUserAuthorisationContext.Instance",
             "System.Threading.CancellationToken" => "context.OperationCancelled",
             "Microsoft.Extensions.Logging.ILogger" => "this.Logger",
             "Microsoft.AspNetCore.Http.HttpContext" => "context.HttpContext",

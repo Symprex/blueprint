@@ -48,7 +48,7 @@ namespace Blueprint.Generated
             var testQueryHandler = Blueprint.Runtime.Exec.PipelineHelpers.ResolveOrCreateHandler<global::TestNamespace.TestQueryHandler>(context.ServiceProvider);
 
             testQueryHandler.Context = context;
-            testQueryHandler.Identity = context.UserAuthorisationContext;
+            testQueryHandler.Identity = context.UserAuthorisationContext ?? Blueprint.Authorization.AnonymousUserAuthorisationContext.Instance;
             testQueryHandler.Logger = this.Logger;
             testQueryHandler.CancellationToken = context.OperationCancelled;
 
