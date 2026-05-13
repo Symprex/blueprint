@@ -565,6 +565,28 @@ Each pipeline had 4 `private readonly` field declarations + 4 constructor resolu
 
 **Impact:** ~8 lines removed per pipeline. Zero behavioral change. S365 proof builds clean.
 
+### Auth Provider Field Hoisting (Commit 09d936f)
+
+**Problem:** Each pipeline that uses resource-based authorization resolved `IResolvedResourceAuthorizationProvider` and `IResourceAuthorizationProvider` independently. That's 2 field declarations + 2 constructor lines per authorized pipeline.
+
+**Solution:** Hoisted both to `OperationExecutorShell` base class. Generated code references `this.ResolvedResourceAuthorizationProvider` and `this.ResourceAuthorizationProvider`.
+
+**Impact:** ~4 lines removed per authorized pipeline. Zero behavioral change.
+
+### Auth/Audit Service Field Hoisting (Commit 2496c6e)
+
+**Problem:** Remaining per-pipeline DI fields for authorization and audit:
+- `IApiAuthoriser[]` (API-level authorisers)
+- `IOperationAuthoriser[]` (operation-specific authorisers)
+- `IUserAuthorisationContextFactory` (user context loading)
+- `IResourceEventAuditSink` (resource-event audit)
+
+Each pipeline had up to 4 additional field declarations + constructor resolution lines.
+
+**Solution:** Hoisted all 4 to `OperationExecutorShell` base class. Array properties initialized to `[]` in the backward-compat constructor, resolved from `IServiceProvider` in the new constructor. Generated code references `this.ApiAuthorisers`, `this.OperationAuthorisers`, `this.UserAuthorisationContextFactory`, `this.ResourceEventAuditSink`.
+
+**Impact:** ~6-8 lines removed per pipeline. Combined with all hoisting phases, the base class now resolves 10 cross-cutting services, reducing per-pipeline constructor/field boilerplate by ~18 lines per operation (~11,376 lines for S365's 632 ops). Only operation-specific fields remain per-pipeline (handler DI, `_scopePairs_*`, `_appliedModuleIds`).
+
 ---
 
 ## S365 Operation Patterns
