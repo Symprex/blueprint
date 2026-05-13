@@ -26,7 +26,7 @@ namespace Blueprint.Authorization;
 /// non-API scopes such as <c>"openid"</c> or <c>"profile"</c>.
 /// </para>
 /// </remarks>
-public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvider
+public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvider, IResolvedResourceAuthorizationProvider
 {
     private static readonly Task<bool> _trueResult = Task.FromResult(true);
     private static readonly Task<bool> _falseResult = Task.FromResult(false);
@@ -119,6 +119,74 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
 
         // If the identity has no API scope claims at all, fall through to the
         // configurable no-scopes behavior (default: deny)
+        if (!hasAnyScopeClaims)
+        {
+            return this.AllowWhenNoScopeClaims(operationContext, principal) ? _trueResult : _falseResult;
+        }
+
+        return _falseResult;
+    }
+
+    /// <summary>
+    /// Evaluates authorization using pre-expanded <see cref="ResolvedScopePair"/> instances.
+    /// The same any-of semantics as the legacy overload apply: the caller is authorized if
+    /// any expanded scope pair matches any scope claim in the principal's identity.
+    /// </summary>
+    /// <remarks>
+    /// This overload is preferred by generated pipelines when both interfaces are registered
+    /// on the same instance. It avoids the template-expansion overhead entirely because the
+    /// generated code already substitutes operation properties and claim values at compile time.
+    /// </remarks>
+    /// <param name="operationContext">The current operation context.</param>
+    /// <param name="principal">The authenticated principal.</param>
+    /// <param name="resolvedScopePairs">Pre-expanded scope pairs from the generated pipeline.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns><see langword="true"/> when at least one scope pair is satisfied.</returns>
+    public Task<bool> IsAuthorizedAsync(
+        ApiOperationContext operationContext,
+        ClaimsPrincipal principal,
+        IReadOnlyList<ResolvedScopePair> resolvedScopePairs,
+        CancellationToken cancellationToken)
+    {
+        if (resolvedScopePairs.Count == 0)
+        {
+            return _trueResult;
+        }
+
+        var identity = principal.Identity as ClaimsIdentity;
+
+        if (identity is not { IsAuthenticated: true })
+        {
+            return _falseResult;
+        }
+
+        var hasAnyScopeClaims = false;
+
+        foreach (var claim in identity.Claims)
+        {
+            if (!string.Equals(claim.Type, this._scopeClaimType, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (this._ignoredScopes.Count > 0 && this._ignoredScopes.Contains(claim.Value))
+            {
+                continue;
+            }
+
+            hasAnyScopeClaims = true;
+
+            foreach (var required in resolvedScopePairs)
+            {
+                var expectedScope = $"{required.Noun}{this._separator}{required.Verb}";
+
+                if (string.Equals(claim.Value, expectedScope, StringComparison.OrdinalIgnoreCase))
+                {
+                    return _trueResult;
+                }
+            }
+        }
+
         if (!hasAnyScopeClaims)
         {
             return this.AllowWhenNoScopeClaims(operationContext, principal) ? _trueResult : _falseResult;

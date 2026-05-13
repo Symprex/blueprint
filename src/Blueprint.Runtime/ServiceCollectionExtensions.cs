@@ -128,6 +128,9 @@ public sealed class BlueprintServiceBuilder
 
     /// <summary>
     /// Registers a resource authorization provider that evaluates scope-pair permissions at pipeline execution time.
+    /// When the implementation also implements <see cref="Blueprint.Authorization.IResolvedResourceAuthorizationProvider"/>,
+    /// the same instance is registered for both interfaces so that generated pipelines use the compile-time–expanded
+    /// path automatically.
     /// </summary>
     /// <typeparam name="T">The <see cref="Blueprint.Authorization.IResourceAuthorizationProvider"/> implementation type.</typeparam>
     /// <returns>This builder for chaining.</returns>
@@ -135,6 +138,17 @@ public sealed class BlueprintServiceBuilder
         where T : class, Blueprint.Authorization.IResourceAuthorizationProvider
     {
         this.Services.AddSingleton<Blueprint.Authorization.IResourceAuthorizationProvider, T>();
+
+        // When the same type implements IResolvedResourceAuthorizationProvider, forward the
+        // singleton so generated pipelines automatically pick up the compile-time–expanded path
+        // without requiring a separate registration call.
+        if (typeof(Blueprint.Authorization.IResolvedResourceAuthorizationProvider).IsAssignableFrom(typeof(T)))
+        {
+            this.Services.AddSingleton<Blueprint.Authorization.IResolvedResourceAuthorizationProvider>(
+                sp => (Blueprint.Authorization.IResolvedResourceAuthorizationProvider)sp
+                    .GetRequiredService<Blueprint.Authorization.IResourceAuthorizationProvider>());
+        }
+
         return this;
     }
 
