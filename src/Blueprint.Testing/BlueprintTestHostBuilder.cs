@@ -12,7 +12,7 @@ namespace Blueprint.Testing;
 /// <typeparam name="TApp">The <see cref="BlueprintApp"/> subclass discovered by <c>[BlueprintAppScan]</c>.</typeparam>
 /// <typeparam name="TExec">The source-generated executor type.</typeparam>
 public sealed class BlueprintTestHostBuilder<TApp, TExec>
-    where TApp : BlueprintApp
+    where TApp : BlueprintApp, new()
     where TExec : BlueprintAppExecutor
 {
     private readonly List<Action<IServiceCollection>> _serviceConfigurations = new();

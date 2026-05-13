@@ -1,8 +1,10 @@
 using System.Diagnostics.CodeAnalysis;
 using Blueprint;
+using Blueprint.Http;
 using Blueprint.Model;
 using Blueprint.Runtime.Http;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 
 // This is the recommendation from MS for extensions to IServiceCollection to aid discoverability
 // ReSharper disable once CheckNamespace
@@ -28,11 +30,21 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddBlueprintApi<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TApp, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TExec>(
         this IServiceCollection services,
         Action<BlueprintServiceBuilder>? configure = null)
-        where TApp : BlueprintApp
+        where TApp : BlueprintApp, new()
         where TExec : BlueprintAppExecutor
     {
-        services.AddSingleton<TApp>();
-        services.AddSingleton<BlueprintApp>(sp => sp.GetRequiredService<TApp>());
+        services.AddSingleton<TApp>(static sp =>
+        {
+            var app = new TApp();
+            var jsonOptions = sp.GetService<IOptions<BlueprintJsonOptions>>();
+            if (jsonOptions?.Value is { } opts)
+            {
+                app.ApplySerializerOptions(opts.SerializerOptions);
+            }
+
+            return app;
+        });
+        services.AddSingleton<BlueprintApp>(static sp => sp.GetRequiredService<TApp>());
         services.AddSingleton<TExec>();
 
         // Register the base executor type so handlers and infrastructure can inject
@@ -430,6 +442,34 @@ public sealed class BlueprintServiceBuilder
     /// <param name="configure">A delegate to configure <see cref="HttpOperationResultExecutor"/>-level options.</param>
     /// <returns>This builder for chaining.</returns>
     public BlueprintServiceBuilder ConfigureHttp(Action<BlueprintHttpOptions> configure)
+    {
+        this.Services.Configure(configure);
+        return this;
+    }
+
+    /// <summary>
+    /// Configures the <see cref="System.Text.Json.JsonSerializerOptions"/> that Blueprint uses
+    /// when serializing HTTP response bodies. Use this to add NodaTime converters, custom naming
+    /// policies, or other serializer customizations.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Example — adding NodaTime support:
+    /// <code>
+    /// blueprint.ConfigureJson(json =&gt;
+    /// {
+    ///     json.SerializerOptions.ConfigureForNodaTime(DateTimeZoneProviders.Tzdb);
+    /// });
+    /// </code>
+    /// </para>
+    /// <para>
+    /// Blueprint starts with sensible defaults (camelCase, relaxed escaping, string enums).
+    /// This method lets you layer additional configuration on top.
+    /// </para>
+    /// </remarks>
+    /// <param name="configure">A delegate to configure <see cref="Blueprint.Http.BlueprintJsonOptions"/>.</param>
+    /// <returns>This builder for chaining.</returns>
+    public BlueprintServiceBuilder ConfigureJson(Action<Blueprint.Http.BlueprintJsonOptions> configure)
     {
         this.Services.Configure(configure);
         return this;

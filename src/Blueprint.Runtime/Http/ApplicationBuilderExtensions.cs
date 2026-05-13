@@ -50,7 +50,9 @@ public static class EndpointRouteBuilderExtensions
         // Ensure ends with a slash, but only one
         basePath = basePath.TrimEnd('/') + '/';
 
-        var runtimeModel = new T();
+        // Prefer the DI-registered singleton (set up by AddBlueprintApi with serializer options applied).
+        // Fall back to direct construction for testing scenarios that build a manual service collection.
+        var runtimeModel = endpoints.ServiceProvider.GetService<T>() ?? new T();
 
         var httpOptions = endpoints.ServiceProvider.GetService<IOptions<BlueprintHttpOptions>>()?.Value ?? new BlueprintHttpOptions();
 

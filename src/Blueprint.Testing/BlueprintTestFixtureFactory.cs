@@ -53,7 +53,7 @@ namespace Blueprint.Testing;
 /// </code>
 /// </example>
 public abstract class BlueprintTestFixtureFactory<TApp, TExec> : IDisposable, IAsyncDisposable
-    where TApp : BlueprintApp
+    where TApp : BlueprintApp, new()
     where TExec : BlueprintAppExecutor
 {
     private readonly object _initLock = new();
