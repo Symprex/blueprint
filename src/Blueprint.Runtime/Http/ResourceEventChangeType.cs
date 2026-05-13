@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Blueprint.Http;
 
 /// <summary>
@@ -6,6 +8,7 @@ namespace Blueprint.Http;
 /// with legacy Blueprint consumers that reference <c>ResourceEventChangeType</c> in the
 /// <c>Blueprint.Http</c> namespace.
 /// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum ResourceEventChangeType
 {
     /// <summary>

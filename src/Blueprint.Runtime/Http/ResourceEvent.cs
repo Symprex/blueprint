@@ -55,6 +55,15 @@ public class ResourceEvent : OperationResult
     }
 
     /// <summary>
+    /// Gets the static object-type discriminator for this resource event, always <c>"event"</c>.
+    /// Mirrors the <c>$object</c> convention used by <see cref="ApiResource"/> to let clients identify
+    /// the shape of the JSON payload without inspecting every property.
+    /// </summary>
+    [JsonPropertyName("$object")]
+    [JsonInclude]
+    public string Object => "event";
+
+    /// <summary>
     /// Gets the id of this event, for example <c>timeEntry.updated</c> or <c>account.approvals.enabled</c>.
     /// The id is a dot-delimited string with the first part being the resource type and the remainder
     /// identifying the specific event.
