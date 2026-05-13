@@ -33,6 +33,23 @@ public readonly struct EquatableList<T> : IEquatable<EquatableList<T>>, IEnumera
     }
 
     /// <summary>
+    /// Creates a new <see cref="EquatableList{T}"/> by taking ownership of an existing list,
+    /// avoiding an intermediate <c>ToArray()</c> copy.
+    /// </summary>
+    /// <param name="list">The list to take ownership of. Callers must not mutate the list after this call.</param>
+    /// <returns>A new <see cref="EquatableList{T}"/> wrapping the given list.</returns>
+    public static EquatableList<T> TakeOwnership(List<T> list)
+    {
+        return new EquatableList<T>(list, owned: true);
+    }
+
+    private EquatableList(List<T> list, bool owned)
+    {
+        _ = owned;
+        this._list = list;
+    }
+
+    /// <summary>
     /// Gets the length of the array, or 0 if the array is null
     /// </summary>
     public int Count => this._list.Count;

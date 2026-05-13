@@ -29,10 +29,13 @@ public partial class OperationExecutorPipelineSourceGenerator
 
         var operationTypes = ScanForOperationTypes(compilation, appInfo.AppType);
 
+        // Build the external handler index once for all operations (avoids per-operation syntax tree scans)
+        var externalHandlerIndex = HandlerDiscovery.BuildExternalHandlerIndex(compilation);
+
         foreach (var operationType in operationTypes)
         {
             // Find handler for this operation
-            var handlerResult = HandlerDiscovery.FindHandler(operationType, compilation);
+            var handlerResult = HandlerDiscovery.FindHandler(operationType, externalHandlerIndex);
 
             if (handlerResult.Diagnostics.Count > 0)
             {
@@ -48,17 +51,17 @@ public partial class OperationExecutorPipelineSourceGenerator
         // If we have diagnostics but no handlers, it's a failure
         if (diagnostics.Count > 0 && handlers.Count == 0)
         {
-            return Result<PipelineCompilationModel>.Failure(new EquatableList<DiagnosticInfo>(diagnostics.ToArray()));
+            return Result<PipelineCompilationModel>.Failure(EquatableList<DiagnosticInfo>.TakeOwnership(diagnostics));
         }
 
         var model = new PipelineCompilationModel(
             appInfo.AppTypeName,
             appInfo.AppNamespace,
-            new EquatableList<OperationHandlerModel>(handlers.ToArray()));
+            EquatableList<OperationHandlerModel>.TakeOwnership(handlers));
 
         // Return success with any warnings
         return diagnostics.Count > 0
-            ? new Result<PipelineCompilationModel>(model, new EquatableList<DiagnosticInfo>(diagnostics.ToArray()))
+            ? new Result<PipelineCompilationModel>(model, EquatableList<DiagnosticInfo>.TakeOwnership(diagnostics))
             : Result.Success(model);
     }
 

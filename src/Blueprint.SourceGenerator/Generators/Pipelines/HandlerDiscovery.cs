@@ -11,21 +11,22 @@ namespace Blueprint.SourceGenerator.Generators.Pipelines;
 public static class HandlerDiscovery
 {
     /// <summary>
-    /// Attempts to find a handler for the given operation type.
+    /// Attempts to find a handler for the given operation type using a pre-built external handler index.
+    /// The index should be built once via <see cref="BuildExternalHandlerIndex"/> and reused across all
+    /// operations in a compilation to avoid repeated full-compilation scans.
     /// </summary>
     /// <param name="operationType">The operation type to find a handler for.</param>
-    /// <param name="compilation">The compilation to search in.</param>
+    /// <param name="externalHandlerIndex">Pre-built index mapping operation types to candidate handler methods.</param>
     /// <returns>The discovered handler model, or failure with diagnostic if no handler was found.</returns>
     [MustUseReturnValue]
     public static Result<OperationHandlerModel> FindHandler(
         INamedTypeSymbol operationType,
-        Compilation compilation)
+        ExternalHandlerIndex externalHandlerIndex)
     {
         // First, try to find an inline handler
         var (inlineValue, inlineDiagnostic) = FindInlineHandler(operationType);
         if (inlineDiagnostic != null)
         {
-            // Multiple inline handlers or other error
             return Result<OperationHandlerModel>.Failure(inlineDiagnostic);
         }
 
@@ -34,11 +35,10 @@ public static class HandlerDiscovery
             return Result.Success(inlineValue);
         }
 
-        // If no inline handler, search for external handler
-        var (externalValue, externalDiagnostic) = FindExternalHandler(operationType, compilation);
+        // If no inline handler, look up from the pre-built index
+        var (externalValue, externalDiagnostic) = FindExternalHandlerFromIndex(operationType, externalHandlerIndex);
         if (externalDiagnostic != null)
         {
-            // Multiple external handlers or other error
             return Result<OperationHandlerModel>.Failure(externalDiagnostic);
         }
 
@@ -54,6 +54,60 @@ public static class HandlerDiscovery
             new EquatableList<string>(new[] { operationType.Name }));
 
         return Result<OperationHandlerModel>.Failure(diagnostic);
+    }
+
+    /// <summary>
+    /// Legacy overload that builds a per-call external handler index. Prefer the overload
+    /// accepting <see cref="ExternalHandlerIndex"/> for batch handler discovery.
+    /// </summary>
+    /// <param name="operationType">The operation type to find a handler for.</param>
+    /// <param name="compilation">The compilation to search in.</param>
+    /// <returns>The discovered handler model, or failure with diagnostic if no handler was found.</returns>
+    [MustUseReturnValue]
+    public static Result<OperationHandlerModel> FindHandler(
+        INamedTypeSymbol operationType,
+        Compilation compilation)
+    {
+        var index = BuildExternalHandlerIndex(compilation);
+        return FindHandler(operationType, index);
+    }
+
+    /// <summary>
+    /// Builds an index of all candidate external handler methods in the compilation by traversing
+    /// assembly namespaces (symbol-based). This is O(types + methods) and should be called once
+    /// per compilation, then reused for all operations — avoiding the O(operations × syntax trees)
+    /// cost of per-operation syntax tree scanning.
+    /// </summary>
+    /// <param name="compilation">The compilation to index.</param>
+    /// <returns>A reusable index for per-operation handler lookups.</returns>
+    [MustUseReturnValue]
+    public static ExternalHandlerIndex BuildExternalHandlerIndex(Compilation compilation)
+    {
+        var candidates = new List<(INamedTypeSymbol HandlerClass, IMethodSymbol Method, INamedTypeSymbol OperationType)>();
+
+        foreach (var type in GetAllTypesFromCompilation(compilation))
+        {
+            if (type.IsAbstract || type.IsStatic || type.TypeKind != TypeKind.Class)
+            {
+                continue;
+            }
+
+            foreach (var member in type.GetMembers())
+            {
+                if (member is not IMethodSymbol method || !ParameterAnalyzer.IsHandlerMethodName(method.Name))
+                {
+                    continue;
+                }
+
+                if (method.Parameters.Length > 0 &&
+                    method.Parameters[0].Type is INamedTypeSymbol firstParamType)
+                {
+                    candidates.Add((type, method, firstParamType));
+                }
+            }
+        }
+
+        return new ExternalHandlerIndex(candidates);
     }
 
     /// <summary>
@@ -117,56 +171,23 @@ public static class HandlerDiscovery
     }
 
     /// <summary>
-    /// Finds an external handler (method on a separate handler class where first parameter is the operation).
+    /// Finds an external handler from the pre-built index by matching the operation type
+    /// against the first parameter of candidate handler methods.
     /// </summary>
-    private static (OperationHandlerModel? Value, DiagnosticInfo? Diagnostic) FindExternalHandler(
+    private static (OperationHandlerModel? Value, DiagnosticInfo? Diagnostic) FindExternalHandlerFromIndex(
         INamedTypeSymbol operationType,
-        Compilation compilation)
+        ExternalHandlerIndex index)
     {
-        var foundHandlers = new List<(INamedTypeSymbol HandlerClass, IMethodSymbol HandlerMethod)>();
-
-        // Search all types in the compilation
-        foreach (var syntaxTree in compilation.SyntaxTrees)
-        {
-            var semanticModel = compilation.GetSemanticModel(syntaxTree);
-            var root = syntaxTree.GetRoot();
-
-            // Get all type symbols in this syntax tree
-            var types = root.DescendantNodes()
-                .OfType<Microsoft.CodeAnalysis.CSharp.Syntax.ClassDeclarationSyntax>()
-                .Select(c => semanticModel.GetDeclaredSymbol(c))
-                .Where(t => t != null)
-                .Cast<INamedTypeSymbol>();
-
-            foreach (var type in types)
-            {
-                // Look for handler methods
-                var methods = type.GetMembers()
-                    .OfType<IMethodSymbol>()
-                    .Where(m => ParameterAnalyzer.IsHandlerMethodName(m.Name));
-
-                foreach (var method in methods)
-                {
-                    // Check if first parameter matches the operation type
-                    if (method.Parameters.Length > 0 &&
-                        SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, operationType))
-                    {
-                        foundHandlers.Add((type, method));
-                    }
-                }
-            }
-        }
+        var foundHandlers = index.FindHandlersFor(operationType);
 
         if (foundHandlers.Count == 0)
         {
-            // No external handler found
             return (null, null);
         }
 
         if (foundHandlers.Count > 1)
         {
-            // Multiple external handlers found - error
-            var handlerNames = string.Join(", ", foundHandlers.Select(h => $"{h.HandlerClass.Name}.{h.HandlerMethod.Name}"));
+            var handlerNames = string.Join(", ", foundHandlers.Select(static h => $"{h.HandlerClass.Name}.{h.HandlerMethod.Name}"));
             var diagnostic = new DiagnosticInfo(
                 DiagnosticDescriptors.MultipleHandlersFound,
                 LocationInfo.CreateFrom(operationType.Locations.FirstOrDefault()!),
@@ -177,14 +198,11 @@ public static class HandlerDiscovery
 
         var (handlerClass, handlerMethod) = foundHandlers[0];
 
-        // Analyze parameters (skip first parameter which is the operation)
         var parameters = ParameterAnalyzer.AnalyzeParameters(handlerMethod, operationType, isExternalHandler: true);
 
-        // Determine return type
         var returnType = handlerMethod.ReturnType;
         var returnTypeName = returnType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
-        // Check if async
         var isAsync = returnType.Name == "Task" ||
                       (returnType is INamedTypeSymbol namedReturn &&
                        namedReturn.IsGenericType &&
@@ -207,6 +225,68 @@ public static class HandlerDiscovery
             PropertyInjections: DetectPropertyInjections(handlerClass));
 
         return (model, null);
+    }
+
+    /// <summary>
+    /// Enumerates all named types from every assembly referenced by the compilation,
+    /// including the compilation's own assembly. Uses namespace traversal (no syntax trees).
+    /// </summary>
+    private static IEnumerable<INamedTypeSymbol> GetAllTypesFromCompilation(Compilation compilation)
+    {
+        // Scan the main assembly
+        foreach (var type in GetTypesFromNamespace(compilation.Assembly.GlobalNamespace))
+        {
+            yield return type;
+        }
+
+        // Scan referenced assemblies (external handlers could be in referenced projects)
+        foreach (var reference in compilation.References)
+        {
+            if (compilation.GetAssemblyOrModuleSymbol(reference) is IAssemblySymbol assembly)
+            {
+                foreach (var type in GetTypesFromNamespace(assembly.GlobalNamespace))
+                {
+                    yield return type;
+                }
+            }
+        }
+    }
+
+    private static IEnumerable<INamedTypeSymbol> GetTypesFromNamespace(INamespaceSymbol ns)
+    {
+        foreach (var member in ns.GetMembers())
+        {
+            if (member is INamedTypeSymbol namedType)
+            {
+                yield return namedType;
+
+                // Check nested types
+                foreach (var nested in GetNestedTypes(namedType))
+                {
+                    yield return nested;
+                }
+            }
+            else if (member is INamespaceSymbol childNs)
+            {
+                foreach (var type in GetTypesFromNamespace(childNs))
+                {
+                    yield return type;
+                }
+            }
+        }
+    }
+
+    private static IEnumerable<INamedTypeSymbol> GetNestedTypes(INamedTypeSymbol type)
+    {
+        foreach (var member in type.GetTypeMembers())
+        {
+            yield return member;
+
+            foreach (var nested in GetNestedTypes(member))
+            {
+                yield return nested;
+            }
+        }
     }
 
     /// <summary>

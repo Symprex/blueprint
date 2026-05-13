@@ -40,15 +40,16 @@ public sealed partial class AppDataModelSourceGenerator
         var missingSerializerCoverageOperations = new HashSet<string>(StringComparer.Ordinal);
         var requiredSerializerCoverageTypeNames = new HashSet<string>(StringComparer.Ordinal);
         var requiredSerializerCoverageOperations = new HashSet<string>(StringComparer.Ordinal);
-        var strippedNameToOperations = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+        var strippedNameToOperations = new Dictionary<string, List<string>>(128, StringComparer.Ordinal);
         var coveredSerializerContextTypeNames = dataModelClass.SerializerContextTypeName is null
             ? null
             : new HashSet<string>(dataModelClass.SerializerContextBodyTypeNames.AsArray(), StringComparer.Ordinal);
 
+        // Cache the model class type outside the attribute loop — metadata name is constant.
+        var modelClassType = compilation.GetTypeByMetadataName(dataModelClass.MetadataName);
+
         foreach (var attribute in attributes)
         {
-            var modelClassType = compilation.GetTypeByMetadataName(dataModelClass.MetadataName);
-
             foreach (var operation in ScanForOperationTypes(compilation, attribute, modelClassType!))
             {
                 registrations.Add(operation.ToDisplayString());
@@ -83,10 +84,13 @@ public sealed partial class AppDataModelSourceGenerator
                     continue;
                 }
 
-                foreach (var missingTypeName in requiredTypeNames.Where(requiredTypeName => !coveredSerializerContextTypeNames.Contains(requiredTypeName)))
+                foreach (var requiredTypeName in requiredTypeNames)
                 {
-                    missingSerializerCoverageTypeNames.Add(missingTypeName);
-                    missingSerializerCoverageOperations.Add(operation.Name);
+                    if (!coveredSerializerContextTypeNames.Contains(requiredTypeName))
+                    {
+                        missingSerializerCoverageTypeNames.Add(requiredTypeName);
+                        missingSerializerCoverageOperations.Add(operation.Name);
+                    }
                 }
             }
 
