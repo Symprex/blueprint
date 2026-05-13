@@ -860,6 +860,25 @@ public class HttpEndToEndIntegrationTests
     }
 
     [Fact]
+    public async Task When_handler_returns_ProxyResult_then_proxies_status_headers_and_body()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/e2e/proxy");
+        endpoint.Should().NotBeNull("the proxy query route should be registered");
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider);
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        response.Body.Should().Contain("\"analytics\"");
+        response.CustomHeaders.Should().ContainKey("X-Downstream-Id");
+        response.CustomHeaders["X-Downstream-Id"].Should().Be("cubejs-123");
+        response.CustomHeaders.Should().ContainKey("X-Request-ID");
+        response.CustomHeaders["X-Request-ID"].Should().Be("req-456");
+    }
+
+    [Fact]
     public async Task When_conditional_RequiredIf_is_satisfied_and_field_missing_then_returns_422()
     {
         var endpoints = CreateEndpoints();
@@ -2770,5 +2789,32 @@ internal sealed class E2ECustomHttpResult : Blueprint.Http.HttpResult
         : base(statusCode)
     {
         this.Headers["X-Custom-E2E"] = "test-value";
+    }
+}
+
+/// <summary>
+/// Anonymous GET returning a <see cref="Blueprint.Http.ProxyResult" /> — proves that
+/// downstream HTTP responses are correctly proxied through the generated pipeline (gateway pattern).
+/// </summary>
+[Blueprint.Model.Attributes.AllowAnonymous]
+[Blueprint.Model.Attributes.RootLink("/e2e/proxy")]
+[Blueprint.Model.Attributes.HttpGet]
+[Blueprint.Auditing.DoNotAudit]
+public partial class E2EProxyQuery : IQuery<Blueprint.Http.ProxyResult>
+{
+    /// <summary>Simulates a gateway proxy by constructing a downstream response in-memory.</summary>
+    /// <param name="query">The query instance (unused).</param>
+    /// <returns>A proxy result wrapping a simulated downstream response.</returns>
+    public static Task<Blueprint.Http.ProxyResult> HandleAsync(E2EProxyQuery query)
+    {
+        var downstream = new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+        {
+            Content = new StringContent("{\"analytics\":\"data\"}", Encoding.UTF8, "application/json"),
+        };
+
+        downstream.Headers.Add("X-Downstream-Id", "cubejs-123");
+        downstream.Headers.Add("X-Request-Id", "req-456");
+
+        return Task.FromResult(new Blueprint.Http.ProxyResult(downstream));
     }
 }
