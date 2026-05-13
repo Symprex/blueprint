@@ -880,7 +880,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         if (bodyEntries.Length > 0)
         {
             context.WriteStatement(
-                $"var _bodyResult = await Blueprint.Runtime.Exec.PipelineHelpers.ReadJsonBodyAsync(httpContext, context.OperationCancelled, {operationExpr}, static (_bodyBytes, _op) => PopulateFromJsonBody(_bodyBytes, _op)).ConfigureAwait(false);");
+                $"var _bodyResult = await Blueprint.Runtime.Exec.PipelineHelpers.ReadJsonBodyAsync(httpContext, context.OperationCancelled, {operationExpr}, PopulateFromJsonBody).ConfigureAwait(false);");
             context.If("_bodyResult != null", earlyReturnCtx =>
             {
                 earlyReturnCtx.Return("_bodyResult");
