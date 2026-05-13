@@ -56,4 +56,38 @@ public static class BlueprintHttpClientServiceCollectionExtensions
     {
         return services.AddBlueprintHttpClient<TApp>(client => client.BaseAddress = baseAddress);
     }
+
+    /// <summary>
+    /// Registers a <see cref="BlueprintHttpClient{TApp}"/> using a <paramref name="configureClient"/>
+    /// callback that receives both the <see cref="IServiceProvider"/> and <see cref="System.Net.Http.HttpClient"/>.
+    /// Use this overload when the client needs access to scoped services such as
+    /// <c>IHttpContextAccessor</c> for JWT token forwarding in gateway scenarios.
+    /// </summary>
+    /// <typeparam name="TApp">The <see cref="BlueprintApp"/> that owns the operation descriptors.</typeparam>
+    /// <param name="services">The service collection.</param>
+    /// <param name="configureClient">
+    /// A callback receiving the scoped <see cref="IServiceProvider"/> and the
+    /// <see cref="System.Net.Http.HttpClient"/> to configure. Typically used to forward the
+    /// incoming JWT token via <c>IHttpContextAccessor.HttpContext.Request.Headers.Authorization</c>.
+    /// </param>
+    /// <param name="jsonOptions">Optional custom JSON serializer options. Defaults to Blueprint's standard config.</param>
+    /// <returns>An <see cref="IHttpClientBuilder"/> for further configuration (e.g., adding Polly policies).</returns>
+    public static IHttpClientBuilder AddBlueprintHttpClient<TApp>(
+        this IServiceCollection services,
+        Action<IServiceProvider, System.Net.Http.HttpClient> configureClient,
+        JsonSerializerOptions? jsonOptions = null)
+        where TApp : BlueprintApp
+    {
+        var effectiveOptions = jsonOptions ?? BlueprintJsonOptions.CreateDefaultOptions();
+
+        return services.AddHttpClient<BlueprintHttpClient<TApp>>((sp, client) =>
+        {
+            configureClient(sp, client);
+        })
+        .AddTypedClient((httpClient, sp) =>
+        {
+            var app = sp.GetRequiredService<TApp>();
+            return new BlueprintHttpClient<TApp>(httpClient, app, effectiveOptions);
+        });
+    }
 }
