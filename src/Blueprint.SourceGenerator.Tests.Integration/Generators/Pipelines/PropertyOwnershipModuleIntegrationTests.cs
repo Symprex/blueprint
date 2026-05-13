@@ -624,6 +624,61 @@ public class PropertyOwnershipModuleIntegrationTests
             static e => e.PropertyName == "PageSize" && e.Source == PropertyBindingSource.Query);
     }
 
+    [Fact]
+    public void When_post_command_has_FromAuthContext_then_descriptor_has_AuthContext_source()
+    {
+        var descriptor = CreateAuthContextItemCommand.Configure();
+
+        descriptor.TryGetFeatureData<OperationPropertyOwnershipFeatureData>(out var ownershipData)
+            .Should().BeTrue();
+
+        ownershipData!.Entries.Should().Contain(
+            static e => e.PropertyName == "TenantId" && e.Source == PropertyBindingSource.AuthContext,
+            "[FromAuthContext] property should be AuthContext-owned");
+
+        ownershipData.Entries.Should().Contain(
+            static e => e.PropertyName == "Name" && e.Source == PropertyBindingSource.Body,
+            "non-auth-context property should remain body-owned on POST");
+    }
+
+    [Fact]
+    public void When_get_query_has_FromAuthContext_then_descriptor_has_AuthContext_source()
+    {
+        var descriptor = ListAuthContextItemsQuery.Configure();
+
+        descriptor.TryGetFeatureData<OperationPropertyOwnershipFeatureData>(out var ownershipData)
+            .Should().BeTrue();
+
+        ownershipData!.Entries.Should().Contain(
+            static e => e.PropertyName == "TenantId" && e.Source == PropertyBindingSource.AuthContext,
+            "[FromAuthContext] property should be AuthContext-owned on GET");
+
+        ownershipData.Entries.Should().Contain(
+            static e => e.PropertyName == "Page" && e.Source == PropertyBindingSource.Query,
+            "non-auth-context property should remain query-owned on GET");
+    }
+
+    [Fact]
+    public void When_FromAuthContext_property_is_route_placeholder_then_route_wins()
+    {
+        var descriptor = GetAuthContextRouteItemQuery.Configure();
+
+        descriptor.TryGetFeatureData<OperationPropertyOwnershipFeatureData>(out var ownershipData)
+            .Should().BeTrue();
+
+        // Route takes precedence over [FromAuthContext]
+        ownershipData!.Entries.Should().Contain(
+            static e => e.PropertyName == "TenantId" && e.Source == PropertyBindingSource.Route,
+            "route placeholder should take precedence over [FromAuthContext]");
+
+        ownershipData.Entries.Should().Contain(
+            static e => e.PropertyName == "Id" && e.Source == PropertyBindingSource.Route);
+
+        ownershipData.Entries.Should().NotContain(
+            static e => e.Source == PropertyBindingSource.AuthContext,
+            "no AuthContext entries expected when route wins");
+    }
+
     private static Blueprint.Runtime.Exec.ApiOperationContext CreateContext(BlueprintApp app, ApiOperationDescriptor descriptor, object operation, Microsoft.AspNetCore.Http.HttpContext httpContext)
     {
         return new Blueprint.Runtime.Exec.ApiOperationContext(new EmptyServiceProvider(), app, descriptor, CancellationToken.None)
@@ -1212,5 +1267,63 @@ public partial class SearchByTypeConverterIdPopulationQuery : IQuery<string>
     public static Task<string> HandleAsync(SearchByTypeConverterIdPopulationQuery operation)
     {
         return Task.FromResult(operation.FilterId?.ToString() ?? "none");
+    }
+}
+
+/// <summary>
+/// POST command with <c>[FromAuthContext]</c> on TenantId — proves the property is excluded
+/// from body binding and recorded as <see cref="PropertyBindingSource.AuthContext"/> in the
+/// descriptor, while other properties are still body-bound.
+/// </summary>
+[Blueprint.Model.Attributes.AllowAnonymous]
+[Blueprint.Model.Attributes.RootLink("/population-test/auth-context-items")]
+public partial class CreateAuthContextItemCommand : ICommand<string>
+{
+    [Blueprint.Model.Attributes.FromAuthContext]
+    public string? TenantId { get; set; }
+
+    public string? Name { get; set; }
+
+    public static Task<string> HandleAsync(CreateAuthContextItemCommand operation)
+    {
+        return Task.FromResult($"tenant={operation.TenantId ?? "null"},name={operation.Name}");
+    }
+}
+
+/// <summary>
+/// GET query with <c>[FromAuthContext]</c> on TenantId — proves the property is excluded
+/// from query string binding and not visible in OpenAPI query parameters.
+/// </summary>
+[Blueprint.Model.Attributes.AllowAnonymous]
+[Blueprint.Model.Attributes.RootLink("/population-test/auth-context-list")]
+public partial class ListAuthContextItemsQuery : IQuery<string>
+{
+    [Blueprint.Model.Attributes.FromAuthContext]
+    public string? TenantId { get; set; }
+
+    public int Page { get; set; }
+
+    public static Task<string> HandleAsync(ListAuthContextItemsQuery operation)
+    {
+        return Task.FromResult($"tenant={operation.TenantId ?? "null"},page={operation.Page}");
+    }
+}
+
+/// <summary>
+/// GET query where TenantId is BOTH <c>[FromAuthContext]</c> and a route placeholder —
+/// proves route binding takes precedence and the property is bound from the URL.
+/// </summary>
+[Blueprint.Model.Attributes.AllowAnonymous]
+[Blueprint.Model.Attributes.RootLink("/population-test/auth-context-tenants/{TenantId}/items/{Id}")]
+public partial class GetAuthContextRouteItemQuery : IQuery<string>
+{
+    [Blueprint.Model.Attributes.FromAuthContext]
+    public string? TenantId { get; set; }
+
+    public string? Id { get; set; }
+
+    public static Task<string> HandleAsync(GetAuthContextRouteItemQuery operation)
+    {
+        return Task.FromResult($"tenant={operation.TenantId ?? "null"},id={operation.Id}");
     }
 }
