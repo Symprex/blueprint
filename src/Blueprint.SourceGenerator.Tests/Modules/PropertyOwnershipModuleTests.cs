@@ -1501,6 +1501,156 @@ public class PropertyOwnershipModuleTests
     }
 
     [Fact]
+    public void When_route_parameter_type_has_TypeConverter_attribute_then_no_BPPO001_and_pipeline_uses_TypeDescriptor()
+    {
+        const string source = """
+            #nullable enable
+            using Blueprint;
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using System;
+            using System.ComponentModel;
+            using System.Globalization;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace
+            {
+                [BlueprintAppScan]
+                public partial class TestApp : BlueprintApp { }
+
+                /// <summary>
+                /// Simulates S365 ApiId: readonly struct with TypeConverter but no IParsable or TryParse.
+                /// </summary>
+                [TypeConverter(typeof(ApiIdTypeConverter))]
+                public readonly struct ApiId : IEquatable<ApiId>
+                {
+                    private readonly Guid _value;
+                    private ApiId(Guid value) => _value = value;
+
+                    public static ApiId Create() => new ApiId(Guid.NewGuid());
+                    public static ApiId Hydrate(string raw) => new ApiId(Guid.Parse(raw));
+
+                    public bool Equals(ApiId other) => _value == other._value;
+                    public override bool Equals(object? obj) => obj is ApiId other && Equals(other);
+                    public override int GetHashCode() => _value.GetHashCode();
+                    public override string ToString() => _value.ToString("N");
+                }
+
+                public class ApiIdTypeConverter : TypeConverter
+                {
+                    public override bool CanConvertFrom(ITypeDescriptorContext? context, Type sourceType)
+                        => sourceType == typeof(string) || base.CanConvertFrom(context, sourceType);
+
+                    public override object? ConvertFrom(ITypeDescriptorContext? context, CultureInfo? culture, object value)
+                        => value is string s ? ApiId.Hydrate(s) : base.ConvertFrom(context, culture, value);
+                }
+
+                [RootLink("/tenants/{TenantId}/items/{Id}")]
+                public partial class GetItemByTenantQuery : IQuery<string>
+                {
+                    public ApiId TenantId { get; set; }
+                    public string Id { get; set; } = string.Empty;
+
+                    public static Task<string> HandleAsync(GetItemByTenantQuery operation)
+                    {
+                        return Task.FromResult(operation.Id);
+                    }
+                }
+            }
+            """;
+
+        var generators = new[]
+        {
+            TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>(),
+            TestHelpers.CreateTrackedGenerator<OperationExecutorPipelineSourceGenerator>(),
+        };
+
+        var result = TestHelpers.CompileWithTrackedGenerators(
+            generators,
+            [source],
+            ["Input0.cs"]);
+
+        result.Diagnostics.Should().BeEmpty("[TypeConverter] types should be accepted as route parameters");
+
+        var pipelineSource = string.Join(
+            Environment.NewLine,
+            result.GetGeneratedSources(nameof(OperationExecutorPipelineSourceGenerator)).Select(static s => s.SourceText.ToString()));
+
+        pipelineSource.Should().Contain("TypeDescriptor.GetConverter(", "should use TypeDescriptor for [TypeConverter] types");
+        pipelineSource.Should().Contain("ConvertFromInvariantString(", "should call ConvertFromInvariantString for route binding");
+    }
+
+    [Fact]
+    public void When_query_parameter_type_has_TypeConverter_attribute_then_no_BPPO003_and_pipeline_uses_TypeDescriptor()
+    {
+        const string source = """
+            #nullable enable
+            using Blueprint;
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using System;
+            using System.ComponentModel;
+            using System.Globalization;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace
+            {
+                [BlueprintAppScan]
+                public partial class TestApp : BlueprintApp { }
+
+                [TypeConverter(typeof(SlugConverter))]
+                public readonly struct Slug
+                {
+                    public string Value { get; }
+                    private Slug(string value) => Value = value;
+                    public static Slug From(string raw) => new Slug(raw);
+                    public override string ToString() => Value;
+                }
+
+                public class SlugConverter : TypeConverter
+                {
+                    public override bool CanConvertFrom(ITypeDescriptorContext? context, Type sourceType)
+                        => sourceType == typeof(string) || base.CanConvertFrom(context, sourceType);
+
+                    public override object? ConvertFrom(ITypeDescriptorContext? context, CultureInfo? culture, object value)
+                        => value is string s ? Slug.From(s) : base.ConvertFrom(context, culture, value);
+                }
+
+                [RootLink("/items")]
+                public partial class SearchItemsQuery : IQuery<string>
+                {
+                    public Slug? Category { get; set; }
+
+                    public static Task<string> HandleAsync(SearchItemsQuery operation)
+                    {
+                        return Task.FromResult(operation.Category.ToString());
+                    }
+                }
+            }
+            """;
+
+        var generators = new[]
+        {
+            TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>(),
+            TestHelpers.CreateTrackedGenerator<OperationExecutorPipelineSourceGenerator>(),
+        };
+
+        var result = TestHelpers.CompileWithTrackedGenerators(
+            generators,
+            [source],
+            ["Input0.cs"]);
+
+        result.Diagnostics.Should().BeEmpty("[TypeConverter] types should be accepted as query parameters");
+
+        var pipelineSource = string.Join(
+            Environment.NewLine,
+            result.GetGeneratedSources(nameof(OperationExecutorPipelineSourceGenerator)).Select(static s => s.SourceText.ToString()));
+
+        pipelineSource.Should().Contain("TypeDescriptor.GetConverter(", "should use TypeDescriptor for [TypeConverter] query types");
+        pipelineSource.Should().Contain("ConvertFromInvariantString(", "should call ConvertFromInvariantString for query binding");
+    }
+
+    [Fact]
     public void When_route_parameter_type_is_not_supported_then_BPPO001_diagnostic_is_reported()
     {
         var result = CompileDescriptor(

@@ -54,7 +54,7 @@
 | Pipeline optimization audit | ✅ Done | No further extraction opportunities remain; pipelines are already well-optimized |
 | S365 source generators | ✅ Analysed | 3 custom generators (DTO, Metrics, ServiceApi) — orthogonal to Blueprint, must coexist |
 | Blueprint.Compiler (legacy) | ✅ Analysed | Runtime Roslyn compiler, not source-gen — superseded by Blueprint source-gen |
-| S365 `ApiId` route binding | ⚠️ S365 action needed | `ApiId` needs `IParsable<ApiId>` — currently has only `TypeConverter` + `Hydrate()`. Blueprint catches at compile time (BPPO001) |
+| S365 `ApiId` route binding | ✅ Done | Blueprint now supports `[TypeConverter]`-attributed types for route and query binding via `TypeDescriptor.GetConverter()` — matches legacy Blueprint behavior exactly |
 | GetHttpContext() compat method | ✅ Done | Instance method on ApiOperationContext for S365 HttpContext access |
 | StatusCodeResult returns | ✅ Verified | Accepted (85 S365 usages), NoContent (10), Created (12) all work |
 | `[DoNotSaveChanges]` | ✅ Verified | Already supported with BPP001 diagnostic for misuse on non-commands |
@@ -88,7 +88,7 @@
 | IResourceEventAuditRepository | ✅ Already exists | `AddAsync(object)` — S365 `BusResourceEventAuditRepository` implements directly |
 | ResourceExpansionModule | ✅ Already exists | Post-execution resource expansion via `IResourceExpander<T>` |
 | ApiResource.GetTypeName caching | ✅ Done | `ConcurrentDictionary` cache, DTO suffix strip, delegates from `ResourceEvent.GetResourceTypeName` |
-| ApiId IParsable not required | ✅ Verified | S365 `ApiId` is only in body JSON or auto-hydrated from claims — never in route params |
+| ApiId route/query binding | ✅ Done | S365 `ApiId` IS used in route params (e.g. `GetSentEmailQuery.TenantId`). Blueprint now handles `[TypeConverter]` types natively — no S365 changes needed |
 | IResourceEventAuditSink enhanced | ✅ Done | `RecordAsync` now includes full `OperationResult` — S365 can cast to `ResourceEvent` for bus publish |
 | ResourceEvent audit sink fix | ✅ Done | Pipeline now matches `ResourceEvent` (not just `ResourceEventResult`) for audit recording |
 | HATEOAS ResourceEvent link fix | ✅ Done | `LinkGeneratorHandler` now extracts content from `ResourceEvent.Data` for link population |
@@ -136,7 +136,7 @@
 | HttpContext handler injection | ✅ Done | `HttpContext` and `ClaimsPrincipal` now injectable as handler properties alongside Context, Logger, CancellationToken, IUserAuthorisationContext |
 | S365 TenantOrderedPagedQuery compat | ✅ Verified | Already extends Blueprint's `OrderedPagedQuery<T>` — no changes needed |
 | S365 TenantPagedApiResource compat | ✅ Verified | Already extends Blueprint's `PagedApiResource<T>` — no changes needed |
-| S365 ApiId type compat | ✅ S365-owned | Domain-specific value type with prefix semantics; stays in S365; only used in body/claims (not route params) |
+| S365 ApiId type compat | ✅ Done | `ApiId` readonly struct with `[TypeConverter]` works for route/query/body binding — no S365 changes needed |
 | S365 ApiOperations base class | ✅ Verified | Context, Identity, Logger, CancellationToken auto-injected; HttpContext/HttpRequest/HttpResponse derive from Context.GetHttpContext() |
 | S365 NotFoundException handling | ✅ Verified | `ApiException(404)` → `UnhandledExceptionResult` → ProblemDetails JSON with 404 status; exact S365 pattern |
 | S365 TypeScript codegen flow | ✅ Analysed | Backend writes OpenAPI JSON to disk → Node.js script loads + Handlebars templates generate api.ts; `x-links` extension required (Blueprint emits it) |
@@ -158,8 +158,9 @@
 | TestMessageCollector `HaveSent` fix | ✅ Done | `HaveSent<T>()` now returns single T (matching S365 `FakeBus.Should().HaveSent<T>()`) instead of `IReadOnlyList<T>` |
 | TestMessageCollector `HavePublished` | ✅ Done | `HavePublished<T>()` now asserts at least one published (matching S365); `HavePublishedAny<T>()` added |
 | TestMessageCollector `Clear()` | ✅ Done | Added `Clear()` alias for `ClearAll()` — S365 uses `api.Bus.Clear()` in 56 test call sites |
-| FakeBus `.Events` access | ⚠️ 9 files | S365 has 9 helper/extension files accessing `api.Bus.Events.OfType<>()` directly — these must use `Messages.Published`/`Sent` instead; limited to test infrastructure, not individual test files |
-| FakeBus `.Publish()` in tests | ⚠️ 2 files | S365 IdentityServer tests call `api.Bus.Publish()` for test setup — must use real FakeBus or `TestMessageCollector.Publish()` |
+| FakeBus `.Events` access | ✅ Not applicable | S365 non-SMTP apps have NO test projects; only legacy Blueprint framework tests use FakeBus |
+| FakeBus `.Publish()` in tests | ✅ Not applicable | Same as above — only Blueprint framework tests, not S365 app tests |
+| S365 app test projects | ✅ None exist | Non-SMTP S365 apps have ZERO test projects — all 42 test projects are either SMTP or legacy Blueprint framework tests. Test migration is NOT a factor for S365 app migration. |
 | TS codegen x-links | ✅ Compatible | Blueprint emits `x-links` with identical shape (`rel`, `operationId`, `method`) — S365 Handlebars templates work unchanged |
 | TS codegen operationId | ✅ Compatible | Blueprint uses operation class name (minus suffix) for `operationId` — matches S365 NSwag convention |
 

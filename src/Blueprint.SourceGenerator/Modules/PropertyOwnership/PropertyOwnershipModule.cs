@@ -689,7 +689,8 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             or "bool"
             or "decimal"
             || type.TypeKind == TypeKind.Enum
-            || IsStringParsable(type);
+            || IsStringParsable(type)
+            || HasTypeConverterAttribute(type);
     }
 
     private static bool IsSupportedQueryType(ITypeSymbol type)
@@ -700,13 +701,14 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             return IsSupportedScalarType(arrayType.ElementType);
         }
 
-        // Nullable<T> where T is a supported scalar
+        // Nullable<T> where T is a supported scalar or has TypeConverter
         if (type.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T && type is INamedTypeSymbol namedType)
         {
-            return IsSupportedScalarType(namedType.TypeArguments[0]);
+            var innerType = namedType.TypeArguments[0];
+            return IsSupportedScalarType(innerType) || HasTypeConverterAttribute(innerType);
         }
 
-        return IsSupportedScalarType(type);
+        return IsSupportedScalarType(type) || HasTypeConverterAttribute(type);
     }
 
     private static bool IsSupportedScalarType(ITypeSymbol type)
@@ -787,6 +789,32 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
     private static bool IsStringParsable(ITypeSymbol type)
     {
         return ImplementsIParsable(type) || HasStaticTryParseMethod(type);
+    }
+
+    /// <summary>
+    /// Checks whether a type is decorated with <c>[TypeConverter]</c>, which legacy Blueprint
+    /// used to convert route/query string values from strings. Types with this attribute
+    /// use exception-based conversion at runtime via <see cref="System.ComponentModel.TypeDescriptor"/>.
+    /// </summary>
+    private static bool HasTypeConverterAttribute(ITypeSymbol type)
+    {
+        return type.GetAttributes().Any(
+            static a => a.AttributeClass is
+            {
+                Name: "TypeConverterAttribute",
+                ContainingNamespace: { Name: "ComponentModel", ContainingNamespace: { Name: "System", ContainingNamespace.IsGlobalNamespace: true } },
+            });
+    }
+
+    /// <summary>
+    /// Returns <see langword="true"/> when the type is supported for route/query binding
+    /// only through a <c>[TypeConverter]</c> attribute (i.e. not via scalars, enums,
+    /// <c>IParsable</c>, or <c>TryParse</c>). Used to select the exception-based
+    /// conversion code path instead of the boolean TryParse path.
+    /// </summary>
+    private static bool IsTypeConverterOnlyType(ITypeSymbol type)
+    {
+        return !IsSupportedScalarType(type) && HasTypeConverterAttribute(type);
     }
 
     private static void RenderDescriptorFeatureData(ICodeWriter writer, List<PropertyOwnershipEntry> entries)
@@ -1020,6 +1048,26 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         {
             context.WriteStatement(FormatPropertyAssignment(operationExpr, entry, $"(string){routeValueExpr}"));
         }
+        else if (IsTypeConverterOnlyType(entry.TypeSymbol))
+        {
+            var fqType = entry.TypeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+            context.If($"{routeValueExpr} is string routeStr_{entry.PropertyName}", ifCtx =>
+            {
+                ifCtx.Try(tryCtx =>
+                {
+                    var assignment = FormatPropertyAssignment(
+                        operationExpr,
+                        entry,
+                        $"({fqType})System.ComponentModel.TypeDescriptor.GetConverter(typeof({fqType})).ConvertFromInvariantString(routeStr_{entry.PropertyName})!");
+                    tryCtx.WriteStatement(assignment);
+                });
+                ifCtx.Catch("System.Exception", catchCtx =>
+                {
+                    catchCtx.Return($"new Blueprint.Runtime.Exec.BindingFailureResult(\"Invalid route parameter '{entry.BindingName}'\")");
+                });
+            });
+        }
         else
         {
             var tryParseExpr = GetScalarTryParseExpression(entry.TypeSymbol, $"routeStr_{entry.PropertyName}", $"_parsed_{entry.PropertyName}");
@@ -1066,6 +1114,26 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             context.If($"{queryVar}.Count > 0", ifCtx =>
             {
                 ifCtx.WriteStatement(FormatPropertyAssignment(operationExpr, entry, $"{queryVar}[0]"));
+            });
+        }
+        else if (IsTypeConverterOnlyType(effectiveType))
+        {
+            var fqType = effectiveType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+            context.If($"{queryVar}.Count > 0", ifCtx =>
+            {
+                ifCtx.Try(tryCtx =>
+                {
+                    var assignment = FormatPropertyAssignment(
+                        operationExpr,
+                        entry,
+                        $"({fqType})System.ComponentModel.TypeDescriptor.GetConverter(typeof({fqType})).ConvertFromInvariantString({queryVar}[0])!");
+                    tryCtx.WriteStatement(assignment);
+                });
+                ifCtx.Catch("System.Exception", catchCtx =>
+                {
+                    catchCtx.Return($"new Blueprint.Runtime.Exec.BindingFailureResult(\"Invalid query parameter '{entry.BindingName}'\")");
+                });
             });
         }
         else
