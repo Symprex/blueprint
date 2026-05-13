@@ -21,10 +21,13 @@ The new Blueprint pre-renders the OpenAPI document at startup and serves it as a
 
 | Aspect | Legacy Blueprint | Blueprint Source-Gen |
 |---|---|---|
-| Format | Class name | Class name (same) |
-| Example | `GetTemplateQuery` | `GetTemplateQuery` |
+| Format | Class name with `Query`/`Command` stripped | Class name with `Query`/`Command` stripped (same) |
+| Example | `GetTemplate` (from `GetTemplateQuery`) | `GetTemplate` (from `GetTemplateQuery`) |
 
-Operation IDs are derived from the operation class name in both versions. No change expected.
+Operation IDs are derived from the operation class name with trailing `Query` and `Command`
+suffixes removed. This matches legacy Blueprint convention and ensures TypeScript client
+generation compatibility. Operation types that do not end in `Query` or `Command` keep
+their full name as the operationId.
 
 ### 2. Path Conventions
 

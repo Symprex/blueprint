@@ -226,8 +226,8 @@ S365 has **3 custom source generators** in `Symprex.Signature365.SourceGenerator
 - 13 modules refactored to use centralised `HttpHostExposureHelper` (was duplicate per-module)
 
 ### OpenAPI Compatibility
-- Blueprint uses `operationId` = operation class name (e.g., `GetTemplateQuery`)
-- S365 legacy also uses class name — **compatible**
+- Blueprint uses `operationId` = operation class name with `Query`/`Command` suffix stripped (e.g., `GetTemplateQuery` → `GetTemplate`)
+- S365 legacy also strips these suffixes — **compatible**
 - Custom Handlebars templates use `operation.operationId` for lookup — works unchanged
 - `pathGenerator` helper builds URL interpolation from path — uses standard `{paramName}` format
 - Templates group operations by `tags` — Blueprint's OpenAPI groups by namespace, configurable
@@ -376,7 +376,7 @@ Successfully ran Blueprint codemod against `Signature365.sln` (158 projects). Fo
 3. ~~**Tenant middleware ordering**: Should tenant resolution be ASP.NET middleware or pipeline stage?~~ → **Resolved**: TenantModule in pipeline
 4. ~~**Property populator elimination**: Can ALL S365 property populators become compile-time?~~ → **Resolved**: Yes, PropertyOwnershipModule + TenantModule
 5. ~~**Resource key template**: How should `{Auth:AccountId}` expansion integrate with generated code?~~ → **Resolved**: `FromResource` template override
-6. ~~**Handlebars template compatibility**: What specific OpenAPI shape properties do the templates expect?~~ → **Resolved**: Blueprint emits `x-links` with `rel`, `operationId`, `method` — matches S365 template expectations exactly. `$links` serialized via `[JsonPropertyName("$links")]` on `ApiResource.Links`. `operationId` = class name (same convention). Path format `{paramName}` compatible.
+6. ~~**Handlebars template compatibility**: What specific OpenAPI shape properties do the templates expect?~~ → **Resolved**: Blueprint emits `x-links` with `rel`, `operationId`, `method` — matches S365 template expectations exactly. `$links` serialized via `[JsonPropertyName("$links")]` on `ApiResource.Links`. `operationId` = class name with `Query`/`Command` suffix stripped (same convention as legacy). Path format `{paramName}` compatible.
 7. ~~**StateBasedLinkChecker**: S365 uses state-based link checkers for conditional HATEOAS links~~ → **Resolved**: Fully implemented with identical API
 8. ~~**InvokeAsync convention**: S365 operations can have `InvokeAsync()` directly~~ → **Resolved**: `HandlerDiscovery.FindInlineHandler()` supports `Invoke`, `InvokeAsync`, `Handle`, `HandleAsync` method names
 9. ~~**ProxyResult (Portal CubeJS analytics)**: Is this a Blueprint gap?~~ → **Resolved**: S365-specific result type; extends `HttpResult` (already designed for consumer subclasses). S365 defines `ProxyResult` locally.
