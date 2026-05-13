@@ -3,6 +3,7 @@ using Blueprint.Model;
 using Blueprint.Model.Attributes;
 using Blueprint.Runtime.Exec;
 using Blueprint.SourceGenerator.Tests.Integration.Generators.OperationDescriptors;
+using Blueprint.Tenancy;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
@@ -159,6 +160,76 @@ public class TenantIsolationIntegrationTests
         TenantAccountQuery.HandlerCallCount.Should().Be(0);
     }
 
+    [Fact]
+    public async Task When_parsable_struct_TenantId_not_in_route_and_accessor_has_value_then_populated_from_accessor()
+    {
+        var tenantAccessor = new TestTenantAccessor();
+        var tenantResolver = new TestTenantResolver();
+
+        var app = new IntegrationTestBlueprintApp();
+        var serviceProvider = new ServiceCollection()
+            .AddSingleton<ITenantAccessor>(tenantAccessor)
+            .AddSingleton<ITenantResolver>(tenantResolver)
+            .BuildServiceProvider();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
+        var pipeline = executor.GetPipeline(typeof(ParsableTenantOverviewQuery));
+
+        // Operation starts with default TenantId (empty struct)
+        var operation = new ParsableTenantOverviewQuery();
+        var context = CreateHttpContext(
+            app,
+            ParsableTenantOverviewQuery.Configure(),
+            operation,
+            CreateAuthenticatedPrincipal("tenant-42"),
+            serviceProvider);
+
+        ParsableTenantOverviewQuery.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<OkResult<string>>();
+        ((OkResult<string>)result).Content.Should().Be("overview-tenant-42");
+        ParsableTenantOverviewQuery.HandlerCallCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task When_parsable_struct_TenantId_already_set_via_query_then_accessor_does_not_override()
+    {
+        var tenantAccessor = new TestTenantAccessor();
+        var tenantResolver = new TestTenantResolver();
+
+        var app = new IntegrationTestBlueprintApp();
+        var serviceProvider = new ServiceCollection()
+            .AddSingleton<ITenantAccessor>(tenantAccessor)
+            .AddSingleton<ITenantResolver>(tenantResolver)
+            .BuildServiceProvider();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
+        var pipeline = executor.GetPipeline(typeof(ParsableTenantOverviewQuery));
+
+        // Operation has TenantId NOT in route, but query string provides it
+        var operation = new ParsableTenantOverviewQuery();
+        var principal = CreateAuthenticatedPrincipal("tenant-99");
+        var context = CreateHttpContext(
+            app,
+            ParsableTenantOverviewQuery.Configure(),
+            operation,
+            principal,
+            serviceProvider);
+
+        // Set query string value — PropertyOwnershipModule should bind this
+        ((DefaultHttpContext)context.HttpContext!).Request.QueryString = new QueryString("?tenantId=tenant-from-query");
+
+        ParsableTenantOverviewQuery.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<OkResult<string>>();
+
+        // Should use query-bound value, NOT accessor value (tenant-99)
+        ((OkResult<string>)result).Content.Should().Be("overview-tenant-from-query");
+        ParsableTenantOverviewQuery.HandlerCallCount.Should().Be(1);
+    }
+
     private static ApiOperationContext CreateHttpContext(
         BlueprintApp app,
         ApiOperationDescriptor descriptor,
@@ -290,6 +361,26 @@ public class TenantIsolationIntegrationTests
         {
         }
     }
+
+    /// <summary>
+    /// Test double for <see cref="ITenantAccessor"/> — mirrors S365's AsyncLocal-based accessor.
+    /// </summary>
+    private sealed class TestTenantAccessor : ITenantAccessor
+    {
+        public string? Current { get; set; }
+    }
+
+    /// <summary>
+    /// Test double for <see cref="ITenantResolver"/> — extracts AccountId from the principal's claims.
+    /// <see cref="PipelineHelpers.ResolveTenant"/> feeds this return value into <see cref="ITenantAccessor.Current"/>.
+    /// </summary>
+    private sealed class TestTenantResolver : ITenantResolver
+    {
+        public string? ResolveTenantId(System.Security.Claims.ClaimsPrincipal principal)
+        {
+            return principal.FindFirst("AccountId")?.Value;
+        }
+    }
 }
 
 /// <summary>
@@ -339,5 +430,81 @@ public partial class TenantAccountQuery : IQuery<string>
     {
         HandlerCallCount++;
         return Task.FromResult($"account-{userContext.AccountId}");
+    }
+}
+
+/// <summary>
+/// Mirrors S365's <c>ApiId</c> — a strongly-typed tenant identifier that implements
+/// <c>IParsable&lt;T&gt;</c> for route/query/body binding and compile-time TenantModule parsing.
+/// </summary>
+public readonly struct ParsableTenantId : IParsable<ParsableTenantId>, IEquatable<ParsableTenantId>
+{
+    public string Value { get; }
+
+    public ParsableTenantId(string value)
+    {
+        this.Value = value;
+    }
+
+    public static ParsableTenantId Parse(string s, IFormatProvider? provider)
+    {
+        return new(s);
+    }
+
+    public static bool TryParse(string? s, IFormatProvider? provider, out ParsableTenantId result)
+    {
+        if (s is null)
+        {
+            result = default;
+            return false;
+        }
+
+        result = new ParsableTenantId(s);
+        return true;
+    }
+
+    public bool Equals(ParsableTenantId other)
+    {
+        return string.Equals(this.Value, other.Value, StringComparison.Ordinal);
+    }
+
+    public override bool Equals(object? obj)
+    {
+        return obj is ParsableTenantId other && this.Equals(other);
+    }
+
+    public override int GetHashCode()
+    {
+        return this.Value?.GetHashCode(StringComparison.Ordinal) ?? 0;
+    }
+
+    public override string ToString()
+    {
+        return this.Value ?? string.Empty;
+    }
+}
+
+/// <summary>
+/// Proves TenantModule auto-populates a non-string <c>ParsableTenantId TenantId</c> from
+/// <see cref="Blueprint.Tenancy.ITenantAccessor"/> when TenantId is NOT in the route template.
+/// Mirrors the 165 S365 operations where <c>ApiId TenantId</c> comes from JWT claims.
+/// </summary>
+[MustBeAuthenticated]
+[RootLink("/overview")]
+public partial class ParsableTenantOverviewQuery : IQuery<string>
+{
+    public ParsableTenantId TenantId { get; set; }
+
+    public static int HandlerCallCount { get; private set; }
+
+    public static void Reset()
+    {
+        HandlerCallCount = 0;
+    }
+
+    public static Task<string> HandleAsync(ParsableTenantOverviewQuery operation)
+    {
+        HandlerCallCount++;
+        return Task.FromResult($"overview-{operation.TenantId}");
     }
 }

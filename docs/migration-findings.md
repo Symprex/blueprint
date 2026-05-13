@@ -138,6 +138,7 @@
 | S365 TenantOrderedPagedQuery compat | ✅ Verified | Already extends Blueprint's `OrderedPagedQuery<T>` — no changes needed |
 | S365 TenantPagedApiResource compat | ✅ Verified | Already extends Blueprint's `PagedApiResource<T>` — no changes needed |
 | S365 ApiId type compat | ✅ Done | `ApiId` readonly struct with `[TypeConverter]` works for route/query/body binding — no S365 changes needed |
+| TenantModule non-string types | ✅ Done | TenantModule now supports `ApiId`, `Guid`, any `IParsable<T>`/`TryParse`/`[TypeConverter]` type for TenantId — 165 S365 operations with `ApiId TenantId` (not in route) now auto-populate correctly via `TryParse` + `EqualityComparer<T>.Default` guard |
 | S365 ApiOperations base class | ✅ Verified | Context, Identity, Logger, CancellationToken auto-injected; HttpContext/HttpRequest/HttpResponse derive from Context.GetHttpContext() |
 | S365 NotFoundException handling | ✅ Verified | `ApiException(404)` → `UnhandledExceptionResult` → ProblemDetails JSON with 404 status; exact S365 pattern |
 | S365 TypeScript codegen flow | ✅ Analysed | Backend writes OpenAPI JSON to disk → Node.js script loads + Handlebars templates generate api.ts; `x-links` extension required (Blueprint emits it) |
