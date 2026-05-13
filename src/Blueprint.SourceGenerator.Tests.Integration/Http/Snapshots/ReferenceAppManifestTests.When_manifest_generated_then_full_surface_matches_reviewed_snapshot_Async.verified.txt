@@ -501,6 +501,8 @@
     - 400: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
     - 401: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
     - 403: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+    - 404: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+    - 409: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
     - 415: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
     - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
     - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]

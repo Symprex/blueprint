@@ -1126,7 +1126,7 @@
       "put": {
         "operationId": "UpdateTemplate",
         "summary": "Update an existing template\u0027s name and content.",
-        "description": "Demonstrates inheriting the parent \u0027s [Resource(\u0022template\u0022, \u0022write\u0022)] scope pair so the same resource authorization rule applies to updates without restating the scope metadata.",
+        "description": "Demonstrates inheriting the parent \u0027s [Resource(\u0022template\u0022, \u0022write\u0022)] scope pair so the same resource authorization rule applies to updates without restating the scope metadata. Also demonstrates fields for compile-time OpenAPI error response discovery: the NotFound and Conflict factories are scanned by ApiExceptionFactoryModule and projected as additional 404 and 409 response entries in the generated descriptor metadata.",
         "tags": [
           "Templates"
         ],
@@ -1192,6 +1192,26 @@
           },
           "403": {
             "description": "Forbidden",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/problem\u002Bjson": {
                 "schema": {

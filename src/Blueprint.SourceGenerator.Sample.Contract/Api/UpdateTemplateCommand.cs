@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
+using System.Net;
 using Blueprint.Model;
 using Blueprint.Model.Attributes;
 using Blueprint.Runtime.Exec;
@@ -14,9 +15,17 @@ namespace Blueprint.SourceGenerator.Sample.Contract.Api;
 /// content source (HtmlSource or PlainTextSource) must be provided.
 /// </summary>
 /// <remarks>
+/// <para>
 /// Demonstrates <see cref="FromResourceAttribute"/> inheriting the parent
 /// <see cref="CreateTemplateCommand"/>'s <c>[Resource("template", "write")]</c> scope pair so the same
 /// resource authorization rule applies to updates without restating the scope metadata.
+/// </para>
+/// <para>
+/// Also demonstrates <see cref="ApiExceptionFactory"/> fields for compile-time OpenAPI error
+/// response discovery: the <c>NotFound</c> and <c>Conflict</c> factories are scanned by
+/// <c>ApiExceptionFactoryModule</c> and projected as additional 404 and 409 response entries
+/// in the generated descriptor metadata.
+/// </para>
 /// </remarks>
 [ApiOperations("Templates")]
 [RootLink("/templates/{Id}")]
@@ -25,6 +34,24 @@ namespace Blueprint.SourceGenerator.Sample.Contract.Api;
 [Description("Update an existing template's name and content.")]
 public partial class UpdateTemplateCommand : ICommand<ResourceEventResult<TemplateApiResource>>, IValidatableObject
 {
+    /// <summary>
+    /// Thrown when the template does not exist. Scanned at compile time by
+    /// <c>ApiExceptionFactoryModule</c> to produce a 404 OpenAPI response entry.
+    /// </summary>
+    public static readonly ApiExceptionFactory NotFound = new(
+        "Template not found",
+        "template_not_found",
+        HttpStatusCode.NotFound);
+
+    /// <summary>
+    /// Thrown when the template has been modified concurrently. Scanned at compile time by
+    /// <c>ApiExceptionFactoryModule</c> to produce a 409 OpenAPI response entry.
+    /// </summary>
+    public static readonly ApiExceptionFactory Conflict = new(
+        "Template version conflict",
+        "template_conflict",
+        HttpStatusCode.Conflict);
+
     /// <summary>
     /// The identifier of the template to update (bound from the route).
     /// </summary>
