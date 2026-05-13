@@ -170,6 +170,11 @@
 | Custom S365 middleware (6) | ✅ Compatible | SetTenantMiddleware, ResourceExpandMiddleware, Rebus TX scope (start/commit), SaveMarten, MartenOutbox — all register via startup |
 | Property populators | ✅ Not needed | S365 uses middleware (SetTenantMiddleware) instead of IPropertyPopulator — no populator migration needed |
 | Background tasks | ✅ Compatible | IBackgroundTaskScheduler patterns across Generation, VCard, EventStore, AdminPortal, Portal — all standard |
+| `[FromQuery("name")]` constructor | ✅ Done | S365 uses `[FromQuery("validationToken")]` (1 usage in M365 Gateway). Fixed generator to read `ConstructorArguments` before `NamedArguments`. Both `[FromQuery("x")]` and `[FromQuery(Name = "x")]` now work. |
+| Abstract base class inheritance | ✅ Verified | S365 uses `OrderedPagedQuery`, `SubscribeCommand`, `CampaignCommand` as operation bases. `PropertyOwnershipModule.AnalyzePropertyOwnership` uses `GetAllMembers()` which walks full type hierarchy — inherited properties discovered correctly. |
+| `[FromBody]` explicit (SMTP only) | ✅ Not applicable | Only in SMTP MockApi ASP.NET controller — not a Blueprint operation, no migration needed |
+| Multiple IHandleMessages<T> per class | ✅ S365-owned | 5 Rebus handlers implement 3+ IHandleMessages interfaces each (Analytics: Campaign, Disclaimer, Group, Signature, Survey). These are Rebus event handlers, NOT Blueprint operations — handled by Rebus subscription wire-up. |
+| Abstract generic base operations | ✅ Compatible | `EmailOrderedPagedQuery<T> : OrderedPagedQuery, IQuery<EmailPagedApiResource<T>>` — source generator resolves concrete type args; PropertyOwnership walks through generic base hierarchy |
 
 ---
 

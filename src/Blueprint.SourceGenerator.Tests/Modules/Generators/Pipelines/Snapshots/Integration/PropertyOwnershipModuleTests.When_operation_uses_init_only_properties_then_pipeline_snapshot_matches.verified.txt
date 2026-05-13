@@ -92,8 +92,7 @@ namespace Blueprint.Generated
             // Tenant resolution (compile-time, no reflection)
             if (this._tenantResolver != null && this._tenantAccessor != null)
             {
-                var resolvedTenantId = this._tenantResolver.ResolveTenantId(context.UserPrincipal);
-                this._tenantAccessor.Current = resolvedTenantId;
+                Blueprint.Runtime.Exec.PipelineHelpers.ResolveTenant(this._tenantResolver, this._tenantAccessor, context.UserPrincipal);
             }
 
             await Blueprint.Runtime.Exec.PipelineHelpers.PopulatePropertiesAsync(this._propertyPopulators, context).ConfigureAwait(false);

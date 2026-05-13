@@ -313,6 +313,30 @@ public static class PipelineHelpers
     }
 
     /// <summary>
+    /// Resolves the current tenant identifier from the authenticated user's claims and stores it
+    /// in the ambient <see cref="Blueprint.Tenancy.ITenantAccessor"/>. Called by the generated pipeline's
+    /// tenant-resolution stage when both an <see cref="Blueprint.Tenancy.ITenantResolver"/> and
+    /// <see cref="Blueprint.Tenancy.ITenantAccessor"/> are registered.
+    /// </summary>
+    /// <remarks>
+    /// Extracted from per-pipeline inline code to reduce IL size — the 5-line tenant block appeared
+    /// in every pipeline (~3,160 lines for S365's 632 operations).
+    /// </remarks>
+    /// <param name="tenantResolver">The tenant resolver (must not be null).</param>
+    /// <param name="tenantAccessor">The tenant accessor (must not be null).</param>
+    /// <param name="userPrincipal">The authenticated user's claims principal.</param>
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+    public static void ResolveTenant(
+        Blueprint.Tenancy.ITenantResolver tenantResolver,
+        Blueprint.Tenancy.ITenantAccessor tenantAccessor,
+        ClaimsPrincipal? userPrincipal)
+    {
+        tenantAccessor.Current = userPrincipal is not null
+            ? tenantResolver.ResolveTenantId(userPrincipal)
+            : null;
+    }
+
+    /// <summary>
     /// Commits queued outbox messages when an <see cref="Blueprint.Messaging.IMessageOutbox"/> is registered.
     /// Extracted from per-pipeline inline code to reduce IL size across hundreds of generated pipelines.
     /// </summary>

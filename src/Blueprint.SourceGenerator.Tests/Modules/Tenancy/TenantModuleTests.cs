@@ -56,14 +56,11 @@ public class TenantModuleTests
         pipelineSource.Should().Contain("ITenantAccessor _tenantAccessor");
         pipelineSource.Should().Contain("ITenantResolver _tenantResolver");
 
-        // Resolves tenant from claims via resolver
-        pipelineSource.Should().Contain("ResolveTenantId(context.UserPrincipal)");
-
-        // Sets the accessor's Current property
-        pipelineSource.Should().Contain("_tenantAccessor.Current = resolvedTenantId");
+        // Uses shared helper to resolve and set tenant
+        pipelineSource.Should().Contain("PipelineHelpers.ResolveTenant(");
 
         // Direct property assignment (no reflection, no IPropertyPopulator)
-        pipelineSource.Should().Contain("operation.TenantId = resolvedTenantId");
+        pipelineSource.Should().Contain("operation.TenantId = this._tenantAccessor.Current");
     }
 
     [Fact]
@@ -107,8 +104,7 @@ public class TenantModuleTests
         var pipelineSource = string.Join("\n", pipelineSources.Select(static s => s.SourceText));
 
         // Still resolves and sets accessor (all operations get tenant context)
-        pipelineSource.Should().Contain("ResolveTenantId(context.UserPrincipal)");
-        pipelineSource.Should().Contain("_tenantAccessor.Current = resolvedTenantId");
+        pipelineSource.Should().Contain("PipelineHelpers.ResolveTenant(");
 
         // Should NOT attempt direct property assignment
         pipelineSource.Should().NotContain("operation.TenantId");
@@ -158,7 +154,7 @@ public class TenantModuleTests
         var pipelineSource = string.Join("\n", pipelineSources.Select(static s => s.SourceText));
 
         // Should detect TenantId from the base class and assign directly
-        pipelineSource.Should().Contain("operation.TenantId = resolvedTenantId");
+        pipelineSource.Should().Contain("operation.TenantId = this._tenantAccessor.Current");
     }
 
     [Fact]
@@ -200,7 +196,7 @@ public class TenantModuleTests
         var pipelineSource = string.Join("\n", pipelineSources.Select(static s => s.SourceText));
 
         // Still resolves and sets accessor
-        pipelineSource.Should().Contain("_tenantAccessor.Current = resolvedTenantId");
+        pipelineSource.Should().Contain("PipelineHelpers.ResolveTenant(");
 
         // Should NOT assign to readonly property
         pipelineSource.Should().NotContain("operation.TenantId");

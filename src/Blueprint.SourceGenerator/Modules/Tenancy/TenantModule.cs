@@ -90,21 +90,19 @@ public sealed class TenantModule : IBlueprintSourceGeneratorModule, IPipelineCon
             $"this.{TenantResolverField} != null && this.{TenantAccessorField} != null",
             ctx =>
             {
-                // Resolve tenant from claims and set the accessor.
-                ctx.DeclareVariable(
-                    "resolvedTenantId",
-                    $"this.{TenantResolverField}.ResolveTenantId(context.UserPrincipal)");
-                ctx.WriteStatement($"this.{TenantAccessorField}.Current = resolvedTenantId;");
+                // Resolve tenant from claims and set the accessor via shared helper.
+                ctx.WriteStatement(
+                    $"Blueprint.Runtime.Exec.PipelineHelpers.ResolveTenant(this.{TenantResolverField}, this.{TenantAccessorField}, context.UserPrincipal);");
 
                 // If the operation has a TenantId property, assign directly (no reflection).
                 if (hasTenantIdProperty)
                 {
                     ctx.WriteBlankLine();
                     ctx.If(
-                        "resolvedTenantId != null && string.IsNullOrEmpty(operation.TenantId)",
+                        $"this.{TenantAccessorField}.Current != null && string.IsNullOrEmpty(operation.TenantId)",
                         innerCtx =>
                         {
-                            innerCtx.WriteStatement("operation.TenantId = resolvedTenantId;");
+                            innerCtx.WriteStatement($"operation.TenantId = this.{TenantAccessorField}.Current;");
                         });
                 }
             });
