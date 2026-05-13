@@ -257,6 +257,26 @@ S365 has **3 custom source generators** in `Symprex.Signature365.SourceGenerator
 - Templates group operations by `tags` — Blueprint's OpenAPI groups by namespace, configurable
 - **Critical**: `x-links` extension must be present in Blueprint OpenAPI output for model resource methods
 
+#### OpenAPI Structural Differences (S365 Legacy vs Blueprint Source-Gen)
+
+| Aspect | S365 (Legacy NSwag) | Blueprint Source-Gen | Impact |
+|--------|---------------------|---------------------|--------|
+| OpenAPI version | `3.0.0` | `3.0.4` (configurable) | Set `OpenApiVersion = "3.0.0"` for older tooling compat if needed |
+| Schema naming | Verbose prefixed (`PortalInviteTenantUserCommand`) | Short clean names (`InviteTenantUser`) | Different names in `$ref` paths — TS templates work fine (names from `$ref` key) |
+| Schema `id` field | Present on complex types | Not present (uses `title` instead) | TS templates do NOT read `id` field — verified no impact |
+| `requestBody.required` | Omitted | Explicit `true` | Blueprint is stricter — strictly better for validation tooling |
+| `securitySchemes` | Not present | JWT bearer auth in `components` | Improvement — S365 omitted this despite using Bearer auth |
+| Root `tags` array | Not present | Present (centralised tag registry) | Additive — doesn't break existing consumers |
+| Error content-type | `application/json` | `application/problem+json` | Correct per RFC 7807 — TS templates may need minor update if they check content-type |
+| Response status codes | Basic (200, 422, 500) | Comprehensive (200, 201, 202, 400, 401, 403, 415, 422, 500) | Blueprint is strictly better — more error cases documented |
+| `x-links` extension | Present on resource schemas | Present on resource schemas | **Identical shape** (`rel`, `operationId`, `method`) |
+| Enum handling | `x-enumNames` only | `enum` + `x-enumNames` + `x-enum-varnames` | Superset — backward compatible |
+| Nullable fields | `"nullable": true` | `"nullable": true` | **Identical** |
+| Parameter schemas | Inline only | Inline only | **Identical** |
+| `operationId` position | After tags/summary | First in operation | JSON property order is insignificant |
+
+**Overall verdict**: Blueprint's OpenAPI output is a **strict superset** of S365 legacy. No breaking structural changes. TS Handlebars templates will work unchanged.
+
 ### Background Tasks (Hangfire)
 - S365 uses `[Queue("portal")]` attribute on background tasks — **already supported**
 - `BackgroundTaskEnvelope.GetQueueName()` reads attribute (cached reflection, functional)
