@@ -30,11 +30,13 @@ public class SourceGeneratorCompilationBenchmarks
     private SyntheticBlueprintFixture _fixture50 = null!;
     private SyntheticBlueprintFixture _fixture100 = null!;
     private SyntheticBlueprintFixture _fixture250 = null!;
+    private SyntheticBlueprintFixture _fixture500 = null!;
 
     private CSharpCompilation _compilation10 = null!;
     private CSharpCompilation _compilation50 = null!;
     private CSharpCompilation _compilation100 = null!;
     private CSharpCompilation _compilation250 = null!;
+    private CSharpCompilation _compilation500 = null!;
 
     /// <summary>
     /// Pre-builds the synthetic fixtures and Roslyn compilations so benchmark iterations
@@ -51,11 +53,14 @@ public class SourceGeneratorCompilationBenchmarks
             new SyntheticBlueprintFixtureOptions("Bench100", "Bench100App", 100, includeRootLinks: true));
         this._fixture250 = SyntheticBlueprintFixtureGenerator.Create(
             new SyntheticBlueprintFixtureOptions("Bench250", "Bench250App", 250, includeRootLinks: true));
+        this._fixture500 = SyntheticBlueprintFixtureGenerator.Create(
+            new SyntheticBlueprintFixtureOptions("Bench500", "Bench500App", 500, includeRootLinks: true));
 
         this._compilation10 = CreateCompilation(this._fixture10);
         this._compilation50 = CreateCompilation(this._fixture50);
         this._compilation100 = CreateCompilation(this._fixture100);
         this._compilation250 = CreateCompilation(this._fixture250);
+        this._compilation500 = CreateCompilation(this._fixture500);
     }
 
     // ─── Initial (cold) runs ─────────────────────────────────────────────
@@ -100,6 +105,18 @@ public class SourceGeneratorCompilationBenchmarks
     public GeneratorDriver InitialRun_250Ops()
     {
         return RunAllGenerators(this._compilation250);
+    }
+
+    /// <summary>
+    /// Measures initial generation cost for a 500-operation app — simulates S365's total
+    /// operation count across all services (~540 ops), validating generator performance at
+    /// the largest realistic compilation unit.
+    /// </summary>
+    /// <returns>The generator driver after running all generators.</returns>
+    [Benchmark]
+    public GeneratorDriver InitialRun_500Ops()
+    {
+        return RunAllGenerators(this._compilation500);
     }
 
     // ─── Incremental (cached) runs ───────────────────────────────────────
