@@ -235,6 +235,8 @@
 | S365 test auth patterns | ✅ Zero churn | `Authentication.Set(identity)`, `Authentication.As(identity)`, `Authentication.MakeAnonymous()` — all shimmed in `TestAuthenticationManager` |
 | S365 test bus patterns | ✅ Zero churn | `Bus.Should().HavePublished<T>()`, `Bus.Should().HavePublishedSingle<T>()`, `Bus.Clear()` — all aliased in `TestMessageCollector` |
 | S365 test Marten patterns | ✅ Done | 200+ files use `WithDatabaseAsync(tenant, ...)` and `LoadFromDatabaseAsync(tenant, id)` — now provided by `Blueprint.Testing.Marten`, S365 needs only `TenantReference.ApiId` bridge |
+| Test exception compat | ✅ Done | `BlueprintTestHost.ExecuteAsync<T>` now rethrows original exceptions from `UnhandledExceptionResult` via `ExceptionDispatchInfo` — S365 `ThrowApiExceptionAsync()` pattern works unchanged. `BlueprintTestExecutionException` gains `ValidationErrors` + `IsValidationFailure` for S365 validation assertion shims. |
+| ResourceEventDefinition.EventId | ✅ Done | Changed from `private protected readonly string` field to `public string { get; }` auto-property — eliminates S365 `ResourceEventAssertionsExtensions` reflection hack (line 36-37 in S365 TestHelpers) |
 
 ---
 
