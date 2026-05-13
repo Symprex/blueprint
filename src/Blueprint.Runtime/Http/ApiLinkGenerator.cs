@@ -112,7 +112,36 @@ public sealed class ApiLinkGenerator : IApiLinkGenerator
     public Link CreateSelfLink<T>(Guid id, object? queryString = null)
         where T : ApiResource
     {
-        return this.CreateSelfLink<T>(id.ToString(), queryString);
+        var selfLink = this._app.GetLinkFor(typeof(T), "self");
+
+        if (selfLink is null)
+        {
+            throw new InvalidOperationException(
+                $"Cannot generate a self link for resource type '{typeof(T).Name}' because no 'self' link " +
+                "has been registered. Ensure an operation has a [SelfLink] attribute targeting this resource type.");
+        }
+
+        // Fast path: pass the Guid directly to the compiled builder — the generated switch
+        // expression includes a System.Guid case that formats via ISpanFormattable.TryFormat
+        // directly into the interpolated string, avoiding Guid.ToString() heap allocation.
+        var relativeUrl = selfLink.CompiledUrlBuilder?.Invoke(id);
+
+        // Slow path: wrap in anonymous object for reflection-based placeholder resolution.
+        relativeUrl ??= selfLink.CreateRelativeUrl(new { id = id.ToString() });
+
+        if (relativeUrl is null)
+        {
+            throw new InvalidOperationException(
+                $"Cannot fill all placeholders for the self link of '{typeof(T).Name}' from the provided id definition.");
+        }
+
+        var fullUri = this.BuildUrl(relativeUrl, queryString);
+
+        return new Link
+        {
+            Href = fullUri,
+            Type = typeof(T).Name,
+        };
     }
 
     /// <inheritdoc />

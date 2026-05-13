@@ -245,8 +245,9 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
             resourceCase = $"{resourceTypeFqn} r => $\"{interpolated}\"";
         }
 
-        // Single-placeholder links get an additional string scalar case so that
-        // CreateSelfLink<T>(string id) avoids anonymous-object allocation + reflection.
+        // Single-placeholder links get additional scalar cases so that
+        // CreateSelfLink<T>(string id) and CreateSelfLink<T>(Guid id) avoid
+        // anonymous-object allocation, reflection, and intermediate ToString() allocations.
         if (mappings.Count == 1)
         {
             // Build the scalar interpolated URL (replace the single placeholder with {id})
@@ -260,7 +261,19 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
                         : match.Value;
                 });
 
-            return $"static (obj) => obj switch {{ {resourceCase}, string id => $\"{scalarInterpolated}\", _ => null }}";
+            // Guid format (00000000-0000-0000-0000-000000000000) is always URL-safe —
+            // hex digits and dashes need no encoding. Use {g} directly to leverage
+            // ISpanFormattable.TryFormat, which writes into the interpolated string
+            // handler's buffer without a separate Guid.ToString() heap allocation.
+            var guidInterpolated = _mappedPlaceholderRegex.Replace(
+                urlFormat,
+                match =>
+                {
+                    var routeName = match.Groups["routeName"].Value;
+                    return mappingLookup.ContainsKey(routeName) ? "{g}" : match.Value;
+                });
+
+            return $"static (obj) => obj switch {{ {resourceCase}, string id => $\"{scalarInterpolated}\", global::System.Guid g => $\"{guidInterpolated}\", _ => null }}";
         }
 
         return $"static (obj) => obj switch {{ {resourceCase}, _ => null }}";
