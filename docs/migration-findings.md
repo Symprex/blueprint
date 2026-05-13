@@ -499,6 +499,20 @@ S365 testing uses `WebApiFixtureFactory<TStartup>` → `ApiFixture` with:
 | `fixture.Authentication.As(identity)` | `fixture.Authentication.As(identity)` | ✅ IDisposable scope |
 | `fixture.Authentication.MakeAnonymous()` | `fixture.Authentication.MakeAnonymous()` | ✅ S365 API match |
 | `fixture.Authentication.AsAnonymous()` | `fixture.Authentication.AsAnonymous()` | ✅ IDisposable scope |
+| `fixture.Bus.Should().HavePublishedSingle<T>()` | `fixture.Bus.Should().HavePublishedSingle<T>()` | ✅ `Should()` returns self for chaining |
+| `fixture.Bus.Clear()` | `fixture.Bus.Clear()` | ✅ Direct match |
+| `fixture.Tasks.All` | `fixture.Tasks` (BackgroundTaskCollector) | ✅ Auto-resolved from DI |
+
+---
+
+## Type Compatibility Fixes
+
+| Item | Status | Details |
+|------|--------|---------|
+| `PlainTextResult : HttpResult` | ✅ Fixed | S365 returns PlainTextResult from `ICommand<HttpResult>` handlers (webhooks). Changed inheritance from `OperationResult` → `HttpResult`. Commit 34a16ea. |
+| `ResourceCreated<T>` ambiguity (CS0104) | ✅ Fixed | `Blueprint.Runtime.Exec.ResourceCreated<T>` conflicted with `Blueprint.Http.ResourceCreated<TResource>`. Removed Exec convenience types; Http versions are the S365 standard. Commit 10e29b3. |
+| `StatusCodeResult` types | ✅ Already OK | S365 only uses `.Accepted`, `.Created`, `.NoContent`, `.OK` — all 4 already exist in Blueprint. The 47 types in legacy Blueprint library are unused by consumers. |
+| `ResourceEvent<T>` factory pattern | ✅ Compatible | S365 uses `FolderEvents.Created.New(domain)` which calls `new ResourceCreated<T>(query)` under the hood. This is a consumer pattern; Blueprint provides the base types. |
 | `fixture.GetOptions<T>()` | `fixture.GetOptions<T>()` | ✅ Added |
 | `AuthenticateAs*()` extensions | Extension methods stay in S365 test helpers | S365-specific |
 | `fixture.Bus` (FakeBus) | `(FakeBus)fixture.Services.GetRequiredService<IBus>()` | S365 extension method |
