@@ -19,8 +19,6 @@ namespace Blueprint.Generated
         static readonly string[] _appliedModuleIds =
             new string[] { "PropertyOwnershipModule", "TenantModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "HandlerExecutionModule", "LinkGenerationModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
         readonly Blueprint.Auditing.IAuditSink _auditSink;
-        private static readonly System.Diagnostics.ActivityTagsCollection _auditTags_GetWidgetQuery =
-            new System.Diagnostics.ActivityTagsCollection { { "blueprint.operation.type", "GetWidgetQuery" } };
         readonly Blueprint.Authorization.IOperationAuthoriser[] _operationAuthorisers;
         readonly Blueprint.Runtime.Middleware.IPropertyPopulator[] _propertyPopulators;
         readonly Blueprint.Tenancy.ITenantAccessor _tenantAccessor;
@@ -82,7 +80,7 @@ namespace Blueprint.Generated
             if (handlerResult.WasSuccessful)
             {
 
-                await Blueprint.Runtime.Exec.PipelineHelpers.ExecuteAuditSinkAsync(this._auditSink, context, handlerResult, _auditTags_GetWidgetQuery, "GetWidgetQuery").ConfigureAwait(false);
+                await Blueprint.Runtime.Exec.PipelineHelpers.ExecuteAuditSinkAsync(this._auditSink, context, handlerResult, "GetWidgetQuery").ConfigureAwait(false);
 
                 await Blueprint.Runtime.Exec.PipelineHelpers.FlushBackgroundTasksAsync(context.ServiceProvider).ConfigureAwait(false);
             }
@@ -147,8 +145,6 @@ namespace Blueprint.Generated
         static readonly string[] _appliedModuleIds =
             new string[] { "PropertyOwnershipModule", "TenantModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "HandlerExecutionModule", "LinkGenerationModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "ResourceEventAuditModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
         readonly Blueprint.Auditing.IAuditSink _auditSink;
-        private static readonly System.Diagnostics.ActivityTagsCollection _auditTags_UpdateWidgetCommand =
-            new System.Diagnostics.ActivityTagsCollection { { "blueprint.operation.type", "UpdateWidgetCommand" } };
         readonly Blueprint.Authorization.IOperationAuthoriser[] _operationAuthorisers;
         readonly Blueprint.Runtime.Middleware.IPropertyPopulator[] _propertyPopulators;
         readonly Blueprint.Auditing.IResourceEventAuditSink _resourceEventAuditSink;
@@ -222,7 +218,7 @@ namespace Blueprint.Generated
 
                 await Blueprint.Runtime.Exec.PipelineHelpers.CommitMessageOutboxAsync(context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);
 
-                await Blueprint.Runtime.Exec.PipelineHelpers.ExecuteAuditSinkAsync(this._auditSink, context, handlerResult, _auditTags_UpdateWidgetCommand, "UpdateWidgetCommand").ConfigureAwait(false);
+                await Blueprint.Runtime.Exec.PipelineHelpers.ExecuteAuditSinkAsync(this._auditSink, context, handlerResult, "UpdateWidgetCommand").ConfigureAwait(false);
 
                 await Blueprint.Runtime.Exec.PipelineHelpers.ExecuteResourceEventAuditSinkAsync(this._resourceEventAuditSink, context, handlerResult, "UpdateWidgetCommand").ConfigureAwait(false);
 

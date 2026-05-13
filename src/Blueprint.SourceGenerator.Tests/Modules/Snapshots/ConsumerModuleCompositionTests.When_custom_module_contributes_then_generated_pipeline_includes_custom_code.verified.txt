@@ -18,8 +18,6 @@ namespace Blueprint.Generated
         static readonly string[] _appliedModuleIds =
             new string[] { "TestTenantEnrichmentModule", "TenantModule", "PropertyPopulationModule", "HandlerExecutionModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
         readonly Blueprint.Auditing.IAuditSink _auditSink;
-        private static readonly System.Diagnostics.ActivityTagsCollection _auditTags_EnrichedCommand =
-            new System.Diagnostics.ActivityTagsCollection { { "blueprint.operation.type", "EnrichedCommand" } };
         readonly Blueprint.Runtime.Middleware.IPropertyPopulator[] _propertyPopulators;
         readonly Blueprint.Tenancy.ITenantAccessor _tenantAccessor;
         readonly Blueprint.Tenancy.ITenantResolver _tenantResolver;
@@ -56,7 +54,7 @@ namespace Blueprint.Generated
 
                 await Blueprint.Runtime.Exec.PipelineHelpers.CommitMessageOutboxAsync(context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);
 
-                await Blueprint.Runtime.Exec.PipelineHelpers.ExecuteAuditSinkAsync(this._auditSink, context, handlerResult, _auditTags_EnrichedCommand, "EnrichedCommand").ConfigureAwait(false);
+                await Blueprint.Runtime.Exec.PipelineHelpers.ExecuteAuditSinkAsync(this._auditSink, context, handlerResult, "EnrichedCommand").ConfigureAwait(false);
 
                 await Blueprint.Runtime.Exec.PipelineHelpers.FlushBackgroundTasksAsync(context.ServiceProvider).ConfigureAwait(false);
             }

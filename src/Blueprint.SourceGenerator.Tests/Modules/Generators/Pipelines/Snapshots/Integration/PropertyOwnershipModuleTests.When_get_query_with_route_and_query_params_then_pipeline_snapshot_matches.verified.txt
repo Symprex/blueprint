@@ -19,8 +19,6 @@ namespace Blueprint.Generated
         static readonly string[] _appliedModuleIds =
             new string[] { "PropertyOwnershipModule", "TenantModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "HandlerExecutionModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
         readonly Blueprint.Auditing.IAuditSink _auditSink;
-        private static readonly System.Diagnostics.ActivityTagsCollection _auditTags_GetUserItemsQuery =
-            new System.Diagnostics.ActivityTagsCollection { { "blueprint.operation.type", "GetUserItemsQuery" } };
         readonly Blueprint.Authorization.IOperationAuthoriser[] _operationAuthorisers;
         readonly Blueprint.Runtime.Middleware.IPropertyPopulator[] _propertyPopulators;
         readonly Blueprint.Tenancy.ITenantAccessor _tenantAccessor;
@@ -107,7 +105,7 @@ namespace Blueprint.Generated
             if (handlerResult.WasSuccessful)
             {
 
-                await Blueprint.Runtime.Exec.PipelineHelpers.ExecuteAuditSinkAsync(this._auditSink, context, handlerResult, _auditTags_GetUserItemsQuery, "GetUserItemsQuery").ConfigureAwait(false);
+                await Blueprint.Runtime.Exec.PipelineHelpers.ExecuteAuditSinkAsync(this._auditSink, context, handlerResult, "GetUserItemsQuery").ConfigureAwait(false);
 
                 await Blueprint.Runtime.Exec.PipelineHelpers.FlushBackgroundTasksAsync(context.ServiceProvider).ConfigureAwait(false);
             }

@@ -19,8 +19,6 @@ namespace Blueprint.Generated
         static readonly string[] _appliedModuleIds =
             new string[] { "PropertyOwnershipModule", "TenantModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "HandlerExecutionModule", "LinkGenerationModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "ResourceEventAuditModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
         readonly Blueprint.Auditing.IAuditSink _auditSink;
-        private static readonly System.Diagnostics.ActivityTagsCollection _auditTags_CreateResourceCommand =
-            new System.Diagnostics.ActivityTagsCollection { { "blueprint.operation.type", "CreateResourceCommand" } };
         readonly Blueprint.Authorization.IOperationAuthoriser[] _operationAuthorisers;
         readonly Blueprint.Runtime.Middleware.IPropertyPopulator[] _propertyPopulators;
         readonly Blueprint.Auditing.IResourceEventAuditSink _resourceEventAuditSink;
@@ -94,7 +92,7 @@ namespace Blueprint.Generated
 
                 await Blueprint.Runtime.Exec.PipelineHelpers.CommitMessageOutboxAsync(context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);
 
-                await Blueprint.Runtime.Exec.PipelineHelpers.ExecuteAuditSinkAsync(this._auditSink, context, handlerResult, _auditTags_CreateResourceCommand, "CreateResourceCommand").ConfigureAwait(false);
+                await Blueprint.Runtime.Exec.PipelineHelpers.ExecuteAuditSinkAsync(this._auditSink, context, handlerResult, "CreateResourceCommand").ConfigureAwait(false);
 
                 await Blueprint.Runtime.Exec.PipelineHelpers.ExecuteResourceEventAuditSinkAsync(this._resourceEventAuditSink, context, handlerResult, "CreateResourceCommand").ConfigureAwait(false);
 

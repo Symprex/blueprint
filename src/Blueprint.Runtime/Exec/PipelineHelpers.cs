@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
 using System.Security.Claims;
@@ -20,6 +21,8 @@ namespace Blueprint.Runtime.Exec;
 /// </remarks>
 public static class PipelineHelpers
 {
+    private static readonly ConcurrentDictionary<string, ActivityTagsCollection> _auditTagsCache = new();
+
     /// <summary>
     /// Resolves a collection of services from the DI container and materialises them into an
     /// array. Returns <see cref="Array.Empty{T}"/> when no services of the requested type are
@@ -133,23 +136,28 @@ public static class PipelineHelpers
     /// activity events and swallows sink exceptions. When the sink is <c>null</c> (not registered),
     /// the method returns immediately with no overhead.
     /// </summary>
+    /// <remarks>
+    /// Audit tags (<c>blueprint.operation.type</c>) are cached in a shared <see cref="ConcurrentDictionary{TKey,TValue}"/>
+    /// keyed by operation name. This eliminates the need for per-pipeline <c>static readonly ActivityTagsCollection</c>
+    /// fields, reducing generated code by ~2 lines per pipeline (~1,264 lines for 632 S365 operations).
+    /// </remarks>
     /// <param name="auditSink">The audit sink to invoke, or <c>null</c> if none is registered.</param>
     /// <param name="context">The operation context for the current pipeline execution.</param>
     /// <param name="handlerResult">The handler result to pass to the audit sink.</param>
-    /// <param name="operationTags">Pre-allocated activity tags for the operation type (reused for started/succeeded events).</param>
-    /// <param name="operationTypeName">The operation type name for failure event tags.</param>
+    /// <param name="operationTypeName">The operation type name for activity tags and failure events.</param>
     /// <returns>A task that completes when the audit sink has finished (or been skipped).</returns>
     public static async Task ExecuteAuditSinkAsync(
         IAuditSink? auditSink,
         ApiOperationContext context,
         OperationResult handlerResult,
-        ActivityTagsCollection operationTags,
         string operationTypeName)
     {
         if (auditSink == null)
         {
             return;
         }
+
+        var operationTags = GetOrCreateAuditTags(operationTypeName);
 
         context.Activity?.AddEvent(new ActivityEvent("blueprint.audit.started", default, operationTags));
 
@@ -206,6 +214,18 @@ public static class PipelineHelpers
         }
 
         activity.AddEvent(new ActivityEvent(eventName, default, tags));
+    }
+
+    /// <summary>
+    /// Returns a cached <see cref="ActivityTagsCollection"/> for the given operation type name.
+    /// Tags contain a single entry: <c>blueprint.operation.type = operationTypeName</c>.
+    /// The cache eliminates the need for per-pipeline <c>static readonly</c> field declarations.
+    /// </summary>
+    private static ActivityTagsCollection GetOrCreateAuditTags(string operationTypeName)
+    {
+        return _auditTagsCache.GetOrAdd(
+            operationTypeName,
+            static name => new ActivityTagsCollection { { "blueprint.operation.type", name } });
     }
 
     /// <summary>

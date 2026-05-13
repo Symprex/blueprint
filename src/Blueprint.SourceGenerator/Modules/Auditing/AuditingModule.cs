@@ -69,35 +69,22 @@ public sealed class AuditingModule : IBlueprintSourceGeneratorModule, IPipelineC
 
         var operationTypeName = context.Operation.TypeName;
 
-        // Generate a safe field name from the operation type for the cached tags collection
-        var safeFieldName = "_auditTags_" + operationTypeName.Replace(".", "_").Replace("+", "_");
-
-        // Pre-declare a static readonly ActivityTagsCollection to avoid per-request allocations for constant tags
-        context.AddDeferredClassMember(classBuilder =>
-        {
-            classBuilder.AddProperty(safeFieldName, Accessibility.Private)
-                .SetType("System.Diagnostics.ActivityTagsCollection")
-                .MakeStatic()
-                .WithReadonlyValue(
-                    $"new System.Diagnostics.ActivityTagsCollection {{ {{ \"blueprint.operation.type\", \"{operationTypeName}\" }} }}");
-        });
-
         context.RequireVariable(
             new VariableKey(HandlerExecutionModule.HandlerResultTypeName, HandlerExecutionModule.HandlerResultPurpose),
             requiredBy: PipelineStage.PostExecution);
 
         context.RequireAsync();
-        context.AddSuccessGuardedRenderStep(PipelineStage.PostExecution, ctx => RenderAuditSink(ctx, operationTypeName, safeFieldName));
+        context.AddSuccessGuardedRenderStep(PipelineStage.PostExecution, ctx => RenderAuditSink(ctx, operationTypeName));
     }
 
-    private static void RenderAuditSink(PipelineRenderContext context, string operationTypeName, string cachedTagsFieldName)
+    private static void RenderAuditSink(PipelineRenderContext context, string operationTypeName)
     {
         context.WriteBlankLine();
 
         // Delegate to shared helper — avoids duplicating the null-check, try/catch, and activity
-        // event recording across every auditable pipeline.
+        // event recording across every auditable pipeline. Audit tags are cached by PipelineHelpers.
         context.WriteStatement(
-            $"await Blueprint.Runtime.Exec.PipelineHelpers.ExecuteAuditSinkAsync(this._auditSink, context, handlerResult, {cachedTagsFieldName}, \"{operationTypeName}\").ConfigureAwait(false);");
+            $"await Blueprint.Runtime.Exec.PipelineHelpers.ExecuteAuditSinkAsync(this._auditSink, context, handlerResult, \"{operationTypeName}\").ConfigureAwait(false);");
     }
 
     private static bool HasDoNotAuditAttribute(INamedTypeSymbol operationType)
