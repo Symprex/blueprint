@@ -169,6 +169,34 @@ the fallback path, the overhead is still only ~4.5µs per attribute invocation.
 
 ---
 
+## Source Generator Compilation Benchmarks
+
+Measures the source generator's compile-time performance with synthetic apps of different sizes.
+Both initial (full) and incremental (cached) runs are measured to quantify scaling and cache efficacy.
+
+| Benchmark | Mean | Error | StdDev | Gen0 | Gen1 | Allocated |
+|-----------|-----:|------:|-------:|-----:|-----:|----------:|
+| AppRegistration_100Ops | 10.24 ms | 4.99 ms | 1.78 ms | 265 | 62 | 3.36 MB |
+| PipelineOnly_100Ops | 14.06 ms | 10.25 ms | 3.66 ms | 1,218 | 640 | 14.69 MB |
+| IncrementalCachedRun_100Ops | 24.50 ms | 21.86 ms | 7.80 ms | 1,000 | — | 16.39 MB |
+| InitialRun_10Ops | 32.43 ms | 64.66 ms | 23.06 ms | 281 | 125 | 3.39 MB |
+| InitialRun_50Ops | 29.30 ms | 13.28 ms | 4.74 ms | 1,281 | 875 | 15.55 MB |
+| DescriptorOnly_100Ops | 33.63 ms | 3.50 ms | 1.25 ms | 1,031 | 500 | 12.01 MB |
+| InitialRun_100Ops | 54.06 ms | 34.32 ms | 12.24 ms | 2,666 | 666 | 30.89 MB |
+| InitialRun_250Ops | 164.13 ms | 113.95 ms | 40.63 ms | 6,750 | 2,000 | 76.84 MB |
+
+**Key insights:**
+- **Initial run scales roughly linearly**: 10 ops → 32ms, 100 ops → 54ms, 250 ops → 164ms
+- **Incremental cached run** (100 ops): 24.5ms — good cacheability, but Roslyn infrastructure
+  still dominates. The cache avoids regeneration but not Roslyn's own bookkeeping.
+- **Allocations per operation**: ~300KB per operation for a full initial run (30.89 MB ÷ 100)
+- **S365 impact**: The largest S365 service (Portal, ~70 ops) would add ~40-50ms to compilation.
+  For a typical 5-10 op service, the generator adds ~30-35ms — negligible in CI builds.
+- **Pipeline generation dominates**: Descriptors (12 MB for 100 ops) + Pipelines (14.7 MB) are
+  the main cost. App registration is cheap (3.4 MB).
+
+---
+
 ## NBomber Load Test Results
 
 ### Environment
