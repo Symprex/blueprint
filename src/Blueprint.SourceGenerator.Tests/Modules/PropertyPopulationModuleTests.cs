@@ -49,9 +49,8 @@ public class PropertyPopulationModuleTests
 
         var pipelineSource = string.Join("\n", pipelineSources.Select(static s => s.SourceText));
 
-        // PropertyPopulationModule resolves all IPropertyPopulator registrations from DI
-        pipelineSource.Should().Contain("IPropertyPopulator");
-        pipelineSource.Should().Contain("propertyPopulators");
+        // PropertyPopulationModule uses base class PropertyPopulators property (no per-pipeline field)
+        pipelineSource.Should().Contain("PropertyPopulators");
 
         // Delegates to PipelineHelpers.PopulatePropertiesAsync instead of inline code
         pipelineSource.Should().Contain("PipelineHelpers.PopulatePropertiesAsync");
@@ -93,7 +92,7 @@ public class PropertyPopulationModuleTests
         var pipelineSources = result.GetGeneratedSources(nameof(OperationExecutorPipelineSourceGenerator));
         var pipelineSource = string.Join("\n", pipelineSources.Select(static s => s.SourceText));
 
-        pipelineSource.Should().Contain("IPropertyPopulator");
+        pipelineSource.Should().Contain("PropertyPopulators");
         pipelineSource.Should().Contain("PipelineHelpers.PopulatePropertiesAsync");
     }
 
@@ -133,11 +132,11 @@ public class PropertyPopulationModuleTests
         var pipelineSources = result.GetGeneratedSources(nameof(OperationExecutorPipelineSourceGenerator));
         var pipelineSource = string.Join("\n", pipelineSources.Select(static s => s.SourceText));
 
-        // Pipelines delegate to the shared PipelineHelpers instead of emitting inline if/else/foreach
-        pipelineSource.Should().Contain("PipelineHelpers.PopulatePropertiesAsync(this._propertyPopulators, context)");
+        // Pipelines delegate to the shared PipelineHelpers using base class property
+        pipelineSource.Should().Contain("PipelineHelpers.PopulatePropertiesAsync(this.PropertyPopulators, context)");
 
         // The inline Length == 1 / Length > 1 pattern should no longer appear in generated code
-        pipelineSource.Should().NotContain("_propertyPopulators.Length == 1");
+        pipelineSource.Should().NotContain("PropertyPopulators.Length == 1");
         pipelineSource.Should().NotContain("foreach (var populator");
     }
 }

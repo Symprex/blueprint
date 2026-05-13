@@ -16,8 +16,6 @@ namespace Blueprint.SourceGenerator.Modules;
 /// </summary>
 public sealed class PropertyPopulationModule : IBlueprintSourceGeneratorModule, IPipelineContributor
 {
-    private const string FieldName = "_propertyPopulators";
-    private const string ServiceType = "Blueprint.Runtime.Middleware.IPropertyPopulator[]";
 
     /// <inheritdoc />
     public string ModuleId => nameof(PropertyPopulationModule);
@@ -40,13 +38,7 @@ public sealed class PropertyPopulationModule : IBlueprintSourceGeneratorModule, 
     /// <inheritdoc />
     public void ContributeToPipeline(PipelineContributorContext context)
     {
-        // Resolve populators once at construction time — they are registered as singletons.
-        // Uses ResolveServiceArray which returns Array.Empty<T>() when none are registered.
-        context.CacheService(
-            FieldName,
-            ServiceType,
-            "Blueprint.Runtime.Exec.PipelineHelpers.ResolveServiceArray<Blueprint.Runtime.Middleware.IPropertyPopulator>(serviceProvider)",
-            isNullable: false);
+        // Property populators are cached by OperationExecutorShell base class — no CacheService needed.
 
         context.RequireAsync();
         context.AddRenderStep(PipelineStage.Population, RenderPopulation);
@@ -56,9 +48,9 @@ public sealed class PropertyPopulationModule : IBlueprintSourceGeneratorModule, 
     {
         context.WriteBlankLine();
 
-        // Delegate to shared helper — avoids duplicating the if/else/foreach across every pipeline.
+        // Delegate to shared helper using base class property — avoids duplicating the if/else/foreach across every pipeline.
         context.WriteStatement(
-            $"await Blueprint.Runtime.Exec.PipelineHelpers.PopulatePropertiesAsync(this.{FieldName}, context).ConfigureAwait(false);");
+            "await Blueprint.Runtime.Exec.PipelineHelpers.PopulatePropertiesAsync(this.PropertyPopulators, context).ConfigureAwait(false);");
     }
 }
 

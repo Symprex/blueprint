@@ -69,18 +69,7 @@ public sealed class TenantModule : IBlueprintSourceGeneratorModule, IPipelineCon
             return;
         }
 
-        // Cache both services at pipeline construction time (singletons).
-        context.CacheService(
-            TenantAccessorField,
-            TenantAccessorType,
-            $"Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<{TenantAccessorType}>(serviceProvider)",
-            isNullable: true);
-
-        context.CacheService(
-            TenantResolverField,
-            TenantResolverType,
-            $"Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<{TenantResolverType}>(serviceProvider)",
-            isNullable: true);
+        // Tenancy services are cached by OperationExecutorShell base class — no CacheService needed.
 
         // Detect whether the operation has a settable TenantId property of any supported type.
         var tenantIdInfo = FindSettableTenantIdProperty(context.Operation.TypeSymbol);
@@ -94,14 +83,14 @@ public sealed class TenantModule : IBlueprintSourceGeneratorModule, IPipelineCon
         context.WriteBlankLine();
         context.WriteStatement("// Tenant resolution (compile-time, no reflection)");
 
-        // Guard: only run when both services are registered.
+        // Guard: only run when both services are registered (resolved by base class).
         context.If(
-            $"this.{TenantResolverField} != null && this.{TenantAccessorField} != null",
+            "this.TenantResolver != null && this.TenantAccessor != null",
             ctx =>
             {
                 // Resolve tenant from claims and set the accessor via shared helper.
                 ctx.WriteStatement(
-                    $"Blueprint.Runtime.Exec.PipelineHelpers.ResolveTenant(this.{TenantResolverField}, this.{TenantAccessorField}, context.UserPrincipal);");
+                    "Blueprint.Runtime.Exec.PipelineHelpers.ResolveTenant(this.TenantResolver, this.TenantAccessor, context.UserPrincipal);");
 
                 // If the operation has a TenantId property, assign directly (no reflection).
                 if (tenantIdInfo is not null)
@@ -119,7 +108,7 @@ public sealed class TenantModule : IBlueprintSourceGeneratorModule, IPipelineCon
     /// </summary>
     private static void RenderTenantIdAssignment(PipelineRenderContext ctx, TenantIdPropertyInfo info)
     {
-        var accessorCurrent = $"this.{TenantAccessorField}.Current";
+        var accessorCurrent = "this.TenantAccessor.Current";
 
         switch (info.Kind)
         {

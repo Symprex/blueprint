@@ -17,18 +17,10 @@ namespace Blueprint.Generated
     {
         static readonly string[] _appliedModuleIds =
             new string[] { "TenantModule", "PropertyPopulationModule", "ValidationModule", "HandlerExecutionModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
-        readonly Blueprint.Auditing.IAuditSink _auditSink;
-        readonly Blueprint.Runtime.Middleware.IPropertyPopulator[] _propertyPopulators;
-        readonly Blueprint.Tenancy.ITenantAccessor _tenantAccessor;
-        readonly Blueprint.Tenancy.ITenantResolver _tenantResolver;
 
         public CreateUserCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, System.IServiceProvider serviceProvider)
-            : base(loggerFactory, "CreateUserCommand")
+            : base(loggerFactory, "CreateUserCommand", serviceProvider)
         {
-            this._tenantAccessor = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Tenancy.ITenantAccessor>(serviceProvider);
-            this._tenantResolver = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Tenancy.ITenantResolver>(serviceProvider);
-            this._propertyPopulators = Blueprint.Runtime.Exec.PipelineHelpers.ResolveServiceArray<Blueprint.Runtime.Middleware.IPropertyPopulator>(serviceProvider);
-            this._auditSink = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Auditing.IAuditSink>(serviceProvider);
         }
 
         protected override async System.Threading.Tasks.Task<Blueprint.OperationResult> ExecuteCoreAsync(Blueprint.Runtime.Exec.ApiOperationContext context)
@@ -37,12 +29,12 @@ namespace Blueprint.Generated
 
 
             // Tenant resolution (compile-time, no reflection)
-            if (this._tenantResolver != null && this._tenantAccessor != null)
+            if (this.TenantResolver != null && this.TenantAccessor != null)
             {
-                Blueprint.Runtime.Exec.PipelineHelpers.ResolveTenant(this._tenantResolver, this._tenantAccessor, context.UserPrincipal);
+                Blueprint.Runtime.Exec.PipelineHelpers.ResolveTenant(this.TenantResolver, this.TenantAccessor, context.UserPrincipal);
             }
 
-            await Blueprint.Runtime.Exec.PipelineHelpers.PopulatePropertiesAsync(this._propertyPopulators, context).ConfigureAwait(false);
+            await Blueprint.Runtime.Exec.PipelineHelpers.PopulatePropertiesAsync(this.PropertyPopulators, context).ConfigureAwait(false);
             var validationResults = default(global::System.Collections.Generic.List<global::System.ComponentModel.DataAnnotations.ValidationResult>);
             if (operation.Maximum <= operation.Minimum)
             {
@@ -62,7 +54,7 @@ namespace Blueprint.Generated
 
                 await Blueprint.Runtime.Exec.PipelineHelpers.CommitMessageOutboxAsync(context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);
 
-                await Blueprint.Runtime.Exec.PipelineHelpers.ExecuteAuditSinkAsync(this._auditSink, context, handlerResult, "CreateUserCommand").ConfigureAwait(false);
+                await Blueprint.Runtime.Exec.PipelineHelpers.ExecuteAuditSinkAsync(this.AuditSink, context, handlerResult, "CreateUserCommand").ConfigureAwait(false);
 
                 await Blueprint.Runtime.Exec.PipelineHelpers.FlushBackgroundTasksAsync(context.ServiceProvider).ConfigureAwait(false);
             }

@@ -52,15 +52,15 @@ public class TenantModuleTests
 
         var pipelineSource = string.Join("\n", pipelineSources.Select(static s => s.SourceText));
 
-        // Module caches both services at construction time
-        pipelineSource.Should().Contain("ITenantAccessor _tenantAccessor");
-        pipelineSource.Should().Contain("ITenantResolver _tenantResolver");
+        // Module uses base class properties for tenant services (no per-pipeline fields)
+        pipelineSource.Should().Contain("this.TenantAccessor");
+        pipelineSource.Should().Contain("this.TenantResolver");
 
         // Uses shared helper to resolve and set tenant
         pipelineSource.Should().Contain("PipelineHelpers.ResolveTenant(");
 
         // Direct property assignment (no reflection, no IPropertyPopulator)
-        pipelineSource.Should().Contain("operation.TenantId = this._tenantAccessor.Current");
+        pipelineSource.Should().Contain("operation.TenantId = this.TenantAccessor.Current");
     }
 
     [Fact]
@@ -154,7 +154,7 @@ public class TenantModuleTests
         var pipelineSource = string.Join("\n", pipelineSources.Select(static s => s.SourceText));
 
         // Should detect TenantId from the base class and assign directly
-        pipelineSource.Should().Contain("operation.TenantId = this._tenantAccessor.Current");
+        pipelineSource.Should().Contain("operation.TenantId = this.TenantAccessor.Current");
     }
 
     [Fact]
@@ -265,7 +265,7 @@ public class TenantModuleTests
         pipelineSource.Should().Contain("EqualityComparer<global::TestNamespace.ApiId>.Default.Equals(operation.TenantId, default)");
 
         // Uses TryParse with null IFormatProvider (IParsable pattern)
-        pipelineSource.Should().Contain("global::TestNamespace.ApiId.TryParse(this._tenantAccessor.Current, null, out var _parsedTenantId)");
+        pipelineSource.Should().Contain("global::TestNamespace.ApiId.TryParse(this.TenantAccessor.Current, null, out var _parsedTenantId)");
 
         // Assigns parsed value
         pipelineSource.Should().Contain("operation.TenantId = _parsedTenantId;");
@@ -331,7 +331,7 @@ public class TenantModuleTests
         var pipelineSource = string.Join("\n", pipelineSources.Select(static s => s.SourceText));
 
         // Should detect inherited ApiId TenantId and use TryParse
-        pipelineSource.Should().Contain("ApiId.TryParse(this._tenantAccessor.Current, null, out var _parsedTenantId)");
+        pipelineSource.Should().Contain("ApiId.TryParse(this.TenantAccessor.Current, null, out var _parsedTenantId)");
         pipelineSource.Should().Contain("operation.TenantId = _parsedTenantId;");
     }
 
@@ -401,6 +401,6 @@ public class TenantModuleTests
 
         // Should NOT auto-populate TenantId from accessor — route binding handles it
         pipelineSource.Should().NotContain("_parsedTenantId");
-        pipelineSource.Should().NotContain("operation.TenantId = this._tenantAccessor.Current");
+        pipelineSource.Should().NotContain("operation.TenantId = this.TenantAccessor.Current");
     }
 }

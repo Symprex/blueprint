@@ -42,8 +42,8 @@ internal static class PipelineCodeGenerator
     private static void AddConstructor(ClassBuilder pipelineClass, OperationHandlerModel handler, PipelinePlan plan)
     {
         var baseCallArgs = plan.SuppressActivity
-            ? new[] { "loggerFactory", $"\"{handler.OperationTypeName}\"", "suppressActivity: true" }
-            : new[] { "loggerFactory", $"\"{handler.OperationTypeName}\"" };
+            ? new[] { "loggerFactory", $"\"{handler.OperationTypeName}\"", "serviceProvider", "suppressActivity: true" }
+            : new[] { "loggerFactory", $"\"{handler.OperationTypeName}\"", "serviceProvider" };
 
         var ctor = pipelineClass.AddConstructor()
             .AddParameter("Microsoft.Extensions.Logging.ILoggerFactory", "loggerFactory")

@@ -60,12 +60,7 @@ public sealed class AuditingModule : IBlueprintSourceGeneratorModule, IPipelineC
             return;
         }
 
-        // Cache singleton IAuditSink at pipeline construction time (nullable — may not be registered)
-        context.CacheService(
-            "_auditSink",
-            "Blueprint.Auditing.IAuditSink",
-            "Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Auditing.IAuditSink>(serviceProvider)",
-            isNullable: true);
+        // Audit sink is cached by OperationExecutorShell base class — no CacheService needed.
 
         var operationTypeName = context.Operation.TypeName;
 
@@ -81,10 +76,10 @@ public sealed class AuditingModule : IBlueprintSourceGeneratorModule, IPipelineC
     {
         context.WriteBlankLine();
 
-        // Delegate to shared helper — avoids duplicating the null-check, try/catch, and activity
-        // event recording across every auditable pipeline. Audit tags are cached by PipelineHelpers.
+        // Delegate to shared helper using base class property — avoids duplicating the null-check, try/catch,
+        // and activity event recording across every auditable pipeline. Audit tags are cached by PipelineHelpers.
         context.WriteStatement(
-            $"await Blueprint.Runtime.Exec.PipelineHelpers.ExecuteAuditSinkAsync(this._auditSink, context, handlerResult, \"{operationTypeName}\").ConfigureAwait(false);");
+            $"await Blueprint.Runtime.Exec.PipelineHelpers.ExecuteAuditSinkAsync(this.AuditSink, context, handlerResult, \"{operationTypeName}\").ConfigureAwait(false);");
     }
 
     private static bool HasDoNotAuditAttribute(INamedTypeSymbol operationType)
