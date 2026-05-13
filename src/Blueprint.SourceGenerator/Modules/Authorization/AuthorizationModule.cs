@@ -341,11 +341,10 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
     }
 
     /// <summary>
-    /// Generates pipeline code that uses <c>IResolvedResourceAuthorizationProvider</c> with
-    /// compile-time expanded resource keys. Falls back to <c>IResourceAuthorizationProvider</c>
-    /// when the resolved provider is not registered. The resolved scope-pair array is constructed
-    /// lazily inside the <c>if</c> branch so that template expansion only runs when the resolved
-    /// provider is registered.
+    /// Generates pipeline code that uses the unified <c>PipelineHelpers.CheckResourceAuthorizationAsync</c>
+    /// overload, which internally prefers <c>IResolvedResourceAuthorizationProvider</c> when available
+    /// and falls back to <c>IResourceAuthorizationProvider</c>. This replaces the previous if/else
+    /// pattern that emitted ~14 lines per pipeline with a single ~4-line helper call.
     /// </summary>
     private static void RenderResolvedAuthorizationCheck(
         PipelineRenderContext context,
@@ -356,51 +355,36 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
         var httpContextExpr = context.GetHttpContextExpression();
         var principalExpr = $"{httpContextExpr}.User";
 
-        // Use base class cached IResolvedResourceAuthorizationProvider
-        context.If(
-            "this.ResolvedResourceAuthorizationProvider != null",
-            resolvedBranch =>
-            {
-                string scopeArg;
+        string resolvedScopeArg;
 
-                if (scopePairs.Count == 1)
-                {
-                    // Single scope pair: pass by value to avoid per-request array allocation.
-                    // PipelineHelpers wraps it in a stack-allocated SingleItemList<T>.
-                    var sp = scopePairs[0];
-                    scopeArg = sp.ResourceKeyTemplate is not null
-                        ? BuildResolvedScopePairExpression(sp, operationExpr, principalExpr)
-                        : $"new Blueprint.Model.ResolvedScopePair(\"{sp.Noun}\", \"{sp.Verb}\", null, null)";
-                }
-                else
-                {
-                    // Multiple scope pairs: allocate array (rare path for multi-Resource operations)
-                    var resolvedElements = string.Join(
-                        ", ",
-                        scopePairs.Select(sp => sp.ResourceKeyTemplate is not null
-                            ? BuildResolvedScopePairExpression(sp, operationExpr, principalExpr)
-                            : $"new Blueprint.Model.ResolvedScopePair(\"{sp.Noun}\", \"{sp.Verb}\", null, null)"));
-
-                    scopeArg = $"new Blueprint.Model.ResolvedScopePair[] {{ {resolvedElements} }}";
-                }
-
-                resolvedBranch.DeclareVariable(
-                    "authorizationDenial",
-                    $"await Blueprint.Runtime.Exec.PipelineHelpers.CheckResourceAuthorizationAsync(context, {principalExpr}, this.ResolvedResourceAuthorizationProvider, {scopeArg}, {httpContextExpr}.RequestAborted).ConfigureAwait(false)");
-
-                resolvedBranch.If(
-                    "authorizationDenial != null",
-                    deniedBranch =>
-                    {
-                        deniedBranch.Return("authorizationDenial");
-                    });
-            });
-
-        // Fallback to legacy provider
-        context.Else(elseBranch =>
+        if (scopePairs.Count == 1)
         {
-            RenderLegacyHelperCall(elseBranch, scopePairFieldName);
-        });
+            var sp = scopePairs[0];
+            resolvedScopeArg = sp.ResourceKeyTemplate is not null
+                ? BuildResolvedScopePairExpression(sp, operationExpr, principalExpr)
+                : $"new Blueprint.Model.ResolvedScopePair(\"{sp.Noun}\", \"{sp.Verb}\", null, null)";
+        }
+        else
+        {
+            var resolvedElements = string.Join(
+                ", ",
+                scopePairs.Select(sp => sp.ResourceKeyTemplate is not null
+                    ? BuildResolvedScopePairExpression(sp, operationExpr, principalExpr)
+                    : $"new Blueprint.Model.ResolvedScopePair(\"{sp.Noun}\", \"{sp.Verb}\", null, null)"));
+
+            resolvedScopeArg = $"new Blueprint.Model.ResolvedScopePair[] {{ {resolvedElements} }}";
+        }
+
+        context.DeclareVariable(
+            "authorizationDenial",
+            $"await Blueprint.Runtime.Exec.PipelineHelpers.CheckResourceAuthorizationAsync(context, {principalExpr}, this.ResolvedResourceAuthorizationProvider, this.ResourceAuthorizationProvider, {resolvedScopeArg}, {scopePairFieldName}, {httpContextExpr}.RequestAborted).ConfigureAwait(false)");
+
+        context.If(
+            "authorizationDenial != null",
+            deniedBranch =>
+            {
+                deniedBranch.Return("authorizationDenial");
+            });
 
         context.WriteBlankLine();
     }

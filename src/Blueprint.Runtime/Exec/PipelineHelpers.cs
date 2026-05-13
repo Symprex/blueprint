@@ -665,6 +665,66 @@ public static class PipelineHelpers
     }
 
     /// <summary>
+    /// Unified authorization check that prefers the compile-time resolved provider when available,
+    /// falling back to the legacy provider. Consolidates the if/else dispatch that was previously
+    /// emitted inline in every generated pipeline, reducing per-pipeline IL by ~10 lines.
+    /// Single-scope-pair overload avoids per-request array allocation via <see cref="SingleItemList{T}"/>.
+    /// </summary>
+    /// <param name="context">The current operation execution context.</param>
+    /// <param name="principal">The authenticated caller's claims principal.</param>
+    /// <param name="resolvedProvider">The resolved resource authorization provider, or <c>null</c>.</param>
+    /// <param name="legacyProvider">The legacy resource authorization provider, or <c>null</c>.</param>
+    /// <param name="resolvedScope">The single compile-time expanded scope pair.</param>
+    /// <param name="legacyScopes">The static scope pairs (raw template strings) for legacy fallback.</param>
+    /// <param name="cancellationToken">Cancellation token for the authorization evaluation.</param>
+    /// <returns><c>null</c> when authorized; <see cref="ForbiddenResult.Instance"/> when denied.</returns>
+    public static Task<OperationResult?> CheckResourceAuthorizationAsync(
+        ApiOperationContext context,
+        ClaimsPrincipal principal,
+        Authorization.IResolvedResourceAuthorizationProvider? resolvedProvider,
+        Authorization.IResourceAuthorizationProvider? legacyProvider,
+        ResolvedScopePair resolvedScope,
+        ScopePair[] legacyScopes,
+        CancellationToken cancellationToken)
+    {
+        if (resolvedProvider != null)
+        {
+            return CheckResourceAuthorizationAsync(context, principal, resolvedProvider, resolvedScope, cancellationToken);
+        }
+
+        return CheckResourceAuthorizationAsync(context, principal, legacyProvider, legacyScopes, cancellationToken);
+    }
+
+    /// <summary>
+    /// Unified authorization check for operations with multiple <c>[Resource]</c> attributes.
+    /// Prefers the resolved provider when available, falling back to the legacy provider.
+    /// </summary>
+    /// <param name="context">The current operation execution context.</param>
+    /// <param name="principal">The authenticated caller's claims principal.</param>
+    /// <param name="resolvedProvider">The resolved resource authorization provider, or <c>null</c>.</param>
+    /// <param name="legacyProvider">The legacy resource authorization provider, or <c>null</c>.</param>
+    /// <param name="resolvedScopes">The compile-time expanded scope pairs.</param>
+    /// <param name="legacyScopes">The static scope pairs (raw template strings) for legacy fallback.</param>
+    /// <param name="cancellationToken">Cancellation token for the authorization evaluation.</param>
+    /// <returns><c>null</c> when authorized; <see cref="ForbiddenResult.Instance"/> when denied.</returns>
+    public static Task<OperationResult?> CheckResourceAuthorizationAsync(
+        ApiOperationContext context,
+        ClaimsPrincipal principal,
+        Authorization.IResolvedResourceAuthorizationProvider? resolvedProvider,
+        Authorization.IResourceAuthorizationProvider? legacyProvider,
+        ResolvedScopePair[] resolvedScopes,
+        ScopePair[] legacyScopes,
+        CancellationToken cancellationToken)
+    {
+        if (resolvedProvider != null)
+        {
+            return CheckResourceAuthorizationAsync(context, principal, resolvedProvider, resolvedScopes, cancellationToken);
+        }
+
+        return CheckResourceAuthorizationAsync(context, principal, legacyProvider, legacyScopes, cancellationToken);
+    }
+
+    /// <summary>
     /// Executes the resource-event audit sink with best-effort semantics when the handler result
     /// is a <see cref="ResourceEventResult"/> or <see cref="KeyOnlyResourceEventResult"/>.
     /// Extracts the event/resource identity from the result, records started/succeeded/failed
