@@ -129,6 +129,13 @@
 | ArrayPool buffer leak fix | ✅ Done | `ReadJsonBodyAsync` fast-path uses try/finally to guarantee `ArrayPool.Return` on all exception paths |
 | RunAllPublishedMessagesAsync | ✅ Done | Test fixture dispatches captured published messages through pipeline — mirrors S365 `ApiFixtureExtensions.RunAllPublishedMessagesAsync` |
 | RunAndConsumeAllPublishedMessagesAsync | ✅ Done | Dispatches then clears — prevents re-processing on subsequent calls |
+| HttpContext handler injection | ✅ Done | `HttpContext` and `ClaimsPrincipal` now injectable as handler properties alongside Context, Logger, CancellationToken, IUserAuthorisationContext |
+| S365 TenantOrderedPagedQuery compat | ✅ Verified | Already extends Blueprint's `OrderedPagedQuery<T>` — no changes needed |
+| S365 TenantPagedApiResource compat | ✅ Verified | Already extends Blueprint's `PagedApiResource<T>` — no changes needed |
+| S365 ApiId type compat | ✅ S365-owned | Domain-specific value type with prefix semantics; stays in S365; only used in body/claims (not route params) |
+| S365 ApiOperations base class | ✅ Verified | Context, Identity, Logger, CancellationToken auto-injected; HttpContext/HttpRequest/HttpResponse derive from Context.GetHttpContext() |
+| S365 NotFoundException handling | ✅ Verified | `ApiException(404)` → `UnhandledExceptionResult` → ProblemDetails JSON with 404 status; exact S365 pattern |
+| S365 TypeScript codegen flow | ✅ Analysed | Backend writes OpenAPI JSON to disk → Node.js script loads + Handlebars templates generate api.ts; `x-links` extension required (Blueprint emits it) |
 
 ---
 
@@ -429,3 +436,4 @@ S365 testing uses `WebApiFixtureFactory<TStartup>` → `ApiFixture` with:
 | 2025-07 | Final gap analysis | ResourceEvent `[Obsolete]` removal (prevents CS0618 warnings), ApiOperationResourceConvention confirmed superseded by compile-time modules, Sig365LinkGeneratorMiddleware confirmed replaced by source-gen, all 6 S365 middleware types verified compatible, health checks confirmed Blueprint-agnostic, PlainTextResult verified |
 | 2025-07 | Auth + remaining patterns | Full auth analysis: dual authorizer merge into IResourceAuthorizationProvider (consumer responsibility), special permissions = [AllowAnonymous]/[MustBeAuthenticated] (BPAU003 compile-time), verb expansion consumer-owned, AccountId well-known property ✅. Patterns: 0 IPropertyPopulator (middleware instead), 11 IBackgroundTask (all standard), 70 Rebus subscriptions (all IHandleMessages<T>), 100+ NodaTime usages (consumer config), 5 custom validators (runtime fallback), ApiId TenantId→string TenantId migration step needed |
 | 2025-07 | Runtime optimizations | BlueprintHttpClient: PropertyInfo cache, StringBuilder query strings, span-based placeholder parsing. PipelineHelpers: ResolveServiceArray fast-path for arrays. ResourceEvent JSON: fix `data` vs `content` envelope property name. ArrayPool buffer leak fix in ReadJsonBodyAsync (try/finally). RunAllPublishedMessagesAsync/RunAndConsumeAllPublishedMessagesAsync added to test fixture. |
+| 2025-07 | Compatibility deep-dive | Added HttpContext/ClaimsPrincipal handler property injection. Verified S365 TenantOrderedPagedQuery/TenantPagedApiResource already extend Blueprint base classes. Confirmed ApiId stays S365-owned. Verified ApiOperations base class property injection. NotFoundException→ProblemDetails(404) confirmed. TypeScript codegen flow fully analysed (custom Handlebars, x-links compatible). |
