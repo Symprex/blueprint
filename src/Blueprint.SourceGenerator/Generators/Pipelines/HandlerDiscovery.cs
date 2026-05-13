@@ -302,16 +302,21 @@ public static class HandlerDiscovery
 
     /// <summary>
     /// Maps well-known handler property types and names to pipeline source expressions.
+    /// The <c>HttpContext</c> and <c>ClaimsPrincipal</c> injections are only valid for
+    /// HTTP-hosted operations; non-HTTP pipelines will have these properties set to
+    /// <see langword="null"/> (matching the nullable <c>ApiOperationContext.HttpContext</c>
+    /// and <c>UserPrincipal</c> semantics).
     /// </summary>
     private static string? GetPropertyInjectionSource(string propertyName, string typeName)
     {
-        // Exact type matches
         return typeName switch
         {
             "Blueprint.Runtime.Exec.ApiOperationContext" => "context",
             "Blueprint.Authorization.IUserAuthorisationContext" => "context.UserAuthorisationContext",
             "System.Threading.CancellationToken" => "context.OperationCancelled",
             "Microsoft.Extensions.Logging.ILogger" => "this.Logger",
+            "Microsoft.AspNetCore.Http.HttpContext" => "context.HttpContext",
+            "System.Security.Claims.ClaimsPrincipal" => "context.UserPrincipal",
             _ => null,
         };
     }
