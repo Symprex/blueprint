@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using Blueprint.Auditing;
 using Blueprint.Model;
 using Blueprint.Runtime.Exec;
@@ -42,8 +42,8 @@ public class AuditingModuleIntegrationTests
         var serviceProvider = new AuditTestServiceProvider(auditSink);
         var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
 
-        var pipeline = executor.GetPipeline(typeof(AuditableCommand));
-        var context = new ApiOperationContext(serviceProvider, app, AuditableCommand.Configure(), CancellationToken.None);
+        var pipeline = executor.GetPipeline(typeof(AuditableWriteCommand));
+        var context = new ApiOperationContext(serviceProvider, app, AuditableWriteCommand.Configure(), CancellationToken.None);
 
         // Leave RequiredField null to trigger validation failure
         var result = await pipeline.ExecuteAsync(context);
@@ -280,7 +280,7 @@ public partial class AuditableQuery : IQuery<string>
 /// <summary>
 /// A command operation that participates in auditing but can fail validation.
 /// </summary>
-public partial class AuditableCommand : ICommand
+public partial class AuditableWriteCommand : ICommand
 {
     /// <summary>Gets or sets the required field (triggers validation when null).</summary>
     [System.ComponentModel.DataAnnotations.Required]
@@ -289,7 +289,7 @@ public partial class AuditableCommand : ICommand
     /// <summary>Handles the command.</summary>
     /// <param name="operation">The command instance.</param>
     /// <returns>A completed task.</returns>
-    public static Task HandleAsync(AuditableCommand operation)
+    public static Task HandleAsync(AuditableWriteCommand operation)
     {
         return Task.CompletedTask;
     }

@@ -98,7 +98,7 @@ public static class EndpointRouteBuilderExtensions
 
         builders.Add(openApiBuilder);
 
-        // RFC 9727 well-known endpoint for API discovery. Serves the same pre-rendered
+        // RFC 9264 well-known endpoint for API discovery. Serves the same pre-rendered
         // document at the IETF-standard location so tooling can auto-discover the spec.
         var wellKnownBuilder = endpoints.Map(
             RoutePatternFactory.Parse("/.well-known/openapi"),

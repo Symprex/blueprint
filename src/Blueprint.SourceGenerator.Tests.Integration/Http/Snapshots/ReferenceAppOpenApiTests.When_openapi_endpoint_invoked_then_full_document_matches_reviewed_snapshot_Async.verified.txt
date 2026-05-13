@@ -883,6 +883,11 @@
                 "CreatedDate",
                 "LastModified"
               ],
+              "x-enumNames": [
+                "Name",
+                "CreatedDate",
+                "LastModified"
+              ],
               "x-enum-varnames": [
                 "Name",
                 "CreatedDate",
@@ -2346,6 +2351,11 @@
             "nullable": true,
             "description": "Visibility level: public, internal, or private.",
             "enum": [
+              "public",
+              "internal",
+              "private"
+            ],
+            "x-enumNames": [
               "public",
               "internal",
               "private"

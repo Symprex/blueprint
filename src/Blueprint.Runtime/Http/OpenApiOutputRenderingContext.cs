@@ -481,12 +481,21 @@ public sealed record OpenApiOutputRenderingContext(
 
         writer.WriteEndArray();
 
-        // x-enum-varnames helps TypeScript and other code generators produce named
-        // enum members instead of raw string/numeric unions.
+        // x-enumNames (NSwag convention) and x-enum-varnames (OpenAPI Generator convention)
+        // both help TypeScript and other code generators produce named enum members instead of
+        // raw string/numeric unions. Emit both for maximum tooling compatibility.
+        writer.WritePropertyName("x-enumNames");
+        WriteStringArray(writer, enumValues);
+
         writer.WritePropertyName("x-enum-varnames");
+        WriteStringArray(writer, enumValues);
+    }
+
+    private static void WriteStringArray(Utf8JsonWriter writer, ImmutableArray<string> values)
+    {
         writer.WriteStartArray();
 
-        foreach (var value in enumValues)
+        foreach (var value in values)
         {
             writer.WriteStringValue(value);
         }
