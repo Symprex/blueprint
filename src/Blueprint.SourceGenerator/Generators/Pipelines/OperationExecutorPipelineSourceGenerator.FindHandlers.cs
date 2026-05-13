@@ -70,15 +70,16 @@ public partial class OperationExecutorPipelineSourceGenerator
         INamedTypeSymbol appType)
     {
         var operationInterface = compilation.GetTypeByMetadataName("Blueprint.Model.IOperation");
+        var scanAttributeType = compilation.GetTypeByMetadataName("Blueprint.Model.BlueprintAppScanAttribute");
 
-        if (operationInterface == null)
+        if (operationInterface == null || scanAttributeType == null)
         {
             yield break;
         }
 
         var discoveredTypes = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
         var scanAttributes = appType.GetAttributes()
-            .Where(static attribute => attribute.AttributeClass?.ToDisplayString() == "Blueprint.Model.BlueprintAppScanAttribute")
+            .Where(attribute => SymbolEqualityComparer.Default.Equals(attribute.AttributeClass, scanAttributeType))
             .Select(ParseOnlyOperationScanAttributeModel.Create);
 
         foreach (var scanAttribute in scanAttributes)
