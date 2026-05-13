@@ -260,6 +260,29 @@ S365 has **3 custom source generators** in `Symprex.Signature365.SourceGenerator
 - `OperationExecutorShell` now exposes `protected ILogger Logger` for generated pipelines to use
 - **Impact**: Handlers extending ApiOperations work without code changes — no migration churn
 
+### S365 Custom Middleware → Blueprint Source-Gen Module Mapping
+S365 uses 8 custom `IMiddlewareBuilder` implementations in legacy Blueprint. In the new source-gen
+Blueprint, these map to built-in modules — no custom middleware code migrates.
+
+| S365 Middleware | Blueprint Source-Gen Equivalent | Status |
+|----------------|-------------------------------|--------|
+| `SetTenantMiddleware` | `TenantModule` (first-class tenant pipeline stage) | ✅ Built-in |
+| `SaveMartenChangesMiddleware` | `UnitOfWorkModule` (`IUnitOfWork` from `Blueprint.Marten`) | ✅ Built-in |
+| `UseMartenAsOutboxMiddleware` | `Blueprint.Marten` Marten-Rebus outbox integration | ✅ Built-in |
+| `StartRebusTransactionScopeMiddleware` | `Blueprint.Rebus` transaction scope module | ✅ Built-in |
+| `CommitRebusTransactionScopeMiddleware` | `Blueprint.Rebus` transaction scope module | ✅ Built-in |
+| `ResourceExpandMiddleware` | ASP.NET Core middleware (runs outside Blueprint pipeline) | ⚠️ S365-owned |
+| `Sig365LinkGeneratorMiddleware` | `LinkGenerationModule` (compile-time link generation) | ✅ Built-in |
+| `RegionalResponseHeadersMiddleware` | ASP.NET Core middleware (not Blueprint-specific) | ✅ Unchanged |
+
+**Opt-out attributes:**
+- `[DoNotSaveChanges]` → Not needed; `UnitOfWorkModule` only activates for commands by default
+- `[NoRebusTransaction]` → Consumer-specific; S365 can check attribute in `IMessageOutbox` implementation
+
+**Key insight:** S365's `ResourceExpandMiddleware` is the only custom middleware that doesn't have
+a direct Blueprint module equivalent. It handles `?expand=property` query parameters to fetch related
+resources. This stays as S365-owned ASP.NET Core middleware running after Blueprint's pipeline.
+
 ### Pipeline Helper Extraction
 - `LoadUserContextAsync` extracted from per-pipeline inline code (~15 lines saved per pipeline)
   - Identity check → factory call → APM activity tags
