@@ -125,6 +125,44 @@ public class HandlerReturnNormalizationIntegrationTests
         NoContentStatusCodeOperation.HandlerCallCount.Should().Be(1);
     }
 
+    [Fact]
+    public async Task When_handler_returns_list_then_generated_pipeline_wraps_in_ok_result()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
+        var pipeline = executor.GetPipeline(typeof(ListReturnQuery));
+        var context = CreateContext(app, ListReturnQuery.Configure());
+
+        ListReturnQuery.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<OkResult<List<string>>>();
+        var content = ((OkResult<List<string>>)result).Content;
+        content.Should().HaveCount(3);
+        content.Should().ContainInOrder("alpha", "beta", "gamma");
+        ListReturnQuery.HandlerCallCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task When_handler_returns_array_then_generated_pipeline_wraps_in_ok_result()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
+        var pipeline = executor.GetPipeline(typeof(ArrayReturnQuery));
+        var context = CreateContext(app, ArrayReturnQuery.Configure());
+
+        ArrayReturnQuery.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<OkResult<string[]>>();
+        var content = ((OkResult<string[]>)result).Content;
+        content.Should().HaveCount(3);
+        content.Should().ContainInOrder("one", "two", "three");
+        ArrayReturnQuery.HandlerCallCount.Should().Be(1);
+    }
+
     private static ApiOperationContext CreateContext(BlueprintApp app, ApiOperationDescriptor descriptor)
     {
         return new ApiOperationContext(new EmptyServiceProvider(), app, descriptor, CancellationToken.None);
@@ -262,5 +300,47 @@ public partial class NoContentStatusCodeOperation : ICommand<StatusCodeResult.No
     {
         HandlerCallCount++;
         return Task.FromResult(StatusCodeResult.NoContent.Instance);
+    }
+}
+
+/// <summary>
+/// Proves the S365 pattern where a query returns <c>List&lt;T&gt;</c> directly — Blueprint wraps
+/// it in <c>OkResult&lt;List&lt;T&gt;&gt;</c>. Used by ~20 operations in S365 (e.g. AdminPortal).
+/// </summary>
+[AllowAnonymous]
+public partial class ListReturnQuery : IQuery<List<string>>
+{
+    public static int HandlerCallCount { get; private set; }
+
+    public static void Reset()
+    {
+        HandlerCallCount = 0;
+    }
+
+    public static Task<List<string>> HandleAsync(ListReturnQuery operation)
+    {
+        HandlerCallCount++;
+        return Task.FromResult(new List<string> { "alpha", "beta", "gamma" });
+    }
+}
+
+/// <summary>
+/// Proves the S365 pattern where a query returns <c>T[]</c> directly — Blueprint wraps
+/// it in <c>OkResult&lt;T[]&gt;</c>. Used by Templates service in S365.
+/// </summary>
+[AllowAnonymous]
+public partial class ArrayReturnQuery : IQuery<string[]>
+{
+    public static int HandlerCallCount { get; private set; }
+
+    public static void Reset()
+    {
+        HandlerCallCount = 0;
+    }
+
+    public static Task<string[]> HandleAsync(ArrayReturnQuery operation)
+    {
+        HandlerCallCount++;
+        return Task.FromResult(new[] { "one", "two", "three" });
     }
 }
