@@ -1203,7 +1203,7 @@ public class ValidationModuleTests
         pipelineSource.Should().Contain("operation.Name.Length < 3");
         pipelineSource.Should().Contain("_va_Name.FormatErrorMessage(\"Name\")");
         pipelineSource.Should().Contain("new global::System.ComponentModel.DataAnnotations.MinLengthAttribute(3)");
-        pipelineSource.Should().Contain("return new Blueprint.Runtime.Exec.ValidationFailedResult(validationResults);");
+        pipelineSource.Should().Contain("return Blueprint.Runtime.Exec.PipelineHelpers.CreateValidationFailure(context, validationResults);");
         pipelineSource.Should().NotContain("throw new global::Blueprint.Validation.ValidationException(validationResults);");
 
         // Validation exception handling now lives in OperationExecutorShell, not in generated validation code
@@ -1258,7 +1258,7 @@ public class ValidationModuleTests
         result.Diagnostics.Should().BeEmpty();
         var pipelineSource = result.Output.Single(static tree => tree.FilePath.EndsWith("CreateUserCommandExecutorPipeline.g.cs", StringComparison.Ordinal)).ToString();
 
-        pipelineSource.Should().Contain("return new Blueprint.Runtime.Exec.ValidationFailedResult(validationResults);");
+        pipelineSource.Should().Contain("return Blueprint.Runtime.Exec.PipelineHelpers.CreateValidationFailure(context, validationResults);");
         pipelineSource.Should().NotContain("return new Blueprint.Middleware.ValidationFailedOperationResult(validationResults);");
 
         // Validation exception translation catch blocks are now in OperationExecutorShell at runtime
@@ -1624,8 +1624,7 @@ public class ValidationModuleTests
         pipelineSource.Should().Contain("((global::System.ComponentModel.DataAnnotations.IValidatableObject)",
             "IValidatableObject should be called directly instead of TryValidateObject fallback");
         pipelineSource.Should().Contain("ivoFailures");
-        pipelineSource.Should().Contain("context.Activity?.SetTag(\"otel.status_code\", \"OK\");");
-        pipelineSource.Should().Contain("return new Blueprint.Runtime.Exec.ValidationFailedResult(ivoFailures);");
+        pipelineSource.Should().Contain("return Blueprint.Runtime.Exec.PipelineHelpers.CreateValidationFailure(context, ivoFailures);");
         pipelineSource.Should().NotContain("global::System.ComponentModel.DataAnnotations.Validator.TryValidateObject",
             "IValidatableObject-only types should use direct Validate() call, not whole-object TryValidateObject fallback");
         pipelineSource.Should().NotContain("throw new global::Blueprint.Validation.ValidationException(validationResults);");

@@ -52,8 +52,7 @@ namespace Blueprint.Generated
             }
             if (validationResults is not null)
             {
-                context.Activity?.SetTag("otel.status_code", "OK");
-                return new Blueprint.Runtime.Exec.ValidationFailedResult(validationResults);
+                return Blueprint.Runtime.Exec.PipelineHelpers.CreateValidationFailure(context, validationResults);
             }
 
             var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<string>(await global::TestNamespace.CreateUserCommand.HandleAsync(operation).ConfigureAwait(false));

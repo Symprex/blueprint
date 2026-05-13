@@ -56,7 +56,8 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
 
         CacheKnownSingletonServices(context, handler);
 
-        context.AddRenderStep(PipelineStage.Execution, renderContext => RenderHandlerInvocation(renderContext, normalization));
+        var isParameterlessHandler = handler.ConstructorParameters is { Count: 0 };
+        context.AddRenderStep(PipelineStage.Execution, renderContext => RenderHandlerInvocation(renderContext, normalization, isParameterlessHandler));
         context.RegisterVariable(
             new VariableKey(HandlerResultTypeName, HandlerResultPurpose),
             availableFrom: PipelineStage.Execution,
@@ -64,7 +65,7 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
             lifetime: VariableLifetime.Local);
     }
 
-    private static void RenderHandlerInvocation(PipelineRenderContext context, HandlerReturnNormalization normalization)
+    private static void RenderHandlerInvocation(PipelineRenderContext context, HandlerReturnNormalization normalization, bool isParameterlessHandler)
     {
         foreach (var param in context.GetHandlerParameters())
         {
@@ -119,17 +120,29 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
             var handlerClassFullName = context.GetRequiredHandlerClassFullName();
             var handlerVarName = char.ToLowerInvariant(handlerClassName[0]) + handlerClassName.Substring(1);
 
-            context.DeclareVariable(
-                handlerVarName,
-                context.GetOptionalServiceExpression(handlerClassFullName));
-            context.If(
-                $"{handlerVarName} == null",
-                branch =>
-                {
-                    branch.Assign(
-                        handlerVarName,
-                        branch.GetCompiledHandlerConstructorExpression(handlerClassFullName));
-                });
+            // Parameterless handlers use the extracted helper to avoid the GetService + null
+            // check + new() boilerplate in every pipeline. Handlers with constructor DI keep
+            // the inline compiled-constructor pattern for zero-reflection instantiation.
+            if (isParameterlessHandler)
+            {
+                context.DeclareVariable(
+                    handlerVarName,
+                    $"Blueprint.Runtime.Exec.PipelineHelpers.ResolveOrCreateHandler<{handlerClassFullName}>({context.GetServiceProviderExpression()})");
+            }
+            else
+            {
+                context.DeclareVariable(
+                    handlerVarName,
+                    context.GetOptionalServiceExpression(handlerClassFullName));
+                context.If(
+                    $"{handlerVarName} == null",
+                    branch =>
+                    {
+                        branch.Assign(
+                            handlerVarName,
+                            branch.GetCompiledHandlerConstructorExpression(handlerClassFullName));
+                    });
+            }
 
             // Populate well-known base-class properties (e.g., S365 ApiOperations: Context, Identity, Logger, CancellationToken)
             var propertyInjections = context.GetPropertyInjections();

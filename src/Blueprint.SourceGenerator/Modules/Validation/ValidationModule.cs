@@ -533,9 +533,7 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
 
         context.If(
             "validationResults is not null",
-            static branch => ReturnValidationFailure(
-                branch,
-                "new Blueprint.Runtime.Exec.ValidationFailedResult(validationResults)"));
+            static branch => ReturnValidationFailure(branch, "validationResults"));
         context.WriteBlankLine();
     }
 
@@ -683,9 +681,7 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
         });
         context.If(
             "ivoFailures is not null",
-            static branch => ReturnValidationFailure(
-                branch,
-                "new Blueprint.Runtime.Exec.ValidationFailedResult(ivoFailures)"));
+            static branch => ReturnValidationFailure(branch, "ivoFailures"));
         context.WriteBlankLine();
     }
 
@@ -702,18 +698,16 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
             $"global::System.ComponentModel.DataAnnotations.Validator.TryValidateObject({context.GetOperationExpression()}, validationContext, validationResults, validateAllProperties: true)");
         context.If(
             "isValid == false",
-            static branch => ReturnValidationFailure(
-                branch,
-                "new Blueprint.Runtime.Exec.ValidationFailedResult(validationResults)"));
+            static branch => ReturnValidationFailure(branch, "validationResults"));
         context.WriteBlankLine();
     }
 
-    private static void ReturnValidationFailure(PipelineRenderContext context, string operationResultExpression)
+    private static void ReturnValidationFailure(PipelineRenderContext context, string validationResultsVariable)
     {
-        context.WriteStatement($"{context.GetContextPropertyExpression("Activity")}?.SetTag(\"otel.status_code\", \"OK\");");
+        var resultExpression = $"Blueprint.Runtime.Exec.PipelineHelpers.CreateValidationFailure({context.GetContextExpression()}, {validationResultsVariable})";
         context.Return(
             context.IsPipelineAsync()
-                ? operationResultExpression
-                : $"System.Threading.Tasks.Task.FromResult<Blueprint.OperationResult>({operationResultExpression})");
+                ? resultExpression
+                : $"System.Threading.Tasks.Task.FromResult<Blueprint.OperationResult>({resultExpression})");
     }
 }

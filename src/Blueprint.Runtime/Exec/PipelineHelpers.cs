@@ -73,6 +73,38 @@ public static class PipelineHelpers
     }
 
     /// <summary>
+    /// Resolves a handler from the scoped DI container, falling back to <c>new T()</c> when the
+    /// type is not registered. Generated pipelines call this for external handlers that have a
+    /// parameterless constructor — avoiding the 3-line null-check-then-construct inline pattern
+    /// that was previously duplicated across every pipeline.
+    /// </summary>
+    /// <typeparam name="T">The handler type to resolve.</typeparam>
+    /// <param name="serviceProvider">The scoped service provider for the current request.</param>
+    /// <returns>The DI-resolved handler, or a new default-constructed instance.</returns>
+    public static T ResolveOrCreateHandler<T>(IServiceProvider serviceProvider)
+        where T : class, new()
+    {
+        return Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions
+            .GetService<T>(serviceProvider) ?? new T();
+    }
+
+    /// <summary>
+    /// Creates a <see cref="ValidationFailedResult"/> and sets the OpenTelemetry status tag on
+    /// the current activity. Generated pipelines call this at every validation exit point,
+    /// replacing the repeated 2-line inline pattern of tag-then-return.
+    /// </summary>
+    /// <param name="context">The operation context (used to access the current activity).</param>
+    /// <param name="validationResults">The collected validation failures.</param>
+    /// <returns>The validation failure result to return from the pipeline.</returns>
+    public static ValidationFailedResult CreateValidationFailure(
+        ApiOperationContext context,
+        List<ValidationResult> validationResults)
+    {
+        context.Activity?.SetTag("otel.status_code", "OK");
+        return new ValidationFailedResult(validationResults);
+    }
+
+    /// <summary>
     /// Invokes registered <see cref="IPropertyPopulator"/> instances in order, using an optimised
     /// single-populator fast path to avoid enumerator allocation when only one is registered.
     /// </summary>

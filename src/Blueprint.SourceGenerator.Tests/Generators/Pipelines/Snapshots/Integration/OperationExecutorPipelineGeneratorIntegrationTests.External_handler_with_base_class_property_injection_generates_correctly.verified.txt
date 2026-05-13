@@ -45,11 +45,7 @@ namespace Blueprint.Generated
             }
 
             await Blueprint.Runtime.Exec.PipelineHelpers.PopulatePropertiesAsync(this._propertyPopulators, context).ConfigureAwait(false);
-            var testQueryHandler = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<global::TestNamespace.TestQueryHandler>(context.ServiceProvider);
-            if (testQueryHandler == null)
-            {
-                testQueryHandler = new global::TestNamespace.TestQueryHandler();
-            }
+            var testQueryHandler = Blueprint.Runtime.Exec.PipelineHelpers.ResolveOrCreateHandler<global::TestNamespace.TestQueryHandler>(context.ServiceProvider);
 
             testQueryHandler.Context = context;
             testQueryHandler.Identity = context.UserAuthorisationContext;
