@@ -185,6 +185,9 @@
 | Validation regex caching | ✅ Done | `[RegularExpression]` fast-path now emits `static readonly Regex` field with `RegexOptions.Compiled` — eliminates per-request pattern compilation from `Regex.IsMatch(string, string)` |
 | Validation pipeline audit | ✅ Done | Full audit confirmed: zero allocation on success path, zero reflection in fast-paths, 43 fast-path strategies, lazy `List<ValidationResult>`, attribute caching via static fields. Only fallback for custom/unsupported attributes. |
 | OpenAPI shape audit | ✅ Compatible | Blueprint emits same `operationId` (class name), tags, `x-links` {rel, operationId, method}, schema components. S365 Handlebars templates use `{{#withOperation operationId}}` which traverses full OpenAPI doc — fully compatible. |
+| SingleItemList<T> auth optimization | ✅ Done | `PipelineHelpers.SingleItemList<T>` struct avoids per-request `ResolvedScopePair[]` array allocation for single-`[Resource]` operations (vast majority of S365). Source generator emits single-element overload when exactly 1 scope pair. |
+| Cached Task<bool> in auth | ✅ Done | `ScopePairClaimAuthorizationProvider` uses static `_trueResult`/`_falseResult` instead of `Task.FromResult` per auth check — eliminates per-request `Task<bool>` allocation |
+| Dual auth interface provider | ✅ Done | `ScopePairClaimAuthorizationProvider` implements both `IResourceAuthorizationProvider` AND `IResolvedResourceAuthorizationProvider` — single registration enables both legacy and compile-time–expanded auth paths. `AddResourceAuthorizationProvider<T>()` auto-forwards. |
 
 ---
 
