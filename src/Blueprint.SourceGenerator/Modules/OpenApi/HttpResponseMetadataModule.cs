@@ -38,6 +38,7 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
     [
         nameof(FlattenedResultOutcomeModule),
         nameof(FailureOutcomesModule),
+        nameof(ApiExceptionFactoryModule),
         nameof(AuthenticationModule),
         nameof(PropertyOwnershipModule),
     ];
@@ -228,6 +229,13 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
         if (context.GetMetadata<AuthorizationDescriptorRegistration>().Any(static r => r.RequiresResourceAuthorization))
         {
             responses.Add(CreateResponse(403, true, "Blueprint.Runtime.Exec.ForbiddenResult", problemDetailsBody));
+        }
+
+        // ApiExceptionFactory fields: per-operation error status codes projected from compile-time field analysis.
+        // Each unique status code produces a ProblemDetails response in the OpenAPI document.
+        foreach (var factory in context.GetMetadata<ApiExceptionFactoryRegistration>())
+        {
+            responses.Add(CreateResponse(factory.HttpStatus, true, "Blueprint.ApiException", problemDetailsBody));
         }
 
         return responses.ToImmutable();
