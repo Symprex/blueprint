@@ -188,6 +188,7 @@
 | SingleItemList<T> auth optimization | ✅ Done | `PipelineHelpers.SingleItemList<T>` struct avoids per-request `ResolvedScopePair[]` array allocation for single-`[Resource]` operations (vast majority of S365). Source generator emits single-element overload when exactly 1 scope pair. |
 | Cached Task<bool> in auth | ✅ Done | `ScopePairClaimAuthorizationProvider` uses static `_trueResult`/`_falseResult` instead of `Task.FromResult` per auth check — eliminates per-request `Task<bool>` allocation |
 | Dual auth interface provider | ✅ Done | `ScopePairClaimAuthorizationProvider` implements both `IResourceAuthorizationProvider` AND `IResolvedResourceAuthorizationProvider` — single registration enables both legacy and compile-time–expanded auth paths. `AddResourceAuthorizationProvider<T>()` auto-forwards. |
+| Zero-alloc scope comparison | ✅ Done | `ScopePairClaimAuthorizationProvider.MatchesScopePair` uses `ReadOnlySpan<char>` slicing to compare `{noun}{sep}{verb}` against claim values — eliminates per-comparison string interpolation allocation in auth hot path |
 
 ---
 
