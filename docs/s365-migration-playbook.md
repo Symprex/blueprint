@@ -168,8 +168,8 @@ Based on S365 analysis, these gaps need closing in `blueprint-source-gen` before
 | `[Resource(noun, verb, key)]` | S365 Custom | `Blueprint.Model.Attributes.ResourceAttribute` | **Constructor compatible** — same (noun, verb, resourceKeyTemplate) signature |
 | `PagedApiResource<T>` | Legacy Blueprint | `Blueprint.Runtime.Model.PagedApiResource<T>` | Namespace change |
 | `OrderedPagedQuery` | Legacy Blueprint | `Blueprint.Runtime.Model.OrderedPagedQuery` | Namespace change |
-| `ResourceEvent<T>` | Legacy Blueprint | `Blueprint.Runtime.Exec.ResourceEventResult<T>` | **API change**: use `[ResourceEventFamily]` attribute with generated event records |
-| `ResourceEvent<T>` (delete/key-only) | Legacy Blueprint | `Blueprint.Runtime.Exec.KeyOnlyResourceEventResult` | Use `[ResourceEventKey]` parameter on event record |
+| `ResourceEvent<T>` | Legacy Blueprint | `Blueprint.Runtime.Exec.ResourceEvent<T>` | **No change needed** — identical type, BP108 recognises `ICommand<ResourceEvent<T>>` directly |
+| `ResourceEventDefinitionFactory` | Legacy Blueprint | `Blueprint.Runtime.Http.ResourceEventDefinition` | **No change needed** — same `For<TResource, TDomain>()` factory API |
 | `StatusCodeResult` | Legacy Blueprint | `Blueprint.Runtime.Exec.StatusCodeResult` | Namespace change |
 | `ApiId` | S365 Custom | **Keep in S365** | No change needed |
 | `TenantOrderedPagedQuery<T>` | S365 Custom | **Keep in S365** (update base class import) | Carries forward |
@@ -185,8 +185,8 @@ Based on S365 analysis, these gaps need closing in `blueprint-source-gen` before
 A compile-time proof project (`.scratch/s365-proof/`) validated S365 patterns against the source generator on .NET 10. The proof now covers:
 
 - **Query operations** (GET) with `IQuery<T>` returning `ApiResource`
-- **Command operations** returning `ResourceEventResult<T>` (POST, PUT)
-- **Command operations** returning `KeyOnlyResourceEventResult` (DELETE)
+- **Command operations** returning `ResourceEvent<T>` (POST, PUT)
+- **Command operations** returning `ResourceEvent<T>` with key-only events (DELETE)
 - **Command operations** returning `AcceptedResult` (HTTP 202 long-running)
 - **Command operations** returning `NoResultOperationResult` (HTTP 204 fire-and-forget)
 - **`[ResourceEventFamily]`** with source-generated event records (Created, Updated, Deleted)

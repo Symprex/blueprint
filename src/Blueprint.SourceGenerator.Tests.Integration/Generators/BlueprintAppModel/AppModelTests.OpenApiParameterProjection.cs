@@ -198,6 +198,76 @@ public class AppModelOpenApiParameterProjectionTests
         operation.RequestBody.Should().BeNull();
     }
 
+    [Fact]
+    public void When_post_command_has_FromAuthContext_property_then_openapi_body_excludes_it()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var operationContext = BuildOperationContext(app);
+
+        var operation = FindOperation<CreateAuthContextItemCommand>(operationContext);
+
+        // TenantId has [FromAuthContext] — must NOT appear in body
+        operation.RequestBody.Should().NotBeNull();
+        operation.RequestBody!.Properties.Should().NotContain(static p => p.Name == "tenantId");
+
+        // Name is a regular body property — must appear
+        operation.RequestBody.Properties.Should().ContainSingle(static p => p.Name == "name");
+    }
+
+    [Fact]
+    public void When_get_query_has_FromAuthContext_property_then_openapi_query_params_exclude_it()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var operationContext = BuildOperationContext(app);
+
+        var operation = FindOperation<ListAuthContextItemsQuery>(operationContext);
+
+        // TenantId has [FromAuthContext] — must NOT appear as query parameter
+        operation.Parameters.Should().NotContain(static p => p.Name == "TenantId");
+        operation.Parameters.Should().NotContain(static p => p.Name == "tenantId");
+
+        // Page is a regular query property — must appear
+        operation.Parameters.Should().ContainSingle(static p => p.Name == "page" && p.In == "query");
+    }
+
+    [Fact]
+    public void When_FromAuthContext_is_also_route_placeholder_then_openapi_includes_it_as_path_param()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var operationContext = BuildOperationContext(app);
+
+        var operation = FindOperation<GetAuthContextRouteItemQuery>(operationContext);
+
+        // TenantId is both [FromAuthContext] and a route placeholder — route wins
+        operation.Parameters.Should().Contain(static p => p.Name == "TenantId" && p.In == "path");
+
+        // Id is a regular route param
+        operation.Parameters.Should().Contain(static p => p.Name == "Id" && p.In == "path");
+    }
+
+    [Fact]
+    public void When_post_command_has_FromAuthContext_then_openapi_json_body_schema_excludes_it()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var output = BuildOutputContext(app);
+        var doc = JsonDocument.Parse(output.Json);
+        var paths = doc.RootElement.GetProperty("paths");
+
+        var authContextPath = paths.GetProperty("/population-test/auth-context-items");
+        var postMethod = authContextPath.GetProperty("post");
+
+        postMethod.TryGetProperty("requestBody", out var requestBody).Should().BeTrue();
+        var schema = ResolveRequestBodySchema(requestBody, doc.RootElement);
+        var properties = schema.GetProperty("properties");
+
+        // TenantId must NOT appear in the JSON body schema
+        properties.TryGetProperty("tenantId", out _).Should().BeFalse(
+            "[FromAuthContext] properties should not appear in OpenAPI request body schema");
+
+        // Name must appear
+        properties.TryGetProperty("name", out _).Should().BeTrue();
+    }
+
     private static JsonElement ResolveRequestBodySchema(JsonElement requestBody, JsonElement root)
     {
         var schemaElement = requestBody.GetProperty("content").GetProperty("application/json").GetProperty("schema");
