@@ -123,16 +123,16 @@ namespace Blueprint.Generated
                     return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid query parameter 'minPrice'");
                 }
             }
-            var _qv_TenantId = httpContext.Request.Query["tenantId"];
-            if (_qv_TenantId.Count > 0)
+            var _qv_FilterId = httpContext.Request.Query["filterId"];
+            if (_qv_FilterId.Count > 0)
             {
-                if (System.Guid.TryParse(_qv_TenantId[0], out var _parsed_TenantId))
+                if (System.Guid.TryParse(_qv_FilterId[0], out var _parsed_FilterId))
                 {
-                    operation.TenantId = _parsed_TenantId;
+                    operation.FilterId = _parsed_FilterId;
                 }
                 else
                 {
-                    return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid query parameter 'tenantId'");
+                    return new Blueprint.Runtime.Exec.BindingFailureResult("Invalid query parameter 'filterId'");
                 }
             }
             var _qv_Since = httpContext.Request.Query["since"];

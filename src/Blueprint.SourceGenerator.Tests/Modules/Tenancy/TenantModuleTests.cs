@@ -201,4 +201,206 @@ public class TenantModuleTests
         // Should NOT assign to readonly property
         pipelineSource.Should().NotContain("operation.TenantId");
     }
+
+    [Fact]
+    public void When_TenantId_is_parsable_struct_then_pipeline_uses_TryParse()
+    {
+        const string source = """
+            using Blueprint;
+            using Blueprint.Model;
+            using System;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace
+            {
+                [BlueprintAppScan]
+                public partial class TestApp : BlueprintApp { }
+
+                /// <summary>Mirrors S365's ApiId — a parsable struct used for tenant IDs.</summary>
+                public readonly struct ApiId : IParsable<ApiId>
+                {
+                    public string Value { get; }
+                    public ApiId(string value) => this.Value = value;
+                    public static ApiId Parse(string s, IFormatProvider? provider) => new(s);
+                    public static bool TryParse(string? s, IFormatProvider? provider, out ApiId result)
+                    {
+                        if (s is null) { result = default; return false; }
+                        result = new ApiId(s);
+                        return true;
+                    }
+                    public override string ToString() => this.Value;
+                }
+
+                /// <summary>
+                /// Operation with ApiId TenantId NOT in route — TenantModule should
+                /// auto-populate from the accessor using TryParse.
+                /// </summary>
+                public partial class ParsableTenantCommand : ICommand<string>
+                {
+                    public ApiId TenantId { get; set; }
+                    public string Name { get; set; }
+
+                    public static Task<string> HandleAsync(ParsableTenantCommand operation)
+                    {
+                        return Task.FromResult("ok");
+                    }
+                }
+            }
+            """;
+
+        var generators = new[]
+        {
+            TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>(),
+            TestHelpers.CreateTrackedGenerator<OperationExecutorPipelineSourceGenerator>(),
+        };
+
+        var result = TestHelpers.CompileWithTrackedGenerators(generators, [source], ["Input0.cs"]);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var pipelineSources = result.GetGeneratedSources(nameof(OperationExecutorPipelineSourceGenerator));
+        var pipelineSource = string.Join("\n", pipelineSources.Select(static s => s.SourceText));
+
+        // Uses EqualityComparer<T>.Default for value-type default check
+        pipelineSource.Should().Contain("EqualityComparer<global::TestNamespace.ApiId>.Default.Equals(operation.TenantId, default)");
+
+        // Uses TryParse with null IFormatProvider (IParsable pattern)
+        pipelineSource.Should().Contain("global::TestNamespace.ApiId.TryParse(this._tenantAccessor.Current, null, out var _parsedTenantId)");
+
+        // Assigns parsed value
+        pipelineSource.Should().Contain("operation.TenantId = _parsedTenantId;");
+    }
+
+    [Fact]
+    public void When_TenantId_is_parsable_struct_inherited_from_base_then_pipeline_uses_TryParse()
+    {
+        const string source = """
+            using Blueprint;
+            using Blueprint.Model;
+            using System;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace
+            {
+                [BlueprintAppScan]
+                public partial class TestApp : BlueprintApp { }
+
+                public readonly struct ApiId : IParsable<ApiId>
+                {
+                    public string Value { get; }
+                    public ApiId(string value) => this.Value = value;
+                    public static ApiId Parse(string s, IFormatProvider? provider) => new(s);
+                    public static bool TryParse(string? s, IFormatProvider? provider, out ApiId result)
+                    {
+                        if (s is null) { result = default; return false; }
+                        result = new ApiId(s);
+                        return true;
+                    }
+                    public override string ToString() => this.Value;
+                }
+
+                /// <summary>S365-style base class with ApiId TenantId.</summary>
+                public abstract class TenantAwareBase
+                {
+                    public ApiId TenantId { get; set; }
+                }
+
+                public partial class InheritedParsableTenantQuery : TenantAwareBase, IQuery<string>
+                {
+                    public string Filter { get; set; }
+
+                    public static Task<string> HandleAsync(InheritedParsableTenantQuery operation)
+                    {
+                        return Task.FromResult("ok");
+                    }
+                }
+            }
+            """;
+
+        var generators = new[]
+        {
+            TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>(),
+            TestHelpers.CreateTrackedGenerator<OperationExecutorPipelineSourceGenerator>(),
+        };
+
+        var result = TestHelpers.CompileWithTrackedGenerators(generators, [source], ["Input0.cs"]);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var pipelineSources = result.GetGeneratedSources(nameof(OperationExecutorPipelineSourceGenerator));
+        var pipelineSource = string.Join("\n", pipelineSources.Select(static s => s.SourceText));
+
+        // Should detect inherited ApiId TenantId and use TryParse
+        pipelineSource.Should().Contain("ApiId.TryParse(this._tenantAccessor.Current, null, out var _parsedTenantId)");
+        pipelineSource.Should().Contain("operation.TenantId = _parsedTenantId;");
+    }
+
+    [Fact]
+    public void When_TenantId_is_in_route_then_pipeline_does_not_auto_populate_from_accessor()
+    {
+        const string source = """
+            using Blueprint;
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using System;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace
+            {
+                [BlueprintAppScan]
+                public partial class TestApp : BlueprintApp { }
+
+                public readonly struct ApiId : IParsable<ApiId>
+                {
+                    public string Value { get; }
+                    public ApiId(string value) => this.Value = value;
+                    public static ApiId Parse(string s, IFormatProvider? provider) => new(s);
+                    public static bool TryParse(string? s, IFormatProvider? provider, out ApiId result)
+                    {
+                        if (s is null) { result = default; return false; }
+                        result = new ApiId(s);
+                        return true;
+                    }
+                    public override string ToString() => this.Value;
+                }
+
+                /// <summary>
+                /// TenantId IS in the route — PropertyOwnershipModule handles route binding,
+                /// TenantModule should NOT auto-populate from accessor.
+                /// </summary>
+                [RootLink("/tenants/{TenantId}/items")]
+                [HttpGet]
+                public partial class RouteBoundTenantQuery : IQuery<string>
+                {
+                    public ApiId TenantId { get; set; }
+                    public string Filter { get; set; }
+
+                    public static Task<string> HandleAsync(RouteBoundTenantQuery operation)
+                    {
+                        return Task.FromResult("ok");
+                    }
+                }
+            }
+            """;
+
+        var generators = new[]
+        {
+            TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>(),
+            TestHelpers.CreateTrackedGenerator<OperationExecutorPipelineSourceGenerator>(),
+        };
+
+        var result = TestHelpers.CompileWithTrackedGenerators(generators, [source], ["Input0.cs"]);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var pipelineSources = result.GetGeneratedSources(nameof(OperationExecutorPipelineSourceGenerator));
+        var pipelineSource = string.Join("\n", pipelineSources.Select(static s => s.SourceText));
+
+        // Still resolves tenant accessor (all operations get tenant context)
+        pipelineSource.Should().Contain("PipelineHelpers.ResolveTenant(");
+
+        // Should NOT auto-populate TenantId from accessor — route binding handles it
+        pipelineSource.Should().NotContain("_parsedTenantId");
+        pipelineSource.Should().NotContain("operation.TenantId = this._tenantAccessor.Current");
+    }
 }

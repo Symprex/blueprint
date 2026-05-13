@@ -1134,7 +1134,7 @@ public class PropertyOwnershipModuleTests
                     // Query: decimal scalar
                     public decimal MinPrice { get; set; }
                     // Query: Guid scalar
-                    public System.Guid TenantId { get; set; }
+                    public System.Guid FilterId { get; set; }
                     // Query: DateTime scalar
                     public System.DateTime Since { get; set; }
                     // Query: DateTimeOffset scalar

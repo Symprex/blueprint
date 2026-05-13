@@ -796,54 +796,24 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         return char.ToLowerInvariant(name[0]) + name.Substring(1);
     }
 
-    /// <summary>
-    /// Checks whether a type implements <c>IParsable&lt;T&gt;</c> (System.IParsable),
-    /// which ASP.NET Core uses for binding route/query values from strings.
-    /// </summary>
     private static bool ImplementsIParsable(ITypeSymbol type)
     {
-        return type.AllInterfaces.Any(
-            static i => i is { IsGenericType: true, MetadataName: "IParsable`1", ContainingNamespace.Name: "System" });
+        return TypeConversionHelpers.ImplementsIParsable(type);
     }
 
-    /// <summary>
-    /// Checks whether a type has a <c>static TryParse(string, out T)</c> or
-    /// <c>static TryParse(string, IFormatProvider?, out T)</c> method, which ASP.NET Core
-    /// uses as a fallback for binding route/query values when <c>IParsable&lt;T&gt;</c> is not implemented.
-    /// </summary>
     private static bool HasStaticTryParseMethod(ITypeSymbol type)
     {
-        return type.GetMembers("TryParse")
-            .OfType<IMethodSymbol>()
-            .Any(static m =>
-                m is { IsStatic: true, ReturnsVoid: false, ReturnType.SpecialType: SpecialType.System_Boolean }
-                && m.Parameters.Length >= 2
-                && m.Parameters[0].Type.SpecialType == SpecialType.System_String
-                && m.Parameters[^1].RefKind == RefKind.Out);
+        return TypeConversionHelpers.HasStaticTryParseMethod(type);
     }
 
-    /// <summary>
-    /// Determines whether a type can be parsed from a string value — either via <c>IParsable&lt;T&gt;</c>,
-    /// a conventional <c>static TryParse</c> method, or membership in the built-in scalar set.
-    /// </summary>
     private static bool IsStringParsable(ITypeSymbol type)
     {
-        return ImplementsIParsable(type) || HasStaticTryParseMethod(type);
+        return TypeConversionHelpers.IsStringParsable(type);
     }
 
-    /// <summary>
-    /// Checks whether a type is decorated with <c>[TypeConverter]</c>, which legacy Blueprint
-    /// used to convert route/query string values from strings. Types with this attribute
-    /// use exception-based conversion at runtime via <see cref="System.ComponentModel.TypeDescriptor"/>.
-    /// </summary>
     private static bool HasTypeConverterAttribute(ITypeSymbol type)
     {
-        return type.GetAttributes().Any(
-            static a => a.AttributeClass is
-            {
-                Name: "TypeConverterAttribute",
-                ContainingNamespace: { Name: "ComponentModel", ContainingNamespace: { Name: "System", ContainingNamespace.IsGlobalNamespace: true } },
-            });
+        return TypeConversionHelpers.HasTypeConverterAttribute(type);
     }
 
     /// <summary>
@@ -1325,27 +1295,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
     /// </summary>
     private static string GetScalarTryParseExpression(ITypeSymbol typeSymbol, string stringExpression, string outVariable)
     {
-        var typeDisplay = typeSymbol.WithNullableAnnotation(NullableAnnotation.NotAnnotated).ToDisplayString();
-
-        return typeDisplay switch
-        {
-            "int" => $"int.TryParse({stringExpression}, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var {outVariable})",
-            "long" => $"long.TryParse({stringExpression}, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var {outVariable})",
-            "double" => $"double.TryParse({stringExpression}, System.Globalization.NumberStyles.Float | System.Globalization.NumberStyles.AllowThousands, System.Globalization.CultureInfo.InvariantCulture, out var {outVariable})",
-            "float" => $"float.TryParse({stringExpression}, System.Globalization.NumberStyles.Float | System.Globalization.NumberStyles.AllowThousands, System.Globalization.CultureInfo.InvariantCulture, out var {outVariable})",
-            "bool" => $"bool.TryParse({stringExpression}, out var {outVariable})",
-            "decimal" => $"decimal.TryParse({stringExpression}, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var {outVariable})",
-            "System.Guid" => $"System.Guid.TryParse({stringExpression}, out var {outVariable})",
-            "System.DateTime" => $"System.DateTime.TryParse({stringExpression}, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var {outVariable})",
-            "System.DateTimeOffset" => $"System.DateTimeOffset.TryParse({stringExpression}, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var {outVariable})",
-            _ when typeSymbol.TypeKind == TypeKind.Enum =>
-                $"System.Enum.TryParse<{typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}>({stringExpression}, out var {outVariable})",
-            _ when ImplementsIParsable(typeSymbol) =>
-                $"{typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}.TryParse({stringExpression}, null, out var {outVariable})",
-            _ when HasStaticTryParseMethod(typeSymbol) =>
-                $"{typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}.TryParse({stringExpression}, out var {outVariable})",
-            _ => $"int.TryParse({stringExpression}, out var {outVariable})", // fallback — should not be reached for supported types
-        };
+        return TypeConversionHelpers.GetTryParseExpression(typeSymbol, stringExpression, outVariable);
     }
 
     /// <summary>
