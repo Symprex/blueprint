@@ -122,4 +122,77 @@ public class OperationDescriptorSourceGeneratorTestsHttpResponseMetadata
         descriptorSource.Should().Contain("\"Microsoft.AspNetCore.Mvc.ValidationProblemDetails\"");
         descriptorSource.Should().Contain("\"Microsoft.AspNetCore.Mvc.ProblemDetails\"");
     }
+
+    [Theory]
+    [InlineData("System.Collections.Generic.List<string>", "string[]")]
+    [InlineData("System.Collections.Generic.IList<string>", "string[]")]
+    [InlineData("System.Collections.Generic.IReadOnlyList<string>", "string[]")]
+    [InlineData("System.Collections.Generic.ICollection<string>", "string[]")]
+    [InlineData("System.Collections.Generic.IReadOnlyCollection<string>", "string[]")]
+    [InlineData("System.Collections.Generic.IEnumerable<string>", "string[]")]
+    public void When_plain_clr_collection_return_type_then_body_type_name_uses_array_notation(string collectionType, string expectedBodyTypeName)
+    {
+        var result = OperationDescriptorSourceGeneratorTests.Compile($$"""
+            using Blueprint.Runtime.Exec;
+            using System.Collections.Generic;
+
+            [Blueprint.Model.Attributes.RootLink("/openapi/collection-return")]
+            public partial class CollectionReturnOperation : IQuery<{{collectionType}}> {}
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var descriptorSource = result.Output
+            .Select(static tree => tree.ToString())
+            .FirstOrDefault(static source => source.Contains("CollectionReturnOperationDescriptor"));
+
+        descriptorSource.Should().NotBeNull();
+        descriptorSource!.Should().Contain($"\"{expectedBodyTypeName}\"",
+            $"Collection return type {collectionType} should normalize to array notation {expectedBodyTypeName}");
+    }
+
+    [Fact]
+    public void When_array_return_type_then_body_type_name_uses_array_notation()
+    {
+        var result = OperationDescriptorSourceGeneratorTests.Compile("""
+            using Blueprint.Runtime.Exec;
+
+            [Blueprint.Model.Attributes.RootLink("/openapi/array-return")]
+            public partial class ArrayReturnOperation : IQuery<string[]> {}
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var descriptorSource = result.Output
+            .Select(static tree => tree.ToString())
+            .FirstOrDefault(static source => source.Contains("ArrayReturnOperationDescriptor"));
+
+        descriptorSource.Should().NotBeNull();
+        descriptorSource!.Should().Contain("\"string[]\"",
+            "Array return type should produce array notation body type name");
+    }
+
+    [Fact]
+    public void When_ok_result_wraps_collection_then_body_type_name_uses_array_notation()
+    {
+        var result = OperationDescriptorSourceGeneratorTests.Compile("""
+            using Blueprint.Runtime.Exec;
+            using System.Collections.Generic;
+
+            public class TemplateResource { public string Name { get; set; } = ""; }
+
+            [Blueprint.Model.Attributes.RootLink("/openapi/ok-collection")]
+            public partial class OkCollectionReturnOperation : IQuery<OkResult<List<TemplateResource>>> {}
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var descriptorSource = result.Output
+            .Select(static tree => tree.ToString())
+            .FirstOrDefault(static source => source.Contains("OkCollectionReturnOperationDescriptor"));
+
+        descriptorSource.Should().NotBeNull();
+        descriptorSource!.Should().Contain("\"TestNamespace.TemplateResource[]\"",
+            "OkResult<List<T>> should normalize the inner collection to array notation");
+    }
 }

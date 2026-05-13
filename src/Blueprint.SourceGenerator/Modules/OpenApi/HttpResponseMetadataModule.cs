@@ -308,9 +308,47 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
             bodyTypeNames);
     }
 
+    /// <summary>
+    /// Returns the CLR type name for OpenAPI body-type registration. Generic collection types
+    /// (<c>List&lt;T&gt;</c>, <c>IList&lt;T&gt;</c>, <c>IEnumerable&lt;T&gt;</c>, etc.) are normalized to
+    /// <c>ElementType[]</c> so the runtime OpenAPI schema renderer can resolve them via its existing
+    /// array-suffix handling rather than requiring a CLR <c>FullName</c> ↔ Roslyn display-string bridge.
+    /// </summary>
     private static string GetTypeName(ITypeSymbol typeSymbol)
     {
-        return typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat).Replace("global::", string.Empty, StringComparison.Ordinal);
+        // Arrays already produce "Element[]" from ToDisplayString — handle them naturally.
+        if (typeSymbol is IArrayTypeSymbol arrayType)
+        {
+            return GetTypeName(arrayType.ElementType) + "[]";
+        }
+
+        // Normalize generic collection interfaces and concrete List<T> to "Element[]".
+        if (typeSymbol is INamedTypeSymbol { IsGenericType: true, TypeArguments.Length: 1 } namedType
+            && IsCollectionType(namedType))
+        {
+            return GetTypeName(namedType.TypeArguments[0]) + "[]";
+        }
+
+        return typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
+            .Replace("global::", string.Empty, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Returns <c>true</c> when the type is a well-known single-element generic collection that should
+    /// be represented as an array in the OpenAPI body-type contract.
+    /// </summary>
+    private static bool IsCollectionType(INamedTypeSymbol type)
+    {
+        var ns = type.ContainingNamespace?.ToDisplayString();
+        if (ns is not ("System.Collections.Generic" or "System.Collections.Immutable"))
+        {
+            return false;
+        }
+
+        return type.Name is "List" or "IList" or "IReadOnlyList"
+            or "ICollection" or "IReadOnlyCollection"
+            or "IEnumerable"
+            or "ImmutableArray" or "ImmutableList";
     }
 
     private static ImmutableArray<string> GetResponseBodyTypeNames(
