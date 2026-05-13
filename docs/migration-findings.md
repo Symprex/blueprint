@@ -212,6 +212,7 @@
 | S365 Startup patterns audit | ✅ Done | 3 services audited (Portal, VCard, IdentityServer): NodaTime config → `ConfigureJson`, OpenAPI PostConfigure → `configureOpenApi`, Rebus subscriptions → S365-owned, tenant middleware → TenantModule, HATEOAS → LinkGenerationModule |
 | ResourceEventResult<T> typed chaining | ✅ Done | `WithMetadata`, `WithSecureData`, `WithChangedValue` return `ResourceEventResult<T>` (not base) — enables fluent chaining from typed convenience classes (`ResourceCreated<T>`, etc.) |
 | Binding helper extraction | ✅ Done | `BindRouteValue<T>`, `BindQueryValue<T>`, `BindQueryArray<T>`, `BindHeaderValue<T>`, `BindCookieValue<T>` with static `TryParseFunc<T>` lambdas — ~30K fewer generated IL lines across S365's 540 ops |
+| Async state machine elimination | ✅ Done | 5 PipelineHelpers methods converted to non-async fast-path + async-core pattern: `FlushBackgroundTasksAsync`, `ExecuteAuditSinkAsync`, `ExecuteResourceEventAuditSinkAsync`, `PopulatePropertiesAsync`, `PopulateHateoasLinksAsync` — saves state machine allocation on common no-op paths (no scheduler, no audit sink, 0-1 populators, not-modified) |
 | S365 PartnerId on operations | ✅ Verified | Only IdentityServer partner-specific operations (3 direct + PartnerOrderedPagedQuery base) have `PartnerId` property — these are URL route params, not auto-populated like TenantId. Blueprint handles correctly via standard route/query binding. |
 
 ---

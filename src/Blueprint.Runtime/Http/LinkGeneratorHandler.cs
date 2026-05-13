@@ -19,7 +19,7 @@ public static class LinkGeneratorHandler
     /// <param name="context">The current operation context.</param>
     /// <param name="result">The operation result to enrich with links.</param>
     /// <returns>A <see cref="ValueTask"/> representing the asynchronous link population.</returns>
-    public static async ValueTask AddLinksAsync(
+    public static ValueTask AddLinksAsync(
         IApiLinkGenerator apiLinkGenerator,
         IEnumerable<IResourceLinkGenerator> registeredGenerators,
         ApiOperationContext context,
@@ -33,11 +33,18 @@ public static class LinkGeneratorHandler
             _ => null,
         };
 
-        if (content is null)
-        {
-            return;
-        }
+        return content is not null
+            ? AddLinksAsyncCore(apiLinkGenerator, registeredGenerators, context, result, content)
+            : default;
+    }
 
+    private static async ValueTask AddLinksAsyncCore(
+        IApiLinkGenerator apiLinkGenerator,
+        IEnumerable<IResourceLinkGenerator> registeredGenerators,
+        ApiOperationContext context,
+        OperationResult result,
+        object content)
+    {
         var enriched = await AddResourceLinksAsync(apiLinkGenerator, registeredGenerators, context, content).ConfigureAwait(false);
 
         // OkResult allows content replacement (e.g. when materialising IQueryable)
@@ -58,12 +65,11 @@ public static class LinkGeneratorHandler
             await AddLinksAsync(apiLinkGenerator, generators, context, linkableResource).ConfigureAwait(false);
         }
 
-        var enumerableResult = resource as IEnumerable<object>;
-
-        if (resource is IApiResourceCollection pagedResult)
-        {
-            enumerableResult = pagedResult.GetEnumerable();
-        }
+        // Determine enumerable surface: IApiResourceCollection (paged/list) takes priority,
+        // otherwise fall back to IEnumerable<object> for raw collections.
+        var enumerableResult = resource is IApiResourceCollection pagedResult
+            ? pagedResult.GetEnumerable()
+            : resource as IEnumerable<object>;
 
         if (enumerableResult != null)
         {
