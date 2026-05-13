@@ -25,6 +25,14 @@ namespace Blueprint.Authorization;
 /// Optionally, a set of ignored scopes can be provided to skip
 /// non-API scopes such as <c>"openid"</c> or <c>"profile"</c>.
 /// </para>
+/// <para>
+/// <b>Verb hierarchy:</b> When verb inclusions are configured via the constructor
+/// (e.g. <c>"Manage" → [Create, Read, Update, Delete]</c>), a claim carrying a parent
+/// verb will also satisfy requirements for any of its included child verbs. For example,
+/// if a user has scope <c>"User.Manage"</c> and the operation requires
+/// <c>[Resource("User", "Read")]</c>, the check succeeds because <c>Manage</c> includes
+/// <c>Read</c>. This matches the S365 verb expansion model.
+/// </para>
 /// </remarks>
 public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvider, IResolvedResourceAuthorizationProvider
 {
@@ -34,6 +42,10 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
     private readonly string _scopeClaimType;
     private readonly string _separator;
     private readonly FrozenSet<string> _ignoredScopes;
+
+    // Inverse mapping: required verb → list of parent verbs that also satisfy it.
+    // e.g. "Create" → ["Manage"] means a "Manage" claim also satisfies a "Create" requirement.
+    private readonly FrozenDictionary<string, string[]> _verbIncludedIn;
 
     /// <summary>
     /// Initialises a new instance of the <see cref="ScopePairClaimAuthorizationProvider"/> class
@@ -57,16 +69,24 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
     /// Scope values to ignore during authorization (e.g. <c>"openid"</c>, <c>"profile"</c>).
     /// When non-null and non-empty, claims matching these values are skipped entirely.
     /// </param>
+    /// <param name="verbInclusions">
+    /// Optional verb hierarchy: maps parent verbs to the child verbs they include.
+    /// For example, <c>{ "Manage": ["Create", "Read", "Update", "Delete"] }</c> means a
+    /// claim of <c>"User.Manage"</c> also satisfies requirements for <c>"User.Create"</c>,
+    /// <c>"User.Read"</c>, etc. This matches the S365 verb expansion model.
+    /// </param>
     public ScopePairClaimAuthorizationProvider(
         string scopeClaimType,
         string separator,
-        IEnumerable<string>? ignoredScopes = null)
+        IEnumerable<string>? ignoredScopes = null,
+        IDictionary<string, string[]>? verbInclusions = null)
     {
         this._scopeClaimType = scopeClaimType ?? throw new ArgumentNullException(nameof(scopeClaimType));
         this._separator = separator ?? throw new ArgumentNullException(nameof(separator));
         this._ignoredScopes = ignoredScopes is not null
             ? ignoredScopes.ToFrozenSet(StringComparer.OrdinalIgnoreCase)
             : FrozenSet<string>.Empty;
+        this._verbIncludedIn = BuildInverseVerbMap(verbInclusions);
     }
 
     /// <inheritdoc />
@@ -112,6 +132,19 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
                 if (MatchesScopePair(claim.Value, required.Noun, this._separator, required.Verb))
                 {
                     return _trueResult;
+                }
+
+                // Verb hierarchy: if the claim carries a parent verb (e.g. "Manage"),
+                // check whether it includes the required verb (e.g. "Create").
+                if (this._verbIncludedIn.TryGetValue(required.Verb, out var parentVerbs))
+                {
+                    foreach (var parentVerb in parentVerbs)
+                    {
+                        if (MatchesScopePair(claim.Value, required.Noun, this._separator, parentVerb))
+                        {
+                            return _trueResult;
+                        }
+                    }
                 }
             }
         }
@@ -182,6 +215,19 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
                 {
                     return _trueResult;
                 }
+
+                // Verb hierarchy: if the claim carries a parent verb (e.g. "Manage"),
+                // check whether it includes the required verb (e.g. "Create").
+                if (this._verbIncludedIn.TryGetValue(required.Verb, out var parentVerbs))
+                {
+                    foreach (var parentVerb in parentVerbs)
+                    {
+                        if (MatchesScopePair(claim.Value, required.Noun, this._separator, parentVerb))
+                        {
+                            return _trueResult;
+                        }
+                    }
+                }
             }
         }
 
@@ -234,5 +280,42 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
         return span[..noun.Length].Equals(noun.AsSpan(), StringComparison.OrdinalIgnoreCase)
             && span.Slice(noun.Length, separator.Length).Equals(separator.AsSpan(), StringComparison.OrdinalIgnoreCase)
             && span[(noun.Length + separator.Length)..].Equals(verb.AsSpan(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Builds the inverse verb mapping from <c>verbInclusions</c>. The input maps parent verbs
+    /// to their children (e.g. <c>Manage → [Create, Read, Update, Delete]</c>). The output
+    /// maps each child verb to the parent verbs that include it (e.g. <c>Create → [Manage]</c>),
+    /// enabling O(1) lookup during authorization: "which parent verbs would also satisfy this
+    /// required verb?"
+    /// </summary>
+    private static FrozenDictionary<string, string[]> BuildInverseVerbMap(
+        IDictionary<string, string[]>? verbInclusions)
+    {
+        if (verbInclusions is null || verbInclusions.Count == 0)
+        {
+            return FrozenDictionary<string, string[]>.Empty;
+        }
+
+        var inverse = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var (parentVerb, childVerbs) in verbInclusions)
+        {
+            foreach (var childVerb in childVerbs)
+            {
+                if (!inverse.TryGetValue(childVerb, out var parents))
+                {
+                    parents = [];
+                    inverse[childVerb] = parents;
+                }
+
+                parents.Add(parentVerb);
+            }
+        }
+
+        return inverse.ToFrozenDictionary(
+            static kvp => kvp.Key,
+            static kvp => kvp.Value.ToArray(),
+            StringComparer.OrdinalIgnoreCase);
     }
 }
