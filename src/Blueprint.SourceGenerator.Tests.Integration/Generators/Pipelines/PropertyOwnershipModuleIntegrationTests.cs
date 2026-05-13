@@ -393,6 +393,23 @@ public class PropertyOwnershipModuleIntegrationTests
     }
 
     [Fact]
+    public void When_explicit_FromQuery_with_constructor_name_then_descriptor_has_custom_binding_name()
+    {
+        var descriptor = ConstructorQueryPopulationCommand.Configure();
+
+        descriptor.TryGetFeatureData<OperationPropertyOwnershipFeatureData>(out var ownershipData)
+            .Should().BeTrue();
+
+        // [FromQuery("validationToken")] constructor form overrides camelCase convention
+        ownershipData!.Entries.Should().Contain(
+            static e => e.PropertyName == "Token" && e.Source == PropertyBindingSource.Query && e.BindingName == "validationToken");
+
+        // Remaining property on POST should still be Body-owned
+        ownershipData.Entries.Should().Contain(
+            static e => e.PropertyName == "Payload" && e.Source == PropertyBindingSource.Body);
+    }
+
+    [Fact]
     public void When_mixed_explicit_and_convention_then_descriptor_has_all_sources()
     {
         var descriptor = MixedBindingPopulationCommand.Configure();
@@ -857,6 +874,27 @@ public partial class ExplicitQueryPopulationCommand : ICommand<string>
     public static Task<string> HandleAsync(ExplicitQueryPopulationCommand operation)
     {
         return Task.FromResult($"{operation.SearchTerm}:{operation.Title}");
+    }
+}
+
+/// <summary>
+/// POST command with <c>[FromQuery("validationToken")]</c> constructor form — proves the
+/// generator reads <c>ConstructorArguments</c> in addition to <c>NamedArguments</c> for the
+/// custom binding name.
+/// </summary>
+[Blueprint.Model.Attributes.AllowAnonymous]
+[Blueprint.Model.Attributes.RootLink("/population-test/constructor-query")]
+public partial class ConstructorQueryPopulationCommand : ICommand<string>
+{
+    [Blueprint.Model.Attributes.FromQuery("validationToken")]
+    public string? Token { get; set; }
+
+    /// <summary>Body-owned by convention.</summary>
+    public string? Payload { get; set; }
+
+    public static Task<string> HandleAsync(ConstructorQueryPopulationCommand operation)
+    {
+        return Task.FromResult($"{operation.Token}:{operation.Payload}");
     }
 }
 

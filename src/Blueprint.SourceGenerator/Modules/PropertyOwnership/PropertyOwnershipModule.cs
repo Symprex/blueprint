@@ -471,9 +471,17 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             return;
         }
 
-        // Named argument Name overrides the default camelCase property name
-        var nameOverride = attribute.NamedArguments
-            .FirstOrDefault(static a => a.Key == "Name").Value.Value as string;
+        // Constructor argument overrides first (e.g. [FromQuery("validationToken")])
+        var nameOverride = attribute.ConstructorArguments.Length > 0
+            ? attribute.ConstructorArguments[0].Value as string
+            : null;
+
+        // Fall back to named argument Name (e.g. [FromQuery(Name = "validationToken")])
+        if (string.IsNullOrWhiteSpace(nameOverride))
+        {
+            nameOverride = attribute.NamedArguments
+                .FirstOrDefault(static a => a.Key == "Name").Value.Value as string;
+        }
 
         var bindingName = !string.IsNullOrWhiteSpace(nameOverride) ? nameOverride : GetCamelCaseName(member.Name);
 

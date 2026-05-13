@@ -533,6 +533,38 @@ public class PropertyOwnershipModuleTests
     }
 
     [Fact]
+    public void When_property_has_FromQuery_with_constructor_name_then_uses_custom_name()
+    {
+        var result = CompileDescriptor(
+            """
+            [global::Blueprint.Model.Attributes.RootLink("/items")]
+            public partial class CreateItemCommand : ICommand<string>
+            {
+                [global::Blueprint.Model.Attributes.FromQuery("validationToken")]
+                public string? ValidationToken { get; set; }
+                public string Name { get; set; }
+
+                public static Task<string> HandleAsync(CreateItemCommand operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var descriptorSource = result.Output
+            .Select(static t => t.ToString())
+            .FirstOrDefault(static s => s.Contains("OperationPropertyOwnershipFeatureData"));
+
+        descriptorSource.Should().NotBeNull();
+        descriptorSource!.Should().Contain("PropertyBindingSource.Query");
+
+        // Constructor argument "validationToken" is used as the binding name
+        descriptorSource.Should().Contain("\"validationToken\"");
+    }
+
+    [Fact]
     public void When_property_has_explicit_FromHeader_then_header_owned()
     {
         var result = CompileDescriptor(
