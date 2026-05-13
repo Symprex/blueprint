@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Blueprint.Auditing;
+using Blueprint.Authorization;
 using Blueprint.Diagnostics;
 using Blueprint.Middleware;
 using Blueprint.Runtime.Exec;
@@ -78,6 +79,22 @@ public abstract class OperationExecutorShell : IOperationExecutorPipeline
     protected IAuditSink? AuditSink { get; }
 
     /// <summary>
+    /// Gets the resolved resource authorization provider cached at pipeline construction time, or
+    /// <see langword="null"/> when none is registered. The resolved provider receives pre-expanded
+    /// resource keys (compile-time string interpolation) for zero-reflection authorization checks.
+    /// Preferred by generated code when resource-key templates are present.
+    /// </summary>
+    protected IResolvedResourceAuthorizationProvider? ResolvedResourceAuthorizationProvider { get; }
+
+    /// <summary>
+    /// Gets the legacy resource authorization provider cached at pipeline construction time, or
+    /// <see langword="null"/> when none is registered. Used as a fallback when
+    /// <see cref="ResolvedResourceAuthorizationProvider"/> is not available, with runtime template
+    /// expansion via regex/reflection.
+    /// </summary>
+    protected IResourceAuthorizationProvider? ResourceAuthorizationProvider { get; }
+
+    /// <summary>
     /// Initialises a new instance of <see cref="OperationExecutorShell"/> with the supplied logger factory and
     /// operation type name used for activity tracing and structured log entries.
     /// </summary>
@@ -125,6 +142,8 @@ public abstract class OperationExecutorShell : IOperationExecutorPipeline
         this.TenantResolver = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<ITenantResolver>(serviceProvider);
         this.PropertyPopulators = PipelineHelpers.ResolveServiceArray<IPropertyPopulator>(serviceProvider);
         this.AuditSink = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<IAuditSink>(serviceProvider);
+        this.ResolvedResourceAuthorizationProvider = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<IResolvedResourceAuthorizationProvider>(serviceProvider);
+        this.ResourceAuthorizationProvider = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<IResourceAuthorizationProvider>(serviceProvider);
     }
 
     /// <inheritdoc />

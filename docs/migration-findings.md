@@ -539,6 +539,34 @@ S365 testing uses `WebApiFixtureFactory<TStartup>` → `ApiFixture` with:
 
 ---
 
+## Pipeline Code-Size Optimizations
+
+### Audit Tag Caching (Commit 3b20512)
+
+**Problem:** Every generated pipeline had a `private static readonly ActivityTagsCollection _auditTags_OpName` field with identical shape — only the operation type name differed. For 632 S365 operations this adds ~1,264 lines of static field declarations.
+
+**Solution:** Moved tag creation into `PipelineHelpers` using a `ConcurrentDictionary<string, ActivityTagsCollection>` cache. The `ExecuteAuditSinkAsync` method now takes just a `string operationTypeName` instead of a pre-built `ActivityTagsCollection`. Tags are lazily created and cached on first use.
+
+**Impact:** ~2 lines removed per pipeline (field + static initializer). Cache is thread-safe and deterministic. Zero behavioral change.
+
+### Base Class Field Hoisting (Commit 7b7a109)
+
+**Problem:** Every generated pipeline resolved 4 cross-cutting DI services independently:
+- `ITenantAccessor` (tenant read)
+- `ITenantResolver` (tenant resolution)
+- `IPropertyPopulator[]` (property population)
+- `IAuditSink` (audit logging)
+
+Each pipeline had 4 `private readonly` field declarations + 4 constructor resolution lines = ~8 lines per pipeline (~5,056 lines for 632 operations).
+
+**Solution:** Added a new `OperationExecutorShell` constructor overload that accepts `IServiceProvider` and resolves these 4 services into protected properties (`TenantAccessor`, `TenantResolver`, `PropertyPopulators`, `AuditSink`). Generated code now references base class properties instead of private fields. The old constructor is preserved for backward compatibility with companion generators.
+
+**Critical design constraint:** Only *field storage/DI resolution* moved to the base class. The *invocation* calls (`ResolveTenantAsync`, property populator loop, `ExecuteAuditSinkAsync`) remain in generated `ExecuteCoreAsync` at their correct pipeline stage positions. Moving invocations to base `ExecuteAsync` would break stage ordering — tenant resolution and property population must run AFTER body binding.
+
+**Impact:** ~8 lines removed per pipeline. Zero behavioral change. S365 proof builds clean.
+
+---
+
 ## S365 Operation Patterns
 
 ### Return Type Mapping

@@ -302,26 +302,6 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
         // Add authorization check after authentication
         context.RequireAsync();
 
-        // Cache singleton IResourceAuthorizationProvider at pipeline construction time
-        context.CacheService(
-            "_resourceAuthorizationProvider",
-            "Blueprint.Authorization.IResourceAuthorizationProvider",
-            "Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Authorization.IResourceAuthorizationProvider>(serviceProvider)",
-            isNullable: true);
-
-        // When templates are present, also cache IResolvedResourceAuthorizationProvider to
-        // avoid per-request DI resolution (auth providers are singletons).
-        var hasTemplates = effectiveScopePairs.Any(static sp => sp.ResourceKeyTemplate is not null);
-
-        if (hasTemplates && !hasTemplateValidationErrors)
-        {
-            context.CacheService(
-                "_resolvedResourceAuthorizationProvider",
-                "Blueprint.Authorization.IResolvedResourceAuthorizationProvider",
-                "Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Authorization.IResolvedResourceAuthorizationProvider>(serviceProvider)",
-                isNullable: true);
-        }
-
         // Cache the ScopePair[] as a static readonly field to avoid per-request allocation
         // (all values are compile-time string literals)
         var scopePairFieldName = "_scopePairs_" + context.Operation.TypeName.Replace(".", "_").Replace("+", "_");
@@ -376,9 +356,9 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
         var httpContextExpr = context.GetHttpContextExpression();
         var principalExpr = $"{httpContextExpr}.User";
 
-        // Use cached IResolvedResourceAuthorizationProvider (resolved at construction time)
+        // Use base class cached IResolvedResourceAuthorizationProvider
         context.If(
-            "this._resolvedResourceAuthorizationProvider != null",
+            "this.ResolvedResourceAuthorizationProvider != null",
             resolvedBranch =>
             {
                 string scopeArg;
@@ -406,7 +386,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
 
                 resolvedBranch.DeclareVariable(
                     "authorizationDenial",
-                    $"await Blueprint.Runtime.Exec.PipelineHelpers.CheckResourceAuthorizationAsync(context, {principalExpr}, this._resolvedResourceAuthorizationProvider, {scopeArg}, {httpContextExpr}.RequestAborted).ConfigureAwait(false)");
+                    $"await Blueprint.Runtime.Exec.PipelineHelpers.CheckResourceAuthorizationAsync(context, {principalExpr}, this.ResolvedResourceAuthorizationProvider, {scopeArg}, {httpContextExpr}.RequestAborted).ConfigureAwait(false)");
 
                 resolvedBranch.If(
                     "authorizationDenial != null",
@@ -464,7 +444,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
 
         context.DeclareVariable(
             "authorizationDenial",
-            $"await Blueprint.Runtime.Exec.PipelineHelpers.CheckResourceAuthorizationAsync(context, {principalExpr}, this._resourceAuthorizationProvider, {scopePairFieldName}, {httpContextExpr}.RequestAborted).ConfigureAwait(false)");
+            $"await Blueprint.Runtime.Exec.PipelineHelpers.CheckResourceAuthorizationAsync(context, {principalExpr}, this.ResourceAuthorizationProvider, {scopePairFieldName}, {httpContextExpr}.RequestAborted).ConfigureAwait(false)");
 
         context.If(
             "authorizationDenial != null",

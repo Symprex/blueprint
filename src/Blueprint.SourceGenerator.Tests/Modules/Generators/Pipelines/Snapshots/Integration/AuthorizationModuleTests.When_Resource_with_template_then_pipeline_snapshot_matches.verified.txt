@@ -19,8 +19,6 @@ namespace Blueprint.Generated
         static readonly string[] _appliedModuleIds =
             new string[] { "PropertyOwnershipModule", "TenantModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "AuthorizationModule", "HandlerExecutionModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
         readonly Blueprint.Authorization.IOperationAuthoriser[] _operationAuthorisers;
-        readonly Blueprint.Authorization.IResolvedResourceAuthorizationProvider _resolvedResourceAuthorizationProvider;
-        readonly Blueprint.Authorization.IResourceAuthorizationProvider _resourceAuthorizationProvider;
         private static readonly Blueprint.Model.ScopePair[] _scopePairs_GetAccountQuery =
             new Blueprint.Model.ScopePair[] { new Blueprint.Model.ScopePair("account", "read", "/tenants/{Auth:AccountId}/accounts/{Id}") };
         readonly Blueprint.Authorization.IUserAuthorisationContextFactory _userContextFactory;
@@ -28,8 +26,6 @@ namespace Blueprint.Generated
         public GetAccountQueryExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, System.IServiceProvider serviceProvider)
             : base(loggerFactory, "GetAccountQuery", serviceProvider)
         {
-            this._resourceAuthorizationProvider = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Authorization.IResourceAuthorizationProvider>(serviceProvider);
-            this._resolvedResourceAuthorizationProvider = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Authorization.IResolvedResourceAuthorizationProvider>(serviceProvider);
             this._apiAuthorisers = Blueprint.Runtime.Exec.PipelineHelpers.ResolveServiceArray<Blueprint.Authorization.IApiAuthoriser>(serviceProvider);
             this._operationAuthorisers = Blueprint.Runtime.Exec.PipelineHelpers.ResolveServiceArray<Blueprint.Authorization.IOperationAuthoriser>(serviceProvider);
             this._userContextFactory = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Authorization.IUserAuthorisationContextFactory>(serviceProvider);
@@ -58,9 +54,9 @@ namespace Blueprint.Generated
 
             await Blueprint.Runtime.Exec.PipelineHelpers.LoadUserContextAsync(context, httpContext, this._userContextFactory).ConfigureAwait(false);
 
-            if (this._resolvedResourceAuthorizationProvider != null)
+            if (this.ResolvedResourceAuthorizationProvider != null)
             {
-                var authorizationDenial = await Blueprint.Runtime.Exec.PipelineHelpers.CheckResourceAuthorizationAsync(context, httpContext.User, this._resolvedResourceAuthorizationProvider, new Blueprint.Model.ResolvedScopePair("account", "read", "/tenants/{Auth:AccountId}/accounts/{Id}", $"/tenants/{context.UserAuthorisationContext?.AccountId ?? httpContext.User.FindFirst("AccountId")?.Value ?? ""}/accounts/{operation.Id?.ToString() ?? ""}"), httpContext.RequestAborted).ConfigureAwait(false);
+                var authorizationDenial = await Blueprint.Runtime.Exec.PipelineHelpers.CheckResourceAuthorizationAsync(context, httpContext.User, this.ResolvedResourceAuthorizationProvider, new Blueprint.Model.ResolvedScopePair("account", "read", "/tenants/{Auth:AccountId}/accounts/{Id}", $"/tenants/{context.UserAuthorisationContext?.AccountId ?? httpContext.User.FindFirst("AccountId")?.Value ?? ""}/accounts/{operation.Id?.ToString() ?? ""}"), httpContext.RequestAborted).ConfigureAwait(false);
                 if (authorizationDenial != null)
                 {
                     return authorizationDenial;
@@ -68,7 +64,7 @@ namespace Blueprint.Generated
             }
             else
             {
-                var authorizationDenial = await Blueprint.Runtime.Exec.PipelineHelpers.CheckResourceAuthorizationAsync(context, httpContext.User, this._resourceAuthorizationProvider, _scopePairs_GetAccountQuery, httpContext.RequestAborted).ConfigureAwait(false);
+                var authorizationDenial = await Blueprint.Runtime.Exec.PipelineHelpers.CheckResourceAuthorizationAsync(context, httpContext.User, this.ResourceAuthorizationProvider, _scopePairs_GetAccountQuery, httpContext.RequestAborted).ConfigureAwait(false);
                 if (authorizationDenial != null)
                 {
                     return authorizationDenial;
