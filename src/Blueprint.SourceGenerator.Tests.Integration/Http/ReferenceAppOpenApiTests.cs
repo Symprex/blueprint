@@ -1099,7 +1099,7 @@ public class ReferenceAppOpenApiTests
         endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
 
         var wellKnown = FindEndpoint(endpoints, "/.well-known/openapi", "GET");
-        wellKnown.Should().NotBeNull("RFC 9727 well-known OpenAPI endpoint should be registered");
+        wellKnown.Should().NotBeNull("RFC 9264 well-known OpenAPI endpoint should be registered");
     }
 
     [Fact]

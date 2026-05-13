@@ -18,7 +18,7 @@
 | First-class tenancy | ✅ Done | TenantModule in pipeline, claim-based resolution |
 | Pipeline body extraction | ✅ Done | `PipelineHelpers.ReadJsonBodyAsync` (~80 lines → 1 line) |
 | Minimize test churn | ✅ Done | Typed overloads, anonymous BackgroundTask/Message, factory pattern |
-| OpenAPI well-known endpoint | ✅ Done | RFC 9727 `/.well-known/openapi` |
+| OpenAPI well-known endpoint | ✅ Done | RFC 9264 `/.well-known/openapi` |
 | Compile-time populators | ✅ Done | PropertyOwnershipModule + TenantModule handle all at compile time |
 | TypeScript generation compat | ✅ Documented | Custom Handlebars templates analysed (see below) |
 | Codemod S365 run | ✅ Done | 10 BPMIG diagnostics found (3 auto-fixable, 2 config, 2 rewrite, 3 manual) |
@@ -138,6 +138,17 @@
 | S365 ApiOperations base class | ✅ Verified | Context, Identity, Logger, CancellationToken auto-injected; HttpContext/HttpRequest/HttpResponse derive from Context.GetHttpContext() |
 | S365 NotFoundException handling | ✅ Verified | `ApiException(404)` → `UnhandledExceptionResult` → ProblemDetails JSON with 404 status; exact S365 pattern |
 | S365 TypeScript codegen flow | ✅ Analysed | Backend writes OpenAPI JSON to disk → Node.js script loads + Handlebars templates generate api.ts; `x-links` extension required (Blueprint emits it) |
+| OpenAPI tag grouping | ✅ Compatible | Both S365 and Blueprint derive tags from last namespace segment; `[ApiOperations("Group")]` available for explicit override |
+| OpenAPI response status codes | ✅ Improvement | Blueprint generates more granular codes (201/302/401/403/415); S365 omits 401 despite using Bearer auth. Blueprint output is strictly better. |
+| Query string binding | ✅ Compatible | S365 uses `[FromQuery]` explicitly; Blueprint supports same attribute plus automatic GET binding |
+| Pagination patterns | ✅ Compatible | S365 `OrderedPagedQuery<T>` + `PagedApiResource<T>` identical to Blueprint. Custom pages (e.g. aggregate stats) work unchanged |
+| Binary file responses | ⚠️ S365-owned | S365 embeds binary as base64 in JSON (e.g. InvoicePdfApiResource). Blueprint offers `FileStreamResult` for streaming. Migration optional. |
+| Custom HTTP headers | ✅ None needed | No S365 operations use custom request/response headers |
+| Correlation IDs | ✅ Not applicable | Infrastructure-level, not operation-level — no migration needed |
+| Error response shape | ✅ Compatible | Both use RFC 7807 ProblemDetails. Blueprint uses `application/problem+json` content-type (correct per spec). |
+| Enum handling | ✅ Compatible | S365 uses string properties; Blueprint uses `JsonStringEnumConverter` by default — both produce string values |
+| x-enumNames OpenAPI ext | ✅ Done | Blueprint emits both `x-enumNames` (NSwag) and `x-enum-varnames` (OpenAPI Generator) for maximum tooling compat |
+| RFC 9264 well-known endpoint | ✅ Done | Corrected from RFC 9727 → RFC 9264; `/.well-known/openapi` serves same pre-rendered document |
 
 ---
 
@@ -373,7 +384,7 @@ Successfully ran Blueprint codemod against `Signature365.sln` (158 projects). Fo
 
 ## Open Questions
 
-1. ~~**OpenAPI endpoint path**: What is the current best practice?~~ → **Resolved**: RFC 9727 `/.well-known/openapi`
+1. ~~**OpenAPI endpoint path**: What is the current best practice?~~ → **Resolved**: RFC 9264 `/.well-known/openapi`
 2. ~~**Pipeline IL size**: How much duplication exists?~~ → **Resolved**: ~80 lines per pipeline → 1 line via `ReadJsonBodyAsync`
 3. ~~**Tenant middleware ordering**: Should tenant resolution be ASP.NET middleware or pipeline stage?~~ → **Resolved**: TenantModule in pipeline
 4. ~~**Property populator elimination**: Can ALL S365 property populators become compile-time?~~ → **Resolved**: Yes, PropertyOwnershipModule + TenantModule
