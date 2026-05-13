@@ -115,6 +115,12 @@ public static class EndpointRouteBuilderExtensions
         // Core endpoint to avoid ambiguous routing.
         var mappedEndpoints = new HashSet<(string Route, Type OperationType)>(StringTupleComparer.Instance);
 
+        // Track route→operation for cross-operation collision detection.
+        // Key: (normalised route, HTTP method); Value: first operation name that claimed this route.
+        var routeOwners = new Dictionary<(string Route, string Method), string>(RouteMethodComparer.Instance);
+
+        var logger = endpoints.ServiceProvider.GetService<ILoggerFactory>()?.CreateLogger("Blueprint.Routing");
+
         foreach (var operation in runtimeModel.Operations)
         {
             // Only map operations that are exposed to the HTTP host (have URLs).
@@ -134,6 +140,30 @@ public static class EndpointRouteBuilderExtensions
                 if (!mappedEndpoints.Add((url.UrlFormat, operation.OperationType)))
                 {
                     continue;
+                }
+
+                // Detect cross-operation route collisions: different operations claiming the same route+method.
+                foreach (var method in httpMethods)
+                {
+                    var routeKey = (url.UrlFormat, method);
+
+                    if (routeOwners.TryGetValue(routeKey, out var existingOwner))
+                    {
+                        if (!string.Equals(existingOwner, operation.Name, StringComparison.Ordinal))
+                        {
+                            logger?.LogWarning(
+                                "Route collision detected: {Method} {Route} is claimed by both '{ExistingOperation}' and '{NewOperation}'. " +
+                                "The first registration wins at runtime. Review [Link]/[SelfLink] attributes to resolve.",
+                                method,
+                                url.UrlFormat,
+                                existingOwner,
+                                operation.Name);
+                        }
+                    }
+                    else
+                    {
+                        routeOwners[routeKey] = operation.Name;
+                    }
                 }
 
                 var builder = endpoints.Map(RoutePatternFactory.Parse(basePath.TrimEnd('/') + url.UrlFormat), requestDelegate);
@@ -384,6 +414,27 @@ public static class EndpointRouteBuilderExtensions
             return HashCode.Combine(
                 obj.Route.GetHashCode(StringComparison.Ordinal),
                 obj.OperationType);
+        }
+    }
+
+    /// <summary>
+    /// Compares (string Route, string Method) tuples for cross-operation route collision detection.
+    /// </summary>
+    private sealed class RouteMethodComparer : IEqualityComparer<(string Route, string Method)>
+    {
+        public static readonly RouteMethodComparer Instance = new();
+
+        public bool Equals((string Route, string Method) x, (string Route, string Method) y)
+        {
+            return string.Equals(x.Route, y.Route, StringComparison.Ordinal)
+                   && string.Equals(x.Method, y.Method, StringComparison.OrdinalIgnoreCase);
+        }
+
+        public int GetHashCode((string Route, string Method) obj)
+        {
+            return HashCode.Combine(
+                obj.Route.GetHashCode(StringComparison.Ordinal),
+                obj.Method.GetHashCode(StringComparison.OrdinalIgnoreCase));
         }
     }
 }

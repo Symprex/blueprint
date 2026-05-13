@@ -165,10 +165,10 @@ public class ApiOperationContext : IHttpOperationContext
             HttpContext = this.HttpContext,
             BaseUri = this.BaseUri,
 
-            // Share the mutable state dictionary with the parent when it already exists,
-            // otherwise leave null so the nested context lazily creates its own if needed.
-            // Using the backing field avoids triggering the parent's lazy allocation.
-            _data = this._data,
+            // Share the mutable state dictionary with the parent. Using the property
+            // getter ensures the parent allocates its dictionary if it hasn't yet, so
+            // parent and nested context always share the same reference.
+            _data = this.Data,
         };
 
         return nested;
