@@ -180,6 +180,9 @@
 | Blueprint.Marten.Rebus bridge | ✅ Done | `RebusDomainEventPublisher` implements `IDomainEventPublisher` via `IBus.Publish()`. `AddBlueprintMartenRebus()` DI registration. 4 unit tests passing. |
 | S365 verb hierarchy (auth) | ✅ S365-owned | "Manage" includes Read/Update/Create/Delete — this is an `IResourceAuthorizationProvider` implementation concern, not a Blueprint core concern |
 | S365 resource key wildcards | ✅ S365-owned | "/Tenants/123/*" wildcard matching — implemented in S365's `IResolvedResourceAuthorizationProvider`, Blueprint provides the pre-expanded keys |
+| Validation regex caching | ✅ Done | `[RegularExpression]` fast-path now emits `static readonly Regex` field with `RegexOptions.Compiled` — eliminates per-request pattern compilation from `Regex.IsMatch(string, string)` |
+| Validation pipeline audit | ✅ Done | Full audit confirmed: zero allocation on success path, zero reflection in fast-paths, 43 fast-path strategies, lazy `List<ValidationResult>`, attribute caching via static fields. Only fallback for custom/unsupported attributes. |
+| OpenAPI shape audit | ✅ Compatible | Blueprint emits same `operationId` (class name), tags, `x-links` {rel, operationId, method}, schema components. S365 Handlebars templates use `{{#withOperation operationId}}` which traverses full OpenAPI doc — fully compatible. |
 
 ---
 

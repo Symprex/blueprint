@@ -4,7 +4,7 @@ This guide walks through migrating a legacy Blueprint application (such as a Sig
 
 ## Prerequisites
 
-- .NET 8+ SDK
+- .NET 10+ SDK
 - The `Blueprint.Runtime`, `Blueprint.Runtime.Model`, and `Blueprint.Validation` packages (NuGet or project references)
 - The `Blueprint.SourceGenerator` analyzer reference (see [Generator wiring](#generator-wiring))
 - Optional: `Blueprint.Migration.Analyzers` for automated migration diagnostics
@@ -29,7 +29,7 @@ This guide walks through migrating a legacy Blueprint application (such as a Sig
 | `ICommand` / `IQuery` | Same interfaces | No change |
 | `ValidationException` | `ValidationFailedResult` (no-exception fast path) | Transparent |
 | `IAuditSink` | Same interface, registered via `BlueprintServiceBuilder` | No change |
-| `SetTenantMiddleware` | `IPropertyPopulator` via `AddPropertyPopulator<T>()` | Consumer rewrite |
+| `SetTenantMiddleware` | `TenantModule` (compile-time) via `ITenantResolver` + `ITenantAccessor` DI registration | Registration change |
 | `StartRebusTransactionScope` | `IMessageOutbox` via `AddMessageOutbox<T>()` | Consumer rewrite |
 | `SaveMartenChanges` middleware | `IUnitOfWork` via `AddUnitOfWork<T>()` | Registration change |
 | `IUnitOfWork` middleware | Built-in `UnitOfWorkModule` via `AddUnitOfWork<T>()` | No change |
@@ -37,7 +37,7 @@ This guide walks through migrating a legacy Blueprint application (such as a Sig
 | `IUserAuthorisationContext` | Same interface via `AddUserAuthorisationContextFactory<T>()` | No change |
 | `IApiAuthoriser` | Same interface via `AddApiAuthoriser<T>()`, or focused `IOperationAuthoriser` / `ILinkVisibilityAuthoriser` | Recommended split |
 | `StateBasedLinkChecker<T,R>` | Now implements `ILinkVisibilityAuthoriser` via `AddLinkVisibilityAuthoriser<T>()` | Registration change |
-| `Blueprint.Tasks.Hangfire` | Consumer-provided `IBackgroundTaskScheduler` implementation | Consumer rewrite |
+| `Blueprint.Tasks.Hangfire` | `Blueprint.Tasks.Hangfire` package: `HangfireBackgroundTaskScheduleProvider` + `HangfireRecurringTaskProvider` | Package reference change |
 | `IAuditor` / `AuditItem` | `IResourceEventAuditSink` | Consumer rewrite |
 
 ## Step-by-step migration
@@ -985,16 +985,17 @@ calls at the correct stage.
 
 ### Hangfire (background task scheduling)
 
+Blueprint provides the `Blueprint.Tasks.Hangfire` package with ready-to-use implementations:
+
 | Legacy | New |
 |--------|-----|
-| `HangfireBackgroundTaskScheduleProvider` | Implement `IBackgroundTaskScheduleProvider` |
-| `HangfireRecurringTaskProvider` | Implement `IRecurringTaskScheduler` |
-| `BlueprintTasksBuilderExtensions.UseHangfire()` | `blueprint.AddBackgroundTaskScheduleProvider<T>()` |
+| `HangfireBackgroundTaskScheduleProvider` | `Blueprint.Tasks.Hangfire.HangfireBackgroundTaskScheduleProvider` |
+| `HangfireRecurringTaskProvider` | `Blueprint.Tasks.Hangfire.HangfireRecurringTaskProvider` |
+| `BlueprintTasksBuilderExtensions.UseHangfire()` | `services.AddBlueprintHangfire()` |
 
 ```csharp
 // Register in startup:
-blueprint.AddBackgroundTaskScheduleProvider<HangfireTaskProvider>();
-blueprint.AddRecurringTaskScheduler<HangfireRecurringTasks>();
+services.AddBlueprintHangfire();
 
 // The provider receives BackgroundTaskEnvelope with W3C traceparent headers
 // for distributed trace correlation across async boundaries.
@@ -1002,10 +1003,13 @@ blueprint.AddRecurringTaskScheduler<HangfireRecurringTasks>();
 
 ### Rebus (transactional outbox)
 
+Blueprint provides the `Blueprint.Rebus` companion generator and `Blueprint.Marten.Rebus` bridge:
+
 | Legacy | New |
 |--------|-----|
-| `StartRebusTransactionScopeMiddleware` | Implement `IMessageOutbox` |
+| `StartRebusTransactionScopeMiddleware` | `Blueprint.Rebus` companion generator (auto-generates transaction scope) |
 | `CommitRebusTransactionScopeMiddleware` | (automatic — generated pipeline calls `CommitAsync`) |
+| Marten outbox + Rebus publish | `Blueprint.Marten.Rebus.AddBlueprintMartenRebus()` |
 
 ```csharp
 // Register in startup:
