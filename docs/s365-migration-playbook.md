@@ -605,9 +605,9 @@ services.AddBlueprintApi<AnalyticsBlueprintApp, AnalyticsBlueprintAppExecutor>(b
     blueprint.AddResourceAuthorizationProvider<S365ResourceAuthorizationProvider>();
     blueprint.AddUserAuthorisationContextFactory<Signature365UserAuthorisationContextFactory>();
 
-    blueprint.ConfigureHttp(http =>
+    blueprint.ConfigureJson(json =>
     {
-        http.JsonSerializerOptions.ConfigureForNodaTime(DateTimeZoneProviders.Tzdb);
+        json.SerializerOptions.ConfigureForNodaTime(DateTimeZoneProviders.Tzdb);
     });
 });
 
@@ -761,9 +761,9 @@ public partial class GetTemplatesQuery : IQuery<TemplateApiResource[]>
 services.AddBlueprintApi<TemplatesBlueprintApp, TemplatesBlueprintAppExecutor>(blueprint =>
 {
     // No resource auth needed — only [MustBeAuthenticated]
-    blueprint.ConfigureHttp(http =>
+    blueprint.ConfigureJson(json =>
     {
-        http.JsonSerializerOptions.ConfigureForNodaTime(DateTimeZoneProviders.Tzdb);
+        json.SerializerOptions.ConfigureForNodaTime(DateTimeZoneProviders.Tzdb);
     });
 });
 
@@ -858,9 +858,9 @@ services.AddBlueprintApi<GenerationBlueprintApp, GenerationBlueprintAppExecutor>
     blueprint.AddUnitOfWork<MartenUnitOfWork>();
     blueprint.AddBackgroundTaskScheduler<HangfireTaskScheduler>();
 
-    blueprint.ConfigureHttp(http =>
+    blueprint.ConfigureJson(json =>
     {
-        http.JsonSerializerOptions.ConfigureForNodaTime(DateTimeZoneProviders.Tzdb);
+        json.SerializerOptions.ConfigureForNodaTime(DateTimeZoneProviders.Tzdb);
     });
 });
 

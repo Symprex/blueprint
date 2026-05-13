@@ -128,6 +128,8 @@
 | Custom middleware → modules | ✅ Verified | All 6 S365 middleware types (Tenant, Rebus TX, Marten Save, Marten Outbox, ResourceExpand, Links) have compile-time module equivalents |
 | Health checks | ✅ Not Blueprint | S365 health checks are standard ASP.NET Core (`MapHealthChecks`); Blueprint-agnostic, no migration needed |
 | PlainTextResult compat | ✅ Verified | 14 S365 usages; extends `HttpResult` which is a supported result type in Blueprint |
+| ConfigureJson for NodaTime | ✅ Done | `BlueprintServiceBuilder.ConfigureJson()` wires `JsonSerializerOptions` into `JsonSerializerContext` via `BlueprintApp.ApplySerializerOptions()` — S365 calls `json.SerializerOptions.ConfigureForNodaTime(DateTimeZoneProviders.Tzdb)` |
+| Singleton BlueprintApp from DI | ✅ Done | `MapBlueprintApi` now prefers DI-registered singleton (with serializer options applied) over `new T()`; fallback for manual test setups |
 | BlueprintHttpClient optimization | ✅ Done | PropertyInfo cache per type, lazy StringBuilder for query params, span-based placeholder parsing — eliminates per-request reflection and string allocations |
 | PipelineHelpers.ResolveServiceArray | ✅ Done | Fast-path `is T[]` check avoids `ToArray()` copy when DI returns arrays directly |
 | ResourceEvent JSON envelope fix | ✅ Done | `SendResourceEventAsync` + `SeedTemplateAsync` now check `data` property before `content` — matches `ResourceEventEnvelope` serialization shape |
