@@ -445,19 +445,20 @@ public partial class LoadAnalyticsQuery : IQuery<ProxyResult>
 **Pattern B: Separate handler class** (used via `OperationsHandlerScanner`)
 ```csharp
 // The source generator discovers handlers from ApiOperations base classes
-// automatically. Rename Handle → InvokeAsync for the convention match.
+// automatically. All four conventions are supported: Invoke, InvokeAsync,
+// Handle, HandleAsync — NO rename needed.
 public class AnalyticsOperations : ApiOperations
 {
-    public async Task<Result> InvokeAsync(FindSentEmailsQuery query, ...) { ... }
+    public async Task<Result> HandleAsync(FindSentEmailsQuery query, ...) { ... }
 }
 ```
 
-#### 6b. Migrate ResourceEvent Return Types
+#### 6b. ResourceEvent Return Types (NO CHANGE REQUIRED)
 
-S365 commands return `ResourceEvent<T>` from `ResourceEventDefinitionFactory`. The new Blueprint uses source-generated event records via `[ResourceEventFamily]`.
+S365 commands that return `ResourceEvent<T>` using `ResourceEventDefinitionFactory` work **unchanged** with new Blueprint. The source generator recognises `ICommand<ResourceEvent<T>>` as a valid declared result contract (BP108 fix). No migration to `[ResourceEventFamily]` or `ResourceEventResult<T>` is required.
 
 ```csharp
-// Before (S365): ResourceEventDefinitionFactory pattern
+// S365 pattern — works AS-IS with new Blueprint (no changes needed)
 public static class FolderEvents
 {
     private static readonly ResourceEventDefinitionFactoryWithMapper<FolderApiResource, Folder> Factory =
@@ -468,10 +469,10 @@ public static class FolderEvents
     public static readonly ResourceEventDefinitionWithMapper<FolderApiResource, Folder> Deleted = Factory.Deleted();
 }
 
-// Command declares ICommand<ResourceEvent<FolderApiResource>>
-public class CreateFolderCommand : ICommand<ResourceEvent<FolderApiResource>> { ... }
+// Command declares ICommand<ResourceEvent<FolderApiResource>> — unchanged
+public partial class CreateFolderCommand : ICommand<ResourceEvent<FolderApiResource>> { ... }
 
-// Handler returns ResourceEvent<T>
+// Handler returns ResourceEvent<T> — unchanged
 public ResourceEvent<FolderApiResource> Handle(CreateFolderCommand cmd)
 {
     var folder = new Folder { ... };
@@ -480,44 +481,15 @@ public ResourceEvent<FolderApiResource> Handle(CreateFolderCommand cmd)
 }
 ```
 
-```csharp
-// After (new Blueprint): [ResourceEventFamily] + generated event records
-[ResourceEventFamily(typeof(FolderApiResource), ResourceObject = "folder")]
-public static partial class FolderResourceEvents
-{
-    [ResourceEventReason(ChangeType.Created, "created")]
-    public sealed partial record Created(FolderApiResource Body);
+**Key points:**
+- `ResourceEvent<T>` return type is fully supported — no need to change to `ResourceEventResult<T>`
+- `ResourceEventDefinitionFactory` / `ResourceEventDefinition.For(...)` works unchanged
+- JSON serialisation includes `$object: "event"` discriminator and string `changeType` (fixed)
+- `IResourceEventAuditSink` integration fires for `ResourceEvent` results automatically
+- The `[ResourceEventFamily]` pattern is available as an **optional** future improvement but is NOT required for migration
 
-    [ResourceEventReason(ChangeType.Updated, "updated")]
-    public sealed partial record Updated(FolderApiResource Body);
-
-    [ResourceEventReason(ChangeType.Deleted, "deleted")]
-    public sealed partial record Deleted([ResourceEventKey] string Key);
-}
-
-// Command declares ICommand<ResourceEventResult<FolderApiResource>>
-public partial class CreateFolderCommand : ICommand<ResourceEventResult<FolderApiResource>> { ... }
-
-// Handler returns ResourceEventResult<T> (implicit conversion from generated record)
-public ResourceEventResult<FolderApiResource> InvokeAsync(CreateFolderCommand cmd)
-{
-    var folder = new FolderApiResource { ... };
-    return new FolderResourceEvents.Created(folder);
-}
-
-// For delete (key-only): ICommand<KeyOnlyResourceEventResult>
-public partial class DeleteFolderCommand : ICommand<KeyOnlyResourceEventResult> { ... }
-public KeyOnlyResourceEventResult InvokeAsync(DeleteFolderCommand cmd)
-{
-    return new FolderResourceEvents.Deleted(cmd.Id);
-}
-```
-
-**Key differences:**
-- Return type changes: `ResourceEvent<T>` → `ResourceEventResult<T>` (or `KeyOnlyResourceEventResult` for deletes)
-- Event definition: `ResourceEventDefinitionFactory` → `[ResourceEventFamily]` attribute with generated records
-- Handler return: `FolderEvents.Created.New(entity)` → `new FolderResourceEvents.Created(apiResource)`
-- The generated event records have implicit conversions to `ResourceEventResult<T>`/`KeyOnlyResourceEventResult`
+**Optional future improvement:** `[ResourceEventFamily]` with generated event records is available for
+new code or gradual refactoring, but should NOT be part of the initial migration to avoid unnecessary churn.
 
 #### 7. Verify and Run Tests
 

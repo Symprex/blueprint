@@ -110,6 +110,8 @@
 | S365 control attribute compat | ✅ Verified | All 5 S365 control attributes have Blueprint equivalents: `[DoNotSaveChanges]`, `[NoRebusTransaction]`, `[DoNotAudit]`, `[Sensitive]`, `[AlwaysExpand]` |
 | Tenancy first-class complete | ✅ Verified | `TenantModule` replaces `SetTenantMiddleware` entirely: claim resolution via `ITenantResolver`, direct `TenantId` assignment (no reflection), `ITenantAccessor.Current` ambient context — all compile-time generated |
 | ResourceEvent backward compat | ✅ Verified | `ICommand<ResourceEvent<T>>` works unchanged; S365 `BusResourceEventAuditRepository` → Blueprint `IResourceEventAuditSink`; `[DoNotAudit]` opt-out works; `ResourceCreated/Updated/Deleted<T>` all supported |
+| ResourceEvent `$object` JSON | ✅ Fixed | Added `[JsonPropertyName("$object")]` returning `"event"` to `ResourceEvent` class — S365 wire format requires this discriminator |
+| ResourceEventChangeType enum | ✅ Fixed | Added `[JsonConverter(typeof(JsonStringEnumConverter))]` — was serializing as 0/1/2 instead of `"Created"`/`"Updated"`/`"Deleted"` |
 | ReadJsonBodyAsync static delegate | ✅ Already done | `PopulateFromBodyDelegate<TOperation>` takes operation as parameter; generated code uses `static (_bodyBytes, _op) => PopulateFromJsonBody(_bodyBytes, _op)` — zero closure allocation |
 | Rebus handler patterns (47 handlers) | ✅ Verified | All S365 Rebus patterns supported: `IHandleMessages<T>` (47 handlers), `Subscribe<T>()` (20 services), `bus.Publish/Send`, `IMessageContext`, one-way clients — no sagas, no exotic attributes |
 | Rebus outbox pattern | ✅ S365-owned | Marten outbox with `OutboxForwarder`/`MartenOutboxStorage` — stays S365-owned DI registration, Blueprint provides `IMessageOutbox` integration |
@@ -472,11 +474,16 @@ S365 testing uses `WebApiFixtureFactory<TStartup>` → `ApiFixture` with:
 
 | S365 Return Type | Blueprint Return Type | Notes |
 |---|---|---|
-| `ResourceEvent<T>` | `ResourceEventResult<T>` | Name change only |
-| `StatusCodeResult.Accepted` | `AcceptedResult` / `NoResultOperationResult` | Need to verify |
-| `StatusCodeResult.NoContent` | `HttpNoContentResult` | Already supported |
+| `ResourceEvent<T>` | `ResourceEvent<T>` | ✅ **No change needed** — BP108 recognizes this directly |
+| `StatusCodeResult.Accepted` | `StatusCodeResult.Accepted` | ✅ **No change needed** — identical nested type + `.Instance` singleton |
+| `StatusCodeResult.NoContent` | `StatusCodeResult.NoContent` | ✅ **No change needed** — identical |
+| `StatusCodeResult.Created` | `StatusCodeResult.Created` | ✅ **No change needed** — identical |
+| `StatusCodeResult.OK` | `StatusCodeResult.OK` | ✅ **No change needed** — identical |
 | `ListApiResource<T>` | `ListApiResource<T>` | ✅ Same |
-| Plain `T` | `OkResult<T>` or plain `T` | Blueprint supports both |
+| `PagedApiResource<T>` | `PagedApiResource<T>` | ✅ Same |
+| `PlainTextResult` | `PlainTextResult` | ✅ Extends HttpResult — same class |
+| Plain `T` | Plain `T` | ✅ Blueprint supports plain value returns |
+| `HttpResult` subclasses | `HttpResult` subclasses | ✅ Custom HttpResult types work via ExecuteAsync |
 
 ### Execution Patterns
 
@@ -504,3 +511,4 @@ S365 testing uses `WebApiFixtureFactory<TStartup>` → `ApiFixture` with:
 | 2025-07 | Auth + remaining patterns | Full auth analysis: dual authorizer merge into IResourceAuthorizationProvider (consumer responsibility), special permissions = [AllowAnonymous]/[MustBeAuthenticated] (BPAU003 compile-time), verb expansion consumer-owned, AccountId well-known property ✅. Patterns: 0 IPropertyPopulator (middleware instead), 11 IBackgroundTask (all standard), 70 Rebus subscriptions (all IHandleMessages<T>), 100+ NodaTime usages (consumer config), 5 custom validators (runtime fallback), ApiId TenantId→string TenantId migration step needed |
 | 2025-07 | Runtime optimizations | BlueprintHttpClient: PropertyInfo cache, StringBuilder query strings, span-based placeholder parsing. PipelineHelpers: ResolveServiceArray fast-path for arrays. ResourceEvent JSON: fix `data` vs `content` envelope property name. ArrayPool buffer leak fix in ReadJsonBodyAsync (try/finally). RunAllPublishedMessagesAsync/RunAndConsumeAllPublishedMessagesAsync added to test fixture. |
 | 2025-07 | Compatibility deep-dive | Added HttpContext/ClaimsPrincipal handler property injection. Verified S365 TenantOrderedPagedQuery/TenantPagedApiResource already extend Blueprint base classes. Confirmed ApiId stays S365-owned. Verified ApiOperations base class property injection. NotFoundException→ProblemDetails(404) confirmed. TypeScript codegen flow fully analysed (custom Handlebars, x-links compatible). |
+| 2025-07 | ResourceEvent JSON fix | Fixed `$object` property and `ResourceEventChangeType` string serialization on `ResourceEvent`. Added 5 JSON serialization tests. Updated playbook: ResourceEvent<T> works unchanged (no migration to ResourceEventResult needed). Updated return type mapping: StatusCodeResult subtypes identical. Fixed stale handler rename advice (all 4 conventions supported). |
