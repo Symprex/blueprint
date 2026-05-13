@@ -237,6 +237,15 @@
 | S365 test Marten patterns | ✅ Done | 200+ files use `WithDatabaseAsync(tenant, ...)` and `LoadFromDatabaseAsync(tenant, id)` — now provided by `Blueprint.Testing.Marten`, S365 needs only `TenantReference.ApiId` bridge |
 | Test exception compat | ✅ Done | `BlueprintTestHost.ExecuteAsync<T>` now rethrows original exceptions from `UnhandledExceptionResult` via `ExceptionDispatchInfo` — S365 `ThrowApiExceptionAsync()` pattern works unchanged. `BlueprintTestExecutionException` gains `ValidationErrors` + `IsValidationFailure` for S365 validation assertion shims. |
 | ResourceEventDefinition.EventId | ✅ Done | Changed from `private protected readonly string` field to `public string { get; }` auto-property — eliminates S365 `ResourceEventAssertionsExtensions` reflection hack (line 36-37 in S365 TestHelpers) |
+| Auth block consolidation | ✅ Done | `PipelineHelpers.CheckResourceAuthorizationAsync` — unified overloads (single-scope + multi-scope) reduce 14-line if/else dispatch to 4-line call per pipeline (~4,050 lines saved for S365's 405 auth ops) |
+| ToDisplayString caching | ✅ Done | `LinkGenerationModule` loop: cached `resourceTypeFqn` variable instead of repeated `ToDisplayString(FullyQualifiedFormat)` calls |
+| SymbolEqualityComparer in FindHandlers | ✅ Done | `OperationExecutorPipelineSourceGenerator.FindHandlers` now uses `GetTypeByMetadataName` + `SymbolEqualityComparer.Default.Equals()` instead of string comparison via `ToDisplayString()` |
+| Method group for PopulateFromJsonBody | ✅ Done | Generated code uses `PopulateFromJsonBody` method group reference instead of wrapping lambda — cleaner IL, same allocation profile |
+| SpecialType.System_String | ✅ Done | `PropertyOwnershipModule.IsStringType` uses `SpecialType.System_String` instead of `ToDisplayString() == "string"` — avoids string allocation |
+| MetadataName-first checks | ✅ Done | `ValidationSymbolHelpers`: `ImplementsIValidatableObject`, `IsValidationAttribute`, ICollection check all use `MetadataName` comparison first (cheap), then namespace verification only on match |
+| Single-pass source partitioning | ✅ Done | `PropertyOwnershipModule.RenderPopulation` partitions entries by source in one pass instead of 5 separate LINQ `.Where().ToArray()` scans |
+| EquatableList allocation fix | ✅ Done | Constructor uses `new List<T>(array)` instead of `array.ToList()` — avoids LINQ `Enumerable.ToList()` overhead (extra delegate invocation + capacity logic) |
+| InheritsFrom/ImplementsInterface | ✅ Done | Both helpers check `MetadataName` first (property access, no allocation) before falling back to `ToString()` — short-circuits in the common non-match case |
 
 ---
 
