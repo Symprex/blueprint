@@ -16,6 +16,8 @@ For detailed explanations, see [compile-time-validation.md](compile-time-validat
 | BP006 | Error | Serializer context is missing required response body coverage |
 | BP007 | Error | App is missing a serializer context declaration |
 | BP008 | Error | Serializer-covered body type uses unsupported OpenAPI validation shape |
+| BP009 | Error | Duplicate descriptor name after Query/Command suffix stripping |
+| BP010 | Warning | Non-evaluable ApiExceptionFactory initializer |
 
 ### Pipeline and handler (BP100–BP199)
 
@@ -28,11 +30,13 @@ For detailed explanations, see [compile-time-validation.md](compile-time-validat
 | BP106 | Error | `Results<>` union member is not supported |
 | BP107 | Error | Handler return type is incompatible with declared operation result contract |
 | BP108 | Error | Declared semantic result has no enabled-host executor coverage |
-| BP109 | Warning | Declared semantic result union has ambiguous host translation |
-| BP110 | Warning | HTTP-visible union lacks same-status discrimination strategy |
+| BP109 | Error | Declared semantic result union has ambiguous host translation |
+| BP110 | Error | HTTP-visible union lacks same-status discrimination strategy |
 | BP111 | Error | Declared results contract cannot be projected into aligned flattened outcomes |
 | BP112 | Error | Host-neutral and host-specific no-result shapes are mixed |
 | BP113 | Error | Exception translator ownership is ambiguous |
+| BP114 | Error | Duplicate Results union member |
+| BP115 | Error | Operation implements both ICommand and IQuery |
 
 ### Ergonomics (BP200–BP299)
 
@@ -57,9 +61,10 @@ For detailed explanations, see [compile-time-validation.md](compile-time-validat
 | ID | Severity | Title |
 |----|----------|-------|
 | BPLG001 | Error | Link format is invalid |
-| BPLG002 | Error | Duplicate URL |
 | BPLG003 | Error | Resource type is not `ILinkableResource` |
 | BPLG004 | Warning | Ambiguous self-link declarations |
+| BPLG005 | Error | Empty route template |
+| BPLG006 | Error | Link missing Rel value |
 
 ## Validation (BPV)
 
@@ -72,6 +77,13 @@ For detailed explanations, see [compile-time-validation.md](compile-time-validat
 | BPV005 | Error | `NotAllowedIfAttribute` references a missing property |
 | BPV006 | Error | `LessThanPropertyAttribute` references a missing property |
 | BPV007 | Error | `MustBeGreaterThanOrEqualAttribute` references a missing property |
+| BPV008 | Error | MinLength exceeds MaxLength |
+| BPV009 | Error | Range minimum exceeds maximum |
+| BPV010 | Error | StringLength minimum exceeds maximum |
+| BPV011 | Error | RegularExpression has empty pattern |
+| BPV012 | Warning | `[Required]` is redundant on non-nullable value type |
+| BPV013 | Info | IValidatableObject prevents compile-time validation |
+| BPV014 | Warning | `[Required]` conflicts with `[DefaultValue]` |
 
 ## Property ownership and binding (BPPO)
 
@@ -84,6 +96,7 @@ For detailed explanations, see [compile-time-validation.md](compile-time-validat
 | BPPO005 | Error | `[FromRoute]` without matching route placeholder |
 | BPPO006 | Error | Conflicting `[FromX]` binding attributes |
 | BPPO007 | Error | Unsupported header/cookie property type |
+| BPPO008 | Error | Malformed route placeholder |
 
 ## OpenAPI (BPOA)
 
@@ -95,8 +108,8 @@ For detailed explanations, see [compile-time-validation.md](compile-time-validat
 
 | ID | Severity | Title |
 |----|----------|-------|
-| BPOD001 | Warning | Host exposure not supported by enabled host contributor |
-| BPOD002 | Warning | Operation targets multiple enabled hosts |
+| BPOD001 | Error | Host exposure not supported by enabled host contributor |
+| BPOD002 | Error | Operation targets multiple enabled hosts |
 
 ## Resource events (BPRE)
 
@@ -142,7 +155,7 @@ For detailed explanations, see [compile-time-validation.md](compile-time-validat
 | BPMOD003 | Error | Cyclic contributor dependency |
 | BPMOD004 | Error | Missing required variable |
 | BPMOD005 | Error | Missing operation type |
-| BPMOD006 | Warning | Duplicate debug-manifest entry |
+| BPMOD006 | Error | Duplicate debug-manifest entry |
 
 ## Migration diagnostics (BPMIG)
 
