@@ -73,6 +73,7 @@
 | Singleton result types | ✅ Done | `ForbiddenResult.Instance`, `UnauthenticatedResult.Instance`, `UnsupportedMediaTypeResult.Instance` — zero allocation on auth/content-type failure paths |
 | GetServiceAs test double accessor | ✅ Done | `GetServiceAs<TService, TImpl>()` for safe casting to test doubles (e.g. FakeBus) |
 | WrapConfigureAnonymous optimization | ✅ Done | Cached static no-op delegate eliminates closure allocation for background task/message tests |
+| `[FromAuthContext]` attribute | ✅ Done | Auth-populated properties excluded from HTTP binding/OpenAPI; resolves TenantId-in-body gap |
 | HATEOAS link population extraction | ✅ Done | `PipelineHelpers.PopulateHateoasLinksAsync` — replaces 10-line inline block per pipeline (~6,320 lines saved for 632 ops) |
 | `Bus` property alias on test fixture | ✅ Done | `BlueprintTestFixture.Bus` aliases `Messages` — mirrors S365 `ApiFixture.Bus` for minimal test churn |
 | S365-compatible message assertions | ✅ Done | `HavePublishedSingle<T>()`, `HavePublished<T>()`, `NotHavePublished<T>()` etc. on `TestMessageCollector` |
@@ -359,6 +360,29 @@ resources. This stays as S365-owned ASP.NET Core middleware running after Bluepr
 - Both are `public static` on `PipelineHelpers` for cross-assembly access
 - **Impact for S365**: With 632 operations, this saves ~31,600 lines of generated IL
 
+### `[FromAuthContext]` Attribute — Auth-Populated Property Exclusion
+
+**Problem**: S365's Portal Startup.cs had a `ConfigureOperation` callback (lines 117-151)
+that manually removed TenantId from non-path OpenAPI parameters. Without this, TypeScript
+clients would see TenantId in request bodies and query parameters, even though the pipeline
+populates it from auth claims.
+
+**Root Cause**: Blueprint's `PropertyOwnershipModule` fell through to convention for non-route
+TenantId: POST → Body, GET → Query. The TenantModule then overwrote the value from claims,
+making the HTTP binding pointless.
+
+**Solution**: New `[FromAuthContext]` attribute in `Blueprint.Model.Attributes`:
+- Properties marked `[FromAuthContext]` record as `PropertyOwnershipSource.AuthContext`
+- No HTTP binding code is generated (skipped by `RenderPopulation`)
+- Excluded from OpenAPI parameters and request body schemas
+- Route placeholder takes precedence (TenantId in `/tenants/{TenantId}` still route-binds)
+- Conflict diagnostic BPPO006 fires for `[FromAuthContext]` + `[FromBody/Query/Header/Cookie]`
+- `[FromAuthContext]` + `[FromRoute]` is allowed (route wins silently)
+- Inheritable: base class `[FromAuthContext]` applies to derived operations
+
+**S365 migration**: All operations with non-route `TenantId` should add `[FromAuthContext]`.
+This can be a codemod target. The `ConfigureOperation` OpenAPI workaround is no longer needed.
+
 ---
 
 ## S365 Scale (Verified)
@@ -535,3 +559,4 @@ S365 testing uses `WebApiFixtureFactory<TStartup>` → `ApiFixture` with:
 | 2025-07 | ResourceEvent JSON fix | Fixed `$object` property and `ResourceEventChangeType` string serialization on `ResourceEvent`. Added 5 JSON serialization tests. Updated playbook: ResourceEvent<T> works unchanged (no migration to ResourceEventResult needed). Updated return type mapping: StatusCodeResult subtypes identical. Fixed stale handler rename advice (all 4 conventions supported). |
 | 2025-07 | TypeConverter support | Added [TypeConverter] support for route/query parameter binding (matching legacy Blueprint behavior). S365 ApiId, FolderReference, Role, NodaTime.Instant all have [TypeConverter] attributes — all work automatically. Fixed Nullable<T> unwrapping for TypeConverter query types. Updated BPPO001/BPPO003 diagnostics. Corrected stale ApiId entries. |
 | 2025-07 | Pipeline IL optimization | Extracted `PipelineHelpers.AppendValidationError()` to deduplicate lazy-init+add pattern across all validation fast-path checks. Saves ~N statements per pipeline (N = validated property count). Benchmark baseline: MinimalQuery 2μs/2.5KB, ValidatedQuery(valid) 13.5μs/5.1KB, FullStackCommand(valid) 12μs/5.7KB. Validation adds 6-7× overhead over bare pipeline. |
+| 2025-07 | FromAuthContext | Added `[FromAuthContext]` attribute for auth-populated properties (e.g. TenantId). Properties are excluded from HTTP binding/OpenAPI. Resolves S365 gap where non-route TenantId appeared in request body/query. Route placeholder takes precedence. 11 tests. S365 proof updated. TypeScript codegen compatibility verified via Handlebars template deep-dive. |

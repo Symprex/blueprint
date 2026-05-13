@@ -557,6 +557,7 @@ public partial class GetSentEmailQuery : IQuery<SentEmailApiResource>
 public partial class GetSentEmailQuery : IQuery<SentEmailApiResource>
 {
     [Required]
+    [FromAuthContext]
     public ApiId TenantId { get; set; }
 
     [Required]
@@ -1698,10 +1699,43 @@ The factory parses JWT claims using direct loops (not LINQ) for performance:
 3. Logs tenant ID to Serilog `IDiagnosticContext`
 4. Auto-populates `TenantId` property on operations (if property is `ApiId` type and writable)
 
-### Migration Options
+### New Blueprint Pattern
 
-**Option A (recommended): ASP.NET Core middleware** — runs before Blueprint pipeline:
+Blueprint handles tenancy at compile time through two modules:
+
+1. **TenantModule** — populates `TenantId` property from auth claims during pipeline Population stage
+2. **`[FromAuthContext]`** — marks the property as auth-populated, excluding it from HTTP binding and OpenAPI
+
+**Per-operation migration:**
 ```csharp
+// Before (S365): TenantId appears in request body / query params (OpenAPI workaround needed)
+public class GetSentEmailQuery : IQuery<SentEmailApiResource>
+{
+    public ApiId TenantId { get; set; }
+    public string Id { get; set; }
+}
+
+// After (Blueprint): TenantId excluded from body/query, populated from auth claims
+public partial class GetSentEmailQuery : IQuery<SentEmailApiResource>
+{
+    [FromAuthContext]
+    public ApiId TenantId { get; set; }
+
+    [Required]
+    public string Id { get; set; } = null!;
+}
+```
+
+**Key rules:**
+- Add `[FromAuthContext]` to non-route `TenantId` properties → excluded from OpenAPI
+- If `TenantId` is in a route placeholder (e.g. `/tenants/{TenantId}/items`), route wins
+- `[FromAuthContext]` + `[FromRoute]` is allowed (route takes precedence, no diagnostic)
+- `[FromAuthContext]` + `[FromBody/Query/Header]` is a compile error (BPPO006)
+- Inherited: base class `TenantOperation` with `[FromAuthContext]` applies to all derived operations
+
+**Tenant accessor (S365-owned, unchanged):**
+```csharp
+// ASP.NET Core middleware (runs before Blueprint pipeline)
 app.Use(async (context, next) =>
 {
     if (context.User.Identity?.IsAuthenticated == true)
@@ -1713,11 +1747,6 @@ app.Use(async (context, next) =>
     await next();
 });
 ```
-
-**Option B: `IContextMetadataProvider`** — if Blueprint supports pre-handler context enrichment.
-
-**Option C: Property populator** — use `IPropertyPopulator` registered via
-`AddPropertyPopulator<T>()` for auto-populating `TenantId` on operations.
 
 The tenant accessor is a scoped DI service — it survives the full request including
 Marten queries, Rebus message headers, and background task context propagation.
