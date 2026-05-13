@@ -246,6 +246,13 @@
 | Single-pass source partitioning | ✅ Done | `PropertyOwnershipModule.RenderPopulation` partitions entries by source in one pass instead of 5 separate LINQ `.Where().ToArray()` scans |
 | EquatableList allocation fix | ✅ Done | Constructor uses `new List<T>(array)` instead of `array.ToList()` — avoids LINQ `Enumerable.ToList()` overhead (extra delegate invocation + capacity logic) |
 | InheritsFrom/ImplementsInterface | ✅ Done | Both helpers check `MetadataName` first (property access, no allocation) before falling back to `ToString()` — short-circuits in the common non-match case |
+| HttpMethodManifestModule string elim | ✅ Done | Replaced FQ string concatenation (`namespace + "." + name`) with `Name` property checks + namespace constant — eliminates per-attribute string allocation |
+| Short-circuit reordering (batch) | ✅ Done | `HandlerExecutionModule` (Task/OkResult detection), `SensitivePropertyMetadataModule`, `SensitivePropertyManifestModule`, `HttpResponseMetadataModule` — all check cheap `Name` property before expensive `ToDisplayString()` |
+| DistinctBy over GroupBy+First | ✅ Done | `HostExposureDiagnostics.GetDistinctHostExposureRegistrations` uses `DistinctBy()` instead of `GroupBy().Select(First())` — eliminates intermediate `IGrouping` allocation |
+| ResourceEvent<T> pipeline compat | ✅ Verified | S365 handlers returning `Task<ResourceEvent<T>>` classified as `OperationResult` kind (since `ResourceEvent<T>` extends `OperationResult`). Pipeline assigns directly without wrapping. |
+| S365 test entity extensions | ✅ S365-owned | `PublishAfterAsync`, `PublishAllAsync`, `RunAllLocalMessagesAsync` work with `SymprexEntity.Events` — call `MessageAsync()` which Blueprint provides. S365 keeps these as domain-specific test helpers. |
+| S365 Marten test helpers | ✅ S365-owned | `WithDatabaseAsync`, `AllAsync`, `LoadFromDatabaseAsync` — Marten session access via DI; not Blueprint responsibility |
+| S365 test scale | ✅ Analysed | 707 test files, 300+ CommandAsync, 200+ QueryAsync, 150+ MessageAsync calls — all use patterns Blueprint.Testing already supports |
 
 ---
 
