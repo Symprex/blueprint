@@ -198,6 +198,11 @@
 | CORS | ✅ Not Blueprint | Gateway apps use standard ASP.NET Core `AddCors()`/`UseCors()` — Blueprint-agnostic, no migration needed |
 | Health checks | ✅ Not Blueprint | Standard ASP.NET Core `MapHealthChecks()` in 8 files — Blueprint-agnostic, no migration needed |
 | S365 gap analysis complete | ✅ No blocking gaps | ProxyResult was the only real gap (1 usage); file upload uses SAS (not Blueprint); all middleware have module equivalents; health/CORS are ASP.NET Core standard |
+| Blueprint.Rebus standalone | ✅ No Marten dep | Blueprint.Rebus has zero Marten dependency; S365 forces Marten outbox in `RebusSetup.cs` — S365-owned concern, refactor outbox to be optional during migration |
+| S365 Marten configuration | ✅ S365-owned | Conjoined multi-tenancy (`IHaveTenantId`), `JsonNetSerializer` for persistence, custom Npgsql type handlers (`ApiId`, `FolderReference`), `TimestampTrackedEntityListener` — all S365 DI config, Blueprint.Marten provides basic hooks |
+| S365 Marten outbox vs Rebus TX | ✅ S365-owned | S365 uses explicit `MartenOutboxStorage` (DB-persisted); Blueprint uses `RebusTransactionScope` (in-memory). S365 can keep its outbox during migration — `IMessageOutbox` abstracts the implementation |
+| Hangfire management operations | ⚠️ S365-custom | S365 `RegisterManagementOperations` flag in `HangfireTaskOptions` — custom extension not in Blueprint. S365 can keep this as app-level registration; not a Blueprint core concern |
+| IdentityServer host rewrite | ✅ S365-specific | Custom middleware forces HTTPS + public host for token issuance — standard ASP.NET Core `app.Use()`, not a Blueprint concern |
 
 ---
 
