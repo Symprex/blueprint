@@ -86,7 +86,7 @@ public class AppModelOpenApiOutputRenderingContextTests
         content.TryGetProperty("application/json", out var json).Should().BeTrue();
 
         var refValue = json.GetProperty("schema").GetProperty("$ref").GetString();
-        refValue.Should().NotContain(".", "schema component $ref keys must use underscores instead of dots for tooling compatibility");
+        refValue.Should().NotContain(".", "schema component $ref keys must use simple class names for tooling compatibility");
         refValue.Should().Be("#/components/schemas/string");
     }
 
@@ -141,7 +141,7 @@ public class AppModelOpenApiOutputRenderingContextTests
         var schema = doc.RootElement
             .GetProperty("components")
             .GetProperty("schemas")
-            .GetProperty("Sample_ResponseDto");
+            .GetProperty("ResponseDto");
 
         schema.GetProperty("title").GetString().Should().Be("ResponseDto", "schema title should be the short CLR type name without namespace");
         schema.GetProperty("type").GetString().Should().Be("object");
@@ -193,7 +193,7 @@ public class AppModelOpenApiOutputRenderingContextTests
         var properties = doc.RootElement
             .GetProperty("components")
             .GetProperty("schemas")
-            .GetProperty("Sample_ResponseDto")
+            .GetProperty("ResponseDto")
             .GetProperty("properties");
 
         properties.GetProperty("NullableProp").TryGetProperty("nullable", out var nullableVal).Should().BeTrue(
@@ -226,7 +226,7 @@ public class AppModelOpenApiOutputRenderingContextTests
         var properties = doc.RootElement
             .GetProperty("components")
             .GetProperty("schemas")
-            .GetProperty("Sample_ResponseDto")
+            .GetProperty("ResponseDto")
             .GetProperty("properties");
 
         properties.GetProperty("Count").GetProperty("format").GetString().Should().Be("int32");
@@ -261,7 +261,7 @@ public class AppModelOpenApiOutputRenderingContextTests
         var properties = doc.RootElement
             .GetProperty("components")
             .GetProperty("schemas")
-            .GetProperty("Sample_ResponseDto")
+            .GetProperty("ResponseDto")
             .GetProperty("properties");
 
         var statusEnum = properties.GetProperty("Status").GetProperty("enum");
@@ -305,10 +305,10 @@ public class AppModelOpenApiOutputRenderingContextTests
         var doc = JsonDocument.Parse(context.Json);
         var schemas = doc.RootElement.GetProperty("components").GetProperty("schemas");
 
-        schemas.GetProperty("Sample_ResponseDto").GetProperty("description").GetString()
+        schemas.GetProperty("ResponseDto").GetProperty("description").GetString()
             .Should().Be("Represents a sample response object.");
 
-        schemas.GetProperty("Sample_OtherDto").TryGetProperty("description", out _).Should().BeFalse(
+        schemas.GetProperty("OtherDto").TryGetProperty("description", out _).Should().BeFalse(
             "components without a [Description] attribute should not emit description");
     }
 
@@ -338,7 +338,7 @@ public class AppModelOpenApiOutputRenderingContextTests
         var properties = doc.RootElement
             .GetProperty("components")
             .GetProperty("schemas")
-            .GetProperty("Sample_ResponseDto")
+            .GetProperty("ResponseDto")
             .GetProperty("properties");
 
         properties.GetProperty("Code").GetProperty("description").GetString()
@@ -381,7 +381,7 @@ public class AppModelOpenApiOutputRenderingContextTests
         var properties = doc.RootElement
             .GetProperty("components")
             .GetProperty("schemas")
-            .GetProperty("Sample_ResponseDto")
+            .GetProperty("ResponseDto")
             .GetProperty("properties");
 
         var tagsItems = properties.GetProperty("Tags").GetProperty("items");
@@ -429,7 +429,7 @@ public class AppModelOpenApiOutputRenderingContextTests
         var properties = doc.RootElement
             .GetProperty("components")
             .GetProperty("schemas")
-            .GetProperty("Sample_ResponseDto")
+            .GetProperty("ResponseDto")
             .GetProperty("properties");
 
         var metaAdditional = properties.GetProperty("Metadata").GetProperty("additionalProperties");
@@ -476,7 +476,7 @@ public class AppModelOpenApiOutputRenderingContextTests
         var schema = doc.RootElement
             .GetProperty("components")
             .GetProperty("schemas")
-            .GetProperty("Sample_ResponseDto");
+            .GetProperty("ResponseDto");
 
         schema.GetProperty("type").GetString().Should().Be("NUMBER");
     }
@@ -532,7 +532,7 @@ public class AppModelOpenApiOutputRenderingContextTests
         var properties = doc.RootElement
             .GetProperty("components")
             .GetProperty("schemas")
-            .GetProperty("Sample_ResponseDto")
+            .GetProperty("ResponseDto")
             .GetProperty("properties");
 
         properties.GetProperty("ComputedValue").TryGetProperty("readOnly", out var readOnlyVal).Should().BeTrue(
@@ -564,7 +564,7 @@ public class AppModelOpenApiOutputRenderingContextTests
         var properties = doc.RootElement
             .GetProperty("components")
             .GetProperty("schemas")
-            .GetProperty("Sample_ResponseDto")
+            .GetProperty("ResponseDto")
             .GetProperty("properties");
 
         var tags = properties.GetProperty("Tags");
@@ -832,11 +832,11 @@ public class AppModelOpenApiOutputRenderingContextTests
         schemas.TryGetProperty("TemplateApiResource", out _).Should().BeTrue(
             "custom formatter should strip namespace from schema key");
         schemas.TryGetProperty("Symprex_Signature365_Portal_Contract_Api_TemplateApiResource", out _).Should().BeFalse(
-            "default underscore-separated key should not appear when custom formatter is configured");
+            "default simple-class-name key should not appear when custom formatter is configured");
     }
 
     [Fact]
-    public void When_schema_name_formatter_is_null_then_default_underscore_formatting_is_used()
+    public void When_schema_name_formatter_is_null_then_default_simple_class_name_extraction_is_used()
     {
         var infoOptions = new OpenApiInfoOptions
         {
@@ -859,8 +859,8 @@ public class AppModelOpenApiOutputRenderingContextTests
         doc.RootElement
             .GetProperty("components")
             .GetProperty("schemas")
-            .TryGetProperty("Sample_ResponseDto", out _)
+            .TryGetProperty("ResponseDto", out _)
             .Should()
-            .BeTrue("null formatter should fall back to default dot-to-underscore replacement");
+            .BeTrue("null formatter should fall back to default simple-class-name extraction");
     }
 }

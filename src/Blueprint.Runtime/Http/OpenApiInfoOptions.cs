@@ -66,8 +66,8 @@ public sealed class OpenApiInfoOptions
 
     /// <summary>
     /// Gets or sets an optional delegate that transforms CLR type names into OpenAPI schema
-    /// component keys. When <see langword="null"/> the default strategy is used, which replaces
-    /// dots with underscores (e.g. <c>MyApp.Api.TemplateResource</c> → <c>MyApp_Api_TemplateResource</c>).
+    /// component keys. When <see langword="null"/> the default strategy is used, which extracts
+    /// the simple class name (e.g. <c>MyApp.Api.TemplateResource</c> → <c>TemplateResource</c>).
     /// </summary>
     /// <remarks>
     /// <para>

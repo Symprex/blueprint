@@ -64,7 +64,7 @@ namespace TestNamespace
         private class TaggedQueryDescriptor : global::Blueprint.Model.ApiOperationDescriptor
         {
             public TaggedQueryDescriptor()
-                : base(typeof(TaggedQuery), "TaggedQuery", "Source Generated")
+                : base(typeof(TaggedQuery), "Tagged", "Source Generated")
             {
                 this.SetFeatureData(global::Blueprint.Model.WellKnownFeatureData.DefaultFailureOutcomes);
                 this.SetFeatureData(new global::Blueprint.Model.OperationDiscoveryFeatureData("query", "TestNamespace", "TaggedQuery"));

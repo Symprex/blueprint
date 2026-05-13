@@ -23,7 +23,7 @@ namespace TestNamespace
         private class GetDocumentedWidgetQueryDescriptor : global::Blueprint.Model.ApiOperationDescriptor
         {
             public GetDocumentedWidgetQueryDescriptor()
-                : base(typeof(GetDocumentedWidgetQuery), "GetDocumentedWidgetQuery", "Source Generated")
+                : base(typeof(GetDocumentedWidgetQuery), "GetDocumentedWidget", "Source Generated")
             {
                 this.AddUrl(new global::Blueprint.Model.ApiOperationUrl("/widgets/{Id}"));
                 this.SetFeatureData(global::Blueprint.Model.WellKnownFeatureData.RequiresAuthentication);

@@ -24,17 +24,24 @@ public sealed record OpenApiOutputRenderingContext(
     private const string DefaultOpenApiVersion = "3.0.4";
 
     /// <summary>
-    /// Converts a raw CLR type name into a safe OpenAPI schema component key by replacing <c>.</c> with <c>_</c>.
-    /// CLR names such as <c>Microsoft.AspNetCore.Mvc.ProblemDetails</c> are allowed by the OpenAPI 3.x component-name
-    /// regex (<c>^[a-zA-Z0-9\.\-_]+$</c>), but many popular tools (Swagger UI, openapi-generator, etc.) treat dots as
-    /// namespace separators and fail to resolve <c>$ref</c> pointers that contain them. Using underscores preserves
-    /// the full type identity while remaining universally safe.
+    /// Converts a raw CLR type name into a safe OpenAPI schema component key. When a custom
+    /// <paramref name="customFormatter"/> is provided it is used directly; otherwise the default
+    /// strategy extracts the simple class name (everything after the last <c>.</c>) which produces
+    /// clean, readable schema names like <c>TemplateApiResource</c> instead of
+    /// <c>MyApp_Api_TemplateApiResource</c>. Consumers that need namespace disambiguation or
+    /// suffix stripping can provide a custom formatter via
+    /// <see cref="OpenApiInfoOptions.SchemaNameFormatter"/>.
     /// </summary>
     private static string SanitiseSchemaKey(string clrTypeName, Func<string, string>? customFormatter)
     {
-        return customFormatter is not null
-            ? customFormatter(clrTypeName)
-            : clrTypeName.Replace('.', '_');
+        if (customFormatter is not null)
+        {
+            return customFormatter(clrTypeName);
+        }
+
+        // Use simple class name for cleaner schema keys (e.g. "TemplateApiResource" not "MyApp_Api_TemplateApiResource").
+        var lastDot = clrTypeName.LastIndexOf('.');
+        return lastDot >= 0 ? clrTypeName.Substring(lastDot + 1) : clrTypeName;
     }
 
     /// <summary>
