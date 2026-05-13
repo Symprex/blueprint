@@ -32,7 +32,21 @@ internal static class ValidationSymbolHelpers
     public static bool RequiresWholeObjectFallback(INamedTypeSymbol operationType)
     {
         return HasValidationAttribute(operationType)
-               || operationType.AllInterfaces.Any(static interfaceSymbol => interfaceSymbol.ToDisplayString() == "System.ComponentModel.DataAnnotations.IValidatableObject");
+               || ImplementsIValidatableObject(operationType);
+    }
+
+    /// <summary>
+    /// Checks whether the type implements <c>System.ComponentModel.DataAnnotations.IValidatableObject</c>
+    /// by comparing <see cref="ISymbol.MetadataName"/> first (cheap) then verifying the namespace only
+    /// when the name matches — avoids the full display-string cost per interface.
+    /// </summary>
+    /// <param name="type">The type to inspect for <c>IValidatableObject</c> implementation.</param>
+    /// <returns><see langword="true"/> when the type implements <c>IValidatableObject</c>.</returns>
+    public static bool ImplementsIValidatableObject(INamedTypeSymbol type)
+    {
+        return type.AllInterfaces.Any(static interfaceSymbol =>
+            interfaceSymbol.MetadataName == "IValidatableObject"
+            && interfaceSymbol.ContainingNamespace.ToDisplayString() == "System.ComponentModel.DataAnnotations");
     }
 
     /// <summary>
@@ -47,14 +61,22 @@ internal static class ValidationSymbolHelpers
 
     /// <summary>
     /// Checks whether an attribute type represents a DataAnnotations validation attribute.
+    /// Uses <see cref="ISymbol.MetadataName"/> for the initial check (cheap) before falling back
+    /// to the inheritance walk.
     /// </summary>
     /// <param name="attributeClass">The attribute type to inspect.</param>
     /// <returns><see langword="true"/> when the attribute participates in validation.</returns>
     public static bool IsValidationAttribute(INamedTypeSymbol? attributeClass)
     {
         return attributeClass is not null
-               && (attributeClass.ToDisplayString() == "System.ComponentModel.DataAnnotations.ValidationAttribute"
+               && (IsValidationAttributeExact(attributeClass)
                    || attributeClass.InheritsFrom("System.ComponentModel.DataAnnotations.ValidationAttribute"));
+    }
+
+    private static bool IsValidationAttributeExact(INamedTypeSymbol type)
+    {
+        return type.MetadataName == "ValidationAttribute"
+               && type.ContainingNamespace.ToDisplayString() == "System.ComponentModel.DataAnnotations";
     }
 
     /// <summary>
@@ -481,8 +503,10 @@ internal static class ValidationSymbolHelpers
         }
 
         if (type is INamedTypeSymbol namedType
-            && (namedType.ToDisplayString() == "System.Collections.ICollection"
-                || namedType.AllInterfaces.Any(static candidate => candidate.ToDisplayString() == "System.Collections.ICollection")))
+            && (IsICollection(namedType)
+                || namedType.AllInterfaces.Any(static candidate =>
+                    candidate.MetadataName == "ICollection"
+                    && candidate.ContainingNamespace.ToDisplayString() == "System.Collections")))
         {
             countExpression = $"((global::System.Collections.ICollection){propertyAccess}).Count";
             return true;
@@ -490,6 +514,12 @@ internal static class ValidationSymbolHelpers
 
         countExpression = null;
         return false;
+    }
+
+    private static bool IsICollection(INamedTypeSymbol type)
+    {
+        return type.MetadataName == "ICollection"
+               && type.ContainingNamespace.ToDisplayString() == "System.Collections";
     }
 
     /// <summary>

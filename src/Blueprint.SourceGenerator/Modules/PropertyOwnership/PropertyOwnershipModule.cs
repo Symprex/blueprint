@@ -707,7 +707,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
 
     private static bool IsStringType(ITypeSymbol type)
     {
-        return type.WithNullableAnnotation(NullableAnnotation.NotAnnotated).ToDisplayString() == "string";
+        return type.SpecialType == SpecialType.System_String;
     }
 
     private static bool IsSupportedRouteType(ITypeSymbol type)
@@ -863,11 +863,35 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
     /// </summary>
     private static void RenderPopulation(PipelineRenderContext context, List<PropertyOwnershipEntry> entries)
     {
-        var bodyEntries = entries.Where(static e => e.Source == PropertyOwnershipSource.Body).ToArray();
-        var routeEntries = entries.Where(static e => e.Source == PropertyOwnershipSource.Route).ToArray();
-        var queryEntries = entries.Where(static e => e.Source == PropertyOwnershipSource.Query).ToArray();
-        var headerEntries = entries.Where(static e => e.Source == PropertyOwnershipSource.Header).ToArray();
-        var cookieEntries = entries.Where(static e => e.Source == PropertyOwnershipSource.Cookie).ToArray();
+        // Single-pass partitioning by source avoids scanning the entries collection 5 times.
+        List<PropertyOwnershipEntry>? bodyEntries = null;
+        List<PropertyOwnershipEntry>? routeEntries = null;
+        List<PropertyOwnershipEntry>? queryEntries = null;
+        List<PropertyOwnershipEntry>? headerEntries = null;
+        List<PropertyOwnershipEntry>? cookieEntries = null;
+
+        foreach (var entry in entries)
+        {
+            switch (entry.Source)
+            {
+                case PropertyOwnershipSource.Body:
+                    (bodyEntries ??= []).Add(entry);
+                    break;
+                case PropertyOwnershipSource.Route:
+                    (routeEntries ??= []).Add(entry);
+                    break;
+                case PropertyOwnershipSource.Query:
+                    (queryEntries ??= []).Add(entry);
+                    break;
+                case PropertyOwnershipSource.Header:
+                    (headerEntries ??= []).Add(entry);
+                    break;
+                case PropertyOwnershipSource.Cookie:
+                    (cookieEntries ??= []).Add(entry);
+                    break;
+            }
+        }
+
         var operationExpr = context.GetOperationExpression();
 
         // Ensure httpContext variable is declared (shared across modules via GetHttpContextExpression).
@@ -877,7 +901,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         // Body binding: delegate stream buffering, content-type check, and exception handling
         // to the shared PipelineHelpers.ReadJsonBodyAsync runtime method. The generated pipeline
         // only provides the operation-specific PopulateFromJsonBody call as a static delegate.
-        if (bodyEntries.Length > 0)
+        if (bodyEntries is { Count: > 0 })
         {
             context.WriteStatement(
                 $"var _bodyResult = await Blueprint.Runtime.Exec.PipelineHelpers.ReadJsonBodyAsync(httpContext, context.OperationCancelled, {operationExpr}, PopulateFromJsonBody).ConfigureAwait(false);");
@@ -890,32 +914,44 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         }
 
         // Route binding
-        foreach (var entry in routeEntries)
+        if (routeEntries is not null)
         {
-            WriteRouteExtraction(context, operationExpr, entry);
+            foreach (var entry in routeEntries)
+            {
+                WriteRouteExtraction(context, operationExpr, entry);
+            }
         }
 
-        if (routeEntries.Length > 0 && (queryEntries.Length > 0 || headerEntries.Length > 0 || cookieEntries.Length > 0))
+        if (routeEntries is { Count: > 0 } && (queryEntries is { Count: > 0 } || headerEntries is { Count: > 0 } || cookieEntries is { Count: > 0 }))
         {
             context.WriteBlankLine();
         }
 
         // Query binding
-        foreach (var entry in queryEntries)
+        if (queryEntries is not null)
         {
-            WriteQueryExtraction(context, operationExpr, entry);
+            foreach (var entry in queryEntries)
+            {
+                WriteQueryExtraction(context, operationExpr, entry);
+            }
         }
 
         // Header binding
-        foreach (var entry in headerEntries)
+        if (headerEntries is not null)
         {
-            WriteHeaderExtraction(context, operationExpr, entry);
+            foreach (var entry in headerEntries)
+            {
+                WriteHeaderExtraction(context, operationExpr, entry);
+            }
         }
 
         // Cookie binding
-        foreach (var entry in cookieEntries)
+        if (cookieEntries is not null)
         {
-            WriteCookieExtraction(context, operationExpr, entry);
+            foreach (var entry in cookieEntries)
+            {
+                WriteCookieExtraction(context, operationExpr, entry);
+            }
         }
     }
 

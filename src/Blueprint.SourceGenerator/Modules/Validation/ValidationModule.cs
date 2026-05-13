@@ -345,8 +345,7 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
     {
         var operationType = context.GetOperationTypeSymbol();
 
-        if (!operationType.AllInterfaces.Any(
-                static i => i.ToDisplayString() == "System.ComponentModel.DataAnnotations.IValidatableObject"))
+        if (!ValidationSymbolHelpers.ImplementsIValidatableObject(operationType))
         {
             return;
         }
@@ -378,7 +377,8 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
                 requiredAttr = attr;
             }
 
-            if (attr.AttributeClass?.ToDisplayString() == "System.ComponentModel.DefaultValueAttribute"
+            if (attr.AttributeClass is { MetadataName: "DefaultValueAttribute", ContainingNamespace: { } ns }
+                && ns.ToDisplayString() == "System.ComponentModel"
                 && attr.ConstructorArguments.Length >= 1)
             {
                 defaultValue = attr.ConstructorArguments[0].Value;

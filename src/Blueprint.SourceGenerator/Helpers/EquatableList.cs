@@ -29,7 +29,7 @@ public readonly struct EquatableList<T> : IEquatable<EquatableList<T>>, IEnumera
     /// <param name="array">The input array to wrap.</param>
     public EquatableList(T[] array)
     {
-        this._list = array.ToList();
+        this._list = new List<T>(array);
     }
 
     /// <summary>

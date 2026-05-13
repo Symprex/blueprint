@@ -62,8 +62,7 @@ internal static class ValidationPropertyPlanner
             return new ValidationPipelinePlan(RequiresWholeObjectFallback: true, ImplementsIValidatableObject: false, Properties: []);
         }
 
-        var implementsIValidatableObject = operationType.AllInterfaces.Any(
-            static interfaceSymbol => interfaceSymbol.ToDisplayString() == "System.ComponentModel.DataAnnotations.IValidatableObject");
+        var implementsIValidatableObject = ValidationSymbolHelpers.ImplementsIValidatableObject(operationType);
 
         var properties = new List<PropertyValidationPlan>();
 
