@@ -152,4 +152,25 @@ public class ResourceEventResult<T> : ResourceEventResult where T : notnull
     /// Gets the resource-event payload with its original static type.
     /// </summary>
     public new T Content => (T)base.Content;
+
+    /// <inheritdoc cref="ResourceEventResult.WithMetadata"/>
+    public new ResourceEventResult<T> WithMetadata(string key, object value)
+    {
+        base.WithMetadata(key, value);
+        return this;
+    }
+
+    /// <inheritdoc cref="ResourceEventResult.WithSecureData"/>
+    public new ResourceEventResult<T> WithSecureData(string key, object value)
+    {
+        base.WithSecureData(key, value);
+        return this;
+    }
+
+    /// <inheritdoc cref="ResourceEventResult.WithChangedValue"/>
+    public new ResourceEventResult<T> WithChangedValue(string propertyName, object previousValue)
+    {
+        base.WithChangedValue(propertyName, previousValue);
+        return this;
+    }
 }

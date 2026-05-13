@@ -203,6 +203,13 @@
 | S365 Marten outbox vs Rebus TX | ✅ S365-owned | S365 uses explicit `MartenOutboxStorage` (DB-persisted); Blueprint uses `RebusTransactionScope` (in-memory). S365 can keep its outbox during migration — `IMessageOutbox` abstracts the implementation |
 | Hangfire management operations | ⚠️ S365-custom | S365 `RegisterManagementOperations` flag in `HangfireTaskOptions` — custom extension not in Blueprint. S365 can keep this as app-level registration; not a Blueprint core concern |
 | IdentityServer host rewrite | ✅ S365-specific | Custom middleware forces HTTPS + public host for token issuance — standard ASP.NET Core `app.Use()`, not a Blueprint concern |
+| ResourceEventResult.SecureData | ✅ Done | Added `SecureData` dictionary for security-related data that MUST NOT be persisted — matches S365 `ResourceEvent.SecureData` wire format |
+| ResourceEventResult.ChangedValues | ✅ Done | Added `ChangedValues` dictionary for property change tracking — matches S365 `ResourceEvent.ChangedValues` |
+| ResourceEventResult.CorrelationId | ✅ Done | Added `CorrelationId` string for cross-service tracing — matches S365 `ResourceEvent.CorrelationId` |
+| ResourceEventEnvelope Href | ✅ Done | Envelope now extracts self-link `Href` from `ILinkableResource` content — matches S365 `ResourceEventMiddleware` behavior where Href is populated from HATEOAS self-link |
+| S365 operation count (540) | ✅ Inventoried | 540 total: ResourceEvent<T> 256 (47%), direct ApiResource 172 (32%), ListApiResource<T> 20 (4%), StatusCodeResult 23 (4%), TenantListApiResource<T> ~40, PagedApiResource<T> ~8, other ~21 |
+| S365 test fixture full compat | ✅ Verified | S365 `ApiFixture` API fully covered: `Authentication.Set/As/MakeAnonymous`, `Bus.Should().HavePublishedSingle<T>()`, `BackgroundTaskAsync`, `MessageAsync`, `RunAndConsumeAllPublishedMessagesAsync`, `GetOptions<T>()`, `WithDatabaseAsync` (S365-owned extension) |
+| S365 Startup patterns audit | ✅ Done | 3 services audited (Portal, VCard, IdentityServer): NodaTime config → `ConfigureJson`, OpenAPI PostConfigure → `configureOpenApi`, Rebus subscriptions → S365-owned, tenant middleware → TenantModule, HATEOAS → LinkGenerationModule |
 
 ---
 
