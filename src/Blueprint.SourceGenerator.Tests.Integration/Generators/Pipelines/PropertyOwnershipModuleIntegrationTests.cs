@@ -184,6 +184,100 @@ public class PropertyOwnershipModuleIntegrationTests
     }
 
     [Fact]
+    public async Task When_route_parameter_is_enum_then_pipeline_parses_enum_value()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
+        var pipeline = executor.GetPipeline(typeof(GetItemByEnumCategoryPopulationQuery));
+        var descriptor = GetItemByEnumCategoryPopulationQuery.Configure();
+        var httpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+
+        httpContext.Request.RouteValues["Category"] = "Active";
+        httpContext.Request.RouteValues["Id"] = "item-42";
+
+        var context = new Blueprint.Runtime.Exec.ApiOperationContext(new EmptyServiceProvider(), app, descriptor, CancellationToken.None)
+        {
+            Operation = new GetItemByEnumCategoryPopulationQuery(),
+            HttpContext = httpContext,
+        };
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<Blueprint.Runtime.Exec.OkResult<string>>();
+        ((Blueprint.Runtime.Exec.OkResult<string>)result).Content.Should().Be("Active:item-42");
+    }
+
+    [Fact]
+    public async Task When_route_parameter_is_enum_and_value_invalid_then_binding_failure()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
+        var pipeline = executor.GetPipeline(typeof(GetItemByEnumCategoryPopulationQuery));
+        var descriptor = GetItemByEnumCategoryPopulationQuery.Configure();
+        var httpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+
+        httpContext.Request.RouteValues["Category"] = "NOT_A_CATEGORY";
+        httpContext.Request.RouteValues["Id"] = "item-42";
+
+        var context = new Blueprint.Runtime.Exec.ApiOperationContext(new EmptyServiceProvider(), app, descriptor, CancellationToken.None)
+        {
+            Operation = new GetItemByEnumCategoryPopulationQuery(),
+            HttpContext = httpContext,
+        };
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<Blueprint.Runtime.Exec.BindingFailureResult>();
+    }
+
+    [Fact]
+    public async Task When_query_parameter_is_nullable_enum_and_value_provided_then_parses()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
+        var pipeline = executor.GetPipeline(typeof(SearchByEnumStatusPopulationQuery));
+        var descriptor = SearchByEnumStatusPopulationQuery.Configure();
+
+        var httpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        httpContext.Request.Method = "GET";
+        httpContext.Request.QueryString = new Microsoft.AspNetCore.Http.QueryString("?Status=Archived");
+
+        var context = new Blueprint.Runtime.Exec.ApiOperationContext(new EmptyServiceProvider(), app, descriptor, CancellationToken.None)
+        {
+            Operation = new SearchByEnumStatusPopulationQuery(),
+            HttpContext = httpContext,
+        };
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<Blueprint.Runtime.Exec.OkResult<string>>();
+        ((Blueprint.Runtime.Exec.OkResult<string>)result).Content.Should().Be("Archived");
+    }
+
+    [Fact]
+    public async Task When_query_parameter_is_nullable_enum_and_not_provided_then_stays_null()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
+        var pipeline = executor.GetPipeline(typeof(SearchByEnumStatusPopulationQuery));
+        var descriptor = SearchByEnumStatusPopulationQuery.Configure();
+
+        var httpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        httpContext.Request.Method = "GET";
+
+        var context = new Blueprint.Runtime.Exec.ApiOperationContext(new EmptyServiceProvider(), app, descriptor, CancellationToken.None)
+        {
+            Operation = new SearchByEnumStatusPopulationQuery(),
+            HttpContext = httpContext,
+        };
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<Blueprint.Runtime.Exec.OkResult<string>>();
+        ((Blueprint.Runtime.Exec.OkResult<string>)result).Content.Should().Be("none");
+    }
+
+    [Fact]
     public async Task When_route_parameter_type_has_TypeConverter_then_pipeline_converts_from_route_value()
     {
         var app = new IntegrationTestBlueprintApp();
@@ -1325,5 +1419,53 @@ public partial class GetAuthContextRouteItemQuery : IQuery<string>
     public static Task<string> HandleAsync(GetAuthContextRouteItemQuery operation)
     {
         return Task.FromResult($"tenant={operation.TenantId ?? "null"},id={operation.Id}");
+    }
+}
+
+// --- Enum route/query binding test types ---
+
+/// <summary>
+/// Enum type for testing route and query parameter binding.
+/// Mirrors S365 patterns where enums are used in routes (e.g. report category, status filters).
+/// </summary>
+public enum PopulationTestCategory
+{
+    Unknown = 0,
+    Active = 1,
+    Archived = 2,
+    Deleted = 3,
+}
+
+/// <summary>
+/// GET with enum route parameter — proves <c>System.Enum.TryParse</c> is generated
+/// for enum types in route segments, matching S365's 100+ enum-in-route usages.
+/// </summary>
+[Blueprint.Model.Attributes.AllowAnonymous]
+[Blueprint.Model.Attributes.RootLink("/population-test/categories/{Category}/items/{Id}")]
+public partial class GetItemByEnumCategoryPopulationQuery : IQuery<string>
+{
+    public PopulationTestCategory Category { get; set; }
+
+    public string Id { get; set; } = string.Empty;
+
+    public static Task<string> HandleAsync(GetItemByEnumCategoryPopulationQuery operation)
+    {
+        return Task.FromResult($"{operation.Category}:{operation.Id}");
+    }
+}
+
+/// <summary>
+/// GET with nullable enum query parameter — proves nullable enum query binding
+/// works at runtime (returns null when not provided, parses when present).
+/// </summary>
+[Blueprint.Model.Attributes.AllowAnonymous]
+[Blueprint.Model.Attributes.RootLink("/population-test/enum-search")]
+public partial class SearchByEnumStatusPopulationQuery : IQuery<string>
+{
+    public PopulationTestCategory? Status { get; set; }
+
+    public static Task<string> HandleAsync(SearchByEnumStatusPopulationQuery operation)
+    {
+        return Task.FromResult(operation.Status?.ToString() ?? "none");
     }
 }
