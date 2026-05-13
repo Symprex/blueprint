@@ -564,6 +564,49 @@ public class OperationExecutorPipelineGeneratorIntegrationTests
     }
 
     [Fact]
+    public async Task Inline_handler_with_IOptions_parameter_caches_at_construction()
+    {
+        var source = """
+                     using Blueprint;
+                     using Blueprint.Model;
+                     using System.Threading.Tasks;
+                     using Microsoft.Extensions.Options;
+
+                     namespace TestNamespace;
+
+                     [BlueprintAppScan]
+                     public partial class TestApp : BlueprintApp
+                     {
+                         public TestApp()
+                         {
+                             this.Register(TestQuery.Configure());
+                         }
+                     }
+
+                     public class MySettings
+                     {
+                         public string ConnectionString { get; set; }
+                     }
+
+                     public class TestQuery : IQuery<string>
+                     {
+                         public static ApiOperationDescriptor Configure()
+                         {
+                             return new ApiOperationDescriptor(typeof(TestQuery), nameof(TestQuery), "Tests");
+                         }
+
+                         public static Task<string> InvokeAsync(IOptions<MySettings> settings)
+                         {
+                             return Task.FromResult(settings.Value.ConnectionString);
+                         }
+                     }
+                     """;
+
+        await Compile(source)
+            .VerifySuccessAsync(SnapshotsFolder);
+    }
+
+    [Fact]
     public async Task External_handler_generates_correctly()
     {
         var source = """

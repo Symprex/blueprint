@@ -535,11 +535,18 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
             // The pipeline constructor already receives loggerFactory as a parameter
             resolutionExpression = "loggerFactory";
         }
-        else
+        else if (parameterTypeName.StartsWith("global::Microsoft.Extensions.Logging.ILogger<", StringComparison.Ordinal)
+                 || parameterTypeName.StartsWith("Microsoft.Extensions.Logging.ILogger<", StringComparison.Ordinal))
         {
             // ILogger<T> → create from the loggerFactory parameter (works with NullLoggerFactory)
             resolutionExpression =
                 $"Microsoft.Extensions.Logging.LoggerFactoryExtensions.CreateLogger<{ExtractGenericArgument(parameterTypeName)}>(loggerFactory)";
+        }
+        else
+        {
+            // IOptions<T> and other known singletons → resolve from the service provider
+            resolutionExpression =
+                $"Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<{parameterTypeName}>(serviceProvider)";
         }
 
         context.CacheService(fieldName, parameterTypeName, resolutionExpression);
@@ -576,6 +583,13 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
         // ILogger<T> is always a singleton (Logger<T> is registered as singleton by AddLogging)
         if (fullyQualifiedTypeName.StartsWith("global::Microsoft.Extensions.Logging.ILogger<", StringComparison.Ordinal)
             || fullyQualifiedTypeName.StartsWith("Microsoft.Extensions.Logging.ILogger<", StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        // IOptions<T> is always a singleton (OptionsManager<T> is registered as singleton by AddOptions)
+        if (fullyQualifiedTypeName.StartsWith("global::Microsoft.Extensions.Options.IOptions<", StringComparison.Ordinal)
+            || fullyQualifiedTypeName.StartsWith("Microsoft.Extensions.Options.IOptions<", StringComparison.Ordinal))
         {
             return true;
         }
