@@ -305,12 +305,14 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
         if (url.Contains("{"))
         {
             var placeholders = _placeholderRegex.Matches(url);
+            HashSet<string>? memberNames = null;
 
             foreach (var placeholder in placeholders.Cast<Match>())
             {
                 var placeholderName = placeholder.Value.Trim('{', '}', '*');
+                memberNames ??= new HashSet<string>(operationType.GetAllMembers().Select(static m => m.Name), StringComparer.Ordinal);
 
-                if (operationType.GetAllMembers().Any(m => m.Name == placeholderName) == false)
+                if (!memberNames.Contains(placeholderName))
                 {
                     var argumentLocationInfo = locationInfo.WithSubRange(placeholder.Index + 2, placeholder.Length - 2);
                     context.AddDiagnostic(CreatePlaceholderMissingDiagnostic(operationType, placeholderName, argumentLocationInfo));
@@ -507,12 +509,14 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
                 if (url!.Contains("{"))
                 {
                     var placeholders = _placeholderRegex.Matches(url);
+                    HashSet<string>? memberNames = null;
 
                     foreach (var placeholder in placeholders.Cast<Match>())
                     {
                         var placeholderName = placeholder.Value.Trim('{', '}', '*');
+                        memberNames ??= new HashSet<string>(operationType.GetAllMembers().Select(static m => m.Name), StringComparer.Ordinal);
 
-                        if (!operationType.GetAllMembers().Any(m => m.Name == placeholderName))
+                        if (!memberNames.Contains(placeholderName))
                         {
                             context.AddDiagnostic(CreatePlaceholderMissingDiagnostic(
                                 operationType,
@@ -568,6 +572,10 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
 
             if (normalisedUrl.Contains("{"))
             {
+                var opMemberNames = BuildMemberNameSet(operationType);
+                var resMemberCache = BuildMemberCache(resourceTypeSymbol);
+                var resMemberNames = new HashSet<string>(resMemberCache.Keys, StringComparer.Ordinal);
+
                 normalisedUrl = _mappedPlaceholderRegex.Replace(
                     normalisedUrl,
                     match =>
@@ -579,20 +587,20 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
                             match.Index + 2,
                             match.Length - 2);
 
-                        if (TryFindMember(operationType, routePropertyName, argumentLocationInfo, context))
+                        if (TryFindMember(operationType, routePropertyName, opMemberNames, argumentLocationInfo, context))
                         {
                             if (string.IsNullOrEmpty(resourcePropertyName))
                             {
-                                TryFindMember(resourceTypeSymbol, routePropertyName, argumentLocationInfo, context);
+                                TryFindMember(resourceTypeSymbol, routePropertyName, resMemberNames, argumentLocationInfo, context);
 
-                                var isValueType = IsResourcePropertyValueType(resourceTypeSymbol, routePropertyName);
+                                var isValueType = IsResourcePropertyValueType(resMemberCache, routePropertyName);
                                 placeholderMappings.Add(new LinkPlaceholderMapping(routePropertyName, routePropertyName, isValueType));
                             }
                             else
                             {
-                                TryFindMember(resourceTypeSymbol, resourcePropertyName!, argumentLocationInfo, context);
+                                TryFindMember(resourceTypeSymbol, resourcePropertyName!, resMemberNames, argumentLocationInfo, context);
 
-                                var isValueType = IsResourcePropertyValueType(resourceTypeSymbol, resourcePropertyName!);
+                                var isValueType = IsResourcePropertyValueType(resMemberCache, resourcePropertyName!);
                                 placeholderMappings.Add(new LinkPlaceholderMapping(routePropertyName, resourcePropertyName!, isValueType));
                             }
                         }
@@ -632,6 +640,26 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
     }
 
     /// <summary>
+    /// Overload that uses a pre-built member name set to avoid repeated <see cref="RoslynExtensions.GetAllMembers"/>
+    /// walks when validating multiple placeholders against the same type.
+    /// </summary>
+    private static bool TryFindMember(ITypeSymbol typeSymbol, string placeholderName, HashSet<string> memberNameCache, LocationInfo? argumentLocationInfo, DescriptorContributorContext context)
+    {
+        if (memberNameCache.Contains(placeholderName))
+        {
+            return true;
+        }
+
+        context.AddDiagnostic(
+            CreatePlaceholderMissingDiagnostic(
+                typeSymbol,
+                placeholderName,
+                argumentLocationInfo));
+
+        return false;
+    }
+
+    /// <summary>
     /// Checks whether a named property on a resource type is a non-nullable value type, which
     /// affects the generated URL builder code (value types cannot use <c>?.</c> or be compared to null).
     /// </summary>
@@ -639,7 +667,19 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
     {
         var member = resourceType.GetAllMembers().FirstOrDefault(m => m.Name == propertyName);
 
-        if (member is IPropertySymbol property)
+        return member is IPropertySymbol property
+               && property.Type.IsValueType
+               && property.Type.OriginalDefinition.SpecialType != SpecialType.System_Nullable_T
+               && property.Type.NullableAnnotation != NullableAnnotation.Annotated;
+    }
+
+    /// <summary>
+    /// Overload that uses a pre-built member dictionary to avoid repeated <see cref="RoslynExtensions.GetAllMembers"/>
+    /// walks when checking multiple properties on the same resource type.
+    /// </summary>
+    private static bool IsResourcePropertyValueType(Dictionary<string, ISymbol> memberCache, string propertyName)
+    {
+        if (memberCache.TryGetValue(propertyName, out var member) && member is IPropertySymbol property)
         {
             return property.Type.IsValueType
                    && property.Type.OriginalDefinition.SpecialType != SpecialType.System_Nullable_T
@@ -647,6 +687,33 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Builds a name-to-symbol dictionary for all members of a type, including inherited members.
+    /// Used to cache member lookups when multiple placeholders reference the same type.
+    /// </summary>
+    private static Dictionary<string, ISymbol> BuildMemberCache(ITypeSymbol type)
+    {
+        var cache = new Dictionary<string, ISymbol>(StringComparer.Ordinal);
+
+        foreach (var member in type.GetAllMembers())
+        {
+            if (!cache.ContainsKey(member.Name))
+            {
+                cache[member.Name] = member;
+            }
+        }
+
+        return cache;
+    }
+
+    /// <summary>
+    /// Builds a name set for all members of a type, for fast existence checks.
+    /// </summary>
+    private static HashSet<string> BuildMemberNameSet(ITypeSymbol type)
+    {
+        return new HashSet<string>(type.GetAllMembers().Select(static m => m.Name), StringComparer.Ordinal);
     }
 
     private static DiagnosticInfo CreatePlaceholderMissingDiagnostic(ITypeSymbol namedType, string placeholderName, LocationInfo? argumentLocationInfo)
