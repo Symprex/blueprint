@@ -69,28 +69,7 @@ public sealed class ApiAuthoriserModule : IBlueprintSourceGeneratorModule, IPipe
             return;
         }
 
-        // Cache singleton authoriser arrays at pipeline construction time
-        context.CacheService(
-            "_apiAuthorisers",
-            "Blueprint.Authorization.IApiAuthoriser[]",
-            "Blueprint.Runtime.Exec.PipelineHelpers.ResolveServiceArray<Blueprint.Authorization.IApiAuthoriser>(serviceProvider)",
-            isNullable: false);
-
-        context.CacheService(
-            "_operationAuthorisers",
-            "Blueprint.Authorization.IOperationAuthoriser[]",
-            "Blueprint.Runtime.Exec.PipelineHelpers.ResolveServiceArray<Blueprint.Authorization.IOperationAuthoriser>(serviceProvider)",
-            isNullable: false);
-
         context.RequireAsync();
-
-        // Cache singleton IUserAuthorisationContextFactory at pipeline construction time
-        // (registered as singleton per ServiceCollectionExtensions.AddUserAuthorisationContextFactory)
-        context.CacheService(
-            "_userContextFactory",
-            "Blueprint.Authorization.IUserAuthorisationContextFactory",
-            "Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Authorization.IUserAuthorisationContextFactory>(serviceProvider)",
-            isNullable: true);
 
         // User context loading runs in Authentication stage (after identity check)
         context.AddRenderStep(
@@ -126,7 +105,7 @@ public sealed class ApiAuthoriserModule : IBlueprintSourceGeneratorModule, IPipe
         var httpContextExpr = context.GetHttpContextExpression();
 
         context.WriteStatement(
-            $"await Blueprint.Runtime.Exec.PipelineHelpers.LoadUserContextAsync(context, {httpContextExpr}, this._userContextFactory).ConfigureAwait(false);");
+            $"await Blueprint.Runtime.Exec.PipelineHelpers.LoadUserContextAsync(context, {httpContextExpr}, this.UserAuthorisationContextFactory).ConfigureAwait(false);");
 
         context.WriteBlankLine();
     }
@@ -135,7 +114,7 @@ public sealed class ApiAuthoriserModule : IBlueprintSourceGeneratorModule, IPipe
     {
         context.DeclareVariable(
             "authoriserDenial",
-            "await Blueprint.Runtime.Exec.PipelineHelpers.RunAuthorisersAsync(context, this._apiAuthorisers, this._operationAuthorisers).ConfigureAwait(false)");
+            "await Blueprint.Runtime.Exec.PipelineHelpers.RunAuthorisersAsync(context, this.ApiAuthorisers, this.OperationAuthorisers).ConfigureAwait(false)");
 
         context.If(
             "authoriserDenial != null",

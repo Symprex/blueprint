@@ -95,6 +95,35 @@ public abstract class OperationExecutorShell : IOperationExecutorPipeline
     protected IResourceAuthorizationProvider? ResourceAuthorizationProvider { get; }
 
     /// <summary>
+    /// Gets the API authoriser instances cached at pipeline construction time. Returns an empty
+    /// array when no authorisers are registered. Generated authorisation module code iterates this
+    /// during the Authorisation stage to apply business-level authorization rules.
+    /// </summary>
+    protected IApiAuthoriser[] ApiAuthorisers { get; }
+
+    /// <summary>
+    /// Gets the per-operation authoriser instances cached at pipeline construction time. Returns an
+    /// empty array when no operation authorisers are registered. Generated authorisation module code
+    /// iterates this alongside <see cref="ApiAuthorisers"/> during the Authorisation stage.
+    /// </summary>
+    protected IOperationAuthoriser[] OperationAuthorisers { get; }
+
+    /// <summary>
+    /// Gets the user authorisation context factory cached at pipeline construction time, or
+    /// <see langword="null"/> when none is registered. Generated authentication module code calls
+    /// this to load the user context after identity verification, making claims-based context
+    /// available for authorization template expansion.
+    /// </summary>
+    protected IUserAuthorisationContextFactory? UserAuthorisationContextFactory { get; }
+
+    /// <summary>
+    /// Gets the resource-event audit sink cached at pipeline construction time, or
+    /// <see langword="null"/> when none is registered. Generated resource-event audit module code
+    /// calls this in the PostExecution stage to record resource creation/update/deletion events.
+    /// </summary>
+    protected IResourceEventAuditSink? ResourceEventAuditSink { get; }
+
+    /// <summary>
     /// Initialises a new instance of <see cref="OperationExecutorShell"/> with the supplied logger factory and
     /// operation type name used for activity tracing and structured log entries.
     /// </summary>
@@ -118,6 +147,8 @@ public abstract class OperationExecutorShell : IOperationExecutorPipeline
         this._activityName = operationTypeName + "Pipeline";
         this._suppressActivity = suppressActivity;
         this.PropertyPopulators = [];
+        this.ApiAuthorisers = [];
+        this.OperationAuthorisers = [];
     }
 
     /// <summary>
@@ -144,6 +175,10 @@ public abstract class OperationExecutorShell : IOperationExecutorPipeline
         this.AuditSink = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<IAuditSink>(serviceProvider);
         this.ResolvedResourceAuthorizationProvider = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<IResolvedResourceAuthorizationProvider>(serviceProvider);
         this.ResourceAuthorizationProvider = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<IResourceAuthorizationProvider>(serviceProvider);
+        this.ApiAuthorisers = PipelineHelpers.ResolveServiceArray<IApiAuthoriser>(serviceProvider);
+        this.OperationAuthorisers = PipelineHelpers.ResolveServiceArray<IOperationAuthoriser>(serviceProvider);
+        this.UserAuthorisationContextFactory = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<IUserAuthorisationContextFactory>(serviceProvider);
+        this.ResourceEventAuditSink = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<IResourceEventAuditSink>(serviceProvider);
     }
 
     /// <inheritdoc />

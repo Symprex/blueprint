@@ -15,20 +15,12 @@ namespace Blueprint.Generated
 {
     public sealed partial class CreateResourceCommandExecutorPipeline : Blueprint.OperationExecutorShell
     {
-        readonly Blueprint.Authorization.IApiAuthoriser[] _apiAuthorisers;
         static readonly string[] _appliedModuleIds =
             new string[] { "PropertyOwnershipModule", "TenantModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "HandlerExecutionModule", "LinkGenerationModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "ResourceEventAuditModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
-        readonly Blueprint.Authorization.IOperationAuthoriser[] _operationAuthorisers;
-        readonly Blueprint.Auditing.IResourceEventAuditSink _resourceEventAuditSink;
-        readonly Blueprint.Authorization.IUserAuthorisationContextFactory _userContextFactory;
 
         public CreateResourceCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, System.IServiceProvider serviceProvider)
             : base(loggerFactory, "CreateResourceCommand", serviceProvider)
         {
-            this._apiAuthorisers = Blueprint.Runtime.Exec.PipelineHelpers.ResolveServiceArray<Blueprint.Authorization.IApiAuthoriser>(serviceProvider);
-            this._operationAuthorisers = Blueprint.Runtime.Exec.PipelineHelpers.ResolveServiceArray<Blueprint.Authorization.IOperationAuthoriser>(serviceProvider);
-            this._userContextFactory = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Authorization.IUserAuthorisationContextFactory>(serviceProvider);
-            this._resourceEventAuditSink = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Auditing.IResourceEventAuditSink>(serviceProvider);
         }
 
         protected override async System.Threading.Tasks.Task<Blueprint.OperationResult> ExecuteCoreAsync(Blueprint.Runtime.Exec.ApiOperationContext context)
@@ -57,9 +49,9 @@ namespace Blueprint.Generated
                 return Blueprint.Runtime.Exec.UnauthenticatedResult.Instance;
             }
 
-            await Blueprint.Runtime.Exec.PipelineHelpers.LoadUserContextAsync(context, httpContext, this._userContextFactory).ConfigureAwait(false);
+            await Blueprint.Runtime.Exec.PipelineHelpers.LoadUserContextAsync(context, httpContext, this.UserAuthorisationContextFactory).ConfigureAwait(false);
 
-            var authoriserDenial = await Blueprint.Runtime.Exec.PipelineHelpers.RunAuthorisersAsync(context, this._apiAuthorisers, this._operationAuthorisers).ConfigureAwait(false);
+            var authoriserDenial = await Blueprint.Runtime.Exec.PipelineHelpers.RunAuthorisersAsync(context, this.ApiAuthorisers, this.OperationAuthorisers).ConfigureAwait(false);
             if (authoriserDenial != null)
             {
                 return authoriserDenial;
@@ -86,7 +78,7 @@ namespace Blueprint.Generated
 
                 await Blueprint.Runtime.Exec.PipelineHelpers.ExecuteAuditSinkAsync(this.AuditSink, context, handlerResult, "CreateResourceCommand").ConfigureAwait(false);
 
-                await Blueprint.Runtime.Exec.PipelineHelpers.ExecuteResourceEventAuditSinkAsync(this._resourceEventAuditSink, context, handlerResult, "CreateResourceCommand").ConfigureAwait(false);
+                await Blueprint.Runtime.Exec.PipelineHelpers.ExecuteResourceEventAuditSinkAsync(this.ResourceEventAuditSink, context, handlerResult, "CreateResourceCommand").ConfigureAwait(false);
 
                 await Blueprint.Runtime.Exec.PipelineHelpers.FlushBackgroundTasksAsync(context.ServiceProvider).ConfigureAwait(false);
             }

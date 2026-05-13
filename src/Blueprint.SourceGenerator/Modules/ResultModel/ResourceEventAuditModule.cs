@@ -55,13 +55,6 @@ public sealed class ResourceEventAuditModule : IBlueprintSourceGeneratorModule, 
             return;
         }
 
-        // Cache singleton IResourceEventAuditSink at pipeline construction time
-        context.CacheService(
-            "_resourceEventAuditSink",
-            "Blueprint.Auditing.IResourceEventAuditSink",
-            "Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Auditing.IResourceEventAuditSink>(serviceProvider)",
-            isNullable: true);
-
         var operationTypeName = context.Operation.TypeName;
 
         context.RequireVariable(
@@ -79,7 +72,7 @@ public sealed class ResourceEventAuditModule : IBlueprintSourceGeneratorModule, 
         // Delegate to shared helper — avoids duplicating the pattern match, null check,
         // try/catch, and activity event recording across every resource-event pipeline.
         context.WriteStatement(
-            $"await Blueprint.Runtime.Exec.PipelineHelpers.ExecuteResourceEventAuditSinkAsync(this._resourceEventAuditSink, context, handlerResult, \"{operationTypeName}\").ConfigureAwait(false);");
+            $"await Blueprint.Runtime.Exec.PipelineHelpers.ExecuteResourceEventAuditSinkAsync(this.ResourceEventAuditSink, context, handlerResult, \"{operationTypeName}\").ConfigureAwait(false);");
     }
 
     /// <summary>

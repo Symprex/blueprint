@@ -42,18 +42,12 @@ namespace Blueprint.Generated
 {
     public sealed partial class UpdateUserCommandExecutorPipeline : Blueprint.OperationExecutorShell
     {
-        readonly Blueprint.Authorization.IApiAuthoriser[] _apiAuthorisers;
         static readonly string[] _appliedModuleIds =
             new string[] { "PropertyOwnershipModule", "TenantModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "HandlerExecutionModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
-        readonly Blueprint.Authorization.IOperationAuthoriser[] _operationAuthorisers;
-        readonly Blueprint.Authorization.IUserAuthorisationContextFactory _userContextFactory;
 
         public UpdateUserCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, System.IServiceProvider serviceProvider)
             : base(loggerFactory, "UpdateUserCommand", serviceProvider)
         {
-            this._apiAuthorisers = Blueprint.Runtime.Exec.PipelineHelpers.ResolveServiceArray<Blueprint.Authorization.IApiAuthoriser>(serviceProvider);
-            this._operationAuthorisers = Blueprint.Runtime.Exec.PipelineHelpers.ResolveServiceArray<Blueprint.Authorization.IOperationAuthoriser>(serviceProvider);
-            this._userContextFactory = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Blueprint.Authorization.IUserAuthorisationContextFactory>(serviceProvider);
         }
 
         protected override async System.Threading.Tasks.Task<Blueprint.OperationResult> ExecuteCoreAsync(Blueprint.Runtime.Exec.ApiOperationContext context)
@@ -82,9 +76,9 @@ namespace Blueprint.Generated
                 return Blueprint.Runtime.Exec.UnauthenticatedResult.Instance;
             }
 
-            await Blueprint.Runtime.Exec.PipelineHelpers.LoadUserContextAsync(context, httpContext, this._userContextFactory).ConfigureAwait(false);
+            await Blueprint.Runtime.Exec.PipelineHelpers.LoadUserContextAsync(context, httpContext, this.UserAuthorisationContextFactory).ConfigureAwait(false);
 
-            var authoriserDenial = await Blueprint.Runtime.Exec.PipelineHelpers.RunAuthorisersAsync(context, this._apiAuthorisers, this._operationAuthorisers).ConfigureAwait(false);
+            var authoriserDenial = await Blueprint.Runtime.Exec.PipelineHelpers.RunAuthorisersAsync(context, this.ApiAuthorisers, this.OperationAuthorisers).ConfigureAwait(false);
             if (authoriserDenial != null)
             {
                 return authoriserDenial;
