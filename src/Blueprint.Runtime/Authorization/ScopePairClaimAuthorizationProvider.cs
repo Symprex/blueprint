@@ -105,12 +105,11 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
 
             hasAnyScopeClaims = true;
 
-            // Check if this scope claim matches any required scope pair
+            // Check if this scope claim matches any required scope pair.
+            // Uses span-based comparison to avoid per-comparison string allocation.
             foreach (var required in requiredScopePairs)
             {
-                var expectedScope = $"{required.Noun}{this._separator}{required.Verb}";
-
-                if (string.Equals(claim.Value, expectedScope, StringComparison.OrdinalIgnoreCase))
+                if (MatchesScopePair(claim.Value, required.Noun, this._separator, required.Verb))
                 {
                     return _trueResult;
                 }
@@ -176,11 +175,10 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
 
             hasAnyScopeClaims = true;
 
+            // Uses span-based comparison to avoid per-comparison string allocation.
             foreach (var required in resolvedScopePairs)
             {
-                var expectedScope = $"{required.Noun}{this._separator}{required.Verb}";
-
-                if (string.Equals(claim.Value, expectedScope, StringComparison.OrdinalIgnoreCase))
+                if (MatchesScopePair(claim.Value, required.Noun, this._separator, required.Verb))
                 {
                     return _trueResult;
                 }
@@ -211,5 +209,30 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
         ClaimsPrincipal principal)
     {
         return false;
+    }
+
+    /// <summary>
+    /// Zero-allocation scope-pair comparison. Checks whether <paramref name="claimValue"/> equals
+    /// <c>{noun}{separator}{verb}</c> using ordinal-ignore-case span slicing, avoiding the
+    /// per-comparison string interpolation that would otherwise allocate on every request.
+    /// </summary>
+    private static bool MatchesScopePair(
+        string claimValue,
+        string noun,
+        string separator,
+        string verb)
+    {
+        var expectedLength = noun.Length + separator.Length + verb.Length;
+
+        if (claimValue.Length != expectedLength)
+        {
+            return false;
+        }
+
+        var span = claimValue.AsSpan();
+
+        return span[..noun.Length].Equals(noun.AsSpan(), StringComparison.OrdinalIgnoreCase)
+            && span.Slice(noun.Length, separator.Length).Equals(separator.AsSpan(), StringComparison.OrdinalIgnoreCase)
+            && span[(noun.Length + separator.Length)..].Equals(verb.AsSpan(), StringComparison.OrdinalIgnoreCase);
     }
 }
