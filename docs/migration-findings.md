@@ -254,6 +254,9 @@
 | S365 test entity extensions | ✅ S365-owned | `PublishAfterAsync`, `PublishAllAsync`, `RunAllLocalMessagesAsync` work with `SymprexEntity.Events` — call `MessageAsync()` which Blueprint provides. S365 keeps these as domain-specific test helpers. |
 | S365 Marten test helpers | ✅ S365-owned | `WithDatabaseAsync`, `AllAsync`, `LoadFromDatabaseAsync` — Marten session access via DI; not Blueprint responsibility |
 | S365 test scale | ✅ Analysed | 707 test files, 300+ CommandAsync, 200+ QueryAsync, 150+ MessageAsync calls — all use patterns Blueprint.Testing already supports |
+| ExternalHandlerIndex optimization | ✅ Done | Replaced per-operation syntax tree scanning with pre-built `ExternalHandlerIndex`: namespace traversal (symbol-based) builds index once, then O(candidates) per-operation lookup. Compilation-assembly-only scan (no referenced assemblies). Eliminates O(ops × syntaxTrees × classes) for S365's 540 operations. |
+| EquatableList.TakeOwnership | ✅ Done | Static factory method avoids `List→Array→List` copies when callers already have a `List<T>` — used by FindHandlers batch path |
+| GetAllMembers() caching | ✅ Done | `LinkGenerationModule` now caches member lookups via `BuildMemberNameSet`/`BuildMemberCache` — avoids repeated base-type-chain walks when validating multiple URL placeholders per operation |
 
 ---
 
