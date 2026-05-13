@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Blueprint.Auditing;
+using Blueprint.Http;
 using Blueprint.Model;
 using Blueprint.Runtime.Exec;
 using Blueprint.SourceGenerator.Tests.Integration.Generators.OperationDescriptors;
@@ -138,6 +139,23 @@ public class ResourceEventAuditModuleIntegrationTests
         auditSink.LastResourceId.Should().Be("res-99");
     }
 
+    [Fact]
+    public async Task When_handler_returns_legacy_ResourceCreated_then_audit_sink_is_called()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var auditSink = new TestResourceEventAuditSink();
+        var serviceProvider = new ResourceEventAuditTestServiceProvider(auditSink);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
+
+        var pipeline = executor.GetPipeline(typeof(LegacyResourceEventAuditTestCommand));
+        var context = new ApiOperationContext(serviceProvider, app, LegacyResourceEventAuditTestCommand.Configure(), CancellationToken.None);
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<ResourceCreated<LegacyResourceEventTestApiResource>>();
+        auditSink.RecordCallCount.Should().Be(1, "resource event audit sink should be called for legacy ResourceCreated results");
+    }
+
     private sealed class ResourceEventAuditTestServiceProvider : IServiceProvider
     {
         private readonly IResourceEventAuditSink? _resourceEventAuditSink;
@@ -237,5 +255,33 @@ public partial class KeyOnlyResourceEventAuditTestCommand : ICommand<KeyOnlyReso
     public static Task<KeyOnlyResourceEventResult> HandleAsync(KeyOnlyResourceEventAuditTestCommand operation)
     {
         return Task.FromResult(new KeyOnlyResourceEventResult(ChangeType.Deleted, "test-resource.deleted", "res-99"));
+    }
+}
+
+/// <summary>
+/// An API resource used by the legacy ResourceEvent test operation.
+/// </summary>
+public class LegacyResourceEventTestApiResource : ApiResource
+{
+    /// <inheritdoc />
+    public override string Object => "legacy-test-resource";
+
+    /// <summary>Gets or sets the resource identifier.</summary>
+    public string Id { get; set; } = "legacy-42";
+}
+
+/// <summary>
+/// A command that returns the legacy <see cref="ResourceCreated{TResource}"/> (from Blueprint.Http.ResourceEvent hierarchy)
+/// to prove the audit module activates for S365-style resource event handlers.
+/// </summary>
+public partial class LegacyResourceEventAuditTestCommand : ICommand<ResourceCreated<LegacyResourceEventTestApiResource>>
+{
+    /// <summary>Handles the command by returning a legacy ResourceCreated result.</summary>
+    /// <param name="operation">The command instance.</param>
+    /// <returns>A ResourceCreated result matching the S365 handler pattern.</returns>
+    public static Task<ResourceCreated<LegacyResourceEventTestApiResource>> HandleAsync(LegacyResourceEventAuditTestCommand operation)
+    {
+        var resource = new LegacyResourceEventTestApiResource { Id = "legacy-42" };
+        return Task.FromResult(new ResourceCreated<LegacyResourceEventTestApiResource>(resource));
     }
 }
