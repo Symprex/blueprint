@@ -1,96 +1,65 @@
 using Blueprint.Model;
 using Blueprint.Runtime.Exec;
 
-#pragma warning disable CS0618 // Testing obsolete convenience types intentionally
-
 namespace Blueprint.SourceGenerator.Tests.Integration.Exec;
 
 /// <summary>
-/// Tests for <see cref="ResourceCreated{T}"/>, <see cref="ResourceUpdated{T}"/>,
-/// and <see cref="ResourceDeleted{T}"/> convenience result types.
+/// Tests for <see cref="ResourceEventResult"/> and <see cref="ResourceEventResult{T}"/> base types.
+/// The convenience subclasses (ResourceCreated, ResourceUpdated, ResourceDeleted) live in
+/// <c>Blueprint.Http</c> alongside <see cref="Blueprint.Http.ResourceEvent{TResource}"/>.
 /// </summary>
-public class ResourceEventConvenienceTypeTests
+public class ResourceEventResultTests
 {
-    [Fact]
-    public void ResourceCreated_with_explicit_event_id()
+    [Theory]
+    [InlineData(ChangeType.Created)]
+    [InlineData(ChangeType.Updated)]
+    [InlineData(ChangeType.Deleted)]
+    public void Typed_result_exposes_change_type_and_identity(ChangeType changeType)
     {
-        var result = new ResourceCreated<TestAccount>("account.provisioned", "acc-123", new TestAccount { Id = "acc-123", Name = "Test" });
+        var result = new ResourceEventResult<TestAccount>(changeType, "account.changed", "acc-123", new TestAccount { Id = "acc-123", Name = "Test" });
 
-        Assert.Equal(ChangeType.Created, result.ChangeType);
-        Assert.Equal("account.provisioned", result.EventId);
+        Assert.Equal(changeType, result.ChangeType);
+        Assert.Equal("account.changed", result.EventId);
         Assert.Equal("acc-123", result.ResourceId);
         Assert.Equal("Test", result.Content.Name);
     }
 
     [Fact]
-    public void ResourceCreated_with_conventional_event_id()
+    public void WithMetadata_chains_metadata_entries()
     {
-        var result = new ResourceCreated<TestAccount>("acc-456", new TestAccount { Id = "acc-456", Name = "Auto" });
+        var result = new ResourceEventResult<TestAccount>(ChangeType.Created, "evt", "r1", new TestAccount { Id = "r1", Name = "Meta" });
 
-        Assert.Equal(ChangeType.Created, result.ChangeType);
-        Assert.Equal("TestAccount.created", result.EventId);
-        Assert.Equal("acc-456", result.ResourceId);
-    }
+        result.WithMetadata("source", "test").WithMetadata("version", 2);
 
-    [Fact]
-    public void ResourceUpdated_with_explicit_event_id()
-    {
-        var result = new ResourceUpdated<TestAccount>("account.settings.changed", "acc-789", new TestAccount { Id = "acc-789", Name = "Updated" });
-
-        Assert.Equal(ChangeType.Updated, result.ChangeType);
-        Assert.Equal("account.settings.changed", result.EventId);
-        Assert.Equal("acc-789", result.ResourceId);
-        Assert.Equal("Updated", result.Content.Name);
-    }
-
-    [Fact]
-    public void ResourceUpdated_with_conventional_event_id()
-    {
-        var result = new ResourceUpdated<TestAccount>("acc-111", new TestAccount { Id = "acc-111", Name = "Modified" });
-
-        Assert.Equal(ChangeType.Updated, result.ChangeType);
-        Assert.Equal("TestAccount.updated", result.EventId);
-    }
-
-    [Fact]
-    public void ResourceDeleted_with_explicit_event_id()
-    {
-        var result = new ResourceDeleted<TestAccount>("account.archived", "acc-222", new TestAccount { Id = "acc-222", Name = "Gone" });
-
-        Assert.Equal(ChangeType.Deleted, result.ChangeType);
-        Assert.Equal("account.archived", result.EventId);
-        Assert.Equal("acc-222", result.ResourceId);
-    }
-
-    [Fact]
-    public void ResourceDeleted_with_conventional_event_id()
-    {
-        var result = new ResourceDeleted<TestAccount>("acc-333", new TestAccount { Id = "acc-333", Name = "Removed" });
-
-        Assert.Equal(ChangeType.Deleted, result.ChangeType);
-        Assert.Equal("TestAccount.deleted", result.EventId);
-    }
-
-    [Fact]
-    public void All_types_inherit_from_ResourceEventResult()
-    {
-        ResourceEventResult created = new ResourceCreated<TestAccount>("id1", new TestAccount { Id = "id1", Name = "A" });
-        ResourceEventResult updated = new ResourceUpdated<TestAccount>("id2", new TestAccount { Id = "id2", Name = "B" });
-        ResourceEventResult deleted = new ResourceDeleted<TestAccount>("id3", new TestAccount { Id = "id3", Name = "C" });
-
-        Assert.IsAssignableFrom<ResourceEventResult>(created);
-        Assert.IsAssignableFrom<ResourceEventResult>(updated);
-        Assert.IsAssignableFrom<ResourceEventResult>(deleted);
+        Assert.NotNull(result.Metadata);
+        Assert.Equal("test", result.Metadata["source"]);
+        Assert.Equal(2, result.Metadata["version"]);
     }
 
     [Fact]
     public void Unwrap_returns_typed_content()
     {
-        var result = new ResourceCreated<TestAccount>("x", new TestAccount { Id = "x", Name = "Unwrap" });
+        var result = new ResourceEventResult<TestAccount>(ChangeType.Created, "evt", "x", new TestAccount { Id = "x", Name = "Unwrap" });
 
         var unwrapped = result.Unwrap<TestAccount>();
 
         Assert.Equal("Unwrap", unwrapped.Name);
+    }
+
+    [Fact]
+    public void Unwrap_throws_for_wrong_type()
+    {
+        var result = new ResourceEventResult<TestAccount>(ChangeType.Created, "evt", "x", new TestAccount { Id = "x", Name = "Wrong" });
+
+        Assert.Throws<InvalidCastException>(() => result.Unwrap<string>());
+    }
+
+    [Fact]
+    public void WasSuccessful_is_true()
+    {
+        var result = new ResourceEventResult<TestAccount>(ChangeType.Updated, "evt", "r1", new TestAccount { Id = "r1", Name = "OK" });
+
+        Assert.True(result.WasSuccessful);
     }
 
     private sealed class TestAccount
