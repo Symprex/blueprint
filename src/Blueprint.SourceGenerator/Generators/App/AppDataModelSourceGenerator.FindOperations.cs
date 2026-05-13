@@ -40,6 +40,7 @@ public sealed partial class AppDataModelSourceGenerator
         var missingSerializerCoverageOperations = new HashSet<string>(StringComparer.Ordinal);
         var requiredSerializerCoverageTypeNames = new HashSet<string>(StringComparer.Ordinal);
         var requiredSerializerCoverageOperations = new HashSet<string>(StringComparer.Ordinal);
+        var strippedNameToOperations = new Dictionary<string, List<string>>(StringComparer.Ordinal);
         var coveredSerializerContextTypeNames = dataModelClass.SerializerContextTypeName is null
             ? null
             : new HashSet<string>(dataModelClass.SerializerContextBodyTypeNames.AsArray(), StringComparer.Ordinal);
@@ -51,6 +52,15 @@ public sealed partial class AppDataModelSourceGenerator
             foreach (var operation in ScanForOperationTypes(compilation, attribute, modelClassType!))
             {
                 registrations.Add(operation.ToDisplayString());
+
+                var strippedName = OperationNameHelpers.StripOperationSuffix(operation.Name);
+                if (!strippedNameToOperations.TryGetValue(strippedName, out var operationNames))
+                {
+                    operationNames = new List<string>();
+                    strippedNameToOperations[strippedName] = operationNames;
+                }
+
+                operationNames.Add(operation.Name);
 
                 var requiredTypeNames = GetRequiredSerializerContextCoverage(
                     operation,
@@ -84,6 +94,21 @@ public sealed partial class AppDataModelSourceGenerator
             {
                 return Result<BlueprintAppDataModelCompilationModel>.Failure(
                     new DiagnosticInfo(_noMatchingTypesFound, attribute.Location));
+            }
+        }
+
+        foreach (var kvp in strippedNameToOperations)
+        {
+            if (kvp.Value.Count > 1)
+            {
+                diagnostics.Add(
+                    new DiagnosticInfo(
+                        _duplicateStrippedDescriptorNameRule,
+                        dataModelClass.DeclarationLocation,
+                        [
+                            string.Join(", ", kvp.Value),
+                            kvp.Key,
+                        ]));
             }
         }
 

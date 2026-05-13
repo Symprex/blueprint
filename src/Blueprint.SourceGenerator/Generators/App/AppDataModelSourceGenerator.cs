@@ -68,6 +68,15 @@ public sealed partial class AppDataModelSourceGenerator : IIncrementalGenerator,
         isEnabledByDefault: true,
         description: "OpenAPI schema projection currently supports local per-property validation constraints only. Covered serializer-backed body types that use cross-property validation must fail during generation instead of silently producing incomplete OpenAPI contracts.");
 
+    private static readonly DiagnosticDescriptor _duplicateStrippedDescriptorNameRule = new(
+        id: "BP009",
+        title: "Duplicate descriptor name after Query/Command suffix stripping",
+        messageFormat: "Operations {0} produce the same descriptor name '{1}' after stripping Query/Command suffixes. Rename one of them to avoid an OpenAPI operationId collision.",
+        category: "AppDataModelSourceGenerator",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "Blueprint strips 'Query' and 'Command' suffixes from operation type names to produce descriptor names that flow through to OpenAPI operationId values. When two operations produce the same stripped name (e.g. FooQuery and FooCommand both become Foo), the collision must be resolved by renaming one of the operations.");
+
     private readonly BlueprintSourceGenerationConfig _config;
 
     /// <summary>

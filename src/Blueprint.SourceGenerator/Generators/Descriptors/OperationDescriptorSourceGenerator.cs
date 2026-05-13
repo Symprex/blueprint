@@ -223,7 +223,7 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
 
         // The keys do not matter, they are not used when generating the base call
         baseParameters.Add("type", "typeof(" + plan.Operation.TypeName + ")");
-        baseParameters.Add("name", "\"" + StripOperationSuffix(plan.Operation.TypeName) + "\"");
+        baseParameters.Add("name", "\"" + OperationNameHelpers.StripOperationSuffix(plan.Operation.TypeName) + "\"");
         baseParameters.Add("where", "\"Source Generated\"");
 
         return codeBuilder.Build();
@@ -290,27 +290,6 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
         }
 
         return false;
-    }
-
-    /// <summary>
-    /// Strips trailing <c>Query</c> or <c>Command</c> suffixes from an operation type name
-    /// to produce the descriptor name. This matches legacy Blueprint's convention where
-    /// <c>GetSentEmailQuery</c> becomes <c>GetSentEmail</c> and flows through to
-    /// OpenAPI <c>operationId</c> values and TypeScript client generation.
-    /// </summary>
-    private static string StripOperationSuffix(string typeName)
-    {
-        if (typeName.Length > 5 && typeName.EndsWith("Query", StringComparison.Ordinal))
-        {
-            return typeName.Substring(0, typeName.Length - 5);
-        }
-
-        if (typeName.Length > 7 && typeName.EndsWith("Command", StringComparison.Ordinal))
-        {
-            return typeName.Substring(0, typeName.Length - 7);
-        }
-
-        return typeName;
     }
 
     /// <summary>
