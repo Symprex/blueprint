@@ -96,6 +96,13 @@ public sealed class BlueprintTestHost<TApp, TExec> : IDisposable, IAsyncDisposab
     /// Executes the given operation and unwraps the result to the expected type.
     /// Throws <see cref="BlueprintTestExecutionException"/> if the result cannot be unwrapped
     /// (e.g., if validation failed unexpectedly).
+    /// <para>
+    /// <strong>Exception propagation</strong>: when the pipeline produces an
+    /// <see cref="UnhandledExceptionResult"/>, the original exception is rethrown directly
+    /// so callers can catch the specific exception type. This matches the S365 pattern
+    /// where <c>ThrowApiExceptionAsync()</c> catches <see cref="ApiException"/> from
+    /// handler code.
+    /// </para>
     /// </summary>
     /// <typeparam name="TResult">The expected result type.</typeparam>
     /// <param name="operation">The operation instance to execute.</param>
@@ -110,6 +117,13 @@ public sealed class BlueprintTestHost<TApp, TExec> : IDisposable, IAsyncDisposab
         CancellationToken cancellationToken = default)
     {
         var result = await this.ExecuteAsync(operation, configure, cancellationToken);
+
+        // Rethrow handler exceptions directly so test code can catch specific exception
+        // types (e.g. ApiException, ValidationException) without unwrapping result wrappers.
+        if (result is UnhandledExceptionResult unhandled)
+        {
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(unhandled.Exception).Throw();
+        }
 
         if (result is ValidationFailedResult validationFailed)
         {
