@@ -189,6 +189,13 @@
 | Cached Task<bool> in auth | ✅ Done | `ScopePairClaimAuthorizationProvider` uses static `_trueResult`/`_falseResult` instead of `Task.FromResult` per auth check — eliminates per-request `Task<bool>` allocation |
 | Dual auth interface provider | ✅ Done | `ScopePairClaimAuthorizationProvider` implements both `IResourceAuthorizationProvider` AND `IResolvedResourceAuthorizationProvider` — single registration enables both legacy and compile-time–expanded auth paths. `AddResourceAuthorizationProvider<T>()` auto-forwards. |
 | Zero-alloc scope comparison | ✅ Done | `ScopePairClaimAuthorizationProvider.MatchesScopePair` uses `ReadOnlySpan<char>` slicing to compare `{noun}{sep}{verb}` against claim values — eliminates per-comparison string interpolation allocation in auth hot path |
+| ProxyResult built-in | ✅ Done | `Blueprint.Http.ProxyResult` copies status, headers, and body from `HttpResponseMessage` — S365 LoadAnalyticsQuery can use built-in type instead of custom subclass |
+| Image upload pattern | ✅ Not applicable | S365 uses Azure Blob SAS tokens — image bytes go directly to blob storage, never through Blueprint operations. No IFormFile/multipart support needed. |
+| Handler signature compat | ✅ Verified | 293 `ApiOperations` handlers use HandleAsync (262), Handle (71), InvokeAsync (52), Invoke (1) — all 4 method names discovered by Blueprint. All use property injection (Context, Identity, Logger, CT) + DI method params. |
+| Rebus IHandleMessages handlers | ✅ Separate system | ~99 Rebus event handlers implement `IHandleMessages<T>` — handled by Rebus, not Blueprint source-gen. Constructor DI, not ApiOperations pattern. |
+| CORS | ✅ Not Blueprint | Gateway apps use standard ASP.NET Core `AddCors()`/`UseCors()` — Blueprint-agnostic, no migration needed |
+| Health checks | ✅ Not Blueprint | Standard ASP.NET Core `MapHealthChecks()` in 8 files — Blueprint-agnostic, no migration needed |
+| S365 gap analysis complete | ✅ No blocking gaps | ProxyResult was the only real gap (1 usage); file upload uses SAS (not Blueprint); all middleware have module equivalents; health/CORS are ASP.NET Core standard |
 
 ---
 
