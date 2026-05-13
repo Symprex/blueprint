@@ -1,14 +1,17 @@
 using System.Net;
+using Blueprint.Http;
 
 namespace Blueprint.Runtime.Exec;
 
 /// <summary>
 /// Represents a plain-text response that bypasses JSON serialization and writes a raw text body.
+/// Extends <see cref="HttpResult"/> so it can be returned from handlers declared as
+/// <c>ICommand&lt;HttpResult&gt;</c> (the S365 webhook pattern).
 /// Defaults to <c>200 OK</c> with <c>text/plain</c> content type, but both the status code
 /// and content type can be overridden to support content types like <c>text/vcard</c> or
 /// error responses with non-200 status codes.
 /// </summary>
-public sealed class PlainTextResult : OperationResult
+public sealed class PlainTextResult : HttpResult
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="PlainTextResult"/> class with the given text content
@@ -27,22 +30,17 @@ public sealed class PlainTextResult : OperationResult
     /// <param name="content">The plain-text content to write to the response body.</param>
     /// <param name="statusCode">The HTTP status code for the response.</param>
     public PlainTextResult(string content, HttpStatusCode statusCode)
+        : base(statusCode)
     {
         ArgumentNullException.ThrowIfNull(content);
 
         this.Content = content;
-        this.StatusCode = statusCode;
     }
 
     /// <summary>
     /// Gets the plain-text content that will be written to the response body.
     /// </summary>
     public string Content { get; }
-
-    /// <summary>
-    /// Gets the HTTP status code for this response. Defaults to <c>200 OK</c>.
-    /// </summary>
-    public HttpStatusCode StatusCode { get; }
 
     /// <summary>
     /// Gets or sets the content type header for this response. Defaults to <c>text/plain</c>.
