@@ -8,7 +8,7 @@ namespace Blueprint.Http;
 /// with legacy Blueprint consumers that reference <c>ResourceEventChangeType</c> in the
 /// <c>Blueprint.Http</c> namespace.
 /// </summary>
-[JsonConverter(typeof(JsonStringEnumConverter))]
+[JsonConverter(typeof(JsonStringEnumConverter<ResourceEventChangeType>))]
 public enum ResourceEventChangeType
 {
     /// <summary>

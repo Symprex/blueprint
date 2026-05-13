@@ -175,6 +175,11 @@
 | `[FromBody]` explicit (SMTP only) | ✅ Not applicable | Only in SMTP MockApi ASP.NET controller — not a Blueprint operation, no migration needed |
 | Multiple IHandleMessages<T> per class | ✅ S365-owned | 5 Rebus handlers implement 3+ IHandleMessages interfaces each (Analytics: Campaign, Disclaimer, Group, Signature, Survey). These are Rebus event handlers, NOT Blueprint operations — handled by Rebus subscription wire-up. |
 | Abstract generic base operations | ✅ Compatible | `EmailOrderedPagedQuery<T> : OrderedPagedQuery, IQuery<EmailPagedApiResource<T>>` — source generator resolves concrete type args; PropertyOwnership walks through generic base hierarchy |
+| S365 outbox timing | ✅ Verified | S365 custom Marten outbox publishes domain events in `BeforeSaveChangesAsync` — identical timing to Blueprint's `OutboxPublishingSessionListener`. Both wrap in Rebus transaction scope. |
+| S365 two-tier auth model | ✅ Compatible | `ScopeApiAuthoriser` maps to `ScopePairClaimAuthorizationProvider`; `S365ClaimsApiAuthoriser` maps to custom `IResolvedResourceAuthorizationProvider`. Both receive `ApiOperationContext` with full operation instance. |
+| Blueprint.Marten.Rebus bridge | ✅ Done | `RebusDomainEventPublisher` implements `IDomainEventPublisher` via `IBus.Publish()`. `AddBlueprintMartenRebus()` DI registration. 4 unit tests passing. |
+| S365 verb hierarchy (auth) | ✅ S365-owned | "Manage" includes Read/Update/Create/Delete — this is an `IResourceAuthorizationProvider` implementation concern, not a Blueprint core concern |
+| S365 resource key wildcards | ✅ S365-owned | "/Tenants/123/*" wildcard matching — implemented in S365's `IResolvedResourceAuthorizationProvider`, Blueprint provides the pre-expanded keys |
 
 ---
 

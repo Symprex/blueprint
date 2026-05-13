@@ -505,7 +505,7 @@ public class HttpOperationResultExecutor
         public required string EventId { get; init; }
 
         [JsonPropertyName("changeType")]
-        [JsonConverter(typeof(JsonStringEnumConverter))]
+        [JsonConverter(typeof(JsonStringEnumConverter<ChangeType>))]
         public required ChangeType ChangeType { get; init; }
 
         [JsonPropertyName("created")]
