@@ -580,6 +580,155 @@ S365 testing uses `WebApiFixtureFactory<TStartup>` → `ApiFixture` with:
 
 **Solution:** Moved tag creation into `PipelineHelpers` using a `ConcurrentDictionary<string, ActivityTagsCollection>` cache. The `ExecuteAuditSinkAsync` method now takes just a `string operationTypeName` instead of a pre-built `ActivityTagsCollection`. Tags are lazily created and cached on first use.
 
+### IValidatableObject Tail Call Extraction (Commit 0f083d0)
+
+**Problem:** ~10 lines of `IValidatableObject` validation logic duplicated in every pipeline for commands implementing the interface.
+
+**Solution:** Extracted to `PipelineHelpers.ValidateIValidatableObject<TOperation>()`. Generic constraint `where TOperation : IValidatableObject` avoids casting. `[UnconditionalSuppressMessage]` applied for trim safety since operation types are always preserved.
+
+---
+
+## Route Collision Detection (Commit 570ee19)
+
+**Status:** Implemented at startup via `MapBlueprintApi()`.
+
+Route deduplication already existed (same route+operation → one endpoint). Added cross-operation collision detection: when different operations claim the same route+HTTP method, Blueprint logs a structured warning at startup with both operation names. This catches configuration issues early rather than as ambiguous routing errors at runtime.
+
+---
+
+## CreateNested() Data Dictionary Fix (Commit 570ee19)
+
+**Status:** Fixed.
+
+---
+
+## S365 Authorization Architecture Analysis
+
+**Status:** Analyzed — Blueprint is API-compatible.
+
+### Attribute Compatibility
+
+| S365 Attribute | Blueprint Attribute | Migration |
+|---|---|---|
+| `[Resource(noun, verb, template)]` | `[Resource(noun, verb, template)]` | Namespace change only |
+| `[FromResource(type, template)]` | `[FromResource(type, template)]` | Namespace change only |
+| `[MustBeAuthenticated]` | `[MustBeAuthenticated]` | Same |
+| `[AllowAnonymous]` | `[AllowAnonymous]` | Same |
+
+All three `[Resource]` constructor parameters (noun, verb, resourceKeyTemplate) are supported in Blueprint's `ResourceAttribute`. The S365 migration requires only a namespace change from `Symprex.Signature365.Common.Authorisation` to `Blueprint.Model.Attributes`.
+
+### Auth Flow Mapping
+
+S365 has a two-layer auth model:
+1. **ScopeApiAuthoriser** — JWT scope-based (checks `scope` claims against noun.verb pairs)
+2. **S365ClaimsApiAuthoriser** — Resource-key-based (expands `{Auth:AccountId}` templates, checks claims)
+
+Blueprint maps this to:
+- `IResourceAuthorizationProvider` (or `IResolvedResourceAuthorizationProvider` for compile-time-expanded keys)
+- `IUserAuthorisationContextFactory` for context loading (S365's `Signature365UserAuthorisationContextFactory`)
+- `ResourceKeyTemplateExpander` handles `{Auth:*}` tokens at compile time
+
+### Verb Expansion
+
+S365 uses a `Verb` class with `IncludedImplicitVerbs` (e.g., `Manage` includes `Create, Read, Update, Delete`). This is an S365-domain concern handled inside their `IResourceAuthorizationProvider` implementation — Blueprint passes raw noun+verb string pairs and the provider decides the expansion logic.
+
+### AccountId Resolution
+
+S365's `IUserAuthorisationContext.AccountId` resolves as `TenantId ?? PartnerId ?? "Symprex"`. Blueprint's `{Auth:AccountId}` template token expands from the `IUserAuthorisationContext.AccountId` property at runtime, matching exactly.
+
+---
+
+## S365 SetTenantMiddleware Analysis
+
+**Status:** Analyzed — Blueprint's TenantModule covers most functionality.
+
+S365's `SetTenantMiddleware` does three things:
+1. Sets `ICurrentTenantAccessor.Current` from JWT `Sig365TenantId` claim
+2. Sets Serilog `IDiagnosticContext` with TenantId for structured logging
+3. Auto-populates `TenantId` property on operations (if ApiId-typed and not already set)
+
+Blueprint's `TenantModule` handles #1 (via `ITenantResolver` + `ITenantAccessor`). Blueprint's `PropertyPopulationModule` handles #3. Serilog enrichment (#2) should remain as ASP.NET middleware (runs before Blueprint pipeline).
+
+Only Portal uses `SetTenantMiddleware`. Analytics and Templates do NOT add it — simpler services.
+
+---
+
+## S365 Testing Infrastructure Compatibility
+
+**Status:** Blueprint.Testing provides full compatibility.
+
+| S365 Pattern | Blueprint.Testing Equivalent |
+|---|---|
+| `WebApiFixtureFactory<T>` | `BlueprintTestFixtureFactory<TApp, TExec>` |
+| `ApiFixture` | `BlueprintTestFixture<TApp, TExec>` |
+| `fixture.CommandAsync(op)` | `fixture.CommandAsync(op)` ✅ |
+| `fixture.QueryAsync(op)` | `fixture.QueryAsync(op)` ✅ |
+| `fixture.Bus` | `fixture.Bus` (alias for Messages) ✅ |
+| `Authentication.Set(identity)` | `Authentication.Set(identity)` ✅ |
+| `Authentication.MakeAnonymous()` | `Authentication.MakeAnonymous()` ✅ |
+| `Authentication.As(identity)` | `Authentication.As(identity)` ✅ (IDisposable scope) |
+
+Ambient auth support is built-in: set once, applies to all calls. Per-call overrides via configure callback.
+
+---
+
+## S365 Startup Pattern Analysis
+
+**Status:** Analyzed — migration mapping complete.
+
+### Common Registration Pattern (all services)
+```
+services.AddBlueprintApi(b => b
+    .ConfigureCommon(AppDefinition.Instance)
+    .Http(h => { /* NodaTime JSON */ })
+    .Executors(e => e.AddScanner<OperationsHandlerScanner>())
+    .Operations(o => o.ScanCallingAssembly().Scan(typeof(IXApi).Assembly))
+    .AddAuthentication(a => a.UseContextLoader<Signature365UserAuthorisationContextFactory>())
+    .AddAuthorisation()
+    .AddResourceEvents<BusResourceEventAuditRepository>()
+    /* optional: .RebusConsumer(), .Pipeline(), .UseRebusAndMarten() */
+);
+```
+
+### Migration to New Blueprint
+```
+services.AddBlueprintApi<ServiceBlueprintApp, ServiceBlueprintAppExecutor>(blueprint =>
+{
+    blueprint.AddUnitOfWork<MartenUnitOfWork>();
+    blueprint.AddResourceAuthorizationProvider<S365ResourceAuthorizationProvider>();
+    blueprint.AddResourceEventAuditSink<BusResourceEventAuditSink>();
+    blueprint.ConfigureHttp(http => { http.PublicHost = "..."; });
+});
+```
+
+### AppDefinition Pattern
+Each service has an `AppDefinition` singleton with: `ProjectName`, `OpenApiTitle`, `MessageQueueName`, optional `HangfireQueues`, `EnableBackgroundTasks`.
+
+### Middleware Pipeline Order (standard)
+```
+Serilog → RegionalHeaders → (CORS for Portal) → Authentication → Routing → HealthChecks → Blueprint API
+```
+
+`ApiOperationContext.CreateNested()` was incorrectly using `this._data` (backing field) instead of `this.Data` (property getter), causing parent and nested contexts to NOT share the Data dictionary when the parent had never accessed Data. Fixed to use `this.Data` which ensures the lazy dictionary is allocated and shared.
+
+---
+
+## Legacy ResourceEvent<T> Audit Module Fix (Commit 006b228)
+
+**Status:** Fixed and integration-tested (commit f18ee9f).
+
+`ResourceEventAuditModule.GetResourceEventCastType()` only checked for `ResourceEventResult` and `KeyOnlyResourceEventResult` in the `Blueprint.Runtime.Exec` namespace. S365 handlers returning `ResourceCreated<T>/ResourceUpdated<T>/ResourceDeleted<T>` (which inherit from `Blueprint.Http.ResourceEvent`, not `ResourceEventResult`) would silently skip audit sink wiring.
+
+Fixed by adding `Blueprint.Http.ResourceEvent` detection. Integration test confirms the full pipeline works for the legacy pattern.
+
+---
+
+## Permission/PermissionFor Attributes
+
+**Status:** Not applicable — never existed in new Blueprint.
+
+The new source-gen Blueprint only has Resource-based authorization. There is no Permission or PermissionFor attribute to remove. S365's Resource-based auth pattern is the only path.
+
 **Impact:** ~2 lines removed per pipeline (field + static initializer). Cache is thread-safe and deterministic. Zero behavioral change.
 
 ### Base Class Field Hoisting (Commit 7b7a109)
