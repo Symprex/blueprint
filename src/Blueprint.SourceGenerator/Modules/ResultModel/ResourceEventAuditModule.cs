@@ -78,8 +78,8 @@ public sealed class ResourceEventAuditModule : IBlueprintSourceGeneratorModule, 
     /// <summary>
     /// Determines the fully-qualified cast type name for pattern matching the handler result.
     /// Returns null if the operation does not declare a resource-event result type.
-    /// <c>ResourceEventResult</c> and <c>KeyOnlyResourceEventResult</c> are sibling types
-    /// (both inherit from <c>OperationResult</c>) so the correct one must be selected at compile time.
+    /// <c>ResourceEventResult</c>, <c>KeyOnlyResourceEventResult</c>, and <c>ResourceEvent</c>
+    /// are all supported resource-event result hierarchies that require audit sink execution.
     /// </summary>
     private static string? GetResourceEventCastType(INamedTypeSymbol operationType)
     {
@@ -102,6 +102,12 @@ public sealed class ResourceEventAuditModule : IBlueprintSourceGeneratorModule, 
                 {
                     return "Blueprint.Runtime.Exec.KeyOnlyResourceEventResult";
                 }
+            }
+
+            if (current.ContainingNamespace?.ToDisplayString() == "Blueprint.Http"
+                && current.Name == "ResourceEvent")
+            {
+                return "Blueprint.Http.ResourceEvent";
             }
         }
 
