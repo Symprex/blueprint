@@ -496,6 +496,36 @@ public static class PipelineHelpers
     }
 
     /// <summary>
+    /// Single-element overload for <see cref="CheckResourceAuthorizationAsync(ApiOperationContext, ClaimsPrincipal, Authorization.IResolvedResourceAuthorizationProvider, IReadOnlyList{ResolvedScopePair}, CancellationToken)"/>.
+    /// Avoids per-request array allocation for the common case of operations with exactly one
+    /// <c>[Resource]</c> attribute. The scope pair is passed by value and wrapped in a stack-allocated
+    /// <see cref="SingleItemList{T}"/> that implements <see cref="IReadOnlyList{T}"/>.
+    /// </summary>
+    /// <param name="context">The current operation execution context.</param>
+    /// <param name="principal">The authenticated caller's claims principal.</param>
+    /// <param name="resolvedProvider">The resolved resource authorization provider, or <c>null</c> if none is registered.</param>
+    /// <param name="singleScope">The single compile-time expanded scope pair for this operation.</param>
+    /// <param name="cancellationToken">Cancellation token for the authorization evaluation.</param>
+    /// <returns><c>null</c> when authorized; <see cref="ForbiddenResult.Instance"/> when denied.</returns>
+    public static async Task<OperationResult?> CheckResourceAuthorizationAsync(
+        ApiOperationContext context,
+        ClaimsPrincipal principal,
+        Authorization.IResolvedResourceAuthorizationProvider? resolvedProvider,
+        ResolvedScopePair singleScope,
+        CancellationToken cancellationToken)
+    {
+        if (resolvedProvider == null)
+        {
+            return null;
+        }
+
+        var scopeList = new SingleItemList<ResolvedScopePair>(singleScope);
+        var isAuthorized = await resolvedProvider.IsAuthorizedAsync(context, principal, scopeList, cancellationToken).ConfigureAwait(false);
+
+        return isAuthorized ? null : ForbiddenResult.Instance;
+    }
+
+    /// <summary>
     /// Checks resource authorization using the legacy <see cref="Authorization.IResourceAuthorizationProvider"/>
     /// with raw template strings. Returns <see cref="ForbiddenResult.Instance"/> when the provider
     /// denies access, or <c>null</c> when the caller is authorized or the provider is not registered
@@ -634,5 +664,46 @@ public static class PipelineHelpers
             .GetRequiredService<IEnumerable<Blueprint.Http.IResourceLinkGenerator>>(serviceProvider);
 
         await Blueprint.Http.LinkGeneratorHandler.AddLinksAsync(apiLinkGenerator, resourceLinkGenerators, context, handlerResult).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// A stack-allocated <see cref="IReadOnlyList{T}"/> that holds exactly one element,
+    /// avoiding the heap allocation of a single-element <c>T[]</c> array. Generated pipelines
+    /// use this for the common case of operations with exactly one <c>[Resource]</c> attribute
+    /// (the vast majority of S365 operations).
+    /// </summary>
+    /// <typeparam name="T">The element type.</typeparam>
+    public readonly struct SingleItemList<T> : IReadOnlyList<T>
+    {
+        private readonly T _item;
+
+        /// <summary>
+        /// Initialises a new <see cref="SingleItemList{T}"/> containing <paramref name="item"/>.
+        /// </summary>
+        /// <param name="item">The single element to hold.</param>
+        public SingleItemList(T item)
+        {
+            this._item = item;
+        }
+
+        /// <inheritdoc />
+        public int Count => 1;
+
+        /// <inheritdoc />
+        public T this[int index] => index == 0
+            ? this._item
+            : throw new ArgumentOutOfRangeException(nameof(index));
+
+        /// <inheritdoc />
+        public IEnumerator<T> GetEnumerator()
+        {
+            yield return this._item;
+        }
+
+        /// <inheritdoc />
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator()
+        {
+            return this.GetEnumerator();
+        }
     }
 }

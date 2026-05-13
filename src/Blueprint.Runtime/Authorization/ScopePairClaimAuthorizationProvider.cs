@@ -28,6 +28,9 @@ namespace Blueprint.Authorization;
 /// </remarks>
 public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvider
 {
+    private static readonly Task<bool> _trueResult = Task.FromResult(true);
+    private static readonly Task<bool> _falseResult = Task.FromResult(false);
+
     private readonly string _scopeClaimType;
     private readonly string _separator;
     private readonly FrozenSet<string> _ignoredScopes;
@@ -75,14 +78,14 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
     {
         if (requiredScopePairs.Count == 0)
         {
-            return Task.FromResult(true);
+            return _trueResult;
         }
 
         var identity = principal.Identity as ClaimsIdentity;
 
         if (identity is not { IsAuthenticated: true })
         {
-            return Task.FromResult(false);
+            return _falseResult;
         }
 
         // Collect non-ignored scope claims
@@ -105,11 +108,11 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
             // Check if this scope claim matches any required scope pair
             foreach (var required in requiredScopePairs)
             {
-                var expectedScope = string.Concat(required.Noun, this._separator, required.Verb);
+                var expectedScope = $"{required.Noun}{this._separator}{required.Verb}";
 
                 if (string.Equals(claim.Value, expectedScope, StringComparison.OrdinalIgnoreCase))
                 {
-                    return Task.FromResult(true);
+                    return _trueResult;
                 }
             }
         }
@@ -118,10 +121,10 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
         // configurable no-scopes behavior (default: deny)
         if (!hasAnyScopeClaims)
         {
-            return Task.FromResult(this.AllowWhenNoScopeClaims(operationContext, principal));
+            return this.AllowWhenNoScopeClaims(operationContext, principal) ? _trueResult : _falseResult;
         }
 
-        return Task.FromResult(false);
+        return _falseResult;
     }
 
     /// <summary>

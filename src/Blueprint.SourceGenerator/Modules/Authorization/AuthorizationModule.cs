@@ -381,26 +381,32 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
             "this._resolvedResourceAuthorizationProvider != null",
             resolvedBranch =>
             {
-                // Generate inline-expanded ResolvedScopePair array
-                var resolvedElements = string.Join(
-                    ", ",
-                    scopePairs.Select(sp =>
-                    {
-                        if (sp.ResourceKeyTemplate is not null)
-                        {
-                            var tokens = ResourceKeyTemplateParser.ParseTokens(sp.ResourceKeyTemplate);
-                            var expandedExpr = ResourceKeyTemplateParser.GenerateExpansionExpression(
-                                sp.ResourceKeyTemplate, tokens, operationExpr, principalExpr, "context");
+                string scopeArg;
 
-                            return $"new Blueprint.Model.ResolvedScopePair(\"{sp.Noun}\", \"{sp.Verb}\", \"{sp.ResourceKeyTemplate}\", {expandedExpr})";
-                        }
+                if (scopePairs.Count == 1)
+                {
+                    // Single scope pair: pass by value to avoid per-request array allocation.
+                    // PipelineHelpers wraps it in a stack-allocated SingleItemList<T>.
+                    var sp = scopePairs[0];
+                    scopeArg = sp.ResourceKeyTemplate is not null
+                        ? BuildResolvedScopePairExpression(sp, operationExpr, principalExpr)
+                        : $"new Blueprint.Model.ResolvedScopePair(\"{sp.Noun}\", \"{sp.Verb}\", null, null)";
+                }
+                else
+                {
+                    // Multiple scope pairs: allocate array (rare path for multi-Resource operations)
+                    var resolvedElements = string.Join(
+                        ", ",
+                        scopePairs.Select(sp => sp.ResourceKeyTemplate is not null
+                            ? BuildResolvedScopePairExpression(sp, operationExpr, principalExpr)
+                            : $"new Blueprint.Model.ResolvedScopePair(\"{sp.Noun}\", \"{sp.Verb}\", null, null)"));
 
-                        return $"new Blueprint.Model.ResolvedScopePair(\"{sp.Noun}\", \"{sp.Verb}\", null, null)";
-                    }));
+                    scopeArg = $"new Blueprint.Model.ResolvedScopePair[] {{ {resolvedElements} }}";
+                }
 
                 resolvedBranch.DeclareVariable(
                     "authorizationDenial",
-                    $"await Blueprint.Runtime.Exec.PipelineHelpers.CheckResourceAuthorizationAsync(context, {principalExpr}, this._resolvedResourceAuthorizationProvider, new Blueprint.Model.ResolvedScopePair[] {{ {resolvedElements} }}, {httpContextExpr}.RequestAborted).ConfigureAwait(false)");
+                    $"await Blueprint.Runtime.Exec.PipelineHelpers.CheckResourceAuthorizationAsync(context, {principalExpr}, this._resolvedResourceAuthorizationProvider, {scopeArg}, {httpContextExpr}.RequestAborted).ConfigureAwait(false)");
 
                 resolvedBranch.If(
                     "authorizationDenial != null",
@@ -417,6 +423,18 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
         });
 
         context.WriteBlankLine();
+    }
+
+    private static string BuildResolvedScopePairExpression(
+        (string Noun, string Verb, string? ResourceKeyTemplate) sp,
+        string operationExpr,
+        string principalExpr)
+    {
+        var tokens = ResourceKeyTemplateParser.ParseTokens(sp.ResourceKeyTemplate!);
+        var expandedExpr = ResourceKeyTemplateParser.GenerateExpansionExpression(
+            sp.ResourceKeyTemplate!, tokens, operationExpr, principalExpr, "context");
+
+        return $"new Blueprint.Model.ResolvedScopePair(\"{sp.Noun}\", \"{sp.Verb}\", \"{sp.ResourceKeyTemplate}\", {expandedExpr})";
     }
 
     /// <summary>
