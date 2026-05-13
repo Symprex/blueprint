@@ -210,6 +210,9 @@
 | S365 operation count (540) | ✅ Inventoried | 540 total: ResourceEvent<T> 256 (47%), direct ApiResource 172 (32%), ListApiResource<T> 20 (4%), StatusCodeResult 23 (4%), TenantListApiResource<T> ~40, PagedApiResource<T> ~8, other ~21 |
 | S365 test fixture full compat | ✅ Verified | S365 `ApiFixture` API fully covered: `Authentication.Set/As/MakeAnonymous`, `Bus.Should().HavePublishedSingle<T>()`, `BackgroundTaskAsync`, `MessageAsync`, `RunAndConsumeAllPublishedMessagesAsync`, `GetOptions<T>()`, `WithDatabaseAsync` (S365-owned extension) |
 | S365 Startup patterns audit | ✅ Done | 3 services audited (Portal, VCard, IdentityServer): NodaTime config → `ConfigureJson`, OpenAPI PostConfigure → `configureOpenApi`, Rebus subscriptions → S365-owned, tenant middleware → TenantModule, HATEOAS → LinkGenerationModule |
+| ResourceEventResult<T> typed chaining | ✅ Done | `WithMetadata`, `WithSecureData`, `WithChangedValue` return `ResourceEventResult<T>` (not base) — enables fluent chaining from typed convenience classes (`ResourceCreated<T>`, etc.) |
+| Binding helper extraction | ✅ Done | `BindRouteValue<T>`, `BindQueryValue<T>`, `BindQueryArray<T>`, `BindHeaderValue<T>`, `BindCookieValue<T>` with static `TryParseFunc<T>` lambdas — ~30K fewer generated IL lines across S365's 540 ops |
+| S365 PartnerId on operations | ✅ Verified | Only IdentityServer partner-specific operations (3 direct + PartnerOrderedPagedQuery base) have `PartnerId` property — these are URL route params, not auto-populated like TenantId. Blueprint handles correctly via standard route/query binding. |
 
 ---
 

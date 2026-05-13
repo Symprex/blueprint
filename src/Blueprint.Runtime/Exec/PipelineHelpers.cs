@@ -114,20 +114,31 @@ public static class PipelineHelpers
     /// <param name="populators">The pre-resolved array of property populators (empty when none are registered).</param>
     /// <param name="context">The operation context that the populators will enrich.</param>
     /// <returns>A task that completes when all populators have run.</returns>
-    public static async Task PopulatePropertiesAsync(
+    public static Task PopulatePropertiesAsync(
         IPropertyPopulator[] populators,
         ApiOperationContext context)
     {
         if (populators.Length == 1)
         {
-            await populators[0].PopulateAsync(context, context.OperationCancelled).ConfigureAwait(false);
+            return populators[0].PopulateAsync(context, context.OperationCancelled);
         }
-        else if (populators.Length > 1)
+
+        return populators.Length > 1
+            ? PopulatePropertiesCoreAsync(populators, context)
+            : Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Core async loop for multiple property populators. Separated from the fast path
+    /// to avoid state machine allocation when zero or one populators are registered.
+    /// </summary>
+    private static async Task PopulatePropertiesCoreAsync(
+        IPropertyPopulator[] populators,
+        ApiOperationContext context)
+    {
+        foreach (var populator in populators)
         {
-            foreach (var populator in populators)
-            {
-                await populator.PopulateAsync(context, context.OperationCancelled).ConfigureAwait(false);
-            }
+            await populator.PopulateAsync(context, context.OperationCancelled).ConfigureAwait(false);
         }
     }
 
@@ -146,17 +157,27 @@ public static class PipelineHelpers
     /// <param name="handlerResult">The handler result to pass to the audit sink.</param>
     /// <param name="operationTypeName">The operation type name for activity tags and failure events.</param>
     /// <returns>A task that completes when the audit sink has finished (or been skipped).</returns>
-    public static async Task ExecuteAuditSinkAsync(
+    public static Task ExecuteAuditSinkAsync(
         IAuditSink? auditSink,
         ApiOperationContext context,
         OperationResult handlerResult,
         string operationTypeName)
     {
-        if (auditSink == null)
-        {
-            return;
-        }
+        return auditSink != null
+            ? ExecuteAuditSinkCoreAsync(auditSink, context, handlerResult, operationTypeName)
+            : Task.CompletedTask;
+    }
 
+    /// <summary>
+    /// Core async implementation of audit sink execution, separated from the null-check fast
+    /// path to avoid allocating a state machine when no audit sink is registered.
+    /// </summary>
+    private static async Task ExecuteAuditSinkCoreAsync(
+        IAuditSink auditSink,
+        ApiOperationContext context,
+        OperationResult handlerResult,
+        string operationTypeName)
+    {
         var operationTags = GetOrCreateAuditTags(operationTypeName);
 
         context.Activity?.AddEvent(new ActivityEvent("blueprint.audit.started", default, operationTags));
@@ -438,14 +459,13 @@ public static class PipelineHelpers
     /// <param name="serviceProvider">The scoped service provider for the current operation.</param>
     /// <returns>A task that completes when tasks are flushed (or immediately when no scheduler is registered).</returns>
     [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
-    public static async Task FlushBackgroundTasksAsync(IServiceProvider serviceProvider)
+    public static Task FlushBackgroundTasksAsync(IServiceProvider serviceProvider)
     {
         var scheduler = serviceProvider.GetService<Blueprint.Tasks.IBackgroundTaskScheduler>();
 
-        if (scheduler != null)
-        {
-            await scheduler.RunNowAsync().ConfigureAwait(false);
-        }
+        return scheduler != null
+            ? scheduler.RunNowAsync().AsTask()
+            : Task.CompletedTask;
     }
 
     /// <summary>
@@ -618,17 +638,28 @@ public static class PipelineHelpers
     /// <param name="handlerResult">The handler result — only processed if it is a resource-event result type.</param>
     /// <param name="operationTypeName">The operation type name for activity event tags.</param>
     /// <returns>A task that completes when the audit sink has finished (or been skipped).</returns>
-    public static async Task ExecuteResourceEventAuditSinkAsync(
+    public static Task ExecuteResourceEventAuditSinkAsync(
         IResourceEventAuditSink? auditSink,
         ApiOperationContext context,
         OperationResult handlerResult,
         string operationTypeName)
     {
-        if (auditSink == null)
-        {
-            return;
-        }
+        return auditSink != null
+            ? ExecuteResourceEventAuditSinkCoreAsync(auditSink, context, handlerResult, operationTypeName)
+            : Task.CompletedTask;
+    }
 
+    /// <summary>
+    /// Core async implementation of resource-event audit sink execution. Extracts event/resource
+    /// identity from the result, records activity events, and swallows sink exceptions. Separated
+    /// from the null-check fast path to avoid state machine allocation when no sink is registered.
+    /// </summary>
+    private static async Task ExecuteResourceEventAuditSinkCoreAsync(
+        IResourceEventAuditSink auditSink,
+        ApiOperationContext context,
+        OperationResult handlerResult,
+        string operationTypeName)
+    {
         string? eventId;
         string? resourceId;
 
@@ -694,14 +725,14 @@ public static class PipelineHelpers
     /// <param name="context">The operation context for the current pipeline execution.</param>
     /// <param name="handlerResult">The handler result to enrich with links.</param>
     /// <returns>A task that completes when link population has finished (or been skipped).</returns>
-    public static async Task PopulateHateoasLinksAsync(
+    public static Task PopulateHateoasLinksAsync(
         IServiceProvider serviceProvider,
         ApiOperationContext context,
         OperationResult handlerResult)
     {
         if (handlerResult is INotModifiedResult)
         {
-            return;
+            return Task.CompletedTask;
         }
 
         var apiLinkGenerator = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions
@@ -709,9 +740,22 @@ public static class PipelineHelpers
 
         if (apiLinkGenerator == null)
         {
-            return;
+            return Task.CompletedTask;
         }
 
+        return PopulateHateoasLinksCoreAsync(serviceProvider, apiLinkGenerator, context, handlerResult);
+    }
+
+    /// <summary>
+    /// Core async implementation of HATEOAS link population. Separated from the null-check
+    /// fast paths to avoid state machine allocation for not-modified or no-generator cases.
+    /// </summary>
+    private static async Task PopulateHateoasLinksCoreAsync(
+        IServiceProvider serviceProvider,
+        Blueprint.Http.IApiLinkGenerator apiLinkGenerator,
+        ApiOperationContext context,
+        OperationResult handlerResult)
+    {
         var resourceLinkGenerators = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions
             .GetRequiredService<IEnumerable<Blueprint.Http.IResourceLinkGenerator>>(serviceProvider);
 
