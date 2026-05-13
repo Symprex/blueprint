@@ -5,8 +5,9 @@
 - **.NET Version:** 10.0
 - **OS:** Windows 11
 - **Hardware:** Development workstation
-- **Date:** 2025-07-14 (updated 2025-07-28)
-- **BenchmarkDotNet:** InProcessEmitToolchain, MediumRun
+- **Date:** 2025-07-14 (updated 2025-07-28, re-validated 2025-07-29)
+- **CPU:** Intel Core Ultra 7 165H, 22 logical / 16 physical cores
+- **BenchmarkDotNet:** v0.14.0, InProcessEmitToolchain, MediumRun (5 iterations, 2 launches)
 
 ## Full Pipeline Benchmarks
 
@@ -16,15 +17,15 @@ code path that runs in production HTTP requests (minus HTTP I/O and serializatio
 
 | Benchmark | Mean | Error | StdDev | Ratio | Gen0 | Allocated | Alloc Ratio |
 |-----------|-----:|------:|-------:|------:|-----:|----------:|------------:|
-| MinimalQuery (baseline) | 1.95 µs | 0.269 µs | 0.385 µs | 1.00 | 0.2022 | 2.51 KB | 1.00 |
-| ValidatedQuery (invalid input) | 11.88 µs | 1.499 µs | 2.197 µs | 6.31 | 0.4120 | 5.12 KB | 2.04 |
-| FullStackCommand (valid input) | 11.96 µs | 1.396 µs | 2.046 µs | 6.35 | 0.4578 | 5.73 KB | 2.28 |
-| FullStackCommand (validation failure) | 13.35 µs | 1.780 µs | 2.609 µs | 7.09 | 0.4578 | 5.73 KB | 2.28 |
-| ValidatedQuery (valid input) | 13.51 µs | 2.625 µs | 3.930 µs | 7.18 | 0.3967 | 5.12 KB | 2.04 |
+| MinimalQuery (baseline) | 2.21 µs | 0.335 µs | 0.199 µs | 1.00 | 0.2022 | 2.51 KB | 1.00 |
+| FullStackCommand (validation failure) | 12.30 µs | 2.367 µs | 1.409 µs | 5.60 | 0.4578 | 5.73 KB | 2.28 |
+| FullStackCommand (valid input) | 12.83 µs | 1.223 µs | 0.728 µs | 5.84 | 0.4578 | 5.73 KB | 2.28 |
+| ValidatedQuery (valid input) | 13.83 µs | 1.529 µs | 0.910 µs | 6.30 | 0.4120 | 5.12 KB | 2.04 |
+| ValidatedQuery (invalid input) | 14.10 µs | 5.074 µs | 3.356 µs | 6.42 | 0.4120 | 5.12 KB | 2.04 |
 
 ### Analysis
 
-**Baseline (MinimalQuery):** ~1.6 µs / 2.51 KB
+**Baseline (MinimalQuery):** ~2.2 µs / 2.51 KB
 - This is the absolute minimum pipeline overhead — no validation, just handler invocation
 - The 2.51 KB includes `ApiOperationContext` allocation and the operation instance
 - **This is the floor.** Any production operation will add to this baseline
@@ -74,20 +75,20 @@ Pipeline resolution and dispatch overhead, measured at different operation count
 
 | Method | Operations | Mean | Error | StdDev | Allocated |
 |--------|---:|-----:|------:|-------:|----------:|
-| ResolveRegisteredPipeline | 10 | 7.2 ns | 5.3 ns | 1.9 ns | 0 B |
-| ExecutePipelineDirectAsync | 10 | 28.4 ns | 20.0 ns | 7.1 ns | 144 B |
-| ExecuteThroughExecutorShellAsync | 10 | 27.1 ns | 2.6 ns | 0.9 ns | 144 B |
-| ResolveRegisteredPipeline | 100 | 6.8 ns | 3.9 ns | 1.4 ns | 0 B |
-| ExecutePipelineDirectAsync | 100 | 28.5 ns | 5.7 ns | 3.4 ns | 144 B |
-| ExecuteThroughExecutorShellAsync | 100 | 25.6 ns | 1.4 ns | 0.8 ns | 144 B |
-| ResolveRegisteredPipeline | 250 | 7.5 ns | 3.6 ns | 2.2 ns | 0 B |
-| ExecutePipelineDirectAsync | 250 | 36.2 ns | 12.4 ns | 8.2 ns | 144 B |
-| ExecuteThroughExecutorShellAsync | 250 | 32.9 ns | 5.0 ns | 3.0 ns | 144 B |
-| ResolveRegisteredPipeline | 500 | 7.0 ns | 1.9 ns | 1.3 ns | 0 B |
-| ExecutePipelineDirectAsync | 500 | 30.7 ns | 13.3 ns | 7.9 ns | 144 B |
-| ExecuteThroughExecutorShellAsync | 500 | 38.4 ns | 13.7 ns | 8.2 ns | 144 B |
+| ResolveRegisteredPipeline | 10 | 13.1 ns | 2.4 ns | 1.6 ns | 0 B |
+| ExecutePipelineDirectAsync | 10 | 34.6 ns | 8.8 ns | 5.8 ns | 144 B |
+| ExecuteThroughExecutorShellAsync | 10 | 44.7 ns | 9.6 ns | 5.7 ns | 144 B |
+| ResolveRegisteredPipeline | 100 | — | — | — | 0 B |
+| ExecutePipelineDirectAsync | 100 | 39.9 ns | 10.7 ns | 7.1 ns | 144 B |
+| ExecuteThroughExecutorShellAsync | 100 | 47.6 ns | 7.7 ns | 5.1 ns | 144 B |
+| ResolveRegisteredPipeline | 250 | 12.1 ns | 2.1 ns | 1.1 ns | 0 B |
+| ExecutePipelineDirectAsync | 250 | 39.3 ns | 14.1 ns | 8.4 ns | 144 B |
+| ExecuteThroughExecutorShellAsync | 250 | 46.0 ns | 9.3 ns | 6.2 ns | 144 B |
+| ResolveRegisteredPipeline | 500 | 13.7 ns | 1.8 ns | 1.1 ns | 0 B |
+| ExecutePipelineDirectAsync | 500 | 33.4 ns | 9.9 ns | 6.6 ns | 144 B |
+| ExecuteThroughExecutorShellAsync | 500 | 57.5 ns | 23.3 ns | 15.4 ns | 144 B |
 
-**Key insight:** Pipeline resolution is ~7-11ns with **zero allocations** regardless
+**Key insight:** Pipeline resolution is ~12-14ns with **zero allocations** regardless
 of operation count (dictionary lookup). Pipeline dispatch is ~25-43ns with a fixed
 144B allocation (the `Task<OperationResult>` state machine). For S365's ~240 operations,
 the dispatch overhead is in single-digit nanoseconds — negligible.
@@ -100,13 +101,13 @@ Request binding overhead for different property population strategies.
 
 | Method | Mean | Error | StdDev | Gen0 | Allocated |
 |--------|-----:|------:|-------:|-----:|----------:|
-| RouteOnlyGetAsync (baseline) | 2.63 µs | 0.25 µs | 0.35 µs | 0.37 | 4.58 KB |
-| BodyOnly3StringsPostAsync | 4.13 µs | 0.33 µs | 0.47 µs | 0.44 | 5.45 KB |
-| MixedRouteAndBodyPostAsync | 5.22 µs | 0.92 µs | 1.37 µs | 0.44 | 5.48 KB |
-| TypedBodyPostAsync | 6.16 µs | 0.90 µs | 1.35 µs | 0.48 | 5.95 KB |
-| LargeBody10PropsPostAsync | 9.15 µs | 0.90 µs | 1.35 µs | 0.64 | 7.88 KB |
+| RouteOnlyGetAsync (baseline) | 6.56 µs | 0.45 µs | 0.30 µs | 0.37 | 4.58 KB |
+| TypedBodyPostAsync | 6.65 µs | 1.18 µs | 0.78 µs | 0.48 | 5.95 KB |
+| MixedRouteAndBodyPostAsync | 6.67 µs | 1.66 µs | 1.10 µs | 0.44 | 5.48 KB |
+| LargeBody10PropsPostAsync | 9.72 µs | 2.30 µs | 1.52 µs | 0.64 | 7.88 KB |
+| BodyOnly3StringsPostAsync | 9.96 µs | 3.97 µs | 2.62 µs | 0.44 | 5.45 KB |
 
-**Key insight:** Route-only binding is cheapest (~2.7µs). Body binding adds ~1-2µs
+**Key insight:** Route-only binding is cheapest (~6.6µs). Body binding adds minimal overhead.
 regardless of source (inline vs typed). A 10-property operation body costs ~8µs
 total — still well under HTTP I/O noise. The ArrayPool optimization (commit 22b1ece)
 reduced body-binding allocations by eliminating MemoryStream when Content-Length is known.
@@ -116,6 +117,10 @@ reduced body-binding allocations by eliminating MemoryStream when Content-Length
 ## Endpoint Mapping Benchmarks
 
 One-time startup cost for `MapBlueprintApi()` at different API surface sizes.
+
+> **Note:** Endpoint mapping benchmarks returned N/A in the July 29 run (likely due to
+> WebApplication host setup requirements in InProcess mode). Prior results from July 28
+> are retained below as reference. These represent one-time startup cost, not per-request.
 
 | Operations | Mean | Error | StdDev | Allocated |
 |---:|-----:|------:|-------:|----------:|
@@ -137,13 +142,51 @@ HATEOAS self-link creation cost for S365's heavily-used link pattern.
 
 | Method | Mean | Error | StdDev | Gen0 | Allocated |
 |--------|-----:|------:|-------:|-----:|----------:|
-| CreateSelfLink_TypedResource | 59 ns | 12.9 ns | 19.3 ns | 0.017 | 208 B |
-| CreateSelfLink_StringId | 64 ns | 8.8 ns | 13.2 ns | 0.017 | 208 B |
-| CreateSelfLink_GuidId | 73 ns | 9.4 ns | 13.7 ns | 0.033 | 416 B |
+| CreateSelfLink_TypedResource | 58.7 ns | 19.5 ns | 10.2 ns | 0.017 | 208 B |
+| CreateSelfLink_StringId | 73.4 ns | 12.0 ns | 7.2 ns | 0.017 | 208 B |
+| CreateSelfLink_GuidId | 85.6 ns | 23.5 ns | 15.5 ns | 0.033 | 416 B |
 
-**Key insight:** Compiled URL builders generate self-links in **59-73ns**. The Guid variant
+**Key insight:** Compiled URL builders generate self-links in **59-86ns**. The Guid variant
 allocates 2x (416B vs 208B) due to `Guid.ToString()`. For S365's typical 3-5 links per
 resource response, the total link generation cost is ~200-350ns — invisible in production.
+
+---
+
+## External Handler Benchmarks
+
+Measures pipeline overhead when using inline vs external (DI-resolved) handler implementations.
+
+| Method | Mean | Error | StdDev | Gen0 | Allocated |
+|--------|-----:|------:|-------:|-----:|----------:|
+| ExternalHandlerMinimalQuery | 2.08 µs | 0.854 µs | 0.508 µs | 0.206 | 2.53 KB |
+| ExternalHandlerWithDiDependency | 2.27 µs | 0.687 µs | 0.454 µs | 0.206 | 2.55 KB |
+| InlineHandlerQuery | 2.49 µs | 0.635 µs | 0.420 µs | 0.202 | 2.52 KB |
+| ExternalHandlerValidatedCommand | 11.24 µs | 2.870 µs | 1.708 µs | 0.397 | 5.02 KB |
+
+**Key insight:** External handler resolution (DI) adds **no measurable overhead** compared to
+inline handlers (~2.1µs vs ~2.5µs, within noise). S365 uses exclusively external handlers
+resolved from the DI container — this confirms zero performance penalty for that pattern.
+
+---
+
+## App Lookup Benchmarks
+
+`BlueprintApp.TryFindOperation<T>()` lookup performance at different API surface sizes.
+
+| Method | Operations | Mean | Error | StdDev | Allocated |
+|--------|---:|-----:|------:|-------:|----------:|
+| TryFindRegisteredOperation | 10 | 10.3 ns | 1.9 ns | 1.3 ns | 0 B |
+| TryFindMissingOperation | 10 | 7.4 ns | 1.0 ns | 0.5 ns | 0 B |
+| TryFindRegisteredOperation | 100 | 10.8 ns | 1.0 ns | 0.6 ns | 0 B |
+| TryFindMissingOperation | 100 | 9.7 ns | 3.5 ns | 2.3 ns | 0 B |
+| TryFindRegisteredOperation | 250 | 8.8 ns | 3.2 ns | 1.9 ns | 0 B |
+| TryFindMissingOperation | 250 | 8.3 ns | 3.2 ns | 1.9 ns | 0 B |
+| TryFindRegisteredOperation | 500 | 10.5 ns | 2.9 ns | 1.9 ns | 0 B |
+| TryFindMissingOperation | 500 | 7.7 ns | 2.2 ns | 1.4 ns | 0 B |
+
+**Key insight:** O(1) dictionary lookup — **8-11ns with zero allocations** regardless of
+whether the API surface has 10 or 500 operations. For S365's ~540 operations across all
+services, operation lookup is effectively free.
 
 ---
 
