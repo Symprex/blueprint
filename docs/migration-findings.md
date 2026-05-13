@@ -257,6 +257,10 @@
 | ExternalHandlerIndex optimization | ✅ Done | Replaced per-operation syntax tree scanning with pre-built `ExternalHandlerIndex`: namespace traversal (symbol-based) builds index once, then O(candidates) per-operation lookup. Compilation-assembly-only scan (no referenced assemblies). Eliminates O(ops × syntaxTrees × classes) for S365's 540 operations. |
 | EquatableList.TakeOwnership | ✅ Done | Static factory method avoids `List→Array→List` copies when callers already have a `List<T>` — used by FindHandlers batch path |
 | GetAllMembers() caching | ✅ Done | `LinkGenerationModule` now caches member lookups via `BuildMemberNameSet`/`BuildMemberCache` — avoids repeated base-type-chain walks when validating multiple URL placeholders per operation |
+| Collection return type OpenAPI fix | ✅ Done | `IQuery<List<T>>`, `IQuery<IReadOnlyList<T>>`, etc. produced CLR-format body type names that failed runtime schema bridge. Fixed: source generator now normalizes all generic collection types to `ElementType[]` notation at compile time — runtime already handles `[]` suffix. 8 new tests. |
+| Handler DI param count | ✅ Verified | No limit on handler constructor DI parameters — S365 handlers with 6-8 params work fine. Generated as direct `new Handler(GetRequiredService<T>()...)` calls. |
+| Dictionary<string, string?> OpenAPI | ✅ Verified | OpenAPI schema correctly produces `{ type: object, additionalProperties: { type: string, nullable: true } }` — full runtime CLR reflection handles `IDictionary<,>` interface chain. |
+| Nested complex body properties | ✅ Verified | Body binding falls through to `JsonSerializer.Deserialize<T>(ref reader)` for non-primitive types (line 1081 of PropertyOwnershipModule). Nested validation recursive up to 5 levels via `RecursiveDataAnnotationValidator`. Integration tests prove this. |
 
 ---
 
