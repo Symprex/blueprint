@@ -594,6 +594,13 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
             return true;
         }
 
+        // IMemoryCache is always a singleton (registered by AddMemoryCache)
+        if (fullyQualifiedTypeName is "global::Microsoft.Extensions.Caching.Memory.IMemoryCache"
+            or "Microsoft.Extensions.Caching.Memory.IMemoryCache")
+        {
+            return true;
+        }
+
         return false;
     }
 
