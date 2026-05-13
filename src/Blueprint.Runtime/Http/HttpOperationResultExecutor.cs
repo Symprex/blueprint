@@ -525,16 +525,40 @@ public class HttpOperationResultExecutor
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public Dictionary<string, object>? Metadata { get; init; }
 
+        [JsonPropertyName("secureData")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public Dictionary<string, object>? SecureData { get; init; }
+
+        [JsonPropertyName("changedValues")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public Dictionary<string, object>? ChangedValues { get; init; }
+
+        [JsonPropertyName("correlationId")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? CorrelationId { get; init; }
+
         public static ResourceEventEnvelope Create(ResourceEventResult result)
         {
+            string? href = null;
+
+            if (result.Content is ILinkableResource { Links: { } links } &&
+                links.TryGetValue("self", out var selfLink))
+            {
+                href = selfLink.Href;
+            }
+
             return new ResourceEventEnvelope
             {
                 EventId = result.EventId,
                 ChangeType = result.ChangeType,
                 Created = DateTimeOffset.UtcNow,
                 ResourceObject = ApiResource.GetTypeName(result.Content.GetType()),
+                Href = href,
                 Data = result.Content,
                 Metadata = result.Metadata,
+                SecureData = result.SecureData,
+                ChangedValues = result.ChangedValues,
+                CorrelationId = result.CorrelationId,
             };
         }
     }

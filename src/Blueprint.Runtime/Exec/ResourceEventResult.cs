@@ -55,6 +55,25 @@ public class ResourceEventResult : OperationResult
     public Dictionary<string, object>? Metadata { get; private set; }
 
     /// <summary>
+    /// Gets a dictionary of security-related data that will NOT be persisted anywhere.
+    /// Use this for sensitive values that should be available in the HTTP response
+    /// (e.g. temporary tokens) but must not reach audit or event stores.
+    /// </summary>
+    public Dictionary<string, object>? SecureData { get; private set; }
+
+    /// <summary>
+    /// Gets a dictionary of property names to their previous values, used to identify what
+    /// has actually changed between the old and new state of the resource.
+    /// </summary>
+    public Dictionary<string, object>? ChangedValues { get; private set; }
+
+    /// <summary>
+    /// Gets or sets the correlation identifier that ties this event back to the initial
+    /// request that produced it, useful for cross-service tracing and event replay.
+    /// </summary>
+    public string? CorrelationId { get; set; }
+
+    /// <summary>
     /// Adds a metadata key-value pair to this event, returning this instance for fluent chaining.
     /// Metadata is persisted with the event for auditing and downstream enrichment.
     /// </summary>
@@ -65,6 +84,34 @@ public class ResourceEventResult : OperationResult
     {
         this.Metadata ??= new Dictionary<string, object>();
         this.Metadata[key] = value;
+        return this;
+    }
+
+    /// <summary>
+    /// Adds a security-related key-value pair to this event. Secure data appears in the HTTP
+    /// response but is NOT persisted to audit or event stores. Returns this instance for chaining.
+    /// </summary>
+    /// <param name="key">The secure data key.</param>
+    /// <param name="value">The secure data value.</param>
+    /// <returns>This <see cref="ResourceEventResult"/> for chaining.</returns>
+    public ResourceEventResult WithSecureData(string key, object value)
+    {
+        this.SecureData ??= new Dictionary<string, object>();
+        this.SecureData[key] = value;
+        return this;
+    }
+
+    /// <summary>
+    /// Adds a changed-value entry to this event, recording the previous value of a property.
+    /// Returns this instance for chaining.
+    /// </summary>
+    /// <param name="propertyName">The name of the changed property.</param>
+    /// <param name="previousValue">The previous value of the property.</param>
+    /// <returns>This <see cref="ResourceEventResult"/> for chaining.</returns>
+    public ResourceEventResult WithChangedValue(string propertyName, object previousValue)
+    {
+        this.ChangedValues ??= new Dictionary<string, object>();
+        this.ChangedValues[propertyName] = previousValue;
         return this;
     }
 
