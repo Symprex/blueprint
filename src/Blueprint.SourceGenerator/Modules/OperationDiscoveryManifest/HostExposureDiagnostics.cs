@@ -77,8 +77,7 @@ internal static class HostExposureDiagnostics
     private static HostExposureRegistration[] GetDistinctHostExposureRegistrations(DescriptorPlan descriptorPlan)
     {
         return descriptorPlan.GetMetadata<HostExposureRegistration>()
-            .GroupBy(static registration => registration.HostName, StringComparer.Ordinal)
-            .Select(static registrations => registrations.First())
+            .DistinctBy(static registration => registration.HostName, StringComparer.Ordinal)
             .OrderBy(static registration => registration.HostName, StringComparer.Ordinal)
             .ToArray();
     }

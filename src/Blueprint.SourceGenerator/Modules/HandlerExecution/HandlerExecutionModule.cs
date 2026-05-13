@@ -321,8 +321,8 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
         }
 
         if (returnType is INamedTypeSymbol namedReturnType
-            && namedReturnType.ContainingNamespace.ToDisplayString() == "System.Threading.Tasks"
-            && namedReturnType.Name == "Task")
+            && namedReturnType.Name == "Task"
+            && namedReturnType.ContainingNamespace.ToDisplayString() == "System.Threading.Tasks")
         {
             return namedReturnType.TypeArguments.Length == 1
                 ? namedReturnType.TypeArguments[0]
@@ -448,9 +448,9 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
     {
         if (candidateType is INamedTypeSymbol namedType
             && namedType.IsGenericType
-            && namedType.ContainingNamespace.ToDisplayString() == "Blueprint.Runtime.Exec"
             && namedType.Name == "OkResult"
-            && namedType.TypeArguments.Length == 1)
+            && namedType.TypeArguments.Length == 1
+            && namedType.ContainingNamespace.ToDisplayString() == "Blueprint.Runtime.Exec")
         {
             payloadType = namedType.TypeArguments[0];
             return true;

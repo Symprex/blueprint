@@ -12,7 +12,8 @@ namespace Blueprint.SourceGenerator.Modules.Auditing;
 /// </summary>
 public sealed class SensitivePropertyMetadataModule : IBlueprintSourceGeneratorModule, IDescriptorContributor
 {
-    private const string SensitiveAttributeMetadataName = "Blueprint.Auditing.SensitiveAttribute";
+    private const string SensitiveAttributeName = "SensitiveAttribute";
+    private const string SensitiveAttributeNamespace = "Blueprint.Auditing";
 
     /// <inheritdoc />
     public string ModuleId => nameof(SensitivePropertyMetadataModule);
@@ -64,7 +65,8 @@ public sealed class SensitivePropertyMetadataModule : IBlueprintSourceGeneratorM
             }
 
             var hasSensitive = property.GetAttributes()
-                .Any(static attr => attr.AttributeClass?.ToDisplayString() == SensitiveAttributeMetadataName);
+                .Any(static attr => attr.AttributeClass?.Name == SensitiveAttributeName
+                    && attr.AttributeClass.ContainingNamespace.ToDisplayString() == SensitiveAttributeNamespace);
 
             if (!hasSensitive)
             {

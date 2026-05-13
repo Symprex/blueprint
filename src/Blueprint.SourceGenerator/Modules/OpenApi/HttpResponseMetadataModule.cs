@@ -343,17 +343,15 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
                 continue;
             }
 
-            var ns = current.ContainingNamespace.ToDisplayString();
-
-            if (string.Equals(ns, "Blueprint.Runtime.Exec", StringComparison.Ordinal)
-                && current.Name is "OkResult" or "AcceptedResult" or "ConflictResult" or "NotFoundResult" or "CreatedResult" or "ResourceEventResult")
+            if (current.Name is "OkResult" or "AcceptedResult" or "ConflictResult" or "NotFoundResult" or "CreatedResult" or "ResourceEventResult"
+                && current.ContainingNamespace.ToDisplayString() == "Blueprint.Runtime.Exec")
             {
                 return current.TypeArguments[0];
             }
 
             // Legacy Blueprint.Http.ResourceEvent<T> carries Data as the resource body
-            if (string.Equals(ns, "Blueprint.Http", StringComparison.Ordinal)
-                && string.Equals(current.Name, "ResourceEvent", StringComparison.Ordinal))
+            if (current.Name == "ResourceEvent"
+                && current.ContainingNamespace.ToDisplayString() == "Blueprint.Http")
             {
                 return current.TypeArguments[0];
             }
