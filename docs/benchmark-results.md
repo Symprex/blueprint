@@ -5,7 +5,7 @@
 - **.NET Version:** 10.0
 - **OS:** Windows 11
 - **Hardware:** Development workstation
-- **Date:** 2025-07-14 (updated 2025-07-24)
+- **Date:** 2025-07-14 (updated 2025-07-27)
 - **BenchmarkDotNet:** InProcessEmitToolchain, MediumRun
 
 ## Full Pipeline Benchmarks
@@ -16,11 +16,11 @@ code path that runs in production HTTP requests (minus HTTP I/O and serializatio
 
 | Benchmark | Mean | Error | StdDev | Ratio | Gen0 | Allocated | Alloc Ratio |
 |-----------|-----:|------:|-------:|------:|-----:|----------:|------------:|
-| MinimalQuery (baseline) | 1.65 µs | 0.223 µs | 0.334 µs | 1.00 | 0.2041 | 2.51 KB | 1.00 |
-| ValidatedQuery (invalid input) | 10.20 µs | 0.964 µs | 1.382 µs | 6.42 | 0.4120 | 5.12 KB | 2.04 |
-| ValidatedQuery (valid input) | 10.64 µs | 1.168 µs | 1.711 µs | 6.70 | 0.4120 | 5.12 KB | 2.04 |
-| FullStackCommand (valid input) | 11.65 µs | 1.246 µs | 1.787 µs | 7.33 | 0.4578 | 5.73 KB | 2.28 |
-| FullStackCommand (validation failure) | 12.62 µs | 1.619 µs | 2.423 µs | 7.95 | 0.4578 | 5.73 KB | 2.28 |
+| MinimalQuery (baseline) | 1.95 µs | 0.269 µs | 0.385 µs | 1.00 | 0.2022 | 2.51 KB | 1.00 |
+| ValidatedQuery (invalid input) | 11.88 µs | 1.499 µs | 2.197 µs | 6.31 | 0.4120 | 5.12 KB | 2.04 |
+| FullStackCommand (valid input) | 11.96 µs | 1.396 µs | 2.046 µs | 6.35 | 0.4578 | 5.73 KB | 2.28 |
+| FullStackCommand (validation failure) | 13.35 µs | 1.780 µs | 2.609 µs | 7.09 | 0.4578 | 5.73 KB | 2.28 |
+| ValidatedQuery (valid input) | 13.51 µs | 2.625 µs | 3.930 µs | 7.18 | 0.3967 | 5.12 KB | 2.04 |
 
 ### Analysis
 

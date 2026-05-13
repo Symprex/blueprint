@@ -48,8 +48,7 @@ namespace Blueprint.Generated
             var validationResults = default(global::System.Collections.Generic.List<global::System.ComponentModel.DataAnnotations.ValidationResult>);
             if (operation.Minimum >= operation.Maximum)
             {
-                validationResults = validationResults ?? new global::System.Collections.Generic.List<global::System.ComponentModel.DataAnnotations.ValidationResult>();
-                validationResults.Add(new global::System.ComponentModel.DataAnnotations.ValidationResult(new global::Blueprint.Validation.LessThanPropertyAttribute("Maximum").FormatErrorMessage("Minimum"), ["Minimum"]));
+                Blueprint.Runtime.Exec.PipelineHelpers.AppendValidationError(ref validationResults, new global::Blueprint.Validation.LessThanPropertyAttribute("Maximum").FormatErrorMessage("Minimum"), "Minimum");
             }
             if (validationResults is not null)
             {

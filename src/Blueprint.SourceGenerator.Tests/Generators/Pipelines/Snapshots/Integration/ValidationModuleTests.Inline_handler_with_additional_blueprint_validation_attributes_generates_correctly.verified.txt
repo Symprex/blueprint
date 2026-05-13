@@ -54,68 +54,55 @@ namespace Blueprint.Generated
             var validationResults = default(global::System.Collections.Generic.List<global::System.ComponentModel.DataAnnotations.ValidationResult>);
             if (operation.AcceptedTerms == false)
             {
-                validationResults = validationResults ?? new global::System.Collections.Generic.List<global::System.ComponentModel.DataAnnotations.ValidationResult>();
-                validationResults.Add(new global::System.ComponentModel.DataAnnotations.ValidationResult(new global::Blueprint.Validation.MustBeTrueAttribute("Accept the terms.").FormatErrorMessage("AcceptedTerms"), ["AcceptedTerms"]));
+                Blueprint.Runtime.Exec.PipelineHelpers.AppendValidationError(ref validationResults, new global::Blueprint.Validation.MustBeTrueAttribute("Accept the terms.").FormatErrorMessage("AcceptedTerms"), "AcceptedTerms");
             }
             if (operation.StartsAt is not null && operation.StartsAt.Value <= global::System.DateTime.UtcNow)
             {
-                validationResults = validationResults ?? new global::System.Collections.Generic.List<global::System.ComponentModel.DataAnnotations.ValidationResult>();
-                validationResults.Add(new global::System.ComponentModel.DataAnnotations.ValidationResult(new global::Blueprint.Validation.InFutureAttribute("Future only.").FormatErrorMessage("StartsAt"), ["StartsAt"]));
+                Blueprint.Runtime.Exec.PipelineHelpers.AppendValidationError(ref validationResults, new global::Blueprint.Validation.InFutureAttribute("Future only.").FormatErrorMessage("StartsAt"), "StartsAt");
             }
             if (operation.CompletedAt is not null && operation.CompletedAt.Value >= global::System.DateTimeOffset.UtcNow)
             {
-                validationResults = validationResults ?? new global::System.Collections.Generic.List<global::System.ComponentModel.DataAnnotations.ValidationResult>();
-                validationResults.Add(new global::System.ComponentModel.DataAnnotations.ValidationResult(new global::Blueprint.Validation.InPastAttribute().FormatErrorMessage("CompletedAt"), ["CompletedAt"]));
+                Blueprint.Runtime.Exec.PipelineHelpers.AppendValidationError(ref validationResults, new global::Blueprint.Validation.InPastAttribute().FormatErrorMessage("CompletedAt"), "CompletedAt");
             }
             if (operation.PublishedAt > global::System.DateTime.UtcNow)
             {
-                validationResults = validationResults ?? new global::System.Collections.Generic.List<global::System.ComponentModel.DataAnnotations.ValidationResult>();
-                validationResults.Add(new global::System.ComponentModel.DataAnnotations.ValidationResult(new global::Blueprint.Validation.NotInFutureAttribute().FormatErrorMessage("PublishedAt"), ["PublishedAt"]));
+                Blueprint.Runtime.Exec.PipelineHelpers.AppendValidationError(ref validationResults, new global::Blueprint.Validation.NotInFutureAttribute().FormatErrorMessage("PublishedAt"), "PublishedAt");
             }
             if (operation.ScheduledAt < global::System.DateTimeOffset.UtcNow)
             {
-                validationResults = validationResults ?? new global::System.Collections.Generic.List<global::System.ComponentModel.DataAnnotations.ValidationResult>();
-                validationResults.Add(new global::System.ComponentModel.DataAnnotations.ValidationResult(new global::Blueprint.Validation.NotInPastAttribute().FormatErrorMessage("ScheduledAt"), ["ScheduledAt"]));
+                Blueprint.Runtime.Exec.PipelineHelpers.AppendValidationError(ref validationResults, new global::Blueprint.Validation.NotInPastAttribute().FormatErrorMessage("ScheduledAt"), "ScheduledAt");
             }
             if (operation.ItemIds is not null && operation.ItemIds.Length == 0)
             {
-                validationResults = validationResults ?? new global::System.Collections.Generic.List<global::System.ComponentModel.DataAnnotations.ValidationResult>();
-                validationResults.Add(new global::System.ComponentModel.DataAnnotations.ValidationResult(new global::Blueprint.Validation.NotEmptyListAttribute("Add at least one item.").FormatErrorMessage("ItemIds"), ["ItemIds"]));
+                Blueprint.Runtime.Exec.PipelineHelpers.AppendValidationError(ref validationResults, new global::Blueprint.Validation.NotEmptyListAttribute("Add at least one item.").FormatErrorMessage("ItemIds"), "ItemIds");
             }
             if (operation.ScoreIds is not null && operation.ScoreIds.Length > 2)
             {
-                validationResults = validationResults ?? new global::System.Collections.Generic.List<global::System.ComponentModel.DataAnnotations.ValidationResult>();
-                validationResults.Add(new global::System.ComponentModel.DataAnnotations.ValidationResult(new global::Blueprint.Validation.MaxItemsListAttribute(2, "Too many items.").FormatErrorMessage("ScoreIds"), ["ScoreIds"]));
+                Blueprint.Runtime.Exec.PipelineHelpers.AppendValidationError(ref validationResults, new global::Blueprint.Validation.MaxItemsListAttribute(2, "Too many items.").FormatErrorMessage("ScoreIds"), "ScoreIds");
             }
             if (operation.MinimumAge is not null && operation.MinimumAge.Value < 5)
             {
-                validationResults = validationResults ?? new global::System.Collections.Generic.List<global::System.ComponentModel.DataAnnotations.ValidationResult>();
-                validationResults.Add(new global::System.ComponentModel.DataAnnotations.ValidationResult(new global::Blueprint.Validation.GreaterThanOrEqualToAttribute(5, "Minimum five.").FormatErrorMessage("MinimumAge"), ["MinimumAge"]));
+                Blueprint.Runtime.Exec.PipelineHelpers.AppendValidationError(ref validationResults, new global::Blueprint.Validation.GreaterThanOrEqualToAttribute(5, "Minimum five.").FormatErrorMessage("MinimumAge"), "MinimumAge");
             }
             if (operation.MaximumAge is not null && operation.MaximumAge.Value > 10)
             {
-                validationResults = validationResults ?? new global::System.Collections.Generic.List<global::System.ComponentModel.DataAnnotations.ValidationResult>();
-                validationResults.Add(new global::System.ComponentModel.DataAnnotations.ValidationResult(new global::Blueprint.Validation.LessThanOrEqualToAttribute(10).FormatErrorMessage("MaximumAge"), ["MaximumAge"]));
+                Blueprint.Runtime.Exec.PipelineHelpers.AppendValidationError(ref validationResults, new global::Blueprint.Validation.LessThanOrEqualToAttribute(10).FormatErrorMessage("MaximumAge"), "MaximumAge");
             }
             if ((operation.MaximumValue is not null && operation.MinimumValue is not null) && operation.MaximumValue.Value < operation.MinimumValue.Value)
             {
-                validationResults = validationResults ?? new global::System.Collections.Generic.List<global::System.ComponentModel.DataAnnotations.ValidationResult>();
-                validationResults.Add(new global::System.ComponentModel.DataAnnotations.ValidationResult(new global::Blueprint.Validation.MustBeGreaterThanOrEqualAttribute("MinimumValue").FormatErrorMessage("MaximumValue"), ["MaximumValue"]));
+                Blueprint.Runtime.Exec.PipelineHelpers.AppendValidationError(ref validationResults, new global::Blueprint.Validation.MustBeGreaterThanOrEqualAttribute("MinimumValue").FormatErrorMessage("MaximumValue"), "MaximumValue");
             }
             if (_va_Password.IsValid(operation.Password) == false)
             {
-                validationResults = validationResults ?? new global::System.Collections.Generic.List<global::System.ComponentModel.DataAnnotations.ValidationResult>();
-                validationResults.Add(new global::System.ComponentModel.DataAnnotations.ValidationResult(_va_Password.FormatErrorMessage("Password"), ["Password"]));
+                Blueprint.Runtime.Exec.PipelineHelpers.AppendValidationError(ref validationResults, _va_Password.FormatErrorMessage("Password"), "Password");
             }
             if (_va_ResourceKey.IsValid(operation.ResourceKey) == false)
             {
-                validationResults = validationResults ?? new global::System.Collections.Generic.List<global::System.ComponentModel.DataAnnotations.ValidationResult>();
-                validationResults.Add(new global::System.ComponentModel.DataAnnotations.ValidationResult(_va_ResourceKey.FormatErrorMessage("ResourceKey"), ["ResourceKey"]));
+                Blueprint.Runtime.Exec.PipelineHelpers.AppendValidationError(ref validationResults, _va_ResourceKey.FormatErrorMessage("ResourceKey"), "ResourceKey");
             }
             if (_va_Postcode.IsValid(operation.Postcode) == false)
             {
-                validationResults = validationResults ?? new global::System.Collections.Generic.List<global::System.ComponentModel.DataAnnotations.ValidationResult>();
-                validationResults.Add(new global::System.ComponentModel.DataAnnotations.ValidationResult(_va_Postcode.FormatErrorMessage("Postcode"), ["Postcode"]));
+                Blueprint.Runtime.Exec.PipelineHelpers.AppendValidationError(ref validationResults, _va_Postcode.FormatErrorMessage("Postcode"), "Postcode");
             }
             if (validationResults is not null)
             {

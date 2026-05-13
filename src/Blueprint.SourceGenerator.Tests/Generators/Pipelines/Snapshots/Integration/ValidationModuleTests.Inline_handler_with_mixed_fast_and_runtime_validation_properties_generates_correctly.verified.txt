@@ -52,13 +52,11 @@ namespace Blueprint.Generated
             var validationResults = default(global::System.Collections.Generic.List<global::System.ComponentModel.DataAnnotations.ValidationResult>);
             if (global::System.String.IsNullOrWhiteSpace(operation.Name))
             {
-                validationResults = validationResults ?? new global::System.Collections.Generic.List<global::System.ComponentModel.DataAnnotations.ValidationResult>();
-                validationResults.Add(new global::System.ComponentModel.DataAnnotations.ValidationResult(_va_Name.FormatErrorMessage("Name"), ["Name"]));
+                Blueprint.Runtime.Exec.PipelineHelpers.AppendValidationError(ref validationResults, _va_Name.FormatErrorMessage("Name"), "Name");
             }
             if (!global::System.String.IsNullOrWhiteSpace(operation.Name) && operation.Name.Length > 3)
             {
-                validationResults = validationResults ?? new global::System.Collections.Generic.List<global::System.ComponentModel.DataAnnotations.ValidationResult>();
-                validationResults.Add(new global::System.ComponentModel.DataAnnotations.ValidationResult(_va_Name_1.FormatErrorMessage("Name"), ["Name"]));
+                Blueprint.Runtime.Exec.PipelineHelpers.AppendValidationError(ref validationResults, _va_Name_1.FormatErrorMessage("Name"), "Name");
             }
             global::Blueprint.Validation.ValidationRuntime.ValidateProperty(context.Descriptor.GetPropertyAttributes("Code"), operation, operation.Code, "Code", ref validationResults);
             if (validationResults is not null)

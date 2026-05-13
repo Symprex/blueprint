@@ -48,8 +48,7 @@ namespace Blueprint.Generated
             var validationResults = default(global::System.Collections.Generic.List<global::System.ComponentModel.DataAnnotations.ValidationResult>);
             if (operation.Enabled == true && operation.Name is not null)
             {
-                validationResults = validationResults ?? new global::System.Collections.Generic.List<global::System.ComponentModel.DataAnnotations.ValidationResult>();
-                validationResults.Add(new global::System.ComponentModel.DataAnnotations.ValidationResult(new global::Blueprint.Validation.NotAllowedIfAttribute("Enabled", true).FormatErrorMessage("Name"), ["Name"]));
+                Blueprint.Runtime.Exec.PipelineHelpers.AppendValidationError(ref validationResults, new global::Blueprint.Validation.NotAllowedIfAttribute("Enabled", true).FormatErrorMessage("Name"), "Name");
             }
             if (validationResults is not null)
             {

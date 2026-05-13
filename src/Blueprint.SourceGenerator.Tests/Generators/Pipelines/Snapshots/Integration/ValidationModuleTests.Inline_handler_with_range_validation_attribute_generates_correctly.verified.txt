@@ -50,8 +50,7 @@ namespace Blueprint.Generated
             var validationResults = default(global::System.Collections.Generic.List<global::System.ComponentModel.DataAnnotations.ValidationResult>);
             if (operation.Priority < 1 || operation.Priority > 100)
             {
-                validationResults = validationResults ?? new global::System.Collections.Generic.List<global::System.ComponentModel.DataAnnotations.ValidationResult>();
-                validationResults.Add(new global::System.ComponentModel.DataAnnotations.ValidationResult(_va_Priority.FormatErrorMessage("Priority"), ["Priority"]));
+                Blueprint.Runtime.Exec.PipelineHelpers.AppendValidationError(ref validationResults, _va_Priority.FormatErrorMessage("Priority"), "Priority");
             }
             if (validationResults is not null)
             {

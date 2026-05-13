@@ -50,8 +50,7 @@ namespace Blueprint.Generated
             var validationResults = default(global::System.Collections.Generic.List<global::System.ComponentModel.DataAnnotations.ValidationResult>);
             if (!object.Equals(operation.ConfirmPassword, operation.Password))
             {
-                validationResults = validationResults ?? new global::System.Collections.Generic.List<global::System.ComponentModel.DataAnnotations.ValidationResult>();
-                validationResults.Add(new global::System.ComponentModel.DataAnnotations.ValidationResult(_va_ConfirmPassword.FormatErrorMessage("ConfirmPassword"), ["ConfirmPassword"]));
+                Blueprint.Runtime.Exec.PipelineHelpers.AppendValidationError(ref validationResults, _va_ConfirmPassword.FormatErrorMessage("ConfirmPassword"), "ConfirmPassword");
             }
             if (validationResults is not null)
             {

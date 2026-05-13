@@ -594,20 +594,17 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
         FastPathPropertyValidationPlan property,
         CachedFieldMaps cachedFields)
     {
+        var attrExpression = ResolveAttributeExpression(rule, cachedFields.AttributeFields);
+        var validationAttributeExpression = rule.WrapValidationAttributeExpression
+            ? $"({attrExpression})"
+            : attrExpression;
+
         context.If(
             failureCondition,
             branch =>
             {
-                branch.Assign(
-                    "validationResults",
-                    "validationResults ?? new global::System.Collections.Generic.List<global::System.ComponentModel.DataAnnotations.ValidationResult>()");
-
-                var attrExpression = ResolveAttributeExpression(rule, cachedFields.AttributeFields);
-                var validationAttributeExpression = rule.WrapValidationAttributeExpression
-                    ? $"({attrExpression})"
-                    : attrExpression;
                 branch.WriteStatement(
-                    $"validationResults.Add(new global::System.ComponentModel.DataAnnotations.ValidationResult({validationAttributeExpression}.FormatErrorMessage(\"{property.DisplayName}\"), [\"{property.MemberName}\"]));");
+                    $"Blueprint.Runtime.Exec.PipelineHelpers.AppendValidationError(ref validationResults, {validationAttributeExpression}.FormatErrorMessage(\"{property.DisplayName}\"), \"{property.MemberName}\");");
             });
     }
 

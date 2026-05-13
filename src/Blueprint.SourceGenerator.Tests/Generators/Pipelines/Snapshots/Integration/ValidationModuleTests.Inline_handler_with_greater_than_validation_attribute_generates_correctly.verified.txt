@@ -48,8 +48,7 @@ namespace Blueprint.Generated
             var validationResults = default(global::System.Collections.Generic.List<global::System.ComponentModel.DataAnnotations.ValidationResult>);
             if (operation.Count <= 10)
             {
-                validationResults = validationResults ?? new global::System.Collections.Generic.List<global::System.ComponentModel.DataAnnotations.ValidationResult>();
-                validationResults.Add(new global::System.ComponentModel.DataAnnotations.ValidationResult(new global::Blueprint.Validation.GreaterThanAttribute(10).FormatErrorMessage("Count"), ["Count"]));
+                Blueprint.Runtime.Exec.PipelineHelpers.AppendValidationError(ref validationResults, new global::Blueprint.Validation.GreaterThanAttribute(10).FormatErrorMessage("Count"), "Count");
             }
             if (validationResults is not null)
             {

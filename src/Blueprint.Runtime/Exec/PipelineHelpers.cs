@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
 using System.Security.Claims;
 using Blueprint.Auditing;
@@ -44,6 +45,31 @@ public static class PipelineHelpers
         }
 
         return items.ToArray();
+    }
+
+    /// <summary>
+    /// Appends a validation error to a lazily-initialised list, consolidating the repeated
+    /// null-coalesce-then-add pattern that the source generator previously emitted inline at
+    /// every fast-path validation check site. On the success path (no validation failures) the
+    /// list is never allocated. Called from generated pipelines once per property that fails
+    /// compile-time validation.
+    /// </summary>
+    /// <param name="results">
+    /// A reference to the pipeline-local nullable accumulator. The list is allocated on the
+    /// first failure and reused for subsequent failures within the same request.
+    /// </param>
+    /// <param name="errorMessage">
+    /// The pre-formatted error message, typically from
+    /// <c>ValidationAttribute.FormatErrorMessage(displayName)</c>.
+    /// </param>
+    /// <param name="memberName">The property name that failed validation.</param>
+    public static void AppendValidationError(
+        ref List<ValidationResult>? results,
+        string errorMessage,
+        string memberName)
+    {
+        results ??= new List<ValidationResult>();
+        results.Add(new ValidationResult(errorMessage, [memberName]));
     }
 
     /// <summary>

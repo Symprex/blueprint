@@ -48,8 +48,7 @@ namespace Blueprint.Generated
             var validationResults = default(global::System.Collections.Generic.List<global::System.ComponentModel.DataAnnotations.ValidationResult>);
             if (operation.TokenId is not null && global::System.String.IsNullOrWhiteSpace(operation.PaymentIntentId))
             {
-                validationResults = validationResults ?? new global::System.Collections.Generic.List<global::System.ComponentModel.DataAnnotations.ValidationResult>();
-                validationResults.Add(new global::System.ComponentModel.DataAnnotations.ValidationResult(new global::Blueprint.Validation.RequiredIfNotAttribute("TokenId", null).FormatErrorMessage("PaymentIntentId"), ["PaymentIntentId"]));
+                Blueprint.Runtime.Exec.PipelineHelpers.AppendValidationError(ref validationResults, new global::Blueprint.Validation.RequiredIfNotAttribute("TokenId", null).FormatErrorMessage("PaymentIntentId"), "PaymentIntentId");
             }
             if (validationResults is not null)
             {

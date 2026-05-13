@@ -52,8 +52,7 @@ namespace Blueprint.Generated
             var validationResults = default(global::System.Collections.Generic.List<global::System.ComponentModel.DataAnnotations.ValidationResult>);
             if (operation.Code is not null && _vr_Code.IsMatch(operation.Code) == false)
             {
-                validationResults = validationResults ?? new global::System.Collections.Generic.List<global::System.ComponentModel.DataAnnotations.ValidationResult>();
-                validationResults.Add(new global::System.ComponentModel.DataAnnotations.ValidationResult(_va_Code.FormatErrorMessage("Code"), ["Code"]));
+                Blueprint.Runtime.Exec.PipelineHelpers.AppendValidationError(ref validationResults, _va_Code.FormatErrorMessage("Code"), "Code");
             }
             if (validationResults is not null)
             {
