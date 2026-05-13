@@ -122,6 +122,50 @@ public class HandlerExecutionModuleIntegrationTests
     }
 
     [Fact]
+    public async Task When_handler_accepts_HttpRequest_parameter_then_generated_pipeline_injects_from_context()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
+        var pipeline = executor.GetPipeline(typeof(HttpRequestHandlerCommand));
+        var context = CreateContext(app, HttpRequestHandlerCommand.Configure(), new HttpRequestHandlerCommand());
+
+        // Set a custom header on the HttpRequest to prove it's the real one from context
+        context.HttpContext!.Request.Headers["X-Webhook-Signature"] = "test-sig-123";
+
+        HttpRequestHandlerCommand.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<OkResult<string>>();
+        ((OkResult<string>)result).Content.Should().Be("test-sig-123");
+        HttpRequestHandlerCommand.HandlerCallCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task When_handler_accepts_ClaimsPrincipal_parameter_then_generated_pipeline_injects_from_context()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
+        var pipeline = executor.GetPipeline(typeof(ClaimsPrincipalHandlerQuery));
+
+        var identity = new System.Security.Claims.ClaimsIdentity(
+            [new System.Security.Claims.Claim("sub", "user-42")],
+            "TestAuth");
+        var principal = new System.Security.Claims.ClaimsPrincipal(identity);
+
+        var context = CreateContext(app, ClaimsPrincipalHandlerQuery.Configure(), new ClaimsPrincipalHandlerQuery());
+        context.UserPrincipal = principal;
+
+        ClaimsPrincipalHandlerQuery.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<OkResult<string>>();
+        ((OkResult<string>)result).Content.Should().Be("user-42");
+        ClaimsPrincipalHandlerQuery.HandlerCallCount.Should().Be(1);
+    }
+
+    [Fact]
     public async Task When_external_handler_has_base_class_properties_then_generated_pipeline_injects_them()
     {
         var app = new IntegrationTestBlueprintApp();
@@ -357,5 +401,51 @@ public class PropertyInjectedHandlerQueryHandler : TestApiOperationsBase
         LastCancellationToken = this.CancellationToken;
         LastLogger = this.Logger;
         return Task.FromResult(query.Value);
+    }
+}
+
+/// <summary>
+/// Proves <c>HttpRequest</c> is injected from <c>context.HttpContext.Request</c>,
+/// not from DI — matching the S365 Stripe webhook handler pattern.
+/// </summary>
+[AllowAnonymous]
+[RootLink("/handler/http-request")]
+public partial class HttpRequestHandlerCommand : ICommand<string>
+{
+    public static int HandlerCallCount { get; private set; }
+
+    public static void Reset()
+    {
+        HandlerCallCount = 0;
+    }
+
+    public static Task<string> InvokeAsync(Microsoft.AspNetCore.Http.HttpRequest httpRequest)
+    {
+        HandlerCallCount++;
+        var signature = httpRequest.Headers["X-Webhook-Signature"].ToString();
+        return Task.FromResult(signature);
+    }
+}
+
+/// <summary>
+/// Proves <c>ClaimsPrincipal</c> is injected from <c>context.UserPrincipal</c>,
+/// not from DI.
+/// </summary>
+[AllowAnonymous]
+[RootLink("/handler/claims-principal")]
+public partial class ClaimsPrincipalHandlerQuery : IQuery<string>
+{
+    public static int HandlerCallCount { get; private set; }
+
+    public static void Reset()
+    {
+        HandlerCallCount = 0;
+    }
+
+    public static Task<string> HandleAsync(System.Security.Claims.ClaimsPrincipal principal)
+    {
+        HandlerCallCount++;
+        var sub = principal.FindFirst("sub")?.Value ?? "unknown";
+        return Task.FromResult(sub);
     }
 }

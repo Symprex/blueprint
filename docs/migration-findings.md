@@ -133,7 +133,7 @@
 | ArrayPool buffer leak fix | ✅ Done | `ReadJsonBodyAsync` fast-path uses try/finally to guarantee `ArrayPool.Return` on all exception paths |
 | RunAllPublishedMessagesAsync | ✅ Done | Test fixture dispatches captured published messages through pipeline — mirrors S365 `ApiFixtureExtensions.RunAllPublishedMessagesAsync` |
 | RunAndConsumeAllPublishedMessagesAsync | ✅ Done | Dispatches then clears — prevents re-processing on subsequent calls |
-| HttpContext handler injection | ✅ Done | `HttpContext` and `ClaimsPrincipal` now injectable as handler properties alongside Context, Logger, CancellationToken, IUserAuthorisationContext |
+| HttpContext handler injection | ✅ Done | `HttpContext`, `HttpRequest`, `HttpResponse`, `ClaimsPrincipal`, `ClaimsIdentity` all injectable as handler parameters — resolved from context properties, not DI. Covers S365 Stripe webhook pattern. |
 | S365 TenantOrderedPagedQuery compat | ✅ Verified | Already extends Blueprint's `OrderedPagedQuery<T>` — no changes needed |
 | S365 TenantPagedApiResource compat | ✅ Verified | Already extends Blueprint's `PagedApiResource<T>` — no changes needed |
 | S365 ApiId type compat | ✅ Done | `ApiId` readonly struct with `[TypeConverter]` works for route/query/body binding — no S365 changes needed |
