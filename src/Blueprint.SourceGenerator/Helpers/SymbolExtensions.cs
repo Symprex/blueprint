@@ -38,17 +38,22 @@ namespace Blueprint.SourceGenerator.Helpers
         /// <summary>
         /// Checks if the given symbol inherits from the given base type, where the base type is the fully qualified
         /// name of the type (e.g. <c>System.String</c> or <c>Blueprint.Model.ApiResource</c>).
+        /// Compares <see cref="ISymbol.MetadataName"/> first (cheap) and only falls back to the full display
+        /// string when the short name matches — avoids per-ancestor string allocation in the common non-match case.
         /// </summary>
         /// <param name="symbol">The symbol to check from (a class, interface, etc.).</param>
         /// <param name="baseType">The base type to check against.</param>
         /// <returns>Whether the given symbol inherits from the given base type.</returns>
         public static bool InheritsFrom(this INamedTypeSymbol symbol, string baseType)
         {
+            var lastDot = baseType.LastIndexOf('.');
+            var simpleName = lastDot >= 0 ? baseType.Substring(lastDot + 1) : baseType;
+
             var current = symbol.BaseType;
 
             while (current != null)
             {
-                if (current.ToString() == baseType)
+                if (current.MetadataName == simpleName && current.ToString() == baseType)
                 {
                     return true;
                 }
@@ -61,13 +66,17 @@ namespace Blueprint.SourceGenerator.Helpers
 
         /// <summary>
         /// Checks whether the given symbol implements an interface identified by its fully qualified type name.
+        /// Compares <see cref="ISymbol.MetadataName"/> first (cheap) to short-circuit on the common non-match case.
         /// </summary>
         /// <param name="symbol">The symbol whose interface list should be inspected.</param>
         /// <param name="interfaceType">The fully qualified interface type name to look for.</param>
         /// <returns><see langword="true"/> when the symbol implements the requested interface.</returns>
         public static bool ImplementsInterface(this INamedTypeSymbol symbol, string interfaceType)
         {
-            return symbol.AllInterfaces.Any(i => i.ToString() == interfaceType);
+            var lastDot = interfaceType.LastIndexOf('.');
+            var simpleName = lastDot >= 0 ? interfaceType.Substring(lastDot + 1) : interfaceType;
+
+            return symbol.AllInterfaces.Any(i => i.MetadataName == simpleName && i.ToString() == interfaceType);
         }
 
         /// <summary>
@@ -79,7 +88,7 @@ namespace Blueprint.SourceGenerator.Helpers
         {
             return symbol.ContainingNamespace.IsGlobalNamespace
                 ? symbol.MetadataName
-                : symbol.ContainingNamespace.ToDisplayString() + "." + symbol.MetadataName;
+                : $"{symbol.ContainingNamespace.ToDisplayString()}.{symbol.MetadataName}";
         }
     }
 }
