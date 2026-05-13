@@ -679,7 +679,7 @@ public class ReferenceAppOpenApiTests
             {
                 ops.Processors.Add((operation, descriptor) =>
                 {
-                    if (descriptor.Name == "GetTemplatesQuery")
+                    if (descriptor.Name == "GetTemplates")
                     {
                         return operation with { Summary = "Custom override summary" };
                     }

@@ -2,7 +2,7 @@
 
 ## Operations
 
-### ArchiveTemplateCommand
+### ArchiveTemplate
   Type: ArchiveTemplateCommand
   Source: Source Generated
   HTTP Methods: DELETE
@@ -26,7 +26,7 @@
   Links:
     - rel=archive url=/templates/{Id} resource=TemplateApiResource
 
-### BulkArchiveTemplatesCommand
+### BulkArchiveTemplates
   Type: BulkArchiveTemplatesCommand
   Source: Source Generated
   HTTP Methods: POST
@@ -50,7 +50,7 @@
     - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
     - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
 
-### ChangePasswordCommand
+### ChangePassword
   Type: ChangePasswordCommand
   Source: Source Generated
   HTTP Methods: PUT
@@ -73,7 +73,7 @@
     - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
     - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
 
-### CloneTemplateCommand
+### CloneTemplate
   Type: CloneTemplateCommand
   Source: Source Generated
   HTTP Methods: POST
@@ -99,7 +99,7 @@
   Links:
     - rel=clone url=/templates/{Id}/clone resource=TemplateApiResource
 
-### CreateTemplateCommand
+### CreateTemplate
   Type: CreateTemplateCommand
   Source: Source Generated
   HTTP Methods: POST
@@ -123,7 +123,7 @@
     - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
     - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
 
-### DownloadTemplateQuery
+### DownloadTemplate
   Type: DownloadTemplateQuery
   Source: Source Generated
   HTTP Methods: GET
@@ -145,7 +145,7 @@
     - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
     - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
 
-### ExportTemplatesCommand
+### ExportTemplates
   Type: ExportTemplatesCommand
   Source: Source Generated
   HTTP Methods: POST
@@ -169,7 +169,7 @@
     - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
     - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
 
-### GetFolderContentsQuery
+### GetFolderContents
   Type: GetFolderContentsQuery
   Source: Source Generated
   HTTP Methods: GET
@@ -189,7 +189,7 @@
     - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
     - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
 
-### GetMyAuthManifestQuery
+### GetMyAuthManifest
   Type: GetMyAuthManifestQuery
   Source: Source Generated
   HTTP Methods: GET
@@ -210,7 +210,7 @@
   Links:
     - rel=self url=/me/authManifest resource=AuthManifestApiResource
 
-### GetPagedTemplatesQuery
+### GetPagedTemplates
   Type: GetPagedTemplatesQuery
   Source: Source Generated
   HTTP Methods: GET
@@ -230,48 +230,7 @@
     - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
     - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
 
-### GetTemplateByStrongIdQuery
-  Type: GetTemplateByStrongIdQuery
-  Source: Source Generated
-  HTTP Methods: GET
-  URL: /templates/by-id/{Id}
-  Hosts: http
-  Auth: Anonymous
-  Discovery: query (Blueprint.SourceGenerator.Sample.Contract.Api.GetTemplateByStrongIdQuery)
-  Group: Templates
-  Result Outcomes:
-    - OkResult`1
-    - NotFoundResult`1
-  Failure Outcomes:
-    - legacy-validation-exception: Blueprint.Validation.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
-    - data-annotations-validation-exception: System.ComponentModel.DataAnnotations.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
-    - default-unhandled-exception: System.Exception -> Blueprint.Runtime.Exec.UnhandledExceptionResult
-  HTTP Responses:
-    - 200: hasBody=True types=[Blueprint.SourceGenerator.Sample.Contract.Api.TemplateApiResource]
-    - 404: hasBody=True types=[Blueprint.SourceGenerator.Sample.Contract.Api.TemplateApiResource]
-    - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
-    - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
-
-### GetTemplateHistoryQuery
-  Type: GetTemplateHistoryQuery
-  Source: Source Generated
-  HTTP Methods: GET
-  URL: /templates/{Id}/history
-  Hosts: http
-  Auth: Authenticated
-  Discovery: query (Blueprint.SourceGenerator.Sample.Contract.Api.GetTemplateHistoryQuery)
-  Group: Templates
-  Failure Outcomes:
-    - legacy-validation-exception: Blueprint.Validation.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
-    - data-annotations-validation-exception: System.ComponentModel.DataAnnotations.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
-    - default-unhandled-exception: System.Exception -> Blueprint.Runtime.Exec.UnhandledExceptionResult
-  HTTP Responses:
-    - 200: hasBody=True types=[Blueprint.SourceGenerator.Sample.Contract.Api.TemplateVersionApiResource[]]
-    - 401: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
-    - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
-    - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
-
-### GetTemplateQuery
+### GetTemplate
   Type: GetTemplateQuery
   Source: Source Generated
   HTTP Methods: GET
@@ -297,7 +256,48 @@
   Links:
     - rel=self url=/templates/{Id} resource=TemplateApiResource
 
-### GetTemplatesQuery
+### GetTemplateByStrongId
+  Type: GetTemplateByStrongIdQuery
+  Source: Source Generated
+  HTTP Methods: GET
+  URL: /templates/by-id/{Id}
+  Hosts: http
+  Auth: Anonymous
+  Discovery: query (Blueprint.SourceGenerator.Sample.Contract.Api.GetTemplateByStrongIdQuery)
+  Group: Templates
+  Result Outcomes:
+    - OkResult`1
+    - NotFoundResult`1
+  Failure Outcomes:
+    - legacy-validation-exception: Blueprint.Validation.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
+    - data-annotations-validation-exception: System.ComponentModel.DataAnnotations.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
+    - default-unhandled-exception: System.Exception -> Blueprint.Runtime.Exec.UnhandledExceptionResult
+  HTTP Responses:
+    - 200: hasBody=True types=[Blueprint.SourceGenerator.Sample.Contract.Api.TemplateApiResource]
+    - 404: hasBody=True types=[Blueprint.SourceGenerator.Sample.Contract.Api.TemplateApiResource]
+    - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
+    - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+
+### GetTemplateHistory
+  Type: GetTemplateHistoryQuery
+  Source: Source Generated
+  HTTP Methods: GET
+  URL: /templates/{Id}/history
+  Hosts: http
+  Auth: Authenticated
+  Discovery: query (Blueprint.SourceGenerator.Sample.Contract.Api.GetTemplateHistoryQuery)
+  Group: Templates
+  Failure Outcomes:
+    - legacy-validation-exception: Blueprint.Validation.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
+    - data-annotations-validation-exception: System.ComponentModel.DataAnnotations.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
+    - default-unhandled-exception: System.Exception -> Blueprint.Runtime.Exec.UnhandledExceptionResult
+  HTTP Responses:
+    - 200: hasBody=True types=[Blueprint.SourceGenerator.Sample.Contract.Api.TemplateVersionApiResource[]]
+    - 401: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+    - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
+    - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+
+### GetTemplates
   Type: GetTemplatesQuery
   Source: Source Generated
   HTTP Methods: GET
@@ -319,7 +319,7 @@
   Links:
     - rel=self url=/templates resource=TemplateListApiResource
 
-### GetTemplateVersionsQuery
+### GetTemplateVersions
   Type: GetTemplateVersionsQuery
   Source: Source Generated
   HTTP Methods: GET
@@ -339,7 +339,7 @@
     - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
     - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
 
-### HealthCheckQuery
+### HealthCheck
   Type: HealthCheckQuery
   Source: Source Generated
   HTTP Methods: GET
@@ -359,7 +359,7 @@
     - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
     - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
 
-### PatchTemplateSettingsCommand
+### PatchTemplateSettings
   Type: PatchTemplateSettingsCommand
   Source: Source Generated
   HTTP Methods: PATCH
@@ -383,7 +383,7 @@
     - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
     - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
 
-### PreviewTemplateCommand
+### PreviewTemplate
   Type: PreviewTemplateCommand
   Source: Source Generated
   HTTP Methods: POST
@@ -405,7 +405,7 @@
     - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
     - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
 
-### PublishTemplateCommand
+### PublishTemplate
   Type: PublishTemplateCommand
   Source: Source Generated
   HTTP Methods: POST
@@ -429,7 +429,7 @@
     - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
     - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
 
-### RedirectToTemplateDocsQuery
+### RedirectToTemplateDocs
   Type: RedirectToTemplateDocsQuery
   Source: Source Generated
   HTTP Methods: GET
@@ -451,7 +451,7 @@
     - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
     - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
 
-### SearchTemplatesQuery
+### SearchTemplates
   Type: SearchTemplatesQuery
   Source: Source Generated
   HTTP Methods: GET
@@ -481,7 +481,7 @@
     - data-annotations-validation-exception: System.ComponentModel.DataAnnotations.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
     - default-unhandled-exception: System.Exception -> Blueprint.Runtime.Exec.UnhandledExceptionResult
 
-### UpdateTemplateCommand
+### UpdateTemplate
   Type: UpdateTemplateCommand
   Source: Source Generated
   HTTP Methods: PUT
@@ -505,7 +505,7 @@
     - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
     - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
 
-### UpdateTemplateSettingsCommand
+### UpdateTemplateSettings
   Type: UpdateTemplateSettingsCommand
   Source: Source Generated
   HTTP Methods: PUT
@@ -529,7 +529,7 @@
     - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
     - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
 
-### ValidateTemplateCommand
+### ValidateTemplate
   Type: ValidateTemplateCommand
   Source: Source Generated
   HTTP Methods: POST
@@ -551,11 +551,11 @@
 
 ## Resource Links
 
-  AuthManifestApiResource [self] -> /me/authManifest (GetMyAuthManifestQuery)
-  TemplateApiResource [archive] -> /templates/{Id} (ArchiveTemplateCommand)
-  TemplateApiResource [clone] -> /templates/{Id}/clone (CloneTemplateCommand)
-  TemplateApiResource [self] -> /templates/{Id} (GetTemplateQuery)
-  TemplateListApiResource [self] -> /templates (GetTemplatesQuery)
+  AuthManifestApiResource [self] -> /me/authManifest (GetMyAuthManifest)
+  TemplateApiResource [archive] -> /templates/{Id} (ArchiveTemplate)
+  TemplateApiResource [clone] -> /templates/{Id}/clone (CloneTemplate)
+  TemplateApiResource [self] -> /templates/{Id} (GetTemplate)
+  TemplateListApiResource [self] -> /templates (GetTemplates)
 
 ## Serializer Context
   Type: SampleBlueprintAppJsonContext

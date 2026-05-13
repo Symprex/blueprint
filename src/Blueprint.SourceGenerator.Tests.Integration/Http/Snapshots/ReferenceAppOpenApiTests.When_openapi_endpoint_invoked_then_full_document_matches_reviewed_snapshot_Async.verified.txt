@@ -7,7 +7,7 @@
   "paths": {
     "/account/password": {
       "put": {
-        "operationId": "ChangePasswordCommand",
+        "operationId": "ChangePassword",
         "summary": "Change the authenticated user\u0027s password.",
         "tags": [
           "Account"
@@ -17,7 +17,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ChangePasswordCommand"
+                "$ref": "#/components/schemas/ChangePassword"
               }
             }
           }
@@ -86,7 +86,7 @@
     },
     "/folders/{**FolderPath}": {
       "get": {
-        "operationId": "GetFolderContentsQuery",
+        "operationId": "GetFolderContents",
         "summary": "Get contents of a folder by its path.",
         "tags": [
           "Folders"
@@ -132,7 +132,7 @@
     },
     "/me/authManifest": {
       "get": {
-        "operationId": "GetMyAuthManifestQuery",
+        "operationId": "GetMyAuthManifest",
         "summary": "Returns the authorization manifest listing accessible operations for the current user.",
         "tags": [
           "Authorization"
@@ -188,7 +188,7 @@
     },
     "/system/health": {
       "get": {
-        "operationId": "HealthCheckQuery",
+        "operationId": "HealthCheck",
         "summary": "Returns a plain-text health status for load balancers and probes.",
         "tags": [
           "System"
@@ -229,7 +229,7 @@
     },
     "/templates": {
       "get": {
-        "operationId": "GetTemplatesQuery",
+        "operationId": "GetTemplates",
         "summary": "List all available templates.",
         "tags": [
           "Templates"
@@ -296,7 +296,7 @@
         ]
       },
       "post": {
-        "operationId": "CreateTemplateCommand",
+        "operationId": "CreateTemplate",
         "summary": "Create a new template with name and optional content.",
         "description": "Demonstrates -based authorization: the generated descriptor carries the (\u0022template\u0022, \u0022write\u0022) scope pair so a registered can decide whether the current user may create templates.",
         "tags": [
@@ -307,7 +307,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CreateTemplateCommand"
+                "$ref": "#/components/schemas/CreateTemplate"
               }
             }
           }
@@ -401,7 +401,7 @@
     },
     "/templates/bulk-archive": {
       "post": {
-        "operationId": "BulkArchiveTemplatesCommand",
+        "operationId": "BulkArchiveTemplates",
         "summary": "Queue a bulk archive of templates by ID. Returns 202 with no body.",
         "tags": [
           "Templates"
@@ -411,7 +411,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/BulkArchiveTemplatesCommand"
+                "$ref": "#/components/schemas/BulkArchiveTemplates"
               }
             }
           }
@@ -490,7 +490,7 @@
     },
     "/templates/by-id/{Id}": {
       "get": {
-        "operationId": "GetTemplateByStrongIdQuery",
+        "operationId": "GetTemplateByStrongId",
         "summary": "Get a template by its strongly-typed identifier.",
         "description": "Also demonstrates with a nullable IParsable type (TemplateId?) for optional query-parameter filtering.",
         "tags": [
@@ -565,7 +565,7 @@
     },
     "/templates/export": {
       "post": {
-        "operationId": "ExportTemplatesCommand",
+        "operationId": "ExportTemplates",
         "summary": "Queue a bulk export of templates and receive a job tracking reference.",
         "tags": [
           "Templates"
@@ -575,7 +575,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ExportTemplatesCommand"
+                "$ref": "#/components/schemas/ExportTemplates"
               }
             }
           }
@@ -661,7 +661,7 @@
     },
     "/templates/paged": {
       "get": {
-        "operationId": "GetPagedTemplatesQuery",
+        "operationId": "GetPagedTemplates",
         "summary": "List templates with pagination and optional ordering.",
         "tags": [
           "Templates"
@@ -786,7 +786,7 @@
     },
     "/templates/search": {
       "get": {
-        "operationId": "SearchTemplatesQuery",
+        "operationId": "SearchTemplates",
         "summary": "Search templates by name with pagination support.",
         "tags": [
           "Templates"
@@ -957,7 +957,7 @@
     },
     "/templates/{Id}": {
       "delete": {
-        "operationId": "ArchiveTemplateCommand",
+        "operationId": "ArchiveTemplate",
         "summary": "Archive (soft-delete) a template.",
         "description": "Demonstrates -based authorization for a destructive command: the user must satisfy the resource-scope (\u0022template\u0022, \u0022write\u0022) check before the archive operation can execute.",
         "tags": [
@@ -1034,7 +1034,7 @@
         ]
       },
       "get": {
-        "operationId": "GetTemplateQuery",
+        "operationId": "GetTemplate",
         "summary": "Retrieve a single template by identifier.",
         "tags": [
           "Templates"
@@ -1119,7 +1119,7 @@
         ]
       },
       "put": {
-        "operationId": "UpdateTemplateCommand",
+        "operationId": "UpdateTemplate",
         "summary": "Update an existing template\u0027s name and content.",
         "description": "Demonstrates inheriting the parent \u0027s [Resource(\u0022template\u0022, \u0022write\u0022)] scope pair so the same resource authorization rule applies to updates without restating the scope metadata.",
         "tags": [
@@ -1141,7 +1141,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/UpdateTemplateCommand"
+                "$ref": "#/components/schemas/UpdateTemplate"
               }
             }
           }
@@ -1235,7 +1235,7 @@
     },
     "/templates/{Id}/clone": {
       "post": {
-        "operationId": "CloneTemplateCommand",
+        "operationId": "CloneTemplate",
         "summary": "Clone a template with a new name.",
         "tags": [
           "Templates"
@@ -1256,7 +1256,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CloneTemplateCommand"
+                "$ref": "#/components/schemas/CloneTemplate"
               }
             }
           }
@@ -1350,7 +1350,7 @@
     },
     "/templates/{Id}/docs": {
       "get": {
-        "operationId": "RedirectToTemplateDocsQuery",
+        "operationId": "RedirectToTemplateDocs",
         "summary": "Redirect to the external documentation page for a template.",
         "tags": [
           "Templates"
@@ -1428,7 +1428,7 @@
     },
     "/templates/{Id}/download": {
       "get": {
-        "operationId": "DownloadTemplateQuery",
+        "operationId": "DownloadTemplate",
         "summary": "Download the template content as a file.",
         "tags": [
           "Templates"
@@ -1514,7 +1514,7 @@
     },
     "/templates/{Id}/history": {
       "get": {
-        "operationId": "GetTemplateHistoryQuery",
+        "operationId": "GetTemplateHistory",
         "summary": "Get the change history for a template, optionally filtered by date range.",
         "tags": [
           "Templates"
@@ -1618,7 +1618,7 @@
     },
     "/templates/{Id}/preview": {
       "post": {
-        "operationId": "PreviewTemplateCommand",
+        "operationId": "PreviewTemplate",
         "summary": "Preview a rendered template with sample merge data.",
         "tags": [
           "Templates"
@@ -1639,7 +1639,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/PreviewTemplateCommand"
+                "$ref": "#/components/schemas/PreviewTemplate"
               }
             }
           }
@@ -1725,7 +1725,7 @@
     },
     "/templates/{Id}/publish": {
       "post": {
-        "operationId": "PublishTemplateCommand",
+        "operationId": "PublishTemplate",
         "summary": "Publish a template, making it available for use.",
         "tags": [
           "Templates"
@@ -1820,7 +1820,7 @@
     },
     "/templates/{Id}/settings": {
       "patch": {
-        "operationId": "PatchTemplateSettingsCommand",
+        "operationId": "PatchTemplateSettings",
         "summary": "Partially update a template\u0027s display settings.",
         "tags": [
           "Templates"
@@ -1841,7 +1841,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/PatchTemplateSettingsCommand"
+                "$ref": "#/components/schemas/PatchTemplateSettings"
               }
             }
           }
@@ -1935,7 +1935,7 @@
     },
     "/templates/{Id}/validate": {
       "post": {
-        "operationId": "ValidateTemplateCommand",
+        "operationId": "ValidateTemplate",
         "summary": "A sample command that exercises handler-level exception translation by throwing or depending on the input. Used by E2E tests to prove the generated pipeline correctly translates handler-thrown exceptions into the appropriate HTTP responses.",
         "tags": [
           "Api"
@@ -1956,7 +1956,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ValidateTemplateCommand"
+                "$ref": "#/components/schemas/ValidateTemplate"
               }
             }
           }
@@ -2022,7 +2022,7 @@
     },
     "/templates/{Id}/versions": {
       "get": {
-        "operationId": "GetTemplateVersionsQuery",
+        "operationId": "GetTemplateVersions",
         "summary": "Get the version history for a template.",
         "tags": [
           "Templates"
@@ -2105,7 +2105,7 @@
     },
     "/tenants/{TenantId}/templates/{Id}/settings": {
       "put": {
-        "operationId": "UpdateTemplateSettingsCommand",
+        "operationId": "UpdateTemplateSettings",
         "summary": "Update template settings within a tenant-scoped resource key.",
         "tags": [
           "Templates"
@@ -2135,7 +2135,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/UpdateTemplateSettingsCommand"
+                "$ref": "#/components/schemas/UpdateTemplateSettings"
               }
             }
           }
@@ -2250,8 +2250,8 @@
           }
         }
       },
-      "BulkArchiveTemplatesCommand": {
-        "title": "BulkArchiveTemplatesCommand",
+      "BulkArchiveTemplates": {
+        "title": "BulkArchiveTemplates",
         "type": "object",
         "required": [
           "ids"
@@ -2274,8 +2274,8 @@
           }
         }
       },
-      "ChangePasswordCommand": {
-        "title": "ChangePasswordCommand",
+      "ChangePassword": {
+        "title": "ChangePassword",
         "type": "object",
         "required": [
           "currentPassword",
@@ -2305,8 +2305,8 @@
           }
         }
       },
-      "CloneTemplateCommand": {
-        "title": "CloneTemplateCommand",
+      "CloneTemplate": {
+        "title": "CloneTemplate",
         "type": "object",
         "required": [
           "newName"
@@ -2320,8 +2320,8 @@
           }
         }
       },
-      "CreateTemplateCommand": {
-        "title": "CreateTemplateCommand",
+      "CreateTemplate": {
+        "title": "CreateTemplate",
         "type": "object",
         "required": [
           "name"
@@ -2430,8 +2430,8 @@
           }
         }
       },
-      "ExportTemplatesCommand": {
-        "title": "ExportTemplatesCommand",
+      "ExportTemplates": {
+        "title": "ExportTemplates",
         "type": "object",
         "properties": {
           "nameFilter": {
@@ -2451,8 +2451,8 @@
           }
         }
       },
-      "PatchTemplateSettingsCommand": {
-        "title": "PatchTemplateSettingsCommand",
+      "PatchTemplateSettings": {
+        "title": "PatchTemplateSettings",
         "type": "object",
         "properties": {
           "opacity": {
@@ -2488,8 +2488,8 @@
           }
         }
       },
-      "PreviewTemplateCommand": {
-        "title": "PreviewTemplateCommand",
+      "PreviewTemplate": {
+        "title": "PreviewTemplate",
         "type": "object",
         "required": [
           "mergeFields"
@@ -2670,8 +2670,8 @@
           }
         }
       },
-      "UpdateTemplateCommand": {
-        "title": "UpdateTemplateCommand",
+      "UpdateTemplate": {
+        "title": "UpdateTemplate",
         "type": "object",
         "required": [
           "name"
@@ -2697,8 +2697,8 @@
           }
         }
       },
-      "UpdateTemplateSettingsCommand": {
-        "title": "UpdateTemplateSettingsCommand",
+      "UpdateTemplateSettings": {
+        "title": "UpdateTemplateSettings",
         "type": "object",
         "properties": {
           "displayName": {
@@ -2708,8 +2708,8 @@
           }
         }
       },
-      "ValidateTemplateCommand": {
-        "title": "ValidateTemplateCommand",
+      "ValidateTemplate": {
+        "title": "ValidateTemplate",
         "type": "object",
         "properties": {
           "name": {
