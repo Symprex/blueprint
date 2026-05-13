@@ -228,27 +228,16 @@ public static class HandlerDiscovery
     }
 
     /// <summary>
-    /// Enumerates all named types from every assembly referenced by the compilation,
-    /// including the compilation's own assembly. Uses namespace traversal (no syntax trees).
+    /// Enumerates all named types from the compilation's own assembly only.
+    /// External handler classes must be in source code being compiled — they cannot
+    /// live in referenced (already-compiled) assemblies because the source generator
+    /// only runs on source in the current compilation.
     /// </summary>
     private static IEnumerable<INamedTypeSymbol> GetAllTypesFromCompilation(Compilation compilation)
     {
-        // Scan the main assembly
         foreach (var type in GetTypesFromNamespace(compilation.Assembly.GlobalNamespace))
         {
             yield return type;
-        }
-
-        // Scan referenced assemblies (external handlers could be in referenced projects)
-        foreach (var reference in compilation.References)
-        {
-            if (compilation.GetAssemblyOrModuleSymbol(reference) is IAssemblySymbol assembly)
-            {
-                foreach (var type in GetTypesFromNamespace(assembly.GlobalNamespace))
-                {
-                    yield return type;
-                }
-            }
         }
     }
 
