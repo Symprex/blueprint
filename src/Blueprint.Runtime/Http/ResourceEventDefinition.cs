@@ -30,12 +30,9 @@ public class ResourceEventDefinition<TResource>
     public ResourceEventChangeType ChangeType { get; }
 
     /// <summary>
-    /// The fully-qualified event id (e.g. <c>"tenant.created"</c>), accessible to derived definitions
-    /// that need direct access when constructing <see cref="ResourceEvent{TResource}"/> instances.
+    /// Gets the fully-qualified event id (e.g. <c>"tenant.created"</c>).
     /// </summary>
-#pragma warning disable SA1401 // Field should be private — private protected access is intentional for perf
-    private protected readonly string EventId;
-#pragma warning restore SA1401
+    public string EventId { get; }
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ResourceEventDefinition{TResource}"/> class.
