@@ -44,11 +44,12 @@ public class LinkGenerationBenchmarks
             typeof(BenchmarkLinkResource))
         {
             // Compiled URL builder — mirrors what the source generator now emits:
-            // a switch expression with both a resource-type case and a string scalar case
+            // a switch expression with resource-type, string, and Guid cases
             CompiledUrlBuilder = static obj => obj switch
             {
                 BenchmarkLinkResource r => "resources/" + Uri.EscapeDataString(r.Id),
                 string id => "resources/" + Uri.EscapeDataString(id),
+                Guid g => $"resources/{g}",
                 _ => null,
             },
         };
@@ -86,9 +87,9 @@ public class LinkGenerationBenchmarks
     }
 
     /// <summary>
-    /// Compiled path with ToString overhead: GUID ID is converted to string first, then
-    /// matched by the compiled builder's <c>string</c> case. Adds one <c>Guid.ToString()</c>
-    /// allocation but avoids anonymous-object allocation and reflection.
+    /// Compiled path: GUID ID is boxed and passed directly to the compiled builder's
+    /// <c>Guid</c> case, which formats via <see cref="ISpanFormattable.TryFormat"/> into
+    /// the interpolated string — avoids <c>Guid.ToString()</c> heap allocation.
     /// </summary>
     /// <returns>The generated HATEOAS link.</returns>
     [Benchmark]

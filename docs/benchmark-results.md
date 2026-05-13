@@ -142,13 +142,14 @@ HATEOAS self-link creation cost for S365's heavily-used link pattern.
 
 | Method | Mean | Error | StdDev | Gen0 | Allocated |
 |--------|-----:|------:|-------:|-----:|----------:|
-| CreateSelfLink_TypedResource | 58.7 ns | 19.5 ns | 10.2 ns | 0.017 | 208 B |
-| CreateSelfLink_StringId | 73.4 ns | 12.0 ns | 7.2 ns | 0.017 | 208 B |
-| CreateSelfLink_GuidId | 85.6 ns | 23.5 ns | 15.5 ns | 0.033 | 416 B |
+| CreateSelfLink_StringId | 57.4 ns | 12.6 ns | 7.5 ns | 0.017 | 208 B |
+| CreateSelfLink_TypedResource | 73.8 ns | 16.7 ns | 9.9 ns | 0.017 | 208 B |
+| CreateSelfLink_GuidId | 83.2 ns | 26.6 ns | 17.6 ns | 0.028 | 352 B |
 
-**Key insight:** Compiled URL builders generate self-links in **59-86ns**. The Guid variant
-allocates 2x (416B vs 208B) due to `Guid.ToString()`. For S365's typical 3-5 links per
-resource response, the total link generation cost is ~200-350ns — invisible in production.
+**Key insight:** Compiled URL builders generate self-links in **57-83ns**. The Guid variant
+now passes the Guid directly to the compiled builder (avoiding `Guid.ToString()`), reducing
+allocations from 416B to 352B (-15%). For S365's typical 3-5 links per resource response,
+the total link generation cost is ~200-350ns — invisible in production.
 
 ---
 
