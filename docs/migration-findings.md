@@ -60,6 +60,12 @@
 | `[DoNotSaveChanges]` | ✅ Verified | Already supported with BPP001 diagnostic for misuse on non-commands |
 | Task (void) handler returns | ✅ Verified | 65 S365 Rebus handlers returning Task → NoResult normalization |
 | S365 body reading pattern | ✅ Verified | Operations-as-body pattern matches Blueprint exactly; 160 POST/PUT ops |
+| S365 gateway patterns | ✅ Analysed | 5 gateways, JWT forwarding, custom typed client source gen, forwarding+aggregation handlers |
+| S365 handler base class | ✅ Verified | `ApiOperations` base class: perfect parity between S365 and Blueprint |
+| S365 test patterns deep dive | ✅ Analysed | 300+ CommandAsync, 200+ QueryAsync, 150+ MessageAsync, 140+ Bus assertions, 100+ Tasks assertions |
+| S365 `[AllowAnonymous]` | ✅ Verified | 57+ ops in S365, fully supported with compile-time pipeline short-circuit |
+| S365 `[DoNotAudit]` | ✅ Verified | Used on bulk/upload ops, compile-time audit step removal |
+| S365 `[UnexposedOperation]` | ✅ Verified | Internal ops hidden from OpenAPI/links, compile-time support |
 | Custom JsonConverters | ✅ S365-owned | `ObjectValueJsonConverter`, `DictionaryStringObjectJsonConverter` are S365-specific; registered in S365 DI |
 | QueryAsync/CommandAsync shims | ✅ Done | Already on BlueprintTestHost and BlueprintTestFixture |
 | S365 TenantId type on operations | ✅ Compatible | HTTP ops use `string TenantId` (TenantModule handles); `ApiId` only on domain events |
@@ -818,3 +824,92 @@ Each pipeline had up to 4 additional field declarations + constructor resolution
 | 2025-07 | TypeConverter support | Added [TypeConverter] support for route/query parameter binding (matching legacy Blueprint behavior). S365 ApiId, FolderReference, Role, NodaTime.Instant all have [TypeConverter] attributes — all work automatically. Fixed Nullable<T> unwrapping for TypeConverter query types. Updated BPPO001/BPPO003 diagnostics. Corrected stale ApiId entries. |
 | 2025-07 | Pipeline IL optimization | Extracted `PipelineHelpers.AppendValidationError()` to deduplicate lazy-init+add pattern across all validation fast-path checks. Saves ~N statements per pipeline (N = validated property count). Benchmark baseline: MinimalQuery 2μs/2.5KB, ValidatedQuery(valid) 13.5μs/5.1KB, FullStackCommand(valid) 12μs/5.7KB. Validation adds 6-7× overhead over bare pipeline. |
 | 2025-07 | FromAuthContext | Added `[FromAuthContext]` attribute for auth-populated properties (e.g. TenantId). Properties are excluded from HTTP binding/OpenAPI. Resolves S365 gap where non-route TenantId appeared in request body/query. Route placeholder takes precedence. 11 tests. S365 proof updated. TypeScript codegen compatibility verified via Handlebars template deep-dive. |
+| 2025-07 | Deep S365 analysis | Gateway patterns: 5 gateways, JWT forwarding, custom source-gen for typed service interfaces. S365 TypeScript codegen uses Handlebars templates (not NSwag). Handler patterns: ApiOperations base ✅ perfect parity, [AllowAnonymous] 57+ ops ✅, [DoNotSaveChanges] ✅, [DoNotAudit] ✅, [UnexposedOperation] ✅. Test patterns: CommandAsync 300+, QueryAsync 200+, MessageAsync 150+, FakeBus via Bus prop ✅, FluentAssertions, Marten per-tenant sessions. All attributes already exist in Blueprint. |
+
+---
+
+## S365 Gateway Architecture Analysis
+
+**Status:** Fully analysed — Blueprint.HttpClient + Sample.Gateway already prove the pattern.
+
+### Gateway Projects (5 total)
+| Gateway | Target Service | Operations |
+|---------|---------------|------------|
+| Import.Gateway | Import | File upload forwarding |
+| ExchangeTransportAgent.Gateway | ETA + Generation | Multi-service aggregation |
+| Partners.Gateway | Partners | Partner management forwarding |
+| VCard.Gateway | VCard | vCard generation with error handling |
+| Microsoft365.Gateway | M365 | M365 integration forwarding |
+
+### Service-to-Service Auth Pattern
+JWT token forwarding from incoming request to backend service:
+```csharp
+// HttpClientHelpers.AddAuthorizationHeaderIfPresent(serviceProvider, httpClient)
+// Reads Authorization + User-Agent headers from HttpContext and forwards them
+```
+
+### Gateway Handler Patterns
+1. **Simple forwarding + mapping** — Forward operation, map response resource
+2. **Multi-service aggregation** — Call 2+ services, combine results (ETA gateway)
+3. **Error handling + fallback** — try/catch ApiException, return fallback (VCard)
+4. **Cache control** — Set `Cache-Control` headers on response (ETA signatures)
+
+### Typed Service Client Source Generator
+S365 has a custom `ServiceApiSourceGenerationHelper` that generates typed client interfaces:
+```csharp
+public interface IImportGatewayApi {
+    BlueprintHttpClient BlueprintHttpClient { get; }
+    IImportGatewayApi UpdateJwt(string jwt);
+    Task<TResult> MethodNameAsync(TOperation op, CallOptions? options, CancellationToken ct);
+}
+```
+This is orthogonal to Blueprint — coexists with Blueprint source-gen. Migration impact: namespace changes only.
+
+### TypeScript Client Generation
+**NOT NSwag** — custom Handlebars template-based generation:
+- Source: `frontend/apps/portal/src/openapi/generator/index.mts`
+- Templates: `api.handlebars`, `apiInner.handlebars`, `model.handlebars`, `index.handlebars`
+- Reads OpenAPI JSON from disk (not live endpoint)
+- Custom helpers: `pathGenerator`, `ajvSchema`, `camelcase`, `withOperation`
+- Blueprint's `x-links` metadata in OpenAPI spec is compatible with template expectations
+
+---
+
+## S365 Test Pattern Deep Dive
+
+**Status:** Blueprint.Testing provides full API compatibility — zero test method signature changes needed.
+
+### Method Usage Counts (across 38 test projects)
+| Method | S365 Usage Count | Blueprint Equivalent | Match |
+|--------|-----------------|---------------------|-------|
+| `CommandAsync(` | 300+ | `fixture.CommandAsync(op)` | ✅ Exact |
+| `QueryAsync(` | 200+ | `fixture.QueryAsync(op)` | ✅ Exact |
+| `ExecuteAsync(` | 100+ | `fixture.ExecuteAsync(op)` | ✅ Exact |
+| `MessageAsync(` | 150+ | `fixture.MessageAsync(op)` | ✅ Exact |
+| `api.Bus.` | 140+ | `fixture.Bus.` | ✅ Alias |
+| `api.Tasks.` | 100+ | `fixture.Tasks.` | ✅ Direct |
+| `api.Authentication.Set(` | frequent | `fixture.Authentication.Set(identity)` | ✅ Exact |
+
+### Bus Assertion API Match
+| S365 FluentAssertions Extension | Blueprint TestMessageCollector | Match |
+|---|----|---|
+| `bus.Should().HavePublishedSingle<T>()` | `Bus.Should().HavePublishedSingle<T>()` | ✅ |
+| `bus.Should().HavePublished<T>()` | `Bus.Should().HavePublished<T>()` | ✅ |
+| `bus.Should().NotHavePublished<T>()` | `Bus.Should().NotHavePublished<T>()` | ✅ |
+| `bus.Should().HaveSent<T>()` | `Bus.Should().HaveSent<T>()` | ✅ |
+| `bus.Should().NotHaveSent<T>()` | `Bus.Should().NotHaveSent<T>()` | ✅ |
+| `bus.Should().HavePublishedAny<T>()` | `Bus.Should().HavePublishedAny<T>()` | ✅ |
+
+### Auth Helper Pattern
+S365 uses 16+ extension methods on ApiFixture (e.g. `AuthenticateAsTenantAdministrator`, `CreateTenantUser`). These are **S365-specific** convenience methods built on top of `Authentication.Set(ClaimsIdentity)`. Migration path: S365 reimplements these as extensions on `BlueprintTestFixture<TApp, TExec>` — no Blueprint changes needed.
+
+### Marten Test Sessions
+S365 uses per-tenant Marten sessions via extension methods:
+- `fixture.WithDatabaseAsync(tenant, async db => { ... })`
+- `fixture.AllAsync<T>(tenant)`
+- `fixture.LoadFromDatabaseAsync<T>(tenant, id)`
+
+These are S365 helpers built on `IDocumentStore.LightweightSession(tenantId)` — stay in S365 test helpers project, not Blueprint.
+
+### Test Assertion Library
+FluentAssertions used exclusively across all S365 test projects. Blueprint.Testing is assertion-library-agnostic — works with FluentAssertions, xUnit Assert, or any other library.
