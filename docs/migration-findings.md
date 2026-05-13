@@ -755,6 +755,106 @@ Each pipeline had 4 `private readonly` field declarations + 4 constructor resolu
 
 ### Auth Provider Field Hoisting (Commit 09d936f)
 
+---
+
+## S365 Compatibility Gap Analysis (Comprehensive, Corrected)
+
+Deep analysis of S365's codebase (~240+ operations, 16+ services, 42 test projects) reveals
+the **actual** gap status between Blueprint source-gen and S365 requirements.
+
+### Already Fully Supported (Confirmed Working)
+
+| Pattern | S365 Usage | Blueprint Status |
+|---------|-----------|-----------------|
+| `PlainTextResult` | CSV exports, log downloads | ✅ `PlainTextResult` exists with configurable `ContentType` |
+| `FileStreamResult` | Binary file downloads | ✅ Exists with content disposition support |
+| `RedirectResult` | OAuth callbacks | ✅ Exists |
+| `ITenantAccessor` + `ITenantResolver` | Ambient tenant context | ✅ First-class with compile-time TenantId population |
+| `SetTenantMiddleware` | Claim → tenant context | ✅ Replaced by `TenantModule` (compile-time, no middleware) |
+| `[Resource(noun, verb, template)]` | 349 usages, 3-param | ✅ 3-param constructor, compile-time template expansion |
+| `[FromResource(typeof(X))]` | 158 usages | ✅ `AuthorizationModule` inherits scope pairs |
+| `{Auth:AccountId}` template tokens | Claim-based resource keys | ✅ `ResourceKeyTemplateParser` + `IResolvedResourceAuthorizationProvider` |
+| `[AllowAnonymous]` | 57+ operations | ✅ Compile-time pipeline short-circuit |
+| `[DoNotSaveChanges]` | Bulk/upload ops | ✅ BPP001 diagnostic, UoW skip |
+| `[DoNotAudit]` | Upload ops | ✅ Compile-time audit step removal |
+| `[UnexposedOperation]` | Internal ops | ✅ Excluded from HTTP host exposure |
+| `IBackgroundTask` + `[Queue]` | Hangfire tasks | ✅ `Blueprint.Tasks.Hangfire` |
+| `IRecurringTaskScheduler` | Cron schedules | ✅ `Blueprint.Tasks.Hangfire` |
+| `ResourceEvent<T>` / `ResourceEventResult<T>` | Event audit | ✅ Compile-time metadata + audit sink |
+| `IPropertyPopulator` | Runtime populators | ✅ Supported but TenantId now compile-time |
+| `IValidatableObject` | 4 implementations | ✅ Called in validation stage |
+| `ScopePair` / `IResourceAuthorizationProvider` | Authorization | ✅ Static scope-pair arrays, zero allocation |
+| `IUserAuthorisationContextFactory` | Claims context | ✅ Cached at pipeline construction |
+| `IApiAuthoriser` + `IOperationAuthoriser` | Business auth | ✅ Pre-cached arrays, iterated in pipeline |
+| `CommandAsync` / `QueryAsync` / `MessageAsync` | Test methods | ✅ `BlueprintTestFixture` exact signatures |
+| `WebApiFixtureFactory` | Test factories | ✅ `BlueprintTestFixtureFactory` matching pattern |
+| FakeBus assertions | 140+ usages | ✅ `TestMessageCollector.Should()` chain |
+| Auth test helpers | Ambient auth | ✅ `TestAuthenticationManager.Set/As/MakeAnonymous` |
+| BackgroundTask assertions | 100+ usages | ✅ `BackgroundTaskCollector` |
+| Blueprint.Marten | Marten UoW + outbox | ✅ Exists with transaction scope |
+| Blueprint.Rebus | Companion generator | ✅ Exists with message outbox |
+| BlueprintHttpClient | Service-to-service calls | ✅ Compiled URL builders, zero reflection |
+| JWT token forwarding | Gateway pattern | ✅ `HttpClientTokenForwarding.ForwardAuthorizationHeader()` (commit 7eb8840) |
+
+### S365-Specific Patterns That Stay Consumer-Owned
+
+| Pattern | Why Consumer-Owned |
+|---------|-------------------|
+| `Signature365UserAuthorisationContextFactory` | Maps S365-specific JWT claims to context |
+| `Signature365JwtClaimTypes.Sig365TenantId` | Custom claim type name (`s365_tenant_id`) |
+| `ScopeApiAuthoriser` → `IResourceAuthorizationProvider` | S365 scope matching logic |
+| `SampleTenantResolver` | S365-specific claim extraction |
+| `AuthHelpers.CreateTenantUser()` etc. | 16+ S365-specific test identity factories |
+| `PortalMartenRegistry` | Per-service Marten schema config |
+| `Sig365LinkGeneratorMiddleware` | Custom HATEOAS link enrichment |
+| `IOperationScannerConvention` (name stripping) | Cosmetic, not needed in source-gen |
+| Custom Handlebars TypeScript codegen | Templates at `frontend/apps/*/openapi/` |
+| Gateway handler implementations | Business logic for forwarding/aggregation |
+
+### Genuine Remaining Gaps (Actionable)
+
+1. **Operation scanner convention equivalent** — S365 strips "Portal" from descriptor names.
+   In source-gen, `OperationNameHelpers.StripOperationSuffix` already strips Query/Command.
+   The "Portal" strip is cosmetic and can be handled by just not prefixing operation names.
+   **Status: Not a gap** — convention is inherent in the type naming.
+
+2. **Custom middleware extensibility** — S365 has `Sig365LinkGeneratorMiddleware` as a custom
+   `IMiddlewareBuilder`. Blueprint source-gen uses its own module system. S365's custom link
+   enrichment should be replaced by `ILinkVisibilityAuthoriser` and similar extension points.
+   **Status: Covered** — Blueprint provides `AddLinkVisibilityAuthoriser<T>()`.
+
+3. **OpenAPI shape verification** — The TypeScript client generation uses custom Handlebars
+   templates, not NSwag. Blueprint's `x-links` metadata and operation naming must produce
+   OpenAPI JSON that the existing templates can consume.
+   **Status: Hard gate** — Must validate per-service before shipping.
+
+### Key Migration Insight
+
+The analysis reveals that S365 migration is primarily a **mechanical transformation** rather
+than a feature gap issue. Blueprint source-gen already supports every S365 pattern either
+natively or through well-defined extension points. The migration effort is dominated by:
+
+1. Making operation classes `partial` (~240 files)
+2. Updating `[Resource]` attribute imports (namespace change, same params)
+3. Creating `BlueprintApp` + `JsonSerializerContext` per service
+4. Replacing `Startup.cs` registration boilerplate
+5. Validating OpenAPI output per service
+
+### HttpClient Gateway Support (Commit 7eb8840)
+
+Added `IServiceProvider`-aware `AddBlueprintHttpClient<TApp>` overload and
+`HttpClientTokenForwarding.ForwardAuthorizationHeader()` helper. This matches
+S365's `HttpClientHelpers.AddAuthorizationHeaderIfPresent` pattern exactly:
+
+```csharp
+// S365 gateway registration pattern:
+services.AddBlueprintHttpClient<BackendApp>((sp, client) =>
+{
+    client.BaseAddress = new Uri("https://backend/api/");
+    HttpClientTokenForwarding.ForwardAuthorizationHeader(sp, client);
+});
+```
+
 **Problem:** Each pipeline that uses resource-based authorization resolved `IResolvedResourceAuthorizationProvider` and `IResourceAuthorizationProvider` independently. That's 2 field declarations + 2 constructor lines per authorized pipeline.
 
 **Solution:** Hoisted both to `OperationExecutorShell` base class. Generated code references `this.ResolvedResourceAuthorizationProvider` and `this.ResourceAuthorizationProvider`.
