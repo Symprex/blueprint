@@ -166,7 +166,7 @@ public class HttpOperationResultExecutor
                     TrySetLocationHeader(httpContext, resourceEventResult.Content);
                 }
 
-                await WriteJsonAsync(httpContext, operationContext, ResourceEventEnvelope.Create(resourceEventResult)).ConfigureAwait(false);
+                await WriteResourceEventEnvelopeAsync(httpContext, operationContext, resourceEventResult).ConfigureAwait(false);
                 return true;
             case HttpNoContentResult:
                 httpContext.Response.StatusCode = StatusCodes.Status204NoContent;
@@ -244,6 +244,109 @@ public class HttpOperationResultExecutor
             var serializerOptions = serializerContext?.Options ?? new JsonSerializerOptions();
             await JsonSerializer.SerializeAsync(httpContext.Response.Body, content, contentType, CreateFallbackSerializerOptions(serializerOptions), httpContext.RequestAborted).ConfigureAwait(false);
         }
+    }
+
+    // Pre-computed ChangeType enum strings matching JsonStringEnumConverter<ChangeType> output (PascalCase).
+    private static readonly string[] _changeTypeStrings = [nameof(ChangeType.Created), nameof(ChangeType.Updated), nameof(ChangeType.Deleted)];
+
+    // Pre-encoded JSON property names for ResourceEvent envelope to avoid per-request UTF-8 conversion.
+    private static readonly JsonEncodedText _propObject = JsonEncodedText.Encode("$object");
+    private static readonly JsonEncodedText _propEventId = JsonEncodedText.Encode("eventId");
+    private static readonly JsonEncodedText _propChangeType = JsonEncodedText.Encode("changeType");
+    private static readonly JsonEncodedText _propCreated = JsonEncodedText.Encode("created");
+    private static readonly JsonEncodedText _propResourceObject = JsonEncodedText.Encode("resourceObject");
+    private static readonly JsonEncodedText _propHref = JsonEncodedText.Encode("href");
+    private static readonly JsonEncodedText _propData = JsonEncodedText.Encode("data");
+    private static readonly JsonEncodedText _propMetadata = JsonEncodedText.Encode("metadata");
+    private static readonly JsonEncodedText _propSecureData = JsonEncodedText.Encode("secureData");
+    private static readonly JsonEncodedText _propChangedValues = JsonEncodedText.Encode("changedValues");
+    private static readonly JsonEncodedText _propCorrelationId = JsonEncodedText.Encode("correlationId");
+    private static readonly JsonEncodedText _valEvent = JsonEncodedText.Encode("event");
+
+    /// <summary>
+    /// Writes a <see cref="ResourceEventResult"/> as an event envelope directly via <see cref="Utf8JsonWriter"/>,
+    /// bypassing the private <c>ResourceEventEnvelope</c> wrapper allocation and the reflection-based STJ fallback
+    /// that it would trigger (since the wrapper is not registered in any <see cref="JsonSerializerContext"/>).
+    /// The inner <c>data</c> payload is serialized via the app's source-generated context when available.
+    /// </summary>
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2026",
+        Justification = "Dictionary<string,object> metadata bags require runtime serialization for heterogeneous values. The data payload prefers the app-owned serializer context and only falls back to reflection for uncovered types.")]
+    private static async Task WriteResourceEventEnvelopeAsync(
+        HttpContext httpContext,
+        ApiOperationContext operationContext,
+        ResourceEventResult result)
+    {
+        var serializerContext = operationContext.App.AppOwnedSerializerContext;
+        var serializerOptions = serializerContext?.Options ?? new JsonSerializerOptions();
+
+        await using var writer = new Utf8JsonWriter(httpContext.Response.Body);
+
+        writer.WriteStartObject();
+
+        writer.WriteString(_propObject, _valEvent);
+        writer.WriteString(_propEventId, result.EventId);
+        writer.WriteString(_propChangeType, _changeTypeStrings[(int)result.ChangeType]);
+        writer.WriteString(_propCreated, DateTimeOffset.UtcNow);
+        writer.WriteString(_propResourceObject, ApiResource.GetTypeName(result.Content.GetType()));
+
+        // href: extract from self-link when the resource is linkable
+        string? href = null;
+        if (result.Content is ILinkableResource { Links: { } links } &&
+            links.TryGetValue("self", out var selfLink))
+        {
+            href = selfLink.Href;
+        }
+
+        if (href is not null)
+        {
+            writer.WriteString(_propHref, href);
+        }
+
+        // data: use app-owned source-generated context when available for zero-reflection serialization
+        writer.WritePropertyName(_propData);
+
+        var dataType = result.Content.GetType();
+        var dataTypeInfo = _typeInfoCache.GetOrAdd(
+            new TypeInfoCacheKey(serializerContext, dataType),
+            static key => key.Context?.GetTypeInfo(key.ContentType));
+
+        if (dataTypeInfo is not null)
+        {
+            JsonSerializer.Serialize(writer, result.Content, dataTypeInfo);
+        }
+        else
+        {
+            JsonSerializer.Serialize(writer, result.Content, dataType, CreateFallbackSerializerOptions(serializerOptions));
+        }
+
+        // Nullable dictionary properties — omit when null to match the prior envelope behavior
+        if (result.Metadata is not null)
+        {
+            writer.WritePropertyName(_propMetadata);
+            JsonSerializer.Serialize(writer, result.Metadata, CreateFallbackSerializerOptions(serializerOptions));
+        }
+
+        if (result.SecureData is not null)
+        {
+            writer.WritePropertyName(_propSecureData);
+            JsonSerializer.Serialize(writer, result.SecureData, CreateFallbackSerializerOptions(serializerOptions));
+        }
+
+        if (result.ChangedValues is not null)
+        {
+            writer.WritePropertyName(_propChangedValues);
+            JsonSerializer.Serialize(writer, result.ChangedValues, CreateFallbackSerializerOptions(serializerOptions));
+        }
+
+        if (result.CorrelationId is not null)
+        {
+            writer.WriteString(_propCorrelationId, result.CorrelationId);
+        }
+
+        writer.WriteEndObject();
+        await writer.FlushAsync(httpContext.RequestAborted).ConfigureAwait(false);
     }
 
     private static readonly ConcurrentDictionary<JsonSerializerOptions, JsonSerializerOptions> _fallbackOptionsCache = new();
@@ -489,77 +592,5 @@ public class HttpOperationResultExecutor
             ResourceEventChangeType.Deleted => StatusCodes.Status204NoContent,
             _ => StatusCodes.Status200OK,
         };
-    }
-
-    /// <summary>
-    /// Wire-format envelope for <see cref="ResourceEventResult"/> responses. The shape intentionally mirrors
-    /// the legacy <see cref="ResourceEvent"/> class so that both code paths produce identical JSON, keeping
-    /// TypeScript client generators and downstream consumers working without changes.
-    /// </summary>
-    private sealed class ResourceEventEnvelope
-    {
-        [JsonPropertyName("$object")]
-        public string Object => "event";
-
-        [JsonPropertyName("eventId")]
-        public required string EventId { get; init; }
-
-        [JsonPropertyName("changeType")]
-        [JsonConverter(typeof(JsonStringEnumConverter<ChangeType>))]
-        public required ChangeType ChangeType { get; init; }
-
-        [JsonPropertyName("created")]
-        public required DateTimeOffset Created { get; init; }
-
-        [JsonPropertyName("resourceObject")]
-        public required string ResourceObject { get; init; }
-
-        [JsonPropertyName("href")]
-        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        public string? Href { get; init; }
-
-        [JsonPropertyName("data")]
-        public required object Data { get; init; }
-
-        [JsonPropertyName("metadata")]
-        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        public Dictionary<string, object>? Metadata { get; init; }
-
-        [JsonPropertyName("secureData")]
-        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        public Dictionary<string, object>? SecureData { get; init; }
-
-        [JsonPropertyName("changedValues")]
-        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        public Dictionary<string, object>? ChangedValues { get; init; }
-
-        [JsonPropertyName("correlationId")]
-        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        public string? CorrelationId { get; init; }
-
-        public static ResourceEventEnvelope Create(ResourceEventResult result)
-        {
-            string? href = null;
-
-            if (result.Content is ILinkableResource { Links: { } links } &&
-                links.TryGetValue("self", out var selfLink))
-            {
-                href = selfLink.Href;
-            }
-
-            return new ResourceEventEnvelope
-            {
-                EventId = result.EventId,
-                ChangeType = result.ChangeType,
-                Created = DateTimeOffset.UtcNow,
-                ResourceObject = ApiResource.GetTypeName(result.Content.GetType()),
-                Href = href,
-                Data = result.Content,
-                Metadata = result.Metadata,
-                SecureData = result.SecureData,
-                ChangedValues = result.ChangedValues,
-                CorrelationId = result.CorrelationId,
-            };
-        }
     }
 }

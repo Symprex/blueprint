@@ -1844,3 +1844,23 @@ Revisit when pipeline count exceeds 1000+ or profiling shows state machine overh
 - Snapshot test updated with full envelope schema
 - Targeted test verifying all envelope properties and `data.$ref`
 - `UseStatus200ForSuccessResponses` test updated for raw schema comparison
+
+### #302 — ResourceEvent Envelope Serialization: Optimized (Utf8JsonWriter)
+
+**Problem:** `ResourceEventEnvelope` was a private class not registered in any `JsonSerializerContext`. 
+Every `ResourceEventResult<T>` response fell back to reflection-based STJ serialization, allocating the 
+wrapper object and using slow runtime type inspection on every request.
+
+**Fix:** Replaced `ResourceEventEnvelope.Create()` → `WriteJsonAsync()` pattern with direct 
+`Utf8JsonWriter`-based serialization in `WriteResourceEventEnvelopeAsync()`:
+- Pre-encoded `JsonEncodedText` property names avoid per-request UTF-8 conversion
+- Inner `data` payload uses the app's source-generated `JsonSerializerContext` (zero reflection when registered)
+- Nullable properties (`metadata`, `secureData`, `changedValues`, `correlationId`) are omitted when null
+- `ChangeType` enum serialized via pre-computed string array (no `JsonStringEnumConverter` overhead)
+- `ResourceEventEnvelope` class deleted entirely — zero wrapper allocation
+
+**Performance impact:** Every command returning `ResourceEventResult<T>` (~274 S365 operations) benefits from:
+- Eliminated wrapper object allocation
+- Eliminated reflection-based serialization fallback for the envelope structure
+- Inner data payload still uses app-owned source-generated context when available
+- Pre-encoded property names cached as static fields
