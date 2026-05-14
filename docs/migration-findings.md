@@ -270,6 +270,8 @@
 | S365 auth flow compatibility | ✅ Compatible | S365 `ScopeApiAuthoriser.CanExecuteOperationAsync` → Blueprint `IResourceAuthorizationProvider.IsAuthorizedAsync`. S365 checks `JwtClaimTypes.Scope` (default "scope") with Noun.Verb format (default ".") → Blueprint defaults match exactly. S365 no-scopes-allow behavior → subclass `AllowWhenNoScopeClaims()` returning true. |
 | RFC 9727 api-catalog | ✅ Done | `/.well-known/api-catalog` returns `application/linkset+json` with `service-desc` pointing to OpenAPI doc. Supports GET (body) + HEAD (Link header only). Existing `/.well-known/openapi` kept for backward compat. |
 | OpenAPI operation processors | ✅ Already exists | `OpenApiOperationProcessorOptions.Processors` list — S365 can remove TenantId params, add vendor extensions, override summaries. Equivalent to legacy `OpenApiOptions.ConfigureOperation`. |
+| ResourceEvent SelfQuery resolution | ✅ Done | `ResourceEventSelfQueryModule` (Order=-5) generates PostExecution call to `PipelineHelpers.ResolveResourceEventSelfQueryAsync` — best-effort nested query execution populates `Data` on `ResourceEvent<T>` when handler returns `new ResourceDeleted<T>(selfQuery)`. Lazy `Executor` in `OperationExecutorShell` prevents circular dependency. 4 integration tests. |
+| FindOperation dead code fix | ✅ Done | Changed from `FindOperation` (throws) to `TryFindOperation` (returns bool) in SelfQuery preflight — eliminates dead null-check branch |
 
 ---
 

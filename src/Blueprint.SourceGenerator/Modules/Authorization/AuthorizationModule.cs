@@ -262,6 +262,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
 
         // Validate template property tokens exist on the operation type
         var hasTemplateValidationErrors = false;
+        var valueTypePropertyNames = new HashSet<string>();
 
         foreach (var (_, _, template) in effectiveScopePairs)
         {
@@ -280,10 +281,11 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
                 }
 
                 // Property tokens must exist on the operation type
-                var hasProperty = operationType.GetAllMembers()
-                    .Any(m => m is IPropertySymbol && m.Name == token.Name);
+                var matchingProperty = operationType.GetAllMembers()
+                    .OfType<IPropertySymbol>()
+                    .FirstOrDefault(p => p.Name == token.Name);
 
-                if (!hasProperty)
+                if (matchingProperty is null)
                 {
                     context.AddDiagnostic(
                         new DiagnosticInfo(
@@ -292,6 +294,10 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
                             [operationType.Name, token.Name]));
 
                     hasTemplateValidationErrors = true;
+                }
+                else if (matchingProperty.Type.IsValueType)
+                {
+                    valueTypePropertyNames.Add(token.Name);
                 }
             }
         }
@@ -318,21 +324,22 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
 
         context.AddRenderStep(
             PipelineStage.Authorisation,
-            ctx => RenderAuthorizationCheck(ctx, effectiveScopePairs, hasTemplateValidationErrors, scopePairFieldName));
+            ctx => RenderAuthorizationCheck(ctx, effectiveScopePairs, hasTemplateValidationErrors, scopePairFieldName, valueTypePropertyNames));
     }
 
     private static void RenderAuthorizationCheck(
         PipelineRenderContext context,
         List<(string Noun, string Verb, string? ResourceKeyTemplate)> scopePairs,
         bool hasTemplateValidationErrors,
-        string scopePairFieldName)
+        string scopePairFieldName,
+        HashSet<string> valueTypePropertyNames)
     {
         var hasTemplates = scopePairs.Any(static sp => sp.ResourceKeyTemplate is not null);
 
         // When templates are valid, prefer the resolved provider for zero-reflection expansion
         if (hasTemplates && !hasTemplateValidationErrors)
         {
-            RenderResolvedAuthorizationCheck(context, scopePairs, scopePairFieldName);
+            RenderResolvedAuthorizationCheck(context, scopePairs, scopePairFieldName, valueTypePropertyNames);
         }
         else
         {
@@ -349,7 +356,8 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
     private static void RenderResolvedAuthorizationCheck(
         PipelineRenderContext context,
         List<(string Noun, string Verb, string? ResourceKeyTemplate)> scopePairs,
-        string scopePairFieldName)
+        string scopePairFieldName,
+        HashSet<string> valueTypePropertyNames)
     {
         var operationExpr = context.GetOperationExpression();
         var httpContextExpr = context.GetHttpContextExpression();
@@ -361,7 +369,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
         {
             var sp = scopePairs[0];
             resolvedScopeArg = sp.ResourceKeyTemplate is not null
-                ? BuildResolvedScopePairExpression(sp, operationExpr, principalExpr)
+                ? BuildResolvedScopePairExpression(sp, operationExpr, principalExpr, valueTypePropertyNames)
                 : $"new Blueprint.Model.ResolvedScopePair(\"{sp.Noun}\", \"{sp.Verb}\", null, null)";
         }
         else
@@ -369,7 +377,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
             var resolvedElements = string.Join(
                 ", ",
                 scopePairs.Select(sp => sp.ResourceKeyTemplate is not null
-                    ? BuildResolvedScopePairExpression(sp, operationExpr, principalExpr)
+                    ? BuildResolvedScopePairExpression(sp, operationExpr, principalExpr, valueTypePropertyNames)
                     : $"new Blueprint.Model.ResolvedScopePair(\"{sp.Noun}\", \"{sp.Verb}\", null, null)"));
 
             resolvedScopeArg = $"new Blueprint.Model.ResolvedScopePair[] {{ {resolvedElements} }}";
@@ -392,11 +400,12 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
     private static string BuildResolvedScopePairExpression(
         (string Noun, string Verb, string? ResourceKeyTemplate) sp,
         string operationExpr,
-        string principalExpr)
+        string principalExpr,
+        HashSet<string> valueTypePropertyNames)
     {
         var tokens = ResourceKeyTemplateParser.ParseTokens(sp.ResourceKeyTemplate!);
         var expandedExpr = ResourceKeyTemplateParser.GenerateExpansionExpression(
-            sp.ResourceKeyTemplate!, tokens, operationExpr, principalExpr, "context");
+            sp.ResourceKeyTemplate!, tokens, operationExpr, principalExpr, "context", valueTypePropertyNames);
 
         return $"new Blueprint.Model.ResolvedScopePair(\"{sp.Noun}\", \"{sp.Verb}\", \"{sp.ResourceKeyTemplate}\", {expandedExpr})";
     }

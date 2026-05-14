@@ -959,9 +959,9 @@ public static class PipelineHelpers
 
         try
         {
-            // Preflight: verify the SelfQuery operation is registered before creating a nested context
-            var descriptor = executor.App.FindOperation(selfQuery.GetType());
-            if (descriptor is null)
+            // Preflight: verify the SelfQuery operation is registered before creating a nested context.
+            // Use TryFindOperation (not FindOperation) to avoid throwing on unregistered operations.
+            if (!executor.App.TryFindOperation(selfQuery.GetType(), out _))
             {
                 _logSelfQueryFailed(logger, operationTypeName, selfQueryTypeName, null);
                 return;

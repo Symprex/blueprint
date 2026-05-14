@@ -106,13 +106,18 @@ internal static class ResourceKeyTemplateParser
     /// Optional expression that accesses the <c>ApiOperationContext</c> (e.g., <c>"context"</c>).
     /// When provided, well-known claim tokens resolve from the user authorization context first.
     /// </param>
+    /// <param name="valueTypePropertyNames">
+    /// Optional set of property names whose types are value types (structs). Value-type properties
+    /// use <c>.ToString()</c> without null-conditional access, avoiding CS0023 errors.
+    /// </param>
     /// <returns>A C# expression string that evaluates to the expanded resource key.</returns>
     public static string GenerateExpansionExpression(
         string template,
         List<ResourceKeyToken> tokens,
         string operationExpression,
         string principalExpression,
-        string? contextExpression = null)
+        string? contextExpression = null,
+        HashSet<string>? valueTypePropertyNames = null)
     {
         if (tokens.Count == 0)
         {
@@ -142,14 +147,25 @@ internal static class ResourceKeyTemplateParser
             }
             else
             {
+                var isValueType = valueTypePropertyNames?.Contains(token.Name) == true;
+
                 if (token.SubPropertyName != null)
                 {
-                    // Property path: {TenantId:Id} → operation.TenantId?.Id?.ToString() ?? ""
-                    replacement = $"{{{operationExpression}.{token.Name}?.{token.SubPropertyName}?.ToString() ?? \"\"}}";
+                    // Property path: {TenantId:Id}
+                    // Value type parent: operation.TenantId.Id?.ToString() ?? ""
+                    // Ref type parent: operation.TenantId?.Id?.ToString() ?? ""
+                    replacement = isValueType
+                        ? $"{{{operationExpression}.{token.Name}.{token.SubPropertyName}?.ToString() ?? \"\"}}"
+                        : $"{{{operationExpression}.{token.Name}?.{token.SubPropertyName}?.ToString() ?? \"\"}}";
                 }
                 else
                 {
-                    replacement = $"{{{operationExpression}.{token.Name}?.ToString() ?? \"\"}}";
+                    // Simple property: {TenantId}
+                    // Value type: operation.TenantId.ToString()
+                    // Ref type: operation.TenantId?.ToString() ?? ""
+                    replacement = isValueType
+                        ? $"{{{operationExpression}.{token.Name}.ToString()}}"
+                        : $"{{{operationExpression}.{token.Name}?.ToString() ?? \"\"}}";
                 }
             }
 
