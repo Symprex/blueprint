@@ -93,6 +93,9 @@
 | S365 health checks | ✅ Not needed | Health checks independent of Blueprint; `MapSig365HealthChecks()` alongside `MapBlueprintApi()` (#348) |
 | S365 Hangfire management | ✅ S365-owned | TriggerScheduledMessage, RequeueMessage, DeleteMessage ops are S365-specific admin (#349) |
 | Auth docs update | ✅ Done | Added WithCrudVerbHierarchy factory pattern and allowWhenNoScopeClaims (#350) |
+| CallAsync / nested execution | ✅ Compatible | Blueprint has CreateNested, ExecuteAsync, ExecuteWithNewScopeAsync — full match (#351) |
+| Property populators | ✅ Compile-time | No custom populators in S365; Blueprint's compile-time modules replace all 3 sources (#352) |
+| TypeScript client generation | ⚠️ Critical | Custom Handlebars generator — OpenAPI shape must match exactly (#353) |
 | S365 partner vs tenant distinction | ✅ S365-owned | PartnerId claim handling stays in S365's ITenantResolver implementation |
 | InvokeAsync inline handlers | ✅ Verified | HandlerDiscovery supports Invoke/InvokeAsync/Handle/HandleAsync on operation class |
 | x-links OpenAPI extension | ✅ Verified | Blueprint emits x-links with rel/operationId/method; matches S365 Handlebars templates |
@@ -3861,3 +3864,97 @@ Updated `docs/authorization.md`:
 - Added complete `additionalIgnoredScopes` list matching S365's production configuration
 - Showed both factory approach (preferred) and subclass approach (for overrides)
 - Documented `allowWhenNoScopeClaims: true` parameter
+
+---
+
+## Finding #351: S365 CallAsync / Nested Execution Pattern
+
+**Date:** Session continuation  
+**Category:** Migration architecture  
+**Impact:** Blueprint already supports all patterns
+
+### CallAsync (Remote HTTP Calls)
+- `BlueprintHttpClient.CallAsync<TResponse>(IReturn<TResponse>, CallOptions?, CancellationToken)` — remote HTTP client
+- Used by **generated service API clients** (S365's source generators create typed clients per service)
+- Maps to Blueprint source-gen's `BlueprintHttpClient<TApp>` — same pattern
+
+### Nested Operation Execution
+- S365 uses `IApiOperationExecutor.ExecuteAsync(context)` + `context.CreateNested(operation)` for handler-to-operation chaining
+- Used in `ResourceEventHandler` (fetches resource after creation) and `TaskExecutor` (background task dispatch)
+- Blueprint source-gen already has:
+  - `ApiOperationContext.CreateNested(IOperation, bool skipAuthorisation)` ✅
+  - `BlueprintAppDataModel.ExecuteAsync(ApiOperationContext)` ✅
+  - `BlueprintAppDataModel.ExecuteWithNewScopeAsync(IOperation, IServiceProvider, CancellationToken)` ✅
+
+**Action:** None required. Blueprint's execution model is feature-complete for S365's patterns.
+
+---
+
+## Finding #352: S365 Property Populator Architecture
+
+**Date:** Session continuation  
+**Category:** Migration architecture  
+**Impact:** Blueprint compile-time is superior — no custom populators needed
+
+### S365 Pattern
+- `IMessagePopulationSource` interface with 3 built-in implementations:
+  - `HttpRouteMessagePopulationSource` (priority 100) — route values
+  - `HttpBodyMessagePopulationSource` (priority 0) — JSON body
+  - `HttpPartMessagePopulationSource` (priority 0) — cookies, headers, query
+- **No custom `IMessagePopulationSource` implementations** in S365
+
+### TenantId Population
+- `SetTenantMiddleware` (runs at Authentication stage, not Population stage)
+- Reads `sig365_tenant_id` JWT claim → sets property named `TenantId` on operation (if ApiId type)
+- Also sets `ICurrentTenantAccessor.Current`
+
+### Blueprint Compile-Time Equivalent
+- `PropertyOwnershipModule` handles route, body, query, header at compile time
+- `TenantModule` handles TenantId population from `ITenantResolver` at compile time
+- No runtime reflection, no `IMessagePopulationSource` loop
+- Each property's source is resolved at compile time and emitted as direct code
+
+**Action:** No custom property populators needed. Blueprint's compile-time approach eliminates runtime overhead.
+
+---
+
+## Finding #353: S365 TypeScript Client Generation Architecture
+
+**Date:** Session continuation  
+**Category:** Migration compatibility — CRITICAL  
+**Impact:** OpenAPI shape must be compatible with custom Handlebars generator
+
+### Architecture
+- S365 does **NOT** use NSwag for TypeScript generation
+- Custom Handlebars-based generator at `frontend/apps/{admin|portal|partners}/src/openapi/generator/`
+- 4 template files: `api.handlebars`, `apiInner.handlebars`, `model.handlebars`, `index.handlebars`
+- Generator reads `openapi.json` from disk (saved in `Spec/` folder per service)
+- Invoked via `npm run openapi` with running API backend
+
+### Critical OpenAPI Features Used by Generator
+1. **`operationId`** — used directly as method names in generated TypeScript
+2. **`tags`** — groups operations into API classes
+3. **`x-enumNames`** — maps enum integer values to string names
+4. **`x-links`** — HATEOAS links on response schemas → generates link-following methods
+5. **`parameters`** (path, query, header) — generates method parameters
+6. **`requestBody`** — generates typed request objects
+7. **Response schemas** — generates TypeScript classes with `setData()`, `toJSON()`, `typeDetails()`
+8. **AJV schemas** — exported for client-side form validation
+9. **Error type mapping** — per-operation error response types
+
+### OpenAPI Shape Requirements
+- OpenAPI 3.0.x format (not 3.1.x)
+- `operationId` must match current naming convention (operation class name)
+- `x-enumNames` on enum schemas for display names
+- `x-links` on response schemas for HATEOAS operations
+- Validation error shape: `ValidationProblemDetails` with `errors` dictionary
+- `nullable: true` on optional properties (not `type: ["string", "null"]`)
+
+### Open Questions — RESOLVED
+- Does Blueprint source-gen emit `x-links` in OpenAPI schemas? → **YES** ✅ (`OpenApiDocumentRenderingContext.cs:120`)
+- Does Blueprint emit `x-enumNames`? → **YES** ✅ (`OpenApiOutputRenderingContext.cs:557-560`)
+- Is Blueprint's operationId naming the same? → **YES** ✅ Operation class name
+- Is Blueprint's error response shape compatible? → **YES** ✅ Uses `MvcValidationProblemDetails` (422 with `errors` dict)
+- OpenAPI version: Blueprint emits 3.0.x format ✅
+
+**Action:** OpenAPI shape appears compatible. Remaining verification: compare an actual rendered document side-by-side with S365 baseline during proof-of-concept migration.
