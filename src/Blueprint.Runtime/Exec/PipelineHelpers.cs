@@ -367,7 +367,7 @@ public static class PipelineHelpers
                     }
                     catch (Exception ex) when (ex is System.Text.Json.JsonException or InvalidOperationException or NotSupportedException)
                     {
-                        return new BindingFailureResult("Invalid JSON body");
+                        return ToBodyBindingFailure(ex);
                     }
                 }
 
@@ -391,11 +391,37 @@ public static class PipelineHelpers
             }
             catch (Exception ex) when (ex is System.Text.Json.JsonException or InvalidOperationException or NotSupportedException)
             {
-                return new BindingFailureResult("Invalid JSON body");
+                return ToBodyBindingFailure(ex);
             }
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Converts a JSON parsing exception into a <see cref="BindingFailureResult"/> with structured
+    /// detail. For <see cref="System.Text.Json.JsonException"/> the message includes the JSON path
+    /// and byte position so that callers can pinpoint malformed input without attaching a debugger.
+    /// </summary>
+    private static BindingFailureResult ToBodyBindingFailure(Exception ex)
+    {
+        if (ex is System.Text.Json.JsonException jsonEx)
+        {
+            var path = jsonEx.Path;
+            var bytePos = jsonEx.BytePositionInLine;
+
+            if (path is not null && bytePos.HasValue)
+            {
+                return new BindingFailureResult($"Invalid JSON body at '{path}' (byte {bytePos.Value}): {jsonEx.Message}");
+            }
+
+            if (path is not null)
+            {
+                return new BindingFailureResult($"Invalid JSON body at '{path}': {jsonEx.Message}");
+            }
+        }
+
+        return new BindingFailureResult("Invalid JSON body");
     }
 
     /// <summary>
