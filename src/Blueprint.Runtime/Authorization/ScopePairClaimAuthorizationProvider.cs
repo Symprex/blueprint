@@ -8,8 +8,8 @@ namespace Blueprint.Authorization;
 /// <summary>
 /// A production-ready <see cref="IResourceAuthorizationProvider"/> that evaluates
 /// scope-pair claims from the authenticated principal. This is the authorization model
-/// used by Signature 365 where JWT tokens carry scope claims in <c>{noun}.{verb}</c>
-/// format (e.g. <c>"Template.Read"</c>, <c>"User.Manage"</c>).
+/// used by Signature 365 where JWT tokens carry scope claims in <c>{noun}::{verb}</c>
+/// format (e.g. <c>"Template::Read"</c>, <c>"User::Manage"</c>).
 /// </summary>
 /// <remarks>
 /// <para>
@@ -18,8 +18,9 @@ namespace Blueprint.Authorization;
 /// </para>
 /// <para>
 /// The scope claim type defaults to <c>"scope"</c> which matches
-/// the standard OAuth2 convention. The separator defaults to
-/// <c>"."</c> which matches the S365 convention of <c>Noun.Verb</c>.
+/// the standard OAuth2 convention. The separator is configurable via the constructor
+/// (default <c>"::"</c> for the <c>WithCrudVerbHierarchy</c> factory,
+/// matching the S365 convention of <c>Noun::Verb</c>).
 /// </para>
 /// <para>
 /// Optionally, a set of ignored scopes can be provided to skip
@@ -29,11 +30,26 @@ namespace Blueprint.Authorization;
 /// <b>Verb hierarchy:</b> When verb inclusions are configured via the constructor
 /// (e.g. <c>"Manage" → [Create, Read, Update, Delete]</c>), a claim carrying a parent
 /// verb will also satisfy requirements for any of its included child verbs. For example,
-/// if a user has scope <c>"User.Manage"</c> and the operation requires
+/// if a user has scope <c>"User::Manage"</c> and the operation requires
 /// <c>[Resource("User", "Read")]</c>, the check succeeds because <c>Manage</c> includes
 /// <c>Read</c>. This matches the S365 verb expansion model.
 /// </para>
+/// <para>
+/// <b>Legacy scope mapping:</b> When a <see cref="LegacyScopeMapperFunc"/> is provided,
+/// scope claims that do not directly match any required pair are remapped through the
+/// function before a second match attempt. This supports backwards-compatible tokens
+/// after scope renames (e.g. <c>"CompiledSignature::Read"</c> → <c>"MyCompiledSignature::Read"</c>).
+/// </para>
 /// </remarks>
+/// <summary>
+/// A function that maps a legacy scope claim value to zero or more replacement scope values.
+/// Returning <see langword="null"/> or an empty array means no legacy mapping exists for the value.
+/// </summary>
+/// <param name="scopeClaimValue">The raw scope claim value that did not match any required scope pair directly.</param>
+/// <returns>Replacement scope values, or <see langword="null"/> if no mapping exists.</returns>
+public delegate string[]? LegacyScopeMapperFunc(string scopeClaimValue);
+
+/// <inheritdoc cref="ScopePairClaimAuthorizationProvider"/>
 public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvider, IResolvedResourceAuthorizationProvider
 {
     private static readonly Task<bool> _trueResult = Task.FromResult(true);
@@ -42,6 +58,7 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
     private readonly string _scopeClaimType;
     private readonly string _separator;
     private readonly FrozenSet<string> _ignoredScopes;
+    private readonly LegacyScopeMapperFunc? _legacyScopeMapper;
 
     // Inverse mapping: required verb → list of parent verbs that also satisfy it.
     // e.g. "Create" → ["Manage"] means a "Manage" claim also satisfies a "Create" requirement.
@@ -49,8 +66,8 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
 
     /// <summary>
     /// The standard verb hierarchy where <c>Manage</c> includes all CRUD verbs.
-    /// Matches the S365 convention: a scope claim of <c>User.Manage</c> also
-    /// satisfies <c>User.Create</c>, <c>User.Read</c>, <c>User.Update</c>, and <c>User.Delete</c>.
+    /// Matches the S365 convention: a scope claim of <c>User::Manage</c> also
+    /// satisfies <c>User::Create</c>, <c>User::Read</c>, <c>User::Update</c>, and <c>User::Delete</c>.
     /// </summary>
     public static readonly IReadOnlyDictionary<string, string[]> StandardCrudVerbHierarchy =
         new Dictionary<string, string[]>
@@ -66,11 +83,11 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
 
     /// <summary>
     /// Initialises a new instance of the <see cref="ScopePairClaimAuthorizationProvider"/> class
-    /// with default settings: <c>"scope"</c> claim type, <c>"."</c> separator, and the standard
+    /// with default settings: <c>"scope"</c> claim type, <c>"::"</c> separator, and the standard
     /// OAuth2 non-API scopes (<c>openid</c>, <c>profile</c>, <c>email</c>) ignored.
     /// </summary>
     public ScopePairClaimAuthorizationProvider()
-        : this("scope", ".", ["openid", "profile", "email", "offline_access"])
+        : this("scope", "::", ["openid", "profile", "email", "offline_access"])
     {
     }
 
@@ -78,6 +95,7 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
     /// Creates a provider with the standard CRUD verb hierarchy where <c>Manage</c> includes
     /// <c>Create</c>, <c>Read</c>, <c>Update</c>, and <c>Delete</c>. This is the recommended
     /// configuration for S365 services and any application using the standard noun/verb authorization model.
+    /// Uses the <c>"::"</c> separator matching S365's <c>Noun::Verb</c> convention.
     /// </summary>
     /// <param name="additionalIgnoredScopes">
     /// Extra scope values to ignore beyond the defaults (<c>openid</c>, <c>profile</c>, <c>email</c>,
@@ -87,6 +105,33 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
     public static ScopePairClaimAuthorizationProvider WithCrudVerbHierarchy(
         params string[] additionalIgnoredScopes)
     {
+        return WithCrudVerbHierarchy(separator: "::", legacyScopeMapper: null, additionalIgnoredScopes);
+    }
+
+    /// <summary>
+    /// Creates a provider with the standard CRUD verb hierarchy and a configurable separator and
+    /// optional legacy scope mapper. For S365 services, the separator is <c>"::"</c> matching
+    /// the <c>Noun::Verb</c> convention.
+    /// </summary>
+    /// <param name="separator">
+    /// The separator between noun and verb in scope claim values (e.g. <c>"::"</c> for
+    /// <c>"Template::Read"</c>, or <c>"."</c> for <c>"Template.Read"</c>).
+    /// </param>
+    /// <param name="legacyScopeMapper">
+    /// Optional function that maps legacy scope claim values to replacement values.
+    /// When a scope claim does not directly match any required scope pair, this function is called
+    /// to see if the claim maps to one or more newer scope values that might match.
+    /// </param>
+    /// <param name="additionalIgnoredScopes">
+    /// Extra scope values to ignore beyond the defaults (<c>openid</c>, <c>profile</c>, <c>email</c>,
+    /// <c>offline_access</c>).
+    /// </param>
+    /// <returns>A configured provider with CRUD verb hierarchy.</returns>
+    public static ScopePairClaimAuthorizationProvider WithCrudVerbHierarchy(
+        string separator,
+        LegacyScopeMapperFunc? legacyScopeMapper,
+        params string[] additionalIgnoredScopes)
+    {
         IEnumerable<string> allIgnored = ["openid", "profile", "email", "offline_access"];
 
         if (additionalIgnoredScopes.Length > 0)
@@ -94,7 +139,7 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
             allIgnored = allIgnored.Concat(additionalIgnoredScopes);
         }
 
-        return new ScopePairClaimAuthorizationProvider("scope", ".", allIgnored, _standardCrudVerbHierarchy);
+        return new ScopePairClaimAuthorizationProvider("scope", separator, allIgnored, _standardCrudVerbHierarchy, legacyScopeMapper);
     }
 
     /// <summary>
@@ -102,8 +147,8 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
     /// </summary>
     /// <param name="scopeClaimType">The claim type that carries scope-pair values.</param>
     /// <param name="separator">
-    /// The separator between noun and verb in scope claim values (e.g. <c>"."</c> for
-    /// <c>"Template.Read"</c>).
+    /// The separator between noun and verb in scope claim values (e.g. <c>"::"</c> for
+    /// <c>"Template::Read"</c>).
     /// </param>
     /// <param name="ignoredScopes">
     /// Scope values to ignore during authorization (e.g. <c>"openid"</c>, <c>"profile"</c>).
@@ -112,14 +157,20 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
     /// <param name="verbInclusions">
     /// Optional verb hierarchy: maps parent verbs to the child verbs they include.
     /// For example, <c>{ "Manage": ["Create", "Read", "Update", "Delete"] }</c> means a
-    /// claim of <c>"User.Manage"</c> also satisfies requirements for <c>"User.Create"</c>,
-    /// <c>"User.Read"</c>, etc. This matches the S365 verb expansion model.
+    /// claim of <c>"User::Manage"</c> also satisfies requirements for <c>"User::Create"</c>,
+    /// <c>"User::Read"</c>, etc. This matches the S365 verb expansion model.
+    /// </param>
+    /// <param name="legacyScopeMapper">
+    /// Optional function that maps legacy scope claim values to replacement values.
+    /// When a scope claim does not directly match any required scope pair, this function is called
+    /// to attempt remapping before giving up on that claim.
     /// </param>
     public ScopePairClaimAuthorizationProvider(
         string scopeClaimType,
         string separator,
         IEnumerable<string>? ignoredScopes = null,
-        IDictionary<string, string[]>? verbInclusions = null)
+        IDictionary<string, string[]>? verbInclusions = null,
+        LegacyScopeMapperFunc? legacyScopeMapper = null)
     {
         this._scopeClaimType = scopeClaimType ?? throw new ArgumentNullException(nameof(scopeClaimType));
         this._separator = separator ?? throw new ArgumentNullException(nameof(separator));
@@ -127,6 +178,7 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
             ? ignoredScopes.ToFrozenSet(StringComparer.OrdinalIgnoreCase)
             : FrozenSet<string>.Empty;
         this._verbIncludedIn = BuildInverseVerbMap(verbInclusions);
+        this._legacyScopeMapper = legacyScopeMapper;
     }
 
     /// <inheritdoc />
@@ -167,20 +219,21 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
 
             // Check if this scope claim matches any required scope pair.
             // Uses span-based comparison to avoid per-comparison string allocation.
-            foreach (var required in requiredScopePairs)
+            if (this.MatchesAnyRequired(claim.Value, requiredScopePairs))
             {
-                if (MatchesScopePair(claim.Value, required.Noun, this._separator, required.Verb))
-                {
-                    return _trueResult;
-                }
+                return _trueResult;
+            }
 
-                // Verb hierarchy: if the claim carries a parent verb (e.g. "Manage"),
-                // check whether it includes the required verb (e.g. "Create").
-                if (this._verbIncludedIn.TryGetValue(required.Verb, out var parentVerbs))
+            // Legacy scope remapping: if the claim didn't directly match, try mapped values
+            if (this._legacyScopeMapper is not null)
+            {
+                var mappedScopes = this._legacyScopeMapper(claim.Value);
+
+                if (mappedScopes is not null)
                 {
-                    foreach (var parentVerb in parentVerbs)
+                    foreach (var mapped in mappedScopes)
                     {
-                        if (MatchesScopePair(claim.Value, required.Noun, this._separator, parentVerb))
+                        if (this.MatchesAnyRequired(mapped, requiredScopePairs))
                         {
                             return _trueResult;
                         }
@@ -249,20 +302,21 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
             hasAnyScopeClaims = true;
 
             // Uses span-based comparison to avoid per-comparison string allocation.
-            foreach (var required in resolvedScopePairs)
+            if (this.MatchesAnyResolved(claim.Value, resolvedScopePairs))
             {
-                if (MatchesScopePair(claim.Value, required.Noun, this._separator, required.Verb))
-                {
-                    return _trueResult;
-                }
+                return _trueResult;
+            }
 
-                // Verb hierarchy: if the claim carries a parent verb (e.g. "Manage"),
-                // check whether it includes the required verb (e.g. "Create").
-                if (this._verbIncludedIn.TryGetValue(required.Verb, out var parentVerbs))
+            // Legacy scope remapping: if the claim didn't directly match, try mapped values
+            if (this._legacyScopeMapper is not null)
+            {
+                var mappedScopes = this._legacyScopeMapper(claim.Value);
+
+                if (mappedScopes is not null)
                 {
-                    foreach (var parentVerb in parentVerbs)
+                    foreach (var mapped in mappedScopes)
                     {
-                        if (MatchesScopePair(claim.Value, required.Noun, this._separator, parentVerb))
+                        if (this.MatchesAnyResolved(mapped, resolvedScopePairs))
                         {
                             return _trueResult;
                         }
@@ -294,6 +348,64 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
         ApiOperationContext operationContext,
         ClaimsPrincipal principal)
     {
+        return false;
+    }
+
+    /// <summary>
+    /// Checks whether a scope value (claim or mapped) matches any of the required scope pairs,
+    /// including verb hierarchy expansion.
+    /// </summary>
+    private bool MatchesAnyRequired(string scopeValue, IReadOnlyList<ScopePair> requiredScopePairs)
+    {
+        foreach (var required in requiredScopePairs)
+        {
+            if (MatchesScopePair(scopeValue, required.Noun, this._separator, required.Verb))
+            {
+                return true;
+            }
+
+            // Verb hierarchy: if the scope value carries a parent verb (e.g. "Manage"),
+            // check whether it includes the required verb (e.g. "Create").
+            if (this._verbIncludedIn.TryGetValue(required.Verb, out var parentVerbs))
+            {
+                foreach (var parentVerb in parentVerbs)
+                {
+                    if (MatchesScopePair(scopeValue, required.Noun, this._separator, parentVerb))
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Checks whether a scope value (claim or mapped) matches any of the resolved scope pairs,
+    /// including verb hierarchy expansion.
+    /// </summary>
+    private bool MatchesAnyResolved(string scopeValue, IReadOnlyList<ResolvedScopePair> resolvedScopePairs)
+    {
+        foreach (var required in resolvedScopePairs)
+        {
+            if (MatchesScopePair(scopeValue, required.Noun, this._separator, required.Verb))
+            {
+                return true;
+            }
+
+            if (this._verbIncludedIn.TryGetValue(required.Verb, out var parentVerbs))
+            {
+                foreach (var parentVerb in parentVerbs)
+                {
+                    if (MatchesScopePair(scopeValue, required.Noun, this._separator, parentVerb))
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+
         return false;
     }
 

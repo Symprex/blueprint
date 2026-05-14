@@ -201,7 +201,7 @@ public class ScopePairClaimAuthorizationProviderTests
     public async Task When_direct_scope_match_then_authorized()
     {
         var provider = new ScopePairClaimAuthorizationProvider();
-        var principal = CreatePrincipal("Template.Read");
+        var principal = CreatePrincipal("Template::Read");
         ScopePair[] scopePairs = [new ScopePair("Template", "Read")];
 
         var result = await provider.IsAuthorizedAsync(
@@ -214,7 +214,7 @@ public class ScopePairClaimAuthorizationProviderTests
     public async Task When_scope_match_is_case_insensitive_then_authorized()
     {
         var provider = new ScopePairClaimAuthorizationProvider();
-        var principal = CreatePrincipal("template.read");
+        var principal = CreatePrincipal("template::read");
         ScopePair[] scopePairs = [new ScopePair("Template", "Read")];
 
         var result = await provider.IsAuthorizedAsync(
@@ -227,7 +227,7 @@ public class ScopePairClaimAuthorizationProviderTests
     public async Task When_no_required_scope_pairs_then_authorized()
     {
         var provider = new ScopePairClaimAuthorizationProvider();
-        var principal = CreatePrincipal("Template.Read");
+        var principal = CreatePrincipal("Template::Read");
 
         var result = await provider.IsAuthorizedAsync(
             null!, principal, Array.Empty<ScopePair>(), CancellationToken.None);
@@ -252,7 +252,7 @@ public class ScopePairClaimAuthorizationProviderTests
     public async Task When_scope_mismatch_then_denied()
     {
         var provider = new ScopePairClaimAuthorizationProvider();
-        var principal = CreatePrincipal("Template.Read");
+        var principal = CreatePrincipal("Template::Read");
         ScopePair[] scopePairs = [new ScopePair("Template", "Delete")];
 
         var result = await provider.IsAuthorizedAsync(
@@ -299,7 +299,7 @@ public class ScopePairClaimAuthorizationProviderTests
     [Fact]
     public async Task When_no_scope_claims_and_permissive_override_then_authorized()
     {
-        var provider = new PermissiveNoScopesProvider("scope", ".");
+        var provider = new PermissiveNoScopesProvider("scope", "::");
         var principal = CreatePrincipalWithoutScopes();
         ScopePair[] scopePairs = [new ScopePair("Template", "Read")];
 
@@ -315,7 +315,7 @@ public class ScopePairClaimAuthorizationProviderTests
     public async Task When_any_scope_pair_matches_then_authorized()
     {
         var provider = new ScopePairClaimAuthorizationProvider();
-        var principal = CreatePrincipal("Template.Delete");
+        var principal = CreatePrincipal("Template::Delete");
         ScopePair[] scopePairs =
         [
             new ScopePair("Template", "Read"),
@@ -372,7 +372,7 @@ public class ScopePairClaimAuthorizationProviderTests
     {
         var provider = ScopePairClaimAuthorizationProvider.WithCrudVerbHierarchy();
 
-        var principal = CreatePrincipal("Template.Manage");
+        var principal = CreatePrincipal("Template::Manage");
         ScopePair[] scopePairs = [new ScopePair("Template", "Read")];
 
         var result = await provider.IsAuthorizedAsync(
@@ -385,7 +385,7 @@ public class ScopePairClaimAuthorizationProviderTests
     public async Task WithCrudVerbHierarchy_manages_scope_satisfies_all_crud_verbs()
     {
         var provider = ScopePairClaimAuthorizationProvider.WithCrudVerbHierarchy();
-        var principal = CreatePrincipal("User.Manage");
+        var principal = CreatePrincipal("User::Manage");
 
         foreach (var verb in new[] { "Create", "Read", "Update", "Delete" })
         {
@@ -448,5 +448,79 @@ public class ScopePairClaimAuthorizationProviderTests
 
         hierarchy.Should().ContainKey("Manage");
         hierarchy["Manage"].Should().BeEquivalentTo(["Create", "Read", "Update", "Delete"]);
+    }
+
+    // ─── Legacy scope mapper tests ────────────────────────────────────
+
+    [Fact]
+    public async Task WithCrudVerbHierarchy_legacy_mapper_remaps_old_scopes()
+    {
+        var provider = ScopePairClaimAuthorizationProvider.WithCrudVerbHierarchy(
+            separator: "::",
+            legacyScopeMapper: static scope => scope switch
+            {
+                "CompiledSignature::Read" => ["MyCompiledSignature::Read"],
+                _ => null,
+            });
+
+        var principal = CreatePrincipal("CompiledSignature::Read");
+        ScopePair[] scopePairs = [new ScopePair("MyCompiledSignature", "Read")];
+
+        var result = await provider.IsAuthorizedAsync(
+            null!, principal, scopePairs, CancellationToken.None);
+
+        result.Should().BeTrue("legacy mapper should remap CompiledSignature::Read to MyCompiledSignature::Read");
+    }
+
+    [Fact]
+    public async Task Legacy_mapper_does_not_interfere_with_direct_matches()
+    {
+        var provider = ScopePairClaimAuthorizationProvider.WithCrudVerbHierarchy(
+            separator: "::",
+            legacyScopeMapper: static _ => null);
+
+        var principal = CreatePrincipal("Template::Read");
+        ScopePair[] scopePairs = [new ScopePair("Template", "Read")];
+
+        var result = await provider.IsAuthorizedAsync(
+            null!, principal, scopePairs, CancellationToken.None);
+
+        result.Should().BeTrue("direct match should work even when mapper returns null");
+    }
+
+    [Fact]
+    public async Task Legacy_mapper_remapped_scope_benefits_from_verb_hierarchy()
+    {
+        var provider = ScopePairClaimAuthorizationProvider.WithCrudVerbHierarchy(
+            separator: "::",
+            legacyScopeMapper: static scope => scope switch
+            {
+                "UserFieldValue::ManageMine" => ["UserFieldValue::Manage"],
+                _ => null,
+            });
+
+        var principal = CreatePrincipal("UserFieldValue::ManageMine");
+        ScopePair[] scopePairs = [new ScopePair("UserFieldValue", "Read")];
+
+        var result = await provider.IsAuthorizedAsync(
+            null!, principal, scopePairs, CancellationToken.None);
+
+        result.Should().BeTrue("ManageMine remaps to Manage, which includes Read via hierarchy");
+    }
+
+    [Fact]
+    public async Task WithCrudVerbHierarchy_custom_separator_works()
+    {
+        var provider = ScopePairClaimAuthorizationProvider.WithCrudVerbHierarchy(
+            separator: ".",
+            legacyScopeMapper: null);
+
+        var principal = CreatePrincipal("Template.Read");
+        ScopePair[] scopePairs = [new ScopePair("Template", "Read")];
+
+        var result = await provider.IsAuthorizedAsync(
+            null!, principal, scopePairs, CancellationToken.None);
+
+        result.Should().BeTrue("custom separator '.' should work when claim values use '.'");
     }
 }

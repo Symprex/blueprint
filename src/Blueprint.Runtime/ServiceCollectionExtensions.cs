@@ -167,7 +167,7 @@ public sealed class BlueprintServiceBuilder
     /// <summary>
     /// Registers a pre-configured <see cref="Blueprint.Authorization.IResourceAuthorizationProvider"/> instance.
     /// Use this overload with factory methods such as
-    /// <see cref="Blueprint.Authorization.ScopePairClaimAuthorizationProvider.WithCrudVerbHierarchy"/>.
+    /// <see cref="Blueprint.Authorization.ScopePairClaimAuthorizationProvider">ScopePairClaimAuthorizationProvider.WithCrudVerbHierarchy</see>.
     /// When the instance also implements <see cref="Blueprint.Authorization.IResolvedResourceAuthorizationProvider"/>,
     /// generated pipelines that use compile-time–expanded resource keys pick up the optimised
     /// path automatically.
