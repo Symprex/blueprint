@@ -90,7 +90,8 @@ public sealed class TypedHttpClientExtensionsGenerator : IIncrementalGenerator, 
         {
             ct.ThrowIfCancellationRequested();
 
-            if (attr.AttributeClass?.ToDisplayString() != "Blueprint.Model.BlueprintAppScanAttribute")
+            if (attr.AttributeClass is not { Name: "BlueprintAppScanAttribute" } attrClass
+                || !attrClass.IsInNamespace("Blueprint", "Model"))
             {
                 continue;
             }
@@ -230,14 +231,15 @@ public sealed class TypedHttpClientExtensionsGenerator : IIncrementalGenerator, 
         foreach (var iface in operationType.AllInterfaces)
         {
             if (iface.TypeArguments.Length == 1
-                && iface.ContainingNamespace.ToDisplayString() == "Blueprint.Model"
+                && iface.IsInNamespace("Blueprint", "Model")
                 && iface.Name is "ICommand" or "IQuery" or "IOperation")
             {
                 var resultType = iface.TypeArguments[0];
 
                 // Skip OperationResult base — means no typed result
-                if (resultType.Name == "OperationResult"
-                    && resultType.ContainingNamespace.ToDisplayString() == "Blueprint.Runtime.Exec")
+                if (resultType is INamedTypeSymbol namedResult
+                    && namedResult.Name == "OperationResult"
+                    && namedResult.IsInNamespace("Blueprint", "Runtime", "Exec"))
                 {
                     return (null, false);
                 }
@@ -254,21 +256,25 @@ public sealed class TypedHttpClientExtensionsGenerator : IIncrementalGenerator, 
         // Check for explicit HTTP method attributes (same as OperationHttpMethodMetadataModule)
         foreach (var attr in operationType.GetAttributes())
         {
-            var attrFqn = attr.AttributeClass?.ToDisplayString();
-
-            switch (attrFqn)
+            if (attr.AttributeClass is not { } attrClass
+                || !attrClass.IsInNamespace("Blueprint", "Model", "Attributes"))
             {
-                case "Blueprint.Model.Attributes.HttpGetAttribute":
+                continue;
+            }
+
+            switch (attrClass.Name)
+            {
+                case "HttpGetAttribute":
                     return "GET";
-                case "Blueprint.Model.Attributes.HttpPostAttribute":
+                case "HttpPostAttribute":
                     return "POST";
-                case "Blueprint.Model.Attributes.HttpPutAttribute":
+                case "HttpPutAttribute":
                     return "PUT";
-                case "Blueprint.Model.Attributes.HttpPatchAttribute":
+                case "HttpPatchAttribute":
                     return "PATCH";
-                case "Blueprint.Model.Attributes.HttpDeleteAttribute":
+                case "HttpDeleteAttribute":
                     return "DELETE";
-                case "Blueprint.Model.Attributes.HttpMethodAttribute"
+                case "HttpMethodAttribute"
                     when attr.ConstructorArguments.Length > 0 && attr.ConstructorArguments[0].Value is string method:
                     return method.ToUpperInvariant();
             }
@@ -277,7 +283,7 @@ public sealed class TypedHttpClientExtensionsGenerator : IIncrementalGenerator, 
         // Fall back to interface convention
         foreach (var iface in operationType.AllInterfaces)
         {
-            if (iface.ContainingNamespace.ToDisplayString() == "Blueprint.Model")
+            if (iface.IsInNamespace("Blueprint", "Model"))
             {
                 if (iface.Name == "IQuery")
                 {

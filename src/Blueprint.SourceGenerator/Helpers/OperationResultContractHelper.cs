@@ -17,7 +17,7 @@ public static class OperationResultContractHelper
     {
         var operationResultInterface = operationType.AllInterfaces.FirstOrDefault(
             static candidate => candidate.TypeArguments.Length == 1
-                && candidate.ContainingNamespace.ToDisplayString() == "Blueprint.Model"
+                && candidate.IsInNamespace("Blueprint", "Model")
                 && (candidate.Name == "ICommand" || candidate.Name == "IQuery" || candidate.Name == "IOperation"));
 
         return operationResultInterface?.TypeArguments[0];
@@ -33,7 +33,7 @@ public static class OperationResultContractHelper
     {
         if (candidateType is INamedTypeSymbol namedType
             && namedType.IsGenericType
-            && namedType.ContainingNamespace.ToDisplayString() == "Blueprint.Model"
+            && namedType.IsInNamespace("Blueprint", "Model")
             && namedType.Name == "Results"
             && namedType.TypeArguments.Length == 2)
         {
@@ -353,20 +353,14 @@ public static class OperationResultContractHelper
     {
         for (var current = candidateType as INamedTypeSymbol; current is not null; current = current.BaseType)
         {
-            if (IsNamedType(current, "Blueprint.Runtime.Exec", "UnhandledExceptionResult")
-                || IsNamedType(current, "Blueprint", "UnhandledExceptionOperationResult"))
+            if ((current.Name == "UnhandledExceptionResult" && current.IsInNamespace("Blueprint", "Runtime", "Exec"))
+                || (current.Name == "UnhandledExceptionOperationResult" && current.IsInRootNamespace("Blueprint")))
             {
                 return true;
             }
         }
 
         return false;
-    }
-
-    private static bool IsNamedType(INamedTypeSymbol candidateType, string @namespace, string typeName)
-    {
-        return candidateType.Name == typeName
-            && candidateType.ContainingNamespace.ToDisplayString() == @namespace;
     }
 
     /// <summary>

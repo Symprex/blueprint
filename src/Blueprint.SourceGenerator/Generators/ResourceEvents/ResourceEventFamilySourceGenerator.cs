@@ -17,9 +17,6 @@ namespace Blueprint.SourceGenerator.Generators.ResourceEvents;
 public sealed class ResourceEventFamilySourceGenerator : IIncrementalGenerator, ITrackedSourceGenerator
 {
     private const string ResourceEventFamilyAttributeMetadataName = "Blueprint.Model.Attributes.ResourceEventFamilyAttribute";
-    private const string ResourceEventReasonAttributeMetadataName = "Blueprint.Model.Attributes.ResourceEventReasonAttribute";
-    private const string ResourceEventKeyAttributeMetadataName = "Blueprint.Model.Attributes.ResourceEventKeyAttribute";
-    private const string ResourceEventBodyAttributeMetadataName = "Blueprint.Model.Attributes.ResourceEventBodyAttribute";
 
     private static readonly DiagnosticDescriptor _familyNotPartialRule = new(
         id: "BPRE001",
@@ -107,7 +104,7 @@ public sealed class ResourceEventFamilySourceGenerator : IIncrementalGenerator, 
 
         // Extract family attribute data
         var familyAttr = ctx.Attributes.FirstOrDefault(static a =>
-            a.AttributeClass?.ToDisplayString() == ResourceEventFamilyAttributeMetadataName);
+            a.AttributeClass is { Name: "ResourceEventFamilyAttribute" } ac && ac.IsInNamespace("Blueprint", "Model", "Attributes"));
         if (familyAttr is null)
         {
             return null;
@@ -159,7 +156,7 @@ public sealed class ResourceEventFamilySourceGenerator : IIncrementalGenerator, 
 
             // Check for [ResourceEventReason]
             var reasonAttr = member.GetAttributes()
-                .FirstOrDefault(static a => a.AttributeClass?.ToDisplayString() == ResourceEventReasonAttributeMetadataName);
+                .FirstOrDefault(static a => a.AttributeClass is { Name: "ResourceEventReasonAttribute" } ac && ac.IsInNamespace("Blueprint", "Model", "Attributes"));
             if (reasonAttr is null)
             {
                 continue;
@@ -292,11 +289,11 @@ public sealed class ResourceEventFamilySourceGenerator : IIncrementalGenerator, 
         {
             foreach (var attr in param.GetAttributes())
             {
-                if (attr.AttributeClass?.ToDisplayString() == ResourceEventKeyAttributeMetadataName)
+                if (attr.AttributeClass is { Name: "ResourceEventKeyAttribute" } keyAc && keyAc.IsInNamespace("Blueprint", "Model", "Attributes"))
                 {
                     explicitKeyParam = param.Name;
                 }
-                else if (attr.AttributeClass?.ToDisplayString() == ResourceEventBodyAttributeMetadataName)
+                else if (attr.AttributeClass is { Name: "ResourceEventBodyAttribute" } bodyAc && bodyAc.IsInNamespace("Blueprint", "Model", "Attributes"))
                 {
                     explicitBodyParam = param.Name;
                     explicitBodyTypeFullName = param.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);

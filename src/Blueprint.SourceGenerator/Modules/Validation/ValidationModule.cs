@@ -377,8 +377,8 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
                 requiredAttr = attr;
             }
 
-            if (attr.AttributeClass is { MetadataName: "DefaultValueAttribute", ContainingNamespace: { } ns }
-                && ns.ToDisplayString() == "System.ComponentModel"
+            if (attr.AttributeClass is { MetadataName: "DefaultValueAttribute" } defaultValueAttrClass
+                && defaultValueAttrClass.IsInNamespace("System", "ComponentModel")
                 && attr.ConstructorArguments.Length >= 1)
             {
                 defaultValue = attr.ConstructorArguments[0].Value;

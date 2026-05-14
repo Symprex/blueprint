@@ -1,3 +1,4 @@
+using Blueprint.SourceGenerator.Helpers;
 using Blueprint.SourceGenerator.Planning;
 using Microsoft.CodeAnalysis;
 using Newtonsoft.Json.Linq;
@@ -15,8 +16,6 @@ namespace Blueprint.SourceGenerator.Modules.OpenApi;
 /// </remarks>
 internal sealed class OperationGroupManifestModule : IBlueprintSourceGeneratorModule, IDebugManifestContributor
 {
-    private const string ApiOperationsAttributeMetadataName = "Blueprint.Model.Attributes.ApiOperationsAttribute";
-
     /// <inheritdoc />
     public string ModuleId => nameof(OperationGroupManifestModule);
 
@@ -59,7 +58,7 @@ internal sealed class OperationGroupManifestModule : IBlueprintSourceGeneratorMo
     private static string? TryGetExplicitGroupName(INamedTypeSymbol operationType)
     {
         return operationType.GetAttributes()
-            .Where(static attr => attr.AttributeClass?.ToDisplayString() == ApiOperationsAttributeMetadataName)
+            .Where(static attr => attr.AttributeClass is { Name: "ApiOperationsAttribute" } ac && ac.IsInNamespace("Blueprint", "Model", "Attributes"))
             .Select(static attr => attr.ConstructorArguments.Length == 1 ? attr.ConstructorArguments[0].Value as string : null)
             .FirstOrDefault(static name => !string.IsNullOrWhiteSpace(name));
     }

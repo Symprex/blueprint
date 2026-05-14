@@ -191,5 +191,30 @@ namespace Blueprint.SourceGenerator.Helpers
                 && ns.Name == namespaceName
                 && ns.ContainingNamespace is { IsGlobalNamespace: true };
         }
+
+        /// <summary>
+        /// Checks whether a symbol's containing namespace matches a four-part dotted name
+        /// (e.g. "System.Text.Json.Serialization") without allocating a <see cref="string"/>.
+        /// </summary>
+        /// <param name="symbol">The symbol whose namespace is tested.</param>
+        /// <param name="part1">The outermost namespace segment (e.g. "System").</param>
+        /// <param name="part2">The second segment (e.g. "Text").</param>
+        /// <param name="part3">The third segment (e.g. "Json").</param>
+        /// <param name="part4">The innermost segment (e.g. "Serialization").</param>
+        /// <returns><see langword="true"/> when the namespace matches <c>part1.part2.part3.part4</c> exactly.</returns>
+        public static bool IsInNamespace(this ISymbol symbol, string part1, string part2, string part3, string part4)
+        {
+            var ns = symbol.ContainingNamespace;
+
+            return ns is not null
+                && ns.Name == part4
+                && ns.ContainingNamespace is { IsGlobalNamespace: false } level3
+                && level3.Name == part3
+                && level3.ContainingNamespace is { IsGlobalNamespace: false } level2
+                && level2.Name == part2
+                && level2.ContainingNamespace is { IsGlobalNamespace: false } level1
+                && level1.Name == part1
+                && level1.ContainingNamespace is { IsGlobalNamespace: true };
+        }
     }
 }

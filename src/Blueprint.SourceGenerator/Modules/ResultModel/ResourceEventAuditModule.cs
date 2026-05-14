@@ -91,7 +91,7 @@ public sealed class ResourceEventAuditModule : IBlueprintSourceGeneratorModule, 
 
         for (var current = declaredResultType; current is not null; current = current.BaseType)
         {
-            if (current.ContainingNamespace?.ToDisplayString() == "Blueprint.Runtime.Exec")
+            if (current.IsInNamespace("Blueprint", "Runtime", "Exec"))
             {
                 if (current.Name == "ResourceEventResult")
                 {
@@ -104,7 +104,7 @@ public sealed class ResourceEventAuditModule : IBlueprintSourceGeneratorModule, 
                 }
             }
 
-            if (current.ContainingNamespace?.ToDisplayString() == "Blueprint.Http"
+            if (current.IsInNamespace("Blueprint", "Http")
                 && current.Name == "ResourceEvent")
             {
                 return "Blueprint.Http.ResourceEvent";

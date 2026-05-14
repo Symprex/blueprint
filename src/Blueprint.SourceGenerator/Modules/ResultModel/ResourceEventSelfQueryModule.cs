@@ -87,7 +87,7 @@ public sealed class ResourceEventSelfQueryModule : IBlueprintSourceGeneratorModu
 
         for (var current = declaredResultType; current is not null; current = current.BaseType)
         {
-            if (current.ContainingNamespace?.ToDisplayString() == "Blueprint.Http"
+            if (current.IsInNamespace("Blueprint", "Http")
                 && current.Name == "ResourceEvent")
             {
                 return true;

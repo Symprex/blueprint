@@ -17,8 +17,6 @@ namespace Blueprint.SourceGenerator.Modules;
 /// </remarks>
 internal sealed class ResourceEventManifestModule : IBlueprintSourceGeneratorModule, IDebugManifestContributor
 {
-    private const string ResourceEventAttributeMetadataName = "Blueprint.Model.Attributes.ResourceEventAttribute";
-
     /// <inheritdoc />
     public string ModuleId => nameof(ResourceEventManifestModule);
 
@@ -155,7 +153,7 @@ internal sealed class ResourceEventManifestModule : IBlueprintSourceGeneratorMod
     private static string? GetResourceEventId(ITypeSymbol bodyType)
     {
         return bodyType.GetAttributes()
-            .Where(static attr => attr.AttributeClass?.ToDisplayString() == ResourceEventAttributeMetadataName)
+            .Where(static attr => attr.AttributeClass is { Name: "ResourceEventAttribute" } ac && ac.IsInNamespace("Blueprint", "Model", "Attributes"))
             .Select(static attr => attr.ConstructorArguments.Length == 1 ? attr.ConstructorArguments[0].Value as string : null)
             .FirstOrDefault(static value => !string.IsNullOrWhiteSpace(value));
     }

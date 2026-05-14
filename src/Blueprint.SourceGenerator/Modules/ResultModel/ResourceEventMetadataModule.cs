@@ -13,8 +13,6 @@ namespace Blueprint.SourceGenerator.Modules;
 /// </summary>
 public sealed class ResourceEventMetadataModule : IBlueprintSourceGeneratorModule, IDescriptorContributor
 {
-    private const string ResourceEventAttributeMetadataName = "Blueprint.Model.Attributes.ResourceEventAttribute";
-
     /// <inheritdoc />
     public string ModuleId => nameof(ResourceEventMetadataModule);
 
@@ -86,7 +84,7 @@ public sealed class ResourceEventMetadataModule : IBlueprintSourceGeneratorModul
         }
 
         var eventId = bodyType.GetAttributes()
-            .Where(static attribute => attribute.AttributeClass?.ToDisplayString() == ResourceEventAttributeMetadataName)
+            .Where(static attribute => attribute.AttributeClass is { Name: "ResourceEventAttribute" } ac && ac.IsInNamespace("Blueprint", "Model", "Attributes"))
             .Select(static attribute => attribute.ConstructorArguments.Length == 1 ? attribute.ConstructorArguments[0].Value as string : null)
             .FirstOrDefault(static value => string.IsNullOrWhiteSpace(value) == false);
         if (string.IsNullOrWhiteSpace(eventId))

@@ -12,8 +12,6 @@ namespace Blueprint.SourceGenerator.Modules;
 /// </summary>
 public sealed class OperationGroupMetadataModule : IBlueprintSourceGeneratorModule, IDescriptorContributor
 {
-    private const string ApiOperationsAttributeMetadataName = "Blueprint.Model.Attributes.ApiOperationsAttribute";
-
     /// <inheritdoc />
     public string ModuleId => nameof(OperationGroupMetadataModule);
 
@@ -80,7 +78,7 @@ public sealed class OperationGroupMetadataModule : IBlueprintSourceGeneratorModu
     private static (string? GroupName, string? Description) TryResolveExplicitGroup(INamedTypeSymbol operationType)
     {
         var attribute = operationType.GetAttributes()
-            .FirstOrDefault(static attribute => attribute.AttributeClass?.ToDisplayString() == ApiOperationsAttributeMetadataName);
+            .FirstOrDefault(static attribute => attribute.AttributeClass is { Name: "ApiOperationsAttribute" } ac && ac.IsInNamespace("Blueprint", "Model", "Attributes"));
 
         if (attribute is null || attribute.ConstructorArguments.Length != 1)
         {

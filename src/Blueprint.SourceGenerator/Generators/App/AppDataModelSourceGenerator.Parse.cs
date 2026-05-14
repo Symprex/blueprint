@@ -12,7 +12,6 @@ namespace Blueprint.SourceGenerator.Generators.App;
 public sealed partial class AppDataModelSourceGenerator
 {
     private const string SerializerContextAttributeMetadataName = "Blueprint.Model.BlueprintAppSerializerContextAttribute";
-    private const string JsonSerializableAttributeMetadataName = "System.Text.Json.Serialization.JsonSerializableAttribute";
 
     private static Result<ParseOnlyDataModel>? ParseDataModelWithScanAttributes(GeneratorAttributeSyntaxContext context)
     {
@@ -87,7 +86,7 @@ public sealed partial class AppDataModelSourceGenerator
     private static EquatableList<string> GetSerializerContextBodyTypeNames(INamedTypeSymbol serializerContextType)
     {
         var bodyTypeNames = serializerContextType.GetAttributes()
-            .Where(static attribute => string.Equals(attribute.AttributeClass?.ToDisplayString(), JsonSerializableAttributeMetadataName, StringComparison.Ordinal))
+            .Where(static attribute => attribute.AttributeClass is { Name: "JsonSerializableAttribute" } ac && ac.IsInNamespace("System", "Text", "Json", "Serialization"))
             .Select(static attribute => attribute.ConstructorArguments.FirstOrDefault().Value)
             .OfType<ITypeSymbol>()
             .Select(static typeSymbol => typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat).Replace("global::", string.Empty, StringComparison.Ordinal))
@@ -100,7 +99,7 @@ public sealed partial class AppDataModelSourceGenerator
     private static EquatableList<string> GetSerializerContextBodyTypeTypeNames(INamedTypeSymbol serializerContextType)
     {
         var bodyTypeNames = serializerContextType.GetAttributes()
-            .Where(static attribute => string.Equals(attribute.AttributeClass?.ToDisplayString(), JsonSerializableAttributeMetadataName, StringComparison.Ordinal))
+            .Where(static attribute => attribute.AttributeClass is { Name: "JsonSerializableAttribute" } ac && ac.IsInNamespace("System", "Text", "Json", "Serialization"))
             .Select(static attribute => attribute.ConstructorArguments.FirstOrDefault().Value)
             .OfType<ITypeSymbol>()
             .Select(static typeSymbol => typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))

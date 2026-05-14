@@ -10,7 +10,6 @@ namespace Blueprint.SourceGenerator.Helpers;
 /// </summary>
 internal static class HttpHostExposureHelper
 {
-    private const string AttributeNamespace = "Blueprint.Model.Attributes";
 
     /// <summary>
     /// Returns <c>true</c> when the operation symbol carries at least one link attribute
@@ -113,9 +112,6 @@ internal static class HttpHostExposureHelper
 
     private static bool IsInAttributeNamespace(INamedTypeSymbol attrClass)
     {
-        return string.Equals(
-            attrClass.ContainingNamespace?.ToDisplayString(),
-            AttributeNamespace,
-            StringComparison.Ordinal);
+        return attrClass.IsInNamespace("Blueprint", "Model", "Attributes");
     }
 }
