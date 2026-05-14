@@ -82,6 +82,9 @@ public sealed record OpenApiSchemaComponentRenderingContext(
             property.AdditionalPropertiesFormat,
             property.ItemsSchemaName,
             additionalPropertiesSchemaRef,
+            property.AdditionalPropertiesItemsKind.HasValue ? MapType(property.AdditionalPropertiesItemsKind.Value) : null,
+            property.AdditionalPropertiesItemsFormat,
+            property.AdditionalPropertiesItemsSchemaName,
             property.IsDeprecated,
             property.DeprecationReason,
             property.DefaultValue,
@@ -161,6 +164,9 @@ public sealed record OpenApiSchemaLinkExtension(string Rel, string OperationId, 
 /// <param name="AdditionalPropertiesFormat">The OpenAPI format of dictionary values when the values have a standard format.</param>
 /// <param name="ItemsSchemaRef">The schema component name for complex array element types, enabling <c>$ref</c> rendering instead of inline <c>type</c>.</param>
 /// <param name="AdditionalPropertiesSchemaRef">The schema component name for complex dictionary value types, enabling <c>$ref</c> rendering instead of inline <c>type</c>.</param>
+/// <param name="AdditionalPropertiesItemsType">The OpenAPI type of items within dictionary values when values are arrays (e.g. <c>string</c> for <c>Dictionary&lt;string, string[]&gt;</c>).</param>
+/// <param name="AdditionalPropertiesItemsFormat">The OpenAPI format of items within dictionary values when the nested items have a standard format.</param>
+/// <param name="AdditionalPropertiesItemsSchemaRef">The schema component name for complex items within dictionary array values, enabling nested <c>$ref</c> rendering.</param>
 /// <param name="IsDeprecated">Whether the property is deprecated (mapped from <see cref="ObsoleteAttribute"/>).</param>
 /// <param name="DeprecationReason">The deprecation reason from <see cref="ObsoleteAttribute.Message"/>, or null.</param>
 /// <param name="DefaultValue">The default value from <see cref="System.ComponentModel.DefaultValueAttribute"/>, or null.</param>
@@ -188,6 +194,9 @@ public sealed record OpenApiSchemaComponentPropertyModel(
     string? AdditionalPropertiesFormat = null,
     string? ItemsSchemaRef = null,
     string? AdditionalPropertiesSchemaRef = null,
+    string? AdditionalPropertiesItemsType = null,
+    string? AdditionalPropertiesItemsFormat = null,
+    string? AdditionalPropertiesItemsSchemaRef = null,
     bool IsDeprecated = false,
     string? DeprecationReason = null,
     object? DefaultValue = null,

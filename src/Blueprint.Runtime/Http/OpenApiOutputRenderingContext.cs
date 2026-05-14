@@ -1415,6 +1415,31 @@ public sealed record OpenApiOutputRenderingContext(
                 writer.WriteString("format", property.AdditionalPropertiesFormat);
             }
 
+            // When dictionary values are arrays, emit the nested items schema.
+            if (string.Equals(property.AdditionalPropertiesType, "array", StringComparison.Ordinal))
+            {
+                if (property.AdditionalPropertiesItemsSchemaRef is not null)
+                {
+                    writer.WritePropertyName("items");
+                    writer.WriteStartObject();
+                    writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(property.AdditionalPropertiesItemsSchemaRef, schemaNameFormatter)}");
+                    writer.WriteEndObject();
+                }
+                else if (property.AdditionalPropertiesItemsType is not null)
+                {
+                    writer.WritePropertyName("items");
+                    writer.WriteStartObject();
+                    writer.WriteString("type", property.AdditionalPropertiesItemsType);
+
+                    if (property.AdditionalPropertiesItemsFormat is not null)
+                    {
+                        writer.WriteString("format", property.AdditionalPropertiesItemsFormat);
+                    }
+
+                    writer.WriteEndObject();
+                }
+            }
+
             writer.WriteEndObject();
         }
 

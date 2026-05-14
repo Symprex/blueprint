@@ -180,6 +180,24 @@ public sealed record OpenApiSchemaProjectionContext(
         var (itemsKind, itemsFormat, itemsSchemaName) = ResolveElementSchema(propertyTypeInfo, property.PropertyType, JsonTypeInfoKind.Enumerable, coveredTypesByName);
         var (additionalPropertiesKind, additionalPropertiesFormat, additionalPropertiesSchemaName) = ResolveElementSchema(propertyTypeInfo, property.PropertyType, JsonTypeInfoKind.Dictionary, coveredTypesByName);
 
+        // When dictionary values are arrays (e.g. Dictionary<string, string[]>), resolve the nested
+        // array element type so the schema can emit "items" inside "additionalProperties".
+        OpenApiSchemaKind? additionalPropertiesItemsKind = null;
+        string? additionalPropertiesItemsFormat = null;
+        string? additionalPropertiesItemsSchemaName = null;
+
+        if (additionalPropertiesKind == OpenApiSchemaKind.Array)
+        {
+            var dictValueType = ExtractElementType(property.PropertyType, JsonTypeInfoKind.Dictionary);
+
+            if (dictValueType is not null)
+            {
+                var dictValueTypeInfo = serializerContext.GetTypeInfo(dictValueType);
+                (additionalPropertiesItemsKind, additionalPropertiesItemsFormat, additionalPropertiesItemsSchemaName) =
+                    ResolveElementSchema(dictValueTypeInfo, dictValueType, JsonTypeInfoKind.Enumerable, coveredTypesByName);
+            }
+        }
+
         return new OpenApiSchemaPropertyModel(
             property.Name,
             propertyKind,
@@ -202,6 +220,9 @@ public sealed record OpenApiSchemaProjectionContext(
             additionalPropertiesFormat,
             itemsSchemaName,
             additionalPropertiesSchemaName,
+            additionalPropertiesItemsKind,
+            additionalPropertiesItemsFormat,
+            additionalPropertiesItemsSchemaName,
             isDeprecated,
             deprecationReason,
             defaultValue,
@@ -1023,6 +1044,9 @@ public sealed record OpenApiSchemaModel(
 /// <param name="AdditionalPropertiesFormat">The OpenAPI format of dictionary values when they have a standard format mapping.</param>
 /// <param name="ItemsSchemaName">The component schema name for complex array element types, enabling <c>$ref</c> rendering.</param>
 /// <param name="AdditionalPropertiesSchemaName">The component schema name for complex dictionary value types, enabling <c>$ref</c> rendering.</param>
+/// <param name="AdditionalPropertiesItemsKind">The schema kind for items within dictionary values when values are arrays (e.g. <c>String</c> for <c>Dictionary&lt;string, string[]&gt;</c>).</param>
+/// <param name="AdditionalPropertiesItemsFormat">The OpenAPI format of items within dictionary values when the nested items have a standard format.</param>
+/// <param name="AdditionalPropertiesItemsSchemaName">The component schema name for complex items within dictionary array values, enabling nested <c>$ref</c> rendering.</param>
 /// <param name="IsDeprecated">Whether the property is deprecated (mapped from <see cref="ObsoleteAttribute"/>).</param>
 /// <param name="DeprecationReason">The deprecation reason from <see cref="ObsoleteAttribute.Message"/>, or null.</param>
 /// <param name="DefaultValue">The default value from <see cref="System.ComponentModel.DefaultValueAttribute"/>, or null.</param>
@@ -1051,6 +1075,9 @@ public sealed record OpenApiSchemaPropertyModel(
     string? AdditionalPropertiesFormat = null,
     string? ItemsSchemaName = null,
     string? AdditionalPropertiesSchemaName = null,
+    OpenApiSchemaKind? AdditionalPropertiesItemsKind = null,
+    string? AdditionalPropertiesItemsFormat = null,
+    string? AdditionalPropertiesItemsSchemaName = null,
     bool IsDeprecated = false,
     string? DeprecationReason = null,
     object? DefaultValue = null,

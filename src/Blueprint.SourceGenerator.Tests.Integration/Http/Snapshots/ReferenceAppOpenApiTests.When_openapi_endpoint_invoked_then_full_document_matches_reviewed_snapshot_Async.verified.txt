@@ -3125,7 +3125,10 @@
           "errors": {
             "type": "object",
             "additionalProperties": {
-              "type": "array"
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
             }
           },
           "instance": {
