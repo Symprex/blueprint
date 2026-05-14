@@ -355,8 +355,10 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
     /// </summary>
     private static bool IsCollectionType(INamedTypeSymbol type)
     {
-        var ns = type.ContainingNamespace?.ToDisplayString();
-        if (ns is not ("System.Collections.Generic" or "System.Collections.Immutable"))
+        var isGenericCollections = type.IsInNamespace("System", "Collections", "Generic");
+        var isImmutableCollections = !isGenericCollections && type.IsInNamespace("System", "Collections", "Immutable");
+
+        if (!isGenericCollections && !isImmutableCollections)
         {
             return false;
         }

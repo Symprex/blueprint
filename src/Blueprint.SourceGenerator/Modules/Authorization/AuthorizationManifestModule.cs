@@ -1,3 +1,4 @@
+using Blueprint.SourceGenerator.Helpers;
 using Blueprint.SourceGenerator.Modules.Authentication;
 using Blueprint.SourceGenerator.Planning;
 using Microsoft.CodeAnalysis;
@@ -21,7 +22,6 @@ internal sealed class AuthorizationManifestModule : IBlueprintSourceGeneratorMod
     private const string FromResourceAttributeName = "FromResourceAttribute";
     private const string AllowAnonymousAttributeName = "AllowAnonymousAttribute";
     private const string MustBeAuthenticatedAttributeName = "MustBeAuthenticatedAttribute";
-    private const string AttributeNamespace = "Blueprint.Model.Attributes";
 
     /// <inheritdoc />
     public string ModuleId => nameof(AuthorizationManifestModule);
@@ -146,7 +146,7 @@ internal sealed class AuthorizationManifestModule : IBlueprintSourceGeneratorMod
             }
 
             if (attrClass.Name != FromResourceAttributeName ||
-                !string.Equals(attrClass.ContainingNamespace?.ToDisplayString(), AttributeNamespace, StringComparison.Ordinal))
+                !attrClass.IsInNamespace("Blueprint", "Model", "Attributes"))
             {
                 continue;
             }
@@ -188,7 +188,7 @@ internal sealed class AuthorizationManifestModule : IBlueprintSourceGeneratorMod
             }
 
             if (attrClass.Name != ResourceAttributeName ||
-                !string.Equals(attrClass.ContainingNamespace?.ToDisplayString(), AttributeNamespace, StringComparison.Ordinal))
+                !attrClass.IsInNamespace("Blueprint", "Model", "Attributes"))
             {
                 continue;
             }
@@ -219,10 +219,7 @@ internal sealed class AuthorizationManifestModule : IBlueprintSourceGeneratorMod
             }
 
             return attrClass.Name == attributeName
-                   && string.Equals(
-                       attrClass.ContainingNamespace?.ToDisplayString(),
-                       AttributeNamespace,
-                       StringComparison.Ordinal);
+                   && attrClass.IsInNamespace("Blueprint", "Model", "Attributes");
         });
     }
 }

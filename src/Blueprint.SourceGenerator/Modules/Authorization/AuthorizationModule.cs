@@ -28,7 +28,6 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
     private const string ResourceAttributeName = "ResourceAttribute";
     private const string FromResourceAttributeName = "FromResourceAttribute";
     private const string AllowAnonymousAttributeName = "AllowAnonymousAttribute";
-    private const string AttributeNamespace = "Blueprint.Model.Attributes";
 
     /// <inheritdoc />
     public string ModuleId => nameof(AuthorizationModule);
@@ -470,7 +469,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
             }
 
             if (attrClass.Name != ResourceAttributeName ||
-                !string.Equals(attrClass.ContainingNamespace?.ToDisplayString(), AttributeNamespace, StringComparison.Ordinal))
+                !attrClass.IsInNamespace("Blueprint", "Model", "Attributes"))
             {
                 continue;
             }
@@ -509,7 +508,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
             }
 
             if (attrClass.Name != FromResourceAttributeName ||
-                !string.Equals(attrClass.ContainingNamespace?.ToDisplayString(), AttributeNamespace, StringComparison.Ordinal))
+                !attrClass.IsInNamespace("Blueprint", "Model", "Attributes"))
             {
                 continue;
             }
@@ -561,10 +560,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
             }
 
             return attrClass.Name == attributeName
-                   && string.Equals(
-                       attrClass.ContainingNamespace?.ToDisplayString(),
-                       AttributeNamespace,
-                       StringComparison.Ordinal);
+                   && attrClass.IsInNamespace("Blueprint", "Model", "Attributes");
         });
     }
 }

@@ -14,7 +14,6 @@ public sealed class AuthenticationModule : IBlueprintSourceGeneratorModule, IDes
 {
     private const string MustBeAuthenticatedAttributeName = "MustBeAuthenticatedAttribute";
     private const string AllowAnonymousAttributeName = "AllowAnonymousAttribute";
-    private const string AttributeNamespace = "Blueprint.Model.Attributes";
 
     /// <inheritdoc />
     public string ModuleId => nameof(AuthenticationModule);
@@ -138,10 +137,7 @@ public sealed class AuthenticationModule : IBlueprintSourceGeneratorModule, IDes
             }
 
             return attrClass.Name == attributeName
-                   && string.Equals(
-                       attrClass.ContainingNamespace?.ToDisplayString(),
-                       AttributeNamespace,
-                       StringComparison.Ordinal);
+                   && attrClass.IsInNamespace("Blueprint", "Model", "Attributes");
         });
     }
 

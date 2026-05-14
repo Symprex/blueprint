@@ -343,10 +343,10 @@ internal static class ValidationSymbolHelpers
             return false;
         }
 
-        var namespaceName = attributeClass.ContainingNamespace.ToDisplayString();
+        var ns = attributeClass.ContainingNamespace;
 
-        return (attributeClass.Name == "DisplayAttribute" && namespaceName == "System.ComponentModel.DataAnnotations")
-               || (attributeClass.Name == "DisplayNameAttribute" && namespaceName == "System.ComponentModel");
+        return (attributeClass.Name == "DisplayAttribute" && attributeClass.IsInNamespace("System", "ComponentModel", "DataAnnotations"))
+               || (attributeClass.Name == "DisplayNameAttribute" && ns is { Name: "ComponentModel", ContainingNamespace: { Name: "System", ContainingNamespace.IsGlobalNamespace: true } });
     }
 
     /// <summary>

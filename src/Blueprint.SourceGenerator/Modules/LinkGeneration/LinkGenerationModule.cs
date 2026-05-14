@@ -449,7 +449,7 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
             // Match LinkAttribute but NOT its derived SelfLinkAttribute/RootLinkAttribute
             // (those are already handled by LookForSelfLinks/LookForRootLinks).
             if (attrClass.Name != "LinkAttribute" ||
-                !string.Equals(attrClass.ContainingNamespace?.ToDisplayString(), "Blueprint.Model.Attributes", StringComparison.Ordinal))
+                !attrClass.IsInNamespace("Blueprint", "Model", "Attributes"))
             {
                 continue;
             }

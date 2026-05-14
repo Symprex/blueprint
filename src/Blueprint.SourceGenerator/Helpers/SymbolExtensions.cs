@@ -216,5 +216,30 @@ namespace Blueprint.SourceGenerator.Helpers
                 && level1.Name == part1
                 && level1.ContainingNamespace is { IsGlobalNamespace: true };
         }
+
+        /// <summary>
+        /// Checks whether a namespace symbol has "System" as its root (outermost) segment,
+        /// without allocating a <see cref="string"/>. Matches "System", "System.Collections",
+        /// "System.Text.Json", etc.
+        /// </summary>
+        /// <param name="ns">The namespace symbol to test.</param>
+        /// <returns><see langword="true"/> when the root namespace is "System".</returns>
+        public static bool IsSystemNamespace(this INamespaceSymbol? ns)
+        {
+            if (ns is null || ns.IsGlobalNamespace)
+            {
+                return false;
+            }
+
+            // Walk up to the root namespace.
+            var current = ns;
+
+            while (current.ContainingNamespace is { IsGlobalNamespace: false } parent)
+            {
+                current = parent;
+            }
+
+            return current.Name == "System";
+        }
     }
 }

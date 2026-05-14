@@ -65,17 +65,12 @@ internal sealed class OperationGroupManifestModule : IBlueprintSourceGeneratorMo
 
     private static string? GetNamespaceDerivedGroupName(INamedTypeSymbol operationType)
     {
-        var ns = operationType.ContainingNamespace?.ToDisplayString();
-        if (string.IsNullOrWhiteSpace(ns))
+        var ns = operationType.ContainingNamespace;
+        if (ns is null || ns.IsGlobalNamespace || string.IsNullOrWhiteSpace(ns.Name))
         {
             return null;
         }
 
-        var segments = ns!.Split('.')
-            .Select(static s => s.Trim())
-            .Where(static s => s.Length > 0)
-            .ToArray();
-
-        return segments.Length > 0 ? segments[^1] : null;
+        return ns.Name;
     }
 }

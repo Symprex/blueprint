@@ -27,7 +27,6 @@ namespace Blueprint.SourceGenerator.Modules.Authorization;
 public sealed class ApiAuthoriserModule : IBlueprintSourceGeneratorModule, IPipelineContributor
 {
     private const string AllowAnonymousAttributeName = "AllowAnonymousAttribute";
-    private const string AttributeNamespace = "Blueprint.Model.Attributes";
 
     /// <inheritdoc />
     public string ModuleId => nameof(ApiAuthoriserModule);
@@ -93,10 +92,7 @@ public sealed class ApiAuthoriserModule : IBlueprintSourceGeneratorModule, IPipe
             }
 
             return attrClass.Name == AllowAnonymousAttributeName
-                   && string.Equals(
-                       attrClass.ContainingNamespace?.ToDisplayString(),
-                       AttributeNamespace,
-                       StringComparison.Ordinal);
+                   && attrClass.IsInNamespace("Blueprint", "Model", "Attributes");
         });
     }
 

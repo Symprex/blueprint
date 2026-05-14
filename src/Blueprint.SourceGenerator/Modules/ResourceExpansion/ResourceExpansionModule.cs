@@ -298,9 +298,8 @@ public sealed class ResourceExpansionModule : IBlueprintSourceGeneratorModule, I
 
             if (propertyType is INamedTypeSymbol namedType)
             {
-                var ns = namedType.ContainingNamespace?.ToDisplayString() ?? string.Empty;
-
-                if (ns.StartsWith("System", StringComparison.Ordinal))
+                // Skip system types by checking the top-level namespace without allocating a string.
+                if (namedType.ContainingNamespace.IsSystemNamespace())
                 {
                     continue;
                 }
