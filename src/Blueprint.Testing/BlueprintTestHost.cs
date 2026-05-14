@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Blueprint.Model;
 using Blueprint.Runtime.Exec;
 
@@ -227,6 +228,48 @@ public sealed class BlueprintTestHost<TApp, TExec> : IDisposable, IAsyncDisposab
         CancellationToken cancellationToken = default)
     {
         return this.ExecuteAsync(command, configure, cancellationToken);
+    }
+
+    /// <summary>
+    /// Executes an operation with an authenticated user built from the provided claims.
+    /// This is a direct migration shim for S365's <c>TestApiOperationExecutor.ExecuteWithAuth(operation, claims...)</c>.
+    /// </summary>
+    /// <param name="operation">The operation instance to execute.</param>
+    /// <param name="claims">One or more claims to build the authenticated identity from.</param>
+    /// <returns>The raw operation result.</returns>
+    public Task<OperationResult> ExecuteWithAuth(
+        IOperation operation,
+        params Claim[] claims)
+    {
+        return this.ExecuteAsync(operation, ctx => ctx.WithUser(c =>
+        {
+            foreach (var claim in claims)
+            {
+                c.Add(claim);
+            }
+        }));
+    }
+
+    /// <summary>
+    /// Executes an operation with an authenticated user built from the provided claims and
+    /// unwraps the result to the expected type. This is a direct migration shim for S365's
+    /// <c>TestApiOperationExecutor.ExecuteWithAuth(operation, claims...)</c>.
+    /// </summary>
+    /// <typeparam name="TResult">The expected result type.</typeparam>
+    /// <param name="operation">The operation instance to execute.</param>
+    /// <param name="claims">One or more claims to build the authenticated identity from.</param>
+    /// <returns>The unwrapped result.</returns>
+    public Task<TResult> ExecuteWithAuth<TResult>(
+        IOperation operation,
+        params Claim[] claims)
+    {
+        return this.ExecuteAsync<TResult>(operation, ctx => ctx.WithUser(c =>
+        {
+            foreach (var claim in claims)
+            {
+                c.Add(claim);
+            }
+        }));
     }
 
     private static string FormatValidationErrors(ValidationFailedResult validationFailed)

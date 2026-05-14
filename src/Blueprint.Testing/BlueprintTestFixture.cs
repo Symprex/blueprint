@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Blueprint.Model;
 using Blueprint.Runtime.Exec;
 using Blueprint.Tasks;
@@ -137,6 +138,41 @@ public sealed class BlueprintTestFixture<TApp, TExec> : IDisposable, IAsyncDispo
         CancellationToken cancellationToken = default)
     {
         return this._host.ExecuteExpectingValidationFailureAsync(operation, this.WrapConfigure(configure), cancellationToken);
+    }
+
+    // ──────────────────────────────────────────────
+    //  ExecuteWithAuth — S365 migration shim
+    // ──────────────────────────────────────────────
+
+    /// <summary>
+    /// Executes an operation with an authenticated user built from the provided claims, bypassing
+    /// the fixture's ambient auth. This is a direct migration shim for S365's
+    /// <c>TestApiOperationExecutor.ExecuteWithAuth(operation, claims...)</c>.
+    /// </summary>
+    /// <param name="operation">The operation instance to execute.</param>
+    /// <param name="claims">One or more claims to build the authenticated identity from.</param>
+    /// <returns>The raw operation result.</returns>
+    public Task<OperationResult> ExecuteWithAuth(
+        IOperation operation,
+        params Claim[] claims)
+    {
+        return this._host.ExecuteWithAuth(operation, claims);
+    }
+
+    /// <summary>
+    /// Executes an operation with an authenticated user built from the provided claims and
+    /// unwraps the result. This is a direct migration shim for S365's
+    /// <c>TestApiOperationExecutor.ExecuteWithAuth(operation, claims...)</c>.
+    /// </summary>
+    /// <typeparam name="TResult">The expected result type.</typeparam>
+    /// <param name="operation">The operation instance to execute.</param>
+    /// <param name="claims">One or more claims to build the authenticated identity from.</param>
+    /// <returns>The unwrapped result.</returns>
+    public Task<TResult> ExecuteWithAuth<TResult>(
+        IOperation operation,
+        params Claim[] claims)
+    {
+        return this._host.ExecuteWithAuth<TResult>(operation, claims);
     }
 
     // ──────────────────────────────────────────────
