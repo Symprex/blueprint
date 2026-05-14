@@ -164,6 +164,10 @@ public sealed class TypedHttpClientExtensionsGenerator : IIncrementalGenerator, 
         // Determine the result type from IQuery<T> or ICommand<T>
         var (resultTypeFqn, isResultValueType) = GetResultTypeInfo(operationType);
 
+        // Detect ResourceEvent<T> result types so the generated method uses
+        // SendResourceEventAsync<T> (envelope-aware) instead of SendAsync<ResourceEvent<T>>
+        var resourceEventResourceTypeFqn = GetResourceEventInnerType(operationType);
+
         // Get the HTTP method from explicit attributes or interface convention
         var httpMethod = GetHttpMethod(operationType);
         if (httpMethod is null)
@@ -223,7 +227,8 @@ public sealed class TypedHttpClientExtensionsGenerator : IIncrementalGenerator, 
             resultTypeFqn,
             isResultValueType,
             httpMethod,
-            new EquatableList<TypedClientParameterModel>(parameters.ToArray()));
+            new EquatableList<TypedClientParameterModel>(parameters.ToArray()),
+            resourceEventResourceTypeFqn);
     }
 
     private static (string? Fqn, bool IsValueType) GetResultTypeInfo(INamedTypeSymbol operationType)
@@ -249,6 +254,73 @@ public sealed class TypedHttpClientExtensionsGenerator : IIncrementalGenerator, 
         }
 
         return (null, false);
+    }
+
+    /// <summary>
+    /// If the result type is <c>ResourceEvent&lt;T&gt;</c>, <c>ResourceCreated&lt;T&gt;</c>,
+    /// <c>ResourceUpdated&lt;T&gt;</c>, or <c>ResourceDeleted&lt;T&gt;</c>, returns the FQN
+    /// of the inner resource type <c>T</c>. Otherwise returns <c>null</c>.
+    /// </summary>
+    private static string? GetResourceEventInnerType(INamedTypeSymbol operationType)
+    {
+        foreach (var iface in operationType.AllInterfaces)
+        {
+            if (iface.TypeArguments.Length != 1
+                || !iface.IsInNamespace("Blueprint", "Model"))
+            {
+                continue;
+            }
+
+            if (iface.Name is not ("ICommand" or "IQuery" or "IOperation"))
+            {
+                continue;
+            }
+
+            var resultType = iface.TypeArguments[0];
+            return ExtractResourceEventResourceType(resultType);
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Walks the type hierarchy to find <c>ResourceEvent&lt;T&gt;</c> and extract <c>T</c>.
+    /// Handles <c>ResourceEvent&lt;T&gt;</c>, <c>ResourceCreated&lt;T&gt;</c>,
+    /// <c>ResourceUpdated&lt;T&gt;</c>, and <c>ResourceDeleted&lt;T&gt;</c>.
+    /// </summary>
+    private static string? ExtractResourceEventResourceType(ITypeSymbol resultType)
+    {
+        if (resultType is not INamedTypeSymbol named)
+        {
+            return null;
+        }
+
+        // Check direct match: ResourceEvent<T>
+        if (named.IsGenericType
+            && named.TypeArguments.Length == 1
+            && named.Name == "ResourceEvent"
+            && named.IsInNamespace("Blueprint", "Http"))
+        {
+            return named.TypeArguments[0].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        }
+
+        // Check subclasses: ResourceCreated<T>, ResourceUpdated<T>, ResourceDeleted<T>
+        // These extend ResourceEvent<T> which extends ResourceEvent
+        var current = named.BaseType;
+        while (current is not null)
+        {
+            if (current.IsGenericType
+                && current.TypeArguments.Length == 1
+                && current.Name == "ResourceEvent"
+                && current.IsInNamespace("Blueprint", "Http"))
+            {
+                return current.TypeArguments[0].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            }
+
+            current = current.BaseType;
+        }
+
+        return null;
     }
 
     private static string? GetHttpMethod(INamedTypeSymbol operationType)
@@ -402,8 +474,16 @@ public sealed class TypedHttpClientExtensionsGenerator : IIncrementalGenerator, 
 
         // Determine return type - SendAsync<T> returns Task<T?> but for value types T? is just T (no Nullable wrapper without struct constraint)
         var hasTypedResult = op.ResultTypeFqn is not null;
+        var isResourceEvent = op.ResourceEventResourceTypeFqn is not null;
         string returnType;
-        if (hasTypedResult)
+        if (isResourceEvent)
+        {
+            // Use ResourceEvent<TResource> as the return type, even when the declared result
+            // is a subtype like ResourceCreated<T>. The HTTP envelope always deserializes as
+            // ResourceEvent<T> via SendResourceEventEnvelopeAsync.
+            returnType = $"global::System.Threading.Tasks.Task<global::Blueprint.Http.ResourceEvent<{op.ResourceEventResourceTypeFqn}>?>";
+        }
+        else if (hasTypedResult)
         {
             returnType = op.IsResultValueType
                 ? $"global::System.Threading.Tasks.Task<{op.ResultTypeFqn}>"
@@ -455,7 +535,11 @@ public sealed class TypedHttpClientExtensionsGenerator : IIncrementalGenerator, 
         sb.AppendLine("            };");
         sb.AppendLine();
 
-        if (hasTypedResult)
+        if (isResourceEvent)
+        {
+            sb.AppendLine($"            return client.SendResourceEventEnvelopeAsync<{op.ResourceEventResourceTypeFqn}>(operation, cancellationToken);");
+        }
+        else if (hasTypedResult)
         {
             sb.AppendLine($"            return client.SendAsync<{op.ResultTypeFqn}>(operation, cancellationToken);");
         }
@@ -541,6 +625,19 @@ internal sealed record TypedClientModel(
 /// <summary>
 /// Per-operation metadata for typed client method generation.
 /// </summary>
+/// <param name="OperationFqn">Fully-qualified name of the operation type.</param>
+/// <param name="OperationTypeName">Simple name of the operation type.</param>
+/// <param name="MethodName">Name of the generated extension method.</param>
+/// <param name="ResultTypeFqn">FQN of the result type (null for void operations).</param>
+/// <param name="IsResultValueType">Whether the result type is a value type.</param>
+/// <param name="HttpMethod">HTTP method (GET, POST, etc.).</param>
+/// <param name="Parameters">The operation's public settable properties as method parameters.</param>
+/// <param name="ResourceEventResourceTypeFqn">
+/// When the result type is <c>ResourceEvent&lt;T&gt;</c> (or a subtype like <c>ResourceCreated&lt;T&gt;</c>),
+/// this holds the FQN of the inner resource type <c>T</c>. The generated extension method then calls
+/// <c>SendResourceEventEnvelopeAsync&lt;T&gt;</c> instead of <c>SendAsync&lt;ResourceEvent&lt;T&gt;&gt;</c>,
+/// because the HTTP host serialises resource events as an envelope that requires special unwrapping.
+/// </param>
 internal sealed record TypedClientOperationModel(
     string OperationFqn,
     string OperationTypeName,
@@ -548,7 +645,8 @@ internal sealed record TypedClientOperationModel(
     string? ResultTypeFqn,
     bool IsResultValueType,
     string HttpMethod,
-    EquatableList<TypedClientParameterModel> Parameters);
+    EquatableList<TypedClientParameterModel> Parameters,
+    string? ResourceEventResourceTypeFqn = null);
 
 /// <summary>
 /// Per-parameter metadata for typed client method generation.

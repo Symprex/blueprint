@@ -136,6 +136,158 @@ public sealed class BlueprintHttpClient<TApp>
         return doc.RootElement.Deserialize<TResource>(this._jsonOptions);
     }
 
+    /// <summary>
+    /// Sends an operation whose remote handler returns a resource event and deserialises
+    /// the full envelope as a <see cref="ResourceEvent{TResource}"/>. Unlike
+    /// <see cref="SendResourceEventAsync{TResource}"/> (which returns only the inner resource),
+    /// this method returns the complete event envelope including <c>ChangeType</c>, <c>EventId</c>,
+    /// <c>Href</c>, <c>Metadata</c> etc.
+    /// <para>
+    /// Gateway services in S365 call upstream commands that return <c>ResourceEvent&lt;T&gt;</c> and need
+    /// access to the envelope metadata to construct their own response. This method provides that.
+    /// </para>
+    /// </summary>
+    /// <typeparam name="TResource">The resource type carried inside the envelope's <c>data</c> property.</typeparam>
+    /// <param name="operation">The operation to send.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The full <see cref="ResourceEvent{TResource}"/> envelope with properly typed <c>Data</c>.</returns>
+    /// <exception cref="BlueprintApiException">Thrown for non-success status codes.</exception>
+    /// <exception cref="ValidationException">Thrown for 422 Unprocessable Entity.</exception>
+    public async Task<ResourceEvent<TResource>?> SendResourceEventEnvelopeAsync<TResource>(
+        IOperation operation,
+        CancellationToken cancellationToken = default)
+        where TResource : ApiResource
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+
+        using var request = this.CreateRequest(operation);
+        using var response = await this._httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+
+        await this.EnsureSuccessOrThrowAsync(response, cancellationToken).ConfigureAwait(false);
+
+        if (response.StatusCode == HttpStatusCode.NoContent)
+        {
+            return default;
+        }
+
+        using var doc = await JsonDocument.ParseAsync(
+            await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false),
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        return DeserializeResourceEventEnvelope<TResource>(doc.RootElement, this._jsonOptions);
+    }
+
+    /// <summary>
+    /// Parses a resource event JSON envelope into a fully-typed <see cref="ResourceEvent{TResource}"/>.
+    /// The envelope shape is <c>{"$object":"event","eventId":"...","changeType":"...","data":{...},...}</c>
+    /// as produced by <c>HttpOperationResultExecutor.WriteResourceEventEnvelopeAsync</c>.
+    /// </summary>
+    /// <typeparam name="TResource">The resource type carried inside the envelope's <c>data</c> property.</typeparam>
+    /// <param name="root">The root JSON element of the envelope.</param>
+    /// <param name="jsonOptions">The JSON serializer options for deserializing nested payloads.</param>
+    /// <returns>A fully-typed <see cref="ResourceEvent{TResource}"/>, or <c>null</c> if the data payload is absent.</returns>
+    internal static ResourceEvent<TResource>? DeserializeResourceEventEnvelope<TResource>(
+        JsonElement root,
+        JsonSerializerOptions jsonOptions)
+        where TResource : ApiResource
+    {
+        // Extract the strongly-typed data payload
+        TResource? data = default;
+        if (root.TryGetProperty("data", out var dataElement) && dataElement.ValueKind != JsonValueKind.Null)
+        {
+            data = dataElement.Deserialize<TResource>(jsonOptions);
+        }
+        else if (root.TryGetProperty("content", out var contentElement) && contentElement.ValueKind != JsonValueKind.Null)
+        {
+            data = contentElement.Deserialize<TResource>(jsonOptions);
+        }
+
+        if (data is null)
+        {
+            return null;
+        }
+
+        // Parse the change type from string → enum
+        var changeType = ResourceEventChangeType.Updated;
+        if (root.TryGetProperty("changeType", out var changeTypeElement) && changeTypeElement.ValueKind == JsonValueKind.String)
+        {
+            var changeTypeStr = changeTypeElement.GetString();
+            if (changeTypeStr is not null)
+            {
+                _ = Enum.TryParse(changeTypeStr, ignoreCase: true, out changeType);
+            }
+        }
+
+        // Extract the event id
+        var eventId = string.Empty;
+        if (root.TryGetProperty("eventId", out var eventIdElement) && eventIdElement.ValueKind == JsonValueKind.String)
+        {
+            eventId = eventIdElement.GetString() ?? string.Empty;
+        }
+
+        var resourceEvent = new ResourceEvent<TResource>(changeType, eventId, data);
+
+        // Populate optional envelope fields
+        if (root.TryGetProperty("href", out var hrefElement) && hrefElement.ValueKind == JsonValueKind.String)
+        {
+            resourceEvent.Href = hrefElement.GetString();
+        }
+
+        if (root.TryGetProperty("correlationId", out var corrElement) && corrElement.ValueKind == JsonValueKind.String)
+        {
+            resourceEvent.CorrelationId = corrElement.GetString();
+        }
+
+        if (root.TryGetProperty("changedValues", out var changedElement) && changedElement.ValueKind == JsonValueKind.Object)
+        {
+            resourceEvent.ChangedValues = changedElement.Deserialize<Dictionary<string, object>>(jsonOptions);
+        }
+
+        // Populate metadata through per-entry WithMetadata to respect internal setter
+        if (root.TryGetProperty("metadata", out var metaElement) && metaElement.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var prop in metaElement.EnumerateObject())
+            {
+                var value = prop.Value.ValueKind switch
+                {
+                    JsonValueKind.String => (object?)prop.Value.GetString(),
+                    JsonValueKind.Number => prop.Value.GetDouble(),
+                    JsonValueKind.True => true,
+                    JsonValueKind.False => false,
+                    _ => prop.Value.GetRawText(),
+                };
+
+                if (value is not null)
+                {
+                    resourceEvent.WithMetadata(prop.Name, value);
+                }
+            }
+        }
+
+        // Populate secureData through per-entry WithSecureData to respect internal setter
+        if (root.TryGetProperty("secureData", out var secElement) && secElement.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var prop in secElement.EnumerateObject())
+            {
+                var value = prop.Value.ValueKind switch
+                {
+                    JsonValueKind.String => (object?)prop.Value.GetString(),
+                    JsonValueKind.Number => prop.Value.GetDouble(),
+                    JsonValueKind.True => true,
+                    JsonValueKind.False => false,
+                    _ => prop.Value.GetRawText(),
+                };
+
+                if (value is not null)
+                {
+                    resourceEvent.WithSecureData(prop.Name, value);
+                }
+            }
+        }
+
+        return resourceEvent;
+    }
+
     // ──────────────────────────────────────────────
     //  S365 compatibility: CallAsync aliases
     // ──────────────────────────────────────────────
