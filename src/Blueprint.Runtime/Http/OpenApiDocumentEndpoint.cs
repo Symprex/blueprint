@@ -82,7 +82,9 @@ internal static class OpenApiDocumentEndpoint
         var documentBuilderContext = OpenApiDocumentBuilderContext.Create(app);
         var schemaProjectionContext = OpenApiSchemaProjectionContext.Create(documentBuilderContext);
         var responseSchemaProjectionContext = OpenApiResponseSchemaReferenceProjectionContext.Create(schemaProjectionContext);
-        var responseObjectContext = OpenApiResponseObjectRenderingContext.Create(responseSchemaProjectionContext);
+        var responseObjectContext = OpenApiResponseObjectRenderingContext.Create(
+            responseSchemaProjectionContext,
+            infoOptions?.UsePlainJsonForErrorResponses ?? false);
         var operationContext = OpenApiOperationRenderingContext.Create(responseObjectContext);
 
         // Apply per-operation processors before path-item grouping so consumers can strip

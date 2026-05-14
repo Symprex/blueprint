@@ -85,6 +85,20 @@ public sealed class OpenApiInfoOptions
     public bool UseStatus200ForSuccessResponses { get; set; }
 
     /// <summary>
+    /// When <see langword="true"/>, error responses (<c>422 Unprocessable Entity</c>, <c>409 Conflict</c>, etc.)
+    /// use <c>application/json</c> as their media type instead of <c>application/problem+json</c>.
+    /// Defaults to <see langword="false"/> (RFC 9457 <c>application/problem+json</c> is used).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This exists for backward compatibility with legacy OpenAPI consumers (such as the
+    /// Signature 365 Handlebars-based TypeScript generator) that expect all response bodies
+    /// to use <c>application/json</c>, even for ProblemDetails / ValidationProblemDetails payloads.
+    /// </para>
+    /// </remarks>
+    public bool UsePlainJsonForErrorResponses { get; set; }
+
+    /// <summary>
     /// Gets or sets an optional delegate that transforms CLR type names into OpenAPI schema
     /// component keys. When <see langword="null"/> the default strategy is used, which extracts
     /// the simple class name (e.g. <c>MyApp.Api.TemplateResource</c> → <c>TemplateResource</c>).

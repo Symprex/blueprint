@@ -32,8 +32,13 @@ public sealed record OpenApiResponseObjectRenderingContext(
     /// bindings for covered schema components, leaving operation/document assembly to later slices.
     /// </summary>
     /// <param name="responseSchemaProjection">The response-schema reference projection to render.</param>
+    /// <param name="usePlainJsonForErrorResponses">
+    /// When <see langword="true"/>, error responses use <c>application/json</c> instead of <c>application/problem+json</c>.
+    /// </param>
     /// <returns>The rendered response-object context.</returns>
-    public static OpenApiResponseObjectRenderingContext Create(OpenApiResponseSchemaReferenceProjectionContext responseSchemaProjection)
+    public static OpenApiResponseObjectRenderingContext Create(
+        OpenApiResponseSchemaReferenceProjectionContext responseSchemaProjection,
+        bool usePlainJsonForErrorResponses = false)
     {
         ArgumentNullException.ThrowIfNull(responseSchemaProjection);
 
@@ -41,7 +46,7 @@ public sealed record OpenApiResponseObjectRenderingContext(
         var componentsByBodyTypeName = schemaComponents.Components
             .ToFrozenDictionary(static component => component.BodyTypeName, StringComparer.Ordinal);
         var operations = responseSchemaProjection.Operations
-            .Select(operation => CreateOperationContext(operation, componentsByBodyTypeName))
+            .Select(operation => CreateOperationContext(operation, componentsByBodyTypeName, usePlainJsonForErrorResponses))
             .ToImmutableArray();
 
         return new OpenApiResponseObjectRenderingContext(responseSchemaProjection, schemaComponents, operations);
@@ -49,10 +54,11 @@ public sealed record OpenApiResponseObjectRenderingContext(
 
     private static OpenApiResponseObjectOperationContext CreateOperationContext(
         OpenApiResponseSchemaReferenceOperationContext operation,
-        FrozenDictionary<string, OpenApiSchemaComponentModel> componentsByBodyTypeName)
+        FrozenDictionary<string, OpenApiSchemaComponentModel> componentsByBodyTypeName,
+        bool usePlainJsonForErrors)
     {
         var responses = operation.Responses
-            .Select(response => CreateResponseObject(operation.Operation, response, componentsByBodyTypeName))
+            .Select(response => CreateResponseObject(operation.Operation, response, componentsByBodyTypeName, usePlainJsonForErrors))
             .ToImmutableArray();
 
         return new OpenApiResponseObjectOperationContext(operation.Operation, responses);
@@ -61,10 +67,11 @@ public sealed record OpenApiResponseObjectRenderingContext(
     private static OpenApiResponseObjectModel CreateResponseObject(
         ApiOperationDescriptor operation,
         OpenApiResponseSchemaReferenceResponseContext response,
-        FrozenDictionary<string, OpenApiSchemaComponentModel> componentsByBodyTypeName)
+        FrozenDictionary<string, OpenApiSchemaComponentModel> componentsByBodyTypeName,
+        bool usePlainJsonForErrors)
     {
         var content = response.Response.HasResponseBody
-            ? CreateContent(operation, response, componentsByBodyTypeName)
+            ? CreateContent(operation, response, componentsByBodyTypeName, usePlainJsonForErrors)
             : ImmutableArray<OpenApiResponseContentModel>.Empty;
 
         var headers = InferResponseHeaders(response.Response);
@@ -80,7 +87,8 @@ public sealed record OpenApiResponseObjectRenderingContext(
     private static ImmutableArray<OpenApiResponseContentModel> CreateContent(
         ApiOperationDescriptor operation,
         OpenApiResponseSchemaReferenceResponseContext response,
-        FrozenDictionary<string, OpenApiSchemaComponentModel> componentsByBodyTypeName)
+        FrozenDictionary<string, OpenApiSchemaComponentModel> componentsByBodyTypeName,
+        bool usePlainJsonForErrors)
     {
         var schemaComponents = response.SchemaReferences
             .Select(reference => TryCreateContentSchemaComponent(reference, componentsByBodyTypeName))
@@ -91,7 +99,7 @@ public sealed record OpenApiResponseObjectRenderingContext(
 
         return schemaComponents.IsEmpty
             ? TryCreateNonJsonContent(response.Response)
-            : [new OpenApiResponseContentModel(SelectMediaType(schemaComponents), schemaComponents, discriminator, InlineSchema: null, isResourceEventEnvelope)];
+            : [new OpenApiResponseContentModel(SelectMediaType(schemaComponents, usePlainJsonForErrors), schemaComponents, discriminator, InlineSchema: null, isResourceEventEnvelope)];
     }
 
     /// <summary>
@@ -133,10 +141,11 @@ public sealed record OpenApiResponseObjectRenderingContext(
     /// <summary>
     /// Selects <c>application/problem+json</c> when every schema component in the response is a
     /// ProblemDetails or ValidationProblemDetails body (RFC 9457), otherwise <c>application/json</c>.
+    /// When <paramref name="usePlainJson"/> is <see langword="true"/>, always returns <c>application/json</c>.
     /// </summary>
-    private static string SelectMediaType(ImmutableArray<OpenApiResponseContentSchemaComponent> schemaComponents)
+    private static string SelectMediaType(ImmutableArray<OpenApiResponseContentSchemaComponent> schemaComponents, bool usePlainJson)
     {
-        if (schemaComponents.IsEmpty)
+        if (usePlainJson || schemaComponents.IsEmpty)
         {
             return JsonMediaType;
         }
