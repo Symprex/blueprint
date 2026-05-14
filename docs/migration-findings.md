@@ -1324,3 +1324,32 @@ Complete analysis of all 14 S365 services reveals a highly uniform registration 
 - 8 test cases covering IQuery, ICommand, concrete exclusion, non-generic exclusion, inherited-only exclusion, abstract record support, and location targeting
 - Wired into codemod `SolutionAnalysisRunner.ResolveDescriptor` for migration reports
 - No code fix in v1 — cross-file refactoring (removing from base, adding to 25 subclasses across projects) is unsafe as an automated code fix
+
+---
+
+## 279. ✅ Nullable Value Type JSON Body Optimization
+
+**Problem**: Nullable value types (`int?`, `Guid?`, `double?`, etc.) in request bodies fell through to expensive `JsonSerializer.Deserialize<T?>()` instead of using fast `Utf8JsonReader.GetXxx()` methods. This allocated through the converter pipeline for every nullable field.
+
+**Solution**: Refactored `WriteUtf8ReaderAssignment` in `PropertyOwnershipModule` to use a switch expression mapping type names to fast reader expressions, then wrapping with `JsonTokenType.Null` guard for nullable types.
+
+**Before**: `JsonSerializer.Deserialize<int?>(ref reader, jsonOptions)` — allocates, uses converter pipeline
+**After**: `reader.TokenType == System.Text.Json.JsonTokenType.Null ? null : (int?)reader.GetInt32()` — zero allocation
+
+**Impact**: All 9 supported nullable primitives (`int?`, `long?`, `double?`, `float?`, `bool?`, `decimal?`, `Guid?`, `DateTime?`, `DateTimeOffset?`) now use the fast path. For S365's ~540 operations with many nullable body properties, this eliminates thousands of unnecessary `JsonSerializer.Deserialize` calls per request.
+
+---
+
+## 280. ✅ PipelineServices: Startup DI Optimization
+
+**Problem**: Each generated pipeline's base class constructor (`OperationExecutorShell`) resolved 12 cross-cutting services individually from the DI container. For 540 operations, that's 6,480 redundant DI lookups at startup — every pipeline resolves the same `ITenantAccessor`, `IAuditSink`, etc.
+
+**Solution**: Introduced `PipelineServices` class that bundles all 12 service resolutions into a single object created once per executor. Generated executor creates `PipelineServices(serviceProvider)` once, then passes it to all 540 pipeline constructors which just assign properties.
+
+**Before**: 540 × 12 = 6,480 DI container lookups at startup
+**After**: 12 DI lookups + 540 × 12 = 6,480 property assignments (essentially free)
+
+**Design decisions**:
+- Not registered in DI — created inside the generated executor constructor
+- Old `IServiceProvider` constructor overload kept for backward compatibility with companion generators
+- `PipelineServices.ServiceProvider` exposed for pipeline-specific `CachedService` resolution expressions (e.g. handler constructor dependencies)
