@@ -334,12 +334,12 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             var isInitOnly = member.SetMethod.IsInitOnly;
 
             // Step 1 — detect explicit [FromX] attributes (namespace-qualified to avoid MVC collisions)
-            var fromRoute = FindAttribute(member, "FromRouteAttribute", "Blueprint.Model.Attributes");
-            var fromQuery = FindAttribute(member, "FromQueryAttribute", "Blueprint.Model.Attributes");
-            var fromBody = FindAttribute(member, "FromBodyAttribute", "Blueprint.Model.Attributes");
-            var fromHeader = FindAttribute(member, "FromHeaderAttribute", "Blueprint.Model.Attributes");
-            var fromCookie = FindAttribute(member, "FromCookieAttribute", "Blueprint.Model.Attributes");
-            var fromAuthContext = FindAttribute(member, "FromAuthContextAttribute", "Blueprint.Model.Attributes");
+            var fromRoute = FindBlueprintAttribute(member, "FromRouteAttribute");
+            var fromQuery = FindBlueprintAttribute(member, "FromQueryAttribute");
+            var fromBody = FindBlueprintAttribute(member, "FromBodyAttribute");
+            var fromHeader = FindBlueprintAttribute(member, "FromHeaderAttribute");
+            var fromCookie = FindBlueprintAttribute(member, "FromCookieAttribute");
+            var fromAuthContext = FindBlueprintAttribute(member, "FromAuthContextAttribute");
 
             var httpBindingCount = (fromRoute != null ? 1 : 0) + (fromQuery != null ? 1 : 0) + (fromBody != null ? 1 : 0) + (fromHeader != null ? 1 : 0) + (fromCookie != null ? 1 : 0);
 
@@ -705,11 +705,11 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
     /// Finds a Blueprint attribute by name and namespace on the given property, returning null if not present.
     /// Uses full namespace matching to avoid collisions with MVC <c>[FromX]</c> attributes.
     /// </summary>
-    private static AttributeData? FindAttribute(IPropertySymbol property, string attributeName, string attributeNamespace)
+    private static AttributeData? FindBlueprintAttribute(IPropertySymbol property, string attributeName)
     {
         return property.GetAttributes().FirstOrDefault(a =>
             a.AttributeClass?.Name == attributeName
-            && a.AttributeClass.ContainingNamespace?.ToDisplayString() == attributeNamespace);
+            && a.AttributeClass.IsInNamespace("Blueprint", "Model", "Attributes"));
     }
 
     /// <summary>
