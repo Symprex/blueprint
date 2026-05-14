@@ -2424,3 +2424,107 @@ BenchmarkDotNet results (.NET 10.0.8, X64 RyuJIT AVX2, MediumRun InProcess):
 - Validation adds ~8 µs but no extra allocations for valid vs invalid (same 5.12 KB)
 - Link generation is sub-100ns — negligible compared to pipeline execution
 - Guid boxing adds 144 bytes — could optimize with ISpanFormattable but marginal
+
+## Finding #306: x-links Vendor Extension Already Implemented
+
+**Date:** 2025-07-17
+
+Blueprint already emits x-links on resource schemas in OpenAPI output — matching S365's `BlueprintLinkSchemaProcessor`:
+
+- `OpenApiOutputRenderingContext.WriteSchemaComponent()` (lines 1316-1331) emits `x-links` array
+- `OpenApiDocumentRenderingContext.EnrichWithResourceLinks()` (lines 124-184) populates from `app.Links`
+- Skips "self" links (matching S365's behavior)
+- Each entry: `rel`, `operationId`, `method`
+
+S365's TypeScript Handlebars templates (admin, portal, partners) actively consume x-links to generate typed HATEOAS methods (`canExecute()` etc.). **This is not a gap — it already works.**
+
+## Finding #307: S365 Service Registration Matrix (18 services)
+
+**Date:** 2025-07-17
+
+Comprehensive startup analysis of all 18 S365 services:
+
+| Service | Marten | Rebus | Tenant MW | Resource Events | HATEOAS | Pattern |
+|---------|--------|-------|-----------|-----------------|---------|---------|
+| Portal | ✅ | ✅ (19 subs) | ✅ | ✅ | ✅ Sig365 | Standard + expansion |
+| Billing | ✅ | ✅ (10 subs) | ❌ | ✅ | ❌ | Standard, PeekLock |
+| Analytics | ❌ | ✅ (32 subs) | ❌ | ✅ | ❌ | Read-only |
+| Partners | ✅ | ✅ (6 subs) | ✅ | ✅ | ✅ | Region outbox |
+| Outlook | ✅ | ✅ (1 sub) | ✅ | ✅ | ❌ | Dev CORS |
+| VCard | ✅ | ✅ (0 subs) | ✅ | ✅ | ✅ | Standard |
+| Templates | ❌ | ✅ (0 subs) | ❌ | ❌ | ❌ | Minimal |
+| Generation | ✅ | ✅ (1 sub) | ❌ | ❌ | ❌ | Portal dep |
+| IdentityServer | ❌ | ✅ (9 subs) | ❌ | ✅ | ❌ | Razor, host override |
+| EventStore | ❌ | ✅ (1 sub) | ✅ | ✅ | ❌ | Event sourcing |
+| Import | ✅ | ✅ (3 subs) | ✅ | ✅ | ❌ | Standard |
+| Microsoft365 | ✅ | ✅ (3 subs) | ❌ | ❌ | ❌ | PeekLock, anon tasks |
+| ExchangeTransportAgent | ✅ | ✅ (1 sub) | ✅ | ✅ | ❌ | Standard |
+| Subscriptions | ✅ | ✅ (1 sub) | ✅ | ✅ | ✅ | Chargebee MW |
+| GraphProxy | ❌ | N/A | ❌ | ❌ | ❌ | Proxy-only |
+| AdminPortal | ❌ | ✅ (1 sub) | ❌ | ✅ | ✅ | Instance method |
+| Partners.Gateway | ❌ | ✅ | ✅ | ✅ | ✅ | Gateway |
+| Import.Gateway | ❌ | ✅ | ✅ | ✅ | ❌ | Gateway |
+
+**Key patterns:**
+- 9/18 services use `SetTenantMiddleware` → replaced by TenantModule
+- 12/18 services use Marten → `blueprint.AddUnitOfWork<MartenUnitOfWork>()`
+- All services use Rebus (except GraphProxy) → `Blueprint.Rebus` companion
+- 5 services use HATEOAS links → `[SelfLink]`/`[Link]` attributes unchanged
+- 2 gateway services → `BlueprintHttpClient` story
+
+## Finding #308: S365 Handler Patterns (85+ handlers)
+
+**Date:** 2025-07-17
+
+S365 uses three handler patterns:
+
+**1. Rebus `IHandleMessages<T>` (~85+ handlers)**
+- Auto-discovered via `RebusHandleMessageOperationExecutorBuilderScanner`
+- `BlueprintApiActivator` wraps each message into a Blueprint operation execution
+- Portal: ~15, Billing: ~11, IdentityServer: ~9, Analytics: ~12, Partners: ~6
+
+**2. Resource Event returns (~150+ usages)**
+- Commands return `ResourceEvent<T>` subtypes (`ResourceCreated<T>`, `ResourceUpdated<T>`, `ResourceDeleted<T>`)
+- Blueprint already handles these — return types are core to the pipeline
+
+**3. Background tasks (~12+ implementations)**
+- `IBackgroundTask` marker with optional `IRecurringTaskScheduler`
+- Portal: 8 tasks, Billing: 1, Microsoft365: 1
+- Blueprint handles via `BackgroundTaskFlushModule` in generated pipelines
+
+**Blueprint mapping:** All patterns have direct equivalents. `Blueprint.Rebus` handles message scanning, `Blueprint.Tasks.Hangfire` handles recurring tasks.
+
+## Finding #309: S365 Test Infrastructure — Full Coverage Verified
+
+**Date:** 2025-07-17
+
+Comprehensive analysis of S365 test patterns vs Blueprint.Testing:
+
+| S365 Pattern | Usage Count | Blueprint.Testing Equivalent | Status |
+|-------------|-------------|------------------------------|--------|
+| `CommandAsync<T>` | ~3,000+ | `fixture.CommandAsync<T>()` | ✅ |
+| `QueryAsync<T>` | ~2,200+ | `fixture.QueryAsync<T>()` | ✅ |
+| `BackgroundTaskAsync` | ~67 | `fixture.BackgroundTaskAsync()` | ✅ |
+| `MessageAsync` | ~230+ | `fixture.MessageAsync()` with retry | ✅ |
+| `Bus.Should().HavePublished*` | ~750+ | `fixture.Bus.Should().HavePublished*()` | ✅ |
+| `Bus.Should().NotHavePublished*` | ~30+ | `fixture.Bus.Should().NotHavePublished*()` | ✅ |
+| `Tasks.Enqueued` | ~100+ | `fixture.Tasks.Enqueued` | ✅ |
+| `Authentication.As()` | ~1,500+ | `fixture.Authentication.As()` | ✅ |
+| `Authentication.Set()` | — | `fixture.Authentication.Set()` | ✅ |
+| `MakeAnonymous()` | — | `fixture.Authentication.MakeAnonymous()` | ✅ |
+| `AsAnonymous()` | — | `fixture.Authentication.AsAnonymous()` | ✅ |
+| `WebApiFixtureFactory<T>` | 20 impls | `BlueprintTestFixtureFactory<TApp,TExec>` | ✅ |
+| `Tasks.ClearAll()` | — | `fixture.Tasks.ClearAll()` | ✅ |
+| `Bus.Clear()` | ~56 | `fixture.Bus.Clear()` | ✅ |
+| `GetOptions<T>()` | — | `fixture.GetOptions<T>()` | ✅ |
+| `RunAllPublishedMessagesAsync()` | — | `fixture.RunAllPublishedMessagesAsync()` | ✅ |
+| `CreateClient()` | — | Via `BlueprintHttpTestHost` | ✅ |
+
+**Key finding:** Blueprint.Testing provides 100% API surface coverage for S365 test patterns.
+S365-specific helpers (`AuthenticateAsTenantAdministrator`, `SignupAndLogin`, etc.) remain in
+S365's `Symprex.Signature365.TestHelpers` — they use S365-specific roles/contexts.
+
+**Migration path:** Zero test file changes needed for core test method signatures. S365 test
+helpers need to be updated to create `BlueprintTestFixtureFactory` subclasses instead of
+`WebApiFixtureFactory<TStartup>` subclasses — but this is a one-per-service change (20 files),
+not a per-test-method change.
