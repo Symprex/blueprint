@@ -204,22 +204,34 @@ public sealed class TenantModule : IBlueprintSourceGeneratorModule, IPipelineCon
                     continue;
                 }
 
-                // String: direct assignment path.
-                if (property.Type.SpecialType == SpecialType.System_String)
+                // If the property has an explicit HTTP binding attribute ([FromBody], [FromQuery],
+                // [FromHeader], [FromCookie]), the developer has opted out of auto-population.
+                if (TenantIdConventionHelper.HasExplicitHttpBindingAttribute(property))
                 {
-                    return new TenantIdPropertyInfo(TenantIdKind.String, null);
+                    return null;
+                }
+
+                // Unwrap Nullable<T> for value types (e.g. ApiId?) so we can detect
+                // the underlying conversion strategy while still handling null tenant IDs.
+                var effectiveType = TenantIdConventionHelper.UnwrapNullable(property.Type);
+                var isNullable = !SymbolEqualityComparer.Default.Equals(effectiveType, property.Type);
+
+                // String: direct assignment path.
+                if (effectiveType.SpecialType == SpecialType.System_String)
+                {
+                    return new TenantIdPropertyInfo(TenantIdKind.String, null, isNullable);
                 }
 
                 // IParsable<T> or static TryParse: compile-time parsable path.
-                if (TypeConversionHelpers.IsStringParsable(property.Type))
+                if (TypeConversionHelpers.IsStringParsable(effectiveType))
                 {
-                    return new TenantIdPropertyInfo(TenantIdKind.Parsable, property.Type);
+                    return new TenantIdPropertyInfo(TenantIdKind.Parsable, effectiveType, isNullable);
                 }
 
                 // [TypeConverter]: exception-based conversion path.
-                if (TypeConversionHelpers.HasTypeConverterAttribute(property.Type))
+                if (TypeConversionHelpers.HasTypeConverterAttribute(effectiveType))
                 {
-                    return new TenantIdPropertyInfo(TenantIdKind.TypeConverterOnly, property.Type);
+                    return new TenantIdPropertyInfo(TenantIdKind.TypeConverterOnly, effectiveType, isNullable);
                 }
 
                 // Unsupported type — we found a TenantId property but can't convert it.
@@ -265,7 +277,7 @@ public sealed class TenantModule : IBlueprintSourceGeneratorModule, IPipelineCon
     /// Describes a discovered <c>TenantId</c> property's type and the conversion
     /// strategy needed to assign it from the string-valued tenant accessor.
     /// </summary>
-    private sealed record TenantIdPropertyInfo(TenantIdKind Kind, ITypeSymbol? TypeSymbol);
+    private sealed record TenantIdPropertyInfo(TenantIdKind Kind, ITypeSymbol? TypeSymbol, bool IsNullable = false);
 
     /// <summary>
     /// Discriminates the code-generation strategy for assigning the tenant accessor's

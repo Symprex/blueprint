@@ -66,11 +66,6 @@ namespace Blueprint.Generated
             if (this.TenantResolver != null && this.TenantAccessor != null)
             {
                 Blueprint.Runtime.Exec.PipelineHelpers.ResolveTenant(this.TenantResolver, this.TenantAccessor, context.UserPrincipal);
-
-                if (this.TenantAccessor.Current != null && string.IsNullOrEmpty(operation.TenantId))
-                {
-                    operation.TenantId = this.TenantAccessor.Current;
-                }
             }
 
             await Blueprint.Runtime.Exec.PipelineHelpers.PopulatePropertiesAsync(this.PropertyPopulators, context).ConfigureAwait(false);

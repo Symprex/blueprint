@@ -403,4 +403,196 @@ public class TenantModuleTests
         pipelineSource.Should().NotContain("_parsedTenantId");
         pipelineSource.Should().NotContain("operation.TenantId = this.TenantAccessor.Current");
     }
+
+    [Fact]
+    public void When_TenantId_not_in_route_then_descriptor_excludes_from_openapi()
+    {
+        const string source = """
+            using Blueprint;
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace
+            {
+                [BlueprintAppScan]
+                public partial class TestApp : BlueprintApp { }
+
+                [RootLink("/items")]
+                public partial class CreateItemCommand : ICommand<string>
+                {
+                    public string TenantId { get; set; }
+                    public string Name { get; set; }
+
+                    public static Task<string> HandleAsync(CreateItemCommand operation)
+                    {
+                        return Task.FromResult("ok");
+                    }
+                }
+            }
+            """;
+
+        var generators = new[]
+        {
+            TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>(),
+            TestHelpers.CreateTrackedGenerator<OperationExecutorPipelineSourceGenerator>(),
+        };
+
+        var result = TestHelpers.CompileWithTrackedGenerators(generators, [source], ["Input0.cs"]);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var descriptorSources = result.GetGeneratedSources(nameof(OperationDescriptorSourceGenerator));
+        var descriptorSource = string.Join("\n", descriptorSources.Select(static s => s.SourceText));
+
+        // TenantId should be marked as AuthContext (excluded from OpenAPI) because tenancy is
+        // enabled and TenantId is not route-bound or explicitly bound via HTTP attribute.
+        descriptorSource.Should().Contain("PropertyBindingSource.AuthContext");
+        descriptorSource.Should().Contain("\"TenantId\"");
+
+        // Name should still be body-bound
+        descriptorSource.Should().Contain("PropertyBindingSource.Body");
+    }
+
+    [Fact]
+    public void When_TenantId_in_route_then_descriptor_uses_route_not_auth_context()
+    {
+        const string source = """
+            using Blueprint;
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace
+            {
+                [BlueprintAppScan]
+                public partial class TestApp : BlueprintApp { }
+
+                [RootLink("/tenants/{TenantId}/items")]
+                public partial class CreateItemCommand : ICommand<string>
+                {
+                    public string TenantId { get; set; }
+                    public string Name { get; set; }
+
+                    public static Task<string> HandleAsync(CreateItemCommand operation)
+                    {
+                        return Task.FromResult("ok");
+                    }
+                }
+            }
+            """;
+
+        var generators = new[]
+        {
+            TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>(),
+            TestHelpers.CreateTrackedGenerator<OperationExecutorPipelineSourceGenerator>(),
+        };
+
+        var result = TestHelpers.CompileWithTrackedGenerators(generators, [source], ["Input0.cs"]);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var descriptorSources = result.GetGeneratedSources(nameof(OperationDescriptorSourceGenerator));
+        var descriptorSource = string.Join("\n", descriptorSources.Select(static s => s.SourceText));
+
+        // TenantId in route should be Route-bound, not AuthContext
+        descriptorSource.Should().Contain("PropertyBindingSource.Route");
+        descriptorSource.Should().NotContain("PropertyBindingSource.AuthContext");
+    }
+
+    [Fact]
+    public void When_TenantId_has_explicit_FromBody_then_descriptor_uses_body_not_auth_context()
+    {
+        const string source = """
+            using Blueprint;
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace
+            {
+                [BlueprintAppScan]
+                public partial class TestApp : BlueprintApp { }
+
+                [RootLink("/items")]
+                public partial class CreateItemCommand : ICommand<string>
+                {
+                    [FromBody]
+                    public string TenantId { get; set; }
+                    public string Name { get; set; }
+
+                    public static Task<string> HandleAsync(CreateItemCommand operation)
+                    {
+                        return Task.FromResult("ok");
+                    }
+                }
+            }
+            """;
+
+        var generators = new[]
+        {
+            TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>(),
+            TestHelpers.CreateTrackedGenerator<OperationExecutorPipelineSourceGenerator>(),
+        };
+
+        var result = TestHelpers.CompileWithTrackedGenerators(generators, [source], ["Input0.cs"]);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var descriptorSources = result.GetGeneratedSources(nameof(OperationDescriptorSourceGenerator));
+        var descriptorSource = string.Join("\n", descriptorSources.Select(static s => s.SourceText));
+
+        // Explicit [FromBody] should override tenant convention
+        descriptorSource.Should().Contain("PropertyBindingSource.Body");
+        descriptorSource.Should().NotContain("PropertyBindingSource.AuthContext");
+    }
+
+    [Fact]
+    public void When_TenantId_has_explicit_FromBody_then_pipeline_does_not_auto_populate()
+    {
+        const string source = """
+            using Blueprint;
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace
+            {
+                [BlueprintAppScan]
+                public partial class TestApp : BlueprintApp { }
+
+                [RootLink("/items")]
+                public partial class CreateItemCommand : ICommand<string>
+                {
+                    [FromBody]
+                    public string TenantId { get; set; }
+                    public string Name { get; set; }
+
+                    public static Task<string> HandleAsync(CreateItemCommand operation)
+                    {
+                        return Task.FromResult("ok");
+                    }
+                }
+            }
+            """;
+
+        var generators = new[]
+        {
+            TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>(),
+            TestHelpers.CreateTrackedGenerator<OperationExecutorPipelineSourceGenerator>(),
+        };
+
+        var result = TestHelpers.CompileWithTrackedGenerators(generators, [source], ["Input0.cs"]);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var pipelineSources = result.GetGeneratedSources(nameof(OperationExecutorPipelineSourceGenerator));
+        var pipelineSource = string.Join("\n", pipelineSources.Select(static s => s.SourceText));
+
+        // Tenant resolution should still happen (sets accessor)
+        pipelineSource.Should().Contain("PipelineHelpers.ResolveTenant(");
+
+        // But should NOT auto-assign to operation.TenantId (explicit binding handles that)
+        pipelineSource.Should().NotContain("operation.TenantId = this.TenantAccessor.Current");
+    }
 }

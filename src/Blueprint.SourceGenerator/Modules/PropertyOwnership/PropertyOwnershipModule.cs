@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using Blueprint.SourceGenerator.CodeWriter;
 using Blueprint.SourceGenerator.Helpers;
+using Blueprint.SourceGenerator.Modules.Tenancy;
 using Blueprint.SourceGenerator.Planning;
 using Microsoft.CodeAnalysis;
 using CSharpSymbolDisplay = Microsoft.CodeAnalysis.CSharp.SymbolDisplay;
@@ -46,7 +47,8 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         var httpMethods = ResolveHttpMethods(context, operationType);
 
         var diagnostics = new List<DiagnosticInfo>();
-        var entries = AnalyzePropertyOwnership(operationType, routePlaceholders, httpMethods, diagnostics);
+        var isTenancyEnabled = TenantIdConventionHelper.IsTenancyEnabled(context.FindTypeByMetadataName);
+        var entries = AnalyzePropertyOwnership(operationType, routePlaceholders, httpMethods, diagnostics, isTenancyEnabled);
 
         foreach (var diagnostic in diagnostics)
         {
@@ -83,7 +85,8 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
 
         var routePlaceholders = ExtractRoutePlaceholders(operationType);
         var httpMethods = ResolveHttpMethods(operationType);
-        var entries = AnalyzePropertyOwnership(operationType, routePlaceholders, httpMethods, diagnostics: null);
+        var isTenancyEnabled = TenantIdConventionHelper.IsTenancyEnabled(context.FindTypeByMetadataName);
+        var entries = AnalyzePropertyOwnership(operationType, routePlaceholders, httpMethods, diagnostics: null, isTenancyEnabled);
 
         if (entries.Count == 0)
         {
@@ -303,7 +306,8 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         INamedTypeSymbol operationType,
         List<string> routePlaceholders,
         string[] httpMethods,
-        List<DiagnosticInfo>? diagnostics)
+        List<DiagnosticInfo>? diagnostics,
+        bool isTenancyEnabled = false)
     {
         var entries = new List<PropertyOwnershipEntry>();
         var isGetOrDelete = IsGetOrDeleteMethod(httpMethods);
@@ -410,6 +414,19 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
                 }
 
                 // Fall through to route binding below — route wins over auth-context
+            }
+
+            // Step 3b — Tenant convention: when first-class tenancy is enabled and a TenantId
+            // property has no explicit binding attribute, treat it as AuthContext so it is
+            // excluded from OpenAPI parameters/body and populated by TenantModule at runtime.
+            // This eliminates the need for [FromAuthContext] on every TenantId property.
+            if (isTenancyEnabled
+                && fromAuthContext == null
+                && httpBindingCount == 0
+                && TenantIdConventionHelper.IsTenantAutoPopulated(member, routePlaceholders, hasExplicitHttpBinding: false))
+            {
+                entries.Add(new PropertyOwnershipEntry(member.Name, member.Type, PropertyOwnershipSource.AuthContext, null, isInitOnly));
+                continue;
             }
 
             // Step 4 — exactly one explicit HTTP binding attribute: validate and add entry
