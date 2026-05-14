@@ -513,9 +513,19 @@ public static class PipelineHelpers
         Blueprint.Tenancy.ITenantAccessor tenantAccessor,
         ClaimsPrincipal? userPrincipal)
     {
-        tenantAccessor.Current = userPrincipal is not null
+        var tenantId = userPrincipal is not null
             ? tenantResolver.ResolveTenantId(userPrincipal)
             : null;
+
+        tenantAccessor.Current = tenantId;
+
+        // Enrich the current activity with the tenant ID for distributed tracing.
+        // This replaces S365's Serilog IDiagnosticContext.Set("TenantId", ...) pattern
+        // with the OpenTelemetry-native equivalent.
+        if (tenantId is not null)
+        {
+            Activity.Current?.SetTag("enduser.tenant_id", tenantId);
+        }
     }
 
     /// <summary>

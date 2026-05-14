@@ -1353,3 +1353,43 @@ Complete analysis of all 14 S365 services reveals a highly uniform registration 
 - Not registered in DI — created inside the generated executor constructor
 - Old `IServiceProvider` constructor overload kept for backward compatibility with companion generators
 - `PipelineServices.ServiceProvider` exposed for pipeline-specific `CachedService` resolution expressions (e.g. handler constructor dependencies)
+
+---
+
+## 281. ✅ Property Populators Eliminated by First-Class Tenancy
+
+**Problem**: S365 uses `SetTenantMiddleware` (a `IMiddlewareBuilder`) to:
+1. Resolve tenant ID from `sig365_tenant_id` claim and set `ICurrentTenantAccessor.Current`
+2. Log tenant ID to Serilog's `IDiagnosticContext`
+3. Auto-populate `TenantId` property on operations that have one (using reflection at compile time in legacy Blueprint)
+
+This is the only property populator pattern in S365 — there are no `IPropertyPopulator` implementations.
+
+**Solution**: Blueprint's `TenantModule` already handles all three concerns at compile time:
+- Resolves tenant via `ITenantResolver` and sets `ITenantAccessor.Current`
+- Detects `TenantId` property at compile time (supports `string`, `IParsable<T>`, `TypeConverter`)
+- Generates direct assignment code — zero reflection, zero allocation
+
+**Gap**: The one feature not yet in `TenantModule` is Serilog `IDiagnosticContext` enrichment. This is a minor addition that can be done as a post-migration enhancement or via ASP.NET Core middleware.
+
+**Impact**: S365 can remove `SetTenantMiddleware` entirely. No `IPropertyPopulator` migration needed.
+
+---
+
+## 282. ✅ Testing Infrastructure Verified S365-Compatible
+
+**Audit results** for Blueprint.Testing vs S365 test patterns:
+
+| S365 Pattern | Blueprint Equivalent | Churn |
+|---|---|---|
+| `WebApiFixtureFactory<T>` | `BlueprintTestFixtureFactory<TApp, TExec>` | ~0% |
+| `fixture.QueryAsync<T>(query)` | `fixture.QueryAsync<T>(query)` (alias exists) | ~0% |
+| `fixture.CommandAsync<T>(cmd)` | `fixture.CommandAsync<T>(cmd)` (alias exists) | ~0% |
+| Ambient auth (set once, used for all ops) | `fixture.Authentication.Set(identity)` | ~0% |
+| `CreateTenantUser(tenantId)` | `ctx.WithTenant(tenantId)` in configure callback | ~5% |
+| `fixture.FakeBus` | `fixture.Bus` (`TestMessageCollector`) | ~5% |
+| Background task assertions | `fixture.BackgroundTasks` (`BackgroundTaskCollector`) | ~0% |
+| Marten session isolation | `BlueprintTestFixtureMartenExtensions` | ~0% |
+| JWT token generation | Not needed — tests use Claims directly | ~0% |
+
+**Verdict**: Excellent shim coverage. Most S365 tests can migrate with minimal syntactic changes.
