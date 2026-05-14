@@ -87,10 +87,11 @@ public sealed record OpenApiResponseObjectRenderingContext(
             .OfType<OpenApiResponseContentSchemaComponent>()
             .ToImmutableArray();
         var discriminator = TryCreateResourceEventDiscriminator(operation, response.Response, schemaComponents);
+        var isResourceEventEnvelope = discriminator is null && IsResourceEventResultResponse(response.Response);
 
         return schemaComponents.IsEmpty
             ? TryCreateNonJsonContent(response.Response)
-            : [new OpenApiResponseContentModel(SelectMediaType(schemaComponents), schemaComponents, discriminator)];
+            : [new OpenApiResponseContentModel(SelectMediaType(schemaComponents), schemaComponents, discriminator, InlineSchema: null, isResourceEventEnvelope)];
     }
 
     /// <summary>
@@ -206,8 +207,29 @@ public sealed record OpenApiResponseObjectRenderingContext(
 
     private const string CreatedResultTypeName = "Blueprint.Runtime.Exec.CreatedResult";
     private const string ResourceEventCreatedResultPrefix = "Blueprint.Runtime.Exec.ResourceEventResult+";
+    private const string ResourceEventResultPrefix = "Blueprint.Runtime.Exec.ResourceEventResult";
     private const string RedirectResultTypeName = "Blueprint.Runtime.Http.RedirectResult";
     private const string OkResultTypeName = "Blueprint.Runtime.Exec.OkResult";
+
+    /// <summary>
+    /// Returns <see langword="true"/> when any result type contributing to this response is a
+    /// <c>ResourceEventResult</c> variant. The HTTP executor wraps these in a <c>ResourceEventEnvelope</c>
+    /// at runtime, so the OpenAPI schema must describe the envelope shape rather than the bare inner type.
+    /// </summary>
+    private static bool IsResourceEventResultResponse(OperationHttpResponseMetadata response)
+    {
+        foreach (var resultTypeName in response.ResultTypeNames)
+        {
+            // Match "Blueprint.Runtime.Exec.ResourceEventResult" exactly or as a generic prefix
+            // (e.g., "Blueprint.Runtime.Exec.ResourceEventResult<...>")
+            if (resultTypeName.StartsWith(ResourceEventResultPrefix, StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     /// <summary>
     /// Strips the namespace prefix from a compile-time full CLR body type name so it matches the short
@@ -322,11 +344,15 @@ public sealed record OpenApiResponseObjectModel(
 /// <param name="SchemaComponents">The schema components referenced by this content entry.</param>
 /// <param name="Discriminator">Optional discriminator metadata when the response schema represents a same-status union.</param>
 /// <param name="InlineSchema">Optional inline schema for non-JSON body types (e.g. plain text, binary) that have no reusable component.</param>
+/// <param name="IsResourceEventEnvelope">When <see langword="true"/>, the response body is a <c>ResourceEvent</c> envelope
+/// wrapping the inner type schema. The rendering layer emits a synthetic envelope schema with <c>data: $ref → inner type</c>
+/// instead of a direct <c>$ref</c> to the inner type.</param>
 public sealed record OpenApiResponseContentModel(
     string MediaType,
     ImmutableArray<OpenApiResponseContentSchemaComponent> SchemaComponents,
     OpenApiResponseDiscriminatorModel? Discriminator = null,
-    OpenApiInlineSchemaModel? InlineSchema = null);
+    OpenApiInlineSchemaModel? InlineSchema = null,
+    bool IsResourceEventEnvelope = false);
 
 /// <summary>
 /// Captures the OpenAPI discriminator metadata for a response content schema when a same-status union can be distinguished

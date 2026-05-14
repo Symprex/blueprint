@@ -1726,6 +1726,50 @@ Blueprint source-gen was not emitting this property. Now added to `WriteSchemaCo
 
 ---
 
+### #299 — OpenAPI Response $ref for Generic Body Types: Fixed (Commit 053b754)
+
+**Date:** 2025-07-18
+**Severity:** Critical — generic response schemas silently missing from OpenAPI output
+**Status:** ✅ Fixed
+
+Operations returning generic types (e.g., `IQuery<PagedApiResource<TemplateApiResource>>`) had their 200 response rendered as bare `"description": "OK"` with no `content`/`schema`/`$ref`. The schema component existed in `components/schemas` but was never referenced by the response.
+
+**Root cause:** `NormalizeBodyTypeName` in `OpenApiResponseSchemaReferenceProjectionContext` used `LastIndexOf('.')` to strip namespaces. For generic body type names like `Blueprint.Model.PagedApiResource<Blueprint.SourceGenerator.Sample.Contract.Api.TemplateApiResource>`, this found the dot inside the generic argument, producing `TemplateApiResource>` — which never matched any schema key.
+
+**Fix:** Thread the `FullNameToShortName` mapping (already built by `OpenApiSchemaProjectionContext`) into `ResponseSchemaReferenceProjectionContext`. This dictionary maps both CLR `FullName` (backtick) and display-style (angle-bracket) formats to the correct short "Of" convention names. The `NormalizeBodyTypeName` method now checks this dictionary first, falling back to `LastIndexOf('.')` only for non-generic types not in the dictionary.
+
+**Result:** `GetPagedTemplatesQuery`'s 200 response now correctly references `"$ref": "#/components/schemas/PagedApiResourceOfTemplate"`.
+
+**Impact:** All S365 operations returning `PagedApiResource<T>`, `ResourceEvent<T>`, or other generic response types will now have correct schema references in OpenAPI output.
+
+---
+
+### #300 — OpenAPI Compatibility Summary
+
+**Date:** 2025-07-18
+**Status:** ✅ All critical gaps resolved
+
+After investigating all OpenAPI compatibility items against S365 requirements:
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Tags/grouping | ✅ Working | Auto-derived from last namespace segment; matches S365 convention |
+| 422 validation status | ✅ Working | `ValidationProblemDetails` with `application/problem+json` content type |
+| `operationId` naming | ✅ Working | Strips Query/Command suffix, matches S365 convention |
+| `additionalProperties: false` | ✅ Fixed (#298) | Now emitted on all object schemas |
+| Generic schema components | ✅ Fixed (#297) | Uses "Of/And" naming convention |
+| Generic response `$ref` | ✅ Fixed (#299) | Full CLR name → short name resolution |
+| Per-property `title` | ⚠️ Not emitted | S365 NJsonSchema emits `"title": "String"` etc.; Blueprint omits. Low impact for TS generation. |
+| Empty descriptions | ⚠️ Omitted | S365 renders `"description": ""`; Blueprint omits entirely. Semantically equivalent. |
+| Bearer auth security | ✅ Working | `bearerAuth` scheme with JWT bearer |
+| Deprecated operations | ✅ Working | `[Obsolete]` → `deprecated: true` + `x-deprecated-reason` |
+
+**Remaining low-priority gaps** (not blocking migration):
+- Per-property `title` fields: S365's NJsonSchema adds type-name titles to each property; Blueprint omits. Most TypeScript generators don't use per-property titles.
+- Empty description omission: Semantically equivalent; omitting empty strings is valid OpenAPI.
+
+---
+
 ### #296 — Post-Execution Pipeline Consolidation: Deferred
 
 **Date:** 2025-07-18

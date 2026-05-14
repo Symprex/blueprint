@@ -423,23 +423,21 @@ public class ReferenceAppOpenApiTests
         responses.TryGetProperty("200", out var ok200).Should().BeTrue(
             "a synthetic 200 OK response should be added for backward compatibility");
 
-        // Both should have the same schema reference.
+        // Both should have the same schema shape (inline envelope or $ref).
         var created201 = responses.GetProperty("201");
-        var schema201 = created201
+        var schema201Raw = created201
             .GetProperty("content")
             .GetProperty("application/json")
             .GetProperty("schema")
-            .GetProperty("$ref")
-            .GetString();
+            .GetRawText();
 
-        var schema200 = ok200
+        var schema200Raw = ok200
             .GetProperty("content")
             .GetProperty("application/json")
             .GetProperty("schema")
-            .GetProperty("$ref")
-            .GetString();
+            .GetRawText();
 
-        schema200.Should().Be(schema201,
+        schema200Raw.Should().Be(schema201Raw,
             "the synthetic 200 response should mirror the 201 body schema");
     }
 
@@ -1074,6 +1072,76 @@ public class ReferenceAppOpenApiTests
         var templateSchema = schemas.GetProperty("TemplateApiResource");
         templateSchema.GetProperty("title").GetString().Should().Be("Email Template",
             "[DisplayName(\"Email Template\")] should override the default CLR type name in the schema title");
+    }
+
+    [Fact]
+    public async Task When_operation_returns_generic_type_then_response_references_generic_schema()
+    {
+        var (json, _) = await InvokeOpenApiEndpointAsync();
+        using var doc = JsonDocument.Parse(json);
+
+        // GetPagedTemplatesQuery (GET /templates/paged) returns PagedApiResource<TemplateApiResource>
+        var pagedPath = doc.RootElement.GetProperty("paths").GetProperty("/templates/paged");
+        var responses = pagedPath.GetProperty("get").GetProperty("responses");
+        var ok = responses.GetProperty("200");
+
+        ok.TryGetProperty("content", out var content).Should().BeTrue(
+            "200 response for a generic return type should include content with schema $ref");
+        var schemaRef = content.GetProperty("application/json").GetProperty("schema").GetProperty("$ref").GetString();
+        schemaRef.Should().Be("#/components/schemas/PagedApiResourceOfTemplate",
+            "generic response body should reference the composed schema component name");
+
+        // Verify the referenced schema component exists
+        var schemas = doc.RootElement.GetProperty("components").GetProperty("schemas");
+        schemas.TryGetProperty("PagedApiResourceOfTemplate", out _).Should().BeTrue(
+            "the referenced schema component should exist in components/schemas");
+    }
+
+    [Fact]
+    public async Task When_operation_returns_resource_event_then_response_has_envelope_schema()
+    {
+        var (json, _) = await InvokeOpenApiEndpointAsync();
+        using var doc = JsonDocument.Parse(json);
+
+        // CreateTemplateCommand (POST /templates) returns ResourceEventResult<TemplateApiResource>
+        var createPath = doc.RootElement.GetProperty("paths").GetProperty("/templates");
+        var schema = createPath
+            .GetProperty("post")
+            .GetProperty("responses")
+            .GetProperty("201")
+            .GetProperty("content")
+            .GetProperty("application/json")
+            .GetProperty("schema");
+
+        // Should be an inline envelope schema (not a bare $ref to the inner type)
+        schema.GetProperty("type").GetString().Should().Be("object",
+            "ResourceEventResult responses should produce an inline envelope schema");
+
+        // Verify all envelope properties exist
+        var props = schema.GetProperty("properties");
+        props.TryGetProperty("$object", out _).Should().BeTrue("envelope must include $object");
+        props.TryGetProperty("eventId", out _).Should().BeTrue("envelope must include eventId");
+        props.TryGetProperty("changeType", out _).Should().BeTrue("envelope must include changeType");
+        props.TryGetProperty("created", out _).Should().BeTrue("envelope must include created");
+        props.TryGetProperty("resourceObject", out _).Should().BeTrue("envelope must include resourceObject");
+        props.TryGetProperty("href", out _).Should().BeTrue("envelope must include href");
+        props.TryGetProperty("correlationId", out _).Should().BeTrue("envelope must include correlationId");
+
+        // The data property should reference the inner resource type
+        var dataRef = props.GetProperty("data").GetProperty("$ref").GetString();
+        dataRef.Should().Be("#/components/schemas/TemplateApiResource",
+            "envelope data property should reference the inner resource type");
+
+        // Metadata properties should be nullable objects
+        props.GetProperty("metadata").GetProperty("nullable").GetBoolean().Should().BeTrue();
+        props.GetProperty("secureData").GetProperty("nullable").GetBoolean().Should().BeTrue();
+        props.GetProperty("changedValues").GetProperty("nullable").GetBoolean().Should().BeTrue();
+
+        // Required array should include key properties
+        var required = schema.GetProperty("required").EnumerateArray().Select(static e => e.GetString()).ToList();
+        required.Should().Contain("$object");
+        required.Should().Contain("eventId");
+        required.Should().Contain("data");
     }
 
     /// <summary>

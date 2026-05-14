@@ -767,6 +767,14 @@ public sealed record OpenApiOutputRenderingContext(
             return;
         }
 
+        // ResourceEvent envelope: wrap inner type's $ref in the canonical envelope schema shape
+        // so TypeScript generators see the actual wire format (eventId, changeType, data, etc.).
+        if (content.IsResourceEventEnvelope && content.SchemaComponents.Length >= 1)
+        {
+            WriteResourceEventEnvelopeSchema(writer, content.SchemaComponents, schemaNameFormatter);
+            return;
+        }
+
         var schemaComponents = content.SchemaComponents;
         if (schemaComponents.Length == 1)
         {
@@ -834,6 +842,140 @@ public sealed record OpenApiOutputRenderingContext(
             writer.WriteStartObject();
             writer.WriteEndObject();
         }
+    }
+
+    /// <summary>
+    /// Writes a synthetic ResourceEvent envelope schema that wraps the inner resource type(s) in the
+    /// canonical envelope shape produced by <c>HttpOperationResultExecutor.ResourceEventEnvelope</c>.
+    /// This matches the HTTP wire format so TypeScript generators see the actual JSON structure.
+    /// </summary>
+    private static void WriteResourceEventEnvelopeSchema(
+        Utf8JsonWriter writer,
+        ImmutableArray<OpenApiResponseContentSchemaComponent> innerSchemaComponents,
+        Func<string, string>? schemaNameFormatter)
+    {
+        writer.WriteStartObject();
+        writer.WriteString("type", "object");
+
+        writer.WritePropertyName("properties");
+        writer.WriteStartObject();
+
+        // $object — always "event"
+        writer.WritePropertyName("$object");
+        writer.WriteStartObject();
+        writer.WriteString("type", "string");
+        writer.WritePropertyName("enum");
+        writer.WriteStartArray();
+        writer.WriteStringValue("event");
+        writer.WriteEndArray();
+        writer.WriteEndObject();
+
+        // eventId
+        writer.WritePropertyName("eventId");
+        writer.WriteStartObject();
+        writer.WriteString("type", "string");
+        writer.WriteEndObject();
+
+        // changeType
+        writer.WritePropertyName("changeType");
+        writer.WriteStartObject();
+        writer.WriteString("type", "string");
+        writer.WritePropertyName("enum");
+        writer.WriteStartArray();
+        writer.WriteStringValue("Created");
+        writer.WriteStringValue("Updated");
+        writer.WriteStringValue("Deleted");
+        writer.WriteEndArray();
+        writer.WriteEndObject();
+
+        // created
+        writer.WritePropertyName("created");
+        writer.WriteStartObject();
+        writer.WriteString("type", "string");
+        writer.WriteString("format", "date-time");
+        writer.WriteEndObject();
+
+        // resourceObject
+        writer.WritePropertyName("resourceObject");
+        writer.WriteStartObject();
+        writer.WriteString("type", "string");
+        writer.WriteEndObject();
+
+        // href (nullable)
+        writer.WritePropertyName("href");
+        writer.WriteStartObject();
+        writer.WriteString("type", "string");
+        writer.WriteBoolean("nullable", true);
+        writer.WriteEndObject();
+
+        // data — references the inner type's schema
+        writer.WritePropertyName("data");
+        if (innerSchemaComponents.Length == 1)
+        {
+            var inner = innerSchemaComponents[0];
+            writer.WriteStartObject();
+            writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(inner.BodyTypeName, schemaNameFormatter)}");
+            writer.WriteEndObject();
+        }
+        else
+        {
+            // Multiple inner types: oneOf
+            writer.WriteStartObject();
+            writer.WritePropertyName("oneOf");
+            writer.WriteStartArray();
+            foreach (var inner in innerSchemaComponents)
+            {
+                writer.WriteStartObject();
+                writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(inner.BodyTypeName, schemaNameFormatter)}");
+                writer.WriteEndObject();
+            }
+
+            writer.WriteEndArray();
+            writer.WriteEndObject();
+        }
+
+        // metadata (nullable object)
+        WriteNullableObjectProperty(writer, "metadata");
+
+        // secureData (nullable object)
+        WriteNullableObjectProperty(writer, "secureData");
+
+        // changedValues (nullable object)
+        WriteNullableObjectProperty(writer, "changedValues");
+
+        // correlationId (nullable string)
+        writer.WritePropertyName("correlationId");
+        writer.WriteStartObject();
+        writer.WriteString("type", "string");
+        writer.WriteBoolean("nullable", true);
+        writer.WriteEndObject();
+
+        writer.WriteEndObject(); // end properties
+
+        // required
+        writer.WritePropertyName("required");
+        writer.WriteStartArray();
+        writer.WriteStringValue("$object");
+        writer.WriteStringValue("eventId");
+        writer.WriteStringValue("changeType");
+        writer.WriteStringValue("created");
+        writer.WriteStringValue("resourceObject");
+        writer.WriteStringValue("data");
+        writer.WriteEndArray();
+
+        writer.WriteBoolean("additionalProperties", false);
+
+        writer.WriteEndObject(); // end schema
+    }
+
+    private static void WriteNullableObjectProperty(Utf8JsonWriter writer, string propertyName)
+    {
+        writer.WritePropertyName(propertyName);
+        writer.WriteStartObject();
+        writer.WriteString("type", "object");
+        writer.WriteBoolean("nullable", true);
+        writer.WriteBoolean("additionalProperties", true);
+        writer.WriteEndObject();
     }
 
     private static void WriteResourceEventDiscriminatedResponseSchema(

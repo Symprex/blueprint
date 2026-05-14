@@ -326,7 +326,68 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TemplateApiResource"
+                  "type": "object",
+                  "properties": {
+                    "$object": {
+                      "type": "string",
+                      "enum": [
+                        "event"
+                      ]
+                    },
+                    "eventId": {
+                      "type": "string"
+                    },
+                    "changeType": {
+                      "type": "string",
+                      "enum": [
+                        "Created",
+                        "Updated",
+                        "Deleted"
+                      ]
+                    },
+                    "created": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "resourceObject": {
+                      "type": "string"
+                    },
+                    "href": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/TemplateApiResource"
+                    },
+                    "metadata": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": true
+                    },
+                    "secureData": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": true
+                    },
+                    "changedValues": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": true
+                    },
+                    "correlationId": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "$object",
+                    "eventId",
+                    "changeType",
+                    "created",
+                    "resourceObject",
+                    "data"
+                  ],
+                  "additionalProperties": false
                 }
               }
             }
@@ -1172,7 +1233,68 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TemplateApiResource"
+                  "type": "object",
+                  "properties": {
+                    "$object": {
+                      "type": "string",
+                      "enum": [
+                        "event"
+                      ]
+                    },
+                    "eventId": {
+                      "type": "string"
+                    },
+                    "changeType": {
+                      "type": "string",
+                      "enum": [
+                        "Created",
+                        "Updated",
+                        "Deleted"
+                      ]
+                    },
+                    "created": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "resourceObject": {
+                      "type": "string"
+                    },
+                    "href": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/TemplateApiResource"
+                    },
+                    "metadata": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": true
+                    },
+                    "secureData": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": true
+                    },
+                    "changedValues": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": true
+                    },
+                    "correlationId": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "$object",
+                    "eventId",
+                    "changeType",
+                    "created",
+                    "resourceObject",
+                    "data"
+                  ],
+                  "additionalProperties": false
                 }
               }
             }
@@ -1307,7 +1429,68 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TemplateApiResource"
+                  "type": "object",
+                  "properties": {
+                    "$object": {
+                      "type": "string",
+                      "enum": [
+                        "event"
+                      ]
+                    },
+                    "eventId": {
+                      "type": "string"
+                    },
+                    "changeType": {
+                      "type": "string",
+                      "enum": [
+                        "Created",
+                        "Updated",
+                        "Deleted"
+                      ]
+                    },
+                    "created": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "resourceObject": {
+                      "type": "string"
+                    },
+                    "href": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/TemplateApiResource"
+                    },
+                    "metadata": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": true
+                    },
+                    "secureData": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": true
+                    },
+                    "changedValues": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": true
+                    },
+                    "correlationId": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "$object",
+                    "eventId",
+                    "changeType",
+                    "created",
+                    "resourceObject",
+                    "data"
+                  ],
+                  "additionalProperties": false
                 }
               }
             }
@@ -1787,7 +1970,68 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TemplateApiResource"
+                  "type": "object",
+                  "properties": {
+                    "$object": {
+                      "type": "string",
+                      "enum": [
+                        "event"
+                      ]
+                    },
+                    "eventId": {
+                      "type": "string"
+                    },
+                    "changeType": {
+                      "type": "string",
+                      "enum": [
+                        "Created",
+                        "Updated",
+                        "Deleted"
+                      ]
+                    },
+                    "created": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "resourceObject": {
+                      "type": "string"
+                    },
+                    "href": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/TemplateApiResource"
+                    },
+                    "metadata": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": true
+                    },
+                    "secureData": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": true
+                    },
+                    "changedValues": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": true
+                    },
+                    "correlationId": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "$object",
+                    "eventId",
+                    "changeType",
+                    "created",
+                    "resourceObject",
+                    "data"
+                  ],
+                  "additionalProperties": false
                 }
               }
             }
@@ -1892,7 +2136,68 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TemplateApiResource"
+                  "type": "object",
+                  "properties": {
+                    "$object": {
+                      "type": "string",
+                      "enum": [
+                        "event"
+                      ]
+                    },
+                    "eventId": {
+                      "type": "string"
+                    },
+                    "changeType": {
+                      "type": "string",
+                      "enum": [
+                        "Created",
+                        "Updated",
+                        "Deleted"
+                      ]
+                    },
+                    "created": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "resourceObject": {
+                      "type": "string"
+                    },
+                    "href": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/TemplateApiResource"
+                    },
+                    "metadata": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": true
+                    },
+                    "secureData": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": true
+                    },
+                    "changedValues": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": true
+                    },
+                    "correlationId": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "$object",
+                    "eventId",
+                    "changeType",
+                    "created",
+                    "resourceObject",
+                    "data"
+                  ],
+                  "additionalProperties": false
                 }
               }
             }
