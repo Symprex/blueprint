@@ -136,6 +136,39 @@ public sealed class BlueprintHttpClient<TApp>
         return doc.RootElement.Deserialize<TResource>(this._jsonOptions);
     }
 
+    // ──────────────────────────────────────────────
+    //  S365 compatibility: CallAsync aliases
+    // ──────────────────────────────────────────────
+
+    /// <summary>
+    /// S365 compatibility alias for <see cref="SendAsync{TResponse}"/>. Gateways in Signature 365
+    /// use <c>CallAsync&lt;TResponse&gt;</c>; this method delegates directly so migration requires
+    /// no method-name changes in gateway code.
+    /// </summary>
+    /// <typeparam name="TResponse">The expected response type.</typeparam>
+    /// <param name="operation">The operation to send.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The deserialized response.</returns>
+    public Task<TResponse?> CallAsync<TResponse>(
+        IReturn<TResponse> operation,
+        CancellationToken cancellationToken = default)
+    {
+        return this.SendAsync<TResponse>((IOperation)operation, cancellationToken);
+    }
+
+    /// <summary>
+    /// S365 compatibility alias for <see cref="SendAsync(IOperation, CancellationToken)"/>.
+    /// </summary>
+    /// <param name="operation">The operation to send.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A task that completes when the request is processed.</returns>
+    public Task CallAsync(
+        IOperation operation,
+        CancellationToken cancellationToken = default)
+    {
+        return this.SendAsync(operation, cancellationToken);
+    }
+
     private HttpRequestMessage CreateRequest(IOperation operation)
     {
         var operationType = operation.GetType();

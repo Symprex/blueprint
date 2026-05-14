@@ -2005,3 +2005,25 @@ S365's `AuthenticateAsTenantAdministrator`, `AuthenticateAsPartnerUser`, `Authen
 **Migration impact:** Eliminates ~70 `[FromAuthContext]` annotations and the runtime `ConfigureOperation` callback for TenantId removal. Zero-churn for S365 operations.
 
 **Files changed:** `TenantIdConventionHelper.cs` (new), `TenantModule.cs`, `PropertyOwnershipModule.cs`, `TenantModuleTests.cs`, 1 snapshot promoted.
+
+### #294 — S365 Gap Audit: Property Populators and Middleware (commit 3318942)
+
+**Finding:** Comprehensive audit of S365 property population and middleware patterns confirms:
+
+1. **No `IPropertyPopulator` interface** — S365 has exactly ONE property populator: `SetTenantMiddleware`, which Blueprint's `TenantModule` fully handles at compile time.
+2. **Validation** — S365 uses DataAnnotations only (no FluentValidation), which Blueprint already code-generates.
+3. **Multi-tenancy** — S365 uses single-database with query-level tenant filtering (no per-tenant sharding). `ICurrentTenantAccessor` is the only tenancy seam, already mapped to Blueprint's `ITenantAccessor`.
+4. **Handler pattern** — S365 uses dual patterns: `ApiOperations` classes for HTTP (mapped to Blueprint's `InvokeAsync` handler discovery) and `IHandleMessages<T>` for Rebus (mapped to Blueprint.Rebus companion generator).
+5. **Background tasks** — `IBackgroundTask` with Hangfire, fully covered by `Blueprint.Tasks.Hangfire`.
+
+**Remaining gaps identified:**
+- S365 `BlueprintHttpClient.CallAsync<TResponse>` uses `IReturn<TResponse>` — added `CallAsync` shim to `Blueprint.HttpClient`.
+- S365 middleware ordering: `SetTenantMiddleware` at `MiddlewareStage.Authentication` → Blueprint's `TenantModule` runs at correct pipeline stage (Order 150, after Authentication at 50).
+
+### #295 — BlueprintHttpClient CallAsync S365 Compatibility Shim
+
+**Problem:** S365 gateways use `BlueprintHttpClient.CallAsync<TResponse>(IReturn<TResponse> operation)`. Blueprint's HTTP client uses `SendAsync<TResponse>(IOperation operation)`. Migrating every gateway call from `CallAsync` to `SendAsync` adds unnecessary churn.
+
+**Solution:** Added `CallAsync<TResponse>(IReturn<TResponse>, CancellationToken)` and `CallAsync(IOperation, CancellationToken)` shims that delegate to the existing `SendAsync` methods. Zero runtime overhead — just method delegation.
+
+**Migration impact:** Gateway code keeps `CallAsync` as-is. Only import/namespace changes needed.
