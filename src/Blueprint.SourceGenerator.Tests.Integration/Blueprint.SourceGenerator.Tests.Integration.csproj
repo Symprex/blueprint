@@ -7,7 +7,8 @@
     <LangVersion>preview</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <!-- Tests legitimately reference [Obsolete] operations to prove deprecated rendering. -->
-    <NoWarn>$(NoWarn);CS0618</NoWarn>
+    <!-- Integration tests exercise multi-method dedup behaviour that intentionally triggers BPOA002. -->
+    <NoWarn>$(NoWarn);CS0618;BPOA002</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

@@ -35,9 +35,18 @@ public class AppDataModelSourceGeneratorHttpMethodMetadataTests
     }
 
     [Fact]
-    public void When_http_operation_declares_multiple_explicit_methods_then_http_method_metadata_is_normalized_deduplicated_and_sorted()
+    public void When_http_operation_declares_duplicate_same_method_then_http_method_metadata_is_normalized_and_deduplicated()
     {
-        var data = HttpMethodMultipleExplicitQueryOp.Configure().GetFeatureData<OperationHttpMethodMetadataFeatureData>();
+        var data = HttpMethodDuplicateExplicitQueryOp.Configure().GetFeatureData<OperationHttpMethodMetadataFeatureData>();
+
+        data.Should().NotBeNull();
+        data!.HttpMethods.Should().Equal("POST");
+    }
+
+    [Fact]
+    public void When_http_operation_declares_multiple_distinct_methods_then_http_method_metadata_preserves_all()
+    {
+        var data = HttpMethodMultipleDistinctQueryOp.Configure().GetFeatureData<OperationHttpMethodMetadataFeatureData>();
 
         data.Should().NotBeNull();
         data!.HttpMethods.Should().Equal("GET", "POST");
@@ -66,11 +75,24 @@ public partial class HttpMethodExplicitGetCommandOp : ICommand<OkResult<string>>
 }
 
 [AllowAnonymous]
-[RootLink("/openapi/http-method-multi-explicit-query")]
+[RootLink("/openapi/http-method-duplicate-explicit-query")]
+[HttpMethod("post")]
+[HttpPost]
+[HttpMethod("POST")]
+public partial class HttpMethodDuplicateExplicitQueryOp : IQuery<OkResult<string>>
+{
+    public OkResult<string> Handle()
+    {
+        return new OkResult<string>("OK");
+    }
+}
+
+[AllowAnonymous]
+[RootLink("/openapi/http-method-multi-distinct-query")]
 [HttpMethod("post")]
 [HttpGet]
 [HttpMethod("POST")]
-public partial class HttpMethodMultipleExplicitQueryOp : IQuery<OkResult<string>>
+public partial class HttpMethodMultipleDistinctQueryOp : IQuery<OkResult<string>>
 {
     public OkResult<string> Handle()
     {

@@ -54,10 +54,10 @@ public class AppModelOpenApiOperationRenderingContextTests
         var responseObjectContext = OpenApiResponseObjectRenderingContext.Create(responseSchemaContext);
 
         var operationContext = OpenApiOperationRenderingContext.Create(responseObjectContext)
-            .Operations.Single(static operation => operation.OperationTypeName == (typeof(HttpMethodMultipleExplicitQueryOp).FullName ?? typeof(HttpMethodMultipleExplicitQueryOp).Name));
+            .Operations.Single(static operation => operation.OperationTypeName == (typeof(HttpMethodMultipleDistinctQueryOp).FullName ?? typeof(HttpMethodMultipleDistinctQueryOp).Name));
 
         operationContext.HttpMethods.Should().Equal("GET", "POST");
-        operationContext.UrlFormats.Should().Equal("/openapi/http-method-multi-explicit-query");
+        operationContext.UrlFormats.Should().Equal("/openapi/http-method-multi-distinct-query");
         operationContext.Responses.Select(static response => response.StatusCode).Should().Equal(200, 422, 500);
     }
 

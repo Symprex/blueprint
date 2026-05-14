@@ -87,6 +87,16 @@ public sealed class OperationHttpMethodMetadataModule : IBlueprintSourceGenerato
                 .Distinct(StringComparer.Ordinal)
                 .OrderBy(static httpMethod => httpMethod, StringComparer.Ordinal)
                 .ToArray();
+
+            if (httpMethods.Length > 1)
+            {
+                context.AddDiagnostic(
+                    new DiagnosticInfo(
+                        OperationHttpMethodMetadataDiagnosticDescriptors.ConflictingHttpMethods,
+                        GetExplicitHttpMethodLocation(explicitMethods[0].Attribute, operationType),
+                        [operationType.Name, string.Join(", ", httpMethods)]));
+            }
+
             return true;
         }
 

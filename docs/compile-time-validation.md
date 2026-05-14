@@ -117,6 +117,7 @@ Reserved direction:
 Current OpenAPI descriptor IDs in active use:
 
 - `BPOA001`: `HttpMethodAttribute` declares a null, empty, or whitespace-only explicit HTTP method for an HTTP-exposed operation.
+- `BPOA002`: operation declares multiple distinct HTTP method attributes (e.g. both `[HttpGet]` and `[HttpPost]`) — warning, since each operation should map to exactly one HTTP method.
 
 ### Validation contributor diagnostics
 

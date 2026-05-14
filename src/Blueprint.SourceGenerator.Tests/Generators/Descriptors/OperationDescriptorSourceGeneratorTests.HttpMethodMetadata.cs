@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Microsoft.CodeAnalysis;
 
 namespace Blueprint.SourceGenerator.Tests.Generators.OperationDescriptor;
 
@@ -85,7 +86,8 @@ public class OperationDescriptorSourceGeneratorTestsHttpMethodMetadataTests
             public partial class MultiExplicitMethodQueryOperation : IQuery<string> {}
             """);
 
-        result.Diagnostics.Should().BeEmpty();
+        result.Diagnostics.Select(static d => d.Id).Should().Contain("BPOA002",
+            "conflicting HTTP methods (GET + POST) should produce a warning");
 
         var descriptorSource = result.Output
             .Select(static tree => tree.ToString())
@@ -94,5 +96,35 @@ public class OperationDescriptorSourceGeneratorTestsHttpMethodMetadataTests
         descriptorSource.Should().NotBeNull();
         descriptorSource!.Should().Contain(
             "this.SetFeatureData(new global::Blueprint.Model.OperationHttpMethodMetadataFeatureData(global::System.Collections.Immutable.ImmutableArray.Create(\"GET\", \"POST\")));");
+    }
+
+    [Fact]
+    public void When_http_operation_declares_conflicting_methods_then_reports_BPOA002_warning()
+    {
+        var result = OperationDescriptorSourceGeneratorTests.Compile("""
+            [RootLink("/http-method/conflicting")]
+            [HttpGet]
+            [HttpPost]
+            public partial class ConflictingMethodsOperation : IQuery<string> {}
+            """);
+
+        var bpoa002 = result.Diagnostics.FirstOrDefault(static d => d.Id == "BPOA002");
+        bpoa002.Should().NotBeNull("operation with both [HttpGet] and [HttpPost] should trigger BPOA002");
+        bpoa002!.Severity.Should().Be(DiagnosticSeverity.Warning);
+        bpoa002.GetMessage().Should().Contain("GET").And.Contain("POST");
+    }
+
+    [Fact]
+    public void When_http_operation_declares_duplicate_same_method_then_no_BPOA002_warning()
+    {
+        var result = OperationDescriptorSourceGeneratorTests.Compile("""
+            [RootLink("/http-method/duplicate-same")]
+            [HttpPost]
+            [HttpMethod("POST")]
+            public partial class DuplicateSameMethodOperation : ICommand {}
+            """);
+
+        result.Diagnostics.Where(static d => d.Id == "BPOA002").Should().BeEmpty(
+            "duplicate [HttpPost] attributes resolve to one method after dedup — no conflict");
     }
 }
