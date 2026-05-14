@@ -1612,4 +1612,110 @@ The route deduplication logic requested in the original steering was already imp
 - Cross-operation route collisions are detected and logged as warnings via `ILogger`
 - Uses `StringTupleComparer` and `RouteMethodComparer` for correct ordinal/case-insensitive matching
 
-**No action needed.**
+No action needed.
+
+---
+
+### #294 — S365 Operation Pattern Compatibility: Comprehensive Verification
+
+**Date:** 2025-07-18
+**Severity:** Informational — confirms migration readiness
+**Status:** ✅ All patterns verified as supported
+
+Deep analysis of S365's actual operation patterns against Blueprint source-gen capabilities.
+
+| S365 Pattern | Count | Blueprint Support | Notes |
+|---|---|---|---|
+| `ResourceEvent<T>` / `ResourceCreated<T>` / `ResourceUpdated<T>` / `ResourceDeleted<T>` | ~50+ | ✅ Full | Both legacy `ResourceEvent` and new `ResourceEventResult` handled by `HttpOperationResultExecutor` |
+| `StatusCodeResult.Accepted.Instance` / `.NoContent.Instance` | 71 | ✅ Full | `StatusCodeResult` nested types match 1:1, singleton pattern preserved |
+| External handler classes (`XCommandHandler`) | majority | ✅ Full | `HandlerDiscovery` + `ExternalHandlerIndex` supports external handlers with DI |
+| `InvokeAsync` method name | common | ✅ Full | `ParameterAnalyzer.HandlerMethodNames` = `["Invoke", "InvokeAsync", "Handle", "HandleAsync"]` |
+| `ApiOperations` base class | all handlers | ✅ Full | Blueprint's `ApiOperations` matches S365's exactly (Context, HttpContext, Identity, Logger, CancellationToken) |
+| `[Resource(noun, verb, template)]` | 349 | ✅ Full | 3-parameter constructor supported, template expansion at compile time |
+| `[FromResource(typeof(X))]` | 158 | ✅ Full | Delegated authorization with template inheritance |
+| `ResourceEvent.SelfQuery` execution | ~15+ | ✅ Full | `ResourceEventSelfQueryModule` handles self-query resolution in post-execution |
+| `IBackgroundTask` | 25+ | ✅ Full | Blueprint.Tasks.Hangfire handles scheduling |
+| `IHandleMessages<T>` (Rebus) | ~50 | ✅ N/A | Rebus handlers, not Blueprint operations — handled by Rebus scanner |
+| Property populators | 0 explicit | ✅ N/A | S365 uses no explicit `IPropertyPopulator` — handled by middleware/tenancy |
+
+**ApiOperations base class match:**
+```
+S365                                    Blueprint
+═══                                     ═════════
+Context : ApiOperationContext       →   Context : ApiOperationContext     (identical)
+HttpContext                         →   HttpContext                       (identical)
+HttpRequest                         →   HttpRequest                      (identical)
+HttpResponse                        →   HttpResponse                     (identical)
+Identity : IUserAuthorisationContext →  Identity : IUserAuthorisationContext (identical)
+Logger : ILogger                    →   Logger : ILogger                  (identical)
+CancellationToken                   →   CancellationToken                (identical)
+```
+
+Migration impact: Change `using Symprex.Signature365.Common.Api;` → `using Blueprint.Runtime.Exec;`
+
+No Blueprint code changes needed.
+
+---
+
+### #295 — Authorization Module: Already Fully Optimized for S365
+
+**Date:** 2025-07-18
+**Severity:** Informational
+**Status:** ✅ No action needed
+
+The authorization module already implements all user-requested optimizations:
+
+1. **Static scope-pair arrays per operation** — Generated as `private static readonly ScopePair[]` field on each pipeline class (zero allocation per request)
+2. **Compile-time template expansion** — `ResourceKeyTemplateParser` generates inline string concatenation expressions for `{Auth:ClaimType}` and `{PropertyName}` tokens, eliminating runtime regex/reflection
+3. **Resolved vs legacy paths** — When templates are valid, uses `IResolvedResourceAuthorizationProvider` with pre-expanded keys; falls back to legacy `IResourceAuthorizationProvider` for backward compatibility
+4. **Compile-time template validation** — `BPAU04` diagnostic fires when template tokens reference nonexistent operation properties
+
+Example generated code for `[Resource("Template", "Read", "/Tenants/{Auth:AccountId}/Templates/{Id}")]`:
+```csharp
+private static readonly ScopePair[] _scopePairs =
+    [new ScopePair("Template", "Read", "/Tenants/{Auth:AccountId}/Templates/{Id}")];
+
+// In pipeline:
+var authorizationDenial = await PipelineHelpers.CheckResourceAuthorizationAsync(
+    context, httpContext.User,
+    this.ResolvedResourceAuthorizationProvider,
+    this.ResourceAuthorizationProvider,
+    new ResolvedScopePair("Template", "Read",
+        "/Tenants/{Auth:AccountId}/Templates/{Id}",
+        "/Tenants/" + httpContext.User.FindFirst("AccountId")?.Value + "/Templates/" + operation.Id),
+    _scopePairs,
+    httpContext.RequestAborted).ConfigureAwait(false);
+```
+
+No code changes needed.
+
+---
+
+### #296 — Post-Execution Pipeline Consolidation: Deferred
+
+**Date:** 2025-07-18
+**Severity:** Low — optimization opportunity
+**Status:** ⏸️ Deferred (marginal gain vs complexity)
+
+Analysis of consolidating the post-execution `await` calls (UnitOfWork → Outbox → Audit → BackgroundTasks) into a single helper method.
+
+**Current pattern** (4 awaits for full command pipeline):
+```csharp
+if (handlerResult.WasSuccessful)
+{
+    await PipelineHelpers.SaveUnitOfWorkAsync(context.ServiceProvider, ct);
+    await PipelineHelpers.CommitMessageOutboxAsync(context.ServiceProvider, ct);
+    await PipelineHelpers.ExecuteAuditSinkAsync(this.AuditSink, context, handlerResult, "OpName");
+    await PipelineHelpers.FlushBackgroundTasksAsync(context.ServiceProvider);
+}
+```
+
+**Estimated savings:** Each additional `await` adds ~40-80 bytes to the async state machine. For 632 S365 operations, consolidating 4→1 awaits saves ~60-80KB IL total.
+
+**Decision:** Deferred because:
+- Individual helpers are already well-extracted — the bulk of IL savings already achieved
+- Module abstraction would need reworking (each module independently contributes render steps)
+- Flags/bitmask approach adds runtime branching for marginal IL reduction
+- The per-pipeline overhead of 3 extra `await` entries is negligible vs I/O latency
+
+Revisit when pipeline count exceeds 1000+ or profiling shows state machine overhead as measurable.
