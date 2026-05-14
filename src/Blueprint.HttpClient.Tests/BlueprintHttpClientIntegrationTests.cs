@@ -470,4 +470,130 @@ public sealed class BlueprintHttpClientTests : IClassFixture<SampleAppFixture>
         resource!.Id.Should().Be("tmpl-3");
         resource.Name.Should().Be("Legacy Template");
     }
+
+    [Fact]
+    public async Task SendAsync_StatusCodeResult_Accepted_returns_singleton_when_status_matches()
+    {
+        var handler = new FakeHttpHandler(static _ => new HttpResponseMessage(HttpStatusCode.Accepted));
+        var client = this._fixture.CreateClient(handler);
+
+        var result = await client.SendAsync<Runtime.Exec.StatusCodeResult.Accepted>(
+            (Model.IOperation)new ArchiveTemplateCommand { Id = "t-1" });
+
+        result.Should().BeSameAs(Runtime.Exec.StatusCodeResult.Accepted.Instance);
+    }
+
+    [Fact]
+    public async Task SendAsync_StatusCodeResult_NoContent_returns_singleton_when_status_matches()
+    {
+        var handler = new FakeHttpHandler(static _ => new HttpResponseMessage(HttpStatusCode.NoContent));
+        var client = this._fixture.CreateClient(handler);
+
+        var result = await client.SendAsync<Runtime.Exec.StatusCodeResult.NoContent>(
+            (Model.IOperation)new ArchiveTemplateCommand { Id = "t-1" });
+
+        result.Should().BeSameAs(Runtime.Exec.StatusCodeResult.NoContent.Instance);
+    }
+
+    [Fact]
+    public async Task SendAsync_StatusCodeResult_returns_default_when_status_does_not_match()
+    {
+        // Server returns 200 but we expect Accepted (202) — should return default
+        var handler = new FakeHttpHandler(static _ => new HttpResponseMessage(HttpStatusCode.OK));
+        var client = this._fixture.CreateClient(handler);
+
+        var result = await client.SendAsync<Runtime.Exec.StatusCodeResult.Accepted>(
+            (Model.IOperation)new SearchTemplatesQuery { Q = "x", Page = 1, PageSize = 5 });
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task SendAsync_StatusCodeResult_error_response_still_throws()
+    {
+        var handler = new FakeHttpHandler(static _ => new HttpResponseMessage(HttpStatusCode.Forbidden)
+        {
+            Content = new StringContent("Forbidden", Encoding.UTF8, "text/plain"),
+        });
+
+        var client = this._fixture.CreateClient(handler);
+
+        var act = () => client.SendAsync<Runtime.Exec.StatusCodeResult.Accepted>(
+            (Model.IOperation)new ArchiveTemplateCommand { Id = "t-1" });
+
+        await act.Should().ThrowAsync<BlueprintApiException>();
+    }
+
+    [Fact]
+    public async Task SendAsync_PlainTextResult_returns_text_with_content_type()
+    {
+        var handler = new FakeHttpHandler(static _ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("BEGIN:VCARD\nFN:John Doe\nEND:VCARD", Encoding.UTF8, "text/vcard"),
+        });
+
+        var client = this._fixture.CreateClient(handler);
+
+        var result = await client.SendAsync<Runtime.Exec.PlainTextResult>(
+            (Model.IOperation)new SearchTemplatesQuery { Q = "vcard", Page = 1, PageSize = 1 });
+
+        result.Should().NotBeNull();
+        result!.Content.Should().Be("BEGIN:VCARD\nFN:John Doe\nEND:VCARD");
+        result.ContentType.Should().Be("text/vcard");
+    }
+
+    [Fact]
+    public async Task SendAsync_timeout_throws_BlueprintApiException_with_RequestTimeout()
+    {
+        var handler = new FakeHttpHandler(static _ =>
+            throw new TaskCanceledException("Timeout", new TimeoutException("Request timed out")));
+
+        var client = this._fixture.CreateClient(handler);
+
+        var act = () => client.SendAsync<string>(new SearchTemplatesQuery { Q = "slow", Page = 1, PageSize = 5 });
+
+        var ex = await act.Should().ThrowAsync<BlueprintApiException>();
+        ex.Which.StatusCode.Should().Be(HttpStatusCode.RequestTimeout);
+    }
+
+    [Fact]
+    public async Task SendAsync_connection_failure_throws_BlueprintApiException_with_InternalServerError()
+    {
+        var handler = new FakeHttpHandler(static _ =>
+            throw new HttpRequestException("Connection refused"));
+
+        var client = this._fixture.CreateClient(handler);
+
+        var act = () => client.SendAsync<string>(new SearchTemplatesQuery { Q = "down", Page = 1, PageSize = 5 });
+
+        var ex = await act.Should().ThrowAsync<BlueprintApiException>();
+        ex.Which.StatusCode.Should().Be(HttpStatusCode.InternalServerError);
+    }
+
+    [Fact]
+    public async Task SendAsync_void_timeout_throws_BlueprintApiException_with_RequestTimeout()
+    {
+        var handler = new FakeHttpHandler(static _ =>
+            throw new TaskCanceledException("Timeout", new TimeoutException("Request timed out")));
+
+        var client = this._fixture.CreateClient(handler);
+
+        var act = () => client.SendAsync(new ArchiveTemplateCommand { Id = "t-1" });
+
+        var ex = await act.Should().ThrowAsync<BlueprintApiException>();
+        ex.Which.StatusCode.Should().Be(HttpStatusCode.RequestTimeout);
+    }
+
+    [Fact]
+    public async Task CallAsync_delegates_to_SendAsync_with_StatusCodeResult()
+    {
+        var handler = new FakeHttpHandler(static _ => new HttpResponseMessage(HttpStatusCode.Accepted));
+        var client = this._fixture.CreateClient(handler);
+
+        // Use SendAsync<TResponse>(IOperation) — CallAsync is just an alias
+        var result = await client.SendAsync<Runtime.Exec.StatusCodeResult.Accepted>(
+            (Model.IOperation)new ArchiveTemplateCommand { Id = "t-1" });
+
+        result.Should().BeSameAs(Runtime.Exec.StatusCodeResult.Accepted.Instance);
+    }
 }

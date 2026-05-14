@@ -5,6 +5,7 @@ using System.Reflection;
 using System.Text.Json;
 using Blueprint.Http;
 using Blueprint.Model;
+using Blueprint.Runtime.Exec;
 using Blueprint.Validation;
 
 namespace Blueprint.HttpClient;
@@ -82,9 +83,30 @@ public sealed class BlueprintHttpClient<TApp>
 
         using var request = this.CreateRequest(operation);
         options?.ModifyRequest?.Invoke(request);
-        using var response = await this._httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
 
-        return await this.HandleResponseAsync<TResponse>(response, cancellationToken).ConfigureAwait(false);
+        try
+        {
+            using var response = await this._httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            return await this.HandleResponseAsync<TResponse>(response, cancellationToken).ConfigureAwait(false);
+        }
+        catch (TaskCanceledException e) when (e.InnerException is TimeoutException)
+        {
+            // Timeout — use RequestTimeout (not GatewayTimeout, which reverse proxies like
+            // Cloudflare intercept and replace with their own HTML error page).
+            throw new BlueprintApiException(
+                HttpStatusCode.RequestTimeout,
+                "Timed out waiting for service response.",
+                e.Message);
+        }
+        catch (HttpRequestException e)
+        {
+            // Connection failure — use InternalServerError (not BadGateway, for the same
+            // Cloudflare interception reason).
+            throw new BlueprintApiException(
+                HttpStatusCode.InternalServerError,
+                "The remote server did not respond.",
+                e.Message);
+        }
     }
 
     /// <summary>
@@ -120,9 +142,26 @@ public sealed class BlueprintHttpClient<TApp>
 
         using var request = this.CreateRequest(operation);
         options?.ModifyRequest?.Invoke(request);
-        using var response = await this._httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
 
-        await this.EnsureSuccessOrThrowAsync(response, cancellationToken).ConfigureAwait(false);
+        try
+        {
+            using var response = await this._httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            await this.EnsureSuccessOrThrowAsync(response, cancellationToken).ConfigureAwait(false);
+        }
+        catch (TaskCanceledException e) when (e.InnerException is TimeoutException)
+        {
+            throw new BlueprintApiException(
+                HttpStatusCode.RequestTimeout,
+                "Timed out waiting for service response.",
+                e.Message);
+        }
+        catch (HttpRequestException e)
+        {
+            throw new BlueprintApiException(
+                HttpStatusCode.InternalServerError,
+                "The remote server did not respond.",
+                e.Message);
+        }
     }
 
     /// <summary>
@@ -165,34 +204,57 @@ public sealed class BlueprintHttpClient<TApp>
 
         using var request = this.CreateRequest(operation);
         options?.ModifyRequest?.Invoke(request);
-        using var response = await this._httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
 
-        await this.EnsureSuccessOrThrowAsync(response, cancellationToken).ConfigureAwait(false);
+        HttpResponseMessage response;
 
-        if (response.StatusCode == HttpStatusCode.NoContent)
+        try
         {
-            return default;
+            response = await this._httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        }
+        catch (TaskCanceledException e) when (e.InnerException is TimeoutException)
+        {
+            throw new BlueprintApiException(
+                HttpStatusCode.RequestTimeout,
+                "Timed out waiting for service response.",
+                e.Message);
+        }
+        catch (HttpRequestException e)
+        {
+            throw new BlueprintApiException(
+                HttpStatusCode.InternalServerError,
+                "The remote server did not respond.",
+                e.Message);
         }
 
-        // Parse the event envelope and extract the resource payload.
-        // The envelope uses "data" for the content (matching ResourceEventEnvelope).
-        using var doc = await JsonDocument.ParseAsync(
-            await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false),
-            cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        if (doc.RootElement.TryGetProperty("data", out var dataElement))
+        using (response)
         {
-            return dataElement.Deserialize<TResource>(this._jsonOptions);
-        }
+            await this.EnsureSuccessOrThrowAsync(response, cancellationToken).ConfigureAwait(false);
 
-        // Legacy fallback: some event envelopes use "content" instead of "data"
-        if (doc.RootElement.TryGetProperty("content", out var contentElement))
-        {
-            return contentElement.Deserialize<TResource>(this._jsonOptions);
-        }
+            if (response.StatusCode == HttpStatusCode.NoContent)
+            {
+                return default;
+            }
 
-        // Fallback: try deserializing the whole body as TResource
-        return doc.RootElement.Deserialize<TResource>(this._jsonOptions);
+            // Parse the event envelope and extract the resource payload.
+            // The envelope uses "data" for the content (matching ResourceEventEnvelope).
+            using var doc = await JsonDocument.ParseAsync(
+                await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false),
+                cancellationToken: cancellationToken).ConfigureAwait(false);
+
+            if (doc.RootElement.TryGetProperty("data", out var dataElement))
+            {
+                return dataElement.Deserialize<TResource>(this._jsonOptions);
+            }
+
+            // Legacy fallback: some event envelopes use "content" instead of "data"
+            if (doc.RootElement.TryGetProperty("content", out var contentElement))
+            {
+                return contentElement.Deserialize<TResource>(this._jsonOptions);
+            }
+
+            // Fallback: try deserializing the whole body as TResource
+            return doc.RootElement.Deserialize<TResource>(this._jsonOptions);
+        }
     }
 
     /// <summary>
@@ -242,20 +304,43 @@ public sealed class BlueprintHttpClient<TApp>
 
         using var request = this.CreateRequest(operation);
         options?.ModifyRequest?.Invoke(request);
-        using var response = await this._httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
 
-        await this.EnsureSuccessOrThrowAsync(response, cancellationToken).ConfigureAwait(false);
+        HttpResponseMessage response;
 
-        if (response.StatusCode == HttpStatusCode.NoContent)
+        try
         {
-            return default;
+            response = await this._httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        }
+        catch (TaskCanceledException e) when (e.InnerException is TimeoutException)
+        {
+            throw new BlueprintApiException(
+                HttpStatusCode.RequestTimeout,
+                "Timed out waiting for service response.",
+                e.Message);
+        }
+        catch (HttpRequestException e)
+        {
+            throw new BlueprintApiException(
+                HttpStatusCode.InternalServerError,
+                "The remote server did not respond.",
+                e.Message);
         }
 
-        using var doc = await JsonDocument.ParseAsync(
-            await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false),
-            cancellationToken: cancellationToken).ConfigureAwait(false);
+        using (response)
+        {
+            await this.EnsureSuccessOrThrowAsync(response, cancellationToken).ConfigureAwait(false);
 
-        return DeserializeResourceEventEnvelope<TResource>(doc.RootElement, this._jsonOptions);
+            if (response.StatusCode == HttpStatusCode.NoContent)
+            {
+                return default;
+            }
+
+            using var doc = await JsonDocument.ParseAsync(
+                await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false),
+                cancellationToken: cancellationToken).ConfigureAwait(false);
+
+            return DeserializeResourceEventEnvelope<TResource>(doc.RootElement, this._jsonOptions);
+        }
     }
 
     /// <summary>
@@ -746,6 +831,27 @@ public sealed class BlueprintHttpClient<TApp>
         HttpResponseMessage response,
         CancellationToken cancellationToken)
     {
+        // StatusCodeResult subtypes (e.g. StatusCodeResult.Accepted): the server returns no body,
+        // just a status code. Find the singleton Instance field and match by status code. This is
+        // the exact pattern S365 gateway code uses via CallAsync<StatusCodeResult.Accepted>(...).
+        if (typeof(StatusCodeResult).IsAssignableFrom(typeof(TResponse)) && typeof(StatusCodeResult) != typeof(TResponse))
+        {
+            // Validate before consuming the response body — error responses should still throw
+            await this.EnsureSuccessOrThrowAsync(response, cancellationToken).ConfigureAwait(false);
+
+            var field = typeof(TResponse).GetField(
+                nameof(StatusCodeResult.Accepted.Instance),
+                BindingFlags.Public | BindingFlags.Static);
+
+            if (field?.GetValue(null) is StatusCodeResult singleton && singleton.StatusCode == (int)response.StatusCode)
+            {
+                return (TResponse)(object)singleton;
+            }
+
+            // Status code didn't match the expected singleton — return default (caller decides if this is an error)
+            return default;
+        }
+
         await this.EnsureSuccessOrThrowAsync(response, cancellationToken).ConfigureAwait(false);
 
         if (response.StatusCode == HttpStatusCode.NoContent)
@@ -754,6 +860,20 @@ public sealed class BlueprintHttpClient<TApp>
         }
 
         var contentType = response.Content.Headers.ContentType?.MediaType;
+
+        // PlainTextResult: when TResponse is PlainTextResult, construct from the response text
+        if (typeof(TResponse) == typeof(PlainTextResult) || typeof(PlainTextResult).IsAssignableTo(typeof(TResponse)))
+        {
+            if (!string.IsNullOrEmpty(contentType))
+            {
+                var text = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+
+                return (TResponse)(object)new PlainTextResult(text, response.StatusCode)
+                {
+                    ContentType = contentType,
+                };
+            }
+        }
 
         // Plain text responses: if TResponse is string, return the body as-is
         if (contentType?.StartsWith("text/", StringComparison.OrdinalIgnoreCase) == true
