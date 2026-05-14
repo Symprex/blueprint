@@ -357,6 +357,7 @@ public class HttpOperationResultExecutor
         writer.WriteEndObject();
         writer.Flush();
 
+        httpContext.Response.ContentLength = buffer.WrittenCount;
         await httpContext.Response.Body.WriteAsync(buffer.WrittenMemory, httpContext.RequestAborted).ConfigureAwait(false);
     }
 

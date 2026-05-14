@@ -46,6 +46,12 @@ public class BlueprintApp
             : this._allOperations.Values;
 
     /// <summary>
+    /// Gets the number of registered operations without materializing the enumerable.
+    /// </summary>
+    public int OperationCount =>
+        this._frozenOperations?.Count ?? this._allOperations.Count;
+
+    /// <summary>
     /// Gets the app-owned serializer context instance that later OpenAPI/schema work can interrogate for generated JSON
     /// metadata without rediscovering serializer ownership from host options.
     /// </summary>

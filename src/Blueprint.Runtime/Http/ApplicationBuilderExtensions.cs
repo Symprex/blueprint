@@ -63,7 +63,8 @@ public static class EndpointRouteBuilderExtensions
             httpOptions,
             basePath).RouteAsync;
 
-        var builders = new List<IEndpointConventionBuilder>();
+        // Pre-size based on expected operations (each may have 1-2 URLs plus fixed well-known endpoints).
+        var builders = new List<IEndpointConventionBuilder>((runtimeModel.OperationCount * 2) + 8);
 
         // OpenAPI is a required part of the HTTP host and is always exposed regardless of environment.
         OpenApiInfoOptions? infoOptions = null;
@@ -126,11 +127,11 @@ public static class EndpointRouteBuilderExtensions
         // Track mapped (route, operationType) pairs to deduplicate. Multiple HATEOAS links per
         // operation are valid, but each unique route+operation pair should produce only one ASP.NET
         // Core endpoint to avoid ambiguous routing.
-        var mappedEndpoints = new HashSet<(string Route, Type OperationType)>(StringTupleComparer.Instance);
+        var mappedEndpoints = new HashSet<(string Route, Type OperationType)>(runtimeModel.OperationCount * 2, StringTupleComparer.Instance);
 
         // Track route→operation for cross-operation collision detection.
         // Key: (normalised route, HTTP method); Value: first operation name that claimed this route.
-        var routeOwners = new Dictionary<(string Route, string Method), string>(RouteMethodComparer.Instance);
+        var routeOwners = new Dictionary<(string Route, string Method), string>(runtimeModel.OperationCount * 2, RouteMethodComparer.Instance);
 
         var logger = endpoints.ServiceProvider.GetService<ILoggerFactory>()?.CreateLogger("Blueprint.Routing");
 
