@@ -243,6 +243,10 @@
 | S365 test bus patterns | ✅ Zero churn | `Bus.Should().HavePublished<T>()`, `Bus.Should().HavePublishedSingle<T>()`, `Bus.Clear()` — all aliased in `TestMessageCollector` |
 | S365 test Marten patterns | ✅ Done | 200+ files use `WithDatabaseAsync(tenant, ...)` and `LoadFromDatabaseAsync(tenant, id)` — now provided by `Blueprint.Testing.Marten`, S365 needs only `TenantReference.ApiId` bridge |
 | Test exception compat | ✅ Done | `BlueprintTestHost.ExecuteAsync<T>` now rethrows original exceptions from `UnhandledExceptionResult` via `ExceptionDispatchInfo` — S365 `ThrowApiExceptionAsync()` pattern works unchanged. `BlueprintTestExecutionException` gains `ValidationErrors` + `IsValidationFailure` for S365 validation assertion shims. |
+| ResourceEvent deserialization fix | ✅ Done | `SendResourceEventEnvelopeAsync<T>()` manually parses JSON envelope — STJ cannot deserialize `ResourceEvent<T>` correctly because base `Data` is `object?` with `[JsonInclude]` while derived `Data` is `new T?` with `[JsonIgnore]` |
+| Typed client operation-object overloads | ✅ Done | Generated extension methods now include overloads accepting full operation object: `client.MethodAsync(operation, ct)` — matches S365 gateway pattern; eliminates rewriting every gateway handler call site |
+| CallOptions support | ✅ Done | `CallOptions` class with `Action<HttpRequestMessage>? ModifyRequest` — identical to S365. `SendAsync`, `SendResourceEventAsync`, `SendResourceEventEnvelopeAsync`, `CallAsync` all accept `CallOptions?`. Generated typed client extensions include `CallOptions` overloads. |
+| Typed client ResourceEvent detection | ✅ Done | `TypedHttpClientExtensionsGenerator` detects `ResourceEvent<T>`, `ResourceCreated<T>`, `ResourceUpdated<T>`, `ResourceDeleted<T>` return types → routes to `SendResourceEventEnvelopeAsync<T>()` instead of broken `SendAsync<ResourceEvent<T>>()` |
 | ResourceEventDefinition.EventId | ✅ Done | Changed from `private protected readonly string` field to `public string { get; }` auto-property — eliminates S365 `ResourceEventAssertionsExtensions` reflection hack (line 36-37 in S365 TestHelpers) |
 | Auth block consolidation | ✅ Done | `PipelineHelpers.CheckResourceAuthorizationAsync` — unified overloads (single-scope + multi-scope) reduce 14-line if/else dispatch to 4-line call per pipeline (~4,050 lines saved for S365's 405 auth ops) |
 | ToDisplayString caching | ✅ Done | `LinkGenerationModule` loop: cached `resourceTypeFqn` variable instead of repeated `ToDisplayString(FullyQualifiedFormat)` calls |
@@ -2528,3 +2532,68 @@ S365's `Symprex.Signature365.TestHelpers` — they use S365-specific roles/conte
 helpers need to be updated to create `BlueprintTestFixtureFactory` subclasses instead of
 `WebApiFixtureFactory<TStartup>` subclasses — but this is a one-per-service change (20 files),
 not a per-test-method change.
+
+---
+
+### #302 — ResourceEvent Deserialization Bug (Critical)
+
+**Problem:** `BlueprintHttpClient.SendAsync<ResourceEvent<T>>()` cannot deserialize resource
+event responses correctly.
+
+**Root cause:** `ResourceEvent.Data` (base class) is `object?` with `[JsonInclude]` — STJ
+deserializes `data` JSON into this as `JsonElement`. `ResourceEvent<T>.Data` (derived) is
+`new TResource?` with `[JsonIgnore]` — STJ ignores the typed property entirely. Result:
+accessing `Data` on the typed instance throws `InvalidCastException` (JsonElement → T).
+
+**Fix:** Added `SendResourceEventEnvelopeAsync<TResource>()` that manually parses the JSON
+envelope and constructs `ResourceEvent<TResource>` with properly typed `Data`. Handles all
+envelope fields: `$object`, `eventId`, `changeType`, `created`, `resourceObject`, `href`,
+`data`, `metadata`, `secureData`, `changedValues`, `correlationId`.
+
+**Impact:** All ~256 S365 ResourceEvent operations affected when called via HTTP client.
+
+### #303 — S365 Typed Client Source Generator Pattern
+
+S365 uses its own source generator (`ServiceApiSourceGenerator`) to generate typed HTTP
+client interfaces and implementations. Blueprint's `TypedHttpClientExtensionsGenerator`
+replaces this entirely.
+
+**S365 pattern:**
+```csharp
+[ServiceApiInclude(typeof(CreatePartnerTenantCommand))]
+public partial class PartnersApi { }
+// Generates: IPartnersApi + PartnersApi wrapping BlueprintHttpClient
+// Method: Task<T> CreatePartnerTenantAsync(CreatePartnerTenantCommand op, CallOptions?, CT)
+```
+
+**Blueprint pattern:**
+```csharp
+// Generated extension method on BlueprintHttpClient<PartnersApp>
+client.CreatePartnerTenantAsync(operation, options, cancellationToken)
+```
+
+**Migration:** `IPartnersApi partnersApi` → `BlueprintHttpClient<PartnersApp> partnersClient`
+Call sites: `partnersApi.CreatePartnerTenantAsync(op)` → `partnersClient.CreatePartnerTenantAsync(op)`
+
+### #304 — CallOptions Support Added
+
+S365's `CallOptions` class is just `Action<HttpRequestMessage>? ModifyRequest`. Used in
+gateway services to add JWT headers, idempotency keys, etc.
+
+Blueprint now has identical `CallOptions` class in `Blueprint.HttpClient` namespace. All
+Send/Call methods accept optional `CallOptions?` parameter. Generated typed client extension
+methods include `CallOptions` overloads to match S365's exact call signature.
+
+### #305 — S365 Property Populator Pattern (No Gap)
+
+S365 uses `SetTenantMiddleware` (an `IMiddlewareBuilder`) to:
+1. Set `ICurrentTenantAccessor.Current` from `s365_tenant_id` JWT claim
+2. Log TenantId to Serilog `IDiagnosticContext`
+3. Auto-populate `TenantId` properties on operations (guarded by null-check)
+
+Blueprint's `TenantModule` does all three at compile time:
+1. Calls `ITenantResolver` → sets `ITenantAccessor.Current`
+2. (Logging available through standard telemetry)
+3. Direct `operation.TenantId = accessor.Current` with type-appropriate conversion
+
+No migration gap — S365 `SetTenantMiddleware` is replaced entirely by `TenantModule`.
