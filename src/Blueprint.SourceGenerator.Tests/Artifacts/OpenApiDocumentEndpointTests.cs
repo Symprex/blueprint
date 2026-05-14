@@ -356,6 +356,92 @@ public class OpenApiDocumentEndpointTests
         string Body);
 
     private sealed class ResourceEventUnionOperation;
+
+    [Fact]
+    public async Task When_schema_body_type_is_generic_then_schema_key_uses_of_convention()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<OpenApiGenericSchemaNameBlueprintApp, BlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/.blueprint/openapi.json")!;
+        var response = await InvokeEndpointAsync(endpoint);
+
+        var doc = JsonDocument.Parse(response.Body);
+        var schemas = doc.RootElement.GetProperty("components").GetProperty("schemas");
+
+        // Generic type OpenApiGenericWrapper<GenericSchemaInner> produces schema key "OpenApiGenericWrapperOfGenericSchemaInner".
+        schemas.TryGetProperty("OpenApiGenericWrapperOfGenericSchemaInner", out var wrapperSchema).Should()
+            .BeTrue("generic schema key should use the 'Of' convention");
+
+        wrapperSchema.GetProperty("title").GetString().Should().Be("OpenApiGenericWrapperOfGenericSchemaInner");
+        wrapperSchema.GetProperty("additionalProperties").GetBoolean().Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task When_schema_body_type_has_multiple_generic_arguments_then_schema_key_uses_of_and_and_convention()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<OpenApiMultiGenericSchemaNameBlueprintApp, BlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/.blueprint/openapi.json")!;
+        var response = await InvokeEndpointAsync(endpoint);
+
+        var doc = JsonDocument.Parse(response.Body);
+        var schemas = doc.RootElement.GetProperty("components").GetProperty("schemas");
+
+        // Multi-arg generic produces "OpenApiGenericPairOfGenericSchemaAlphaAndGenericSchemaBeta".
+        schemas.TryGetProperty("OpenApiGenericPairOfGenericSchemaAlphaAndGenericSchemaBeta", out _).Should()
+            .BeTrue("multi-arg generic schema key should use 'Of...And...' convention");
+    }
+
+    private sealed class OpenApiGenericSchemaNameBlueprintApp : BlueprintApp
+    {
+        public OpenApiGenericSchemaNameBlueprintApp()
+        {
+            // Use the real generic type so the serializer context and schema projection pipeline
+            // can resolve it. The body type name uses angle-bracket format matching what the
+            // source generator produces via ToDisplayString(FullyQualifiedFormat).
+            var genericType = typeof(OpenApiGenericWrapper<GenericSchemaInner>);
+            var bodyTypeName = $"Blueprint.SourceGenerator.Tests.Artifacts.OpenApiGenericWrapper<Blueprint.SourceGenerator.Tests.Artifacts.GenericSchemaInner>";
+
+            var descriptor = new ApiOperationDescriptor(typeof(TestOperation), "TestOperation", "OpenApiDocumentEndpointTests");
+            descriptor.AddUrl(new ApiOperationUrl("/test"));
+            descriptor.SetFeatureData(new OperationHostExposureFeatureData(["http"]));
+            descriptor.SetFeatureData(new OperationHttpResponseMetadataFeatureData([
+                new OperationHttpResponseMetadata(200, true, ["OkResult"], [bodyTypeName]),
+            ]));
+            descriptor.SetFeatureData(new OperationSerializerContextCoverageFeatureData([bodyTypeName]));
+
+            this.AppOwnedSerializerContext = new OpenApiGenericSchemaJsonContext(new JsonSerializerOptions());
+            this.AppOwnedSerializerContextType = typeof(OpenApiGenericSchemaJsonContext);
+            this.AppOwnedSerializerContextBodyTypes = [genericType];
+            this.AppOwnedSerializerContextBodyTypeNames = [bodyTypeName];
+            this.Register(descriptor);
+        }
+    }
+
+    private sealed class OpenApiMultiGenericSchemaNameBlueprintApp : BlueprintApp
+    {
+        public OpenApiMultiGenericSchemaNameBlueprintApp()
+        {
+            var genericType = typeof(OpenApiGenericPair<GenericSchemaAlpha, GenericSchemaBeta>);
+            var bodyTypeName = $"Blueprint.SourceGenerator.Tests.Artifacts.OpenApiGenericPair<Blueprint.SourceGenerator.Tests.Artifacts.GenericSchemaAlpha, Blueprint.SourceGenerator.Tests.Artifacts.GenericSchemaBeta>";
+
+            var descriptor = new ApiOperationDescriptor(typeof(TestOperation), "TestOperation", "OpenApiDocumentEndpointTests");
+            descriptor.AddUrl(new ApiOperationUrl("/test"));
+            descriptor.SetFeatureData(new OperationHostExposureFeatureData(["http"]));
+            descriptor.SetFeatureData(new OperationHttpResponseMetadataFeatureData([
+                new OperationHttpResponseMetadata(200, true, ["OkResult"], [bodyTypeName]),
+            ]));
+            descriptor.SetFeatureData(new OperationSerializerContextCoverageFeatureData([bodyTypeName]));
+
+            this.AppOwnedSerializerContext = new OpenApiMultiGenericSchemaJsonContext(new JsonSerializerOptions());
+            this.AppOwnedSerializerContextType = typeof(OpenApiMultiGenericSchemaJsonContext);
+            this.AppOwnedSerializerContextBodyTypes = [genericType];
+            this.AppOwnedSerializerContextBodyTypeNames = [bodyTypeName];
+            this.Register(descriptor);
+        }
+    }
 }
 
 public sealed class OpenApiSchemaComponentEndpointResponseDto
@@ -379,3 +465,38 @@ public sealed class OpenApiUpdatedEventPayload
 [JsonSerializable(typeof(OpenApiCreatedEventPayload))]
 [JsonSerializable(typeof(OpenApiUpdatedEventPayload))]
 public partial class OpenApiResourceEventUnionJsonContext : JsonSerializerContext;
+
+public sealed class GenericSchemaInner
+{
+    public string? Value { get; init; }
+}
+
+public sealed class OpenApiGenericWrapper<T>
+{
+    public T? Data { get; init; }
+
+    public string? Tag { get; init; }
+}
+
+[JsonSerializable(typeof(OpenApiGenericWrapper<GenericSchemaInner>))]
+public partial class OpenApiGenericSchemaJsonContext : JsonSerializerContext;
+
+public sealed class GenericSchemaAlpha
+{
+    public string? Name { get; init; }
+}
+
+public sealed class GenericSchemaBeta
+{
+    public int Count { get; init; }
+}
+
+public sealed class OpenApiGenericPair<T1, T2>
+{
+    public T1? First { get; init; }
+
+    public T2? Second { get; init; }
+}
+
+[JsonSerializable(typeof(OpenApiGenericPair<GenericSchemaAlpha, GenericSchemaBeta>))]
+public partial class OpenApiMultiGenericSchemaJsonContext : JsonSerializerContext;

@@ -32,6 +32,12 @@ public sealed record OpenApiOutputRenderingContext(
     /// suffix stripping can provide a custom formatter via
     /// <see cref="OpenApiInfoOptions.SchemaNameFormatter"/>.
     /// </summary>
+    /// <remarks>
+    /// Generic type names are flattened using the NJsonSchema "Of" convention for backward
+    /// compatibility with legacy Blueprint and NSwag-based TypeScript generators. For example:
+    /// <c>Blueprint.Http.ResourceEvent&lt;MyApp.TemplateApiResource&gt;</c> becomes
+    /// <c>ResourceEventOfTemplateApiResource</c>. Nested generics are handled recursively.
+    /// </remarks>
     private static string SanitiseSchemaKey(string clrTypeName, Func<string, string>? customFormatter)
     {
         if (customFormatter is not null)
@@ -39,9 +45,76 @@ public sealed record OpenApiOutputRenderingContext(
             return customFormatter(clrTypeName);
         }
 
-        // Use simple class name for cleaner schema keys (e.g. "TemplateApiResource" not "MyApp_Api_TemplateApiResource").
-        var lastDot = clrTypeName.LastIndexOf('.');
-        return lastDot >= 0 ? clrTypeName.Substring(lastDot + 1) : clrTypeName;
+        return SimplifyClrTypeName(clrTypeName);
+    }
+
+    /// <summary>
+    /// Converts a fully-qualified CLR type name (including generic type arguments) into a
+    /// clean OpenAPI schema key using the NJsonSchema "Of" convention. Namespace prefixes are
+    /// stripped and generic angle brackets are replaced with <c>Of</c> separators so that
+    /// <c>Blueprint.Http.ResourceEvent&lt;MyApp.TemplateApiResource&gt;</c> becomes
+    /// <c>ResourceEventOfTemplateApiResource</c>.
+    /// </summary>
+    private static string SimplifyClrTypeName(string clrTypeName)
+    {
+        var angleBracketIndex = clrTypeName.IndexOf('<');
+
+        if (angleBracketIndex < 0)
+        {
+            // Non-generic: strip namespace only (take text after last dot).
+            var lastDot = clrTypeName.LastIndexOf('.');
+            return lastDot >= 0 ? clrTypeName.Substring(lastDot + 1) : clrTypeName;
+        }
+
+        // Generic: extract the outer type name (before '<') and strip its namespace.
+        var outerFullName = clrTypeName.Substring(0, angleBracketIndex);
+        var outerLastDot = outerFullName.LastIndexOf('.');
+        var outerSimpleName = outerLastDot >= 0 ? outerFullName.Substring(outerLastDot + 1) : outerFullName;
+
+        // Extract the inner type arguments (between '<' and the matching '>').
+        var argsContent = clrTypeName.Substring(angleBracketIndex + 1, clrTypeName.Length - angleBracketIndex - 2);
+        var typeArgs = SplitGenericArguments(argsContent);
+
+        // Recursively simplify each type argument and join with "Of" for the first, "And" for subsequent.
+        var builder = new System.Text.StringBuilder(outerSimpleName);
+        for (var i = 0; i < typeArgs.Count; i++)
+        {
+            builder.Append(i == 0 ? "Of" : "And");
+            builder.Append(SimplifyClrTypeName(typeArgs[i].Trim()));
+        }
+
+        return builder.ToString();
+    }
+
+    /// <summary>
+    /// Splits a comma-separated list of generic type arguments, respecting nested angle brackets
+    /// so that <c>Foo&lt;Bar&gt;, Baz</c> correctly splits into two arguments rather than three.
+    /// </summary>
+    private static List<string> SplitGenericArguments(string argsContent)
+    {
+        var result = new List<string>();
+        var depth = 0;
+        var start = 0;
+
+        for (var i = 0; i < argsContent.Length; i++)
+        {
+            switch (argsContent[i])
+            {
+                case '<':
+                    depth++;
+                    break;
+                case '>':
+                    depth--;
+                    break;
+                case ',' when depth == 0:
+                    result.Add(argsContent.Substring(start, i - start));
+                    start = i + 1;
+                    break;
+            }
+        }
+
+        result.Add(argsContent.Substring(start));
+        return result;
     }
 
     /// <summary>
@@ -1051,14 +1124,9 @@ public sealed record OpenApiOutputRenderingContext(
         writer.WritePropertyName(SanitiseSchemaKey(component.BodyTypeName, schemaNameFormatter));
         writer.WriteStartObject();
 
-        // Prefer an explicit [DisplayName] title; fall back to the short CLR type name.
-        var shortTitle = component.Title ?? component.BodyTypeName;
-        var lastDot = shortTitle.LastIndexOf('.');
-
-        if (lastDot >= 0 && component.Title is null)
-        {
-            shortTitle = shortTitle[(lastDot + 1)..];
-        }
+        // Prefer an explicit [DisplayName] title; fall back to the simplified CLR type name
+        // (which correctly handles generics via the "Of" convention).
+        var shortTitle = component.Title ?? SimplifyClrTypeName(component.BodyTypeName);
 
         writer.WriteString("title", shortTitle);
 
@@ -1096,6 +1164,11 @@ public sealed record OpenApiOutputRenderingContext(
             }
 
             writer.WriteEndObject();
+
+            // Emit additionalProperties: false for object schemas with declared properties, matching
+            // NJsonSchema's convention. This prevents consumers (including TypeScript generators)
+            // from allowing arbitrary extra properties on typed schema objects.
+            writer.WriteBoolean("additionalProperties", false);
         }
 
         if (!component.Links.IsDefaultOrEmpty)

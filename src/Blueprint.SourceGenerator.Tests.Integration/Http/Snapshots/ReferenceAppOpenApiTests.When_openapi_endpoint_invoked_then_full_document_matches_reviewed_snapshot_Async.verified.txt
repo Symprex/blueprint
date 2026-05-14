@@ -2273,7 +2273,8 @@
             "type": "string",
             "readOnly": true
           }
-        }
+        },
+        "additionalProperties": false
       },
       "BulkArchiveTemplates": {
         "title": "BulkArchiveTemplates",
@@ -2297,7 +2298,8 @@
             "description": "Optional reason for the bulk archive.",
             "maxLength": 500
           }
-        }
+        },
+        "additionalProperties": false
       },
       "ChangePassword": {
         "title": "ChangePassword",
@@ -2328,7 +2330,8 @@
             "description": "Re-enter the new password for confirmation.",
             "writeOnly": true
           }
-        }
+        },
+        "additionalProperties": false
       },
       "CloneTemplate": {
         "title": "CloneTemplate",
@@ -2343,7 +2346,8 @@
             "description": "The display name for the new cloned template.",
             "maxLength": 200
           }
-        }
+        },
+        "additionalProperties": false
       },
       "CreateTemplate": {
         "title": "CreateTemplate",
@@ -2442,7 +2446,8 @@
               "type": "object"
             }
           }
-        }
+        },
+        "additionalProperties": false
       },
       "ExportJobApiResource": {
         "title": "ExportJobApiResource",
@@ -2458,7 +2463,8 @@
           "JobId": {
             "type": "string"
           }
-        }
+        },
+        "additionalProperties": false
       },
       "ExportTemplates": {
         "title": "ExportTemplates",
@@ -2479,7 +2485,55 @@
             "format": "email",
             "description": "Email address to notify on export completion. Required when NotifyOnCompletion is true."
           }
-        }
+        },
+        "additionalProperties": false
+      },
+      "PagedApiResourceOfTemplate": {
+        "title": "PagedApiResourceOfTemplate",
+        "type": "object",
+        "properties": {
+          "$links": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Link"
+            },
+            "readOnly": true
+          },
+          "$object": {
+            "type": "string",
+            "readOnly": true
+          },
+          "$partial": {
+            "type": "boolean"
+          },
+          "CurrentPage": {
+            "type": "integer",
+            "format": "int32",
+            "readOnly": true
+          },
+          "PageSize": {
+            "type": "integer",
+            "format": "int32",
+            "readOnly": true
+          },
+          "ResourceKey": {
+            "type": "string",
+            "readOnly": true
+          },
+          "Total": {
+            "type": "integer",
+            "format": "int64",
+            "readOnly": true
+          },
+          "Values": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TemplateApiResource"
+            },
+            "readOnly": true
+          }
+        },
+        "additionalProperties": false
       },
       "PatchTemplateSettings": {
         "title": "PatchTemplateSettings",
@@ -2516,7 +2570,8 @@
             "maxLength": 50,
             "pattern": "^[a-zA-Z][a-zA-Z0-9\\-_]*$"
           }
-        }
+        },
+        "additionalProperties": false
       },
       "PreviewTemplate": {
         "title": "PreviewTemplate",
@@ -2532,7 +2587,8 @@
               "type": "string"
             }
           }
-        }
+        },
+        "additionalProperties": false
       },
       "ProblemDetails": {
         "title": "ProblemDetails",
@@ -2562,7 +2618,8 @@
             "type": "string",
             "nullable": true
           }
-        }
+        },
+        "additionalProperties": false
       },
       "TemplateApiResource": {
         "title": "Email Template",
@@ -2616,7 +2673,8 @@
             "type": "string",
             "readOnly": true
           }
-        }
+        },
+        "additionalProperties": false
       },
       "TemplatePreviewApiResource": {
         "title": "TemplatePreviewApiResource",
@@ -2656,7 +2714,8 @@
             "type": "string",
             "readOnly": true
           }
-        }
+        },
+        "additionalProperties": false
       },
       "TemplateVersionApiResource": {
         "title": "TemplateVersionApiResource",
@@ -2698,7 +2757,8 @@
             "format": "int32",
             "readOnly": true
           }
-        }
+        },
+        "additionalProperties": false
       },
       "UpdateTemplate": {
         "title": "UpdateTemplate",
@@ -2725,7 +2785,8 @@
             "description": "The updated plain text content.",
             "maxLength": 10000
           }
-        }
+        },
+        "additionalProperties": false
       },
       "UpdateTemplateSettings": {
         "title": "UpdateTemplateSettings",
@@ -2736,7 +2797,8 @@
             "nullable": true,
             "description": "The new display name."
           }
-        }
+        },
+        "additionalProperties": false
       },
       "ValidateTemplate": {
         "title": "ValidateTemplate",
@@ -2747,7 +2809,8 @@
             "nullable": true,
             "description": "Gets or sets the template name to validate. \u0022INVALID\u0022 triggers a validation exception, \u0022BAD\u0022 triggers a bad-request exception."
           }
-        }
+        },
+        "additionalProperties": false
       },
       "ValidationProblemDetails": {
         "title": "ValidationProblemDetails",
@@ -2783,7 +2846,8 @@
             "type": "string",
             "nullable": true
           }
-        }
+        },
+        "additionalProperties": false
       },
       "Link": {
         "title": "Link",

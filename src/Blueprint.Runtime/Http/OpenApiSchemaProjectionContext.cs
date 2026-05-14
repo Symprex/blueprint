@@ -42,13 +42,30 @@ public sealed record OpenApiSchemaProjectionContext(
             .ToFrozenDictionary(static pair => pair.Key, static pair => pair.Value, StringComparer.Ordinal);
 
         // Build a reverse lookup: full CLR name → FormatTypeName short name.
-        // Descriptor feature data stores full CLR names at compile time, while coveredTypesByName
+        // Descriptor feature data stores full CLR names at compile time (using Roslyn's
+        // ToDisplayString format with angle brackets for generics), while coveredTypesByName
         // uses FormatTypeName-produced short names. This bridge resolves the mismatch.
-        var fullNameToShortName = document.App.AppOwnedSerializerContextBodyTypes
-            .ToFrozenDictionary(
-                static bodyType => bodyType.FullName ?? bodyType.Name,
-                static bodyType => FormatTypeName(bodyType),
-                StringComparer.Ordinal);
+        // For generic types, Type.FullName uses backtick notation (e.g., ResourceEvent`1[[...]])
+        // while the source generator produces angle-bracket format (e.g., ResourceEvent<Foo>),
+        // so we include both formats as keys to handle either naming convention.
+        var fullNameToShortNameBuilder = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        foreach (var bodyType in document.App.AppOwnedSerializerContextBodyTypes)
+        {
+            var shortName = FormatTypeName(bodyType);
+            var fullName = bodyType.FullName ?? bodyType.Name;
+            fullNameToShortNameBuilder.TryAdd(fullName, shortName);
+
+            if (bodyType.IsGenericType)
+            {
+                // Source generators produce angle-bracket format names via ToDisplayString.
+                // Include this as an alternate key so the lookup succeeds for either format.
+                var displayStyleName = FormatFullNameDisplayStyle(bodyType);
+                fullNameToShortNameBuilder.TryAdd(displayStyleName, shortName);
+            }
+        }
+
+        var fullNameToShortName = fullNameToShortNameBuilder.ToFrozenDictionary(StringComparer.Ordinal);
 
         var rawBodyTypeNames = document.Operations
             .Where(static operation => operation.IsSerializerContextCoverageSatisfied)
@@ -885,6 +902,26 @@ public sealed record OpenApiSchemaProjectionContext(
         // Short type name by default — matches what TypeScript generators and most OpenAPI
         // tooling expects (e.g. "TemplateApiResource" not "MyApp_Api_TemplateApiResource").
         return type.Name;
+    }
+
+    /// <summary>
+    /// Produces a fully-qualified type name using the same angle-bracket format that Roslyn's
+    /// <c>ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)</c> produces. This bridges the
+    /// mismatch between <see cref="Type.FullName"/> (backtick notation for generics) and the
+    /// source generator's compile-time body type names (angle-bracket notation).
+    /// </summary>
+    private static string FormatFullNameDisplayStyle(Type type)
+    {
+        if (!type.IsGenericType)
+        {
+            return type.FullName ?? type.Name;
+        }
+
+        var definition = type.GetGenericTypeDefinition().FullName!;
+        var backtickIdx = definition.IndexOf('`');
+        var baseName = backtickIdx > 0 ? definition[..backtickIdx] : definition;
+        var args = string.Join(", ", type.GetGenericArguments().Select(FormatFullNameDisplayStyle));
+        return $"{baseName}<{args}>";
     }
 
     /// <summary>
