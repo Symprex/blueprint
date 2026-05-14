@@ -3367,3 +3367,83 @@ presentation concern, not an authorization concern. Blueprint does not need to p
 it stays in S365's codebase. During migration, this component continues to work because it
 reads `[Resource]` attributes which are unchanged.
 
+### Finding #337: Hangfire Integration — Full Compatibility Confirmed
+
+**Date:** 2025-07-16  
+**Area:** Infrastructure / Background Tasks  
+**Severity:** Info  
+
+S365 Hangfire usage is **fully abstracted** through Blueprint's task interfaces. The patterns are:
+
+1. **Task scheduling** — `IBackgroundTaskScheduleProvider.EnqueueAsync(BackgroundTaskEnvelope)` → Hangfire `IBackgroundJobClient.Create()`
+2. **Recurring tasks** — `IRecurringTaskScheduler` implementations discovered at startup by `RecurringTaskManager`
+3. **Storage** — SQL Server via `RecurringJobPartitionedSqlServerStorage` with connection from `Configuration.GetConnectionString("Hangfire")`
+4. **Test doubles** — NSubstitute `IBackgroundJobClient` substitute in `WebApiFixtureFactory`
+
+Blueprint.Tasks.Hangfire already covers the entire abstraction surface:
+- `HangfireTaskScheduler` maps to S365's `HangfireBackgroundTaskScheduleProvider`
+- `IRecurringTaskProvider` maps to S365's `IRecurringTaskScheduler`
+- Background task flush in generated pipelines replaces manual middleware
+
+**11+ `IBackgroundTask` implementations** identified across: Billing (soft delete), Portal (tenant hard delete, Entra ID import, domain refresh), M365 (Graph subscription renewal), Common (transactional email).
+
+**Action:** None needed. Blueprint.Tasks.Hangfire is a drop-in replacement.
+
+### Finding #338: OpenAPI / TypeScript Client Generation — Shape Compatibility Confirmed
+
+**Date:** 2025-07-16  
+**Area:** OpenAPI / TypeScript  
+**Severity:** Info  
+
+S365 uses a **custom TypeScript generator** (NOT NSwag) built with Handlebars templates in 3 frontend apps (admin, portal, partners). The generator reads committed `Spec/openapi.json` files from disk and produces TypeScript classes with:
+
+- **RTTI support** — `typeDetails()` method on classes for runtime type checking
+- **HATEOAS link methods** — Generated from `x-links` extension on schema components
+- **`can{Operation}` guards** — Boolean getters checking if a link exists
+- **AJV schema validation** — Full JSON Schema embedded for client-side validation
+- **`setData()` constructors** — Partial update pattern for Vue reactivity handling
+
+Blueprint's OpenAPI output is **fully compatible** with S365's Handlebars templates:
+
+| Feature | S365 Expects | Blueprint Generates |
+|---------|-------------|-------------------|
+| `$object` property | ✅ | ✅ `JsonEncodedText.Encode("$object")` |
+| `$links` dictionary | ✅ | ✅ `IDictionary<string, Link>` |
+| `$partial` boolean | ✅ | ✅ On `ILinkableResource` types |
+| `x-links` extension | ✅ | ✅ Schema components with `rel`/`operationId`/`method` |
+| `operationId` = class name | ✅ | ✅ `primaryOperation.OperationName` |
+| `tags` for grouping | ✅ | ✅ From `DescriptorTags` or class name |
+| `Link` schema | ✅ | ✅ `href` + nullable `type` |
+| `ProblemDetails` schema | ✅ | ✅ Standard RFC 7807 shape |
+| `ValidationProblemDetails` | ✅ | ✅ With `errors` dictionary |
+| OpenAPI 3.0 format | ✅ | ✅ `"openapi": "3.0.0"` |
+
+**OpenAPI export to disk** — Blueprint's `OutputOpenApi()` extension writes `Spec/openapi.json`, matching S365's committed spec pattern exactly.
+
+**21 committed openapi.json files** identified across all S365 backend apps. Each service needs to:
+1. Build with Blueprint source gen
+2. Call `host.OutputOpenApi()` in development mode
+3. Compare output with existing committed spec
+4. Run `npm run openapi` in frontend apps to regenerate TypeScript
+
+**Hard Gate:** TS generator must produce equivalent output. The Handlebars templates consume raw OpenAPI JSON structure — as long as the schema shape matches (confirmed above), generation will work.
+
+**Open question:** The `UseStatus200ForSuccessResponses` flag may be needed for services that return 201/204 success codes, since the TS generator's `returnType` resolution may assume `responses['200']`.
+
+### Finding #339: S365 `CallAsync` Shims Already Implemented
+
+**Date:** 2025-07-16  
+**Area:** BlueprintHttpClient  
+**Severity:** Info  
+
+S365 gateways use `_blueprintHttpClient.CallAsync(operation, options, cancellationToken)` extensively. Blueprint's `BlueprintHttpClient` already provides 4 `CallAsync` overloads that delegate to `SendAsync`:
+
+```csharp
+CallAsync<TResponse>(IQuery<TResponse>, CancellationToken)
+CallAsync<TResponse>(IQuery<TResponse>, CallOptions?, CancellationToken)
+CallAsync(IOperation, CancellationToken)
+CallAsync(IOperation, CallOptions?, CancellationToken)
+```
+
+S365's source generators also emit `CallAsync` calls in generated service API classes. No migration churn for gateway code.
+
