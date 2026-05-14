@@ -48,6 +48,13 @@
 | Claims-based auth removal | ✅ Done | Removed 9 files, 775 lines; only Resource-based auth remains |
 | `RequiresPermissionCheck` rename | ✅ Done | → `RequiresResourceAuthorization` for clarity |
 | S365 auth compatibility | ✅ Verified | 3-arg `[Resource]` matches S365 pattern; verb expansion stays in provider |
+| Verb hierarchy | ✅ Done | `ScopePairClaimAuthorizationProvider` constructor accepts `verbInclusions` map |
+| NodaTime OpenAPI | ✅ Done | MapKind + MapFormat for 8 NodaTime types via string matching |
+| HttpClient StatusCodeResult | ✅ Done | Reflection-based singleton matching for gateway `CallAsync<T>()` |
+| HttpClient PlainTextResult | ✅ Done | text/vcard and similar non-JSON content types |
+| HttpClient resilience | ✅ Done | Timeout → RequestTimeout, connection → InternalServerError |
+| TenantId OpenAPI exclusion | ✅ Done | AuthContext classification auto-excludes from OpenAPI params/body |
+| API catalog (RFC 9727) | ✅ Done | `/.well-known/api-catalog` linkset+json endpoint |
 | Pipeline helper extraction | ✅ Done | `LoadUserContextAsync`, `RunAuthorisersAsync` reduce IL per pipeline |
 | Handler property injection | ✅ Done | ApiOperations base-class pattern (Context, Identity, Logger, CT) auto-detected |
 | Self-link dedup in pipelines | ✅ Done | Multiple ops declaring same `[SelfLink]` URL no longer emit duplicate `AddLink("self")` calls |
@@ -3014,4 +3021,124 @@ Blueprint's `HandlerDiscovery.DetectPropertyInjections()` walks the handler type
 
 The S365 `ApiOperations` base class (Context, Identity, Logger, CancellationToken) is directly compatible.
 Generated pipeline line 86-88 confirms: property injection is emitted after handler creation.
+
+### #320 — NodaTime OpenAPI Format Mapping
+
+**Result: Implemented in commit `be4e4aef`**
+
+Blueprint.Runtime now detects NodaTime types via `Type.FullName` string matching (no package reference)
+and maps them to correct OpenAPI kinds and formats:
+
+- `Instant` → string/date-time
+- `LocalDate` → string/date
+- `LocalTime` → string/time
+- `LocalDateTime` → string/date-time
+- `OffsetDateTime` → string/date-time
+- `ZonedDateTime` → string/date-time
+- `Duration` → string/duration
+- `Period` → string/duration
+
+Without this, NodaTime structs rendered as `type: "object"` because STJ sees them as complex types.
+
+### #321 — BlueprintHttpClient StatusCodeResult/PlainTextResult/Resilience
+
+**Result: Implemented in commit `2009e704`**
+
+S365 gateway patterns now fully supported:
+- `CallAsync<StatusCodeResult.Accepted>(...)` — reflection-based singleton Instance matching
+- `PlainTextResult` — text/vcard and similar non-JSON content types
+- Timeout → `BlueprintApiException(RequestTimeout)` (not GatewayTimeout, avoids Cloudflare interception)
+- Connection failure → `BlueprintApiException(InternalServerError)` (not BadGateway)
+
+### #322 — Body Reading: No Further Extraction Needed
+
+**Result: Current implementation is optimal**
+
+`PopulateFromJsonBody` generates ~30-50 lines of `Utf8JsonReader` loop per pipeline.
+This is intentionally kept inline because:
+1. `ValueTextEquals("name"u8)` chain is faster than dictionary lookup
+2. JIT can inline and optimize per-operation reader loops
+3. `ReadJsonBodyAsync` already extracts all shared boilerplate
+
+### #323 — Deep S365 Gap Audit (All 7 Areas Confirmed Working)
+
+| Area | Status | Details |
+|------|--------|---------|
+| CallAsync / HTTP Clients | ✅ | Gateway shims + StatusCodeResult + PlainTextResult |
+| ReadJsonBodyAsync | ✅ | Operation parameter for static lambdas, zero allocation |
+| Property Populators | ✅ | TenantModule convention-based, 290+ TenantId usages covered |
+| PlainTextResult | ✅ | Both client (HttpClient) and server (pipeline) handle it |
+| Background Tasks | ✅ | IBackgroundTaskScheduleProvider fully integrated |
+| ResourceEvent nesting | ✅ | Max 2-level: `ResourceEvent<ListApiResource<T>>` |
+| Body reading duplication | ✅ | Intentionally inline for JIT optimisation |
+
+### #324 — Resource-Based Authorization: Full Compatibility Confirmed
+
+**Result: S365 `[Resource]` attributes work without modification**
+
+Key findings:
+- Blueprint's `ResourceAttribute` has both 2-parameter `(noun, verb)` and 3-parameter
+  `(noun, verb, resourceKeyTemplate)` constructors — matches S365's 3-parameter form exactly
+- `FromResourceAttribute` supports optional template override — S365's 2-parameter form works
+- `ScopePairClaimAuthorizationProvider` already supports verb hierarchy via `verbInclusions`:
+  ```csharp
+  new ScopePairClaimAuthorizationProvider("scope", ".", 
+      ["openid", "profile", "email", "offline_access"],
+      new Dictionary<string, string[]> { ["Manage"] = ["Create", "Read", "Update", "Delete"] })
+  ```
+- Zero-allocation span-based scope matching (`MatchesScopePair` uses `AsSpan()`)
+- `FrozenDictionary`/`FrozenSet` for O(1) lookups
+- Static readonly `ScopePair[]` per operation (compile-time, no per-request allocation)
+- Compile-time template expansion via inline string interpolation (no regex/reflection)
+- `[Permission]`/`[PermissionFor]` do NOT exist in new Blueprint (already removed)
+
+**S365 migration:** Replace `ScopeApiAuthoriser` with `ScopePairClaimAuthorizationProvider`,
+configure verb hierarchy in constructor. Noun/verb string constants work unchanged.
+
+### #325 — Testing Infrastructure: Full S365 Compatibility
+
+**Result: Blueprint.Testing mirrors S365 test surface — minimal migration churn**
+
+| Feature | S365 (`ApiFixture`) | Blueprint (`BlueprintTestFixture`) |
+|---------|---------------------|----------------------------------|
+| `QueryAsync<T>(IQuery<T>)` | ✅ | ✅ Strongly-typed |
+| `CommandAsync<T>(ICommand<T>)` | ✅ | ✅ Strongly-typed |
+| `BackgroundTaskAsync(IBackgroundTask)` | ✅ (clears auth) | ✅ (clears auth) |
+| `MessageAsync(message, retries)` | ✅ | ✅ |
+| Ambient auth (`Authentication`) | ✅ `Set(ClaimsIdentity)` | ✅ `Set(ClaimsIdentity)` |
+| Scoped auth (`As(identity)`) | ✅ → IDisposable | ✅ → IDisposable |
+| `Bus` property | ✅ `FakeBus` | ✅ `TestMessageCollector` |
+| `Tasks` property | ✅ `BackgroundTaskCollector` | ✅ `BackgroundTaskCollector` |
+| `GetOptions<T>()` | ✅ | ✅ |
+| Factory pattern | `WebApiFixtureFactory<T>` | `BlueprintTestFixtureFactory<TApp,TExec>` |
+| `GetServiceAs<S,I>()` | ❌ manual cast | ✅ cast helper |
+
+**Key shims already in place:**
+- `BlueprintTestFixture.Bus` property aliases `Messages` for S365 compatibility
+- `TestMessageCollector` has `HavePublishedSingle<T>()`, `HaveSent<T>()` matching FakeBus API
+- `TestAuthenticationManager` has both Blueprint and S365-style API methods
+
+**Only gap:** S365-specific `AuthHelpers` extensions (e.g. `AuthenticateAsTenantAdministrator`)
+must be provided by S365's own test helpers — these are domain-specific, not framework-level.
+
+### #326 — Route Deduplication: Already Implemented
+
+**Result: No work needed**
+
+`ApplicationBuilderExtensions.MapBlueprintApi` already:
+1. Deduplicates by `(RoutingUrl, OperationType)` via `HashSet` (line 130)
+2. Detects cross-operation route collisions with logging warning (line 164-175)
+3. Multiple HATEOAS links → one ASP.NET endpoint per unique route+operation pair
+
+### #327 — TenantId OpenAPI Exclusion: Already Working
+
+**Result: Automatic exclusion via PropertyOwnershipSource.AuthContext**
+
+When first-class tenancy is enabled (`ICurrentTenantAccessor` registered):
+1. `TenantIdConventionHelper.IsTenantAutoPopulated()` detects `TenantId` properties
+2. `PropertyOwnershipModule` classifies them as `PropertyOwnershipSource.AuthContext`
+3. OpenAPI `ProjectInputMetadata` only renders Route/Query/Header/Cookie/Body sources
+4. `AuthContext` and `System` entries are automatically excluded from OpenAPI parameters and body
+
+**No manual `[OpenApiIgnore]` attribute needed** — convention handles it.
 
