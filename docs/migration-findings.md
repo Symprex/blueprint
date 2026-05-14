@@ -2134,6 +2134,157 @@ wrapper object and using slow runtime type inspection on every request.
 - Inner data payload still uses app-owned source-generated context when available
 - Pre-encoded property names cached as static fields
 
+---
+
+### Finding #314: Test Infrastructure Confirmed Compatible
+
+**Date:** 2025-07-15  
+**Category:** Test Infrastructure  
+**Severity:** Confirmation (no work needed)
+
+S365 test infrastructure verified to have 1:1 mapping to Blueprint.Testing:
+
+| S365 Pattern | Blueprint Equivalent |
+|---|---|
+| `WebApiFixtureFactory<TStartup>` | `BlueprintTestFixtureFactory<TApp, TExec>` |
+| `ApiFixture` | `BlueprintTestFixture<TApp, TExec>` |
+| `api.QueryAsync<T>(query)` | `api.QueryAsync<T>(query)` — same signature |
+| `api.CommandAsync<T>(cmd)` | `api.CommandAsync<T>(cmd)` — same signature |
+| `api.BackgroundTaskAsync(task)` | `api.BackgroundTaskAsync(task)` — same signature |
+| `api.MessageAsync(msg, retryAttempts: N)` | `api.MessageAsync(msg, retryAttempts: N)` — same signature |
+| `api.Authentication.As(identity)` | `api.Authentication.As(identity)` — scoped with dispose-restore |
+| `api.Authentication.MakeAnonymous()` | `api.Authentication.MakeAnonymous()` — same name |
+| `api.Authentication.Set(identity)` | `api.Authentication.Set(identity)` — same name |
+| `api.Bus` (FakeBus) | `api.Bus` → `TestMessageCollector` (different API but same role) |
+| `api.Tasks` (BackgroundTaskCollector) | `api.Tasks` (BackgroundTaskCollector) — same type |
+| `api.Services` | `api.Services` — same |
+
+**Key compatibility features:**
+- Ambient authentication: set once, applies to all calls — same as S365
+- Per-call override: `configure` callback takes precedence — same as S365
+- `BackgroundTaskAsync`/`MessageAsync` auto-clear auth — same as S365
+- `GetRequiredService<T>()` and `GetOptions<T>()` convenience methods
+- xUnit `IClassFixture<Factory>` integration — same lifecycle pattern
+
+---
+
+### Finding #315: IUserAuthorisationContext 1:1 Interface Match
+
+**Date:** 2025-07-15  
+**Category:** Authorization  
+**Severity:** Confirmation (no work needed)
+
+Blueprint's `IUserAuthorisationContext` at `src/Blueprint.Runtime/Authorization/IUserAuthorisationContext.cs`
+has identical properties to S365's version at `src/Blueprint/Blueprint/Authorisation/IUserAuthorisationContext.cs`:
+
+- `bool IsActive` ✅
+- `bool IsAnonymous` ✅
+- `string Id` ✅
+- `string IdentityId` ✅
+- `string AccountId` ✅
+- `string Email` ✅
+- `string Name` ✅
+- `void PopulateMetadata(Action<string, object> add)` ✅
+
+`IUserAuthorisationContextFactory.CreateContextAsync(ClaimsIdentity, CancellationToken)` also matches (Blueprint adds
+`CancellationToken` parameter, but S365 can ignore it).
+
+S365's `Signature365UserAuthorisationContext` implementation with `TenantId`/`PartnerId` can implement
+Blueprint's interface directly — no adaptation layer needed.
+
+---
+
+### Finding #316: ReadJsonBodyAsync Already Has Static Lambda Support
+
+**Date:** 2025-07-15  
+**Category:** Performance  
+**Severity:** Confirmation (already implemented)
+
+`PipelineHelpers.ReadJsonBodyAsync<TOperation>` (line 338 of `PipelineHelpers.cs`) already accepts the
+operation as a `TOperation` parameter and passes it through to the `PopulateFromBodyDelegate<TOperation>`
+delegate. This enables the generated populate lambda to be `static` — zero closure allocation per request.
+
+No further work needed for the user's request to "give the operation object that can be passed back in
+to the lambda to allow making it static and removing lambda allocation."
+
+---
+
+### Finding #317: S365 TypeScript Generation Uses Custom Handlebars
+
+**Date:** 2025-07-15  
+**Category:** OpenAPI / TypeScript  
+**Severity:** Important context for migration
+
+S365 does NOT use NSwag for TypeScript client generation. It uses custom Handlebars templates:
+
+**Location:** `frontend/apps/portal/src/openapi/generator/`
+- `api.handlebars` — top-level `api.ts` entry
+- `apiInner.handlebars` — API "parts" (per-endpoint)
+- `model.handlebars` — model/resource TypeScript classes
+- `index.mts` — CLI entry point using `Handlebars.compile()`
+
+**Invocation:** `npm run openapi ../../../src/Apps/Portal/Symprex.Signature365.Portal/Spec/openapi.json`
+
+**Implications:**
+1. The Handlebars templates parse the OpenAPI JSON directly — they care about:
+   - `operationId` naming conventions
+   - Path parameter syntax
+   - Schema shapes (especially `$ref` vs inline)
+   - Enum representation (string values, `title` property)
+   - Response status code keys (`200` vs `201` vs `204`)
+2. NSwag compatibility is NOT a concern — only raw OpenAPI JSON shape matters
+3. Migration gate: generate OpenAPI from new Blueprint → feed to existing Handlebars templates → verify identical TypeScript output
+
+---
+
+### Finding #318: SetTenantMiddleware Replaced by TenantModule
+
+**Date:** 2025-07-15  
+**Category:** Tenancy  
+**Severity:** Confirmation (already handled)
+
+S365's `SetTenantMiddleware` at `src/Core/Symprex.Signature365.Common/Api/SetTenantMiddleware.cs`:
+1. Reads `sig365_tenant_id` from JWT claims
+2. Sets `ICurrentTenantAccessor.Current = tenantId`
+3. Sets Serilog diagnostic context `TenantId`
+4. Sets `operation.TenantId = tenantId` (if property exists and not already set)
+
+Blueprint's `TenantModule` at `src/Blueprint.SourceGenerator/Modules/Tenancy/TenantModule.cs`:
+1. Detects settable `TenantId` property on any operation (compile-time)
+2. Reads from `ICurrentTenantAccessor.Current` (which is set from JWT by ASP.NET middleware)
+3. Generates direct `operation.TenantId = accessor.Current` assignment (zero reflection)
+4. Type conversion for non-string TenantId (via `IParsable<T>` or `TypeConverter`)
+5. Only populates when property is empty/default (won't overwrite explicit values)
+
+**Migration path:** S365 needs an ASP.NET Core middleware that reads `sig365_tenant_id` from
+`HttpContext.User` and sets `ICurrentTenantAccessor.Current`. The pipeline then auto-populates
+`TenantId` on each operation — no per-operation code needed.
+
+---
+
+### Finding #319: ApiOperations Base Class 1:1 Match
+
+**Date:** 2025-07-15  
+**Category:** Handler Infrastructure  
+**Severity:** Confirmation (no work needed)
+
+Blueprint's `ApiOperations` base class at `src/Blueprint.Runtime/Exec/ApiOperations.cs` has the
+same property surface as S365's version:
+
+| S365 Property | Blueprint Property | Source |
+|---|---|---|
+| `Context` (ApiOperationContext) | `Context` (ApiOperationContext) | Pipeline injection |
+| `Identity` (IUserAuthorisationContext) | `Identity` (IUserAuthorisationContext) | Pipeline injection |
+| `Logger` (ILogger) | `Logger` (ILogger) | Pipeline injection |
+| `CancellationToken` | `CancellationToken` | Pipeline injection |
+| `HttpContext` | `HttpContext` | Computed from Context |
+| `HttpRequest` | `HttpRequest` | Computed from HttpContext |
+| `HttpResponse` | `HttpResponse` | Computed from HttpContext |
+
+S365 handler classes that inherit from `ApiOperations` can inherit from Blueprint's `ApiOperations`
+with zero code changes to handler logic. The generated pipeline discovers and populates all these
+properties via `HandlerDiscovery.DetectPropertyInjections()`.
+
 ### #287 — PartnerId Is Route-Bound, Not Property-Populated
 
 **Date**: 2025-07-30
