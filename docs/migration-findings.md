@@ -48,6 +48,9 @@
 | Claims-based auth removal | ✅ Done | Removed 9 files, 775 lines; only Resource-based auth remains |
 | `RequiresPermissionCheck` rename | ✅ Done | → `RequiresResourceAuthorization` for clarity |
 | S365 auth compatibility | ✅ Verified | 3-arg `[Resource]` matches S365 pattern; verb expansion stays in provider |
+| Recurring task compat | ✅ Verified | Interface identical; registration: explicit `AddRecurringTaskScheduler<T>()` (#356) |
+| Rebus handler compat | ✅ Verified | `IHandleMessages<T>` code unchanged; startup config differs (#357) |
+| Test infrastructure deep audit | ✅ Verified | All APIs (Auth, Fixture, Factory, Bus, Tasks) match S365 signatures (#358) |
 | Verb hierarchy | ✅ Done | `ScopePairClaimAuthorizationProvider` constructor accepts `verbInclusions` map |
 | NodaTime OpenAPI | ✅ Done | MapKind + MapFormat for 8 NodaTime types via string matching |
 | HttpClient StatusCodeResult | ✅ Done | Reflection-based singleton matching for gateway `CallAsync<T>()` |
@@ -3115,6 +3118,102 @@ Key findings:
 - Static readonly `ScopePair[]` per operation (compile-time, no per-request allocation)
 - Compile-time template expansion via inline string interpolation (no regex/reflection)
 - `[Permission]`/`[PermissionFor]` do NOT exist in new Blueprint (already removed)
+
+---
+
+### #356 — Recurring Task Pattern: Interface Identical, Registration Differs
+
+**IRecurringTaskScheduler interface is identical** between S365 legacy Blueprint and new Blueprint source-gen:
+```csharp
+public interface IRecurringTaskScheduler
+{
+    Task<IEnumerable<RecurringTaskSchedule>> GetTaskSchedulesAsync();
+}
+```
+
+**S365 scheduler implementations require zero code changes** — they implement the same interface
+with the same `RecurringTaskSchedule` data model (id, task, cron expression, optional queue name).
+
+**Registration pattern differs** (startup-only change):
+```csharp
+// S365 (auto-discovery at runtime)
+apiBuilder.AddTasks(t => {
+    t.UseHangfire(new HangfireTaskOptions { ... });
+    t.AddRecurringTasks();
+});
+
+// Blueprint source-gen (explicit registration)
+blueprint.AddRecurringTaskScheduler<Microsoft365RecurringTaskScheduler>();
+blueprint.AddRecurringTaskScheduler<TenantHardDeleteRecurringTaskScheduler>();
+blueprint.AddRecurringTaskProvider<HangfireRecurringTaskProvider>();
+```
+
+**Migration effort**: One `AddRecurringTaskScheduler<T>()` call per scheduler implementation in Startup.
+No changes to scheduler classes themselves. S365 has ~16 scheduler implementations across services.
+
+---
+
+### #357 — Rebus Handler Pattern: Handler Code Unchanged, Startup Differs
+
+**IHandleMessages<T> implementations stay identical** — S365 has 70+ message handlers that
+implement `IHandleMessages<T>` with `Task Handle(T message)`. No changes needed to handler classes.
+
+**Key architecture differences**:
+
+| Aspect | S365 (Legacy) | Blueprint Source-Gen |
+|--------|--------------|---------------------|
+| Handler discovery | Runtime reflection scan (`RebusHandleMessageOperationExecutorBuilderScanner`) | Compile-time source generation + explicit `Subscribe<T>()` |
+| Transaction scope | Two separate middleware classes (`Start`/`Commit`) | Single `RebusTransactionModule` generates both setup and teardown in pipeline |
+| Handler activation | `BlueprintApiActivator` wraps in middleware | `BlueprintApiActivator` wraps transactions inside `BlueprintHandler<T>.Handle()` |
+| Configuration | `apiBuilder.RebusConsumer(c => c.Subscribe<T>())` | `services.AddBlueprintRebusConsumer(c => c.Subscribe<T>())` |
+
+**Migration per service**:
+1. Remove `.RebusConsumer()` and `.Executors(e => e.AddScanner(...))` from startup
+2. Remove `.Pipeline(p => p.AddMiddleware<StartRebusTransactionScopeMiddleware>(...))` calls
+3. Add `services.AddBlueprintRebusConsumer(c => c.Subscribe<EventType1>().Subscribe<EventType2>())`
+4. Handler classes: **no changes**
+
+---
+
+### #358 — Test Infrastructure Deep Compatibility: All APIs Match
+
+**S365 `Authentication` class ↔ Blueprint `TestAuthenticationManager`**:
+- `Set(ClaimsIdentity)` ✅ identical
+- `Set(ClaimsPrincipal?)` ✅ identical
+- `As(ClaimsIdentity)` → `IDisposable` ✅ identical
+- `AsAnonymous()` → `IDisposable` ✅ identical
+- `MakeAnonymous()` ✅ identical
+- `CurrentPrincipal` property ✅ identical
+
+**S365 `ApiFixture` ↔ Blueprint `BlueprintTestFixture`**:
+- `QueryAsync<TResult>(IQuery<TResult>)` ✅ identical signature
+- `CommandAsync<TResult>(ICommand<TResult>)` ✅ identical signature
+- `CommandAsync(IOperation)` ✅ identical signature
+- `BackgroundTaskAsync(IBackgroundTask)` ✅ identical (auto-clears auth)
+- `MessageAsync(object, ..., retryAttempts)` ✅ identical (retry support)
+- `Authentication` property ✅ same semantics
+- `Bus` property ✅ alias for Messages
+- `Tasks` property ✅ BackgroundTaskCollector
+- `Services` property ✅ IServiceProvider
+- `GetOptions<T>()` ✅ identical
+- `RunAllPublishedMessagesAsync()` ✅ identical
+- `RunAndConsumeAllPublishedMessagesAsync()` ✅ identical
+
+**S365 `WebApiFixtureFactory<T>` ↔ Blueprint `BlueprintTestFixtureFactory<TApp, TExec>`**:
+- `Create(Action<IServiceCollection>?)` ✅ identical parameter pattern
+- `ConfigureOnce(IServiceProvider)` ✅ identical (async in Blueprint)
+- xUnit `IClassFixture` pattern ✅ identical
+- Per-test service config via `Create(s => s.AddSingleton(...))` ✅ identical
+
+**S365 auth helpers** (`AuthHelpers.cs`): These are S365-specific extension methods on `ApiFixture`
+that create `Signature365UserAuthorisationContext` instances with S365 roles/claims. They all use
+`api.Authentication.Set(identity)` and `api.Authentication.As(identity)` — which Blueprint provides.
+These helpers stay in S365's test infrastructure.
+
+**Context configuration difference**: S365 uses `Action<ApiFixtureExecutionContext<TResult>>` while
+Blueprint uses `Action<BlueprintTestContext>`. Most tests don't use this parameter. Tests that do
+will need a straightforward type change (`BlueprintTestContext` exposes `OperationContext`, `WithUser`,
+`WithTenant`, `WithScopePairs`, `SkipAuthorisation`, `WithData`).
 
 **S365 migration:** Replace `ScopeApiAuthoriser` with `ScopePairClaimAuthorizationProvider`,
 configure verb hierarchy in constructor. Noun/verb string constants work unchanged.
