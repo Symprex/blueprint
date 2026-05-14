@@ -487,7 +487,7 @@ public class ReferenceAppOpenApiTests
         var (json, _) = await InvokeOpenApiEndpointAsync(o => o.UseStatus200ForSuccessResponses = true);
         using var doc = JsonDocument.Parse(json);
 
-        // DELETE /templates/{Id} returns KeyOnlyResourceEventResult → 201 (bodyless).
+        // DELETE /templates/{Id} returns KeyOnlyResourceEventResult → 204 (bodyless).
         // A bodyless success response should NOT gain a synthetic 200 because there is no schema to mirror.
         var deletePath = doc.RootElement.GetProperty("paths").GetProperty("/templates/{Id}");
 
@@ -495,12 +495,11 @@ public class ReferenceAppOpenApiTests
         {
             var responses = deleteOp.GetProperty("responses");
 
-            // KeyOnlyResourceEventResult is 201 with no body — verify no synthetic 200 was added.
-            if (responses.TryGetProperty("201", out _))
-            {
-                responses.TryGetProperty("200", out _).Should().BeFalse(
-                    "bodyless 201 (KeyOnlyResourceEventResult) should not gain a synthetic 200 alias");
-            }
+            // KeyOnlyResourceEventResult on DELETE produces 204 with no body — verify no synthetic 200 was added.
+            responses.TryGetProperty("204", out _).Should().BeTrue(
+                "DELETE with KeyOnlyResourceEventResult should produce 204 No Content");
+            responses.TryGetProperty("200", out _).Should().BeFalse(
+                "bodyless 204 (KeyOnlyResourceEventResult) should not gain a synthetic 200 alias");
         }
     }
 

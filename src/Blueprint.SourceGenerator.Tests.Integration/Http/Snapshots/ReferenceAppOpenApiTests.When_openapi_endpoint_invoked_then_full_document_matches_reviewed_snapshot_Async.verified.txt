@@ -1048,16 +1048,8 @@
           }
         ],
         "responses": {
-          "201": {
-            "description": "Created",
-            "headers": {
-              "Location": {
-                "description": "The URL of the created or redirected resource.",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
+          "204": {
+            "description": "No Content"
           },
           "401": {
             "description": "Unauthorized",
@@ -1220,16 +1212,8 @@
           }
         },
         "responses": {
-          "201": {
-            "description": "Created",
-            "headers": {
-              "Location": {
-                "description": "The URL of the created or redirected resource.",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
+          "200": {
+            "description": "OK",
             "content": {
               "application/json": {
                 "schema": {
@@ -2123,16 +2107,8 @@
           }
         },
         "responses": {
-          "201": {
-            "description": "Created",
-            "headers": {
-              "Location": {
-                "description": "The URL of the created or redirected resource.",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
+          "200": {
+            "description": "OK",
             "content": {
               "application/json": {
                 "schema": {

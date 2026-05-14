@@ -128,12 +128,28 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
             return [];
         }
 
+        // Resolve the HTTP method once so ResourceEvent status codes can match the runtime
+        // ChangeType→StatusCode mapping (DELETE→204, PUT/PATCH→200, POST→201).
+        var httpMethod = context.GetMetadata<OperationHttpMethodMetadataRegistration>()
+            .Select(static r => r.HttpMethod)
+            .FirstOrDefault();
+
         var responses = ImmutableArray.CreateBuilder<HttpResponseMetadataRegistration>(flattenedResults.Length);
         foreach (var flattenedResult in flattenedResults)
         {
             if (OperationResultContractHelper.TryGetHttpOperationResultResponseShape(flattenedResult, okResultType, acceptedResultType, conflictResultType, notFoundResultType, createdResultType, validationFailedResultType, noResultType, keyOnlyResourceEventResultType, resourceEventResultType, httpNoContentResultType, out var statusCode, out var hasResponseBody, plainTextResultType, redirectResultType, fileStreamResultType, statusCodeResultType, resourceEventType, httpResultType) == false)
             {
                 continue;
+            }
+
+            // ResourceEvent result types default to 201 from the type-level helper, but the runtime maps
+            // ChangeType to status code based on the semantic verb. Align OpenAPI with the HTTP method
+            // so DELETE operations document 204 and PUT/PATCH document 200 instead of always 201.
+            if (statusCode == 201 && httpMethod is not null
+                && (SymbolEqualityComparer.Default.Equals(flattenedResult, keyOnlyResourceEventResultType)
+                    || IsTypeOrDerivedFromOptional(flattenedResult, resourceEventResultType)))
+            {
+                statusCode = AdjustResourceEventStatusCodeForHttpMethod(statusCode, httpMethod, hasResponseBody);
             }
 
             responses.Add(CreateResponse(
@@ -409,6 +425,21 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
     private static bool IsTypeOrDerivedFromOptional(ITypeSymbol candidateType, INamedTypeSymbol? baseType)
     {
         return baseType is not null && OperationResultContractHelper.IsTypeOrDerivedFrom(candidateType, baseType);
+    }
+
+    /// <summary>
+    /// Maps the default <c>201 Created</c> status code to the correct runtime status based on the
+    /// HTTP method. The runtime's <c>MapChangeTypeToStatusCode</c> produces 204 for <c>ChangeType.Deleted</c>
+    /// and 200 for <c>ChangeType.Updated</c>; by convention DELETE → Deleted and PUT/PATCH → Updated.
+    /// </summary>
+    private static int AdjustResourceEventStatusCodeForHttpMethod(int defaultStatusCode, string httpMethod, bool hasResponseBody)
+    {
+        return httpMethod switch
+        {
+            "DELETE" => hasResponseBody ? 200 : 204,
+            "PUT" or "PATCH" => 200,
+            _ => defaultStatusCode,
+        };
     }
 
     private static HttpResponseMetadataRegistration CreateGroupedResponse(IGrouping<int, HttpResponseMetadataRegistration> responseGroup)

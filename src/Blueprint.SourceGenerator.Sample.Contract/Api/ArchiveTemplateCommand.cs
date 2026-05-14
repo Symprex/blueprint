@@ -7,7 +7,7 @@ namespace Blueprint.SourceGenerator.Sample.Contract.Api;
 
 /// <summary>
 /// Archives a template by its identifier. Demonstrates a key-only resource-event command
-/// that produces an HTTP 201 Created with no body (identity-only event).
+/// that produces an HTTP 204 No Content with no body (identity-only event for a DELETE).
 /// </summary>
 /// <remarks>
 /// Demonstrates <see cref="ResourceAttribute"/>-based authorization for a destructive command:

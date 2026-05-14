@@ -1798,3 +1798,49 @@ if (handlerResult.WasSuccessful)
 - The per-pipeline overhead of 3 extra `await` entries is negligible vs I/O latency
 
 Revisit when pipeline count exceeds 1000+ or profiling shows state machine overhead as measurable.
+
+---
+
+### #301 — OpenAPI ResourceEvent Envelope Schema: Fixed (Commit 9ec9b4a)
+
+**Date:** 2025-07-18
+**Severity:** Critical — OpenAPI response schema didn't match HTTP wire format
+**Status:** ✅ Fixed
+
+`ResourceEventResult<T>` operations produce HTTP responses wrapped in `ResourceEventEnvelope` (private class in `HttpOperationResultExecutor`), but OpenAPI was incorrectly describing the response body as just `T` (the inner resource type). This meant TypeScript clients expected a plain `TemplateApiResource` when the actual HTTP response was an envelope with `$object`, `eventId`, `changeType`, `created`, `data`, etc.
+
+**Root cause:** `HttpResponseMetadataModule.GetTypedResultBodyType` extracts the inner type `T` from `ResourceEventResult<T>` and uses it as the response body type name. The OpenAPI output rendering then generated a `$ref` to the inner type's schema component. The envelope wrapping happens at runtime in `HttpOperationResultExecutor.WriteJsonAsync` and was invisible to the OpenAPI pipeline.
+
+**Why not use `ResourceEvent<T>` as the OpenAPI body type:**
+1. **Constraint mismatch**: `ResourceEventResult<T> where T : notnull` vs `ResourceEvent<TResource> where TResource : ApiResource` — can't wrap for all valid T
+2. **`[JsonIgnore]` on Data**: `ResourceEvent<T>.Data` has `[JsonIgnore]` — STJ schema would show `object` not `T`
+3. **Discriminator breakage**: `TryCreateResourceEventDiscriminator` matches by inner body type name — changing to envelope names would break multi-variant handling
+
+**Fix applied:** Synthetic inline envelope schema at the output rendering layer:
+- Added `IsResourceEventEnvelope` flag to `OpenApiResponseContentModel`
+- When a response is a single-variant `ResourceEventResult` (no discriminator), the flag is set
+- `WriteResourceEventEnvelopeSchema` writes inline object schema with all envelope properties
+- The `data` property uses `$ref` to the inner type's existing schema component
+- Discriminator case (multi-variant `Results<ResourceEventResult<T>, ...>`) is unchanged
+
+**Envelope properties emitted:**
+| Property | Type | Required | Notes |
+|----------|------|----------|-------|
+| `$object` | `string` enum `["event"]` | ✅ | Discriminator |
+| `eventId` | `string` | ✅ | Stable event identity |
+| `changeType` | `string` enum `["Created","Updated","Deleted"]` | ✅ | Change type |
+| `created` | `string` format `date-time` | ✅ | When event occurred |
+| `resourceObject` | `string` | ✅ | Resource type name |
+| `href` | `string` nullable | ❌ | Self-link URL |
+| `data` | `$ref` to inner type | ✅ | The actual resource |
+| `metadata` | `object` nullable | ❌ | Extra metadata dict |
+| `secureData` | `object` nullable | ❌ | Secure metadata dict |
+| `changedValues` | `object` nullable | ❌ | Changed properties dict |
+| `correlationId` | `string` nullable | ❌ | Correlation ID |
+
+**Impact:** S365 TypeScript clients will now see the correct envelope shape for all `ResourceEventResult<T>` operations (~274 S365 operations affected). The `data` field correctly references the inner resource type for TypeScript type inference.
+
+**Tests:** 
+- Snapshot test updated with full envelope schema
+- Targeted test verifying all envelope properties and `data.$ref`
+- `UseStatus200ForSuccessResponses` test updated for raw schema comparison
