@@ -2597,3 +2597,89 @@ Blueprint's `TenantModule` does all three at compile time:
 3. Direct `operation.TenantId = accessor.Current` with type-appropriate conversion
 
 No migration gap — S365 `SetTenantMiddleware` is replaced entirely by `TenantModule`.
+
+### #306 — TypeScript Client Generation (Custom Handlebars, NOT NSwag)
+
+S365 uses a **custom** TypeScript client generator — NOT NSwag. Located at:
+- `frontend/apps/portal/src/openapi/generator/index.mts` — Main generator script
+- `frontend/apps/portal/src/openapi/generator/api.handlebars` — API methods template
+- `frontend/apps/portal/src/openapi/generator/apiInner.handlebars` — Per-operation methods
+- `frontend/apps/portal/src/openapi/generator/model.handlebars` — Model classes/enums
+- Same structure in `admin/` and `partners/` apps (3 apps total)
+
+Run via `npm run openapi` which loads OpenAPI JSON from a running API, processes through
+Handlebars templates, and generates `api.ts` and `index.ts`.
+
+**Critical OpenAPI requirements for S365 TypeScript generation:**
+1. **`operationId`** — Used as function/method names (via `camelCase(operationId)`)
+2. **`tags`** — Operations grouped by tags into API classes (e.g. `UsersApi`, `GroupsApi`)
+3. **`x-links`** — Vendor extension on schemas for HATEOAS navigation methods
+4. **`components/schemas`** — Full JSON Schema used for AJV form validation (`schemas` export)
+5. **Response `200`/`application/json`** — Determines return type
+6. **`parameters`** — Path/query/header params, with `in`/`required` metadata
+7. **`requestBody`** — Body parameter detection (`application/json` or `text/plain`)
+
+**Blueprint compatibility:**
+- ✅ `operationId` — Uses operation class name (same as S365)
+- ✅ `tags` — Inferred from namespace last segment (same as S365 legacy Blueprint)
+- ✅ `x-links` — Generated as `[{rel, operationId, method}]` array
+- ✅ `components/schemas` — Full schema generation with properties, types, `$ref`
+- ✅ Response unwrapping — `OkResult<T>` → 200 response with T schema
+- ✅ Parameters — Route/query/header/body correctly classified
+
+**Potential issues to verify:**
+- Schema property naming (camelCase? PascalCase?)
+- Nullable handling (`nullable: true` vs `oneOf` with null)
+- Enum schema shape (S365 generator expects `title` on inline enums)
+- `additionalProperties: false` (Blueprint emits this — may need verification)
+
+### #307 — S365 OpenAPI TenantId Stripping
+
+Portal's Startup has a custom `ConfigureOperation` callback:
+```csharp
+.AddOpenApi(o => {
+    o.PostConfigure = (doc) => { doc.Info.Title = AppDefinition.Instance.OpenApiTitle; };
+    o.ConfigureOperation = (operation, descriptor) => {
+        // Remove TenantId from authenticated operation parameters
+    };
+})
+```
+
+Blueprint handles this automatically: properties with `[FromAuthContext]` or auto-detected
+`TenantId` properties (via `TenantModule`) are excluded from HTTP binding, so they never
+appear in OpenAPI parameters. S365's custom processor is no longer needed.
+
+### #308 — S365 Rebus Handler Count and Pattern
+
+**68 `IHandleMessages<T>` implementations** across all services.
+
+Pattern: Simple event subscriber handlers, NOT Blueprint operations.
+- Inject `IDocumentSession` (Marten) for persistence
+- No `IBus` or `IMessageContext` injection in handlers
+- Discovered via `RebusHandleMessageOperationExecutorBuilderScanner`
+- Registered as scoped services
+
+Blueprint.Rebus companion generator handles this pattern — `IHandleMessages<T>` discovery
+and pipeline generation for message handlers.
+
+### #309 — S365 Marten Outbox Pattern
+
+Custom Marten-based outbox (added Feb 2025):
+- `MartenOutboxStorage` — PostgreSQL `outbox` table
+- `OutboxClientTransportDecorator` — Decorates Rebus `ITransport`
+- `OutboxForwarder` — Background poller for sending queued messages
+- `UseMartenSessionAsOutbox()` — Links `IDocumentSession` to outbox scope
+
+This is S365-specific infrastructure. Blueprint provides `IMessageOutbox` abstraction and
+`IUnitOfWork` for persistence integration. S365's outbox storage stays S365-owned but can
+plug into Blueprint's `IMessageOutbox` contract.
+
+### #310 — S365 Hangfire Background Tasks
+
+All background tasks go through Blueprint's abstraction layer:
+- `HangfireRecurringTaskProvider` — `IRecurringJobManager.AddOrUpdate()` with cron
+- `HangfireBackgroundTaskScheduleProvider` — `EnqueueAsync`, `ScheduleAsync`, `EnqueueChildAsync`
+- `RecurringJobManagerRegistrationHostedService` — Registers jobs on startup
+
+No direct `BackgroundJob.Enqueue/Schedule` calls — everything through `IBackgroundTaskScheduleProvider`.
+Blueprint.Tasks.Hangfire already provides equivalent abstractions.
