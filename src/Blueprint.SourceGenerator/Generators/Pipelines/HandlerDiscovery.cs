@@ -180,12 +180,12 @@ public static class HandlerDiscovery
     {
         var foundHandlers = index.FindHandlersFor(operationType);
 
-        if (foundHandlers.Count == 0)
+        if (foundHandlers.Length == 0)
         {
             return (null, null);
         }
 
-        if (foundHandlers.Count > 1)
+        if (foundHandlers.Length > 1)
         {
             var handlerNames = string.Join(", ", foundHandlers.Select(static h => $"{h.HandlerClass.Name}.{h.HandlerMethod.Name}"));
             var diagnostic = new DiagnosticInfo(

@@ -193,8 +193,11 @@ public class TenantIsolationIntegrationTests
     }
 
     [Fact]
-    public async Task When_parsable_struct_TenantId_already_set_via_query_then_accessor_does_not_override()
+    public async Task When_parsable_struct_TenantId_query_string_ignored_accessor_wins()
     {
+        // TenantId is classified as AuthContext by PropertyOwnershipModule when tenancy is
+        // enabled, so it is never bound from the query string. The accessor value (from JWT
+        // claims via ITenantResolver) always wins — preventing tenant spoofing via URL.
         var tenantAccessor = new TestTenantAccessor();
         var tenantResolver = new TestTenantResolver();
 
@@ -206,7 +209,6 @@ public class TenantIsolationIntegrationTests
         var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
         var pipeline = executor.GetPipeline(typeof(ParsableTenantOverviewQuery));
 
-        // Operation has TenantId NOT in route, but query string provides it
         var operation = new ParsableTenantOverviewQuery();
         var principal = CreateAuthenticatedPrincipal("tenant-99");
         var context = CreateHttpContext(
@@ -216,7 +218,7 @@ public class TenantIsolationIntegrationTests
             principal,
             serviceProvider);
 
-        // Set query string value — PropertyOwnershipModule should bind this
+        // Set query string value — this should be ignored because TenantId is auth-owned
         ((DefaultHttpContext)context.HttpContext!).Request.QueryString = new QueryString("?tenantId=tenant-from-query");
 
         ParsableTenantOverviewQuery.Reset();
@@ -225,8 +227,8 @@ public class TenantIsolationIntegrationTests
 
         result.Should().BeOfType<OkResult<string>>();
 
-        // Should use query-bound value, NOT accessor value (tenant-99)
-        ((OkResult<string>)result).Content.Should().Be("overview-tenant-from-query");
+        // Accessor value wins — query string is ignored for TenantId (security: prevents spoofing)
+        ((OkResult<string>)result).Content.Should().Be("overview-tenant-99");
         ParsableTenantOverviewQuery.HandlerCallCount.Should().Be(1);
     }
 
