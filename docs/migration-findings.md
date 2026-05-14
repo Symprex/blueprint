@@ -1393,3 +1393,53 @@ This is the only property populator pattern in S365 — there are no `IPropertyP
 | JWT token generation | Not needed — tests use Claims directly | ~0% |
 
 **Verdict**: Excellent shim coverage. Most S365 tests can migrate with minimal syntactic changes.
+---
+
+## 283. ⚠️ ApiId Needs TryParse for Fast Route Binding
+
+**Problem**: S365's `ApiId` struct has `[TypeConverter(typeof(TypeConverter))]` but no `IParsable<T>` implementation and no standard `TryParse(string, out ApiId)` method. It has `TryHydrate(string, out ApiId?)` instead.
+
+Blueprint's route/query binding uses this priority: built-in scalar → enum → `IParsable<T>.TryParse` → static `TryParse` → `[TypeConverter]`. Without `TryParse`, `ApiId` falls to the `TypeConverter` path which uses exception-based conversion (slower, allocates).
+
+**Recommendation**: Add a standard `TryParse` method to `ApiId` in S365:
+
+`csharp
+public static bool TryParse(string? value, out ApiId result)
+{
+    if (TryHydrate(value, out var apiId))
+    {
+        result = apiId.Value;
+        return true;
+    }
+    result = default;
+    return false;
+}
+`
+
+This one-line delegation unlocks Blueprint's fast `TryParse` binding path for all ~349 `ApiId` route/query parameters across S365.
+
+**Alternative**: Implement `IParsable<ApiId>` for full .NET 7+ compliance, but `TryParse` is simpler and works with Blueprint's existing detection.
+
+---
+
+## 284. ✅ Pipeline IL Size Already Optimized
+
+**Audit**: Comprehensive analysis of generated pipeline snapshots confirms ALL significant code patterns are already extracted to `PipelineHelpers`:
+
+| Pattern | Lines/Pipeline | Status |
+|---|---|---|
+| JSON body reading | 50 | ✅ Extracted (`ReadJsonBodyAsync`) |
+| Auth/authorization | 28 | ✅ Extracted (3 methods) |
+| Validation | 22 | ✅ Extracted (3 methods) |
+| Audit sink | 12 | ✅ Extracted (2 methods + tag caching) |
+| Tenant resolution | 5 | ✅ Extracted (`ResolveTenant`) |
+| Parameter binding | 6-8 | ✅ Extracted (5 methods) |
+| Unit of work | 3 | ✅ Extracted (`SaveUnitOfWorkAsync`) |
+| Message outbox | 3 | ✅ Extracted (`CommitMessageOutboxAsync`) |
+| Background tasks | 3 | ✅ Extracted (`FlushBackgroundTasksAsync`) |
+| HATEOAS links | 10 | ✅ Extracted (`PopulateHateoasLinksAsync`) |
+| ResourceEvent self-query | 30-40 | ✅ Extracted (`ResolveResourceEventSelfQueryAsync`) |
+
+**Estimated IL savings**: ~25,000+ lines of duplicated code eliminated across S365's 540 operations.
+
+**Remaining inline patterns** are intentionally not extracted: 1-line route assignments (unique per op), handler invocation (type-specific), success guard (trivial control flow).
