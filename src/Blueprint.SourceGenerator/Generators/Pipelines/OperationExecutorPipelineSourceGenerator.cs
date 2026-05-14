@@ -159,6 +159,7 @@ public partial class OperationExecutorPipelineSourceGenerator : IIncrementalGene
             new UnitOfWorkModule(),
             new MessageOutboxModule(),
             new AuditingModule(),
+            new ResourceEventSelfQueryModule(),
             new ResourceEventAuditModule(),
             new AuditingManifestModule(),
             new BackgroundTaskFlushModule(),

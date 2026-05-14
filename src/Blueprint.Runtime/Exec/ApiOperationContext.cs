@@ -86,6 +86,12 @@ public class ApiOperationContext : IHttpOperationContext
     private Dictionary<string, object>? _data;
 
     /// <summary>
+    /// Gets a value indicating whether the <see cref="Data"/> dictionary has been initialized,
+    /// allowing callers to skip a read without triggering lazy allocation.
+    /// </summary>
+    public bool HasData => this._data is not null;
+
+    /// <summary>
     /// Provides a generic means of middleware components or hosts to store data related to an API operation
     /// to be used throughout the processing pipeline. Lazy-initialized to avoid allocation when not used.
     /// </summary>

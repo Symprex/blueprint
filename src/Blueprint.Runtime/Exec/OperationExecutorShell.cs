@@ -42,6 +42,9 @@ public abstract class OperationExecutorShell : IOperationExecutorPipeline
     private readonly string _operationTypeName;
     private readonly string _activityName;
     private readonly bool _suppressActivity;
+    private readonly IServiceProvider? _rootServiceProvider;
+    private BlueprintAppExecutor? _executorCached;
+    private bool _executorResolved;
 
     /// <summary>
     /// Gets the pipeline-scoped logger created from the <see cref="ILoggerFactory"/> supplied at construction time.
@@ -124,6 +127,28 @@ public abstract class OperationExecutorShell : IOperationExecutorPipeline
     protected IResourceEventAuditSink? ResourceEventAuditSink { get; }
 
     /// <summary>
+    /// Gets the <see cref="BlueprintAppExecutor"/> used for nested operation dispatch (e.g. resolving
+    /// <see cref="Blueprint.Http.ResourceEvent.SelfQuery"/>). Lazily resolved from the root service
+    /// provider on first access to avoid circular-dependency issues during construction: the executor
+    /// creates pipelines, each of which would eagerly resolve the executor that is still being built.
+    /// </summary>
+    protected BlueprintAppExecutor? Executor
+    {
+        get
+        {
+            if (!this._executorResolved)
+            {
+                this._executorCached = this._rootServiceProvider is not null
+                    ? Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<BlueprintAppExecutor>(this._rootServiceProvider)
+                    : null;
+                this._executorResolved = true;
+            }
+
+            return this._executorCached;
+        }
+    }
+
+    /// <summary>
     /// Gets the <see cref="System.Text.Json.JsonSerializerOptions"/> used for body deserialization,
     /// cached at pipeline construction time. Contains custom converters (e.g. NodaTime) configured
     /// via <see cref="Blueprint.Http.BlueprintJsonOptions"/>. Passed through to
@@ -189,6 +214,9 @@ public abstract class OperationExecutorShell : IOperationExecutorPipeline
         this.OperationAuthorisers = PipelineHelpers.ResolveServiceArray<IOperationAuthoriser>(serviceProvider);
         this.UserAuthorisationContextFactory = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<IUserAuthorisationContextFactory>(serviceProvider);
         this.ResourceEventAuditSink = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<IResourceEventAuditSink>(serviceProvider);
+
+        // Store the root service provider for lazy Executor resolution — see Executor property.
+        this._rootServiceProvider = serviceProvider;
 
         var blueprintJsonOpts = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Microsoft.Extensions.Options.IOptions<Blueprint.Http.BlueprintJsonOptions>>(serviceProvider);
         this.BodyJsonOptions = blueprintJsonOpts?.Value?.SerializerOptions;

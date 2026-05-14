@@ -21,6 +21,16 @@ namespace Blueprint.Runtime.Exec;
 /// </remarks>
 public static class PipelineHelpers
 {
+    /// <summary>
+    /// Maximum nested SelfQuery depth before the pipeline aborts resolution to prevent infinite loops.
+    /// </summary>
+    private const int MaxSelfQueryDepth = 3;
+
+    /// <summary>
+    /// Context data key used to track current SelfQuery resolution depth and prevent runaway recursion.
+    /// </summary>
+    private const string SelfQueryDepthKey = "__Blueprint_SelfQueryDepth";
+
     private static readonly ConcurrentDictionary<string, ActivityTagsCollection> _auditTagsCache = new();
 
     /// <summary>
@@ -844,6 +854,151 @@ public static class PipelineHelpers
         catch (Exception resourceEventAuditException)
         {
             RecordAuditFailureEvent(activity, "blueprint.resource_event_audit.failed", operationTypeName, resourceEventAuditException, eventId, resourceId);
+        }
+    }
+
+    // ────────────────────────────────────────────────────────────────────
+    //  ResourceEvent SelfQuery resolution — executes a nested query to
+    //  populate Data when handlers return ResourceEvent with SelfQuery.
+    // ────────────────────────────────────────────────────────────────────
+
+    private static readonly Action<ILogger, string, string, Exception?> _logSelfQueryResolved =
+        LoggerMessage.Define<string, string>(
+            LogLevel.Debug,
+            new EventId(30, "ResourceEventSelfQueryResolved"),
+            "Resolved ResourceEvent SelfQuery for {OperationType} via {SelfQueryType}");
+
+    private static readonly Action<ILogger, string, string, Exception?> _logSelfQueryFailed =
+        LoggerMessage.Define<string, string>(
+            LogLevel.Warning,
+            new EventId(31, "ResourceEventSelfQueryFailed"),
+            "SelfQuery resolution failed for {OperationType} with query type {SelfQueryType}; Data will remain null");
+
+    /// <summary>
+    /// If the handler result is a <see cref="ResourceEvent"/> with a <see cref="ResourceEvent.SelfQuery"/>
+    /// and null <see cref="ResourceEvent.Data"/>, executes the query through the <paramref name="executor"/>
+    /// using a nested context that preserves the parent's authentication, tenant, and request state.
+    /// Also stamps <see cref="ResourceEvent.CorrelationId"/> from the current <see cref="Activity"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This is the compile-time replacement for S365's <c>ResourceEventHandler</c> middleware.
+    /// The generated pipeline calls this method in the PostExecution stage, before link population
+    /// and before audit, so that the populated Data is available for HATEOAS self-link generation
+    /// and for audit sink recording.
+    /// </para>
+    /// <para>
+    /// Resolution is best-effort: if the SelfQuery's operation is not registered, the nested
+    /// execution returns a non-success result, or an exception occurs, Data is left null and a
+    /// warning is logged. The outer pipeline still succeeds.
+    /// </para>
+    /// <para>
+    /// A recursion guard prevents runaway loops when a SelfQuery inadvertently triggers another
+    /// ResourceEvent with its own SelfQuery.
+    /// </para>
+    /// </remarks>
+    /// <param name="executor">The app executor for dispatching the nested query. May be null if DI did not register one.</param>
+    /// <param name="context">The current pipeline execution context.</param>
+    /// <param name="handlerResult">The handler result to inspect and potentially enrich.</param>
+    /// <param name="logger">The pipeline logger for structured diagnostics.</param>
+    /// <param name="operationTypeName">The operation type name for log messages.</param>
+    /// <returns>A task that completes when resolution has finished (or been skipped).</returns>
+    public static Task ResolveResourceEventSelfQueryAsync(
+        BlueprintAppExecutor? executor,
+        ApiOperationContext context,
+        OperationResult handlerResult,
+        ILogger logger,
+        string operationTypeName)
+    {
+        if (handlerResult is not ResourceEvent { SelfQuery: not null, Data: null } resourceEvent)
+        {
+            return Task.CompletedTask;
+        }
+
+        if (executor is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        return ResolveResourceEventSelfQueryCoreAsync(executor, context, resourceEvent, logger, operationTypeName);
+    }
+
+    /// <summary>
+    /// Core async implementation of SelfQuery resolution, separated from the fast-path guard
+    /// to avoid state machine allocation when the handler result is not a SelfQuery-bearing
+    /// <see cref="ResourceEvent"/>.
+    /// </summary>
+    private static async Task ResolveResourceEventSelfQueryCoreAsync(
+        BlueprintAppExecutor executor,
+        ApiOperationContext context,
+        ResourceEvent resourceEvent,
+        ILogger logger,
+        string operationTypeName)
+    {
+        // Recursion guard: prevent infinite loops when nested queries also return ResourceEvent+SelfQuery
+        var depth = 0;
+        if (context.HasData && context.Data.TryGetValue(SelfQueryDepthKey, out var depthObj) && depthObj is int d)
+        {
+            depth = d;
+        }
+
+        if (depth >= MaxSelfQueryDepth)
+        {
+            _logSelfQueryFailed(logger, operationTypeName, resourceEvent.SelfQuery!.GetType().Name, null);
+            return;
+        }
+
+        // Stamp correlation ID from current activity before resolution so audit sinks see it
+        resourceEvent.CorrelationId ??= context.Activity?.Id;
+
+        // Stamp the operation reference so audit sinks can inspect the triggering command
+        resourceEvent.Operation ??= context.Operation;
+
+        var selfQuery = resourceEvent.SelfQuery!;
+        var selfQueryTypeName = selfQuery.GetType().Name;
+
+        try
+        {
+            // Preflight: verify the SelfQuery operation is registered before creating a nested context
+            var descriptor = executor.App.FindOperation(selfQuery.GetType());
+            if (descriptor is null)
+            {
+                _logSelfQueryFailed(logger, operationTypeName, selfQueryTypeName, null);
+                return;
+            }
+
+            // Create a nested context that inherits auth, tenant, and request state from the parent
+            var nestedContext = context.CreateNested(selfQuery, skipAuthorisation: true);
+
+            // Track recursion depth in the shared Data dictionary
+            nestedContext.Data[SelfQueryDepthKey] = depth + 1;
+
+            var result = await executor.ExecuteAsync(nestedContext).ConfigureAwait(false);
+
+            if (result is OkResult okResult && okResult.Content is not null)
+            {
+                resourceEvent.Data = okResult.Content;
+
+                _logSelfQueryResolved(logger, operationTypeName, selfQueryTypeName, null);
+            }
+            else
+            {
+                _logSelfQueryFailed(logger, operationTypeName, selfQueryTypeName, null);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logSelfQueryFailed(logger, operationTypeName, selfQueryTypeName, ex);
+
+            context.Activity?.AddEvent(new ActivityEvent(
+                "blueprint.resource_event.self_query_failed",
+                default,
+                new ActivityTagsCollection
+                {
+                    { "blueprint.operation.type", operationTypeName },
+                    { "blueprint.self_query.type", selfQueryTypeName },
+                    { "exception.message", ex.Message },
+                }));
         }
     }
 

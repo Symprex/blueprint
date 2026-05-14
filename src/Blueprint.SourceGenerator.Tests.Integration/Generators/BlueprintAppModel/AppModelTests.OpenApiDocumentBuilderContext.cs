@@ -30,7 +30,8 @@ public class AppModelOpenApiDocumentBuilderContextTests
             "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.ExpandableTestEmployee",
             "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.AlwaysExpandTestEmployee",
             "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.MultiExpandableTestEmployee",
-            "Blueprint.SourceGenerator.Tests.Integration.Http.NodaTimeEchoResponse");
+            "Blueprint.SourceGenerator.Tests.Integration.Http.NodaTimeEchoResponse",
+            "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.SelfQueryTestApiResource");
         context.Operations.Select(static operation => operation.Operation.OperationType)
             .Should()
             .NotContain(typeof(InternalOnlyOperationToScan))
