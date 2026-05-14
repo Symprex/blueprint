@@ -1927,3 +1927,60 @@ Audited all 21 non-SMTP S365 service Startup.cs files. All follow the identical 
 - `.AddOpenApi()` → auto-registered at `/.well-known/openapi` + `/.well-known/api-catalog`
 
 No blocking gaps found. GraphProxy (MS Graph passthrough) doesn't use Blueprint at all.
+
+### #291: S365 Authorization Architecture Fully Compatible
+
+Comprehensive audit of S365's authorization stack confirms full compatibility:
+
+**S365 Auth Flow:**
+1. JWT token → `Signature365UserAuthorisationContext` (extracts 10+ claims: sub, email, name, tenant_id, partner_id, role_group, identity_id, signed_in_as, assigned_role, assigned_scope_pair)
+2. `AccountId = TenantId ?? PartnerId ?? "Symprex"` (computed property for template expansion)
+3. `ScopeApiAuthoriser` checks scope claims against `[Resource]` noun+verb pairs
+4. `AuthResourceKeyTemplateExpander` handles `{Auth:AccountId}` and `{Auth:Id}` template tokens
+5. `IS365ResourceKeyExpander` implementations handle hierarchical permission expansion (Tenant, Folder, FieldDefinition)
+
+**Blueprint Equivalent:**
+1. `IUserAuthorisationContextFactory` → `IUserAuthorisationContext` (same property surface: Id, IdentityId, AccountId, Email, Name)
+2. Generated compile-time `ScopePair[]` arrays per operation (zero allocation)
+3. `ScopePairClaimAuthorizationProvider` with verb hierarchy and ignored-scope support (built-in)
+4. `ResourceKeyTemplateParser` generates inline string interpolation (no reflection)
+5. `IResolvedResourceAuthorizationProvider` receives pre-expanded `ResolvedScopePair` values
+
+**Key Verification Points:**
+- `[Resource("Noun", "Verb", "/Tenants/{Auth:AccountId}/Items/{Id}")]` — both 2-arg and 3-arg constructors work identically to S365
+- `[FromResource(typeof(X), "/path")]` — inherits scope pairs with template override
+- `{Auth:AccountId}`, `{Auth:Id}`, `{Auth:IdentityId}`, `{Auth:Email}`, `{Auth:Name}` — all well-known context properties resolve correctly
+- S365's verb hierarchy (`Manage` → `[Create, Read, Update, Delete]`) supported via `verbInclusions` parameter
+- S365's "ignored scopes means full access" pattern supported via `AllowWhenNoScopeClaims` virtual override
+- S365's `IS365ResourceKeyExpander` (hierarchical expansion) maps to consumer-level `IResolvedResourceAuthorizationProvider`
+
+**Migration effort: ZERO for attribute declarations, ONE provider class to implement.**
+
+### #292: Testing Infrastructure Comprehensive Compatibility
+
+Detailed audit of S365's testing infrastructure (42 test projects) against Blueprint.Testing:
+
+| S365 Component | Blueprint Equivalent | Status |
+|---|---|---|
+| `WebApiFixtureFactory<T>` | `BlueprintTestFixtureFactory<TApp, TExec>` | ✅ Same pattern |
+| `ApiFixture` | `BlueprintTestFixture<TApp, TExec>` | ✅ Same API surface |
+| `ApiFixture.Bus` (FakeBus property) | `fixture.Bus` (TestMessageCollector) | ✅ Direct property |
+| `ApiFixture.Tasks` (BackgroundTaskCollector) | `fixture.Tasks` (BackgroundTaskCollector) | ✅ Same type |
+| `Authentication.Set(ClaimsIdentity)` | `Authentication.Set(ClaimsIdentity)` | ✅ Identical API |
+| `Authentication.As(ClaimsIdentity)` | `Authentication.As(ClaimsIdentity)` | ✅ Identical API |
+| `Authentication.MakeAnonymous()` | `Authentication.MakeAnonymous()` | ✅ Identical API |
+| `CommandAsync<T>(ICommand<T>)` | `CommandAsync<T>(ICommand<T>)` | ✅ Same signature |
+| `QueryAsync<T>(IQuery<T>)` | `QueryAsync<T>(IQuery<T>)` | ✅ Same signature |
+| `BackgroundTaskAsync(IBackgroundTask)` | `BackgroundTaskAsync(IBackgroundTask)` | ✅ Same signature (clears auth) |
+| `MessageAsync(object, ..., retryAttempts)` | `MessageAsync(IOperation, ..., retryAttempts)` | ✅ Same pattern |
+| `RunAllPublishedMessagesAsync()` | `RunAllPublishedMessagesAsync()` | ✅ Same pattern |
+| `RunAndConsumeAllPublishedMessagesAsync()` | `RunAndConsumeAllPublishedMessagesAsync()` | ✅ Same pattern |
+| `GetOptions<T>()` | `GetOptions<T>()` | ✅ Same pattern |
+| `CreateClient()` (HTTP tests) | `BlueprintHttpTestHost.CreateClient()` | ✅ Separate host |
+| `ThrowApiExceptionAsync()` | Direct exception rethrow from `ExecuteAsync<T>()` | ✅ Different mechanism, same result |
+| `ApiFixtureDbExtensions` | Consumer-level (stays in S365 test helpers) | — |
+| `AuthHelpers` (AuthenticateAs*) | Consumer-level (stays in S365 test helpers) | — |
+
+S365's `AuthenticateAsTenantAdministrator`, `AuthenticateAsPartnerUser`, `AuthenticateAsInternalUser` etc. are consumer-level helpers that create `Signature365UserAuthorisationContext` with specific claims. These remain in S365's test helpers project — they call `fixture.Authentication.Set(identity)` internally.
+
+**Migration effort for test infrastructure: ZERO for test execution methods, ONE factory class per service to implement.**
