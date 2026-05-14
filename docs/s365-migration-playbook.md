@@ -1699,6 +1699,86 @@ The factory parses JWT claims using direct loops (not LINQ) for performance:
 3. Logs tenant ID to Serilog `IDiagnosticContext`
 4. Auto-populates `TenantId` property on operations (if property is `ApiId` type and writable)
 
+### Blueprint TenantModule (Compile-Time Replacement)
+
+Blueprint's `TenantModule` replaces `SetTenantMiddleware` entirely with compile-time code generation:
+
+1. **Detects `TenantId` property** at compile time on each operation
+2. **Generates direct assignment** — no reflection, no property populator loop
+3. **Supports multiple types**: `string`, `IParsable<T>` (e.g. `ApiId`), `[TypeConverter]`
+4. **Guards against route-bound override**: Only populates if property is default-valued
+5. **Sets OpenTelemetry tag** `enduser.tenant_id` (replaces Serilog enrichment)
+6. **Calls `ITenantResolver.ResolveTenantId(ClaimsPrincipal)`** for claim extraction
+
+### Migration Steps
+
+```csharp
+// 1. Implement ITenantResolver (replaces claim extraction in SetTenantMiddleware)
+public class Signature365TenantResolver : ITenantResolver
+{
+    public string? ResolveTenantId(ClaimsPrincipal principal)
+        => (principal.Identity as ClaimsIdentity)?.FindFirst("s365_tenant_id")?.Value;
+}
+
+// 2. Register in DI (Blueprint registration handles ITenantAccessor automatically)
+blueprint.AddTenantResolver<Signature365TenantResolver>();
+
+// 3. Delete SetTenantMiddleware — it is no longer needed
+```
+
+### What Changes
+
+| Aspect | Old S365 | New Blueprint |
+|---|---|---|
+| Tenant extraction | `SetTenantMiddleware` (runtime) | `ITenantResolver` impl (compile-time pipeline) |
+| Property population | Middleware reflection loop | Compile-time generated assignment |
+| Logging enrichment | Serilog `IDiagnosticContext` | OpenTelemetry `Activity.SetTag()` |
+| Accessor interface | `ICurrentTenantAccessor` | `ITenantAccessor` (identical API) |
+
+### What Stays the Same
+
+- `TenantId` property on operations — unchanged
+- Tenant ID claim type (`s365_tenant_id`) — unchanged
+- Marten tenant scoping using accessor — unchanged
+
+---
+
+## Consolidated Compatibility Matrix
+
+All patterns audited and verified across the S365 codebase:
+
+| Pattern | S365 Usage | Blueprint Status | Migration Impact |
+|---------|-----------|-----------------|-----------------|
+| `ICommand<T>` / `IQuery<T>` | ~240+ operations | ✅ Identical | Add `partial` keyword |
+| `[Resource(noun, verb)]` | 349 usages | ✅ Built-in | Remove URL template (3rd param) |
+| `[FromResource(typeof(X))]` | 158 usages | ✅ Built-in | Remove URL template |
+| `[Link]` / `[SelfLink]` | ~200+ | ✅ Identical | No change |
+| `IHandleMessages<T>` (Rebus) | 70+ handlers | ✅ Identical interface | Startup config only |
+| `IRecurringTaskScheduler` | 16 schedulers | ✅ Identical interface | One `AddRecurringTaskScheduler<T>()` per |
+| `ResourceEvent<T>` | 50+ usages | ✅ Identical | No change (use `Blueprint.Http.ResourceEvent<T>`) |
+| Background tasks | 40+ usages | ✅ Identical | No change |
+| `TenantId` population | 100+ operations | ✅ Compile-time | Implement `ITenantResolver`, delete middleware |
+| `IPropertyPopulator` | 0 usages | N/A | Not used in S365 |
+| `CallAsync` (HTTP gateway) | ~20 files | ✅ Shims exist | Zero changes |
+| Custom middleware | 14+ builders | ⚠️ Remove | Replaced by source-gen modules |
+| Test `ApiFixture` | 42 test projects | ✅ All APIs match | Alias `ApiFixture` → `BlueprintTestFixture` |
+| Test `Authentication` | Every test file | ✅ All APIs match | No change (Set/As/MakeAnonymous identical) |
+| Test `FakeBus` | Many test files | ✅ `TestMessageCollector` | `GetServiceAs<IBus, TestMessageCollector>()` |
+| Test `BackgroundTaskCollector` | Many test files | ✅ Identical | No change |
+| `IUserAuthorisationContextFactory` | Per-service | ✅ Identical | Register via `AddUserAuthorisationContextFactory<T>()` |
+
+### Key S365-Specific Classes That Stay Unchanged
+
+These S365 classes are compatible as-is with the new Blueprint:
+
+1. `Signature365UserAuthorisationContext` — domain auth context
+2. `Signature365UserAuthorisationContextFactory` — JWT claim parser
+3. `IS365ClaimInspector` + implementations — claim inspection logic
+4. `AuthResourceKeyTemplateExpander` → implements `IResourceKeyTemplateExpander`
+5. All `IHandleMessages<T>` handler classes (70+)
+6. All `IRecurringTaskScheduler` implementations (16)
+7. All handler classes (business logic unchanged)
+
 ### New Blueprint Pattern
 
 Blueprint handles tenancy at compile time through two modules:
