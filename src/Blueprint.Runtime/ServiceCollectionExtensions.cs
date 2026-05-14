@@ -165,6 +165,31 @@ public sealed class BlueprintServiceBuilder
     }
 
     /// <summary>
+    /// Registers a pre-configured <see cref="Blueprint.Authorization.IResourceAuthorizationProvider"/> instance.
+    /// Use this overload with factory methods such as
+    /// <see cref="Blueprint.Authorization.ScopePairClaimAuthorizationProvider.WithCrudVerbHierarchy"/>.
+    /// When the instance also implements <see cref="Blueprint.Authorization.IResolvedResourceAuthorizationProvider"/>,
+    /// generated pipelines that use compile-time–expanded resource keys pick up the optimised
+    /// path automatically.
+    /// </summary>
+    /// <param name="instance">The authorization provider instance to register as a singleton.</param>
+    /// <returns>This builder for chaining.</returns>
+    public BlueprintServiceBuilder AddResourceAuthorizationProvider(
+        Blueprint.Authorization.IResourceAuthorizationProvider instance)
+    {
+        ArgumentNullException.ThrowIfNull(instance);
+
+        this.Services.AddSingleton(instance);
+
+        if (instance is Blueprint.Authorization.IResolvedResourceAuthorizationProvider resolved)
+        {
+            this.Services.AddSingleton(resolved);
+        }
+
+        return this;
+    }
+
+    /// <summary>
     /// Registers a custom HTTP result executor that translates operation results to HTTP responses.
     /// </summary>
     /// <typeparam name="T">The <see cref="HttpOperationResultExecutor"/> implementation type.</typeparam>

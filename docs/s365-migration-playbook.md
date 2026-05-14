@@ -1835,3 +1835,319 @@ should be recorded in the `docs/` folder:
 | Gateway calls break | **MEDIUM** | Migrate gateways AFTER target services are stable (Tier 4+) |
 | SMTP subsystem entangled | **LOW** | Separate discovery track — may not need migration |
 | Config/resource collision in worktree | **LOW** | Isolated infra: ports, DBs, ASB topics, Hangfire schemas, appsettings |
+
+---
+
+## Appendix A: Analytics Service — Concrete Migration Recipe
+
+The Analytics service is the smallest S365 service (3 operations, 12 Rebus handlers, 0 test projects)
+and serves as the template migration for all other services.
+
+### A.1 Inventory
+
+| Item | Count | Details |
+|------|-------|---------|
+| Operations | 3 | `GetSentEmailQuery`, `FindSentEmailsQuery`, `IngestCampaignEventCommand` |
+| Rebus handlers | 12 | Campaign/Signature/Disclaimer/User/Group/Email/Login/Survey event handlers |
+| Rebus subscriptions | 31 | Registered in `Startup.ConfigureServices` |
+| Resource classes | 2 | `SentEmailApiResource`, `GenerationSummaryApiResource` |
+| Database | PostgreSQL (Dapper) | No Marten — uses raw SQL via `AnalyticsDatabase` |
+| Test projects | 0 | No existing tests to migrate |
+| NodaTime types | `Instant`, `Instant?` | On `SentEmailApiResource.SentAt` and `FindSentEmailsQuery.StartDate/EndDate` |
+
+### A.2 Contract Assembly Changes
+
+**File: `Symprex.Signature365.Analytics.Contract.csproj`**
+
+```xml
+<!-- ADD: Blueprint source generator analyzer reference -->
+<ItemGroup>
+  <ProjectReference Include="..\..\..\..\blueprint-source-gen\src\Blueprint.SourceGenerator\Blueprint.SourceGenerator.csproj"
+                    OutputItemType="Analyzer"
+                    ReferenceOutputAssembly="false" />
+  <ProjectReference Include="..\..\..\..\blueprint-source-gen\src\Blueprint.Runtime.Model\Blueprint.Runtime.Model.csproj" />
+</ItemGroup>
+
+<!-- REMOVE: old SourceGenerators analyzer if it scans for Blueprint patterns -->
+```
+
+**File: `AnalyticsApi.cs`** — Already `partial`, replace `[ServiceApiInclude]` with `[BlueprintAppScan]`:
+
+```csharp
+// BEFORE
+[UsedImplicitly]
+[ServiceApiInclude(typeof(GetSentEmailQuery))]
+[ServiceApiInclude(typeof(FindSentEmailsQuery))]
+public partial class AnalyticsApi;
+
+// AFTER — move to API host project as BlueprintApp root
+// This file becomes unnecessary (or keep as marker interface)
+```
+
+**File: `Api/GetSentEmailQuery.cs`** — Add `partial`:
+
+```csharp
+// BEFORE
+[SelfLink(typeof(SentEmailApiResource), "/tenants/{TenantId}/sent-emails/{Id}")]
+[PublicAPI]
+[Resource(S365Nouns.SentEmail, S365VerbNames.Read, "/Tenants/{TenantId}/SentEmails/{Id}")]
+public class GetSentEmailQuery : IQuery<SentEmailApiResource>
+{
+    [Required] public ApiId TenantId { get; set; }
+    [Required] public string Id { get; set; } = null!;
+}
+
+// AFTER — only add `partial`
+[SelfLink(typeof(SentEmailApiResource), "/tenants/{TenantId}/sent-emails/{Id}")]
+[PublicAPI]
+[Resource(S365Nouns.SentEmail, S365VerbNames.Read, "/Tenants/{TenantId}/SentEmails/{Id}")]
+public partial class GetSentEmailQuery : IQuery<SentEmailApiResource>
+{
+    [Required] public ApiId TenantId { get; set; }
+    [Required] public string Id { get; set; } = null!;
+}
+```
+
+**File: `Api/FindSentEmailsQuery.cs`** — Add `partial`:
+
+```csharp
+// BEFORE
+[RootLink("/tenants/{TenantId}/sent-emails")]
+[PublicAPI]
+[Resource(S365Nouns.SentEmail, S365VerbNames.Read, "/Tenants/{TenantId}/SentEmails")]
+public class FindSentEmailsQuery : TenantOrderedPagedQuery<SentEmailApiResource>
+
+// AFTER — add partial, and ensure IQuery<T> is on THIS class (not just inherited)
+[RootLink("/tenants/{TenantId}/sent-emails")]
+[PublicAPI]
+[Resource(S365Nouns.SentEmail, S365VerbNames.Read, "/Tenants/{TenantId}/SentEmails")]
+public partial class FindSentEmailsQuery
+    : TenantOrderedPagedQuery<SentEmailApiResource>, IQuery<TenantPagedApiResource<SentEmailApiResource>>
+```
+
+> **Migration note:** Abstract generic base classes cannot implement `static abstract IOperation.Configure()`.
+> The concrete class must explicitly declare `IQuery<T>` even if the base class carried it previously.
+> This affects ~15 abstract generic bases in S365 (e.g. `TenantOrderedPagedQuery<T>`,
+> `EmailOrderedPagedQuery<T>`).
+
+**File: `Api/Ingest/IngestCampaignEventCommand.cs`** — Add `partial`:
+
+```csharp
+// BEFORE
+[AllowAnonymous]
+[RootLink("/track/{type}")]
+[PublicAPI]
+public class IngestCampaignEventCommand : ICommand<StatusCodeResult.Accepted>
+
+// AFTER
+[AllowAnonymous]
+[RootLink("/track/{type}")]
+[PublicAPI]
+public partial class IngestCampaignEventCommand : ICommand<StatusCodeResult.Accepted>
+```
+
+> **Note:** `IngestCampaignEventCommand` has an inline `InvokeAsync` handler — this is fully supported
+> by Blueprint's handler discovery (detects `Invoke`/`InvokeAsync`/`Handle`/`HandleAsync` on the
+> operation class itself).
+
+**File: `Api/Resources/SentEmailApiResource.cs`** — Add `partial`:
+
+```csharp
+// BEFORE
+public class SentEmailApiResource : ApiResource
+
+// AFTER
+public partial class SentEmailApiResource : ApiResource
+```
+
+**File: `Api/Resources/GenerationSummaryApiResource.cs`** — Add `partial`:
+
+```csharp
+// BEFORE
+public class GenerationSummaryApiResource : ApiResource
+
+// AFTER
+public partial class GenerationSummaryApiResource : ApiResource
+```
+
+### A.3 API Host Changes
+
+**New file: `AnalyticsBlueprintApp.cs`**
+
+```csharp
+using Blueprint.Model;
+using Blueprint.Model.Attributes;
+
+namespace Symprex.Signature365.Analytics;
+
+/// <summary>
+/// Blueprint application root for the Analytics service.
+/// Scans the contract assembly for operations.
+/// </summary>
+[BlueprintAppScan(FromAssemblyOf = typeof(Contract.GetSentEmailQuery))]
+[BlueprintAppSerializerContext(JsonSerializerContextType = typeof(AnalyticsJsonContext))]
+public partial class AnalyticsBlueprintApp : BlueprintApp { }
+```
+
+**New file: `AnalyticsJsonContext.cs`**
+
+```csharp
+using System.Text.Json.Serialization;
+using Blueprint.Http;
+using Microsoft.AspNetCore.Mvc;
+using Symprex.Signature365.Analytics.Contract.Api.Resources;
+
+namespace Symprex.Signature365.Analytics;
+
+[JsonSerializerOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+[JsonSourceGenerationOptions(DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
+[JsonSerializable(typeof(SentEmailApiResource))]
+[JsonSerializable(typeof(GenerationSummaryApiResource))]
+[JsonSerializable(typeof(TenantPagedApiResource<SentEmailApiResource>))]
+[JsonSerializable(typeof(ProblemDetails))]
+[JsonSerializable(typeof(ValidationProblemDetails))]
+public partial class AnalyticsJsonContext : JsonSerializerContext { }
+```
+
+**File: `Startup.cs`** — Replace Blueprint registration:
+
+```csharp
+// BEFORE
+services.AddBlueprintApi(b => b
+    .ConfigureCommon(AppDefinition.Instance)
+    .Http(h => { h.Json(j => { j.SerializerOptions.ConfigureForNodaTime(DateTimeZoneProviders.Tzdb); }); })
+    .RebusConsumer(r => { /* 31 subscriptions */ })
+    .Executors(e => e.AddScanner<OperationsHandlerScanner>())
+    .TryConfigureForTests()
+    .Operations(o => o.ScanCallingAssembly().Scan(typeof(IAnalyticsApi).Assembly))
+    .AddOpenApi(o => { o.PostConfigure = d => { d.Info = new OpenApiInfo { Title = "..." }; }; })
+    .AddAuthentication(a => a.UseContextLoader<Signature365UserAuthorisationContextFactory>())
+    .AddAuthorisation()
+    .UseRebus());
+
+// AFTER
+services.AddBlueprintApi<AnalyticsBlueprintApp, AnalyticsBlueprintAppExecutor>(blueprint =>
+{
+    blueprint.AddResourceAuthorizationProvider(
+        ScopePairClaimAuthorizationProvider.WithCrudVerbHierarchy(
+            "Signature365Admin.ReadWrite.All"));
+    blueprint.AddUserAuthorisationContextFactory<Signature365UserAuthorisationContextFactory>();
+
+    blueprint.ConfigureJson(json =>
+    {
+        json.SerializerOptions.ConfigureForNodaTime(DateTimeZoneProviders.Tzdb);
+    });
+});
+
+// Rebus subscriptions remain S365-owned — registered separately
+services.AddBlueprintRebus(RebusSetup.Setup(...));
+```
+
+**File: `Startup.cs` — `Configure` method:**
+
+```csharp
+// BEFORE
+app.UseEndpoints(endpoints =>
+{
+    endpoints.MapSig365HealthChecks(this._configuration);
+    endpoints.MapBlueprintApi("api/");
+});
+
+// AFTER
+app.UseEndpoints(endpoints =>
+{
+    endpoints.MapSig365HealthChecks(this._configuration);
+    endpoints.MapBlueprintApi<AnalyticsBlueprintApp, AnalyticsBlueprintAppExecutor>(
+        "api/",
+        configureOpenApi: info =>
+        {
+            info.Title = AppDefinition.Instance.OpenApiTitle;
+            info.Version = "1.0";
+        });
+});
+```
+
+### A.4 Handler Changes
+
+**File: `Api/GetSentEmailQueryHandler.cs`** — NO changes needed:
+
+```csharp
+// Already extends ApiOperations, uses InvokeAsync with DI params
+// Blueprint handler discovery automatically finds this pattern
+public class GetSentEmailQueryHandler : ApiOperations
+{
+    public async Task<SentEmailApiResource> InvokeAsync(
+        GetSentEmailQuery operation,
+        AnalyticsDatabase analyticsDatabase) { ... }
+}
+```
+
+**File: `Api/FindSentEmailsQueryHandler.cs`** — NO changes needed (same pattern).
+
+**File: `Api/Ingest/IngestCampaignEventCommand.cs`** — NO changes needed
+(inline `InvokeAsync` handler on the operation class itself).
+
+### A.5 Rebus Handler Changes
+
+**All 12 Rebus handlers** — NO changes needed:
+
+```csharp
+// Rebus handlers implement IHandleMessages<T> and use constructor injection
+// These are NOT Blueprint operations — they're Rebus event handlers
+// Blueprint.Rebus scanner discovers them automatically
+public class EmailSentEventHandler : IHandleMessages<EmailSentMessage> { ... }
+```
+
+### A.6 Namespace Changes (Codemod-Automatable)
+
+| Old Import | New Import | Files Affected |
+|---|---|---|
+| `using Blueprint;` | `using Blueprint.Model;` | Contract + host |
+| `using Blueprint.Http;` | `using Blueprint.Http;` (same) | Contract |
+| `using Blueprint.Authorisation;` | `using Blueprint.Model.Attributes;` | Contract |
+| `using Blueprint.Configuration;` | Remove (no equivalent needed) | Host startup |
+
+### A.7 Project Reference Changes
+
+**`Symprex.Signature365.Analytics.csproj`**
+
+```xml
+<!-- REMOVE all legacy Blueprint project references -->
+<!-- Blueprint.csproj, Blueprint.Http.csproj, Blueprint.OpenApi.csproj -->
+
+<!-- ADD -->
+<ProjectReference Include="..\..\..\..\blueprint-source-gen\src\Blueprint.Runtime\Blueprint.Runtime.csproj" />
+<ProjectReference Include="..\..\..\..\blueprint-source-gen\src\Blueprint.SourceGenerator\Blueprint.SourceGenerator.csproj"
+                  OutputItemType="Analyzer"
+                  ReferenceOutputAssembly="false" />
+```
+
+### A.8 Verification Steps
+
+1. **Build:** `dotnet build` — should compile with 0 errors
+2. **Run:** Start service, verify health checks pass
+3. **OpenAPI diff:**
+   ```powershell
+   # Capture baseline from current Analytics
+   curl http://localhost:{port}/openapi -o openapi-baseline.json
+   # Capture from migrated Analytics
+   curl http://localhost:{port}/.well-known/openapi -o openapi-migrated.json
+   # Diff
+   diff openapi-baseline.json openapi-migrated.json
+   ```
+4. **Smoke test:** Call both operations via curl/Postman
+5. **TypeScript client:** Run `npm run openapi` in admin app with migrated spec
+
+### A.9 Total Change Count
+
+| Change Type | Count | Details |
+|---|---|---|
+| Add `partial` keyword | 5 | 3 operations + 2 resources |
+| New files | 2 | `AnalyticsBlueprintApp.cs`, `AnalyticsJsonContext.cs` |
+| Modified files | 2 | `Startup.cs` (registration), `.csproj` (references) |
+| Namespace changes | ~4 | Using directive updates (codemod-automatable) |
+| Handler changes | 0 | All 14 handlers (2 operation + 12 Rebus) unchanged |
+| IQuery<T> declaration | 1 | `FindSentEmailsQuery` must explicitly declare `IQuery<T>` |
+| Test changes | 0 | No test projects exist |
+
+**Total: ~12 file touches, 0 handler logic changes, 0 test changes.**
