@@ -3271,3 +3271,99 @@ Blueprint already supports this via:
 
 **No gap.** Gateways migrate after their target services are stable.
 
+### Finding #334: S365 Auth Architecture Deep Audit — Full Compatibility Confirmed
+
+**Date:** 2025-07-31  
+**Category:** Authorization  
+**Severity:** Confirmation (improvements made)
+
+Deep audit of S365's authorization infrastructure confirms full compatibility with Blueprint:
+
+#### Key Components Audited
+
+| S365 Component | Blueprint Equivalent | Status |
+|---|---|---|
+| `ScopeApiAuthoriser` | `ScopePairClaimAuthorizationProvider` | ✅ Direct replacement |
+| `LegacyScopeMapper` | `LegacyScopeMapperFunc` delegate | ✅ Now built-in |
+| `ScopePair` (record: Noun, Verb) | `ScopePair` (record: Noun, Verb) | ✅ Same shape |
+| `S365Verbs.Manage → [CRUD]` | `StandardCrudVerbHierarchy` | ✅ Same hierarchy |
+| `Signature365UserAuthorisationContextFactory` | `IUserAuthorisationContextFactory` | ✅ S365 implements directly |
+| `SetTenantMiddleware` (reflection-based) | `TenantModule` (compile-time) | ✅ Zero-reflection upgrade |
+| `{Auth:AccountId}` templates | `ResourceKeyTemplateExpander` | ✅ Already handles AccountId |
+
+#### Critical Fix: Scope Separator
+
+S365 uses `::` as the noun/verb separator (e.g. `"Template::Read"`), not `.`. The previous
+Blueprint default was `.` which would have silently failed all authorization checks. Fixed:
+- Default constructor now uses `"::"` separator
+- `WithCrudVerbHierarchy()` factory uses `"::"` by default
+- New overload accepts custom separator for non-S365 consumers
+
+#### Legacy Scope Mapper Support
+
+S365's `LegacyScopeMapper` remaps 5 old scope strings to new equivalents for backwards
+compatibility with existing JWT tokens:
+- `CompiledSignature::Read` → `MyCompiledSignature::Read`
+- `CompiledSignature::ReadMine` → `MyCompiledSignature::Read`
+- `UserFieldValue::ManageMine` → `UserFieldValue::Manage`
+- `UserSignatureSetting::ManageMine` → `UserSignatureSetting::Manage`
+- `CompiledSignature::Read.All` → `CompiledSignature::Read`
+
+Blueprint now supports this via `LegacyScopeMapperFunc` parameter on `WithCrudVerbHierarchy`.
+
+#### S365 Migration Registration Pattern
+
+```csharp
+// S365 service setup:
+blueprint.AddResourceAuthorizationProvider(
+    ScopePairClaimAuthorizationProvider.WithCrudVerbHierarchy(
+        separator: "::",
+        legacyScopeMapper: LegacyScopeMapper.DefaultInstance.MapScopes,
+        "Signature365.ReadWrite.All",
+        "Signature365Admin.ReadWrite.All"));
+```
+
+#### S365 JWT Claim Types Documented
+
+| Claim | Purpose | Blueprint Mapping |
+|---|---|---|
+| `scope` (value: `Noun::Verb`) | API authorization | `ScopePairClaimAuthorizationProvider` |
+| `sub` | User identity | Standard ClaimsPrincipal |
+| `Sig365TenantId` | Tenant context | `IUserAuthorisationContext` |
+| `Sig365PartnerId` | Partner context | `IUserAuthorisationContext` |
+| `Sig365IdentityId` | Internal identity | `IUserAuthorisationContext` |
+| `Sig365RoleGroup` | Role group | `IUserAuthorisationContext` |
+| `Sig365AssignedRole` | Role→scope expansion | S365-owned `ClaimHelpers.ExpandClaims()` |
+| `Sig365AssignedScopePair` | Direct scope grants | Parsed into scope claims |
+
+### Finding #335: S365 Verb Hierarchy Matches Blueprint Exactly
+
+**Date:** 2025-07-31  
+**Category:** Authorization  
+**Severity:** Confirmation (no work needed)
+
+S365's `S365Verbs` configuration defines:
+- Base verbs: `Create`, `Read`, `Update`, `Delete`
+- Composite verb: `Manage` → includes `[Create, Read, Update, Delete]`
+
+Blueprint's `StandardCrudVerbHierarchy` is the exact same mapping. The inverse verb map
+(built at construction time) produces:
+- `Create` → `[Manage]`
+- `Read` → `[Manage]`
+- `Update` → `[Manage]`
+- `Delete` → `[Manage]`
+
+This means a `Manage` scope claim satisfies any CRUD requirement, exactly like S365.
+
+### Finding #336: IRoleToApiOperationMapper Stays S365-Owned
+
+**Date:** 2025-07-31  
+**Category:** Authorization  
+**Severity:** Info (no Blueprint change needed)
+
+S365 has `IRoleToApiOperationMapper` and `RoleToApiOperationMapper` for runtime role→operation
+mapping (used in admin UI to show which roles can access which operations). This is a
+presentation concern, not an authorization concern. Blueprint does not need to provide this —
+it stays in S365's codebase. During migration, this component continues to work because it
+reads `[Resource]` attributes which are unchanged.
+
