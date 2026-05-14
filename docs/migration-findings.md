@@ -2683,3 +2683,73 @@ All background tasks go through Blueprint's abstraction layer:
 
 No direct `BackgroundJob.Enqueue/Schedule` calls — everything through `IBackgroundTaskScheduleProvider`.
 Blueprint.Tasks.Hangfire already provides equivalent abstractions.
+
+### #311 — Compile-Time Proof: Analytics Service (SUCCESS)
+
+**Result: BUILD SUCCEEDED — 0 errors, 2 warnings**
+
+Created `.scratch/s365-proof/` with migrated Analytics.Contract types compiled against new Blueprint.
+Verified 10 generated files including 2 complete executor pipelines.
+
+**Changes required from original S365 source:**
+1. **Add `partial` keyword** to operation and resource classes (required by all source generators)
+2. **Remove 3rd parameter from `[Resource]`** — `[Resource("SentEmail", "Read", "/Tenants/{...}")]` → `[Resource("SentEmail", "Read")]`
+3. **Add `IQuery<T>` to concrete types** — Abstract bases like `TenantOrderedPagedQuery<T>` cannot implement `IQuery<T>` because `IOperation.Configure()` is `static abstract` (static members don't inherit). Move the interface to concrete classes.
+4. **Add `[BlueprintAppSerializerContext]`** with a `JsonSerializerContext` listing response body types + `ProblemDetails`/`ValidationProblemDetails`
+5. **Create `BlueprintApp` class** with `[BlueprintAppScan]` attribute
+
+**Things that work unchanged:**
+- `[SelfLink]`, `[RootLink]`, `[HttpGet]` attributes — identical syntax
+- `ApiId` readonly struct with `[TypeConverter]` — TypeConverter binding works (BPPO011 info diagnostic suggests IParsable)
+- `[Required]` validation on string properties — generates inline null/whitespace check
+- `NodaTime.Instant?` properties — compile fine (need NodaTime.Serialization.SystemTextJson at runtime)
+- S365 `ApiOperations` base class pattern with property injection — Blueprint detects `Context`, `CancellationToken`, `Logger` properties and injects them
+
+**Generated pipeline proves:**
+- Route binding: `TenantId` (ApiId via TypeConverter), `Id` (string from route)
+- Tenant resolution: Compile-time TenantModule step
+- Authentication check: Pre-handler `IsAuthenticated` gate
+- Authorization: Static `_scopePairs` = `[("SentEmail", "Read")]` — zero allocation
+- Validation: Inline checks (Required on string, attribute-based on ApiId)
+- Handler execution: `AnalyticsApiOperations.InvokeAsync(operation)` with property injection
+- Link generation: Self-link `$links.self` populated on returned resource
+- HATEOAS: Full link population step
+- Audit + background tasks: Post-handler steps guarded by `handlerResult.WasSuccessful`
+
+**Warnings (expected, informational):**
+- BPV012: `[Required]` on `ApiId TenantId` (non-nullable value type) — harmless, no behavioral impact
+
+### #312 — Static Abstract Interface Member Gap (IOperation.Configure)
+
+**Impact: ~24 S365 operations using abstract base types with `IQuery<T>`**
+
+In C#, `static abstract` interface members must be implemented by every type that directly declares the interface — including abstract classes. Since `IOperation.Configure()` is `static abstract`, abstract classes like `TenantOrderedPagedQuery<T>` that implement `IQuery<T>` (which extends `IOperation`) cannot satisfy the requirement because static methods don't participate in inheritance.
+
+**Affected S365 base types:**
+- `TenantOrderedPagedQuery<T>` (most common)
+- `PartnerOrderedPagedQuery<T>`
+- `TenantContinuationQuery<T>`
+- `ContinuationQuery<T>`
+- `OrderedPagedQuery<T>` (S365 version)
+
+**Fix:** Remove `IQuery<T>` from the abstract base and add it to each concrete operation class.
+Blueprint's own `OrderedPagedQuery<T>` already follows this pattern (does NOT implement `IQuery<T>`).
+
+**Migration cost:** ~24 operations need one extra `, IQuery<XxxPagedApiResource<T>>` in their class declaration.
+A codemod could automate this (regex: find classes extending `TenantOrderedPagedQuery<T>`, add the interface).
+
+### #313 — Handler Discovery: ApiOperations Base Class Property Injection
+
+**Result: Fully supported — no S365 code changes needed**
+
+Blueprint's `HandlerDiscovery.DetectPropertyInjections()` walks the handler type hierarchy and maps well-known property types to pipeline expressions:
+- `Blueprint.Runtime.Exec.ApiOperationContext` → `context`
+- `Blueprint.Authorization.IUserAuthorisationContext` → `context.UserAuthorisationContext ?? AnonymousUserAuthorisationContext.Instance`
+- `System.Threading.CancellationToken` → `context.OperationCancelled`
+- `Microsoft.Extensions.Logging.ILogger` → `this.Logger`
+- `Microsoft.AspNetCore.Http.HttpContext` → `context.HttpContext`
+- `System.Security.Claims.ClaimsPrincipal` → `context.UserPrincipal`
+
+The S365 `ApiOperations` base class (Context, Identity, Logger, CancellationToken) is directly compatible.
+Generated pipeline line 86-88 confirms: property injection is emitted after handler creation.
+
