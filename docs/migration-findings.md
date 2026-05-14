@@ -272,6 +272,12 @@
 | OpenAPI operation processors | ✅ Already exists | `OpenApiOperationProcessorOptions.Processors` list — S365 can remove TenantId params, add vendor extensions, override summaries. Equivalent to legacy `OpenApiOptions.ConfigureOperation`. |
 | ResourceEvent SelfQuery resolution | ✅ Done | `ResourceEventSelfQueryModule` (Order=-5) generates PostExecution call to `PipelineHelpers.ResolveResourceEventSelfQueryAsync` — best-effort nested query execution populates `Data` on `ResourceEvent<T>` when handler returns `new ResourceDeleted<T>(selfQuery)`. Lazy `Executor` in `OperationExecutorShell` prevents circular dependency. 4 integration tests. |
 | FindOperation dead code fix | ✅ Done | Changed from `FindOperation` (throws) to `TryFindOperation` (returns bool) in SelfQuery preflight — eliminates dead null-check branch |
+| Value-type template expansion fix | ✅ Done | `ResourceKeyTemplateParser` now accepts `valueTypePropertyNames` set — generates `.ToString()` (no `?.`) for value types like `ApiId`, avoiding CS0023. `AuthorizationModule` collects value-type properties during template validation. |
+| S365 namespace mapping | ✅ Documented | `using Blueprint;` → `using Blueprint.Model; using Blueprint.Model.Attributes;`. `using Blueprint.Http;` → stays for `ResourceEvent<T>`, `ProxyResult`, etc. Mechanical find-and-replace, ideal for codemod. |
+| Abstract generic base + IOperation | ⚠️ Migration change | `TenantOrderedPagedQuery<T> : OrderedPagedQuery, IQuery<T>` CANNOT work — `IOperation.Configure()` is `static abstract`, abstract generic bases can't implement it. Fix: concrete subclass must declare `IQuery<T>` explicitly. ~15 S365 abstract bases affected. |
+| Resources need `partial` | ✅ Expected | All `ApiResource` subclasses require `partial` for generated `Object` property — BP001 diagnostic guides this. ~60 S365 resource classes need `partial` added. |
+| ProblemDetails in serializer context | ✅ Expected | BP006 diagnostic requires `ProblemDetails` + `ValidationProblemDetails` in `JsonSerializerContext` — mandatory for every app. Easy codemod. |
+| S365 compile proof complete | ✅ Done | Analytics.Contract patterns (ApiId struct, TenantOrderedPagedQuery, [Resource] with template, [SelfLink], [RootLink]) compile cleanly against Blueprint source-gen. Generated pipelines correct. |
 
 ---
 

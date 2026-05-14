@@ -222,4 +222,73 @@ public class ResourceKeyTemplateParserTests
         expression.Should().NotContain("UserAuthorisationContext");
         expression.Should().Contain("principal.FindFirst(\"AccountId\")?.Value");
     }
+
+    // ── Value-type property expansion tests ─────────────────────────────
+
+    [Fact]
+    public void GenerateExpansionExpression_value_type_property_uses_direct_ToString()
+    {
+        var template = "/tenants/{TenantId}/items/{Id}";
+        var tokens = ResourceKeyTemplateParser.ParseTokens(template);
+        var valueTypes = new HashSet<string> { "TenantId" };
+
+        var expression = ResourceKeyTemplateParser.GenerateExpansionExpression(
+            template, tokens, "operation", "principal", valueTypePropertyNames: valueTypes);
+
+        // Value type: .ToString() without null-conditional
+        expression.Should().Contain("operation.TenantId.ToString()");
+        expression.Should().NotContain("operation.TenantId?.");
+
+        // Reference type: ?.ToString() ?? ""
+        expression.Should().Contain("operation.Id?.ToString() ?? \"\"");
+    }
+
+    [Fact]
+    public void GenerateExpansionExpression_value_type_sub_property_uses_direct_access()
+    {
+        var template = "/tenants/{TenantId:Id}";
+        var tokens = ResourceKeyTemplateParser.ParseTokens(template);
+        var valueTypes = new HashSet<string> { "TenantId" };
+
+        var expression = ResourceKeyTemplateParser.GenerateExpansionExpression(
+            template, tokens, "operation", "principal", valueTypePropertyNames: valueTypes);
+
+        // Value type parent: operation.TenantId.Id (no ?. on TenantId, but sub-property still nullable)
+        expression.Should().Contain("operation.TenantId.Id?.ToString()");
+        expression.Should().NotContain("operation.TenantId?.");
+    }
+
+    [Fact]
+    public void GenerateExpansionExpression_without_value_type_set_uses_nullable_access()
+    {
+        var template = "/tenants/{TenantId}";
+        var tokens = ResourceKeyTemplateParser.ParseTokens(template);
+
+        // No valueTypePropertyNames — defaults to nullable access for all properties
+        var expression = ResourceKeyTemplateParser.GenerateExpansionExpression(
+            template, tokens, "operation", "principal");
+
+        expression.Should().Contain("operation.TenantId?.ToString() ?? \"\"");
+    }
+
+    [Fact]
+    public void GenerateExpansionExpression_mixed_value_and_ref_types()
+    {
+        var template = "/tenants/{Auth:AccountId}/items/{ItemId}/sub/{SubId}";
+        var tokens = ResourceKeyTemplateParser.ParseTokens(template);
+        var valueTypes = new HashSet<string> { "SubId" };
+
+        var expression = ResourceKeyTemplateParser.GenerateExpansionExpression(
+            template, tokens, "operation", "principal", "context", valueTypes);
+
+        // Auth token: context-aware claim resolution (unaffected by value types)
+        expression.Should().Contain("context.UserAuthorisationContext?.AccountId");
+
+        // Ref type: nullable access
+        expression.Should().Contain("operation.ItemId?.ToString() ?? \"\"");
+
+        // Value type: direct ToString
+        expression.Should().Contain("operation.SubId.ToString()");
+        expression.Should().NotContain("operation.SubId?.");
+    }
 }
