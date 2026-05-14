@@ -582,7 +582,7 @@ public sealed class TypedHttpClientExtensionsGenerator : IIncrementalGenerator, 
             returnType = "global::System.Threading.Tasks.Task";
         }
 
-        // XML doc
+        // Overload 1: operation + cancellation token (no CallOptions)
         sb.AppendLine("        /// <summary>");
         sb.AppendLine($"        /// Sends a pre-built <see cref=\"{op.OperationFqn.Replace("global::", string.Empty, StringComparison.Ordinal)}\"/> ({op.HttpMethod}) to the remote API.");
         sb.AppendLine("        /// </summary>");
@@ -594,7 +594,6 @@ public sealed class TypedHttpClientExtensionsGenerator : IIncrementalGenerator, 
             sb.AppendLine($"        /// <returns>The deserialized response.</returns>");
         }
 
-        // Method signature — accepts the full operation object
         sb.Append($"        public static {returnType} {op.MethodName}(");
         sb.Append($"this global::Blueprint.HttpClient.BlueprintHttpClient<{model.AppFqn}> client, ");
         sb.Append($"{op.OperationFqn} operation, ");
@@ -613,6 +612,44 @@ public sealed class TypedHttpClientExtensionsGenerator : IIncrementalGenerator, 
         else
         {
             sb.AppendLine("            return client.SendAsync(operation, cancellationToken);");
+        }
+
+        sb.AppendLine("        }");
+        sb.AppendLine();
+
+        // Overload 2: operation + CallOptions + cancellation token (S365 exact signature)
+        sb.AppendLine("        /// <summary>");
+        sb.AppendLine($"        /// Sends a pre-built <see cref=\"{op.OperationFqn.Replace("global::", string.Empty, StringComparison.Ordinal)}\"/> ({op.HttpMethod}) to the remote API");
+        sb.AppendLine("        /// with optional per-request customisation.");
+        sb.AppendLine("        /// </summary>");
+        sb.AppendLine($"        /// <param name=\"client\">The Blueprint HTTP client.</param>");
+        sb.AppendLine($"        /// <param name=\"operation\">The operation to send.</param>");
+        sb.AppendLine($"        /// <param name=\"options\">Optional call options to modify the outgoing request.</param>");
+        sb.AppendLine($"        /// <param name=\"cancellationToken\">Cancellation token.</param>");
+        if (hasTypedResult || isResourceEvent)
+        {
+            sb.AppendLine($"        /// <returns>The deserialized response.</returns>");
+        }
+
+        sb.Append($"        public static {returnType} {op.MethodName}(");
+        sb.Append($"this global::Blueprint.HttpClient.BlueprintHttpClient<{model.AppFqn}> client, ");
+        sb.Append($"{op.OperationFqn} operation, ");
+        sb.Append("global::Blueprint.HttpClient.CallOptions? options, ");
+        sb.Append("global::System.Threading.CancellationToken cancellationToken = default");
+        sb.AppendLine(")");
+        sb.AppendLine("        {");
+
+        if (isResourceEvent)
+        {
+            sb.AppendLine($"            return client.SendResourceEventEnvelopeAsync<{op.ResourceEventResourceTypeFqn}>(operation, options, cancellationToken);");
+        }
+        else if (hasTypedResult)
+        {
+            sb.AppendLine($"            return client.SendAsync<{op.ResultTypeFqn}>(operation, options, cancellationToken);");
+        }
+        else
+        {
+            sb.AppendLine("            return client.SendAsync(operation, options, cancellationToken);");
         }
 
         sb.AppendLine("        }");
