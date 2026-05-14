@@ -1691,6 +1691,41 @@ No code changes needed.
 
 ---
 
+### #297 — OpenAPI Generic Type Schema Naming: Fixed (Commit 9ec584c)
+
+**Date:** 2025-07-18
+**Severity:** Critical — would break TypeScript client generation
+**Status:** ✅ Fixed
+
+Generic body types (e.g., `ResourceEvent<TemplateApiResource>`, `PagedApiResource<TemplateApiResource>`) were silently dropped from OpenAPI schema components. Two bugs found and fixed:
+
+1. **Schema projection name mismatch**: The source generator produces body type names in angle-bracket format (`Ns.Outer<Ns.Inner>`) via Roslyn's `ToDisplayString`, but the runtime schema projection used `Type.FullName` (backtick format: `` Ns.Outer`1[[Ns.Inner, Assembly]]``) as lookup keys. The lookup silently fell through and generic schemas were never projected.
+
+2. **Schema key sanitization**: `SanitiseSchemaKey` used `LastIndexOf('.')` to strip namespaces, which picked up dots inside generic type arguments, producing malformed keys like `Inner>` instead of `WrapperOfInner`.
+
+**Fixes applied:**
+- `OpenApiSchemaProjectionContext.Create()`: Added `FormatFullNameDisplayStyle()` to bridge both naming formats for generic types
+- `OpenApiOutputRenderingContext.SanitiseSchemaKey()`: Replaced naive `LastIndexOf('.')` with recursive `SimplifyClrTypeName()` using NJsonSchema "Of/And" convention
+- Result: `PagedApiResource<TemplateApiResource>` now correctly appears as `PagedApiResourceOfTemplate` in OpenAPI output
+
+**Tests:** 2 new tests proving single-arg and multi-arg generic schema naming.
+
+---
+
+### #298 — OpenAPI `additionalProperties: false`: Fixed (Commit 9ec584c)
+
+**Date:** 2025-07-18
+**Severity:** Medium — schema strictness for TypeScript generators
+**Status:** ✅ Fixed
+
+S365's legacy Blueprint (via NJsonSchema) emits `"additionalProperties": false` on all object schemas with declared properties. This prevents TypeScript generators from allowing arbitrary extra properties on typed objects.
+
+Blueprint source-gen was not emitting this property. Now added to `WriteSchemaComponent()` for all object schemas with at least one declared property.
+
+**Impact:** TypeScript client types now match S365's schema strictness convention.
+
+---
+
 ### #296 — Post-Execution Pipeline Consolidation: Deferred
 
 **Date:** 2025-07-18

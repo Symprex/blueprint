@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Collections.Immutable;
 using Blueprint.Model;
 using Blueprint.Runtime.Http;
@@ -95,7 +96,7 @@ public class AppModelOpenApiPathItemRenderingContextTests
             null,
             ImmutableArray<string>.Empty,
             ImmutableArray<OpenApiDocumentOperationContext>.Empty);
-        var schemaProjection = new OpenApiSchemaProjectionContext(documentContext, ImmutableArray<OpenApiSchemaModel>.Empty);
+        var schemaProjection = new OpenApiSchemaProjectionContext(documentContext, ImmutableArray<OpenApiSchemaModel>.Empty, FrozenDictionary<string, string>.Empty);
         var schemaComponents = new OpenApiSchemaComponentRenderingContext(schemaProjection, ImmutableArray<OpenApiSchemaComponentModel>.Empty);
         var responseSchemaProjection = new OpenApiResponseSchemaReferenceProjectionContext(
             schemaProjection,

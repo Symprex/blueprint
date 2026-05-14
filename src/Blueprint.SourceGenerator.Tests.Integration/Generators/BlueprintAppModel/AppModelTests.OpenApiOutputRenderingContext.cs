@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Collections.Immutable;
 using System.Text.Json;
 using Blueprint.Model;
@@ -603,7 +604,7 @@ public class AppModelOpenApiOutputRenderingContextTests
             null,
             ImmutableArray<string>.Empty,
             ImmutableArray<OpenApiDocumentOperationContext>.Empty);
-        var schemaProjectionContext = new OpenApiSchemaProjectionContext(documentBuilderContext, ImmutableArray<OpenApiSchemaModel>.Empty);
+        var schemaProjectionContext = new OpenApiSchemaProjectionContext(documentBuilderContext, ImmutableArray<OpenApiSchemaModel>.Empty, FrozenDictionary<string, string>.Empty);
         var schemaComponentContext = new OpenApiSchemaComponentRenderingContext(schemaProjectionContext, [.. schemaComponents]);
         var responseSchemaProjectionContext = new OpenApiResponseSchemaReferenceProjectionContext(
             schemaProjectionContext,
@@ -638,7 +639,7 @@ public class AppModelOpenApiOutputRenderingContextTests
             null,
             ImmutableArray<string>.Empty,
             ImmutableArray<OpenApiDocumentOperationContext>.Empty);
-        var schemaProjectionContext = new OpenApiSchemaProjectionContext(documentBuilderContext, ImmutableArray<OpenApiSchemaModel>.Empty);
+        var schemaProjectionContext = new OpenApiSchemaProjectionContext(documentBuilderContext, ImmutableArray<OpenApiSchemaModel>.Empty, FrozenDictionary<string, string>.Empty);
         var schemaComponentContext = new OpenApiSchemaComponentRenderingContext(schemaProjectionContext, [.. schemaComponents ?? []]);
         var responseSchemaProjectionContext = new OpenApiResponseSchemaReferenceProjectionContext(
             schemaProjectionContext,

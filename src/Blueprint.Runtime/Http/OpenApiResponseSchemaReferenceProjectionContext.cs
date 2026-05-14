@@ -29,7 +29,7 @@ public sealed record OpenApiResponseSchemaReferenceProjectionContext(
         var schemasByBodyTypeName = schemaProjection.Schemas
             .ToFrozenDictionary(static schema => schema.BodyTypeName, StringComparer.Ordinal);
         var operations = schemaProjection.Document.Operations
-            .Select(operation => CreateOperationContext(operation, schemasByBodyTypeName))
+            .Select(operation => CreateOperationContext(operation, schemasByBodyTypeName, schemaProjection.FullNameToShortName))
             .ToImmutableArray();
 
         return new OpenApiResponseSchemaReferenceProjectionContext(schemaProjection, operations);
@@ -37,10 +37,11 @@ public sealed record OpenApiResponseSchemaReferenceProjectionContext(
 
     private static OpenApiResponseSchemaReferenceOperationContext CreateOperationContext(
         OpenApiDocumentOperationContext operation,
-        FrozenDictionary<string, OpenApiSchemaModel> schemasByBodyTypeName)
+        FrozenDictionary<string, OpenApiSchemaModel> schemasByBodyTypeName,
+        FrozenDictionary<string, string> fullNameToShortName)
     {
         var responses = operation.Responses
-            .Select(response => CreateResponseContext(response, schemasByBodyTypeName))
+            .Select(response => CreateResponseContext(response, schemasByBodyTypeName, fullNameToShortName))
             .ToImmutableArray();
 
         return new OpenApiResponseSchemaReferenceOperationContext(operation.Operation, responses);
@@ -48,11 +49,14 @@ public sealed record OpenApiResponseSchemaReferenceProjectionContext(
 
     private static OpenApiResponseSchemaReferenceResponseContext CreateResponseContext(
         OperationHttpResponseMetadata response,
-        FrozenDictionary<string, OpenApiSchemaModel> schemasByBodyTypeName)
+        FrozenDictionary<string, OpenApiSchemaModel> schemasByBodyTypeName,
+        FrozenDictionary<string, string> fullNameToShortName)
     {
         var schemaReferences = response.BodyTypeNames
             .Distinct(StringComparer.Ordinal)
-            .Select(bodyTypeName => TryCreateSchemaReference(NormalizeBodyTypeName(bodyTypeName), schemasByBodyTypeName))
+            .Select(bodyTypeName => TryCreateSchemaReference(
+                NormalizeBodyTypeName(bodyTypeName, fullNameToShortName),
+                schemasByBodyTypeName))
             .OfType<OpenApiResponseSchemaReference>()
             .ToImmutableArray();
 
@@ -85,14 +89,24 @@ public sealed record OpenApiResponseSchemaReferenceProjectionContext(
 
     /// <summary>
     /// Normalizes a compile-time full CLR body type name to the short format used by schema projection.
-    /// Strips the namespace prefix so <c>Microsoft.AspNetCore.Mvc.ProblemDetails</c> becomes <c>ProblemDetails</c>.
+    /// Prefers the <paramref name="fullNameToShortName"/> dictionary for an exact match (handles generic types
+    /// correctly), then falls back to stripping the namespace prefix for simple non-generic types.
     /// Array suffixes are preserved (e.g. <c>Namespace.Type[]</c> → <c>Type[]</c>).
     /// </summary>
-    private static string NormalizeBodyTypeName(string bodyTypeName)
+    private static string NormalizeBodyTypeName(string bodyTypeName, FrozenDictionary<string, string> fullNameToShortName)
     {
         var isArray = bodyTypeName.EndsWith("[]", StringComparison.Ordinal);
         var nameToNormalize = isArray ? bodyTypeName[..^2] : bodyTypeName;
 
+        // The fullNameToShortName dictionary resolves both backtick and angle-bracket generic formats
+        // to the correct "Of" convention short name (e.g. PagedApiResourceOfTemplate).
+        if (fullNameToShortName.TryGetValue(nameToNormalize, out var shortName))
+        {
+            return isArray ? shortName + "[]" : shortName;
+        }
+
+        // Fallback for types not in the dictionary (e.g. non-generic types added after schema projection).
+        // For non-generic names, strip the namespace prefix at the last dot.
         var lastDot = nameToNormalize.LastIndexOf('.');
         if (lastDot >= 0)
         {

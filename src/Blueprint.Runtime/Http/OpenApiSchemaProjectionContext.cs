@@ -18,9 +18,12 @@ namespace Blueprint.Runtime.Http;
 /// </summary>
 /// <param name="Document">The document-builder snapshot that owns the projected schema set.</param>
 /// <param name="Schemas">The distinct covered body-type schemas available for later OpenAPI work.</param>
+/// <param name="FullNameToShortName">Maps full CLR body-type names (both backtick and angle-bracket formats for generics)
+/// to the short <c>FormatTypeName</c> keys used by schema components.</param>
 public sealed record OpenApiSchemaProjectionContext(
     OpenApiDocumentBuilderContext Document,
-    ImmutableArray<OpenApiSchemaModel> Schemas)
+    ImmutableArray<OpenApiSchemaModel> Schemas,
+    FrozenDictionary<string, string> FullNameToShortName)
 {
     /// <summary>
     /// Creates a schema projection snapshot for the covered body types in the supplied OpenAPI document-builder context.
@@ -34,7 +37,7 @@ public sealed record OpenApiSchemaProjectionContext(
 
         if (document.App.AppOwnedSerializerContext is not JsonSerializerContext serializerContext)
         {
-            return new OpenApiSchemaProjectionContext(document, ImmutableArray<OpenApiSchemaModel>.Empty);
+            return new OpenApiSchemaProjectionContext(document, ImmutableArray<OpenApiSchemaModel>.Empty, FrozenDictionary<string, string>.Empty);
         }
 
         var coveredTypesByName = document.App.AppOwnedSerializerContextBodyTypes
@@ -96,7 +99,7 @@ public sealed record OpenApiSchemaProjectionContext(
             }
         }
 
-        return new OpenApiSchemaProjectionContext(document, schemaBuilder.ToImmutable());
+        return new OpenApiSchemaProjectionContext(document, schemaBuilder.ToImmutable(), fullNameToShortName);
     }
 
     private static OpenApiSchemaModel CreateSchema(
