@@ -337,3 +337,46 @@ Before declaring a service migration "OpenAPI compatible":
 - [ ] Verified nullable/required property alignment
 - [ ] Internal parameters (TenantId) hidden from public spec
 - [ ] Security scheme configured correctly
+
+---
+
+## S365-Specific OpenAPI Configuration
+
+### Operation Naming Convention
+
+S365's Portal service uses `PortalOperationScannerConvention` which strips the "Portal" prefix
+from operation names. In Blueprint source-gen, this is handled via operation processors:
+
+```csharp
+app.MapBlueprintApi<PortalBlueprintApp, PortalBlueprintAppExecutor>(
+    basePath: "/api/",
+    configureOpenApi: info =>
+    {
+        info.Title = "Signature 365 Portal API";
+        info.Version = "1.0";
+        info.OpenApiVersion = "3.0.0"; // Match S365 legacy for tooling compat
+        info.UseStatus200ForSuccessResponses = true; // S365 TS generators expect 200
+    },
+    configureOpenApiOperations: ops =>
+    {
+        // Equivalent of PortalOperationScannerConvention
+        ops.Processors.Add((op, _) => op with
+        {
+            OperationName = op.OperationName.Replace("Portal", "")
+        });
+    });
+```
+
+### TenantId Auto-Exclusion
+
+S365 uses a `ConfigureOperation` callback to remove `TenantId` from OpenAPI parameters for
+authenticated operations. Blueprint source-gen handles this automatically via the tenant
+convention — when `ITenantAccessor` and `ITenantResolver` are in the compilation, `TenantId`
+properties are treated as `AuthContext`-sourced and excluded from OpenAPI. No manual
+configuration needed.
+
+### Security Scheme
+
+Blueprint defaults to Bearer JWT (`bearerAuth`, type=`http`, scheme=`bearer`, bearerFormat=`JWT`),
+which matches S365's OAuth2/JWT authentication. Override via `OpenApiInfoOptions.SecuritySchemes`
+if a different scheme is needed.

@@ -1984,3 +1984,24 @@ Detailed audit of S365's testing infrastructure (42 test projects) against Bluep
 S365's `AuthenticateAsTenantAdministrator`, `AuthenticateAsPartnerUser`, `AuthenticateAsInternalUser` etc. are consumer-level helpers that create `Signature365UserAuthorisationContext` with specific claims. These remain in S365's test helpers project — they call `fixture.Authentication.Set(identity)` internally.
 
 **Migration effort for test infrastructure: ZERO for test execution methods, ONE factory class per service to implement.**
+
+---
+
+### #293 — TenantId Auto-Excluded from OpenAPI When Tenancy Enabled (commit da14b9e)
+
+**Problem:** S365 has ~70 operations with `TenantId` auto-populated by `SetTenantMiddleware`. Blueprint's `TenantModule` auto-populates at runtime but didn't inform `PropertyOwnershipModule`, so TenantId still appeared in OpenAPI spec. Migrating without a fix would require either `[FromAuthContext]` on every TenantId property (70+ attributes) or a runtime `ConfigureOperation` callback.
+
+**Solution:** Created `TenantIdConventionHelper` as shared decision logic between `TenantModule` (pipeline generation) and `PropertyOwnershipModule` (descriptor/OpenAPI). When tenancy is enabled (both `ITenantAccessor` and `ITenantResolver` in compilation), properties named exactly `TenantId` are automatically treated as `AuthContext`-sourced — excluded from OpenAPI parameters/body.
+
+**Behavior rules:**
+- Exact "TenantId" name match (case-sensitive)
+- Respects explicit HTTP binding attributes — `[FromBody]`, `[FromQuery]`, `[FromHeader]`, `[FromCookie]` suppress auto-exclusion
+- Skips route-bound TenantId (`{TenantId}` in URL template → stays as Route binding)
+- Unwraps `Nullable<T>` for value types (handles `ApiId?`)
+- Validates type is convertible (string, `IParsable<T>`, TryParse, `[TypeConverter]`)
+
+**Bonus fix:** TenantModule now correctly skips auto-population when TenantId has an explicit HTTP binding attribute. Previously it would auto-populate even with `[FromHeader]` present.
+
+**Migration impact:** Eliminates ~70 `[FromAuthContext]` annotations and the runtime `ConfigureOperation` callback for TenantId removal. Zero-churn for S365 operations.
+
+**Files changed:** `TenantIdConventionHelper.cs` (new), `TenantModule.cs`, `PropertyOwnershipModule.cs`, `TenantModuleTests.cs`, 1 snapshot promoted.

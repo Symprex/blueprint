@@ -405,6 +405,71 @@ public class TenantModuleTests
     }
 
     [Fact]
+    public void When_TenantId_is_nullable_value_type_then_pipeline_uses_HasValue_guard()
+    {
+        const string source = """
+            using Blueprint;
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using System;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace
+            {
+                [BlueprintAppScan]
+                public partial class TestApp : BlueprintApp { }
+
+                public readonly struct ApiId : IParsable<ApiId>
+                {
+                    public string Value { get; }
+                    public ApiId(string value) => this.Value = value;
+                    public static ApiId Parse(string s, IFormatProvider? provider) => new(s);
+                    public static bool TryParse(string? s, IFormatProvider? provider, out ApiId result)
+                    {
+                        if (s is null) { result = default; return false; }
+                        result = new ApiId(s);
+                        return true;
+                    }
+                    public override string ToString() => this.Value;
+                }
+
+                [RootLink("/items")]
+                [HttpGet]
+                public partial class GetItemsQuery : IQuery<string>
+                {
+                    public ApiId? TenantId { get; set; }
+                    public string Filter { get; set; }
+
+                    public static Task<string> HandleAsync(GetItemsQuery operation)
+                    {
+                        return Task.FromResult("ok");
+                    }
+                }
+            }
+            """;
+
+        var generators = new[]
+        {
+            TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>(),
+            TestHelpers.CreateTrackedGenerator<OperationExecutorPipelineSourceGenerator>(),
+        };
+
+        var result = TestHelpers.CompileWithTrackedGenerators(generators, [source], ["Input0.cs"]);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var pipelineSources = result.GetGeneratedSources(nameof(OperationExecutorPipelineSourceGenerator));
+        var pipelineSource = string.Join("\n", pipelineSources.Select(static s => s.SourceText));
+
+        // Should use HasValue guard for Nullable<ApiId>
+        pipelineSource.Should().Contain("!operation.TenantId.HasValue");
+
+        // Should TryParse the unwrapped type
+        pipelineSource.Should().Contain("ApiId.TryParse(this.TenantAccessor.Current, null, out var _parsedTenantId)");
+        pipelineSource.Should().Contain("operation.TenantId = _parsedTenantId;");
+    }
+
+    [Fact]
     public void When_TenantId_not_in_route_then_descriptor_excludes_from_openapi()
     {
         const string source = """

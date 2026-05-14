@@ -128,9 +128,14 @@ public sealed class TenantModule : IBlueprintSourceGeneratorModule, IPipelineCon
                     var fqType = info.TypeSymbol!.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
                     var tryParseExpr = TypeConversionHelpers.GetTryParseExpression(
                         info.TypeSymbol!, accessorCurrent, "_parsedTenantId");
-                    var defaultCheck = info.TypeSymbol!.IsValueType
-                        ? $"global::System.Collections.Generic.EqualityComparer<{fqType}>.Default.Equals(operation.TenantId, default)"
-                        : "operation.TenantId == null";
+
+                    // For Nullable<T>, check HasValue; for value types, compare against default;
+                    // for reference types, check null.
+                    var defaultCheck = info.IsNullable
+                        ? "!operation.TenantId.HasValue"
+                        : info.TypeSymbol!.IsValueType
+                            ? $"global::System.Collections.Generic.EqualityComparer<{fqType}>.Default.Equals(operation.TenantId, default)"
+                            : "operation.TenantId == null";
 
                     ctx.If(
                         $"{accessorCurrent} != null && {defaultCheck}",
@@ -150,9 +155,11 @@ public sealed class TenantModule : IBlueprintSourceGeneratorModule, IPipelineCon
                 {
                     // For TypeConverter-only types: use exception-based conversion with a try/catch guard.
                     var fqType = info.TypeSymbol!.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                    var defaultCheck = info.TypeSymbol!.IsValueType
-                        ? $"global::System.Collections.Generic.EqualityComparer<{fqType}>.Default.Equals(operation.TenantId, default)"
-                        : "operation.TenantId == null";
+                    var defaultCheck = info.IsNullable
+                        ? "!operation.TenantId.HasValue"
+                        : info.TypeSymbol!.IsValueType
+                            ? $"global::System.Collections.Generic.EqualityComparer<{fqType}>.Default.Equals(operation.TenantId, default)"
+                            : "operation.TenantId == null";
 
                     ctx.If(
                         $"{accessorCurrent} != null && {defaultCheck}",
