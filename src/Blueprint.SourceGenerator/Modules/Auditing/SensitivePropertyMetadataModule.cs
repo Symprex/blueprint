@@ -49,7 +49,7 @@ public sealed class SensitivePropertyMetadataModule : IBlueprintSourceGeneratorM
         context.AddRenderStep(writer =>
         {
             writer.AppendLine(
-                $"this.SetFeatureData(new global::Blueprint.Auditing.SensitivePropertyMetadata(new string[] {{ {propertyArray} }}));");
+                $"this.SetFeatureData(new global::Blueprint.Auditing.SensitivePropertyMetadata([{propertyArray}]));");
         });
     }
 

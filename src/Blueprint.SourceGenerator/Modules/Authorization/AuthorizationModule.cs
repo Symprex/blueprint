@@ -192,7 +192,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
             }
 
             writer.AppendLine(
-                $"this.SetFeatureData(new global::Blueprint.Model.OperationAuthorizationFeatureData(global::System.Collections.Immutable.ImmutableArray.Create(new global::Blueprint.Model.ScopePair[] {{ {scopePairEntries} }})));");
+                $"this.SetFeatureData(new global::Blueprint.Model.OperationAuthorizationFeatureData(global::System.Collections.Immutable.ImmutableArray.Create<global::Blueprint.Model.ScopePair>([{scopePairEntries}])));");
         });
     }
 
@@ -318,8 +318,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
             classBuilder.AddProperty(scopePairFieldName, Accessibility.Private)
                 .SetType("Blueprint.Model.ScopePair[]")
                 .MakeStatic()
-                .WithReadonlyValue(
-                    $"new Blueprint.Model.ScopePair[] {{ {scopePairArrayExpr} }}");
+                .WithReadonlyValue($"[{scopePairArrayExpr}]");
         });
 
         context.AddRenderStep(
@@ -380,7 +379,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
                     ? BuildResolvedScopePairExpression(sp, operationExpr, principalExpr, valueTypePropertyNames)
                     : $"new Blueprint.Model.ResolvedScopePair(\"{sp.Noun}\", \"{sp.Verb}\", null, null)"));
 
-            resolvedScopeArg = $"new Blueprint.Model.ResolvedScopePair[] {{ {resolvedElements} }}";
+            resolvedScopeArg = $"[{resolvedElements}]";
         }
 
         context.DeclareVariable(

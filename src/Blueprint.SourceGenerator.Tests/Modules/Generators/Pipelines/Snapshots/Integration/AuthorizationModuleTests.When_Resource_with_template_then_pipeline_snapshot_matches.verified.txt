@@ -18,7 +18,7 @@ namespace Blueprint.Generated
         static readonly string[] _appliedModuleIds =
             ["PropertyOwnershipModule", "TenantModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "AuthorizationModule", "HandlerExecutionModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule"];
         private static readonly Blueprint.Model.ScopePair[] _scopePairs_GetAccountQuery =
-            new Blueprint.Model.ScopePair[] { new Blueprint.Model.ScopePair("account", "read", "/tenants/{Auth:AccountId}/accounts/{Id}") };
+            [new Blueprint.Model.ScopePair("account", "read", "/tenants/{Auth:AccountId}/accounts/{Id}")];
 
         public GetAccountQueryExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, Blueprint.Runtime.Exec.PipelineServices pipelineServices)
             : base(loggerFactory, "GetAccountQuery", pipelineServices)
