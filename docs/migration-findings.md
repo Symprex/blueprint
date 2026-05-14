@@ -7,6 +7,8 @@
 
 | Area | Status | Notes |
 |------|--------|-------|
+| OpenAPI status-200 compat | ✅ Done | `UseStatus200ForSuccessResponses` flag adds synthetic 200 for TypeScript generators |
+|------|--------|-------|
 | Compile-time proof | ✅ Done | `.scratch/s365-proof/` compiles, 46 generated files |
 | Codemod tool | ✅ Done | Per-project SARIF, lenient build failure handling |
 | .NET 10 upgrade | ✅ Done | All projects target net10.0 |
@@ -1183,3 +1185,117 @@ The `AuthorizationModule` generates maximally optimized authorization code:
 - `ResolvedScopePair` with inline string interpolation using operation properties + principal claims
 - Compile-time validation of resource key template tokens against operation properties
 - Single helper call to `PipelineHelpers.CheckResourceAuthorizationAsync` (~4 lines vs ~19 inline)
+
+### OpenAPI Status Code Compatibility (`UseStatus200ForSuccessResponses`)
+
+**Problem**: S365's custom TypeScript code generator (Handlebars templates in all 3 frontend apps: admin, portal, partners) hardcodes `operation.responses['200']` at line 265 of `index.mts` to determine the return type of each operation. Legacy S365 Blueprint always uses status `200` for ALL success responses, including commands that are semantically `201 Created`. New Blueprint correctly uses semantic status codes (200, 201, 202, 204), which would cause the TypeScript generator to see those operations as returning `void`.
+
+**Solution**: `OpenApiInfoOptions.UseStatus200ForSuccessResponses` (default: `false`).
+
+When enabled:
+- For each operation, if there is no body-bearing `200` response, the first body-bearing `2xx` response (e.g. `201 Created` from `ResourceEventResult<T>`) is cloned as a synthetic `200 OK` alias
+- Original semantic status codes are **preserved** (both `200` and `201` appear in the output)
+- Bodyless successes (e.g. `KeyOnlyResourceEventResult` → 201 bodyless, `HttpNoContentResult` → 204) are **not** aliased because there is no schema to mirror
+- Operations already returning `200` (e.g. `OkResult<T>`) are untouched
+
+**S365 legacy response code distribution** (confirmed from live OpenAPI output):
+- 140 operations: `200, 500, 422`
+- 30 operations: `404, 200, 500, 422`
+- 17 operations: `400, 200, 500, 422`
+- All use `200` as the success code — even `ResourceEvent` commands
+
+**S365 migration usage**:
+```csharp
+app.MapBlueprintApi<PortalBlueprintApp, PortalBlueprintAppExecutor>(
+    "api/",
+    configureOpenApi: o =>
+    {
+        o.Title = "Portal API";
+        o.Version = "1.0";
+        o.UseStatus200ForSuccessResponses = true; // S365 TypeScript compat
+    });
+```
+
+### S365 TypeScript Code Generation Deep Analysis
+
+All 3 S365 frontend apps (admin, portal, partners) use **identical** custom TypeScript generators with Handlebars templates. Key OpenAPI properties consumed:
+
+| Property | S365 Template Usage | Blueprint Compatible |
+|----------|-------------------|---------------------|
+| `operationId` | Used as-is for method names | ✅ (suffix-stripped) |
+| `tags` | Groups operations into API classes | ✅ (namespace-based) |
+| `responses['200']` | Hardcoded for return type | ✅ (with `UseStatus200ForSuccessResponses`) |
+| `x-links` on schemas | `rel` → method name, `operationId` → lookup | ✅ |
+| `x-links.method` | **NOT USED** (ignored by templates) | ✅ |
+| `$ref` in schema | Short name from last `/` segment | ✅ (short names used) |
+| `title` on schemas | Required for enums | ✅ |
+| `x-enumNames` | Enum member names | ✅ |
+| `$links` property | `{[key: string]: Link}` shape | ✅ |
+| `requestBody.content['application/json'].schema` | Direct schema or `$ref` | ✅ |
+| `discriminator` | **NOT USED** for type mapping | ✅ |
+
+### S365 Resource Attribute Deep Analysis
+
+**All 349 `[Resource]` attributes** use 3-argument constructor: `(noun, verb, resourceKeyTemplate)`. No 2-argument usages found.
+
+**All 158 `[FromResource]` attributes** use 2-argument constructor: `(operationType, resourceKeyTemplate)`.
+
+| Metric | Value |
+|--------|-------|
+| Unique nouns | 81 |
+| Verbs: Read | 40.7% |
+| Verbs: Update | 45.6% |
+| Verbs: Delete | 7.4% |
+| Verbs: Create | 6.0% |
+| Verbs: UpdateMine | 0.3% |
+| Most common template | `/Tenants/{TenantId}` (115, 33%) |
+| Auth-claims templates | `/Tenants/{Auth:AccountId}` (70, 20%) |
+| Multi-Resource ops | ~20 (OR-logic authorization) |
+| `Manage` verb expansion | Includes [Create, Read, Update, Delete] |
+| Scope format | `"Noun::Verb"` with `::` separator |
+
+### S365 Service Startup → Blueprint Mapping
+
+Complete analysis of all 14 S365 services reveals a highly uniform registration pattern. Every service uses:
+
+| S365 Method | Purpose | Blueprint Equivalent |
+|-------------|---------|---------------------|
+| `.ConfigureCommon(AppDefinition.Instance)` | Resource auth convention + Hangfire | Built-in `[Resource]` + `AddBackgroundTaskScheduler<HangfireTaskScheduler>()` |
+| `.Http(h => h.Json(j => j.SerializerOptions.ConfigureForNodaTime(...)))` | NodaTime JSON | `blueprint.ConfigureJson(j => j.SerializerOptions.ConfigureForNodaTime(...))` |
+| `.Executors(e => e.AddScanner<OperationsHandlerScanner>())` | Runtime handler discovery | Not needed — source-gen discovers handlers at compile time |
+| `.TryConfigureForTests()` | No-op (empty method) | Not needed |
+| `.Operations(o => o.Scan(typeof(IXxxApi).Assembly))` | Assembly scanning | `[BlueprintAppScan(FromAssemblyOf = typeof(IXxxApi))]` |
+| `.AddOpenApi(o => { ... })` | OpenAPI config | `configureOpenApi:` parameter on `MapBlueprintApi()` |
+| `.AddAuthentication(a => a.UseContextLoader<S365UserAuthContextFactory>())` | Auth context | `blueprint.AddResourceAuthorizationProvider<S365ResourceAuthProvider>()` |
+| `.AddAuthorisation()` | Enable auth checks | Built-in (auto-enabled when `[Resource]` or `[MustBeAuthenticated]` present) |
+| `.Pipeline(p => p.AddMiddleware<SetTenantMiddleware>(...))` | Tenant resolution | Built-in `TenantModule` with `blueprint.AddTenantResolver<T>()` |
+| `.UseRebusAndMarten()` | Rebus tx + Marten UoW + outbox | `blueprint.AddUnitOfWork<MartenUnitOfWork>()` + Blueprint.Rebus companion |
+| `.UseRebus()` | Rebus tx scope only | Blueprint.Rebus companion |
+| `.AddResourceEvents<BusResourceEventAuditRepository>()` | Audit trail | `blueprint.AddResourceEventAuditSink<BusResourceEventAuditSink>()` |
+| `.AddHateoasLinks()` / `.AddSig365HateoasLinks()` | Link generation | Built-in `LinkGenerationModule` (compile-time) |
+| `.UseResourceExpansion()` | Resource expansion | `blueprint.AddResourceExpander<T>()` |
+
+**Service-specific configurations:**
+
+| Service | Rebus Subs | SetTenant | Custom Convention | HATEOAS | Special |
+|---------|-----------|-----------|-------------------|---------|---------|
+| Portal | 19 | ✅ | PortalOperationScanner | ✅ (custom) | ResourceExpansion |
+| Templates | 0 | ✗ | — | ✗ | — |
+| Analytics | 31 | ✗ | — | ✗ | Workers 10/20 |
+| EventStore | 1 | ✅ | — | ✗ | — |
+| Billing | 10 | ✗ | — | ✗ | Workers 20/40, PeekLock |
+| IdentityServer | 15 | ✗ | — | ✗ | TaskRunner |
+| Outlook | 1 | ✅ | — | ✗ | — |
+| Import | 3 | ✅ | — | ✗ | — |
+| Generation | 1 | ✗ | — | ✗ | — |
+| Partners | 6 | ✅ | — | ✅ | Region outbox |
+| Subscriptions | 1 | ✅ | — | ✅ | Chargebee |
+| Microsoft365 | 3 | ✗ | BackgroundTaskAllowAnon | ✗ | Workers 20/40 |
+| VCard | 0 | ✅ | — | ✅ | — |
+| ETA | 1 | ✅ | — | ✗ | — |
+
+**OpenAPI TenantId removal**: Portal's `ConfigureOperation` removes `TenantId` from OpenAPI params/body when auth is required. Blueprint's `[FromAuthContext]` attribute on `TenantId` properties achieves the same at compile time — properties marked `[FromAuthContext]` are excluded from HTTP binding and OpenAPI schema.
+
+**PortalOperationScannerConvention**: Strips "Portal" from descriptor names (`descriptor.Name.Replace("Portal", string.Empty)`). In Blueprint source-gen, this can be handled via an OpenAPI operation processor in `configureOpenApiOperations:`.
+
+**BackgroundTaskAllowAnonymousConvention**: Sets `AnonymousAccessAllowed = true` and `IsExposed = false` for `IBackgroundTask` implementations. Blueprint source-gen handles this automatically for Rebus handlers and background tasks.
