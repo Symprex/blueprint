@@ -17,19 +17,19 @@ code path that runs in production HTTP requests (minus HTTP I/O and serializatio
 
 | Benchmark | Mean | Error | StdDev | Ratio | Gen0 | Allocated | Alloc Ratio |
 |-----------|-----:|------:|-------:|------:|-----:|----------:|------------:|
-| MinimalQuery (baseline) | 1.90 µs | 0.203 µs | 0.298 µs | 1.00 | 0.2022 | 2.51 KB | 1.00 |
-| ValidatedQuery (valid input) | 13.04 µs | 1.810 µs | 2.709 µs | 7.04 | 0.4120 | 5.12 KB | 2.04 |
-| ValidatedQuery (invalid input) | 13.37 µs | 2.260 µs | 3.383 µs | 7.22 | 0.3967 | 5.12 KB | 2.04 |
-| FullStackCommand (valid input) | 14.31 µs | 1.704 µs | 2.551 µs | 7.73 | 0.4578 | 5.73 KB | 2.28 |
-| FullStackCommand (validation failure) | 15.78 µs | 2.860 µs | 4.192 µs | 8.52 | 0.4578 | 5.73 KB | 2.28 |
+| MinimalQuery (baseline) | 1.73 µs | 0.225 µs | 0.330 µs | 1.00 | 0.2022 | 2.51 KB | 1.00 |
+| ValidatedQuery (valid input) | 12.21 µs | 1.246 µs | 1.826 µs | 7.30 | 0.4120 | 5.12 KB | 2.04 |
+| ValidatedQuery (invalid input) | 12.37 µs | 1.768 µs | 2.647 µs | 7.40 | 0.3967 | 5.12 KB | 2.04 |
+| FullStackCommand (validation failure) | 13.01 µs | 1.657 µs | 2.480 µs | 7.78 | 0.4578 | 5.73 KB | 2.28 |
+| FullStackCommand (valid input) | 13.40 µs | 1.245 µs | 1.825 µs | 8.01 | 0.4578 | 5.73 KB | 2.28 |
 
 ### Analysis
 
-**Baseline (MinimalQuery):** ~1.9 µs / 2.51 KB
+**Baseline (MinimalQuery):** ~1.73 µs / 2.51 KB
 - This is the absolute minimum pipeline overhead — no validation, just handler invocation
 - The 2.51 KB includes `ApiOperationContext` allocation and the operation instance
 - **This is the floor.** Any production operation will add to this baseline
-- Improved from 2.21 µs → 1.90 µs after pre-sizing and optimization work
+- Improved from 2.21 µs → 1.90 µs → 1.73 µs after successive optimization work
 
 **Validation cost:** ~11-13 µs / 2.6 KB additional
 - Validation adds ~11-13 µs latency and ~2.6 KB allocation over the baseline
@@ -66,6 +66,47 @@ Even the heaviest validated command pipeline (~10 µs) is faster than typical JS
    (99%+ of real requests), rent from `ArrayPool<byte>.Shared` instead of allocating
    a `MemoryStream`. This eliminates a per-request heap allocation for the body buffer.
    Chunked transfer (unknown Content-Length) falls back to `MemoryStream`.
+
+---
+
+## Serialization Benchmarks
+
+JSON serialization performance for typical S365 response payloads. Compares source-generated
+`JsonSerializerContext` (the recommended path) vs reflection fallback.
+
+| Benchmark | Mean | Error | StdDev | Ratio | Gen0 | Allocated | Alloc Ratio |
+|-----------|-----:|------:|-------:|------:|-----:|----------:|------------:|
+| SmallResource_SourceGenContext (baseline) | 348 ns | 45 ns | 68 ns | 1.00 | 0.004 | 56 B | 1.00 |
+| MediumResource_SourceGenContext | 413 ns | 42 ns | 62 ns | 1.23 | 0.004 | 56 B | 1.00 |
+| SmallResource_ReflectionFallback | 565 ns | 69 ns | 103 ns | 1.68 | 0.015 | 192 B | 3.43 |
+| ResourceEventEnvelope_Utf8Writer | 987 ns | 116 ns | 173 ns | 2.94 | 0.416 | 5,232 B | 93.43 |
+| PagedList25Items_SourceGenContext | 4,210 ns | 463 ns | 693 ns | 12.53 | 0.004 | 56 B | 1.00 |
+
+**Key insights:**
+- **Source-gen context serialization**: 348-413ns for typical resources, **only 56 bytes allocated**
+- **Reflection fallback**: 1.6x slower with 3.4x more allocation — justifies requiring `JsonSerializerContext`
+- **Paged list (25 items)**: 4.2µs — still fast, linear scaling with item count
+- **ResourceEvent envelope**: 987ns but 5.2KB allocation from `Guid.NewGuid().ToString()` and
+  `DateTime.UtcNow.ToString("O")` — production path uses pre-allocated values
+
+## Deserialization Benchmarks
+
+JSON deserialization (request body binding) performance for different strategies.
+
+| Benchmark | Mean | Error | StdDev | Ratio | Gen0 | Allocated | Alloc Ratio |
+|-----------|-----:|------:|-------:|------:|-----:|----------:|------------:|
+| SmallBody_PropertyByProperty (baseline) | 130 ns | 14 ns | 20 ns | 1.00 | 0.010 | 120 B | 1.00 |
+| SmallBody_FullDeserialize | 186 ns | 21 ns | 32 ns | 1.47 | 0.010 | 120 B | 1.00 |
+| SmallBody_SourceGenDeserialize | 216 ns | 21 ns | 30 ns | 1.70 | 0.010 | 120 B | 1.00 |
+| MediumBody_PropertyByProperty | 586 ns | 67 ns | 98 ns | 4.62 | 0.056 | 712 B | 5.93 |
+| MediumBody_SourceGenDeserialize | 672 ns | 55 ns | 79 ns | 5.30 | 0.094 | 1,184 B | 9.87 |
+
+**Key insights:**
+- **Property-by-property binding** (Blueprint's generated approach) is **fastest** at 130ns
+  for small bodies — 1.5x faster than full deserialization, 1.7x faster than source-gen context
+- **Medium body** (7+ properties with strings, arrays): 586ns property-by-property vs 672ns
+  source-gen — Blueprint's approach wins on both speed and allocation
+- **All strategies allocate only 120B for small bodies** — the operation object itself
 
 ---
 

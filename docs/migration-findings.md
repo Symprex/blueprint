@@ -319,6 +319,14 @@
 | Gap audit: all 6 areas closed | ✅ Done | Body reading (extracted to PipelineHelpers), route dedup (HashSet-based), property populators (S365 has none beyond TenantId), TenantId first-class (TenantModule), ReadJsonBodyAsync (operation parameter), well-known OpenAPI (/.well-known/openapi + RFC 9727). |
 | Benchmark: 100 ops initial | 📊 340ms / 28MB | Source generator compilation benchmark. Cached incremental run: 161ms / 13.5MB. |
 | Benchmark: 500 ops initial | 📊 845ms / 140MB | Gen2 collections at 500 ops — LOH pressure. S365 services are typically <100 ops per service so this is acceptable. |
+| WithCrudVerbHierarchy factory | ✅ Done | `ScopePairClaimAuthorizationProvider.WithCrudVerbHierarchy()` — static factory pre-configures Manage→CRUD hierarchy + default OAuth scopes. 5 integration tests. |
+| CallAsync → SendAsync compat | ✅ Compatible | Blueprint `SendAsync<T>` covers S365 `CallAsync<T>` pattern — same URL resolution, error handling, response parsing. Extension method shim if churn concern. |
+| ResourceEvent audit seam | ✅ Already exists | S365's `BusResourceEventAuditRepository` maps to Blueprint's `IResourceEventAuditSink`. Register via `AddResourceEventAuditSink<T>()`. Pipeline calls generated automatically. |
+| S365 custom middleware (deep) | ✅ No gap | SetTenant→TenantModule, Rebus TX→RebusTransactionModule, SaveMarten→UnitOfWorkModule, MartenOutbox→MessageOutboxModule, ResourceExpand→ResourceExpansionModule, Links→LinkGenerationModule |
+| Hangfire tenant partitioning | ✅ S365-owned | Custom `RecurringJobPartitionedSqlServerStorage` stays in S365 — infrastructure-specific, not Blueprint core |
+| S365 OpenAPI backend | ⚠️ Migration item | S365 uses NSwag/NJsonSchema for schema generation. Blueprint has its own OpenAPI generator. Schema component naming, `x-links`, `x-enumNames` are compatible. Key difference: S365 caches spec in feature data; Blueprint renders on each request (fast). |
+| S365 TypeScript Handlebars | ✅ Compatible | 3 apps use custom `index.mts` + 4 `.handlebars` templates. Consumes: operationId, tags, x-links, parameters, requestBody, 200/application/json responses. All produced correctly by Blueprint. |
+| S365 gateway OpenAPI aggregation | ✅ Compatible | Gateways register HTTP clients, proxy operations, expose own `/openapi`. Blueprint Sample.Gateway demonstrates this exact pattern. |
 
 ---
 
@@ -3141,4 +3149,125 @@ When first-class tenancy is enabled (`ICurrentTenantAccessor` registered):
 4. `AuthContext` and `System` entries are automatically excluded from OpenAPI parameters and body
 
 **No manual `[OpenApiIgnore]` attribute needed** — convention handles it.
+
+---
+
+### #328 — S365 CallAsync / BlueprintHttpClient: Fully Compatible
+
+**Result: Blueprint's `SendAsync<TResponse>` covers S365's `CallAsync<TResponse>` pattern**
+
+S365 `BlueprintHttpClient.CallAsync<TResponse>`:
+- Resolves URL from `descriptor.Links[0].CreateRelativeUrl(operation, isGet)`
+- Handles `StatusCodeResult`, `PlainTextResult`, validation (422), and error status codes
+- Uses `CallOptions` for request header modification via `ModifyRequest` action
+- Timeout handling maps to RequestTimeout (avoids Cloudflare interception)
+
+Blueprint `BlueprintHttpClient<TApp>.SendAsync<TResponse>`:
+- Same pattern with generic `TApp` parameter for app model
+- Includes `SendResourceEventAsync<TResource>()` for unwrapping resource event envelopes
+- Response handling is more modular with content-type detection
+- Already handles StatusCodeResult, PlainTextResult, and error mapping
+
+**Migration: S365 can adopt `SendAsync` directly. Method name difference (`CallAsync` → `SendAsync`)
+can be mitigated with an extension method shim if churn is a concern.**
+
+### #329 — S365 ResourceEvent Audit: Gap Identified
+
+**Result: Blueprint has interfaces but needs runtime integration for S365's BusResourceEventAuditRepository**
+
+S365's `BusResourceEventAuditRepository`:
+1. Implements `IResourceEventAuditRepository` (GetCurrentDataAsync, AddAsync)
+2. Extracts TenantId from claims/accessor OR from resource property reflection
+3. Publishes to Rebus bus via `EventMapper.ToCreatedEvent()` → `_bus.Publish()`
+4. Uses `RebusTransactionScopeSuppressor` to publish independently of transaction
+5. Only records events for authenticated users (skips anonymous)
+
+Blueprint's current state:
+- `IResourceEventAuditRepository` interface exists with matching contract
+- `IAuditSink` and `IResourceEventAuditSink` interfaces for post-execution recording
+- Generated pipelines call `ExecuteAuditSinkAsync` and `RecordResourceEventAuditAsync` helpers
+- **No built-in Rebus publishing** — this is correct since the Bus implementation is S365-specific
+
+**Action: S365 implements `IResourceEventAuditSink` wrapping its existing `BusResourceEventAuditRepository`
+logic. No Blueprint change needed — the seam already exists via `AddResourceEventAuditSink<T>()`.**
+
+### #330 — S365 Custom Middleware: No Gap
+
+**Result: S365's middleware patterns all map to Blueprint source-gen modules**
+
+S365 middleware registered via `.Pipeline(p => p.AddMiddleware<T>(...))`:
+- `SetTenantMiddleware` → Blueprint's `TenantModule` (compile-time, better)
+- `StartRebusTransactionScopeMiddleware` → Blueprint.Rebus companion generator
+- `CommitRebusTransactionScopeMiddleware` → Blueprint.Rebus companion generator
+- `SaveMartenChangesMiddleware` → Blueprint.Marten `IUnitOfWork`
+
+**No custom runtime middleware registration needed.** Blueprint's source-gen module system
+covers all S365 patterns. If a service has truly custom middleware, it can be expressed as an
+`IPipelineContributor` in a companion source generator package.
+
+### #331 — S365 Hangfire: Minor Gap (Multi-Tenant Partitioning)
+
+**Result: Blueprint covers basic Hangfire; S365 needs its own tenant partitioning**
+
+S365 uses custom `RecurringJobPartitionedSqlServerStorage` for:
+- Multi-tenant job partitioning by TenantId in Hangfire storage
+- App-specific queue naming via `IAppDefinition.MessageQueueName`
+- Server vs client configuration split
+
+Blueprint provides:
+- `HangfireBackgroundTaskScheduleProvider` for basic task scheduling
+- `HangfireTaskExecutor` for execution with DI-based job activation
+- `ServiceProviderJobActivator` matching S365's approach
+
+**Action: S365 keeps its own `RecurringJobPartitionedSqlServerStorage` — this is
+infrastructure-specific and doesn't belong in Blueprint. Blueprint's `AddBackgroundTaskScheduler`
+registration point accepts the S365 implementation directly.**
+
+### #332 — S365 OpenAPI: NSwag/NJsonSchema Backend, Custom Handlebars Frontend
+
+**Result: S365 uses two-stage OpenAPI: NJsonSchema generates spec, custom Handlebars generates TypeScript**
+
+**Backend (OpenAPI generation):**
+- Uses NSwag's `NJsonSchema` with `NewtonsoftJsonSchemaGeneratorSettings`
+- Schema type: OpenAPI 3.0
+- Tags derived from operation type's last namespace segment
+- Custom processors: `BlueprintLinkSchemaProcessor` for `x-links` extension data
+- Spec cached as feature data on the OpenAPI query operation
+- Served at `/openapi` with Scalar API Reference UI for browsers
+
+**Frontend (TypeScript generation):**
+- 3 apps have generators: `admin`, `partners`, `portal`
+- Each loads OpenAPI from committed `Spec/openapi.json` on disk
+- Custom Handlebars templates generate:
+  - API classes per tag with typed methods
+  - Model classes with constructors, `setData()`, `typeDetails()`, AJV validation schemas
+  - HATEOAS link methods from `x-links` extension data
+  - Enum types from `x-enumNames` extension
+- Run via npm script: `node ./src/openapi/generator/index.mts <path-to-openapi.json>`
+
+**Key compatibility requirements for Blueprint:**
+1. ✅ `x-links` extension data on schemas (Blueprint already generates link metadata)
+2. ⚠️ `x-enumNames` — need to verify Blueprint emits these for string enums
+3. ✅ Tags from namespace (Blueprint uses tag convention)
+4. ✅ `operationId` naming (Blueprint uses operation type name)
+5. ✅ Response status codes (200/400/422/500 standard pattern)
+6. ⚠️ Schema naming — S365 uses `BlueprintSchemaNameGenerator`; Blueprint may differ
+
+### #333 — S365 Gateway OpenAPI: Aggregation Pattern
+
+**Result: Gateways proxy downstream services and expose their own OpenAPI**
+
+S365 gateway pattern:
+1. Registers Blueprint HTTP clients to downstream services (`AddBlueprintClient<IApi, Api>`)
+2. Gateway operations delegate to downstream APIs
+3. Gateway scans calling assembly with naming convention (strips gateway prefix)
+4. OpenAPI builder generates spec from gateway operations
+5. Each gateway exposes `/openapi` independently
+
+Blueprint already supports this via:
+- `BlueprintHttpClient<TApp>` for downstream calls
+- Sample.Gateway project demonstrates the pattern end-to-end
+- Generated executors handle gateway operations like any other
+
+**No gap.** Gateways migrate after their target services are stable.
 
