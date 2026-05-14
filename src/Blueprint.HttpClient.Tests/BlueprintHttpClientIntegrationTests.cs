@@ -253,4 +253,72 @@ public sealed class BlueprintHttpClientTests : IClassFixture<SampleAppFixture>
             "%2F",
             "slashes in catch-all parameters must be preserved, not percent-encoded");
     }
+
+    [Fact]
+    public async Task SendAsync_with_CallOptions_ModifyRequest_adds_custom_header()
+    {
+        HttpRequestMessage? captured = null;
+        var handler = new FakeHttpHandler(req =>
+        {
+            captured = req;
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("""{"items":[],"totalItems":0}""", Encoding.UTF8, "application/json"),
+            };
+        });
+
+        var client = this._fixture.CreateClient(handler);
+
+        await client.SendAsync<JsonElement>(
+            new SearchTemplatesQuery { Q = "test", Page = 1, PageSize = 5 },
+            new CallOptions
+            {
+                ModifyRequest = req => req.Headers.Add("X-Custom-Trace", "test-trace-id"),
+            });
+
+        captured.Should().NotBeNull();
+        captured!.Headers.Contains("X-Custom-Trace").Should().BeTrue("CallOptions.ModifyRequest should fire before sending");
+        captured.Headers.GetValues("X-Custom-Trace").Should().ContainSingle().Which.Should().Be("test-trace-id");
+    }
+
+    [Fact]
+    public async Task SendAsync_void_with_CallOptions_ModifyRequest_adds_custom_header()
+    {
+        HttpRequestMessage? captured = null;
+        var handler = new FakeHttpHandler(req =>
+        {
+            captured = req;
+            return new HttpResponseMessage(HttpStatusCode.NoContent);
+        });
+
+        var client = this._fixture.CreateClient(handler);
+
+        await client.SendAsync(
+            new ArchiveTemplateCommand { Id = "t-1" },
+            new CallOptions
+            {
+                ModifyRequest = req => req.Headers.Add("X-Request-Id", "abc-123"),
+            });
+
+        captured.Should().NotBeNull();
+        captured!.Headers.Contains("X-Request-Id").Should().BeTrue("void SendAsync should also support CallOptions");
+        captured.Headers.GetValues("X-Request-Id").Should().ContainSingle().Which.Should().Be("abc-123");
+    }
+
+    [Fact]
+    public async Task SendAsync_with_null_CallOptions_does_not_throw()
+    {
+        var handler = new FakeHttpHandler(static _ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"items":[],"totalItems":0}""", Encoding.UTF8, "application/json"),
+        });
+
+        var client = this._fixture.CreateClient(handler);
+
+        var act = () => client.SendAsync<JsonElement>(
+            new SearchTemplatesQuery { Q = "test", Page = 1, PageSize = 5 },
+            options: null);
+
+        await act.Should().NotThrowAsync();
+    }
 }
