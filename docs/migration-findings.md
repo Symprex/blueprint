@@ -339,6 +339,10 @@
 | S365 OpenAPI backend | ⚠️ Migration item | S365 uses NSwag/NJsonSchema for schema generation. Blueprint has its own OpenAPI generator. Schema component naming, `x-links`, `x-enumNames` are compatible. Key difference: S365 caches spec in feature data; Blueprint renders on each request (fast). |
 | S365 TypeScript Handlebars | ✅ Compatible | 3 apps use custom `index.mts` + 4 `.handlebars` templates. Consumes: operationId, tags, x-links, parameters, requestBody, 200/application/json responses. All produced correctly by Blueprint. |
 | S365 gateway OpenAPI aggregation | ✅ Compatible | Gateways register HTTP clients, proxy operations, expose own `/openapi`. Blueprint Sample.Gateway demonstrates this exact pattern. |
+| Dict-of-array items type | ✅ Done | `Dictionary<string, string[]>` now renders `additionalProperties: { type: "array", items: { type: "string" } }` — was missing `items`. Supports both primitive items and `$ref` for complex types (#354) |
+| JsonExtensionData exclusion | ✅ Done | `[JsonExtensionData]` properties (e.g. ProblemDetails.Extensions) excluded from named schema properties. `HasExtensionData` flag prevents `additionalProperties: false` on types accepting arbitrary extension members per RFC 9457 (#355) |
+| Error response content type | ✅ Done | `OpenApiInfoOptions.UsePlainJsonForErrorResponses` — S365 uses `application/json` for all responses. Blueprint defaults to `application/problem+json` (RFC 9457). New option for backward compat (#356) |
+| OpenAPI param title | ✅ Not needed | S365 Handlebars templates do NOT read parameter `title` field — only used for enum schema naming. Cosmetic difference, zero impact on TypeScript generation (#357) |
 
 ---
 
