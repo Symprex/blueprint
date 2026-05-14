@@ -38,8 +38,11 @@
 | OpenAPI request body `$ref` | ✅ Done | Request body schemas now use `$ref` to component schemas |
 | `[FromResource]` compatibility | ✅ Verified | S365 2-arg form fully compatible, compile-time traversal |
 | PropertyOwnership route extraction | ✅ Done | Now includes `LinkAttribute` routes via shared helper |
-| Handler discovery compat | ✅ Verified | InvokeAsync/Handle/HandleAsync all recognised |
+| Handler discovery compat | ✅ Verified | InvokeAsync/Handle/HandleAsync all recognised; dual pattern (inline + external) |
 | ResourceEvent compat | ✅ Verified | Identical interface between S365 and Blueprint |
+| S365 return type audit | ✅ Verified | All 12 return types compatible; no union types in S365 |
+| ExternalHandlerIndex perf | ✅ Done | Dictionary-backed O(1) lookup replaces O(n) linear scan |
+| TenantId spoofing prevention | ✅ Done | Query string ignored for TenantId when tenancy enabled (AuthContext classification) |
 | IFormFile / multipart | ✅ Not needed | No S365 operations use IFormFile (only SMTP, excluded) |
 | IPropertyPopulator | ✅ Not needed | S365 has none; TenantModule handles TenantId at compile time |
 | Claims-based auth removal | ✅ Done | Removed 9 files, 775 lines; only Resource-based auth remains |
@@ -2027,3 +2030,73 @@ S365's `AuthenticateAsTenantAdministrator`, `AuthenticateAsPartnerUser`, `Authen
 **Solution:** Added `CallAsync<TResponse>(IReturn<TResponse>, CancellationToken)` and `CallAsync(IOperation, CancellationToken)` shims that delegate to the existing `SendAsync` methods. Zero runtime overhead — just method delegation.
 
 **Migration impact:** Gateway code keeps `CallAsync` as-is. Only import/namespace changes needed.
+---
+
+### #296 — S365 Return Type Compatibility: Complete Audit
+
+**Date**: 2026-05-14
+
+Comprehensive analysis of all S365 operation return types confirms full Blueprint compatibility:
+
+| S365 Return Type | Blueprint Equivalent | Normalization |
+|---|---|---|
+| `ResourceEvent<T>` | Same type (`Blueprint.Http`) | Direct → OperationResult |
+| `ResourceCreated<T>` | Same type | Direct → OperationResult |
+| `ResourceUpdated<T>` | Same type | Direct → OperationResult |
+| `ResourceDeleted<T>` | Same type | Direct → OperationResult |
+| `StatusCodeResult.Accepted` | `Blueprint.Runtime.Exec.StatusCodeResult.Accepted` | Direct → OperationResult |
+| `StatusCodeResult.NoContent` | `Blueprint.Runtime.Exec.StatusCodeResult.NoContent` | Direct → OperationResult |
+| `StatusCodeResult.Created` | `Blueprint.Runtime.Exec.StatusCodeResult.Created` | Direct → OperationResult |
+| `PlainTextResult` | `Blueprint.Runtime.Exec.PlainTextResult` | Direct → OperationResult (extends HttpResult) |
+| `HttpResult` | `Blueprint.Runtime.Http.HttpResult` | Direct → OperationResult |
+| Plain `ApiResource` types | Wrapped in `OkResult<T>` | PlainValue → OkResult<T> |
+| `ListApiResource<T>` | `Blueprint.Model.ListApiResource<T>` | PlainValue → OkResult<T> |
+| `TenantListApiResource<T>` | S365-owned (extends ListApiResource<T>) | PlainValue → OkResult<T> |
+
+**Key difference from legacy:** In legacy Blueprint, `ResourceEvent` does NOT extend `OperationResult` — it's wrapped by `ResourceEventHandler` middleware. In new Blueprint, `ResourceEvent : OperationResult` directly, so handlers returning it produce an `OperationResult` without wrapping.
+
+**No Results<T1,T2> union types** found in S365 — only simple return types.
+
+**Handler method names:** S365 uses `HandleAsync` (commands) and `InvokeAsync` (queries). Both are in Blueprint's recognized set: `Invoke`, `InvokeAsync`, `Handle`, `HandleAsync`. `Execute`/`ExecuteAsync` only found on non-operation helper classes.
+
+---
+
+### #297 — ExternalHandlerIndex Dictionary Optimization
+
+**Date**: 2026-05-14
+
+Replaced flat-list linear scan with `Dictionary<INamedTypeSymbol, ImmutableArray<...>>` keyed by `SymbolEqualityComparer.Default`. Each per-operation handler lookup is now O(1) instead of O(candidates).
+
+At S365 scale (~540 operations, hundreds of handler classes), this eliminates thousands of `SymbolEqualityComparer.Default.Equals` calls during compilation. ImmutableArray buckets also avoid per-lookup List allocation.
+
+---
+
+### #298 — TenantId Query String Spoofing Prevention
+
+**Date**: 2026-05-14
+
+Fixed integration test that incorrectly expected query string to override TenantId when tenancy is enabled. The correct behavior:
+
+1. `PropertyOwnershipModule` (Order 70) classifies `TenantId` as `AuthContext` when tenancy is enabled
+2. This excludes it from query/body binding (prevents tenant spoofing via URL)
+3. `TenantModule` (Order 150) populates from `ITenantAccessor.Current` (JWT claims)
+4. Only `[FromRoute]` can provide TenantId when it appears in the route template
+
+This is a security-critical behavior: tenants cannot spoof their identity via query parameters.
+
+---
+
+### #299 — S365 Handler Pattern Analysis: Dual Discovery Confirmed
+
+**Date**: 2026-05-14
+
+S365 uses two handler patterns — both fully supported by Blueprint source-gen:
+
+| Pattern | Count (Portal) | Blueprint Discovery |
+|---|---|---|
+| Separate handler classes (`*Handler : ApiOperations`) | ~81 | External handler index: first param = operation type |
+| Inline handlers (method on operation class) | ~247 | Inline discovery: named method on operation type |
+
+Property injection for `ApiOperations` base class (`Context`, `Identity`, `Logger`, `CancellationToken`, `HttpContext`, `ClaimsPrincipal`) is auto-detected by `DetectPropertyInjections`. Constructor DI is also supported via `ExtractConstructorParameters`.
+
+**No IApiOperationHandler<T> interface needed** in new Blueprint — handler discovery is convention-based (method name + first parameter type), matching legacy behavior.

@@ -26,6 +26,30 @@ internal static class DescriptorPlanBuilder
         Result<BlueprintModuleExecutionPlan> executionPlanResult,
         Result<PipelineExceptionTranslatorPolicy> exceptionTranslatorPolicyResult)
     {
+        return Build(operationFullClassName, compilation, executionPlanResult, exceptionTranslatorPolicyResult, operationLookup: null);
+    }
+
+    /// <summary>
+    /// Builds a descriptor plan reusing a pre-built <see cref="CompilationOperationLookup"/> to avoid
+    /// redundant self-link cache construction when building plans for many operations in the same compilation.
+    /// </summary>
+    /// <param name="operationFullClassName">The fully qualified metadata name of the operation implementation.</param>
+    /// <param name="compilation">The Roslyn compilation that contains the operation and contributor metadata.</param>
+    /// <param name="executionPlanResult">The configured contributor execution plan.</param>
+    /// <param name="exceptionTranslatorPolicyResult">The resolved exception-translation policy for the active generator configuration.</param>
+    /// <param name="operationLookup">
+    /// A reusable lookup instance scoped to this compilation. When <see langword="null"/>, a fresh instance is
+    /// created per call. Pass a shared instance when building plans for multiple operations in a loop to amortise
+    /// the self-link cache build cost across all operations.
+    /// </param>
+    /// <returns>A successful descriptor plan or the diagnostics that prevented one from being built.</returns>
+    public static Result<DescriptorPlan> Build(
+        string operationFullClassName,
+        Compilation compilation,
+        Result<BlueprintModuleExecutionPlan> executionPlanResult,
+        Result<PipelineExceptionTranslatorPolicy> exceptionTranslatorPolicyResult,
+        CompilationOperationLookup? operationLookup)
+    {
         if (executionPlanResult.Value is null)
         {
             return Result<DescriptorPlan>.Failure(executionPlanResult.Diagnostics);
@@ -54,7 +78,7 @@ internal static class DescriptorPlanBuilder
 
         var operationModel = OperationModel.Create(operationImplementationType);
         var descriptorPlan = new DescriptorPlan(operationModel);
-        var operationLookup = new CompilationOperationLookup(compilation);
+        operationLookup ??= new CompilationOperationLookup(compilation);
 
         foreach (var contributor in executionPlanResult.Value.DescriptorContributors)
         {

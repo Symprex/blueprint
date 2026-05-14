@@ -48,6 +48,10 @@ public sealed partial class AppDataModelSourceGenerator
         // Cache the model class type outside the attribute loop — metadata name is constant.
         var modelClassType = compilation.GetTypeByMetadataName(dataModelClass.MetadataName);
 
+        // Share a single CompilationOperationLookup across all operations so the self-link
+        // cache is built once instead of N times (significant at S365 scale: ~540 operations).
+        var sharedOperationLookup = new CompilationOperationLookup(compilation);
+
         foreach (var attribute in attributes)
         {
             foreach (var operation in ScanForOperationTypes(compilation, attribute, modelClassType!))
@@ -67,7 +71,8 @@ public sealed partial class AppDataModelSourceGenerator
                     operation,
                     compilation,
                     executionPlanResult,
-                    exceptionTranslatorPolicyResult);
+                    exceptionTranslatorPolicyResult,
+                    sharedOperationLookup);
                 if (requiredTypeNames.Length == 0)
                 {
                     continue;
@@ -261,13 +266,15 @@ public sealed partial class AppDataModelSourceGenerator
         INamedTypeSymbol operation,
         Compilation compilation,
         Result<BlueprintModuleExecutionPlan> executionPlanResult,
-        Result<PipelineExceptionTranslatorPolicy> exceptionTranslatorPolicyResult)
+        Result<PipelineExceptionTranslatorPolicy> exceptionTranslatorPolicyResult,
+        CompilationOperationLookup sharedOperationLookup)
     {
         var plannedDescriptor = DescriptorPlanBuilder.Build(
             operation.ToFullMetadataName(),
             compilation,
             executionPlanResult,
-            exceptionTranslatorPolicyResult);
+            exceptionTranslatorPolicyResult,
+            sharedOperationLookup);
         if (plannedDescriptor.Value is null)
         {
             return [];
