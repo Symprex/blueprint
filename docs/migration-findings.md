@@ -1721,6 +1721,86 @@ No code changes needed.
 
 ---
 
+## Finding #302: TypeScript Client Generation Pipeline
+
+**Date:** 2025-07-18
+**Category:** OpenAPI / TypeScript Compatibility
+
+### Summary
+
+S365 uses a **custom Handlebars-based TypeScript client generator** — NOT NSwag. The generation pipeline works as follows:
+
+1. OpenAPI JSON files are **checked into the repo** at `src/Apps/{App}/Spec/openapi.json`
+2. A Node.js script (`src/openapi/generator/index.mts`) loads the spec from disk
+3. Handlebars templates (`*.handlebars`) generate TypeScript API classes, model classes, and AJV schemas
+4. Generated `api.ts` files are committed to `frontend/apps/{app}/src/openapi/api.ts`
+
+### Three Applications with Generation
+
+| Application | OpenAPI Spec Path | Generated Output |
+|-------------|-------------------|------------------|
+| Admin Portal | `src/Apps/AdminPortal/.../Spec/openapi.json` | `frontend/apps/admin/src/openapi/api.ts` |
+| Portal | `src/Apps/Portal/.../Spec/openapi.json` | `frontend/apps/portal/src/openapi/api.ts` |
+| Partners | `src/Apps/Partners/.../Spec/openapi.json` | `frontend/apps/partners/src/openapi/api.ts` |
+
+### Template Structure (per app)
+
+Each app has 4 templates in `src/openapi/generator/`:
+- `api.handlebars` — Top-level entry generating `api.ts`
+- `apiInner.handlebars` — Per-tag API classes (e.g., `TransactionalEmailApi`)
+- `model.handlebars` — Model/resource TypeScript classes with RTTI metadata
+- `index.handlebars` — Creates `index.ts` entry point
+
+### Generated Output Shape
+
+The generated `api.ts` exports:
+- `schemas` object with AJV JSON Schema (minified, descriptions removed)
+- Model classes with constructors, property setters, and RTTI metadata
+- API endpoint classes grouped by tag (e.g., `TenantUserApi`, `TransactionalEmailApi`)
+- `RequiredError` exception class
+- Utility functions: `addQueryString`, `resourceToJson`, `axiosRequestConfig`
+
+### Blueprint OpenAPI Compatibility Analysis
+
+**operationId naming**: S365 uses the operation class name (e.g., `GetTenantUsers`). Blueprint uses `OperationName` which is also the class name. ✅ **Compatible.**
+
+**Schema naming**: S365 uses `{OuterType}Of{InnerType}` (e.g., `ResourceEventOfTransactionalEmailSuppression`, `TenantListOfTenantUser`). Blueprint's `SimplifyClrTypeName` uses the exact same pattern — joins generic type args with "Of" (first) and "And" (subsequent). ✅ **Compatible.**
+
+**Schema naming customization**: Blueprint provides `OpenApiInfoOptions.SchemaNameFormatter` hook if any naming adjustments are needed.
+
+**Response structure**: S365 uses standard 200/422/500 response codes with `$ref` to component schemas. Blueprint generates the same pattern. ✅ **Compatible.**
+
+**Tags**: S365 groups operations by tags (derived from resource type names). Blueprint supports tags via the `[Tag]` attribute or automatic derivation. May need configuration to match exact tag names.
+
+### Migration Impact
+
+- **LOW**: The Handlebars templates consume standard OpenAPI 3.0 — any spec-compliant generator works
+- **ACTION**: After migrating each service, regenerate `openapi.json`, run `npm run openapi`, and diff the generated `api.ts`
+- **RISK**: Tag naming differences could cause API classes to be renamed in TypeScript — verify tag assignment matches legacy
+- **RISK**: Schema property ordering differences could cause unnecessarily large diffs in generated code (cosmetic but noisy)
+
+### Verification Steps Per Service
+
+```bash
+# 1. Start migrated service
+dotnet run --project src/Apps/Portal/...
+
+# 2. Fetch new OpenAPI spec
+curl http://localhost:5000/.well-known/openapi.json > openapi-new.json
+
+# 3. Diff against baseline
+diff src/Apps/Portal/.../Spec/openapi.json openapi-new.json
+
+# 4. Regenerate TypeScript client
+cd frontend/apps/portal
+npm run openapi -- ../../../openapi-new.json
+
+# 5. Diff generated api.ts
+diff src/openapi/api.ts src/openapi/api.ts.bak
+```
+
+---
+
 ### #297 — OpenAPI Generic Type Schema Naming: Fixed (Commit 9ec584c)
 
 **Date:** 2025-07-18
@@ -2124,3 +2204,68 @@ S365 uses two handler patterns — both fully supported by Blueprint source-gen:
 Property injection for `ApiOperations` base class (`Context`, `Identity`, `Logger`, `CancellationToken`, `HttpContext`, `ClaimsPrincipal`) is auto-detected by `DetectPropertyInjections`. Constructor DI is also supported via `ExtractConstructorParameters`.
 
 **No IApiOperationHandler<T> interface needed** in new Blueprint — handler discovery is convention-based (method name + first parameter type), matching legacy behavior.
+
+---
+
+### #300 — S365 Return Type Analysis: Complete Inventory
+
+**Date**: 2026-05-14
+
+Comprehensive analysis of all 540 S365 operations (294 commands + 246 queries):
+
+**Command Return Types (294 operations):**
+| Return Type | Count | Blueprint Status |
+|---|---|---|
+| `ResourceEvent<T>` | 254 (86%) | ✅ Fully compatible — same namespace, no constraint change |
+| `StatusCodeResult.Accepted` | 19 | ✅ Singleton pattern matches exactly |
+| `StatusCodeResult.NoContent` | 2 | ✅ Matches |
+| `StatusCodeResult.Created` | 1 | ✅ Matches |
+| `StatusCodeResult.OK` | 1 | ✅ Matches |
+| Direct API resources | 16 | ✅ Unwrapped returns supported |
+| Custom response types | 4 | ✅ Supported as plain return types |
+
+**Query Return Types (246 operations):**
+| Return Type | Count | Blueprint Status |
+|---|---|---|
+| Direct API resources | 170+ | ✅ Supported — 150+ unique types |
+| `ListApiResource<T>` | 40+ | ✅ In `Blueprint.Runtime.Model` |
+| `PagedApiResource<T>` | 17 | ✅ In `Blueprint.Runtime.Model` |
+| `TenantListApiResource<T>` | 10 | ✅ S365-owned, extends `ListApiResource<T>` |
+| `PartnerListApiResource<T>` | 5 | ✅ S365-owned, extends `ListApiResource<T>` |
+| `PlainTextResult` | 9 | ✅ In `Blueprint.Runtime.Exec` |
+
+**Key Findings:**
+- `ResourceCreated<T>` used only 1x, `ResourceDeleted<T>` 3x — 99.6% of commands use generic `ResourceEvent<T>`
+- `IReturn<T>` pattern NOT used in S365 — only `ICommand<T>` and `IQuery<T>`
+- `TenantListApiResource<T>` / `PartnerListApiResource<T>` are S365-owned subclasses — no Blueprint changes needed
+- ALL return types are fully compatible — namespace change only
+
+---
+
+### #301 — Runtime Pipeline Benchmark Baseline
+
+**Date**: 2026-05-14
+
+BenchmarkDotNet results (.NET 10.0.8, X64 RyuJIT AVX2, MediumRun InProcess):
+
+**Pipeline Execution:**
+| Benchmark | Mean | Allocated | Notes |
+|---|---|---|---|
+| MinimalQueryAsync | 1.785 µs | 2.51 KB | Baseline — handler only |
+| ValidatedQueryValidInputAsync | 9.734 µs | 5.12 KB | +7.9 µs for validation overhead |
+| ValidatedQueryInvalidInputAsync | 11.556 µs | 5.12 KB | Short-circuit slightly slower (result creation) |
+| FullStackCommandValidAsync | 13.677 µs | 5.73 KB | 3-property command + validation |
+| FullStackCommandValidationFailureAsync | 13.068 µs | 5.73 KB | Validation failure fast-path |
+
+**Link Generation:**
+| Benchmark | Mean | Allocated | Notes |
+|---|---|---|---|
+| CreateSelfLink_TypedResource | 71.32 ns | 208 B | Compiled URL builder hot path |
+| CreateSelfLink_StringId | 71.45 ns | 208 B | String case in switch expression |
+| CreateSelfLink_GuidId | 73.89 ns | 352 B | +144B from Guid boxing |
+
+**Key Observations:**
+- Minimal query overhead is <2 µs with only 2.51 KB allocated
+- Validation adds ~8 µs but no extra allocations for valid vs invalid (same 5.12 KB)
+- Link generation is sub-100ns — negligible compared to pipeline execution
+- Guid boxing adds 144 bytes — could optimize with ISpanFormattable but marginal
