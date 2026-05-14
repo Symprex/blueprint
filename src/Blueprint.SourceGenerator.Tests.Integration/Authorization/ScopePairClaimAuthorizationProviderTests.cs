@@ -523,4 +523,86 @@ public class ScopePairClaimAuthorizationProviderTests
 
         result.Should().BeTrue("custom separator '.' should work when claim values use '.'");
     }
+
+    // ─── allowWhenNoScopeClaims constructor parameter tests ─────────
+
+    [Fact]
+    public async Task Constructor_allowWhenNoScopeClaims_true_grants_access_when_no_scopes()
+    {
+        var provider = new ScopePairClaimAuthorizationProvider(
+            "scope",
+            "::",
+            ignoredScopes: null,
+            verbInclusions: null,
+            legacyScopeMapper: null,
+            allowWhenNoScopeClaims: true);
+
+        var principal = CreatePrincipalWithoutScopes();
+        ScopePair[] scopePairs = [new ScopePair("Template", "Read")];
+
+        var result = await provider.IsAuthorizedAsync(
+            null!, principal, scopePairs, CancellationToken.None);
+
+        result.Should().BeTrue("allowWhenNoScopeClaims=true grants access when no API scopes present");
+    }
+
+    [Fact]
+    public async Task Constructor_allowWhenNoScopeClaims_false_denies_when_no_scopes()
+    {
+        var provider = new ScopePairClaimAuthorizationProvider(
+            "scope",
+            "::",
+            ignoredScopes: null,
+            verbInclusions: null,
+            legacyScopeMapper: null,
+            allowWhenNoScopeClaims: false);
+
+        var principal = CreatePrincipalWithoutScopes();
+        ScopePair[] scopePairs = [new ScopePair("Template", "Read")];
+
+        var result = await provider.IsAuthorizedAsync(
+            null!, principal, scopePairs, CancellationToken.None);
+
+        result.Should().BeFalse("allowWhenNoScopeClaims=false (default) denies when no scopes");
+    }
+
+    [Fact]
+    public async Task WithCrudVerbHierarchy_allowWhenNoScopeClaims_true_grants_access()
+    {
+        var provider = ScopePairClaimAuthorizationProvider.WithCrudVerbHierarchy(
+            separator: "::",
+            legacyScopeMapper: null,
+            allowWhenNoScopeClaims: true,
+            additionalIgnoredScopes: ["Signature365.ReadWrite.All", "Signature365ReadWrite"]);
+
+        // Principal has only ignored scopes — should still be granted access
+        var principal = CreatePrincipal("openid", "profile", "Signature365.ReadWrite.All");
+        ScopePair[] scopePairs = [new ScopePair("Template", "Read")];
+
+        var result = await provider.IsAuthorizedAsync(
+            null!, principal, scopePairs, CancellationToken.None);
+
+        result.Should().BeTrue(
+            "all scope claims are ignored → falls through to allowWhenNoScopeClaims=true");
+    }
+
+    [Fact]
+    public async Task WithCrudVerbHierarchy_allowWhenNoScopeClaims_still_denies_unauthenticated()
+    {
+        var provider = ScopePairClaimAuthorizationProvider.WithCrudVerbHierarchy(
+            separator: "::",
+            legacyScopeMapper: null,
+            allowWhenNoScopeClaims: true);
+
+        // Unauthenticated principal — should still be denied even with permissive no-scopes
+        var identity = new ClaimsIdentity(); // not authenticated (no authenticationType)
+        var principal = new ClaimsPrincipal(identity);
+        ScopePair[] scopePairs = [new ScopePair("Template", "Read")];
+
+        var result = await provider.IsAuthorizedAsync(
+            null!, principal, scopePairs, CancellationToken.None);
+
+        result.Should().BeFalse(
+            "unauthenticated principal is always denied regardless of allowWhenNoScopeClaims");
+    }
 }

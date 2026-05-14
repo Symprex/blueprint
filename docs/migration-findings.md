@@ -3535,3 +3535,60 @@ Blueprint source-gen equivalent ordering:
 **Action:** None. All patterns have clean Blueprint equivalents. The migration playbook
 already documents the registration transformation.
 
+### Finding #342: S365 Authorization Infrastructure — Full Blueprint Compatibility
+
+**Date:** 2025-07-16  
+**Area:** Authorization  
+**Severity:** Info  
+
+Deep audit of S365 `ScopeApiAuthoriser`, `Signature365UserAuthorisationContext`, `S365Nouns`/`S365Verbs`,
+`ApiOperationResourceConvention`, and `IResourceKeyExpander` implementations.
+
+**Scale:** 85 nouns × 5 verbs = 425 possible scope pairs.
+
+**Key S365 patterns vs Blueprint equivalents:**
+
+| S365 Pattern | Blueprint Equivalent | Status |
+|-------------|---------------------|--------|
+| `ScopeApiAuthoriser` | `ScopePairClaimAuthorizationProvider` | ✅ Full match |
+| Verb hierarchy (Manage → CRUD) | `StandardCrudVerbHierarchy` | ✅ Built-in |
+| "No scopes = full access" | `allowWhenNoScopeClaims: true` | ✅ **NEW** constructor param |
+| FrozenSet ignored scopes | `FrozenSet<string> _ignoredScopes` | ✅ Same pattern |
+| Span-based scope comparison | `MatchesScopePair` zero-alloc | ✅ Same pattern |
+| Legacy scope mapper | `LegacyScopeMapperFunc` | ✅ Built-in |
+| `ApiOperationResourceConvention` | `AuthorizationModule` (compile-time) | ✅ Source gen |
+| `ResourcePermissionsFeatureData` | `ResourcePermissionsFeatureData` | ✅ Same type |
+| `IResourceKeyExpander` (sync) | `ResourceKeyTemplateExpander` | ✅ Built-in |
+| `IS365ResourceKeyExpander` (async) | Stays in S365 | ⚠️ S365-specific |
+| `Signature365UserAuthorisationContextFactory` | `IUserAuthorisationContextFactory` | ✅ Same interface |
+
+**S365 JWT claims extracted (single-pass optimized):**
+- `sub` → Id, `email` → Email, `name` → Name
+- `s365_identity_id` → IdentityId
+- `s365_tenant_id` → TenantId, `s365_partner_id` → PartnerId
+- `s365_role_group` → RoleGroup, `s365_signed_in_as` → SignedInAsRoleGroup
+- `s365_assigned_role` → AssignedRoles
+- `s365_assigned_scope_pair` → AssignedScopePairs
+- AccountId = TenantId ?? PartnerId ?? "Symprex"
+
+**Improvement made:** Added `allowWhenNoScopeClaims` constructor parameter to
+`ScopePairClaimAuthorizationProvider` so S365 can configure the "no scopes = full access"
+behavior without subclassing. 4 new integration tests added.
+
+**S365 migration registration:**
+```csharp
+blueprint.AddResourceAuthorizationProvider(
+    ScopePairClaimAuthorizationProvider.WithCrudVerbHierarchy(
+        separator: "::",
+        legacyScopeMapper: S365LegacyScopeMapper.Map,
+        allowWhenNoScopeClaims: true,
+        additionalIgnoredScopes: [
+            "Signature365.ReadWrite.All",
+            "Signature365ReadWrite",
+            "Signature365Admin.ReadWrite.All",
+            "Signature365Admin.ReadWrite",
+            "Signature365Partner.ReadWrite"]));
+```
+
+**Action:** Enhancement committed — `allowWhenNoScopeClaims` parameter added.
+

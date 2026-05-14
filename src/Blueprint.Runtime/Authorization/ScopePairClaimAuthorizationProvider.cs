@@ -59,6 +59,7 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
     private readonly string _separator;
     private readonly FrozenSet<string> _ignoredScopes;
     private readonly LegacyScopeMapperFunc? _legacyScopeMapper;
+    private readonly bool _allowWhenNoScopeClaims;
 
     // Inverse mapping: required verb → list of parent verbs that also satisfy it.
     // e.g. "Create" → ["Manage"] means a "Manage" claim also satisfies a "Create" requirement.
@@ -105,7 +106,7 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
     public static ScopePairClaimAuthorizationProvider WithCrudVerbHierarchy(
         params string[] additionalIgnoredScopes)
     {
-        return WithCrudVerbHierarchy(separator: "::", legacyScopeMapper: null, additionalIgnoredScopes);
+        return WithCrudVerbHierarchy(separator: "::", legacyScopeMapper: null, allowWhenNoScopeClaims: false, additionalIgnoredScopes);
     }
 
     /// <summary>
@@ -122,6 +123,12 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
     /// When a scope claim does not directly match any required scope pair, this function is called
     /// to see if the claim maps to one or more newer scope values that might match.
     /// </param>
+    /// <param name="allowWhenNoScopeClaims">
+    /// When <see langword="true"/>, authenticated identities that carry no API scope claims
+    /// (after filtering ignored scopes) are automatically granted access. This matches the S365
+    /// convention where admin/service tokens without explicit scopes have full access.
+    /// Defaults to <see langword="false"/> (deny when no scopes).
+    /// </param>
     /// <param name="additionalIgnoredScopes">
     /// Extra scope values to ignore beyond the defaults (<c>openid</c>, <c>profile</c>, <c>email</c>,
     /// <c>offline_access</c>).
@@ -130,6 +137,7 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
     public static ScopePairClaimAuthorizationProvider WithCrudVerbHierarchy(
         string separator,
         LegacyScopeMapperFunc? legacyScopeMapper,
+        bool allowWhenNoScopeClaims = false,
         params string[] additionalIgnoredScopes)
     {
         IEnumerable<string> allIgnored = ["openid", "profile", "email", "offline_access"];
@@ -139,7 +147,7 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
             allIgnored = allIgnored.Concat(additionalIgnoredScopes);
         }
 
-        return new ScopePairClaimAuthorizationProvider("scope", separator, allIgnored, _standardCrudVerbHierarchy, legacyScopeMapper);
+        return new ScopePairClaimAuthorizationProvider("scope", separator, allIgnored, _standardCrudVerbHierarchy, legacyScopeMapper, allowWhenNoScopeClaims);
     }
 
     /// <summary>
@@ -165,12 +173,19 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
     /// When a scope claim does not directly match any required scope pair, this function is called
     /// to attempt remapping before giving up on that claim.
     /// </param>
+    /// <param name="allowWhenNoScopeClaims">
+    /// When <see langword="true"/>, authenticated identities that carry no API scope claims
+    /// (after filtering ignored scopes) are automatically granted access. This matches the S365
+    /// convention where admin/service tokens without explicit scopes have full access.
+    /// Defaults to <see langword="false"/> (deny when no scopes).
+    /// </param>
     public ScopePairClaimAuthorizationProvider(
         string scopeClaimType,
         string separator,
         IEnumerable<string>? ignoredScopes = null,
         IDictionary<string, string[]>? verbInclusions = null,
-        LegacyScopeMapperFunc? legacyScopeMapper = null)
+        LegacyScopeMapperFunc? legacyScopeMapper = null,
+        bool allowWhenNoScopeClaims = false)
     {
         this._scopeClaimType = scopeClaimType ?? throw new ArgumentNullException(nameof(scopeClaimType));
         this._separator = separator ?? throw new ArgumentNullException(nameof(separator));
@@ -179,6 +194,7 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
             : FrozenSet<string>.Empty;
         this._verbIncludedIn = BuildInverseVerbMap(verbInclusions);
         this._legacyScopeMapper = legacyScopeMapper;
+        this._allowWhenNoScopeClaims = allowWhenNoScopeClaims;
     }
 
     /// <inheritdoc />
@@ -335,8 +351,9 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
 
     /// <summary>
     /// Called when the authenticated identity has no API scope claims (after filtering ignored
-    /// scopes). Override to allow access for identities without scopes — the default is
-    /// <see langword="false"/> (deny).
+    /// scopes). Override to allow access for identities without scopes — the default behaviour
+    /// is controlled by the <c>allowWhenNoScopeClaims</c> constructor parameter (defaults to
+    /// <see langword="false"/> / deny).
     /// </summary>
     /// <param name="operationContext">The current operation context.</param>
     /// <param name="principal">The authenticated principal.</param>
@@ -348,7 +365,7 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
         ApiOperationContext operationContext,
         ClaimsPrincipal principal)
     {
-        return false;
+        return this._allowWhenNoScopeClaims;
     }
 
     /// <summary>
