@@ -1101,6 +1101,13 @@ public class PropertyOwnershipModuleTests
                     // Body: nullable value types (use fast Utf8JsonReader with null-token guard)
                     public int? OptionalCount { get; set; }
                     public double? OptionalRating { get; set; }
+                    public long? OptionalBigNumber { get; set; }
+                    public bool? OptionalFlag { get; set; }
+                    public decimal? OptionalPrice { get; set; }
+                    public float? OptionalScore { get; set; }
+                    public System.Guid? OptionalGuid { get; set; }
+                    public System.DateTime? OptionalDate { get; set; }
+                    public System.DateTimeOffset? OptionalOffset { get; set; }
 
                     public static Task<string> HandleAsync(AllTypesPostCommand operation)
                     {

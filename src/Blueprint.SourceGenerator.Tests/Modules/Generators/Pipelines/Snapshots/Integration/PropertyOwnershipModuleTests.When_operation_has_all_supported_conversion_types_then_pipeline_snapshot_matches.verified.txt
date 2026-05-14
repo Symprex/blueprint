@@ -351,6 +351,41 @@ namespace Blueprint.Generated
                     reader.Read();
                     operation.OptionalRating = reader.TokenType == System.Text.Json.JsonTokenType.Null ? null : (double?)reader.GetDouble();
                 }
+                else if (reader.ValueTextEquals("optionalBigNumber"u8))
+                {
+                    reader.Read();
+                    operation.OptionalBigNumber = reader.TokenType == System.Text.Json.JsonTokenType.Null ? null : (long?)reader.GetInt64();
+                }
+                else if (reader.ValueTextEquals("optionalFlag"u8))
+                {
+                    reader.Read();
+                    operation.OptionalFlag = reader.TokenType == System.Text.Json.JsonTokenType.Null ? null : (bool?)reader.GetBoolean();
+                }
+                else if (reader.ValueTextEquals("optionalPrice"u8))
+                {
+                    reader.Read();
+                    operation.OptionalPrice = reader.TokenType == System.Text.Json.JsonTokenType.Null ? null : (decimal?)reader.GetDecimal();
+                }
+                else if (reader.ValueTextEquals("optionalScore"u8))
+                {
+                    reader.Read();
+                    operation.OptionalScore = reader.TokenType == System.Text.Json.JsonTokenType.Null ? null : (float?)reader.GetSingle();
+                }
+                else if (reader.ValueTextEquals("optionalGuid"u8))
+                {
+                    reader.Read();
+                    operation.OptionalGuid = reader.TokenType == System.Text.Json.JsonTokenType.Null ? null : (global::System.Guid?)reader.GetGuid();
+                }
+                else if (reader.ValueTextEquals("optionalDate"u8))
+                {
+                    reader.Read();
+                    operation.OptionalDate = reader.TokenType == System.Text.Json.JsonTokenType.Null ? null : (global::System.DateTime?)reader.GetDateTime();
+                }
+                else if (reader.ValueTextEquals("optionalOffset"u8))
+                {
+                    reader.Read();
+                    operation.OptionalOffset = reader.TokenType == System.Text.Json.JsonTokenType.Null ? null : (global::System.DateTimeOffset?)reader.GetDateTimeOffset();
+                }
                 else
                 {
                     reader.Skip();
