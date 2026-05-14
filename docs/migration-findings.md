@@ -1443,3 +1443,84 @@ This one-line delegation unlocks Blueprint's fast `TryParse` binding path for al
 **Estimated IL savings**: ~25,000+ lines of duplicated code eliminated across S365's 540 operations.
 
 **Remaining inline patterns** are intentionally not extracted: 1-line route assignments (unique per op), handler invocation (type-specific), success guard (trivial control flow).
+
+---
+
+### #285 — Resource Expansion Module: S365 Compatibility Verified
+
+**Date**: 2025-07-15
+**Status**: ✅ Compatible (trivial namespace change)
+
+Blueprint's `ResourceExpansionModule` is ~95% compatible with S365's `ResourceExpandMiddleware`:
+
+| Feature | S365 | Blueprint | Compatible? |
+|---------|------|-----------|-------------|
+| `Expandable<T>` contract | ✅ | ✅ Identical | ✅ |
+| `IResourceExpander` interface | ✅ | ✅ Identical | ✅ |
+| `?expand=PropertyName` | ✅ | ✅ | ✅ |
+| `?expand[]=PropertyName` | ✅ | ✅ | ✅ |
+| `?expand=A,B` (comma-sep) | ❌ | ✅ | Blueprint adds more |
+| `[AlwaysExpand]` attribute | ✅ (S365 namespace) | ✅ (Blueprint namespace) | ⚠️ Using change |
+| Nested expandable properties | ✅ | ✅ | ✅ |
+| Collection of `Expandable<T>` | ✅ | ✅ | ✅ |
+| Discovery timing | Runtime reflection | Compile-time source gen | Blueprint is faster |
+
+**Migration action**: Change `using Symprex.Signature365.Common.Api;` to `using Blueprint.Model.Attributes;` for `[AlwaysExpand]`. Existing `IResourceExpander` implementations are drop-in compatible. Remove `ResourceExpandMiddleware` and `ExpandableResourcePropertyWalker` — Blueprint's source generator replaces them.
+
+---
+
+### #286 — Rebus Transaction Scope: Blueprint Module Ordering Is Correct
+
+**Date**: 2025-07-15
+**Status**: ✅ Compatible (better ordering)
+
+S365 uses three middleware for Rebus+Marten integration:
+
+| S365 Middleware | Blueprint Equivalent | Stage |
+|----------------|---------------------|-------|
+| `StartRebusTransactionScopeMiddleware` | `RebusTransactionModule` (Setup) | Creates `RebusTransactionScope` |
+| `UseMartenAsOutboxMiddleware` | `MartenScopeModule` (Setup) | Sets `MartenScopeAccessor.Current` |
+| `CommitRebusTransactionScopeMiddleware` | `RebusTransactionModule` (PostExec) | Calls `CompleteAsync()` |
+| `SaveMartenChangesMiddleware` | `UnitOfWorkModule` (PostExec) | Calls `IUnitOfWork.SaveChangesAsync()` |
+
+Blueprint's ordering is actually **more correct** than S365:
+- S365: Commit Rebus → Save Marten (messages dispatched before data persisted)
+- Blueprint: Save UnitOfWork → Commit Outbox → Complete Rebus (data persisted first, then messages)
+
+**Migration action**: Remove all three S365 middleware. Register `MartenUnitOfWork : IUnitOfWork` and configure Rebus outbox in startup. Blueprint's generated pipeline handles the lifecycle automatically.
+
+---
+
+### #287 — S365 StatusCodeResult Usage: Fully Compatible
+
+**Date**: 2025-07-15
+**Status**: ✅ Compatible (drop-in)
+
+S365 uses only 4 `StatusCodeResult` subtypes in operation contracts:
+- `ICommand<StatusCodeResult.Accepted>` — ~15 operations
+- `ICommand<StatusCodeResult.NoContent>` — ~10 operations
+- `ICommand<StatusCodeResult.Created>` — ~5 operations
+- `ICommand<StatusCodeResult.OK>` — ~10 operations
+
+All 4 are defined in `Blueprint.Runtime.Exec.StatusCodeResult` with identical semantics.
+
+---
+
+### #288 — S365 Pattern Compatibility Summary
+
+**Date**: 2025-07-15
+
+Comprehensive gap analysis across 8 S365 pattern categories:
+
+| Pattern | S365 Usage | Blueprint Support | Friction |
+|---------|-----------|------------------|----------|
+| `IHandleMessages<T>` (Rebus) | 72+ handlers | Full (via Blueprint.Rebus scanner) | None |
+| `StatusCodeResult.*` returns | 40+ commands | Full (identical types) | None |
+| `ResourceEvent<T>` | Not used in S365 | Full + advanced | N/A |
+| Custom middleware (22 impls) | Tenant, Rebus, Marten, Links | All replaced by modules | None (modules handle it) |
+| `Expandable<T>` + expanders | Active use | Full (identical interfaces) | Trivial namespace |
+| File upload/download | 1 `IFormFile` ref | Supported via FormBodyParser | None |
+| Background tasks (Hangfire) | 30+ references | Full (`HangfireBackgroundTaskScheduleProvider`) | None |
+| `IOperationFilter` | Not used | N/A | N/A |
+
+**Collection expression optimization**: Generated `_appliedModuleIds` arrays now use `[...]` collection expressions instead of `new string[] { ... }` — cleaner generated output, same performance (commit `eb51d37`).
