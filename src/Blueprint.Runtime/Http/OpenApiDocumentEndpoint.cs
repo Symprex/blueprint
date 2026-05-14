@@ -92,6 +92,14 @@ internal static class OpenApiDocumentEndpoint
             operationContext = operationContext.ApplyProcessors(app, operationProcessorOptions);
         }
 
+        // When the consumer opts in to legacy compatibility, add synthetic 200 aliases for
+        // body-bearing non-200 success responses so TypeScript generators that hardcode
+        // responses['200'] still produce the correct return types.
+        if (infoOptions?.UseStatus200ForSuccessResponses == true)
+        {
+            operationContext = operationContext.NormalizeSuccessResponsesTo200();
+        }
+
         var pathItemContext = OpenApiPathItemRenderingContext.Create(operationContext);
         var documentContext = OpenApiDocumentRenderingContext.Create(pathItemContext);
 

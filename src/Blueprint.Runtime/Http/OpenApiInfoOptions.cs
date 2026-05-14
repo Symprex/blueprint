@@ -65,6 +65,26 @@ public sealed class OpenApiInfoOptions
     public List<OpenApiSecurityScheme> SecuritySchemes { get; } = [];
 
     /// <summary>
+    /// When <see langword="true"/>, the renderer adds a synthetic <c>200</c> response that mirrors
+    /// the schema of the first body-bearing <c>2xx</c> success response (e.g. <c>201 Created</c>
+    /// or <c>202 Accepted</c>) for every operation that does not already declare a <c>200</c> body.
+    /// The original semantic status codes are preserved alongside the synthetic alias.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This exists for backward compatibility with TypeScript code generators (such as the
+    /// Signature 365 Handlebars-based generator) that hardcode <c>responses['200']</c> when
+    /// determining the return type of an operation. Without this flag those generators would
+    /// treat <c>ResourceEventResult&lt;T&gt;</c> (201) as <c>void</c>.
+    /// </para>
+    /// <para>
+    /// Bodyless success responses (<c>204 No Content</c>) are not aliased because they carry
+    /// no schema and would not change the TypeScript return type regardless.
+    /// </para>
+    /// </remarks>
+    public bool UseStatus200ForSuccessResponses { get; set; }
+
+    /// <summary>
     /// Gets or sets an optional delegate that transforms CLR type names into OpenAPI schema
     /// component keys. When <see langword="null"/> the default strategy is used, which extracts
     /// the simple class name (e.g. <c>MyApp.Api.TemplateResource</c> → <c>TemplateResource</c>).

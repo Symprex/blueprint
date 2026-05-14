@@ -79,6 +79,53 @@ public sealed record OpenApiOperationRenderingContext(
         return this with { Operations = processed };
     }
 
+    /// <summary>
+    /// Returns a new context where every operation that lacks a body-bearing <c>200</c> response
+    /// gains a synthetic one mirroring the first body-bearing <c>2xx</c> success response (e.g.
+    /// <c>201 Created</c> or <c>202 Accepted</c>). The original semantic status codes are preserved.
+    /// Bodyless success responses (<c>204 No Content</c>) are never aliased.
+    /// </summary>
+    /// <remarks>
+    /// This exists for backward compatibility with TypeScript code generators that hardcode
+    /// <c>responses['200']</c> when determining the return type of an operation. Without this
+    /// normalization, those generators would treat <c>ResourceEventResult&lt;T&gt;</c> (201) as <c>void</c>.
+    /// </remarks>
+    /// <returns>A new context with synthetic <c>200</c> response aliases where applicable.</returns>
+    public OpenApiOperationRenderingContext NormalizeSuccessResponsesTo200()
+    {
+        var normalized = this.Operations
+            .Select(static operation =>
+            {
+                var responses = operation.Responses;
+
+                // Already has a body-bearing 200 — nothing to do.
+                if (responses.Any(static r => r.StatusCode == 200 && r.HasResponseBody))
+                {
+                    return operation;
+                }
+
+                // Find the first body-bearing 2xx success response to alias.
+                var donor = responses.FirstOrDefault(static r =>
+                    r.StatusCode is > 200 and < 300
+                    && r.HasResponseBody
+                    && !r.Content.IsEmpty);
+
+                if (donor is null)
+                {
+                    return operation;
+                }
+
+                // Insert a synthetic 200 clone at the front (before the original 2xx).
+                var synthetic200 = donor with { StatusCode = 200 };
+                var updatedResponses = responses.Insert(0, synthetic200);
+
+                return operation with { Responses = updatedResponses };
+            })
+            .ToImmutableArray();
+
+        return this with { Operations = normalized };
+    }
+
     private static OpenApiOperationModel CreateOperation(OpenApiResponseObjectOperationContext operation)
     {
         var httpMethods = operation.Operation.TryGetFeatureData<OperationHttpMethodMetadataFeatureData>(out var httpMethodMetadata)

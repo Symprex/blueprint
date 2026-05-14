@@ -407,6 +407,106 @@ public class ReferenceAppOpenApiTests
     }
 
     [Fact]
+    public async Task When_UseStatus200ForSuccessResponses_enabled_then_201_operation_also_has_200_response()
+    {
+        var (json, _) = await InvokeOpenApiEndpointAsync(o => o.UseStatus200ForSuccessResponses = true);
+        using var doc = JsonDocument.Parse(json);
+
+        var createPath = doc.RootElement.GetProperty("paths").GetProperty("/templates");
+        var responses = createPath.GetProperty("post").GetProperty("responses");
+
+        // The original 201 should still be present.
+        responses.TryGetProperty("201", out _).Should().BeTrue(
+            "the original 201 Created response should be preserved");
+
+        // A synthetic 200 with the same body schema should also be present.
+        responses.TryGetProperty("200", out var ok200).Should().BeTrue(
+            "a synthetic 200 OK response should be added for backward compatibility");
+
+        // Both should have the same schema reference.
+        var created201 = responses.GetProperty("201");
+        var schema201 = created201
+            .GetProperty("content")
+            .GetProperty("application/json")
+            .GetProperty("schema")
+            .GetProperty("$ref")
+            .GetString();
+
+        var schema200 = ok200
+            .GetProperty("content")
+            .GetProperty("application/json")
+            .GetProperty("schema")
+            .GetProperty("$ref")
+            .GetString();
+
+        schema200.Should().Be(schema201,
+            "the synthetic 200 response should mirror the 201 body schema");
+    }
+
+    [Fact]
+    public async Task When_UseStatus200ForSuccessResponses_disabled_then_201_operation_has_no_200_response()
+    {
+        // Default (disabled) — no synthetic 200.
+        var (json, _) = await InvokeOpenApiEndpointAsync();
+        using var doc = JsonDocument.Parse(json);
+
+        var createPath = doc.RootElement.GetProperty("paths").GetProperty("/templates");
+        var responses = createPath.GetProperty("post").GetProperty("responses");
+
+        responses.TryGetProperty("201", out _).Should().BeTrue(
+            "the 201 Created response should be present");
+
+        responses.TryGetProperty("200", out _).Should().BeFalse(
+            "no synthetic 200 should be added when the flag is off");
+    }
+
+    [Fact]
+    public async Task When_UseStatus200ForSuccessResponses_enabled_then_already_200_operations_are_unchanged()
+    {
+        var (json, _) = await InvokeOpenApiEndpointAsync(o => o.UseStatus200ForSuccessResponses = true);
+        using var doc = JsonDocument.Parse(json);
+
+        // GET /templates returns OkResult<T> which is naturally 200 — should not duplicate.
+        var listPath = doc.RootElement.GetProperty("paths").GetProperty("/templates");
+        var getResponses = listPath.GetProperty("get").GetProperty("responses");
+
+        // Count how many 200-keyed properties exist (should be exactly 1).
+        var count200 = 0;
+        foreach (var prop in getResponses.EnumerateObject())
+        {
+            if (prop.Name == "200")
+            {
+                count200++;
+            }
+        }
+
+        count200.Should().Be(1, "operations that already return 200 should not gain a duplicate 200");
+    }
+
+    [Fact]
+    public async Task When_UseStatus200ForSuccessResponses_enabled_then_bodyless_success_operations_are_not_aliased()
+    {
+        var (json, _) = await InvokeOpenApiEndpointAsync(o => o.UseStatus200ForSuccessResponses = true);
+        using var doc = JsonDocument.Parse(json);
+
+        // DELETE /templates/{Id} returns KeyOnlyResourceEventResult → 201 (bodyless).
+        // A bodyless success response should NOT gain a synthetic 200 because there is no schema to mirror.
+        var deletePath = doc.RootElement.GetProperty("paths").GetProperty("/templates/{Id}");
+
+        if (deletePath.TryGetProperty("delete", out var deleteOp))
+        {
+            var responses = deleteOp.GetProperty("responses");
+
+            // KeyOnlyResourceEventResult is 201 with no body — verify no synthetic 200 was added.
+            if (responses.TryGetProperty("201", out _))
+            {
+                responses.TryGetProperty("200", out _).Should().BeFalse(
+                    "bodyless 201 (KeyOnlyResourceEventResult) should not gain a synthetic 200 alias");
+            }
+        }
+    }
+
+    [Fact]
     public async Task When_operation_returns_file_stream_then_openapi_renders_content_disposition_header()
     {
         var (json, _) = await InvokeOpenApiEndpointAsync();
