@@ -15,13 +15,16 @@ namespace Blueprint.SourceGenerator.Modules;
 /// DI scope owns the lifetime of the service provider, so explicit cleanup is unnecessary.
 /// </para>
 /// <para>
-/// This module is a <see cref="BlueprintModuleCategory.Consumer"/> module — it is only active
-/// when a companion generator package composes it via
-/// <c>CreateDefaultConfig(new MartenScopeModule())</c>.
+/// This module is included in the default pipeline configuration and auto-detects Marten
+/// availability by checking for <c>Blueprint.Marten.MartenScopeAccessor</c> in the
+/// compilation. When Blueprint.Marten is not referenced, the module silently no-ops.
+/// This eliminates the need for consumer companion generators to manually compose the module.
 /// </para>
 /// </remarks>
 public sealed class MartenScopeModule : IBlueprintSourceGeneratorModule, IPipelineContributor
 {
+    private const string MartenScopeAccessorType = "Blueprint.Marten.MartenScopeAccessor";
+
     /// <inheritdoc />
     public string ModuleId => nameof(MartenScopeModule);
 
@@ -43,6 +46,12 @@ public sealed class MartenScopeModule : IBlueprintSourceGeneratorModule, IPipeli
     /// <inheritdoc />
     public void ContributeToPipeline(PipelineContributorContext context)
     {
+        // Auto-detect: only activate when Blueprint.Marten is referenced in the compilation
+        if (context.FindTypeByMetadataName(MartenScopeAccessorType) is null)
+        {
+            return;
+        }
+
         context.AddRenderStep(PipelineStage.Setup, RenderSetScope);
     }
 

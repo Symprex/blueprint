@@ -208,7 +208,12 @@ public class RebusTransactionModuleTests
         var result = TestHelpers.CompileWithTrackedGenerators(
             generators,
             [source],
-            ["Input0.cs"]);
+            ["Input0.cs"],
+            [
+                MetadataReference.CreateFromFile(typeof(global::Rebus.Transport.RebusTransactionScope).Assembly.Location),
+                MetadataReference.CreateFromFile(typeof(Blueprint.Rebus.NoRebusTransactionAttribute).Assembly.Location),
+                MetadataReference.CreateFromFile(typeof(Blueprint.Marten.MartenScopeAccessor).Assembly.Location),
+            ]);
 
         result.Diagnostics.Should().BeEmpty("the compilation should have no diagnostics");
 
@@ -228,6 +233,57 @@ public class RebusTransactionModuleTests
             .UseDirectory("Snapshots");
     }
 
+    [Fact]
+    public void When_rebus_not_referenced_then_module_does_not_contribute()
+    {
+        // Compilation WITHOUT Rebus assembly references — only Blueprint.Runtime.Model
+        var syntaxTree = CSharpSyntaxTree.ParseText(
+            """
+            using Blueprint.Model;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace;
+
+            public partial class SimpleCommand : ICommand<string>
+            {
+                public static Task<string> HandleAsync(SimpleCommand operation)
+                {
+                    return Task.FromResult("done");
+                }
+            }
+            """,
+            new CSharpParseOptions(LanguageVersion.Preview));
+
+        var references = AppDomain.CurrentDomain.GetAssemblies()
+            .Where(static assembly => !assembly.IsDynamic && !string.IsNullOrWhiteSpace(assembly.Location))
+            .Where(static assembly => !assembly.GetName().Name!.StartsWith("Rebus", StringComparison.OrdinalIgnoreCase))
+            .Select(static assembly => (MetadataReference)MetadataReference.CreateFromFile(assembly.Location))
+            .ToList();
+
+        references.Add(MetadataReference.CreateFromFile(typeof(Blueprint.Model.IOperation).Assembly.Location));
+
+        var compilation = CSharpCompilation.Create(
+            assemblyName: "NoRebusTests",
+            syntaxTrees: [syntaxTree],
+            references: references,
+            options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        var config = new BlueprintSourceGenerationConfig(
+        [
+            new RebusTransactionModule(),
+            new HandlerExecutionModule(),
+            new PipelineReturnModule(),
+        ]);
+        var result = config.BuildPipelinePlan("TestNamespace.SimpleCommand", compilation);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Value.Should().NotBeNull();
+
+        result.Value!.Contributions.Should().NotContain(
+            static c => c.ContributorId == nameof(RebusTransactionModule),
+            "RebusTransactionModule should auto-detect and skip when Rebus is not referenced");
+    }
+
     private static CSharpCompilation CreateCompilation(string source)
     {
         var syntaxTree = CSharpSyntaxTree.ParseText(source, new CSharpParseOptions(LanguageVersion.Preview));
@@ -239,6 +295,7 @@ public class RebusTransactionModuleTests
 
         references.Add(MetadataReference.CreateFromFile(typeof(Blueprint.Model.IOperation).Assembly.Location));
         references.Add(MetadataReference.CreateFromFile(typeof(Blueprint.Rebus.NoRebusTransactionAttribute).Assembly.Location));
+        references.Add(MetadataReference.CreateFromFile(typeof(global::Rebus.Transport.RebusTransactionScope).Assembly.Location));
 
         return CSharpCompilation.Create(
             assemblyName: "RebusTransactionModuleTests",
@@ -249,13 +306,14 @@ public class RebusTransactionModuleTests
 }
 
 /// <summary>
-/// A derived pipeline source generator that composes the <see cref="RebusTransactionModule"/> to prove
-/// consumer companion generators can add Rebus transaction support to generated pipelines.
+/// A derived pipeline source generator that uses the default config (which now auto-detects Rebus).
+/// The Rebus module activates automatically when <c>Rebus.Transport.RebusTransactionScope</c>
+/// is found in the compilation, so no companion module composition is needed.
 /// </summary>
 internal sealed class RebusCompanionPipelineSourceGenerator : OperationExecutorPipelineSourceGenerator
 {
     public RebusCompanionPipelineSourceGenerator()
-        : base(CreateDefaultConfig(new RebusTransactionModule()))
+        : base(CreateDefaultConfig())
     {
     }
 }

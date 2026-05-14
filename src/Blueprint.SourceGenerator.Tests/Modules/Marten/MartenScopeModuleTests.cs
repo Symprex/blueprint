@@ -121,7 +121,12 @@ public class MartenScopeModuleTests
         var result = TestHelpers.CompileWithTrackedGenerators(
             generators,
             [source],
-            ["Input0.cs"]);
+            ["Input0.cs"],
+            [
+                MetadataReference.CreateFromFile(typeof(Blueprint.Marten.MartenScopeAccessor).Assembly.Location),
+                MetadataReference.CreateFromFile(typeof(global::Rebus.Transport.RebusTransactionScope).Assembly.Location),
+                MetadataReference.CreateFromFile(typeof(Blueprint.Rebus.NoRebusTransactionAttribute).Assembly.Location),
+            ]);
 
         result.Diagnostics.Should().BeEmpty("the compilation should have no diagnostics");
 
@@ -141,6 +146,57 @@ public class MartenScopeModuleTests
             .UseDirectory("Snapshots");
     }
 
+    [Fact]
+    public void When_marten_not_referenced_then_module_does_not_contribute()
+    {
+        // Compilation WITHOUT Blueprint.Marten assembly references
+        var syntaxTree = CSharpSyntaxTree.ParseText(
+            """
+            using Blueprint.Model;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace;
+
+            public partial class SimpleCommand : ICommand<string>
+            {
+                public static Task<string> HandleAsync(SimpleCommand operation)
+                {
+                    return Task.FromResult("done");
+                }
+            }
+            """,
+            new CSharpParseOptions(LanguageVersion.Preview));
+
+        var references = AppDomain.CurrentDomain.GetAssemblies()
+            .Where(static assembly => !assembly.IsDynamic && !string.IsNullOrWhiteSpace(assembly.Location))
+            .Where(static assembly => !assembly.GetName().Name!.Contains("Marten", StringComparison.OrdinalIgnoreCase))
+            .Select(static assembly => (MetadataReference)MetadataReference.CreateFromFile(assembly.Location))
+            .ToList();
+
+        references.Add(MetadataReference.CreateFromFile(typeof(Blueprint.Model.IOperation).Assembly.Location));
+
+        var compilation = CSharpCompilation.Create(
+            assemblyName: "NoMartenTests",
+            syntaxTrees: [syntaxTree],
+            references: references,
+            options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        var config = new BlueprintSourceGenerationConfig(
+        [
+            new MartenScopeModule(),
+            new HandlerExecutionModule(),
+            new PipelineReturnModule(),
+        ]);
+        var result = config.BuildPipelinePlan("TestNamespace.SimpleCommand", compilation);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Value.Should().NotBeNull();
+
+        result.Value!.Contributions.Should().NotContain(
+            static c => c.ContributorId == nameof(MartenScopeModule),
+            "MartenScopeModule should auto-detect and skip when Blueprint.Marten is not referenced");
+    }
+
     private static CSharpCompilation CreateCompilation(string source)
     {
         var syntaxTree = CSharpSyntaxTree.ParseText(source, new CSharpParseOptions(LanguageVersion.Preview));
@@ -151,6 +207,7 @@ public class MartenScopeModuleTests
             .ToList();
 
         references.Add(MetadataReference.CreateFromFile(typeof(Blueprint.Model.IOperation).Assembly.Location));
+        references.Add(MetadataReference.CreateFromFile(typeof(Blueprint.Marten.MartenScopeAccessor).Assembly.Location));
 
         return CSharpCompilation.Create(
             assemblyName: "MartenScopeModuleTests",
@@ -161,13 +218,14 @@ public class MartenScopeModuleTests
 }
 
 /// <summary>
-/// A derived pipeline source generator that composes the <see cref="MartenScopeModule"/> to prove
-/// consumer companion generators can add Marten scope accessor support to generated pipelines.
+/// A derived pipeline source generator that uses the default config (which now auto-detects Marten).
+/// The Marten module activates automatically when <c>Blueprint.Marten.MartenScopeAccessor</c>
+/// is found in the compilation, so no companion module composition is needed.
 /// </summary>
 internal sealed class MartenCompanionPipelineSourceGenerator : OperationExecutorPipelineSourceGenerator
 {
     public MartenCompanionPipelineSourceGenerator()
-        : base(CreateDefaultConfig(new MartenScopeModule()))
+        : base(CreateDefaultConfig())
     {
     }
 }

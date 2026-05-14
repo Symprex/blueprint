@@ -16,7 +16,7 @@ namespace Blueprint.Generated
     public sealed partial class PlaceOrderCommandExecutorPipeline : Blueprint.OperationExecutorShell
     {
         static readonly string[] _appliedModuleIds =
-            ["RebusTransactionModule", "TenantModule", "PropertyPopulationModule", "HandlerExecutionModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule"];
+            ["MartenScopeModule", "RebusTransactionModule", "TenantModule", "PropertyPopulationModule", "HandlerExecutionModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule"];
 
         public PlaceOrderCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, Blueprint.Runtime.Exec.PipelineServices pipelineServices)
             : base(loggerFactory, "PlaceOrderCommand", pipelineServices)
@@ -27,6 +27,7 @@ namespace Blueprint.Generated
         {
             var operation = (global::TestNamespace.PlaceOrderCommand)context.Operation;
 
+            global::Blueprint.Marten.MartenScopeAccessor.Current = context.ServiceProvider;
 
             using var rebusTransactionScope = new global::Rebus.Transport.RebusTransactionScope();
 

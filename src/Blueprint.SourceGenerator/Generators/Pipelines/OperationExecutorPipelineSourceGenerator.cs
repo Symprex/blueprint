@@ -147,6 +147,8 @@ public partial class OperationExecutorPipelineSourceGenerator : IIncrementalGene
     {
         return new BlueprintSourceGenerationConfig(
         [
+            new MartenScopeModule(),
+            new RebusTransactionModule(),
             new PerformanceMetricsModule(),
             new PropertyOwnershipModule(),
             new TenantModule(),

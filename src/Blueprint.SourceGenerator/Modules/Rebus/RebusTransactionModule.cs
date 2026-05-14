@@ -21,9 +21,10 @@ namespace Blueprint.SourceGenerator.Modules;
 /// <c>Blueprint.Rebus.NoRebusTransactionAttribute</c>) are excluded from transaction wrapping.
 /// </para>
 /// <para>
-/// Consumer companion generators can compose this module via
-/// <c>CreateDefaultConfig(new RebusTransactionModule())</c> to add Rebus transaction support
-/// to generated pipelines.
+/// This module is included in the default pipeline configuration and auto-detects Rebus
+/// availability by checking for <c>Rebus.Transport.RebusTransactionScope</c> in the
+/// compilation. When Rebus is not referenced, the module silently no-ops. This eliminates
+/// the need for consumer companion generators to manually compose the module.
 /// </para>
 /// </remarks>
 public sealed class RebusTransactionModule : IBlueprintSourceGeneratorModule, IPipelineContributor
@@ -52,6 +53,12 @@ public sealed class RebusTransactionModule : IBlueprintSourceGeneratorModule, IP
     /// <inheritdoc />
     public void ContributeToPipeline(PipelineContributorContext context)
     {
+        // Auto-detect: only activate when Rebus is referenced in the compilation
+        if (context.FindTypeByMetadataName(RebusTransactionScopeType) is null)
+        {
+            return;
+        }
+
         // Skip operations that have opted out of Rebus transaction wrapping
         if (HasNoRebusTransactionAttribute(context.Operation.TypeSymbol))
         {

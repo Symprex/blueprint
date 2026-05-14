@@ -281,16 +281,24 @@ public static class TestHelpers
     /// <param name="generators">The tracked generators that should run against the shared compilation.</param>
     /// <param name="sources">The source texts that make up the baseline compilation.</param>
     /// <param name="filePaths">The stable file paths to associate with each source so diagnostics stay deterministic.</param>
+    /// <param name="additionalReferences">Extra metadata references to add to the compilation (e.g. for Marten/Rebus auto-detection).</param>
     /// <returns>The first multi-generator run captured from the shared driver execution.</returns>
     public static MultiGeneratorGenerationResult CompileWithTrackedGenerators(
         TrackedGeneratorDefinition[] generators,
         string[] sources,
-        string[] filePaths)
+        string[] filePaths,
+        MetadataReference[]? additionalReferences = null)
     {
         ArgumentNullException.ThrowIfNull(generators);
 
         var parseOptions = new CSharpParseOptions(LanguageVersion.Preview);
         var compilation = CreateCompilation(sources, filePaths, parseOptions);
+
+        if (additionalReferences is { Length: > 0 })
+        {
+            compilation = compilation.AddReferences(additionalReferences);
+        }
+
         var result = RunTrackedGenerators(generators, parseOptions, compilation);
         return result.Initial;
     }
@@ -364,8 +372,19 @@ public static class TestHelpers
 
     private static List<MetadataReference> CreateMetadataReferences()
     {
+        // Exclude Marten and Rebus assemblies from the default compilation references.
+        // Auto-detecting modules (MartenScopeModule, RebusTransactionModule) activate when
+        // these types are found in the compilation. Module-specific tests add them back via
+        // their own CreateCompilation methods.
         var references = AppDomain.CurrentDomain.GetAssemblies()
             .Where(static assembly => !assembly.IsDynamic && !string.IsNullOrWhiteSpace(assembly.Location))
+            .Where(static assembly =>
+            {
+                var name = assembly.GetName().Name;
+                return name is not null
+                    && !name.Contains("Marten", StringComparison.OrdinalIgnoreCase)
+                    && !name.StartsWith("Rebus", StringComparison.OrdinalIgnoreCase);
+            })
             .Select(static assembly => (MetadataReference)MetadataReference.CreateFromFile(assembly.Location))
             .ToList();
 
@@ -385,8 +404,6 @@ public static class TestHelpers
         references.Add(MetadataReference.CreateFromFile(typeof(Microsoft.Extensions.Primitives.StringValues).Assembly.Location));
         references.Add(MetadataReference.CreateFromFile(typeof(Microsoft.AspNetCore.Http.IQueryCollection).Assembly.Location));
         references.Add(MetadataReference.CreateFromFile(typeof(Microsoft.AspNetCore.Http.HttpContext).Assembly.Location));
-        references.Add(MetadataReference.CreateFromFile(typeof(global::Rebus.Transport.RebusTransactionScope).Assembly.Location));
-        references.Add(MetadataReference.CreateFromFile(typeof(Blueprint.Marten.MartenScopeAccessor).Assembly.Location));
         references.Add(MetadataReference.CreateFromFile(typeof(Blueprint.HttpClient.BlueprintHttpClient<>).Assembly.Location));
 
         return references;
