@@ -54,7 +54,7 @@ public class RebusTransactionModuleTests
     }
 
     [Fact]
-    public void When_query_operation_then_plan_still_contains_rebus_transaction()
+    public void When_query_operation_then_plan_excludes_rebus_transaction()
     {
         var compilation = CreateCompilation(
             """
@@ -83,8 +83,9 @@ public class RebusTransactionModuleTests
         result.Diagnostics.Should().BeEmpty();
         result.Value.Should().NotBeNull();
 
-        result.Value!.Contributions.Should().Contain(
-            new PipelineContribution(PipelineStage.Setup, nameof(RebusTransactionModule)));
+        result.Value!.Contributions.Should().NotContain(
+            static c => c.ContributorId == nameof(RebusTransactionModule),
+            "queries should not get Rebus transaction scope — they do not publish messages");
     }
 
     [Fact]

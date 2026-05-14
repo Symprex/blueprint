@@ -65,6 +65,13 @@ public sealed class RebusTransactionModule : IBlueprintSourceGeneratorModule, IP
             return;
         }
 
+        // Queries do not publish messages — skip the transaction scope to avoid allocation overhead.
+        // Commands that publish messages through Rebus need the scope to batch and commit.
+        if (!IsCommand(context.Operation.TypeSymbol))
+        {
+            return;
+        }
+
         context.RequireVariable(
             new VariableKey(HandlerExecutionModule.HandlerResultTypeName, HandlerExecutionModule.HandlerResultPurpose),
             requiredBy: PipelineStage.PostExecution);
@@ -95,5 +102,12 @@ public sealed class RebusTransactionModule : IBlueprintSourceGeneratorModule, IP
         return operationType.GetAttributes().Any(static attr =>
             attr.AttributeClass?.Name is NoRebusTransactionAttributeName
             && attr.AttributeClass.IsInNamespace("Blueprint", "Rebus"));
+    }
+
+    private static bool IsCommand(INamedTypeSymbol operationType)
+    {
+        return operationType.AllInterfaces.Any(static candidate =>
+            candidate.Name is "ICommand"
+            && candidate.IsInNamespace("Blueprint", "Model"));
     }
 }
