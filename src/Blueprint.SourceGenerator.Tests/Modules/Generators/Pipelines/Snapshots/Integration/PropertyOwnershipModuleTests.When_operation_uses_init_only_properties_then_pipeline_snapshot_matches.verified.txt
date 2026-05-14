@@ -65,7 +65,7 @@ namespace Blueprint.Generated
 
             var httpContext = ((Blueprint.Runtime.Http.IHttpOperationContext)context).HttpContext;
 
-            var _bodyResult = await Blueprint.Runtime.Exec.PipelineHelpers.ReadJsonBodyAsync(httpContext, context.OperationCancelled, operation, PopulateFromJsonBody).ConfigureAwait(false);
+            var _bodyResult = await Blueprint.Runtime.Exec.PipelineHelpers.ReadJsonBodyAsync(httpContext, context.OperationCancelled, operation, PopulateFromJsonBody, this.BodyJsonOptions).ConfigureAwait(false);
             if (_bodyResult != null)
             {
                 return _bodyResult;
@@ -115,7 +115,7 @@ namespace Blueprint.Generated
             return _appliedModuleIds;
         }
 
-        private static void PopulateFromJsonBody(System.ReadOnlySpan<byte> bodyBytes, global::TestNamespace.UpdateInitCommand operation)
+        private static void PopulateFromJsonBody(System.ReadOnlySpan<byte> bodyBytes, global::TestNamespace.UpdateInitCommand operation, System.Text.Json.JsonSerializerOptions jsonOptions)
         {
             var reader = new System.Text.Json.Utf8JsonReader(bodyBytes);
             if (!reader.Read() || reader.TokenType != System.Text.Json.JsonTokenType.StartObject) return;
@@ -133,7 +133,7 @@ namespace Blueprint.Generated
                 else if (reader.ValueTextEquals("score"u8))
                 {
                     reader.Read();
-                    _SetInit_Score(operation, System.Text.Json.JsonSerializer.Deserialize<int?>(ref reader));
+                    _SetInit_Score(operation, System.Text.Json.JsonSerializer.Deserialize<int?>(ref reader, jsonOptions));
                 }
                 else
                 {

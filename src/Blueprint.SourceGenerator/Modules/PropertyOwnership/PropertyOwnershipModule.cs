@@ -976,7 +976,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         if (bodyEntries is { Count: > 0 })
         {
             context.WriteStatement(
-                $"var _bodyResult = await Blueprint.Runtime.Exec.PipelineHelpers.ReadJsonBodyAsync(httpContext, context.OperationCancelled, {operationExpr}, PopulateFromJsonBody).ConfigureAwait(false);");
+                $"var _bodyResult = await Blueprint.Runtime.Exec.PipelineHelpers.ReadJsonBodyAsync(httpContext, context.OperationCancelled, {operationExpr}, PopulateFromJsonBody, this.BodyJsonOptions).ConfigureAwait(false);");
             context.If("_bodyResult != null", earlyReturnCtx =>
             {
                 earlyReturnCtx.Return("_bodyResult");
@@ -1069,7 +1069,8 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             .MakeStaticMethod()
             .WithReturnType("void")
             .AddParameter("System.ReadOnlySpan<byte>", "bodyBytes")
-            .AddParameter(operationTypeFull, "operation");
+            .AddParameter(operationTypeFull, "operation")
+            .AddParameter("System.Text.Json.JsonSerializerOptions", "jsonOptions");
 
         method.WithBody(writer =>
         {
@@ -1150,7 +1151,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
                 break;
             default:
                 var fullyQualifiedType = rawType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                readerExpr = $"System.Text.Json.JsonSerializer.Deserialize<{fullyQualifiedType}>(ref reader)";
+                readerExpr = $"System.Text.Json.JsonSerializer.Deserialize<{fullyQualifiedType}>(ref reader, jsonOptions)";
                 break;
         }
 

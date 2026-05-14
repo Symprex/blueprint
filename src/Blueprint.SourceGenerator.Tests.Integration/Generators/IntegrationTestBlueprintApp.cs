@@ -32,4 +32,5 @@ public partial class IntegrationTestBlueprintApp : BlueprintApp;
 [JsonSerializable(typeof(ExpandableTestEmployee))]
 [JsonSerializable(typeof(AlwaysExpandTestEmployee))]
 [JsonSerializable(typeof(MultiExpandableTestEmployee))]
+[JsonSerializable(typeof(Blueprint.SourceGenerator.Tests.Integration.Http.NodaTimeEchoResponse))]
 public partial class IntegrationTestAppJsonContext : JsonSerializerContext;

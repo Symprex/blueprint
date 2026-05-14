@@ -295,7 +295,11 @@ public static class PipelineHelpers
     /// <typeparam name="TOperation">The concrete operation type.</typeparam>
     /// <param name="bodyBytes">The raw request body bytes, ready for <see cref="System.Text.Json.Utf8JsonReader"/>.</param>
     /// <param name="operation">The operation instance whose body properties will be populated.</param>
-    public delegate void PopulateFromBodyDelegate<in TOperation>(ReadOnlySpan<byte> bodyBytes, TOperation operation);
+    /// <param name="jsonOptions">
+    /// The <see cref="System.Text.Json.JsonSerializerOptions"/> to use when deserializing complex types
+    /// (e.g. NodaTime Instant, custom converters). May be <c>null</c> when no custom converters are needed.
+    /// </param>
+    public delegate void PopulateFromBodyDelegate<in TOperation>(ReadOnlySpan<byte> bodyBytes, TOperation operation, System.Text.Json.JsonSerializerOptions? jsonOptions);
 
     /// <summary>
     /// Reads and buffers the HTTP request body, validates the content type is JSON, then calls the
@@ -312,6 +316,10 @@ public static class PipelineHelpers
     /// body properties (typically via <c>Utf8JsonReader</c>). Because the operation is passed as a
     /// parameter rather than captured, the delegate is allocation-free.
     /// </param>
+    /// <param name="jsonOptions">
+    /// The <see cref="System.Text.Json.JsonSerializerOptions"/> to pass through to the <paramref name="populate"/>
+    /// delegate for complex-type deserialization (e.g. NodaTime converters). May be <c>null</c>.
+    /// </param>
     /// <returns>
     /// <c>null</c> when the body was read and populated successfully (or was empty/absent),
     /// or an <see cref="OperationResult"/> representing the failure (unsupported media type,
@@ -321,7 +329,8 @@ public static class PipelineHelpers
         HttpContext httpContext,
         CancellationToken cancellationToken,
         TOperation operation,
-        PopulateFromBodyDelegate<TOperation> populate)
+        PopulateFromBodyDelegate<TOperation> populate,
+        System.Text.Json.JsonSerializerOptions? jsonOptions = null)
     {
         // No body to read — skip silently
         if (httpContext.Request.ContentLength is null or 0 && httpContext.Request.ContentType is null)
@@ -363,7 +372,7 @@ public static class PipelineHelpers
                 {
                     try
                     {
-                        populate(new ReadOnlySpan<byte>(rentedBuffer, 0, totalRead), operation);
+                        populate(new ReadOnlySpan<byte>(rentedBuffer, 0, totalRead), operation, jsonOptions);
                     }
                     catch (Exception ex) when (ex is System.Text.Json.JsonException or InvalidOperationException or NotSupportedException)
                     {
@@ -387,7 +396,7 @@ public static class PipelineHelpers
         {
             try
             {
-                populate(new ReadOnlySpan<byte>(bodyStream.GetBuffer(), 0, (int)bodyStream.Length), operation);
+                populate(new ReadOnlySpan<byte>(bodyStream.GetBuffer(), 0, (int)bodyStream.Length), operation, jsonOptions);
             }
             catch (Exception ex) when (ex is System.Text.Json.JsonException or InvalidOperationException or NotSupportedException)
             {

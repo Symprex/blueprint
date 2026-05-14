@@ -28,6 +28,7 @@ public class AppModelOpenApiSchemaProjectionContextTests
             "LinkTestApiResource",
             "MappedLinkApiResource",
             "MultiExpandableTestEmployee",
+            "NodaTimeEchoResponse",
             "ProblemDetails",
             "ValidationProblemDetails",
             "string");

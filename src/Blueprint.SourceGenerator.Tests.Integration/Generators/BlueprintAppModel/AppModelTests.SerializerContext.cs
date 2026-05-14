@@ -34,7 +34,8 @@ public class AppModelSerializerContextTests
             "Blueprint.SourceGenerator.Tests.Integration.Http.E2EConflictDetail",
             "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.ExpandableTestEmployee",
             "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.AlwaysExpandTestEmployee",
-            "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.MultiExpandableTestEmployee");
+            "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.MultiExpandableTestEmployee",
+            "Blueprint.SourceGenerator.Tests.Integration.Http.NodaTimeEchoResponse");
     }
 
     [Fact]
@@ -65,6 +66,7 @@ public class AppModelSerializerContextTests
             typeof(E2EConflictDetail),
             typeof(ExpandableTestEmployee),
             typeof(AlwaysExpandTestEmployee),
-            typeof(MultiExpandableTestEmployee));
+            typeof(MultiExpandableTestEmployee),
+            typeof(NodaTimeEchoResponse));
     }
 }

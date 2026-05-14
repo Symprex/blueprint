@@ -28,6 +28,7 @@ public class AppModelOpenApiSchemaComponentRenderingContextTests
             "LinkTestApiResource",
             "MappedLinkApiResource",
             "MultiExpandableTestEmployee",
+            "NodaTimeEchoResponse",
             "ProblemDetails",
             "ValidationProblemDetails",
             "string");

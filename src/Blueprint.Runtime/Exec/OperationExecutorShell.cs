@@ -124,6 +124,16 @@ public abstract class OperationExecutorShell : IOperationExecutorPipeline
     protected IResourceEventAuditSink? ResourceEventAuditSink { get; }
 
     /// <summary>
+    /// Gets the <see cref="System.Text.Json.JsonSerializerOptions"/> used for body deserialization,
+    /// cached at pipeline construction time. Contains custom converters (e.g. NodaTime) configured
+    /// via <see cref="Blueprint.Http.BlueprintJsonOptions"/>. Passed through to
+    /// <see cref="PipelineHelpers.ReadJsonBodyAsync{TOperation}"/> so that the generated
+    /// <c>PopulateFromJsonBody</c> delegate can use converters for complex types without per-request
+    /// DI resolution.
+    /// </summary>
+    protected System.Text.Json.JsonSerializerOptions? BodyJsonOptions { get; }
+
+    /// <summary>
     /// Initialises a new instance of <see cref="OperationExecutorShell"/> with the supplied logger factory and
     /// operation type name used for activity tracing and structured log entries.
     /// </summary>
@@ -179,6 +189,9 @@ public abstract class OperationExecutorShell : IOperationExecutorPipeline
         this.OperationAuthorisers = PipelineHelpers.ResolveServiceArray<IOperationAuthoriser>(serviceProvider);
         this.UserAuthorisationContextFactory = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<IUserAuthorisationContextFactory>(serviceProvider);
         this.ResourceEventAuditSink = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<IResourceEventAuditSink>(serviceProvider);
+
+        var blueprintJsonOpts = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Microsoft.Extensions.Options.IOptions<Blueprint.Http.BlueprintJsonOptions>>(serviceProvider);
+        this.BodyJsonOptions = blueprintJsonOpts?.Value?.SerializerOptions;
     }
 
     /// <inheritdoc />

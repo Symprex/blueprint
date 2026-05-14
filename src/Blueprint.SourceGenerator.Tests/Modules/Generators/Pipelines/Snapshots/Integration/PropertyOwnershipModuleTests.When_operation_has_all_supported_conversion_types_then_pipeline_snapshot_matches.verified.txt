@@ -219,7 +219,7 @@ namespace Blueprint.Generated
 
             var httpContext = ((Blueprint.Runtime.Http.IHttpOperationContext)context).HttpContext;
 
-            var _bodyResult = await Blueprint.Runtime.Exec.PipelineHelpers.ReadJsonBodyAsync(httpContext, context.OperationCancelled, operation, PopulateFromJsonBody).ConfigureAwait(false);
+            var _bodyResult = await Blueprint.Runtime.Exec.PipelineHelpers.ReadJsonBodyAsync(httpContext, context.OperationCancelled, operation, PopulateFromJsonBody, this.BodyJsonOptions).ConfigureAwait(false);
             if (_bodyResult != null)
             {
                 return _bodyResult;
@@ -281,7 +281,7 @@ namespace Blueprint.Generated
             return _appliedModuleIds;
         }
 
-        private static void PopulateFromJsonBody(System.ReadOnlySpan<byte> bodyBytes, global::TestNamespace.AllTypesPostCommand operation)
+        private static void PopulateFromJsonBody(System.ReadOnlySpan<byte> bodyBytes, global::TestNamespace.AllTypesPostCommand operation, System.Text.Json.JsonSerializerOptions jsonOptions)
         {
             var reader = new System.Text.Json.Utf8JsonReader(bodyBytes);
             if (!reader.Read() || reader.TokenType != System.Text.Json.JsonTokenType.StartObject) return;
@@ -344,12 +344,12 @@ namespace Blueprint.Generated
                 else if (reader.ValueTextEquals("optionalCount"u8))
                 {
                     reader.Read();
-                    operation.OptionalCount = System.Text.Json.JsonSerializer.Deserialize<int?>(ref reader);
+                    operation.OptionalCount = System.Text.Json.JsonSerializer.Deserialize<int?>(ref reader, jsonOptions);
                 }
                 else if (reader.ValueTextEquals("optionalRating"u8))
                 {
                     reader.Read();
-                    operation.OptionalRating = System.Text.Json.JsonSerializer.Deserialize<double?>(ref reader);
+                    operation.OptionalRating = System.Text.Json.JsonSerializer.Deserialize<double?>(ref reader, jsonOptions);
                 }
                 else
                 {
