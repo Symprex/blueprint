@@ -129,7 +129,7 @@ public sealed class TypedHttpClientExtensionsGenerator : IIncrementalGenerator, 
                     continue;
                 }
 
-                if (!IsAssignableTo(type, operationInterface))
+                if (!type.IsAssignableTo(operationInterface))
                 {
                     continue;
                 }
@@ -491,13 +491,6 @@ public sealed class TypedHttpClientExtensionsGenerator : IIncrementalGenerator, 
         }
 
         return char.ToLowerInvariant(name[0]) + name[1..];
-    }
-
-    private static bool IsAssignableTo(INamedTypeSymbol type, INamedTypeSymbol targetInterface)
-    {
-        return type.AllInterfaces.Any(i =>
-            SymbolEqualityComparer.Default.Equals(i, targetInterface)
-            || (i.IsGenericType && SymbolEqualityComparer.Default.Equals(i.OriginalDefinition, targetInterface)));
     }
 
     private static IEnumerable<INamedTypeSymbol> GetAllTypesFromAssembly(IAssemblySymbol assembly)

@@ -90,5 +90,49 @@ namespace Blueprint.SourceGenerator.Helpers
                 ? symbol.MetadataName
                 : $"{symbol.ContainingNamespace.ToDisplayString()}.{symbol.MetadataName}";
         }
+
+        /// <summary>
+        /// Determines whether the given type is assignable to the target type, checking direct equality,
+        /// interface implementation (including open generic definitions), and base-type hierarchy.
+        /// Consolidates the three duplicate implementations that previously existed in FindOperations,
+        /// FindHandlers, and TypedHttpClientExtensionsGenerator.
+        /// </summary>
+        /// <param name="type">The concrete type to test.</param>
+        /// <param name="target">The interface or class type to test assignability against.</param>
+        /// <returns><see langword="true"/> when <paramref name="type"/> is assignable to <paramref name="target"/>.</returns>
+        public static bool IsAssignableTo(this INamedTypeSymbol type, INamedTypeSymbol target)
+        {
+            if (SymbolEqualityComparer.Default.Equals(type, target))
+            {
+                return true;
+            }
+
+            if (target.TypeKind == TypeKind.Interface)
+            {
+                foreach (var iface in type.AllInterfaces)
+                {
+                    if (SymbolEqualityComparer.Default.Equals(iface, target)
+                        || (iface.IsGenericType && SymbolEqualityComparer.Default.Equals(iface.OriginalDefinition, target)))
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+
+            var baseType = type.BaseType;
+            while (baseType != null)
+            {
+                if (SymbolEqualityComparer.Default.Equals(baseType, target))
+                {
+                    return true;
+                }
+
+                baseType = baseType.BaseType;
+            }
+
+            return false;
+        }
     }
 }

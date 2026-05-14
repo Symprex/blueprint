@@ -195,39 +195,13 @@ public sealed partial class AppDataModelSourceGenerator
                 continue;
             }
 
-            if (!IsAssignableTo(type, assignableToType))
+            if (!type.IsAssignableTo(assignableToType))
             {
                 continue;
             }
 
             yield return type;
         }
-    }
-
-    private static bool IsAssignableTo(INamedTypeSymbol type, INamedTypeSymbol assignableTo)
-    {
-        if (SymbolEqualityComparer.Default.Equals(type, assignableTo))
-        {
-            return true;
-        }
-
-        if (assignableTo.TypeKind == TypeKind.Interface)
-        {
-            return type.AllInterfaces.Contains(assignableTo, SymbolEqualityComparer.Default);
-        }
-
-        var baseType = type.BaseType;
-        while (baseType != null)
-        {
-            if (SymbolEqualityComparer.Default.Equals(baseType, assignableTo))
-            {
-                return true;
-            }
-
-            baseType = baseType.BaseType;
-        }
-
-        return false;
     }
 
     private static IEnumerable<INamedTypeSymbol> GetTypesFromAssembly(IAssemblySymbol? assemblySymbol)
