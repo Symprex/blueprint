@@ -440,7 +440,7 @@ public static class PipelineHelpers
             }
         }
 
-        return new BindingFailureResult("Invalid JSON body");
+        return new BindingFailureResult($"Invalid JSON body: {ex.GetType().Name}: {ex.Message}");
     }
 
     /// <summary>

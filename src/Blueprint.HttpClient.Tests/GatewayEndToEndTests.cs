@@ -139,7 +139,8 @@ public sealed class GatewayEndToEndTests : IAsyncLifetime
         var response = await this._gatewayHost!.Client.PostAsJsonAsync(
             "/gateway/templates",
             new { name = "Gateway Created", htmlSource = "<p>gw</p>", plainTextSource = "gw" });
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadAsStringAsync();
+        response.StatusCode.Should().Be(HttpStatusCode.OK, body);
 
         var resource = await response.Content.ReadFromJsonAsync<GatewayTemplateResource>();
         resource.Should().NotBeNull();
@@ -201,21 +202,16 @@ public sealed class GatewayEndToEndTests : IAsyncLifetime
         var body2 = await seedResponse.Content.ReadAsStringAsync();
         using var doc = System.Text.Json.JsonDocument.Parse(body2);
 
-        // Try the resource-event envelope shape: { "data": { "Id": ... } } or { "content": { "Id": ... } }
+        // Try the resource-event envelope shape: { "data": { "id": ... } }
+        // Blueprint serializes with camelCase naming policy.
         if (doc.RootElement.TryGetProperty("data", out var dataElem) &&
-            dataElem.TryGetProperty("Id", out var dataIdElem))
+            dataElem.TryGetProperty("id", out var dataIdElem))
         {
             return dataIdElem.GetString() ?? throw new InvalidOperationException("Id was null in data envelope");
         }
 
-        if (doc.RootElement.TryGetProperty("content", out var contentElem) &&
-            contentElem.TryGetProperty("Id", out var idElem))
-        {
-            return idElem.GetString() ?? throw new InvalidOperationException("Id was null in content envelope");
-        }
-
-        // Try direct shape: { "Id": ... }
-        if (doc.RootElement.TryGetProperty("Id", out var directId))
+        // Try direct shape: { "id": ... }
+        if (doc.RootElement.TryGetProperty("id", out var directId))
         {
             return directId.GetString() ?? throw new InvalidOperationException("Id was null");
         }

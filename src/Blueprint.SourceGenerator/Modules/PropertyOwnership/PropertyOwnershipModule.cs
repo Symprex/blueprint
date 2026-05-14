@@ -1193,7 +1193,20 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         else
         {
             var fullyQualifiedType = rawType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            readerExpr = $"System.Text.Json.JsonSerializer.Deserialize<{fullyQualifiedType}>(ref reader, jsonOptions)";
+            var deserializeExpr = $"System.Text.Json.JsonSerializer.Deserialize<{fullyQualifiedType}>(ref reader, jsonOptions)";
+
+            // Reference types (classes, interfaces, arrays, etc.) can receive JSON null tokens.
+            // Guard against calling Deserialize on a null token: the source-gen context would
+            // throw NotSupportedException for types it doesn't recognise, and even the reflection
+            // fallback allocates unnecessarily for what should be a trivial null assignment.
+            if (!rawType.IsValueType)
+            {
+                readerExpr = $"reader.TokenType == System.Text.Json.JsonTokenType.Null ? null : {deserializeExpr}";
+            }
+            else
+            {
+                readerExpr = deserializeExpr;
+            }
         }
 
         writer.AppendLine($"        {FormatPropertyAssignment("operation", entry, readerExpr)}");
