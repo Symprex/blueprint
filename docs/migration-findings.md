@@ -88,6 +88,8 @@
 | S365 ICurrentTenantAccessor pattern | ✅ Compatible | AsyncLocal-based, matches Blueprint ITenantAccessor exactly |
 | S365 Marten tenant isolation | ✅ S365-owned | `TenancyStyle.Conjoined` via IHaveTenantId; S365 creates tenant-scoped session in DI registration |
 | S365 SetTenantMiddleware → TenantModule | ✅ Compatible | SetTenantMiddleware sets accessor + populates TenantId property — TenantModule does both |
+| S365 `ApiId` type deep audit | ✅ Compatible | 530 ops use ApiId; TypeConverter binding works, recommend adding TryParse (#346) |
+| Auth benchmarks | ✅ Done | 7 scenarios in BenchmarkDotNet covering all S365 auth paths (#347) |
 | S365 partner vs tenant distinction | ✅ S365-owned | PartnerId claim handling stays in S365's ITenantResolver implementation |
 | InvokeAsync inline handlers | ✅ Verified | HandlerDiscovery supports Invoke/InvokeAsync/Handle/HandleAsync on operation class |
 | x-links OpenAPI extension | ✅ Verified | Blueprint emits x-links with rel/operationId/method; matches S365 Handlebars templates |
@@ -3713,3 +3715,69 @@ S365's `BlueprintHttpClient.CallAsync(operation)` → Blueprint's `BlueprintHttp
 
 **Action:** No test shim needed for CallAsync. HTTP client migration is a separate concern
 (production code, not test infrastructure).
+
+---
+
+## Finding #346: S365 `ApiId` Type — Deep Audit
+
+**Date:** Session continuation  
+**Category:** Migration compatibility  
+**Impact:** 530 operations affected
+
+### ApiId Definition
+- `readonly struct` in `Symprex.Signature365.Common.Core.Data`
+- String wrapper: format `prefix_random16chars` (e.g. `tenant_hSt4827vs8236gHDG`)
+- **TypeConverter:** Nested `TypeConverter` class converts from string via `Hydrate(value)`
+- **JsonConverter:** `ApiIdJsonConverter : JsonConverter<ApiId>` — reads via `Hydrate()`, writes `.Value`
+- **No implicit/explicit operators** to/from string — only comparison operators
+- **Validation:** Prefix must be 2-10 lowercase ASCII; underscore separator required
+
+### Usage Scale
+- **530 operations** use `ApiId`-typed properties
+- **354 `TenantId` properties** (handled by TenantModule)
+- **68 `Id` properties** (route binding)
+- **58 `PartnerId` properties**
+- **176 other** (`UserId`, `SecretId`, `GenerationId`, etc.)
+
+### Blueprint Compatibility
+- ✅ **Route/query binding:** Blueprint's `PropertyOwnershipModule` detects `[TypeConverter]` at compile time and generates `TypeDescriptor.GetConverter(typeof(ApiId)).ConvertFromInvariantString(value)` code. Exact same mechanism as legacy Blueprint.
+- ✅ **JSON body binding:** `ApiIdJsonConverter` is an STJ `JsonConverter<ApiId>` that will be discovered automatically by the `JsonSerializerContext` source generator.
+- ✅ **TenantId property:** `TenantModule` handles `ApiId TenantId` via `TypeConverter` path.
+- ⚠️ **Performance advisory:** `TypeConverter` uses exception-based error handling for invalid input. Blueprint emits BPPO011 diagnostic recommending `IParsable<ApiId>` or static `TryParse(string?, out ApiId)` for the faster path. S365 should add `TryParse` to `ApiId` to eliminate exception overhead.
+
+### Recommendation for S365
+Add to `ApiId`:
+```csharp
+public static bool TryParse(string? value, out ApiId result)
+{
+    if (TryHydrate(value, out var apiId))
+    {
+        result = apiId;
+        return true;
+    }
+    result = default;
+    return false;
+}
+```
+This unlocks Blueprint's fast-path TryParse binding and eliminates the BPPO011 diagnostic.
+
+---
+
+## Finding #347: Authorization Benchmarks Added
+
+**Date:** Session continuation  
+**Category:** Performance measurement  
+**Impact:** Provides baseline measurements for auth optimization
+
+Added `AuthorizationBenchmarks` to `Blueprint.SourceGenerator.Benchmarks` project covering 7 scenarios:
+1. **ExactMatch_SingleScope** (baseline) — user holds exact required scope
+2. **HierarchyMatch_ManageIncludesRead** — verb expansion path
+3. **NoScopes_AllowFullAccess** — `allowWhenNoScopeClaims` fast-path (most common S365 path)
+4. **ManyScopes_ExactMatch** — 16-scope user, single required scope
+5. **ManyScopes_MultiRequired** — 16-scope user, multiple required scopes
+6. **AuthorizationFailure** — worst-case full scan with no match
+7. **UnresolvedScopePair_ExactMatch** — legacy path for comparison against resolved path
+
+All benchmarks use S365-realistic configuration:
+- `"::"` separator, CRUD verb hierarchy, `allowWhenNoScopeClaims: true`
+- Ignored scopes: `Signature365.ReadWrite.All`, `Signature365ReadWrite`, `Signature365Admin.ReadWrite.All`
