@@ -90,6 +90,9 @@
 | S365 SetTenantMiddleware → TenantModule | ✅ Compatible | SetTenantMiddleware sets accessor + populates TenantId property — TenantModule does both |
 | S365 `ApiId` type deep audit | ✅ Compatible | 530 ops use ApiId; TypeConverter binding works, recommend adding TryParse (#346) |
 | Auth benchmarks | ✅ Done | 7 scenarios in BenchmarkDotNet covering all S365 auth paths (#347) |
+| S365 health checks | ✅ Not needed | Health checks independent of Blueprint; `MapSig365HealthChecks()` alongside `MapBlueprintApi()` (#348) |
+| S365 Hangfire management | ✅ S365-owned | TriggerScheduledMessage, RequeueMessage, DeleteMessage ops are S365-specific admin (#349) |
+| Auth docs update | ✅ Done | Added WithCrudVerbHierarchy factory pattern and allowWhenNoScopeClaims (#350) |
 | S365 partner vs tenant distinction | ✅ S365-owned | PartnerId claim handling stays in S365's ITenantResolver implementation |
 | InvokeAsync inline handlers | ✅ Verified | HandlerDiscovery supports Invoke/InvokeAsync/Handle/HandleAsync on operation class |
 | x-links OpenAPI extension | ✅ Verified | Blueprint emits x-links with rel/operationId/method; matches S365 Handlebars templates |
@@ -3781,3 +3784,80 @@ Added `AuthorizationBenchmarks` to `Blueprint.SourceGenerator.Benchmarks` projec
 All benchmarks use S365-realistic configuration:
 - `"::"` separator, CRUD verb hierarchy, `allowWhenNoScopeClaims: true`
 - Ignored scopes: `Signature365.ReadWrite.All`, `Signature365ReadWrite`, `Signature365Admin.ReadWrite.All`
+
+---
+
+## Finding #348: S365 Health Check Pattern — Independent of Blueprint
+
+**Date:** Session continuation  
+**Category:** Migration compatibility  
+**Impact:** No Blueprint changes needed
+
+### Pattern
+- All 21 S365 services call `services.AddHealthChecks()` with **no registered checks**
+- Endpoints mapped via `endpoints.MapSig365HealthChecks(configuration)` alongside `MapBlueprintApi()`
+- Three-tier structure: `/health/liveness`, `/health/readiness`, `/health` (main port)
+- Separate `HEALTHCHECK_PORT` environment variable for K8s probes
+
+### Blueprint Compatibility
+Health checks are completely independent of Blueprint. During migration:
+- Keep `services.AddHealthChecks()` in ConfigureServices
+- Keep `endpoints.MapSig365HealthChecks()` in endpoint configuration
+- Add `endpoints.MapBlueprintApi<App, Executor>()` alongside existing health endpoints
+- No conflict between Blueprint endpoint routing and health check routing
+
+**Action:** None required in Blueprint. Document in migration playbook that health endpoints are preserved as-is.
+
+---
+
+## Finding #349: S365 Hangfire Management Operations — S365-Owned
+
+**Date:** Session continuation  
+**Category:** Migration architecture  
+**Impact:** 3 admin operations + recurring job infrastructure
+
+### S365 Hangfire Operations
+Located in `Blueprint.Tasks.Hangfire\Operations\`:
+1. **TriggerScheduledMessageCommand** — `jobManager.Trigger(id)` for immediate recurring job execution
+2. **RequeueMessageCommand** — `jobClient.ChangeState(id, EnqueuedState)` for re-running failed jobs
+3. **DeleteMessageCommand** — `jobClient.ChangeState(id, DeletedState)` for removing jobs
+
+All require `S365Nouns.BackgroundTask` + `S365VerbNames.Manage/Update` authorization.
+
+### S365 Hangfire Storage
+- **SQL Server** with custom `RecurringJobPartitionedSqlServerStorage`
+- Partition key: `recurring-jobs-{MicroserviceName}` (allows shared DB across services)
+- No public Hangfire dashboard exposed — admin managed via API operations
+
+### S365 Recurring Jobs (6 found)
+- `TenantHardDeleteRecurringTaskScheduler` — hourly cleanup
+- `UserGroupHardDeleteBackgroundTaskScheduler` — group cleanup  
+- `GraphWebhookRecurringTaskScheduler` — Graph subscription renewal
+- `Microsoft365RecurringTaskScheduler` — EntraID import
+- `DomainInfoRefreshTask` — domain info refresh
+- `BillingSoftDeleteScheduler` — billing cleanup
+
+### Blueprint Compatibility
+- ✅ `Blueprint.Tasks.Hangfire.HangfireBackgroundTaskScheduleProvider` handles the core `EnqueueAsync()` flow
+- ✅ `Blueprint.Tasks.Hangfire.HangfireRecurringTaskProvider` handles recurring job registration
+- ✅ `HangfireTaskExecutor` handles job execution with OpenTelemetry context propagation
+- ⚠️ Admin management operations (trigger/requeue/delete) are S365-specific — keep in S365
+- ⚠️ Partitioned SQL storage is S365-specific — S365 configures Hangfire storage, Blueprint consumes it
+
+**Action:** S365 keeps its 3 Hangfire admin operations and partitioned storage configuration.
+Blueprint.Tasks.Hangfire provides the scheduling/execution bridge — no changes needed.
+
+---
+
+## Finding #350: Authorization Docs Updated
+
+**Date:** Session continuation  
+**Category:** Documentation  
+**Impact:** Clearer S365 migration guidance
+
+Updated `docs/authorization.md`:
+- Added `WithCrudVerbHierarchy()` factory method as the **recommended** S365 registration approach
+- Fixed separator from `"."` to `"::"` (S365's actual separator)
+- Added complete `additionalIgnoredScopes` list matching S365's production configuration
+- Showed both factory approach (preferred) and subclass approach (for overrides)
+- Documented `allowWhenNoScopeClaims: true` parameter

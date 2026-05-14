@@ -246,39 +246,50 @@ S365's `Signature365UserAuthorisationContext` maps to `IUserAuthorisationContext
 
 ### Full S365 Authorization Provider Example
 
+The recommended approach uses the `WithCrudVerbHierarchy` factory method, which pre-configures the
+standard CRUD verb hierarchy (`Manage → [Create, Read, Update, Delete]`):
+
 ```csharp
-/// <summary>
-/// S365 authorization provider that evaluates scope-pair claims with verb hierarchy
-/// and full-access scope support.
-/// </summary>
+// In Startup.ConfigureServices() — preferred factory approach
+services.AddBlueprintApi<PortalBlueprintApp, PortalBlueprintAppExecutor>(blueprint =>
+{
+    blueprint.AddResourceAuthorizationProvider(
+        ScopePairClaimAuthorizationProvider.WithCrudVerbHierarchy(
+            separator: "::",              // S365 uses :: as the scope separator
+            legacyScopeMapper: null,
+            allowWhenNoScopeClaims: true,  // S365 grants full access when no restrictive scopes
+            additionalIgnoredScopes:
+            [
+                "Signature365.ReadWrite.All",
+                "Signature365ReadWrite",
+                "Signature365Admin.ReadWrite.All",
+                "Signature365Admin.ReadWrite",
+                "Signature365Partner.ReadWrite",
+            ]));
+});
+```
+
+Alternatively, subclass for app-specific overrides:
+
+```csharp
 public class S365AuthorizationProvider : ScopePairClaimAuthorizationProvider
 {
     public S365AuthorizationProvider()
         : base(
             scopeClaimType: "scope",
-            separator: ".",
+            separator: "::",
             ignoredScopes:
             [
                 "openid", "profile", "email", "offline_access",
                 "Signature365.ReadWrite.All",
-                "Signature365.ReadWrite",
+                "Signature365ReadWrite",
             ],
             verbInclusions: new Dictionary<string, string[]>
             {
                 ["Manage"] = ["Create", "Read", "Update", "Delete"],
-            })
+            },
+            allowWhenNoScopeClaims: true)
     {
-    }
-
-    /// <summary>
-    /// When the user's only scopes are the ignored full-access scopes,
-    /// allow access (S365 behavior: full-access scopes bypass checks).
-    /// </summary>
-    protected override bool AllowWhenNoScopeClaims(
-        ApiOperationContext operationContext,
-        ClaimsPrincipal principal)
-    {
-        return true; // S365 grants access when only ignored scopes are present
     }
 }
 ```
