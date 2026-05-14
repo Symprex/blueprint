@@ -55,13 +55,33 @@ public sealed class BlueprintHttpClient<TApp>
     /// <returns>The deserialized response, or <c>default</c> for 204 No Content responses.</returns>
     /// <exception cref="BlueprintApiException">Thrown for non-success status codes (4xx/5xx).</exception>
     /// <exception cref="ValidationException">Thrown for 422 Unprocessable Entity with validation errors.</exception>
+    public Task<TResponse?> SendAsync<TResponse>(
+        IOperation operation,
+        CancellationToken cancellationToken = default)
+    {
+        return this.SendAsync<TResponse>(operation, options: null, cancellationToken);
+    }
+
+    /// <summary>
+    /// Sends an operation to the remote API and deserializes the response body as <typeparamref name="TResponse"/>,
+    /// with optional per-request customisation via <see cref="CallOptions"/>.
+    /// </summary>
+    /// <typeparam name="TResponse">The expected response type.</typeparam>
+    /// <param name="operation">The operation to send.</param>
+    /// <param name="options">Optional call options to modify the outgoing request (e.g. add headers).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The deserialized response, or <c>default</c> for 204 No Content responses.</returns>
+    /// <exception cref="BlueprintApiException">Thrown for non-success status codes (4xx/5xx).</exception>
+    /// <exception cref="ValidationException">Thrown for 422 Unprocessable Entity with validation errors.</exception>
     public async Task<TResponse?> SendAsync<TResponse>(
         IOperation operation,
+        CallOptions? options,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(operation);
 
         using var request = this.CreateRequest(operation);
+        options?.ModifyRequest?.Invoke(request);
         using var response = await this._httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
 
         return await this.HandleResponseAsync<TResponse>(response, cancellationToken).ConfigureAwait(false);
@@ -75,13 +95,31 @@ public sealed class BlueprintHttpClient<TApp>
     /// <returns>A task that completes when the request has been sent and the response validated.</returns>
     /// <exception cref="BlueprintApiException">Thrown for non-success status codes.</exception>
     /// <exception cref="ValidationException">Thrown for 422 Unprocessable Entity.</exception>
+    public Task SendAsync(
+        IOperation operation,
+        CancellationToken cancellationToken = default)
+    {
+        return this.SendAsync(operation, options: null, cancellationToken);
+    }
+
+    /// <summary>
+    /// Sends an operation that does not return a typed response body, with optional per-request customisation.
+    /// </summary>
+    /// <param name="operation">The operation to send.</param>
+    /// <param name="options">Optional call options to modify the outgoing request.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A task that completes when the request has been sent and the response validated.</returns>
+    /// <exception cref="BlueprintApiException">Thrown for non-success status codes.</exception>
+    /// <exception cref="ValidationException">Thrown for 422 Unprocessable Entity.</exception>
     public async Task SendAsync(
         IOperation operation,
+        CallOptions? options,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(operation);
 
         using var request = this.CreateRequest(operation);
+        options?.ModifyRequest?.Invoke(request);
         using var response = await this._httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
 
         await this.EnsureSuccessOrThrowAsync(response, cancellationToken).ConfigureAwait(false);
@@ -99,13 +137,34 @@ public sealed class BlueprintHttpClient<TApp>
     /// <exception cref="BlueprintApiException">Thrown for non-success status codes.</exception>
     /// <exception cref="ValidationException">Thrown for 422 Unprocessable Entity.</exception>
     /// <exception cref="InvalidOperationException">Thrown when the response does not contain a <c>content</c> property.</exception>
+    public Task<TResource?> SendResourceEventAsync<TResource>(
+        IOperation operation,
+        CancellationToken cancellationToken = default)
+    {
+        return this.SendResourceEventAsync<TResource>(operation, options: null, cancellationToken);
+    }
+
+    /// <summary>
+    /// Sends an operation whose remote handler returns a resource event envelope,
+    /// with optional per-request customisation via <see cref="CallOptions"/>.
+    /// </summary>
+    /// <typeparam name="TResource">The resource type carried inside the event envelope's <c>content</c> property.</typeparam>
+    /// <param name="operation">The operation to send.</param>
+    /// <param name="options">Optional call options to modify the outgoing request.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The deserialized resource from the event envelope.</returns>
+    /// <exception cref="BlueprintApiException">Thrown for non-success status codes.</exception>
+    /// <exception cref="ValidationException">Thrown for 422 Unprocessable Entity.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the response does not contain a <c>content</c> property.</exception>
     public async Task<TResource?> SendResourceEventAsync<TResource>(
         IOperation operation,
+        CallOptions? options,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(operation);
 
         using var request = this.CreateRequest(operation);
+        options?.ModifyRequest?.Invoke(request);
         using var response = await this._httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
 
         await this.EnsureSuccessOrThrowAsync(response, cancellationToken).ConfigureAwait(false);
@@ -139,7 +198,7 @@ public sealed class BlueprintHttpClient<TApp>
     /// <summary>
     /// Sends an operation whose remote handler returns a resource event and deserialises
     /// the full envelope as a <see cref="ResourceEvent{TResource}"/>. Unlike
-    /// <see cref="SendResourceEventAsync{TResource}"/> (which returns only the inner resource),
+    /// <see cref="SendResourceEventAsync{TResource}(IOperation, CancellationToken)"/> (which returns only the inner resource),
     /// this method returns the complete event envelope including <c>ChangeType</c>, <c>EventId</c>,
     /// <c>Href</c>, <c>Metadata</c> etc.
     /// <para>
@@ -153,14 +212,36 @@ public sealed class BlueprintHttpClient<TApp>
     /// <returns>The full <see cref="ResourceEvent{TResource}"/> envelope with properly typed <c>Data</c>.</returns>
     /// <exception cref="BlueprintApiException">Thrown for non-success status codes.</exception>
     /// <exception cref="ValidationException">Thrown for 422 Unprocessable Entity.</exception>
+    public Task<ResourceEvent<TResource>?> SendResourceEventEnvelopeAsync<TResource>(
+        IOperation operation,
+        CancellationToken cancellationToken = default)
+        where TResource : ApiResource
+    {
+        return this.SendResourceEventEnvelopeAsync<TResource>(operation, options: null, cancellationToken);
+    }
+
+    /// <summary>
+    /// Sends an operation whose remote handler returns a resource event envelope,
+    /// with optional per-request customisation via <see cref="CallOptions"/>.
+    /// Returns the full <see cref="ResourceEvent{TResource}"/> including envelope metadata.
+    /// </summary>
+    /// <typeparam name="TResource">The resource type carried inside the envelope's <c>data</c> property.</typeparam>
+    /// <param name="operation">The operation to send.</param>
+    /// <param name="options">Optional call options to modify the outgoing request.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The full <see cref="ResourceEvent{TResource}"/> envelope with properly typed <c>Data</c>.</returns>
+    /// <exception cref="BlueprintApiException">Thrown for non-success status codes.</exception>
+    /// <exception cref="ValidationException">Thrown for 422 Unprocessable Entity.</exception>
     public async Task<ResourceEvent<TResource>?> SendResourceEventEnvelopeAsync<TResource>(
         IOperation operation,
+        CallOptions? options,
         CancellationToken cancellationToken = default)
         where TResource : ApiResource
     {
         ArgumentNullException.ThrowIfNull(operation);
 
         using var request = this.CreateRequest(operation);
+        options?.ModifyRequest?.Invoke(request);
         using var response = await this._httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
 
         await this.EnsureSuccessOrThrowAsync(response, cancellationToken).ConfigureAwait(false);
@@ -293,7 +374,7 @@ public sealed class BlueprintHttpClient<TApp>
     // ──────────────────────────────────────────────
 
     /// <summary>
-    /// S365 compatibility alias for <see cref="SendAsync{TResponse}"/>. Gateways in Signature 365
+    /// S365 compatibility alias for <see cref="SendAsync{TResponse}(IOperation, CancellationToken)"/>. Gateways in Signature 365
     /// use <c>CallAsync&lt;TResponse&gt;</c>; this method delegates directly so migration requires
     /// no method-name changes in gateway code.
     /// </summary>
@@ -309,6 +390,23 @@ public sealed class BlueprintHttpClient<TApp>
     }
 
     /// <summary>
+    /// S365 compatibility alias for <see cref="SendAsync{TResponse}(IOperation, CallOptions?, CancellationToken)"/>
+    /// with <see cref="CallOptions"/> support. This is the exact signature S365 generated typed clients produce.
+    /// </summary>
+    /// <typeparam name="TResponse">The expected response type.</typeparam>
+    /// <param name="operation">The operation to send.</param>
+    /// <param name="options">Optional call options to modify the outgoing request (e.g. add headers).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The deserialized response.</returns>
+    public Task<TResponse?> CallAsync<TResponse>(
+        IReturn<TResponse> operation,
+        CallOptions? options,
+        CancellationToken cancellationToken = default)
+    {
+        return this.SendAsync<TResponse>((IOperation)operation, options, cancellationToken);
+    }
+
+    /// <summary>
     /// S365 compatibility alias for <see cref="SendAsync(IOperation, CancellationToken)"/>.
     /// </summary>
     /// <param name="operation">The operation to send.</param>
@@ -319,6 +417,22 @@ public sealed class BlueprintHttpClient<TApp>
         CancellationToken cancellationToken = default)
     {
         return this.SendAsync(operation, cancellationToken);
+    }
+
+    /// <summary>
+    /// S365 compatibility alias for <see cref="SendAsync(IOperation, CallOptions?, CancellationToken)"/>
+    /// with <see cref="CallOptions"/> support.
+    /// </summary>
+    /// <param name="operation">The operation to send.</param>
+    /// <param name="options">Optional call options to modify the outgoing request.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A task that completes when the request is processed.</returns>
+    public Task CallAsync(
+        IOperation operation,
+        CallOptions? options,
+        CancellationToken cancellationToken = default)
+    {
+        return this.SendAsync(operation, options, cancellationToken);
     }
 
     private HttpRequestMessage CreateRequest(IOperation operation)
