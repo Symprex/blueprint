@@ -48,6 +48,23 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
     private readonly FrozenDictionary<string, string[]> _verbIncludedIn;
 
     /// <summary>
+    /// The standard verb hierarchy where <c>Manage</c> includes all CRUD verbs.
+    /// Matches the S365 convention: a scope claim of <c>User.Manage</c> also
+    /// satisfies <c>User.Create</c>, <c>User.Read</c>, <c>User.Update</c>, and <c>User.Delete</c>.
+    /// </summary>
+    public static readonly IReadOnlyDictionary<string, string[]> StandardCrudVerbHierarchy =
+        new Dictionary<string, string[]>
+        {
+            ["Manage"] = ["Create", "Read", "Update", "Delete"],
+        };
+
+    private static readonly Dictionary<string, string[]> _standardCrudVerbHierarchy =
+        new()
+        {
+            ["Manage"] = ["Create", "Read", "Update", "Delete"],
+        };
+
+    /// <summary>
     /// Initialises a new instance of the <see cref="ScopePairClaimAuthorizationProvider"/> class
     /// with default settings: <c>"scope"</c> claim type, <c>"."</c> separator, and the standard
     /// OAuth2 non-API scopes (<c>openid</c>, <c>profile</c>, <c>email</c>) ignored.
@@ -55,6 +72,29 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
     public ScopePairClaimAuthorizationProvider()
         : this("scope", ".", ["openid", "profile", "email", "offline_access"])
     {
+    }
+
+    /// <summary>
+    /// Creates a provider with the standard CRUD verb hierarchy where <c>Manage</c> includes
+    /// <c>Create</c>, <c>Read</c>, <c>Update</c>, and <c>Delete</c>. This is the recommended
+    /// configuration for S365 services and any application using the standard noun/verb authorization model.
+    /// </summary>
+    /// <param name="additionalIgnoredScopes">
+    /// Extra scope values to ignore beyond the defaults (<c>openid</c>, <c>profile</c>, <c>email</c>,
+    /// <c>offline_access</c>). For example, S365 ignores the legacy <c>Signature365.ReadWrite.All</c> scope.
+    /// </param>
+    /// <returns>A configured provider with CRUD verb hierarchy.</returns>
+    public static ScopePairClaimAuthorizationProvider WithCrudVerbHierarchy(
+        params string[] additionalIgnoredScopes)
+    {
+        IEnumerable<string> allIgnored = ["openid", "profile", "email", "offline_access"];
+
+        if (additionalIgnoredScopes.Length > 0)
+        {
+            allIgnored = allIgnored.Concat(additionalIgnoredScopes);
+        }
+
+        return new ScopePairClaimAuthorizationProvider("scope", ".", allIgnored, _standardCrudVerbHierarchy);
     }
 
     /// <summary>

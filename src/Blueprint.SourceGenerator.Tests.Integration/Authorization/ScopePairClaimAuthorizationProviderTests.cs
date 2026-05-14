@@ -364,4 +364,89 @@ public class ScopePairClaimAuthorizationProviderTests
             return true;
         }
     }
+
+    // ─── WithCrudVerbHierarchy factory tests ───────────────────────────
+
+    [Fact]
+    public async Task WithCrudVerbHierarchy_manages_scope_satisfies_read()
+    {
+        var provider = ScopePairClaimAuthorizationProvider.WithCrudVerbHierarchy();
+
+        var principal = CreatePrincipal("Template.Manage");
+        ScopePair[] scopePairs = [new ScopePair("Template", "Read")];
+
+        var result = await provider.IsAuthorizedAsync(
+            null!, principal, scopePairs, CancellationToken.None);
+
+        result.Should().BeTrue("Manage includes Read via standard CRUD hierarchy");
+    }
+
+    [Fact]
+    public async Task WithCrudVerbHierarchy_manages_scope_satisfies_all_crud_verbs()
+    {
+        var provider = ScopePairClaimAuthorizationProvider.WithCrudVerbHierarchy();
+        var principal = CreatePrincipal("User.Manage");
+
+        foreach (var verb in new[] { "Create", "Read", "Update", "Delete" })
+        {
+            ScopePair[] scopePairs = [new ScopePair("User", verb)];
+
+            var result = await provider.IsAuthorizedAsync(
+                null!, principal, scopePairs, CancellationToken.None);
+
+            result.Should().BeTrue($"Manage should include {verb}");
+        }
+    }
+
+    [Fact]
+    public async Task WithCrudVerbHierarchy_ignores_standard_oauth_scopes()
+    {
+        var provider = ScopePairClaimAuthorizationProvider.WithCrudVerbHierarchy();
+
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(
+            [
+                new Claim("scope", "openid"),
+                new Claim("scope", "profile"),
+                new Claim("scope", "email"),
+                new Claim("scope", "offline_access"),
+            ],
+            "TestAuth"));
+
+        ScopePair[] scopePairs = [new ScopePair("User", "Read")];
+
+        var result = await provider.IsAuthorizedAsync(
+            null!, principal, scopePairs, CancellationToken.None);
+
+        result.Should().BeFalse("only ignored OAuth scopes present, no API scopes");
+    }
+
+    [Fact]
+    public async Task WithCrudVerbHierarchy_additional_ignored_scopes_are_skipped()
+    {
+        var provider = ScopePairClaimAuthorizationProvider.WithCrudVerbHierarchy(
+            "Signature365.ReadWrite.All", "legacy.scope");
+
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(
+            [
+                new Claim("scope", "Signature365.ReadWrite.All"),
+                new Claim("scope", "legacy.scope"),
+            ],
+            "TestAuth"));
+
+        ScopePair[] scopePairs = [new ScopePair("User", "Read")];
+
+        var result = await provider.IsAuthorizedAsync(
+            null!, principal, scopePairs, CancellationToken.None);
+
+        result.Should().BeFalse("additional ignored scopes should be skipped");
+    }
+
+    [Fact]
+    public void StandardCrudVerbHierarchy_contains_manage_to_crud_mapping()
+    {
+        var hierarchy = ScopePairClaimAuthorizationProvider.StandardCrudVerbHierarchy;
+
+        hierarchy.Should().ContainKey("Manage");
+        hierarchy["Manage"].Should().BeEquivalentTo(["Create", "Read", "Update", "Delete"]);
+    }
 }
