@@ -1160,3 +1160,26 @@ These are S365 helpers built on `IDocumentStore.LightweightSession(tenantId)` �
 
 ### Test Assertion Library
 FluentAssertions used exclusively across all S365 test projects. Blueprint.Testing is assertion-library-agnostic — works with FluentAssertions, xUnit Assert, or any other library.
+
+### RFC 9727 API Catalog Endpoint
+Blueprint now serves `/.well-known/api-catalog` per RFC 9727 returning `application/linkset+json` with `service-desc` pointing to the OpenAPI document. Supports both GET (full Linkset JSON body) and HEAD (empty body with `Link` header only). Three integration tests cover endpoint registration, GET response, and HEAD response.
+
+### AddPartialModifierCodeFixProvider
+A dedicated `Blueprint.SourceGenerator.CodeFixes` project provides an IDE code fix that adds the `partial` modifier to class/record declarations flagged by BP001/BP002/BP005/BP104. Supports "Fix All in Solution" via `WellKnownFixAllProviders.BatchFixer` — critical for S365 migration where 540+ operation classes need `partial`. Separated from the source generator project per RS1038 (Workspaces assembly cannot coexist with source generator assembly). 13 tests cover all scenarios.
+
+### Gap Audit Summary (latest)
+Full re-audit of 7 key migration areas confirms:
+1. **Testing shims** — ✅ DONE (QueryAsync/CommandAsync/BackgroundTaskAsync/MessageAsync)
+2. **FakeBus** — ⚠️ PARTIAL (TestMessageCollector is bus-agnostic; S365 uses Rebus.TestHelpers FakeBus — `TestMessageCollector.Should()` API provides same assertions without requiring FakeBus)
+3. **Auth testing** — ✅ DONE (Set/As/MakeAnonymous matching S365 API exactly)
+4. **ReadJsonBodyAsync** — ✅ DONE (operation param eliminates closure allocation)
+5. **Route deduplication** — ✅ DONE (HashSet dedup + cross-op collision warning)
+6. **Resource attribute** — ✅ DONE (3-arg constructor, compile-time scope pairs, template validation)
+7. **Tenant handling** — ✅ DONE (ITenantResolver/ITenantAccessor, compile-time TenantId population)
+
+### Authorization Compile-Time Optimization Audit
+The `AuthorizationModule` generates maximally optimized authorization code:
+- `private static readonly ScopePair[]` field per operation (zero per-request allocation)
+- `ResolvedScopePair` with inline string interpolation using operation properties + principal claims
+- Compile-time validation of resource key template tokens against operation properties
+- Single helper call to `PipelineHelpers.CheckResourceAuthorizationAsync` (~4 lines vs ~19 inline)
