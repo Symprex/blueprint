@@ -235,6 +235,7 @@ public sealed class SolutionAnalysisRunner
             "BPMIG101" => MigrationDiagnosticDescriptors.ConfiguredAddAuthenticationRequiresMigration,
             "BPMIG200" => MigrationDiagnosticDescriptors.LegacyFromResourceUsageRequiresMigration,
             "BPMIG201" => MigrationDiagnosticDescriptors.LegacyAuthPlaceholderUsageRequiresMigration,
+            "BPMIG202" => MigrationDiagnosticDescriptors.AbstractGenericBaseImplementsOperation,
             "BPMIG300" => MigrationDiagnosticDescriptors.LegacyNamespaceUsing,
             "BPMIG301" => MigrationDiagnosticDescriptors.LegacyMiddlewareBuilderUsage,
             "BPMIG302" => MigrationDiagnosticDescriptors.LegacyBlueprintApiBuilderUsage,

@@ -92,6 +92,20 @@ public static class MigrationDiagnosticDescriptors
         description: "Legacy Blueprint migrations should treat raw {Auth:...} placeholder templates as consumer-extension rewrite work because the replacement auth/resource model needs explicit generated placeholder bindings instead of runtime string expansion.");
 
     /// <summary>
+    /// Gets the diagnostic emitted when an abstract generic class directly implements <c>IQuery&lt;T&gt;</c> or <c>ICommand&lt;T&gt;</c>,
+    /// which is incompatible with Blueprint's <c>static abstract Configure()</c> requirement on <see cref="M:Blueprint.Model.IOperation.Configure" />.
+    /// Concrete subclasses must declare the interface explicitly instead.
+    /// </summary>
+    public static DiagnosticDescriptor AbstractGenericBaseImplementsOperation { get; } = new(
+        id: "BPMIG202",
+        title: "Move IQuery/ICommand to concrete subclasses",
+        messageFormat: "Abstract generic class '{0}' should not directly implement '{1}'. Move '{1}' to concrete subclasses because Blueprint only generates Configure() for concrete operations.",
+        category: "BlueprintMigration",
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "Blueprint's IOperation.Configure() is static abstract, so abstract generic bases cannot satisfy it. Remove the IQuery<T>/ICommand<T> interface from the abstract class and add it to each concrete subclass instead.");
+
+    /// <summary>
     /// Gets the diagnostic emitted when a using directive references a legacy Blueprint namespace that has been renamed or reorganised.
     /// </summary>
     public static DiagnosticDescriptor LegacyNamespaceUsing { get; } = new(
