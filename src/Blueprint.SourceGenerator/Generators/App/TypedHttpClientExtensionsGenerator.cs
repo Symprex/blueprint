@@ -432,6 +432,12 @@ public sealed class TypedHttpClientExtensionsGenerator : IIncrementalGenerator, 
 
             first = false;
             GenerateMethod(sb, model, op);
+
+            // Generate an operation-object overload that accepts the pre-built operation
+            // directly. This reduces S365 migration churn — gateway handlers just change
+            // the client type without rewriting the call site.
+            sb.AppendLine();
+            GenerateOperationObjectOverload(sb, model, op);
         }
 
         sb.AppendLine("    }");
@@ -534,6 +540,67 @@ public sealed class TypedHttpClientExtensionsGenerator : IIncrementalGenerator, 
 
         sb.AppendLine("            };");
         sb.AppendLine();
+
+        if (isResourceEvent)
+        {
+            sb.AppendLine($"            return client.SendResourceEventEnvelopeAsync<{op.ResourceEventResourceTypeFqn}>(operation, cancellationToken);");
+        }
+        else if (hasTypedResult)
+        {
+            sb.AppendLine($"            return client.SendAsync<{op.ResultTypeFqn}>(operation, cancellationToken);");
+        }
+        else
+        {
+            sb.AppendLine("            return client.SendAsync(operation, cancellationToken);");
+        }
+
+        sb.AppendLine("        }");
+    }
+
+    /// <summary>
+    /// Generates an overload that accepts the pre-built operation object directly,
+    /// rather than flattened parameters. This is the pattern S365 gateway handlers use
+    /// and reduces migration churn to just a client-type change.
+    /// </summary>
+    private static void GenerateOperationObjectOverload(StringBuilder sb, TypedClientModel model, TypedClientOperationModel op)
+    {
+        var hasTypedResult = op.ResultTypeFqn is not null;
+        var isResourceEvent = op.ResourceEventResourceTypeFqn is not null;
+        string returnType;
+        if (isResourceEvent)
+        {
+            returnType = $"global::System.Threading.Tasks.Task<global::Blueprint.Http.ResourceEvent<{op.ResourceEventResourceTypeFqn}>?>";
+        }
+        else if (hasTypedResult)
+        {
+            returnType = op.IsResultValueType
+                ? $"global::System.Threading.Tasks.Task<{op.ResultTypeFqn}>"
+                : $"global::System.Threading.Tasks.Task<{op.ResultTypeFqn}?>";
+        }
+        else
+        {
+            returnType = "global::System.Threading.Tasks.Task";
+        }
+
+        // XML doc
+        sb.AppendLine("        /// <summary>");
+        sb.AppendLine($"        /// Sends a pre-built <see cref=\"{op.OperationFqn.Replace("global::", string.Empty, StringComparison.Ordinal)}\"/> ({op.HttpMethod}) to the remote API.");
+        sb.AppendLine("        /// </summary>");
+        sb.AppendLine($"        /// <param name=\"client\">The Blueprint HTTP client.</param>");
+        sb.AppendLine($"        /// <param name=\"operation\">The operation to send.</param>");
+        sb.AppendLine($"        /// <param name=\"cancellationToken\">Cancellation token.</param>");
+        if (hasTypedResult || isResourceEvent)
+        {
+            sb.AppendLine($"        /// <returns>The deserialized response.</returns>");
+        }
+
+        // Method signature — accepts the full operation object
+        sb.Append($"        public static {returnType} {op.MethodName}(");
+        sb.Append($"this global::Blueprint.HttpClient.BlueprintHttpClient<{model.AppFqn}> client, ");
+        sb.Append($"{op.OperationFqn} operation, ");
+        sb.Append("global::System.Threading.CancellationToken cancellationToken = default");
+        sb.AppendLine(")");
+        sb.AppendLine("        {");
 
         if (isResourceEvent)
         {
