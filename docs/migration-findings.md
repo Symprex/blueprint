@@ -2249,6 +2249,117 @@ S365's `SetTenantMiddleware` at `src/Core/Symprex.Signature365.Common/Api/SetTen
 3. Sets Serilog diagnostic context `TenantId`
 4. Sets `operation.TenantId = tenantId` (if property exists and not already set)
 
+Blueprint's `TenantModule` handles all of this at compile time:
+- Generates `ICurrentTenantAccessor.Current` population in the pipeline
+- Convention-based `TenantId` property detection via `TenantIdConventionHelper`
+- Supports `string`, `IParsable<T>`, and `TypeConverter` types
+- No middleware registration needed — it's built into the generated pipeline
+
+---
+
+### Finding #320: NodaTime OpenAPI Format Mapping Implemented
+
+**Date:** 2025-07-16  
+**Category:** OpenAPI  
+**Severity:** Gap closed
+
+Blueprint's OpenAPI schema projection now handles NodaTime types correctly via
+string-matching on `Type.FullName` (no NodaTime package reference needed):
+
+| NodaTime Type | OpenAPI Kind | OpenAPI Format |
+|---|---|---|
+| `Instant`, `OffsetDateTime`, `ZonedDateTime`, `LocalDateTime` | `string` | `date-time` |
+| `LocalDate` | `string` | `date` |
+| `LocalTime` | `string` | `time` |
+| `Duration`, `Period`, `Offset` | `string` | `duration` |
+
+Both `MapKind()` and `MapFormat()` in `OpenApiSchemaProjectionContext.cs` were updated.
+Without the `MapKind` fix, NodaTime structs rendered as `type: "object"` because STJ
+treats them as complex types.
+
+Integration test: `When_property_is_nodatime_instant_then_openapi_renders_date_time_format`
+verifies `Instant` → `{type: "string", format: "date-time"}` and `Instant?` →
+`{type: "string", nullable: true, format: "date-time"}`.
+
+Commit: `be4e4aef`
+
+---
+
+### Finding #321: BlueprintHttpClient StatusCodeResult Handling Implemented
+
+**Date:** 2025-07-16  
+**Category:** HTTP Client / Gateway  
+**Severity:** Gap closed
+
+S365 gateway `BlueprintHttpClient.CallAsync<StatusCodeResult.Accepted>()` uses reflection
+to find the static `Instance` field on the `StatusCodeResult` subtype and matches it
+against the HTTP response status code. This pattern now works in new Blueprint:
+
+```csharp
+// HandleResponseAsync now checks for StatusCodeResult subtypes:
+if (typeof(StatusCodeResult).IsAssignableFrom(typeof(TResponse)))
+{
+    var field = typeof(TResponse).GetField("Instance", ...);
+    // match singleton.StatusCode against response.StatusCode
+}
+```
+
+Also added:
+- `PlainTextResult` response handling (e.g. VCard `text/vcard` responses)
+- Timeout resilience (`TaskCanceledException` → `BlueprintApiException(RequestTimeout)`)
+- Connection failure resilience (`HttpRequestException` → `BlueprintApiException(InternalServerError)`)
+
+9 new tests cover: singleton match, mismatch, error propagation, PlainTextResult,
+timeout, connection failure.
+
+Commit: `2009e704`
+
+---
+
+### Finding #322: Body Reading Already Optimized — No Further Extraction Needed
+
+**Date:** 2025-07-16  
+**Category:** Performance  
+**Severity:** Confirmation (no change needed)
+
+`PipelineHelpers.ReadJsonBodyAsync<TOperation>` already extracts all the boilerplate:
+- Stream buffering (fast path with `ArrayPool`, slow path with `MemoryStream`)
+- Content-type validation
+- Exception handling (`JsonException`, `InvalidOperationException`, `NotSupportedException`)
+- Operation instance passed as generic parameter for zero-allocation static delegates
+
+The remaining per-pipeline duplication is the `PopulateFromJsonBody` method which contains
+the property-specific `Utf8JsonReader` loop (~30-50 lines per pipeline). This is
+intentionally kept inline because:
+1. Property dispatch via `ValueTextEquals("name"u8)` is faster than dictionary lookup
+2. The JIT can inline and optimise per-operation reader loops
+3. Extracting would require generic callbacks that add indirection
+
+**Decision: Keep current approach — inline readers are the correct performance trade-off.**
+
+---
+
+### Finding #323: S365 Deep Gap Audit — All Critical Areas Confirmed Working
+
+**Date:** 2025-07-16  
+**Category:** Migration Readiness  
+**Severity:** Confirmation
+
+Comprehensive audit of 7 critical S365 patterns against Blueprint source-gen:
+
+| Area | Status | Details |
+|------|--------|---------|
+| CallAsync / HTTP Clients | ✅ Working | Gateway CallAsync shims + StatusCodeResult + PlainTextResult |
+| ReadJsonBodyAsync static lambdas | ✅ Working | Operation passed as parameter, zero-allocation delegates |
+| Property Populators (TenantId) | ✅ Working | TenantModule convention-based, 290+ TenantId usages covered |
+| PlainTextResult / non-JSON | ✅ Working | 50+ usages in S365, HttpClient + server both handle it |
+| Background Tasks | ✅ Working | IBackgroundTaskScheduler fully integrated in pipeline |
+| ResourceEvent nesting | ✅ Working | `ResourceEvent<ListApiResource<T>>` max 2-level nesting supported |
+| Body reading duplication | ✅ Optimized | Intentionally inline for JIT performance; shared boilerplate extracted |
+
+**No remaining critical gaps found.** Migration readiness confirmed for S365 gateway,
+service, and handler patterns.
+
 Blueprint's `TenantModule` at `src/Blueprint.SourceGenerator/Modules/Tenancy/TenantModule.cs`:
 1. Detects settable `TenantId` property on any operation (compile-time)
 2. Reads from `ICurrentTenantAccessor.Current` (which is set from JWT by ASP.NET middleware)
