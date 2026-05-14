@@ -1254,6 +1254,7 @@ public sealed record OpenApiOutputRenderingContext(
         writer.WritePropertyName("type");
         writer.WriteStartObject();
         writer.WriteString("type", "string");
+        writer.WriteBoolean("nullable", true);
         writer.WriteString("description", "The type of resource this link will return.");
         writer.WriteEndObject();
 
