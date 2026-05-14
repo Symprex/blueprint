@@ -278,6 +278,9 @@
 | Resources need `partial` | ✅ Expected | All `ApiResource` subclasses require `partial` for generated `Object` property — BP001 diagnostic guides this. ~60 S365 resource classes need `partial` added. |
 | ProblemDetails in serializer context | ✅ Expected | BP006 diagnostic requires `ProblemDetails` + `ValidationProblemDetails` in `JsonSerializerContext` — mandatory for every app. Easy codemod. |
 | S365 compile proof complete | ✅ Done | Analytics.Contract patterns (ApiId struct, TenantOrderedPagedQuery, [Resource] with template, [SelfLink], [RootLink]) compile cleanly against Blueprint source-gen. Generated pipelines correct. |
+| JsonSerializerContext poisoning fix | ✅ Done | `ApplySerializerOptions` was poisoning shared `BlueprintJsonOptions` by passing them directly to `new JsonSerializerContext(options)` — constructor calls `MakeReadOnly()` and sets `TypeInfoResolver = this`. Fix: create context with a COPY of options, then install chained resolver `Combine(context, DefaultJsonTypeInfoResolver)` on the original. All body deserialization now works for both source-gen–registered and unregistered types. |
+| ResourceEvent envelope buffering | ✅ Done | `WriteResourceEventEnvelopeAsync` writes JSON to a MemoryStream buffer then copies to response body — works around a subtle issue where `Utf8JsonWriter.FlushAsync()` to ASP.NET Core TestServer's response pipe produces empty bodies. The buffer approach is correct for all hosts (Kestrel, TestServer) and the envelope payloads are small. |
+| Null-token body reader guard | ✅ Done | Generated `PopulateFromJsonBody` now checks `reader.TokenType == JsonTokenType.Null` before calling `Deserialize<T>()` for reference-type properties. Prevents `JsonException` when `BlueprintHttpClient` sends `null` values for unset properties (e.g. `"mergeFields": null`). |
 
 ---
 

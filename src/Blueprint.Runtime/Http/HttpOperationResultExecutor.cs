@@ -22,6 +22,9 @@ public class HttpOperationResultExecutor
     private const string ProblemJsonContentType = "application/problem+json; charset=utf-8";
     private const string PlainTextContentType = "text/plain; charset=utf-8";
 
+    // Cached empty options for the rare case where no app-owned serializer context exists.
+    private static readonly JsonSerializerOptions _emptyFallbackOptions = new();
+
     // Pre-built ProblemDetails for fixed error responses, avoiding per-request allocation.
     // These are safe to share because JsonSerializer reads but does not mutate them.
     private static readonly MvcProblemDetails _unauthorizedProblem = new()
@@ -241,7 +244,7 @@ public class HttpOperationResultExecutor
         }
         else
         {
-            var serializerOptions = serializerContext?.Options ?? new JsonSerializerOptions();
+            var serializerOptions = serializerContext?.Options ?? _emptyFallbackOptions;
             await JsonSerializer.SerializeAsync(httpContext.Response.Body, content, contentType, CreateFallbackSerializerOptions(serializerOptions), httpContext.RequestAborted).ConfigureAwait(false);
         }
     }
@@ -279,83 +282,82 @@ public class HttpOperationResultExecutor
         ResourceEventResult result)
     {
         var serializerContext = operationContext.App.AppOwnedSerializerContext;
-        var serializerOptions = serializerContext?.Options ?? new JsonSerializerOptions();
+        var serializerOptions = serializerContext?.Options ?? _emptyFallbackOptions;
 
-        // Write to a buffer first, then copy to the response body.
-        // This avoids a subtle issue where Utf8JsonWriter's internal flush to the
-        // response pipe can lose data in certain host configurations.
-        using var buffer = new MemoryStream();
+        // Buffer via ArrayBufferWriter then write the completed span to the response body
+        // in a single call. This avoids a subtle issue where Utf8JsonWriter's incremental
+        // flushes to the ASP.NET Core response pipe can lose data in certain host
+        // configurations (notably TestServer). ArrayBufferWriter is allocation-lighter
+        // than MemoryStream for small JSON payloads like resource event envelopes.
+        var buffer = new System.Buffers.ArrayBufferWriter<byte>(512);
+        using var writer = new Utf8JsonWriter(buffer);
+
+        writer.WriteStartObject();
+
+        writer.WriteString(_propObject, _valEvent);
+        writer.WriteString(_propEventId, result.EventId);
+        writer.WriteString(_propChangeType, _changeTypeStrings[(int)result.ChangeType]);
+        writer.WriteString(_propCreated, DateTimeOffset.UtcNow);
+        writer.WriteString(_propResourceObject, ApiResource.GetTypeName(result.Content.GetType()));
+
+        // href: extract from self-link when the resource is linkable
+        string? href = null;
+        if (result.Content is ILinkableResource { Links: { } links } &&
+            links.TryGetValue("self", out var selfLink))
         {
-            await using var writer = new Utf8JsonWriter(buffer);
-
-            writer.WriteStartObject();
-
-            writer.WriteString(_propObject, _valEvent);
-            writer.WriteString(_propEventId, result.EventId);
-            writer.WriteString(_propChangeType, _changeTypeStrings[(int)result.ChangeType]);
-            writer.WriteString(_propCreated, DateTimeOffset.UtcNow);
-            writer.WriteString(_propResourceObject, ApiResource.GetTypeName(result.Content.GetType()));
-
-            // href: extract from self-link when the resource is linkable
-            string? href = null;
-            if (result.Content is ILinkableResource { Links: { } links } &&
-                links.TryGetValue("self", out var selfLink))
-            {
-                href = selfLink.Href;
-            }
-
-            if (href is not null)
-            {
-                writer.WriteString(_propHref, href);
-            }
-
-            // data: use app-owned source-generated context when available for zero-reflection serialization
-            writer.WritePropertyName(_propData);
-
-            var dataType = result.Content.GetType();
-            var dataTypeInfo = _typeInfoCache.GetOrAdd(
-                new TypeInfoCacheKey(serializerContext, dataType),
-                static key => key.Context?.GetTypeInfo(key.ContentType));
-
-            if (dataTypeInfo is not null)
-            {
-                JsonSerializer.Serialize(writer, result.Content, dataTypeInfo);
-            }
-            else
-            {
-                JsonSerializer.Serialize(writer, result.Content, dataType, CreateFallbackSerializerOptions(serializerOptions));
-            }
-
-            // Nullable dictionary properties — omit when null to match the prior envelope behavior
-            if (result.Metadata is not null)
-            {
-                writer.WritePropertyName(_propMetadata);
-                JsonSerializer.Serialize(writer, result.Metadata, CreateFallbackSerializerOptions(serializerOptions));
-            }
-
-            if (result.SecureData is not null)
-            {
-                writer.WritePropertyName(_propSecureData);
-                JsonSerializer.Serialize(writer, result.SecureData, CreateFallbackSerializerOptions(serializerOptions));
-            }
-
-            if (result.ChangedValues is not null)
-            {
-                writer.WritePropertyName(_propChangedValues);
-                JsonSerializer.Serialize(writer, result.ChangedValues, CreateFallbackSerializerOptions(serializerOptions));
-            }
-
-            if (result.CorrelationId is not null)
-            {
-                writer.WriteString(_propCorrelationId, result.CorrelationId);
-            }
-
-            writer.WriteEndObject();
-            await writer.FlushAsync().ConfigureAwait(false);
+            href = selfLink.Href;
         }
 
-        buffer.Position = 0;
-        await buffer.CopyToAsync(httpContext.Response.Body, httpContext.RequestAborted).ConfigureAwait(false);
+        if (href is not null)
+        {
+            writer.WriteString(_propHref, href);
+        }
+
+        // data: use app-owned source-generated context when available for zero-reflection serialization
+        writer.WritePropertyName(_propData);
+
+        var dataType = result.Content.GetType();
+        var dataTypeInfo = _typeInfoCache.GetOrAdd(
+            new TypeInfoCacheKey(serializerContext, dataType),
+            static key => key.Context?.GetTypeInfo(key.ContentType));
+
+        if (dataTypeInfo is not null)
+        {
+            JsonSerializer.Serialize(writer, result.Content, dataTypeInfo);
+        }
+        else
+        {
+            JsonSerializer.Serialize(writer, result.Content, dataType, CreateFallbackSerializerOptions(serializerOptions));
+        }
+
+        // Nullable dictionary properties — omit when null to match the prior envelope behavior
+        if (result.Metadata is not null)
+        {
+            writer.WritePropertyName(_propMetadata);
+            JsonSerializer.Serialize(writer, result.Metadata, CreateFallbackSerializerOptions(serializerOptions));
+        }
+
+        if (result.SecureData is not null)
+        {
+            writer.WritePropertyName(_propSecureData);
+            JsonSerializer.Serialize(writer, result.SecureData, CreateFallbackSerializerOptions(serializerOptions));
+        }
+
+        if (result.ChangedValues is not null)
+        {
+            writer.WritePropertyName(_propChangedValues);
+            JsonSerializer.Serialize(writer, result.ChangedValues, CreateFallbackSerializerOptions(serializerOptions));
+        }
+
+        if (result.CorrelationId is not null)
+        {
+            writer.WriteString(_propCorrelationId, result.CorrelationId);
+        }
+
+        writer.WriteEndObject();
+        writer.Flush();
+
+        await httpContext.Response.Body.WriteAsync(buffer.WrittenMemory, httpContext.RequestAborted).ConfigureAwait(false);
     }
 
     private static readonly ConcurrentDictionary<JsonSerializerOptions, JsonSerializerOptions> _fallbackOptionsCache = new();
