@@ -453,6 +453,16 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
                 }
 
                 entries.Add(new PropertyOwnershipEntry(member.Name, member.Type, PropertyOwnershipSource.Route, member.Name, isInitOnly));
+
+                if (IsTypeConverterOnlyType(member.Type))
+                {
+                    diagnostics?.Add(CreatePropertyDiagnostic(
+                        PropertyOwnershipDiagnosticDescriptors.TypeConverterFallbackBinding,
+                        member,
+                        operationType,
+                        member.Type.ToDisplayString()));
+                }
+
                 continue;
             }
 
@@ -483,6 +493,15 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
                     PropertyOwnershipSource.Query,
                     GetCamelCaseName(member.Name),
                     isInitOnly));
+
+                if (IsTypeConverterOnlyType(member.Type))
+                {
+                    diagnostics?.Add(CreatePropertyDiagnostic(
+                        PropertyOwnershipDiagnosticDescriptors.TypeConverterFallbackBinding,
+                        member,
+                        operationType,
+                        member.Type.ToDisplayString()));
+                }
             }
         }
 
@@ -517,6 +536,15 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         }
 
         entries.Add(new PropertyOwnershipEntry(member.Name, member.Type, PropertyOwnershipSource.Route, member.Name, isInitOnly));
+
+        if (IsTypeConverterOnlyType(member.Type))
+        {
+            diagnostics?.Add(CreatePropertyDiagnostic(
+                PropertyOwnershipDiagnosticDescriptors.TypeConverterFallbackBinding,
+                member,
+                operationType,
+                member.Type.ToDisplayString()));
+        }
     }
 
     private static void HandleExplicitFromQuery(
@@ -552,6 +580,15 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         var bindingName = !string.IsNullOrWhiteSpace(nameOverride) ? nameOverride : GetCamelCaseName(member.Name);
 
         entries.Add(new PropertyOwnershipEntry(member.Name, member.Type, PropertyOwnershipSource.Query, bindingName, isInitOnly));
+
+        if (IsTypeConverterOnlyType(member.Type))
+        {
+            diagnostics?.Add(CreatePropertyDiagnostic(
+                PropertyOwnershipDiagnosticDescriptors.TypeConverterFallbackBinding,
+                member,
+                operationType,
+                member.Type.ToDisplayString()));
+        }
     }
 
     private static void HandleExplicitFromBody(
@@ -851,14 +888,20 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
     }
 
     /// <summary>
-    /// Returns <see langword="true"/> when the type is supported for route/query binding
-    /// only through a <c>[TypeConverter]</c> attribute (i.e. not via scalars, enums,
-    /// <c>IParsable</c>, or <c>TryParse</c>). Used to select the exception-based
-    /// conversion code path instead of the boolean TryParse path.
+    /// Returns <see langword="true"/> when the type (or its <c>Nullable&lt;T&gt;</c> inner type) is
+    /// supported for route/query binding only through a <c>[TypeConverter]</c> attribute
+    /// (i.e. not via scalars, enums, <c>IParsable</c>, or <c>TryParse</c>). Used to select the
+    /// exception-based conversion code path instead of the boolean TryParse path.
     /// </summary>
     private static bool IsTypeConverterOnlyType(ITypeSymbol type)
     {
-        return !IsSupportedScalarType(type) && HasTypeConverterAttribute(type);
+        var effectiveType = type;
+        if (type.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T && type is INamedTypeSymbol namedType)
+        {
+            effectiveType = namedType.TypeArguments[0];
+        }
+
+        return !IsSupportedScalarType(effectiveType) && HasTypeConverterAttribute(effectiveType);
     }
 
     private static void RenderDescriptorFeatureData(ICodeWriter writer, List<PropertyOwnershipEntry> entries)

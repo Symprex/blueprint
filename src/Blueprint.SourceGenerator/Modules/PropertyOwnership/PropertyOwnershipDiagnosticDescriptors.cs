@@ -120,4 +120,18 @@ internal static class PropertyOwnershipDiagnosticDescriptors
         category: "PropertyOwnership",
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
+
+    /// <summary>
+    /// BPPO011: A route or query property uses <c>[TypeConverter]</c> for string conversion instead
+    /// of the faster <c>IParsable&lt;T&gt;</c> or static <c>TryParse</c> path.
+    /// TypeConverter relies on exception-based flow control for invalid input, which is significantly
+    /// slower than TryParse. Adding <c>static bool TryParse(string?, out T)</c> unlocks the fast path.
+    /// </summary>
+    public static readonly DiagnosticDescriptor TypeConverterFallbackBinding = new(
+        id: "BPPO011",
+        title: "Property uses slow TypeConverter binding path",
+        messageFormat: "Property '{0}' on operation '{1}' has type '{2}' which falls back to TypeConverter for string conversion. Add a static TryParse(string?, out {2}) method or implement IParsable<{2}> for faster binding.",
+        category: "PropertyOwnership",
+        DiagnosticSeverity.Info,
+        isEnabledByDefault: true);
 }

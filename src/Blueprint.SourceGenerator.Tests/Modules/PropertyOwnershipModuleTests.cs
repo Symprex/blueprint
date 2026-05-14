@@ -1609,7 +1609,11 @@ public class PropertyOwnershipModuleTests
             [source],
             ["Input0.cs"]);
 
-        result.Diagnostics.Should().BeEmpty("[TypeConverter] types should be accepted as route parameters");
+        result.Diagnostics.Where(static d => d.Severity == DiagnosticSeverity.Error || d.Severity == DiagnosticSeverity.Warning)
+            .Should().BeEmpty("[TypeConverter] types should be accepted as route parameters without error");
+
+        result.Diagnostics.Where(static d => d.Id == "BPPO011")
+            .Should().ContainSingle("should emit BPPO011 info diagnostic for slow TypeConverter path");
 
         var pipelineSource = string.Join(
             Environment.NewLine,
@@ -1679,7 +1683,11 @@ public class PropertyOwnershipModuleTests
             [source],
             ["Input0.cs"]);
 
-        result.Diagnostics.Should().BeEmpty("[TypeConverter] types should be accepted as query parameters");
+        result.Diagnostics.Where(static d => d.Severity == DiagnosticSeverity.Error || d.Severity == DiagnosticSeverity.Warning)
+            .Should().BeEmpty("[TypeConverter] types should be accepted as query parameters without error");
+
+        result.Diagnostics.Where(static d => d.Id == "BPPO011")
+            .Should().ContainSingle("should emit BPPO011 info diagnostic for slow TypeConverter path");
 
         var pipelineSource = string.Join(
             Environment.NewLine,
