@@ -133,7 +133,7 @@ namespace Blueprint.Generated
                 else if (reader.ValueTextEquals("score"u8))
                 {
                     reader.Read();
-                    _SetInit_Score(operation, System.Text.Json.JsonSerializer.Deserialize<int?>(ref reader, jsonOptions));
+                    _SetInit_Score(operation, reader.TokenType == System.Text.Json.JsonTokenType.Null ? null : (int?)reader.GetInt32());
                 }
                 else
                 {

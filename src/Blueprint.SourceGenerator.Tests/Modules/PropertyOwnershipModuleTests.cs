@@ -1098,7 +1098,7 @@ public class PropertyOwnershipModuleTests
                     public System.DateTime CreatedAt { get; set; }
                     public System.DateTimeOffset ModifiedAt { get; set; }
 
-                    // Body: nullable value types (fall through to Deserialize<T?>)
+                    // Body: nullable value types (use fast Utf8JsonReader with null-token guard)
                     public int? OptionalCount { get; set; }
                     public double? OptionalRating { get; set; }
 

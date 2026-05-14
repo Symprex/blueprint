@@ -344,12 +344,12 @@ namespace Blueprint.Generated
                 else if (reader.ValueTextEquals("optionalCount"u8))
                 {
                     reader.Read();
-                    operation.OptionalCount = System.Text.Json.JsonSerializer.Deserialize<int?>(ref reader, jsonOptions);
+                    operation.OptionalCount = reader.TokenType == System.Text.Json.JsonTokenType.Null ? null : (int?)reader.GetInt32();
                 }
                 else if (reader.ValueTextEquals("optionalRating"u8))
                 {
                     reader.Read();
-                    operation.OptionalRating = System.Text.Json.JsonSerializer.Deserialize<double?>(ref reader, jsonOptions);
+                    operation.OptionalRating = reader.TokenType == System.Text.Json.JsonTokenType.Null ? null : (double?)reader.GetDouble();
                 }
                 else
                 {

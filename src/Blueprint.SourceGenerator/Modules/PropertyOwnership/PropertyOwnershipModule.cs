@@ -1116,43 +1116,41 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             : rawType;
         var typeDisplay = unwrappedType.ToDisplayString();
 
-        string readerExpr;
-        switch (typeDisplay)
+        // Map primitive types to their fast Utf8JsonReader accessor. Nullable value types use
+        // the same accessor wrapped with a JsonTokenType.Null guard, avoiding the much slower
+        // JsonSerializer.Deserialize<T?> path that requires reflection and converter lookup.
+        var fastReaderExpr = typeDisplay switch
         {
-            case "string":
-                readerExpr = "reader.GetString()";
-                break;
-            case "int" when !isNullableValueType:
-                readerExpr = "reader.GetInt32()";
-                break;
-            case "long" when !isNullableValueType:
-                readerExpr = "reader.GetInt64()";
-                break;
-            case "double" when !isNullableValueType:
-                readerExpr = "reader.GetDouble()";
-                break;
-            case "float" when !isNullableValueType:
-                readerExpr = "reader.GetSingle()";
-                break;
-            case "bool" when !isNullableValueType:
-                readerExpr = "reader.GetBoolean()";
-                break;
-            case "decimal" when !isNullableValueType:
-                readerExpr = "reader.GetDecimal()";
-                break;
-            case "System.Guid" when !isNullableValueType:
-                readerExpr = "reader.GetGuid()";
-                break;
-            case "System.DateTime" when !isNullableValueType:
-                readerExpr = "reader.GetDateTime()";
-                break;
-            case "System.DateTimeOffset" when !isNullableValueType:
-                readerExpr = "reader.GetDateTimeOffset()";
-                break;
-            default:
-                var fullyQualifiedType = rawType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                readerExpr = $"System.Text.Json.JsonSerializer.Deserialize<{fullyQualifiedType}>(ref reader, jsonOptions)";
-                break;
+            "string" => "reader.GetString()",
+            "int" => "reader.GetInt32()",
+            "long" => "reader.GetInt64()",
+            "double" => "reader.GetDouble()",
+            "float" => "reader.GetSingle()",
+            "bool" => "reader.GetBoolean()",
+            "decimal" => "reader.GetDecimal()",
+            "System.Guid" => "reader.GetGuid()",
+            "System.DateTime" => "reader.GetDateTime()",
+            "System.DateTimeOffset" => "reader.GetDateTimeOffset()",
+            _ => null,
+        };
+
+        string readerExpr;
+        if (fastReaderExpr is not null)
+        {
+            if (isNullableValueType)
+            {
+                var nullableCast = $"({unwrappedType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}?)";
+                readerExpr = $"reader.TokenType == System.Text.Json.JsonTokenType.Null ? null : {nullableCast}{fastReaderExpr}";
+            }
+            else
+            {
+                readerExpr = fastReaderExpr;
+            }
+        }
+        else
+        {
+            var fullyQualifiedType = rawType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            readerExpr = $"System.Text.Json.JsonSerializer.Deserialize<{fullyQualifiedType}>(ref reader, jsonOptions)";
         }
 
         writer.AppendLine($"        {FormatPropertyAssignment("operation", entry, readerExpr)}");
