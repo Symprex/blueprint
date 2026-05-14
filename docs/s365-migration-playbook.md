@@ -1141,7 +1141,9 @@ We need to provide:
 
 ### New Blueprint Integration
 
-`Blueprint.Rebus` and its companion source generator are already implemented:
+`Blueprint.Rebus` and its auto-detecting pipeline module are already implemented.
+When a consumer project references `Blueprint.Rebus`, the `RebusTransactionModule`
+activates automatically — no companion generator or manual module composition required:
 
 ```csharp
 // Registration — Rebus subscriptions are registered alongside Blueprint
@@ -1156,7 +1158,8 @@ services.AddBlueprintApi<MyApp, MyAppExecutor>(blueprint =>
 ```
 
 **Implementation (already complete):**
-- Rebus companion source generator adds transaction start/commit steps to pipeline
+- `RebusTransactionModule` auto-detects Rebus in the compilation and adds transaction start/commit steps
+- No companion generator needed — module is in the default pipeline config
 - `[NoRebusTransaction]` attribute to opt out of transaction wrapping per operation
 - Message types registered as Blueprint operations via `IHandleMessages<T>` discovery
 - Outbox pattern integration with `IMessageOutbox` + `Blueprint.Marten`
@@ -1170,9 +1173,10 @@ services.AddBlueprintApi<MyApp, MyAppExecutor>(blueprint =>
 
 ### Action Items
 - [x] Create `Blueprint.Rebus` project — **Done**
-- [x] Implement `BlueprintRebusMessageHandler` — **Done** (companion generator)
+- [x] Implement `BlueprintRebusMessageHandler` — **Done** (auto-detecting module)
 - [x] Implement `AddRebus()` extension on `BlueprintServiceBuilder` — **Done**
 - [x] Add Rebus integration tests — **Done** (Blueprint.Rebus has test coverage)
+- [x] Auto-detect Rebus in default pipeline config — **Done** (no companion generator needed)
 - [ ] Test with Azure Service Bus transport (requires S365 infrastructure)
 
 ---
@@ -1352,8 +1356,8 @@ emits the correct pipeline steps directly, so no runtime middleware discovery or
 | `ResourceExpandMiddleware` | PostExecution | `ResourceExpansionModule` (built-in) | Auto-generated; compile-time `Expandable<T>` discovery |
 | `SaveMartenChangesMiddleware` | PostExecution | `UnitOfWorkModule` (built-in) | Auto-generated; calls `IUnitOfWork.CommitAsync()` / `RollbackAsync()` |
 | `UseMartenAsOutboxMiddleware` | PostExecution | `MessageOutboxModule` (built-in) | Auto-generated; commits `IMessageOutbox` on success |
-| `StartRebusTransactionScopeMiddleware` | Execution | `Blueprint.Rebus` companion generator | Companion generator adds Rebus transaction start/commit steps |
-| `CommitRebusTransactionScopeMiddleware` | Execution | `Blueprint.Rebus` companion generator | Same as above; unless `[NoRebusTransaction]` attribute present |
+| `StartRebusTransactionScopeMiddleware` | Execution | `RebusTransactionModule` (auto-detecting) | Auto-detects when `Blueprint.Rebus` is referenced; adds transaction start/commit |
+| `CommitRebusTransactionScopeMiddleware` | Execution | `RebusTransactionModule` (auto-detecting) | Same as above; unless `[NoRebusTransaction]` attribute present |
 | `Sig365LinkGeneratorMiddleware` | PostExecution | Custom `IResourceLinkGenerator` | S365-specific link generation; port to `IResourceLinkGenerator` implementation |
 
 **Key insight:** In legacy Blueprint, middleware classes are discovered and registered at runtime.

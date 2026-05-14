@@ -14,7 +14,7 @@
 | .NET 10 upgrade | ✅ Done | All projects target net10.0 |
 | Blueprint.Testing | ✅ Done | BlueprintTestFixture with ambient auth, S365 compat shims |
 | Blueprint.Marten | ✅ Done | IUnitOfWork, outbox, multi-tenancy session scoping |
-| Blueprint.Rebus | ✅ Done | Companion generator, transaction scope |
+| Blueprint.Rebus | ✅ Done | Auto-detecting module, transaction scope |
 | Blueprint.Tasks.Hangfire | ✅ Done | Schedule provider, recurring tasks |
 | `[Resource]` built-in | ✅ Done | Noun/verb with FromResource template override |
 | First-class tenancy | ✅ Done | TenantModule in pipeline, claim-based resolution |
@@ -346,6 +346,7 @@
 | JsonExtensionData exclusion | ✅ Done | `[JsonExtensionData]` properties (e.g. ProblemDetails.Extensions) excluded from named schema properties. `HasExtensionData` flag prevents `additionalProperties: false` on types accepting arbitrary extension members per RFC 9457 (#355) |
 | Error response content type | ✅ Done | `OpenApiInfoOptions.UsePlainJsonForErrorResponses` — S365 uses `application/json` for all responses. Blueprint defaults to `application/problem+json` (RFC 9457). New option for backward compat (#356) |
 | OpenAPI param title | ✅ Not needed | S365 Handlebars templates do NOT read parameter `title` field — only used for enum schema naming. Cosmetic difference, zero impact on TypeScript generation (#357) |
+| Rebus/Marten auto-detection | ✅ Done | `RebusTransactionModule` and `MartenScopeModule` now auto-detect dependency types in the compilation via `FindTypeByMetadataName()` — included in default pipeline config, no companion generators needed. S365 just references runtime packages. (#358) |
 
 ---
 
@@ -382,6 +383,7 @@
 - `CommitRebusTransactionScopeMiddleware` calls `CompleteAsync()` after handler
 - `[NoRebusTransaction]` attribute opts out specific handlers
 - `[DoNotSaveChanges]` opts out of `SaveMartenChangesMiddleware`
+- **Auto-detection**: `RebusTransactionModule` and `MartenScopeModule` are now in the default pipeline config and auto-detect dependency types via `FindTypeByMetadataName()` — companion generators are no longer needed. S365 just references the runtime packages (`Blueprint.Rebus`, `Blueprint.Marten`).
 
 ### TypeScript Generation
 - **NOT NSwag** — S365 uses custom Handlebars templates in 3 applications
