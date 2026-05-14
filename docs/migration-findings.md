@@ -3486,3 +3486,52 @@ Comprehensive audit of S365's 42 test projects confirms Blueprint.Testing covers
 
 **Test architecture validated:** 5 representative test files analysed across Portal, IdentityServer, Billing, Analytics, and ExchangeTransportAgent — all use the same patterns that map 1:1 to Blueprint.Testing.
 
+### Finding #341: S365 Startup/Registration Patterns — Full Blueprint Mapping Confirmed
+
+**Date:** 2025-07-16  
+**Area:** Service Configuration  
+**Severity:** Info  
+
+Audited 4 services (Portal, Analytics, Templates, Billing) + 1 gateway (VCard). All use the same
+fluent `services.AddBlueprintApi(b => b.ConfigureCommon(...).Http(...).Operations(...))` pattern.
+
+**Registration mapping (legacy → source-gen):**
+
+| S365 Legacy | Blueprint Source-Gen | Notes |
+|-------------|---------------------|-------|
+| `.ConfigureCommon(AppDefinition.Instance)` | Hangfire + recurring tasks via DI | `AppDefinition` stays S365-owned |
+| `.Http(h => h.Json(j => ...NodaTime...))` | `JsonSerializerContext` + STJ options | NodaTime.Serialization.SystemTextJson |
+| `.RebusConsumer(r => r.Subscribe<T>())` | Blueprint.Rebus companion gen + DI | Same subscription model |
+| `.Executors(e => e.AddScanner<...>())` | Source gen discovers at compile time | No runtime scanning |
+| `.Operations(o => o.Scan(...))` | `[BlueprintAppScan(FromAssemblyOf=)]` | Attribute-based |
+| `.AddOpenApi(...)` | `MapBlueprintApi(configureOpenApi:)` | Built into endpoint registration |
+| `.AddAuthentication(a => a.UseContextLoader<T>())` | DI: `IUserAuthorisationContextFactory` | Same interface |
+| `.AddAuthorisation()` | `blueprint.AddResourceAuthorizationProvider<T>()` | Scope-pair based |
+| `.Pipeline(p => p.AddMiddleware<SetTenantMiddleware>)` | `TenantModule` (compile-time) | No reflection |
+| `.UseRebusAndMarten()` | `UnitOfWorkModule` + `MessageOutboxModule` | Compile-time pipeline stages |
+| `.UseRebus()` | `MessageOutboxModule` only | No Marten save |
+| `.AddResourceEvents<T>()` | `blueprint.AddAuditSink<T>()` | Same pattern |
+| `.AddHateoasLinks()` | `LinkGenerationModule` (compile-time) | No runtime middleware |
+| `.UseResourceExpansion()` | Portal-only S365 feature | Stays in S365 |
+
+**Gateway-specific patterns:**
+- `PublicHost` override → `blueprint.ConfigureHttp(h => h.PublicHost = ...)` ✅
+- Empty `RebusConsumer(_ => {})` → No-op in Blueprint (no subscriptions) ✅
+- Endpoint mapping at `/` instead of `/api/` → `basePath: "/"` parameter ✅
+
+**`.UseRebusAndMarten()` internals (critical for ordering):**
+1. `StartRebusTransactionScopeMiddleware` → before handler
+2. `UseMartenAsOutboxMiddleware` → before handler
+3. Handler execution
+4. `CommitRebusTransactionScopeMiddleware` → after handler
+5. `SaveMartenChangesMiddleware` → after handler
+
+Blueprint source-gen equivalent ordering:
+1. `MessageOutboxModule` opens scope → before handler
+2. Handler execution
+3. `UnitOfWorkModule` saves → after handler (includes Marten)
+4. `MessageOutboxModule` commits → after UnitOfWork
+
+**Action:** None. All patterns have clean Blueprint equivalents. The migration playbook
+already documents the registration transformation.
+
