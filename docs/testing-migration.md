@@ -37,30 +37,40 @@ This document maps Signature 365's testing patterns to Blueprint.Testing equival
 
 ### Step 1: Update Test Host Setup
 
+S365 uses `TestApiOperationExecutor` (legacy Blueprint.Testing), not `WebApiFixtureFactory`.
+There are ~28 test files that need migration.
+
 ```csharp
-// ─── BEFORE (S365) ─────────────────────────────────────────────
-public class TemplateApiTests : IClassFixture<WebApiFixtureFactory<Startup>>
-{
-    private readonly WebApiFixtureFactory<Startup> _factory;
-    
-    public TemplateApiTests(WebApiFixtureFactory<Startup> factory)
-    {
-        _factory = factory;
-    }
+// ─── BEFORE (S365 — actual pattern) ───────────────────────────
+// S365 tests use TestApiOperationExecutor from legacy Blueprint:
+var executor = TestApiOperationExecutor.CreateStandalone(o => o
+    .WithOperation<CreateTemplateCommand>()
+    .AddAuthentication(a => a.UseContextLoader<TestUserAuthContextFactory>())
+    .AddAuthorisation());
 
-    [Fact]
-    public async Task Can_create_template()
-    {
-        var fixture = _factory.CreateFixture();
-        fixture.AuthenticateAsTenantAdministrator("tenant-1");
-        
-        var result = await fixture.CommandAsync(new CreateTemplateCommand { Name = "Test" });
-        result.Should().NotBeNull();
-    }
-}
+var result = await executor.ExecuteWithAuth(
+    new CreateTemplateCommand { Name = "Test" },
+    new Claim("sub", "user-1"),
+    new Claim("Sig365TenantId", "tenant-1"),
+    new Claim("scope", "Template::Create"));
 
-// ─── AFTER (Blueprint) ────────────────────────────────────────
-// Option A: Factory pattern (RECOMMENDED — mirrors S365 shape, minimal churn)
+// ─── AFTER (Blueprint) — Option A: Direct host (minimal change) ──
+// Closest 1:1 migration — same ExecuteAsync API:
+var host = BlueprintTestHostBuilder<TemplateApp, TemplateAppExecutor>.Create()
+    .WithTestDefaults()
+    .Build();
+
+var result = await host.ExecuteAsync(
+    new CreateTemplateCommand { Name = "Test" },
+    ctx => ctx.WithUser(claims =>
+    {
+        claims.Add(new Claim("sub", "user-1"));
+        claims.Add(new Claim("Sig365TenantId", "tenant-1"));
+        claims.Add(new Claim("scope", "Template::Create"));
+    }));
+
+// ─── AFTER (Blueprint) — Option B: Factory pattern (RECOMMENDED) ──
+// Reduces per-test boilerplate when many tests share the same setup.
 // Create one per-app factory class:
 public class TemplateTestFixtureFactory
     : BlueprintTestFixtureFactory<TemplateApp, TemplateAppExecutor>
@@ -72,7 +82,7 @@ public class TemplateTestFixtureFactory
     }
 }
 
-// Tests keep the same shape as S365:
+// Tests with ambient auth:
 public class TemplateApiTests : IClassFixture<TemplateTestFixtureFactory>
 {
     private readonly BlueprintTestFixture<TemplateApp, TemplateAppExecutor> _fixture;
@@ -87,7 +97,7 @@ public class TemplateApiTests : IClassFixture<TemplateTestFixtureFactory>
     {
         _fixture.Authentication.Set(TestIdentities.TenantAdmin("tenant-1"));
 
-        var result = await _fixture.CommandAsync(
+        var result = await _fixture.ExecuteAsync(
             new CreateTemplateCommand { Name = "Test" });
 
         result.ShouldBeCreated<TemplateResource>();
@@ -98,54 +108,69 @@ public class TemplateApiTests : IClassFixture<TemplateTestFixtureFactory>
 ### Step 2: Migrate Auth Helpers
 
 ```csharp
-// ─── BEFORE (S365) ─────────────────────────────────────────────
-fixture.AuthenticateAsTenantAdministrator("tenant-1");
-fixture.AuthenticateAsPartner("partner-1");
-fixture.AuthenticateAsInternalUser();
+// ─── BEFORE (S365 — actual pattern) ───────────────────────────
+// S365 uses ExecuteWithAuth which passes raw Claim objects:
+var result = await executor.ExecuteWithAuth(
+    new CreateTemplateCommand { Name = "Test" },
+    new Claim("sub", "user-1"),
+    new Claim("Sig365TenantId", "tenant-1"),
+    new Claim(ClaimTypes.Permission, "*", "Template::Create"));
 
 // ─── AFTER (Blueprint) ────────────────────────────────────────
-// Tenant admin — scope pairs match S365's ScopeApiAuthoriser model
-ctx => ctx.WithTenantScopePairs("tenant-1", "Template.Read", "Template.Create", "Template.Delete")
+// Tenant admin — direct claim setup
+await host.ExecuteAsync(new CreateTemplateCommand { Name = "Test" },
+    ctx => ctx.WithUser(claims =>
+    {
+        claims.Add(new Claim("sub", "user-1"));
+        claims.Add(new Claim("Sig365TenantId", "tenant-1"));
+        claims.Add(new Claim("scope", "Template::Create"));
+    }));
 
 // Partner — custom claims
-ctx => ctx.WithUser(claims =>
-{
-    claims.Add(new Claim("sub", "partner-user"));
-    claims.Add(new Claim("sig365_partner_id", "partner-1"));
-    claims.Add(new Claim("scope", "Partner.Read"));
-})
+await host.ExecuteAsync(operation,
+    ctx => ctx.WithUser(claims =>
+    {
+        claims.Add(new Claim("sub", "partner-user"));
+        claims.Add(new Claim("Sig365PartnerId", "partner-1"));
+        claims.Add(new Claim("scope", "Partner::Read"));
+    }));
 
 // Internal user
-ctx => ctx.WithUser(claims =>
-{
-    claims.Add(new Claim("sub", "internal-user"));
-    claims.Add(new Claim("sig365_role_group", "Internal"));
-    claims.Add(new Claim("scope", "Signature365Admin.ReadWrite.All"));
-})
-
-// Machine user
-ctx => ctx.WithScopePairs("api:read", "api:write")
+await host.ExecuteAsync(operation,
+    ctx => ctx.WithUser(claims =>
+    {
+        claims.Add(new Claim("sub", "internal-user"));
+        claims.Add(new Claim("Sig365RoleGroup", "Internal"));
+        claims.Add(new Claim("scope", "Signature365Admin.ReadWrite.All"));
+    }));
 
 // Skip auth entirely (focus on handler logic)
-ctx => ctx.SkipAuthorisation()
+await host.ExecuteAsync(operation, ctx => ctx.SkipAuthorisation());
 
 // Unauthenticated (default — no context setup needed)
-await _host.ExecuteAsync(query);  // no context = anonymous
+await host.ExecuteAsync(query);  // no context = anonymous
 ```
+
+> **Migration tip:** S365 can define helper extension methods (e.g. `AsTenantAdmin(tenantId)`)
+> that build the appropriate claims array, keeping test code concise. These helpers live in
+> the S365 test infrastructure, not in Blueprint.
 
 ### Step 3: Migrate Command/Query Execution
 
 ```csharp
-// ─── BEFORE (S365) ─────────────────────────────────────────────
-var result = await fixture.CommandAsync(new CreateTemplateCommand { Name = "Test" });
-var template = await fixture.QueryAsync(new GetTemplateQuery { Id = "1" });
-var list = await fixture.QueryAsync(new ListTemplatesQuery { Page = 1 });
+// ─── BEFORE (S365 — actual pattern) ───────────────────────────
+// S365 uses ExecuteAsync on TestApiOperationExecutor:
+var result = await executor.ExecuteAsync(new CreateTemplateCommand { Name = "Test" });
+var template = await executor.ExecuteAsync(new GetTemplateQuery { Id = "1" });
 
 // ─── AFTER (Blueprint) ────────────────────────────────────────
-// QueryAsync and CommandAsync are available directly on the fixture:
-var result = await _fixture.CommandAsync(new CreateTemplateCommand { Name = "Test" });
-var template = await _fixture.QueryAsync(new GetTemplateQuery { Id = "1" });
-var list = await _fixture.QueryAsync(new ListTemplatesQuery { Page = 1 });
+// ExecuteAsync maps 1:1 — same API shape:
+var result = await host.ExecuteAsync(new CreateTemplateCommand { Name = "Test" });
+var template = await host.ExecuteAsync(new GetTemplateQuery { Id = "1" });
+
+// Convenience overloads also available if preferred:
+var result = await fixture.CommandAsync(new CreateTemplateCommand { Name = "Test" });
+var template = await fixture.QueryAsync(new GetTemplateQuery { Id = "1" });
 ```
 
 ### Step 4: Migrate Result Assertions

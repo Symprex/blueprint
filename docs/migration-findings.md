@@ -31,7 +31,7 @@
 | Route deduplication | ✅ Done | `HashSet<(Route, Type)>` dedup in endpoint registration |
 | StateBasedLinkChecker | ✅ Done | Identical API to S365, sample + integration tests |
 | Gateway sample + HTTP client E2E | ✅ Done | `Blueprint.SourceGenerator.Sample.Gateway` with 6 E2E tests |
-| Test fixture factory | ✅ Done | `BlueprintTestFixtureFactory` mirrors S365 `WebApiFixtureFactory` |
+| Test fixture factory | ✅ Done | `BlueprintTestFixtureFactory` provides shared host + per-test fixtures |
 | Test auth S365 compat | ✅ Done | `Set(ClaimsIdentity)`, `As(identity)`, `MakeAnonymous()` API match |
 | `[Link]` attribute support | ✅ Done | Source gen processes runtime `LinkAttribute` (292 S365 usages) |
 | HttpHostExposure centralisation | ✅ Done | 13 modules refactored to shared `HttpHostExposureHelper` |
@@ -63,6 +63,10 @@
 | Constructor service array helper | ✅ Done | `PipelineHelpers.ResolveServiceArray<T>()` replaces ~180-char inline expression across all pipelines |
 | Resource auth helper extraction | ✅ Done | `PipelineHelpers.CheckResourceAuthorizationAsync` — two overloads (resolved + legacy) reduce 19→16 / 8→3 lines per pipeline |
 | S365 middleware gap analysis | ✅ Done | No blocking gaps: all 6 S365 middleware types have Blueprint equivalents |
+| S365 startup audit | ✅ Done | All 14 registration patterns mapped; no blocking gaps (#341) |
+| Auth `allowWhenNoScopeClaims` | ✅ Done | Constructor param for S365's "no scopes = full access" behavior (#342) |
+| S365 property populators | ✅ Verified | No custom populators; TenantModule handles all 281 TenantId ops (#344) |
+| S365 CallAsync clarification | ✅ Corrected | HTTP client method, not test method; maps to `BlueprintHttpClient.SendAsync` (#345) |
 | Pipeline optimization audit | ✅ Done | No further extraction opportunities remain; pipelines are already well-optimized |
 | S365 source generators | ✅ Analysed | 3 custom generators (DTO, Metrics, ServiceApi) — orthogonal to Blueprint, must coexist |
 | Blueprint.Compiler (legacy) | ✅ Analysed | Runtime Roslyn compiler, not source-gen — superseded by Blueprint source-gen |
@@ -74,7 +78,7 @@
 | S365 body reading pattern | ✅ Verified | Operations-as-body pattern matches Blueprint exactly; 160 POST/PUT ops |
 | S365 gateway patterns | ✅ Analysed | 5 gateways, JWT forwarding, custom typed client source gen, forwarding+aggregation handlers |
 | S365 handler base class | ✅ Verified | `ApiOperations` base class: perfect parity between S365 and Blueprint |
-| S365 test patterns deep dive | ✅ Analysed | 300+ CommandAsync, 200+ QueryAsync, 150+ MessageAsync, 140+ Bus assertions, 100+ Tasks assertions |
+| S365 test patterns deep dive | ✅ Corrected | S365 uses `TestApiOperationExecutor.ExecuteAsync()` — maps 1:1 to Blueprint's `ExecuteAsync()` |
 | S365 `[AllowAnonymous]` | ✅ Verified | 57+ ops in S365, fully supported with compile-time pipeline short-circuit |
 | S365 `[DoNotAudit]` | ✅ Verified | Used on bulk/upload ops, compile-time audit step removal |
 | S365 `[UnexposedOperation]` | ✅ Verified | Internal ops hidden from OpenAPI/links, compile-time support |
@@ -3592,3 +3596,120 @@ blueprint.AddResourceAuthorizationProvider(
 
 **Action:** Enhancement committed — `allowWhenNoScopeClaims` parameter added.
 
+
+## Finding #343: S365 Test Infrastructure — Actual Pattern (Corrected)
+
+**Date:** 2026-05-14
+
+Previous migration docs assumed S365 tests use `WebApiFixtureFactory<TStartup>` and `ApiFixture` with
+`QueryAsync`/`CommandAsync` methods. **This is incorrect.**
+
+**Actual S365 test pattern:**
+- `TestApiOperationExecutor` (from legacy Blueprint.Testing) is the primary test infrastructure
+- Tests use `executor.ExecuteAsync(operation)` — NOT `fixture.QueryAsync/CommandAsync`
+- Auth is set via `executor.ExecuteWithAuth(operation, claims...)`
+- There are only ~28 test files using `TestApiOperationExecutor.Create*()`
+- No `WebApiFixtureFactory` or `ApiFixture` exists in S365
+
+**Key methods on TestApiOperationExecutor:**
+- `CreateHttp(configure, configureServices, configureHttp)` — HTTP-enabled test executor
+- `CreateStandalone(configure, configureServices)` — Standalone test executor
+- `ContextFor<T>()` / `ContextFor(operation)` — Create operation context
+- `HttpContextFor<T>()` / `HttpContextFor(operation)` — Create HTTP context
+- `ExecuteAsync<T>()` / `ExecuteAsync(operation)` — Execute operations
+- `ExecuteWithNewScopeAsync(operation)` — Execute with new DI scope
+- `WhatCodeDidIGenerate()` — Debug generated code
+
+**Migration impact:**
+This is GOOD news — `ExecuteAsync` maps 1:1 to `BlueprintTestHost.ExecuteAsync()`.
+The `QueryAsync`/`CommandAsync` shims we added to `BlueprintTestFixture` are bonus
+convenience methods but NOT strictly needed for S365 migration.
+
+**Blueprint.Testing mapping:**
+| S365 Pattern | Blueprint.Testing Equivalent |
+|---|---|
+| `TestApiOperationExecutor.CreateStandalone(...)` | `BlueprintTestHostBuilder<TApp,TExec>.Create().Build()` |
+| `TestApiOperationExecutor.CreateHttp(...)` | `BlueprintTestHostBuilder<TApp,TExec>.Create().BuildHttp()` |
+| `executor.ExecuteAsync(operation)` | `host.ExecuteAsync(operation)` |
+| `executor.ExecuteWithAuth(operation, claims)` | `host.ExecuteAsync(operation, ctx => ctx.WithUser(claims))` |
+| `executor.ContextFor<T>()` | N/A — not needed, pipeline creates context |
+| `executor.WhatCodeDidIGenerate()` | `EmitCompilerGeneratedFiles` in .csproj |
+
+## Finding #344: S365 Property Populators — Deep Audit
+
+**Date:** 2026-05-14
+
+**Key finding: No custom `IPropertyPopulator` in S365.** The only property population is:
+
+1. **`SetTenantMiddleware`** — auto-populates `TenantId` (`ApiId` type) on 281 operations
+   - Reads `Sig365TenantId` JWT claim
+   - Sets `ICurrentTenantAccessor.Current` (`AsyncLocal<string?>`)
+   - Sets Serilog `IDiagnosticContext.Set("TenantId", ...)`
+   - Uses runtime reflection: `context.Descriptor.OperationType.GetProperties()`
+
+2. **Standard Blueprint message population sources:**
+   - `HttpRouteMessagePopulationSource` (Priority: 100) — route parameters
+   - `HttpBodyMessagePopulationSource` (Priority: 0) — JSON body
+   - `HttpPartMessagePopulationSource` — form/query parts
+
+**Blueprint compile-time replacement:**
+- `TenantModule` replaces `SetTenantMiddleware` entirely at compile time
+- PropertyOwnershipModule classifies `TenantId` as `AuthContext` source
+- No runtime reflection needed — property set is generated inline
+- TenantId is automatically excluded from OpenAPI (`AuthContext` source not rendered)
+
+**Property frequency in S365 operations:**
+| Count | Property | Blueprint Handling |
+|---|---|---|
+| 281 | TenantId | TenantModule (compile-time, no reflection) |
+| 188 | Id | Route/Body binding (compile-time) |
+| 35 | PartnerId | Body/Route binding |
+| 30 | Quantity | Body binding |
+| 26 | Name | Body binding |
+| 24 | Country | Body binding |
+
+**`ICurrentTenantAccessor` usage in S365:**
+- **Marten sessions**: `store.IdentitySession(tenantAccessor.Current)` — multi-tenant document store
+- **Resource key expansion**: `TenantResourceKeyExpander` uses tenant for auth scoping
+- **Serilog context**: Structured logging with TenantId
+
+**Action:** Blueprint's TenantModule + PropertyOwnershipModule fully covers S365's property
+population needs. No additional work needed.
+
+## Finding #345: S365 CallAsync — HTTP Client Pattern (Corrected)
+
+**Date:** 2026-05-14
+
+**`CallAsync` is NOT a test method.** It's the production `BlueprintHttpClient` method:
+
+`csharp
+// Signature365's BlueprintHttpClient.CallAsync
+public Task<TResponse> CallAsync<TResponse>(
+    IReturn<TResponse> operation,
+    CallOptions? options = null,
+    CancellationToken cancellationToken = default)
+`
+
+**Usage:** Only in generated API client wrappers (11 references total):
+`csharp
+// Generated by ServiceApiSourceGenerationHelper
+public Task<TenantOwnerInfoApiResource> GetTenantOwnerInfoAsync(
+    GetTenantOwnerInfoQuery operation, CallOptions? options = null)
+{
+    options = this.ConfigureCallOptions(options);
+    return this._blueprintHttpClient.CallAsync(operation, options, cancellationToken);
+}
+`
+
+**S365 test method usage (actual counts):**
+- `CallAsync`: 11 lines (production HTTP client, NOT test)
+- `QueryAsync`: 7 lines (Marten/Cosmos repository methods, NOT test fixture)
+- `CommandAsync`: 0 lines
+- `MessageAsync`: 0 lines
+- `PerformOperationAsUserAsync`: 0 lines (does not exist)
+
+**Blueprint.HttpClient mapping:**
+S365's `BlueprintHttpClient.CallAsync(operation)` → Blueprint's `BlueprintHttpClient<TApp>.SendAsync(operation)`
+
+**Action:** No test shim needed for CallAsync. HTTP client migration is a separate concern
+(production code, not test infrastructure).

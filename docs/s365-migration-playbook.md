@@ -2030,7 +2030,15 @@ services.AddBlueprintApi<AnalyticsBlueprintApp, AnalyticsBlueprintAppExecutor>(b
 {
     blueprint.AddResourceAuthorizationProvider(
         ScopePairClaimAuthorizationProvider.WithCrudVerbHierarchy(
-            "Signature365Admin.ReadWrite.All"));
+            separator: "::",
+            legacyScopeMapper: S365LegacyScopeMapper.Map,
+            allowWhenNoScopeClaims: true,
+            additionalIgnoredScopes: [
+                "Signature365.ReadWrite.All",
+                "Signature365ReadWrite",
+                "Signature365Admin.ReadWrite.All",
+                "Signature365Admin.ReadWrite",
+                "Signature365Partner.ReadWrite"]));
     blueprint.AddUserAuthorisationContextFactory<Signature365UserAuthorisationContextFactory>();
 
     blueprint.ConfigureJson(json =>
