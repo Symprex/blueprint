@@ -18,8 +18,8 @@ namespace Blueprint.Generated
         static readonly string[] _appliedModuleIds =
             new string[] { "TenantModule", "PropertyPopulationModule", "HandlerExecutionModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
 
-        public GetUserQueryExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, System.IServiceProvider serviceProvider)
-            : base(loggerFactory, "GetUserQuery", serviceProvider)
+        public GetUserQueryExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, Blueprint.Runtime.Exec.PipelineServices pipelineServices)
+            : base(loggerFactory, "GetUserQuery", pipelineServices)
         {
         }
 
@@ -76,8 +76,8 @@ namespace Blueprint.Generated
         static readonly string[] _appliedModuleIds =
             new string[] { "TenantModule", "PropertyPopulationModule", "HandlerExecutionModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
 
-        public CreateUserCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, System.IServiceProvider serviceProvider)
-            : base(loggerFactory, "CreateUserCommand", serviceProvider)
+        public CreateUserCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, Blueprint.Runtime.Exec.PipelineServices pipelineServices)
+            : base(loggerFactory, "CreateUserCommand", pipelineServices)
         {
         }
 
@@ -138,8 +138,9 @@ namespace TestNamespace
         public TestAppExecutor(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, TestNamespace.TestApp app, System.IServiceProvider serviceProvider)
             : base(app)
         {
-            this.Register(typeof(global::TestNamespace.GetUserQuery), new Blueprint.Generated.GetUserQueryExecutorPipeline(loggerFactory, serviceProvider));
-            this.Register(typeof(global::TestNamespace.CreateUserCommand), new Blueprint.Generated.CreateUserCommandExecutorPipeline(loggerFactory, serviceProvider));
+            var pipelineServices = new Blueprint.Runtime.Exec.PipelineServices(serviceProvider);
+            this.Register(typeof(global::TestNamespace.GetUserQuery), new Blueprint.Generated.GetUserQueryExecutorPipeline(loggerFactory, pipelineServices));
+            this.Register(typeof(global::TestNamespace.CreateUserCommand), new Blueprint.Generated.CreateUserCommandExecutorPipeline(loggerFactory, pipelineServices));
             this.Freeze();
         }
     }

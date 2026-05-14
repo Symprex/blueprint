@@ -136,8 +136,8 @@ namespace Blueprint.Generated
         static readonly string[] _appliedModuleIds =
             new string[] { "TenantModule", "PropertyPopulationModule", "HandlerExecutionModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
 
-        public GetOrderStatusExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, System.IServiceProvider serviceProvider)
-            : base(loggerFactory, "GetOrderStatus", serviceProvider)
+        public GetOrderStatusExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, Blueprint.Runtime.Exec.PipelineServices pipelineServices)
+            : base(loggerFactory, "GetOrderStatus", pipelineServices)
         {
         }
 
@@ -194,8 +194,8 @@ namespace Blueprint.Generated
         static readonly string[] _appliedModuleIds =
             new string[] { "TestMessagingPipelineModule", "TenantModule", "PropertyPopulationModule", "HandlerExecutionModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
 
-        public ProcessOrderMessageExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, System.IServiceProvider serviceProvider)
-            : base(loggerFactory, "ProcessOrderMessage", serviceProvider)
+        public ProcessOrderMessageExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, Blueprint.Runtime.Exec.PipelineServices pipelineServices)
+            : base(loggerFactory, "ProcessOrderMessage", pipelineServices)
         {
         }
 
@@ -264,8 +264,9 @@ namespace TestNamespace
         public TestAppExecutor(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, TestNamespace.TestApp app, System.IServiceProvider serviceProvider)
             : base(app)
         {
-            this.Register(typeof(global::TestNamespace.ProcessOrderMessage), new Blueprint.Generated.ProcessOrderMessageExecutorPipeline(loggerFactory, serviceProvider));
-            this.Register(typeof(global::TestNamespace.GetOrderStatus), new Blueprint.Generated.GetOrderStatusExecutorPipeline(loggerFactory, serviceProvider));
+            var pipelineServices = new Blueprint.Runtime.Exec.PipelineServices(serviceProvider);
+            this.Register(typeof(global::TestNamespace.ProcessOrderMessage), new Blueprint.Generated.ProcessOrderMessageExecutorPipeline(loggerFactory, pipelineServices));
+            this.Register(typeof(global::TestNamespace.GetOrderStatus), new Blueprint.Generated.GetOrderStatusExecutorPipeline(loggerFactory, pipelineServices));
             this.Freeze();
         }
     }

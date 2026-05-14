@@ -22,8 +22,8 @@ namespace Blueprint.Generated
         private static readonly System.Text.RegularExpressions.Regex _vr_Code =
             new global::System.Text.RegularExpressions.Regex(@"^[A-Z]{2,5}$", global::System.Text.RegularExpressions.RegexOptions.Compiled);
 
-        public CreateUserCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, System.IServiceProvider serviceProvider)
-            : base(loggerFactory, "CreateUserCommand", serviceProvider)
+        public CreateUserCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, Blueprint.Runtime.Exec.PipelineServices pipelineServices)
+            : base(loggerFactory, "CreateUserCommand", pipelineServices)
         {
         }
 
@@ -94,7 +94,8 @@ namespace TestNamespace
         public TestAppExecutor(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, TestNamespace.TestApp app, System.IServiceProvider serviceProvider)
             : base(app)
         {
-            this.Register(typeof(global::TestNamespace.CreateUserCommand), new Blueprint.Generated.CreateUserCommandExecutorPipeline(loggerFactory, serviceProvider));
+            var pipelineServices = new Blueprint.Runtime.Exec.PipelineServices(serviceProvider);
+            this.Register(typeof(global::TestNamespace.CreateUserCommand), new Blueprint.Generated.CreateUserCommandExecutorPipeline(loggerFactory, pipelineServices));
             this.Freeze();
         }
     }

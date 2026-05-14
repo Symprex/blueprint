@@ -18,8 +18,8 @@ namespace Blueprint.Generated
         static readonly string[] _appliedModuleIds =
             new string[] { "TenantModule", "PropertyPopulationModule", "HandlerExecutionModule", "AuditingModule", "ResourceExpansionModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
 
-        public GetParentQueryExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, System.IServiceProvider serviceProvider)
-            : base(loggerFactory, "GetParentQuery", serviceProvider)
+        public GetParentQueryExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, Blueprint.Runtime.Exec.PipelineServices pipelineServices)
+            : base(loggerFactory, "GetParentQuery", pipelineServices)
         {
         }
 
@@ -85,7 +85,8 @@ namespace TestNamespace
         public TestAppExecutor(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, TestNamespace.TestApp app, System.IServiceProvider serviceProvider)
             : base(app)
         {
-            this.Register(typeof(global::TestNamespace.GetParentQuery), new Blueprint.Generated.GetParentQueryExecutorPipeline(loggerFactory, serviceProvider));
+            var pipelineServices = new Blueprint.Runtime.Exec.PipelineServices(serviceProvider);
+            this.Register(typeof(global::TestNamespace.GetParentQuery), new Blueprint.Generated.GetParentQueryExecutorPipeline(loggerFactory, pipelineServices));
             this.Freeze();
         }
     }

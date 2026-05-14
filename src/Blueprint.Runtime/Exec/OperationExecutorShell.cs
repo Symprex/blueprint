@@ -199,6 +199,11 @@ public abstract class OperationExecutorShell : IOperationExecutorPipeline
     /// When <c>true</c>, the pipeline will not create a trace <see cref="Activity"/> for this operation.
     /// Logging, audit sinks, and exception handling remain active.
     /// </param>
+    /// <remarks>
+    /// Retained for backward compatibility with companion generators that have not yet adopted the
+    /// <see cref="PipelineServices"/> overload. Prefer the <see cref="PipelineServices"/> constructor
+    /// for new code — it avoids redundant DI lookups when many pipelines share the same service set.
+    /// </remarks>
     protected OperationExecutorShell(ILoggerFactory loggerFactory, string operationTypeName, IServiceProvider serviceProvider, bool suppressActivity = false)
         : this(loggerFactory, operationTypeName, suppressActivity)
     {
@@ -220,6 +225,39 @@ public abstract class OperationExecutorShell : IOperationExecutorPipeline
 
         var blueprintJsonOpts = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<Microsoft.Extensions.Options.IOptions<Blueprint.Http.BlueprintJsonOptions>>(serviceProvider);
         this.BodyJsonOptions = blueprintJsonOpts?.Value?.SerializerOptions;
+    }
+
+    /// <summary>
+    /// Initialises a new instance of <see cref="OperationExecutorShell"/> from a pre-resolved
+    /// <see cref="PipelineServices"/> bundle. Property assignments replace per-pipeline DI lookups,
+    /// so all pipelines share the same resolved service set with no redundant container queries.
+    /// </summary>
+    /// <param name="loggerFactory">The logger factory that creates the pipeline-scoped logger instance.</param>
+    /// <param name="operationTypeName">The short operation type name used in activity names and log messages.</param>
+    /// <param name="services">The pre-resolved cross-cutting service bundle created once per executor.</param>
+    /// <param name="suppressActivity">
+    /// When <c>true</c>, the pipeline will not create a trace <see cref="Activity"/> for this operation.
+    /// Logging, audit sinks, and exception handling remain active.
+    /// </param>
+    protected OperationExecutorShell(ILoggerFactory loggerFactory, string operationTypeName, PipelineServices services, bool suppressActivity = false)
+        : this(loggerFactory, operationTypeName, suppressActivity)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+
+        this.TenantAccessor = services.TenantAccessor;
+        this.TenantResolver = services.TenantResolver;
+        this.PropertyPopulators = services.PropertyPopulators;
+        this.AuditSink = services.AuditSink;
+        this.ResolvedResourceAuthorizationProvider = services.ResolvedResourceAuthorizationProvider;
+        this.ResourceAuthorizationProvider = services.ResourceAuthorizationProvider;
+        this.ApiAuthorisers = services.ApiAuthorisers;
+        this.OperationAuthorisers = services.OperationAuthorisers;
+        this.UserAuthorisationContextFactory = services.UserAuthorisationContextFactory;
+        this.ResourceEventAuditSink = services.ResourceEventAuditSink;
+        this.BodyJsonOptions = services.BodyJsonOptions;
+
+        // Store the root service provider for lazy Executor resolution — see Executor property.
+        this._rootServiceProvider = services.ServiceProvider;
     }
 
     /// <inheritdoc />

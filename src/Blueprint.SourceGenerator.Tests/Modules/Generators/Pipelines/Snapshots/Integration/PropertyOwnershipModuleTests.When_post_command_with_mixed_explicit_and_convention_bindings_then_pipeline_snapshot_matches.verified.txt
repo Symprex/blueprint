@@ -18,8 +18,8 @@ namespace Blueprint.Generated
         static readonly string[] _appliedModuleIds =
             new string[] { "PropertyOwnershipModule", "TenantModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "HandlerExecutionModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
 
-        public CreateItemCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, System.IServiceProvider serviceProvider)
-            : base(loggerFactory, "CreateItemCommand", serviceProvider)
+        public CreateItemCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, Blueprint.Runtime.Exec.PipelineServices pipelineServices)
+            : base(loggerFactory, "CreateItemCommand", pipelineServices)
         {
         }
 
@@ -159,7 +159,8 @@ namespace TestNamespace
         public TestAppExecutor(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, TestNamespace.TestApp app, System.IServiceProvider serviceProvider)
             : base(app)
         {
-            this.Register(typeof(global::TestNamespace.CreateItemCommand), new Blueprint.Generated.CreateItemCommandExecutorPipeline(loggerFactory, serviceProvider));
+            var pipelineServices = new Blueprint.Runtime.Exec.PipelineServices(serviceProvider);
+            this.Register(typeof(global::TestNamespace.CreateItemCommand), new Blueprint.Generated.CreateItemCommandExecutorPipeline(loggerFactory, pipelineServices));
             this.Freeze();
         }
     }

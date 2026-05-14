@@ -42,12 +42,12 @@ internal static class PipelineCodeGenerator
     private static void AddConstructor(ClassBuilder pipelineClass, OperationHandlerModel handler, PipelinePlan plan)
     {
         var baseCallArgs = plan.SuppressActivity
-            ? new[] { "loggerFactory", $"\"{handler.OperationTypeName}\"", "serviceProvider", "suppressActivity: true" }
-            : new[] { "loggerFactory", $"\"{handler.OperationTypeName}\"", "serviceProvider" };
+            ? new[] { "loggerFactory", $"\"{handler.OperationTypeName}\"", "pipelineServices", "suppressActivity: true" }
+            : new[] { "loggerFactory", $"\"{handler.OperationTypeName}\"", "pipelineServices" };
 
         var ctor = pipelineClass.AddConstructor()
             .AddParameter("Microsoft.Extensions.Logging.ILoggerFactory", "loggerFactory")
-            .AddParameter("System.IServiceProvider", "serviceProvider");
+            .AddParameter("Blueprint.Runtime.Exec.PipelineServices", "pipelineServices");
 
         if (plan.CachedServices.Count > 0)
         {
@@ -63,6 +63,9 @@ internal static class PipelineCodeGenerator
             ctor.WithBaseCallArguments(baseCallArgs)
                 .WithBody(writer =>
                 {
+                    // Alias the service provider so existing CacheService resolution expressions work unchanged
+                    writer.AppendLine("var serviceProvider = pipelineServices.ServiceProvider;");
+
                     foreach (var cached in plan.CachedServices.Values)
                     {
                         writer.AppendLine($"this.{cached.FieldName} = {cached.ResolutionExpression};");

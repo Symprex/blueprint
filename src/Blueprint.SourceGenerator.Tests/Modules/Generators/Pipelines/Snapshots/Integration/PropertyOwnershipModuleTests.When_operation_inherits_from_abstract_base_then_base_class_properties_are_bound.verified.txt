@@ -18,8 +18,8 @@ namespace Blueprint.Generated
         static readonly string[] _appliedModuleIds =
             new string[] { "PropertyOwnershipModule", "TenantModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "HandlerExecutionModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
 
-        public CreateDisclaimerCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, System.IServiceProvider serviceProvider)
-            : base(loggerFactory, "CreateDisclaimerCommand", serviceProvider)
+        public CreateDisclaimerCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, Blueprint.Runtime.Exec.PipelineServices pipelineServices)
+            : base(loggerFactory, "CreateDisclaimerCommand", pipelineServices)
         {
         }
 
@@ -133,7 +133,8 @@ namespace TestNamespace
         public TestAppExecutor(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, TestNamespace.TestApp app, System.IServiceProvider serviceProvider)
             : base(app)
         {
-            this.Register(typeof(global::TestNamespace.CreateDisclaimerCommand), new Blueprint.Generated.CreateDisclaimerCommandExecutorPipeline(loggerFactory, serviceProvider));
+            var pipelineServices = new Blueprint.Runtime.Exec.PipelineServices(serviceProvider);
+            this.Register(typeof(global::TestNamespace.CreateDisclaimerCommand), new Blueprint.Generated.CreateDisclaimerCommandExecutorPipeline(loggerFactory, pipelineServices));
             this.Freeze();
         }
     }

@@ -18,8 +18,8 @@ namespace Blueprint.Generated
         static readonly string[] _appliedModuleIds =
             new string[] { "TenantModule", "PropertyPopulationModule", "HandlerExecutionModule", "AuditingModule", "ResourceExpansionModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
 
-        public GetTopQueryExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, System.IServiceProvider serviceProvider)
-            : base(loggerFactory, "GetTopQuery", serviceProvider)
+        public GetTopQueryExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, Blueprint.Runtime.Exec.PipelineServices pipelineServices)
+            : base(loggerFactory, "GetTopQuery", pipelineServices)
         {
         }
 
@@ -86,7 +86,8 @@ namespace TestNamespace
         public TestAppExecutor(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, TestNamespace.TestApp app, System.IServiceProvider serviceProvider)
             : base(app)
         {
-            this.Register(typeof(global::TestNamespace.GetTopQuery), new Blueprint.Generated.GetTopQueryExecutorPipeline(loggerFactory, serviceProvider));
+            var pipelineServices = new Blueprint.Runtime.Exec.PipelineServices(serviceProvider);
+            this.Register(typeof(global::TestNamespace.GetTopQuery), new Blueprint.Generated.GetTopQueryExecutorPipeline(loggerFactory, pipelineServices));
             this.Freeze();
         }
     }

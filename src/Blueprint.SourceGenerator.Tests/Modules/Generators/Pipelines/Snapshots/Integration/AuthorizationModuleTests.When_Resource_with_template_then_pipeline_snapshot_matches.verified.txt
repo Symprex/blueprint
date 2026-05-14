@@ -20,8 +20,8 @@ namespace Blueprint.Generated
         private static readonly Blueprint.Model.ScopePair[] _scopePairs_GetAccountQuery =
             new Blueprint.Model.ScopePair[] { new Blueprint.Model.ScopePair("account", "read", "/tenants/{Auth:AccountId}/accounts/{Id}") };
 
-        public GetAccountQueryExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, System.IServiceProvider serviceProvider)
-            : base(loggerFactory, "GetAccountQuery", serviceProvider)
+        public GetAccountQueryExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, Blueprint.Runtime.Exec.PipelineServices pipelineServices)
+            : base(loggerFactory, "GetAccountQuery", pipelineServices)
         {
         }
 
@@ -101,7 +101,8 @@ namespace TestNamespace
         public TestAppExecutor(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, TestNamespace.TestApp app, System.IServiceProvider serviceProvider)
             : base(app)
         {
-            this.Register(typeof(global::TestNamespace.GetAccountQuery), new Blueprint.Generated.GetAccountQueryExecutorPipeline(loggerFactory, serviceProvider));
+            var pipelineServices = new Blueprint.Runtime.Exec.PipelineServices(serviceProvider);
+            this.Register(typeof(global::TestNamespace.GetAccountQuery), new Blueprint.Generated.GetAccountQueryExecutorPipeline(loggerFactory, pipelineServices));
             this.Freeze();
         }
     }

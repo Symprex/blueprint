@@ -18,8 +18,8 @@ namespace Blueprint.Generated
         static readonly string[] _appliedModuleIds =
             new string[] { "PropertyOwnershipModule", "TenantModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "HandlerExecutionModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
 
-        public AllTypesGetQueryExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, System.IServiceProvider serviceProvider)
-            : base(loggerFactory, "AllTypesGetQuery", serviceProvider)
+        public AllTypesGetQueryExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, Blueprint.Runtime.Exec.PipelineServices pipelineServices)
+            : base(loggerFactory, "AllTypesGetQuery", pipelineServices)
         {
         }
 
@@ -208,8 +208,8 @@ namespace Blueprint.Generated
         static readonly string[] _appliedModuleIds =
             new string[] { "PropertyOwnershipModule", "TenantModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "HandlerExecutionModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
 
-        public AllTypesPostCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, System.IServiceProvider serviceProvider)
-            : base(loggerFactory, "AllTypesPostCommand", serviceProvider)
+        public AllTypesPostCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, Blueprint.Runtime.Exec.PipelineServices pipelineServices)
+            : base(loggerFactory, "AllTypesPostCommand", pipelineServices)
         {
         }
 
@@ -416,8 +416,9 @@ namespace TestNamespace
         public TestAppExecutor(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, TestNamespace.TestApp app, System.IServiceProvider serviceProvider)
             : base(app)
         {
-            this.Register(typeof(global::TestNamespace.AllTypesPostCommand), new Blueprint.Generated.AllTypesPostCommandExecutorPipeline(loggerFactory, serviceProvider));
-            this.Register(typeof(global::TestNamespace.AllTypesGetQuery), new Blueprint.Generated.AllTypesGetQueryExecutorPipeline(loggerFactory, serviceProvider));
+            var pipelineServices = new Blueprint.Runtime.Exec.PipelineServices(serviceProvider);
+            this.Register(typeof(global::TestNamespace.AllTypesPostCommand), new Blueprint.Generated.AllTypesPostCommandExecutorPipeline(loggerFactory, pipelineServices));
+            this.Register(typeof(global::TestNamespace.AllTypesGetQuery), new Blueprint.Generated.AllTypesGetQueryExecutorPipeline(loggerFactory, pipelineServices));
             this.Freeze();
         }
     }

@@ -29,10 +29,12 @@ internal static class ExecutorCodeGenerator
             .WithBody(
                 writer =>
                 {
+                    writer.AppendLine("var pipelineServices = new Blueprint.Runtime.Exec.PipelineServices(serviceProvider);");
+
                     foreach (var handler in model.Handlers)
                     {
                         var pipelineType = $"Blueprint.Generated.{handler.PipelineClassName}";
-                        writer.AppendLine($"this.Register(typeof({handler.OperationTypeFullName}), new {pipelineType}(loggerFactory, serviceProvider));");
+                        writer.AppendLine($"this.Register(typeof({handler.OperationTypeFullName}), new {pipelineType}(loggerFactory, pipelineServices));");
                     }
 
                     // Freeze the pipeline dictionary after all registrations for optimal dispatch performance
