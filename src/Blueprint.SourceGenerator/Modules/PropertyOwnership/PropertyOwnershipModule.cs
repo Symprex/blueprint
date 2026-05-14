@@ -106,18 +106,40 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
 
         context.AddRenderStep(PipelineStage.Population, renderContext => RenderPopulation(renderContext, entries));
 
+        // Single-pass partition: collect claim-mapped, init-only, and body entries in one traversal
+        // instead of three separate Where().ToList/ToArray() scans.
+        List<PropertyOwnershipEntry>? claimMappedEntries = null;
+        List<PropertyOwnershipEntry>? initEntries = null;
+        List<PropertyOwnershipEntry>? bodyEntries = null;
+        for (var i = 0; i < entries.Count; i++)
+        {
+            var entry = entries[i];
+            if (entry.Source == PropertyOwnershipSource.AuthContext && entry.ClaimType is not null)
+            {
+                (claimMappedEntries ??= []).Add(entry);
+            }
+
+            if (entry.IsInitOnly)
+            {
+                (initEntries ??= []).Add(entry);
+            }
+
+            if (entry.Source == PropertyOwnershipSource.Body)
+            {
+                (bodyEntries ??= []).Add(entry);
+            }
+        }
+
         // Compile-time claim mapping: when [FromAuthContext(ClaimType = "...")] is specified,
         // emit inline claim reading in the Authentication stage (after identity check).
-        var claimMappedEntries = entries.Where(static e => e.Source == PropertyOwnershipSource.AuthContext && e.ClaimType is not null).ToList();
-        if (claimMappedEntries.Count > 0)
+        if (claimMappedEntries is not null)
         {
             context.AddRenderStep(PipelineStage.Authentication, renderContext => RenderClaimMappings(renderContext, claimMappedEntries));
         }
 
         // Generate [UnsafeAccessor] setter methods for init-only properties so the pipeline can
         // assign route/query/header/cookie/body values after construction.
-        var initEntries = entries.Where(static e => e.IsInitOnly).ToList();
-        if (initEntries.Count > 0)
+        if (initEntries is not null)
         {
             var operationTypeFull = operationType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
@@ -125,9 +147,8 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
                 WriteUnsafeAccessorSetters(pipelineClass, operationTypeFull, initEntries));
         }
 
-        if (hasBodyProperties)
+        if (bodyEntries is not null)
         {
-            var bodyEntries = entries.Where(static e => e.Source == PropertyOwnershipSource.Body).ToArray();
             var operationTypeFull = operationType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
             context.AddDeferredClassMember(pipelineClass =>
@@ -1122,7 +1143,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
     private static void WritePopulateFromJsonBodyMethod(
         ClassBuilder pipelineClass,
         string operationTypeFull,
-        PropertyOwnershipEntry[] bodyEntries)
+        List<PropertyOwnershipEntry> bodyEntries)
     {
         var method = pipelineClass.AddMethod("PopulateFromJsonBody")
             .MakePrivateMethod()

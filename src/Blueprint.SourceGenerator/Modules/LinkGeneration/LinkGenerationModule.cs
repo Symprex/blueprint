@@ -117,13 +117,18 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
         }
 
         // Warn when multiple distinct URL templates target the same resource type
-        var distinctUrls = selfLinks.Select(static l => l.UrlTemplate).Distinct().ToList();
-        if (distinctUrls.Count > 1)
+        var distinctUrlSet = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var link in selfLinks)
+        {
+            distinctUrlSet.Add(link.UrlTemplate);
+        }
+
+        if (distinctUrlSet.Count > 1)
         {
             context.AddDiagnostic(new DiagnosticInfo(
                 _ambiguousSelfLinkError,
                 context.Operation.TypeSymbol.Locations.FirstOrDefault(),
-                new EquatableList<string>([resourceBinding.ResourceType.Name, string.Join(", ", distinctUrls.Select(static u => $"'{u}'"))])));
+                new EquatableList<string>([resourceBinding.ResourceType.Name, string.Join(", ", distinctUrlSet.Select(static u => $"'{u}'"))])));
         }
 
         // Require the handler result variable from Execution stage
@@ -194,7 +199,19 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
         EquatableList<LinkPlaceholderMapping> mappings,
         string resourceTypeFqn)
     {
-        var mappingLookup = mappings.ToDictionary(static m => m.RouteName, static m => m, StringComparer.Ordinal);
+        // Linear search is faster than Dictionary for small collections (typically 1-3 mappings)
+        static LinkPlaceholderMapping? FindMapping(EquatableList<LinkPlaceholderMapping> m, string routeName)
+        {
+            for (var i = 0; i < m.Count; i++)
+            {
+                if (string.Equals(m[i].RouteName, routeName, StringComparison.Ordinal))
+                {
+                    return m[i];
+                }
+            }
+
+            return null;
+        }
 
         // Track whether the single placeholder uses catch-all (no escaping) semantics
         var isSinglePlaceholderCatchAll = false;
@@ -204,7 +221,8 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
             match =>
             {
                 var routeName = match.Groups["routeName"].Value;
-                if (!mappingLookup.TryGetValue(routeName, out var mapping))
+                var mapping = FindMapping(mappings, routeName);
+                if (mapping is null)
                 {
                     return match.Value;
                 }
@@ -228,17 +246,22 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
 
         // Build null-guard conditions: return null if any required reference-type property is null.
         // Value type properties always have a value and are excluded from null checks.
-        var nullableProperties = mappings.Where(static m => !m.IsValueType).ToList();
+        // Build inline without materializing a filtered list.
+        string? nullChecks = null;
+        for (var i = 0; i < mappings.Count; i++)
+        {
+            if (!mappings[i].IsValueType)
+            {
+                var check = $"r.{mappings[i].ResourcePropertyName} == null";
+                nullChecks = nullChecks is null ? check : $"{nullChecks} || {check}";
+            }
+        }
 
         // Build the resource-typed case
         string resourceCase;
 
-        if (nullableProperties.Count > 0)
+        if (nullChecks is not null)
         {
-            var nullChecks = string.Join(
-                " || ",
-                nullableProperties.Select(static m => $"r.{m.ResourcePropertyName} == null"));
-
             resourceCase = $"{resourceTypeFqn} r when !({nullChecks}) => $\"{interpolated}\"";
         }
         else
@@ -257,7 +280,7 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
                 match =>
                 {
                     var routeName = match.Groups["routeName"].Value;
-                    return mappingLookup.ContainsKey(routeName)
+                    return FindMapping(mappings, routeName) is not null
                         ? (isSinglePlaceholderCatchAll ? "{id}" : "{System.Uri.EscapeDataString(id)}")
                         : match.Value;
                 });
@@ -271,7 +294,7 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
                 match =>
                 {
                     var routeName = match.Groups["routeName"].Value;
-                    return mappingLookup.ContainsKey(routeName) ? "{g}" : match.Value;
+                    return FindMapping(mappings, routeName) is not null ? "{g}" : match.Value;
                 });
 
             return $"static (obj) => obj switch {{ {resourceCase}, string id => $\"{scalarInterpolated}\", global::System.Guid g => $\"{guidInterpolated}\", _ => null }}";
