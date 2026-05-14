@@ -1310,7 +1310,12 @@ public sealed record OpenApiOutputRenderingContext(
             // Emit additionalProperties: false for object schemas with declared properties, matching
             // NJsonSchema's convention. This prevents consumers (including TypeScript generators)
             // from allowing arbitrary extra properties on typed schema objects.
-            writer.WriteBoolean("additionalProperties", false);
+            // Exception: types with [JsonExtensionData] properties (e.g. ProblemDetails) accept
+            // arbitrary additional members per their contract, so additionalProperties stays open.
+            if (!component.HasExtensionData)
+            {
+                writer.WriteBoolean("additionalProperties", false);
+            }
         }
 
         if (!component.Links.IsDefaultOrEmpty)

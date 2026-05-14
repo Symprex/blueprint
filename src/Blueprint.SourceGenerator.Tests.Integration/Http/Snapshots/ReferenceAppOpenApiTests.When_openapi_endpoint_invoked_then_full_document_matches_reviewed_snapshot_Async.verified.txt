@@ -2882,9 +2882,6 @@
         "title": "ProblemDetails",
         "type": "object",
         "properties": {
-          "Extensions": {
-            "type": "object"
-          },
           "detail": {
             "type": "string",
             "nullable": true
@@ -2906,8 +2903,7 @@
             "type": "string",
             "nullable": true
           }
-        },
-        "additionalProperties": false
+        }
       },
       "TemplateApiResource": {
         "title": "Email Template",
@@ -3115,9 +3111,6 @@
         "title": "ValidationProblemDetails",
         "type": "object",
         "properties": {
-          "Extensions": {
-            "type": "object"
-          },
           "detail": {
             "type": "string",
             "nullable": true
@@ -3148,8 +3141,7 @@
             "type": "string",
             "nullable": true
           }
-        },
-        "additionalProperties": false
+        }
       },
       "Link": {
         "title": "Link",

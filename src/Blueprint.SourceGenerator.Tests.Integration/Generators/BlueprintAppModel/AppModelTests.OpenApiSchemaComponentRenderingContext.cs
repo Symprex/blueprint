@@ -73,7 +73,8 @@ public class AppModelOpenApiSchemaComponentRenderingContextTests
 
         component.Type.Should().Be("object");
         component.RequiredPropertyNames.Should().Equal("Id");
-        component.Properties.Select(static property => property.Name).Should().Equal("Child", "Count", "Enabled", "Extensions", "Id", "Metadata", "Tags");
+        component.HasExtensionData.Should().BeTrue("because SchemaPropertyMetadataResponse has a [JsonExtensionData] property");
+        component.Properties.Select(static property => property.Name).Should().Equal("Child", "Count", "Enabled", "Id", "Metadata", "Tags");
 
         var childProperty = component.Properties.Single(static property => property.Name == "Child");
         childProperty.Type.Should().Be("object");
@@ -86,10 +87,6 @@ public class AppModelOpenApiSchemaComponentRenderingContextTests
         var enabledProperty = component.Properties.Single(static property => property.Name == "Enabled");
         enabledProperty.Type.Should().Be("boolean");
         enabledProperty.IsExtensionData.Should().BeFalse();
-
-        var extensionsProperty = component.Properties.Single(static property => property.Name == "Extensions");
-        extensionsProperty.Type.Should().Be("object");
-        extensionsProperty.IsExtensionData.Should().BeTrue();
 
         var idProperty = component.Properties.Single(static property => property.Name == "Id");
         idProperty.Type.Should().Be("string");

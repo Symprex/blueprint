@@ -32,11 +32,17 @@ public sealed record OpenApiSchemaComponentRenderingContext(
 
     private static OpenApiSchemaComponentModel CreateComponent(OpenApiSchemaModel schema)
     {
+        // Extension data properties ([JsonExtensionData]) represent the catch-all bucket for
+        // arbitrary extra JSON members. They should not appear as named properties in the schema.
+        // When present, the schema should NOT emit additionalProperties: false.
+        var hasExtensionData = schema.Properties.Any(static property => property.IsExtensionData);
+
         var requiredPropertyNames = schema.Properties
-            .Where(static property => property.IsRequired)
+            .Where(static property => property.IsRequired && !property.IsExtensionData)
             .Select(static property => property.Name)
             .ToImmutableArray();
         var properties = schema.Properties
+            .Where(static property => !property.IsExtensionData)
             .Select(static property => CreateProperty(property))
             .ToImmutableArray();
 
@@ -46,7 +52,8 @@ public sealed record OpenApiSchemaComponentRenderingContext(
             requiredPropertyNames,
             properties,
             schema.Description,
-            schema.Title);
+            schema.Title,
+            HasExtensionData: hasExtensionData);
     }
 
     private static OpenApiSchemaComponentPropertyModel CreateProperty(OpenApiSchemaPropertyModel property)
@@ -122,6 +129,10 @@ public sealed record OpenApiSchemaComponentRenderingContext(
 /// The vendor <c>x-links</c> extension entries for this schema when the body type is an <c>ILinkableResource</c>
 /// with registered non-self HATEOAS links. Empty when the resource has no non-self links or is not linkable.
 /// </param>
+/// <param name="HasExtensionData">
+/// Whether the original CLR type has a <c>[JsonExtensionData]</c> property, indicating it accepts arbitrary
+/// additional JSON members. When true, the schema should NOT emit <c>additionalProperties: false</c>.
+/// </param>
 public sealed record OpenApiSchemaComponentModel(
     string BodyTypeName,
     string? Type,
@@ -129,7 +140,8 @@ public sealed record OpenApiSchemaComponentModel(
     ImmutableArray<OpenApiSchemaComponentPropertyModel> Properties,
     string? Description = null,
     string? Title = null,
-    ImmutableArray<OpenApiSchemaLinkExtension> Links = default);
+    ImmutableArray<OpenApiSchemaLinkExtension> Links = default,
+    bool HasExtensionData = false);
 
 /// <summary>
 /// Represents one entry in the <c>x-links</c> vendor extension array for an OpenAPI schema component.
