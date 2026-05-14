@@ -5,7 +5,7 @@
 - **.NET Version:** 10.0
 - **OS:** Windows 11
 - **Hardware:** Development workstation
-- **Date:** 2025-07-14 (updated 2025-07-28, re-validated 2025-07-29)
+- **Date:** 2025-07-14 (updated 2025-07-28, re-validated 2025-07-29, re-run 2025-07-30)
 - **CPU:** Intel Core Ultra 7 165H, 22 logical / 16 physical cores
 - **BenchmarkDotNet:** v0.14.0, InProcessEmitToolchain, MediumRun (5 iterations, 2 launches)
 
@@ -17,21 +17,22 @@ code path that runs in production HTTP requests (minus HTTP I/O and serializatio
 
 | Benchmark | Mean | Error | StdDev | Ratio | Gen0 | Allocated | Alloc Ratio |
 |-----------|-----:|------:|-------:|------:|-----:|----------:|------------:|
-| MinimalQuery (baseline) | 2.21 µs | 0.335 µs | 0.199 µs | 1.00 | 0.2022 | 2.51 KB | 1.00 |
-| FullStackCommand (validation failure) | 12.30 µs | 2.367 µs | 1.409 µs | 5.60 | 0.4578 | 5.73 KB | 2.28 |
-| FullStackCommand (valid input) | 12.83 µs | 1.223 µs | 0.728 µs | 5.84 | 0.4578 | 5.73 KB | 2.28 |
-| ValidatedQuery (valid input) | 13.83 µs | 1.529 µs | 0.910 µs | 6.30 | 0.4120 | 5.12 KB | 2.04 |
-| ValidatedQuery (invalid input) | 14.10 µs | 5.074 µs | 3.356 µs | 6.42 | 0.4120 | 5.12 KB | 2.04 |
+| MinimalQuery (baseline) | 1.90 µs | 0.203 µs | 0.298 µs | 1.00 | 0.2022 | 2.51 KB | 1.00 |
+| ValidatedQuery (valid input) | 13.04 µs | 1.810 µs | 2.709 µs | 7.04 | 0.4120 | 5.12 KB | 2.04 |
+| ValidatedQuery (invalid input) | 13.37 µs | 2.260 µs | 3.383 µs | 7.22 | 0.3967 | 5.12 KB | 2.04 |
+| FullStackCommand (valid input) | 14.31 µs | 1.704 µs | 2.551 µs | 7.73 | 0.4578 | 5.73 KB | 2.28 |
+| FullStackCommand (validation failure) | 15.78 µs | 2.860 µs | 4.192 µs | 8.52 | 0.4578 | 5.73 KB | 2.28 |
 
 ### Analysis
 
-**Baseline (MinimalQuery):** ~2.2 µs / 2.51 KB
+**Baseline (MinimalQuery):** ~1.9 µs / 2.51 KB
 - This is the absolute minimum pipeline overhead — no validation, just handler invocation
 - The 2.51 KB includes `ApiOperationContext` allocation and the operation instance
 - **This is the floor.** Any production operation will add to this baseline
+- Improved from 2.21 µs → 1.90 µs after pre-sizing and optimization work
 
-**Validation cost:** ~8-10 µs / 2.6 KB additional
-- Validation adds ~8-10 µs latency and ~2.6 KB allocation over the baseline
+**Validation cost:** ~11-13 µs / 2.6 KB additional
+- Validation adds ~11-13 µs latency and ~2.6 KB allocation over the baseline
 - Both valid and invalid paths have similar cost — the generated validation code runs
   the same checks either way, just with different outcomes
 - The 2.6 KB is primarily from `ValidationFailedOperationResult` and error message strings

@@ -1867,3 +1867,63 @@ wrapper object and using slow runtime type inspection on every request.
 - Eliminated reflection-based serialization fallback for the envelope structure
 - Inner data payload still uses app-owned source-generated context when available
 - Pre-encoded property names cached as static fields
+
+### #287 — PartnerId Is Route-Bound, Not Property-Populated
+
+**Date**: 2025-07-30
+**Status**: ✅ Compatible (no action needed)
+
+S365 has ~40 operations with a `PartnerId` property (type `ApiId`). Investigation confirms all are
+**route-bound** via URL templates like `/partners/{PartnerId}/tenants`, meaning the
+`PropertyOwnershipModule` handles them at compile time with no `IPropertyPopulator` overhead.
+
+**Key finding:** S365 does NOT use any `IPropertyPopulator` implementations. All property population
+is handled by:
+- **Route binding** (PartnerId, TenantId when in URL) → `PropertyOwnershipModule`
+- **Tenant accessor** (TenantId from claims) → `TenantModule`
+- **Auth context** (IdentityId, RoleGroup) → `Signature365UserAuthorisationContext` (consumer code)
+
+This means the `PropertyPopulationModule` loop will always iterate over an empty array for S365
+services. The generated code handles this efficiently with a null/empty check short-circuit.
+
+### #288 — Pre-Sized Endpoint Registration Collections
+
+**Date**: 2025-07-30
+**Status**: ✅ Implemented
+
+Added `BlueprintApp.OperationCount` property and pre-sized all endpoint registration collections
+using `(OperationCount * 2) + 8` capacity. For S365's 540+ operations, this eliminates multiple
+`List`/`HashSet`/`Dictionary` resizes during startup.
+
+### #289 — Runtime Pipeline Benchmark Baseline (Post-Optimization)
+
+**Date**: 2025-07-30
+**Status**: 📊 Measured
+
+Full pipeline benchmarks on .NET 10 (Intel Core Ultra 7 165H):
+
+| Scenario | Mean | Allocated |
+|----------|-----:|----------:|
+| Minimal query (no validation) | 1.90 µs | 2.51 KB |
+| Validated query (valid) | 13.04 µs | 5.12 KB |
+| Validated query (invalid) | 13.37 µs | 5.12 KB |
+| Full-stack command (valid) | 14.31 µs | 5.73 KB |
+| Full-stack command (failure) | 15.78 µs | 5.73 KB |
+
+For context: typical Kestrel request parsing is 5-10 µs, JSON serialization 1-3 µs, network
+round-trip 100-500 µs. The pipeline overhead is negligible relative to I/O.
+
+### #290 — S365 Startup Patterns Fully Compatible
+
+**Date**: 2025-07-30
+**Status**: ✅ Compatible
+
+Audited all 21 non-SMTP S365 service Startup.cs files. All follow the identical pattern:
+- `ConfigureCommon(AppDefinition.Instance)` → `AddBlueprintApi<TApp, TExecutor>`
+- `.Http(h => h.Json(...))` → `BlueprintJsonOptions` / `JsonSerializerContext`
+- `.Pipeline(p => p.AddMiddleware<SetTenantMiddleware>())` → `TenantModule` (compile-time)
+- `.AddAuthentication()` → `AuthenticationModule` (compile-time)
+- `.AddAuthorisation()` → `ResourceAuthorizationModule` (compile-time)
+- `.AddOpenApi()` → auto-registered at `/.well-known/openapi` + `/.well-known/api-catalog`
+
+No blocking gaps found. GraphProxy (MS Graph passthrough) doesn't use Blueprint at all.
