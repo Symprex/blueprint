@@ -425,6 +425,26 @@ public sealed record OpenApiSchemaProjectionContext(
             return "float";
         }
 
+        // NodaTime types serialise as ISO-8601 strings via NodaTime.Serialization.SystemTextJson.
+        // Matched by full name so Blueprint.Runtime does not need a NodaTime package reference.
+        var fullName = underlying.FullName;
+        if (fullName is not null && fullName.StartsWith("NodaTime.", StringComparison.Ordinal))
+        {
+            return fullName switch
+            {
+                "NodaTime.Instant" => "date-time",
+                "NodaTime.OffsetDateTime" => "date-time",
+                "NodaTime.ZonedDateTime" => "date-time",
+                "NodaTime.LocalDateTime" => "date-time",
+                "NodaTime.LocalDate" => "date",
+                "NodaTime.LocalTime" => "time",
+                "NodaTime.Duration" => "duration",
+                "NodaTime.Period" => "duration",
+                "NodaTime.Offset" => "duration",
+                _ => null,
+            };
+        }
+
         // IParsable<T> types serialise as strings; infer format from a single wrapped field.
         if (underlying.GetInterfaces().Any(
                 static i => i.IsGenericType && i.Name.StartsWith("IParsable`", StringComparison.Ordinal)))
@@ -826,6 +846,20 @@ public sealed record OpenApiSchemaProjectionContext(
             || nonNullableType == typeof(Uri))
         {
             return OpenApiSchemaKind.String;
+        }
+
+        // NodaTime temporal types serialize as ISO-8601 strings with NodaTime.Serialization.SystemTextJson.
+        // Match by full name so Blueprint.Runtime doesn't need a NodaTime package reference.
+        var fullName = nonNullableType.FullName;
+        if (fullName is not null && fullName.StartsWith("NodaTime.", StringComparison.Ordinal))
+        {
+            return fullName switch
+            {
+                "NodaTime.Instant" or "NodaTime.OffsetDateTime" or "NodaTime.ZonedDateTime"
+                    or "NodaTime.LocalDateTime" or "NodaTime.LocalDate" or "NodaTime.LocalTime"
+                    or "NodaTime.Duration" or "NodaTime.Period" or "NodaTime.Offset" => OpenApiSchemaKind.String,
+                _ => OpenApiSchemaKind.Object,
+            };
         }
 
         if (nonNullableType == typeof(bool))

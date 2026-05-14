@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using Blueprint.Model;
 using Blueprint.Model.Attributes;
+using NodaTime;
 
 namespace Blueprint.SourceGenerator.Sample.Contract.Api;
 
@@ -62,6 +63,18 @@ public partial class TemplateApiResource : ApiResource
     /// </summary>
     [Description("Whether the template has been archived (soft-deleted).")]
     public bool IsArchived { get; set; }
+
+    /// <summary>
+    /// When the template was created.
+    /// </summary>
+    [Description("The instant when this template was created (UTC).")]
+    public Instant CreatedAt { get; init; }
+
+    /// <summary>
+    /// When the template was last modified, if ever.
+    /// </summary>
+    [Description("The instant when this template was last modified, or null if never modified.")]
+    public Instant? ModifiedAt { get; init; }
 
     /// <summary>
     /// The owner of this template. Expandable via <c>?expand=Owner</c> query parameter,

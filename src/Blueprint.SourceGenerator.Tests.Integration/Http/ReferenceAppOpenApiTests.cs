@@ -1143,6 +1143,31 @@ public class ReferenceAppOpenApiTests
         required.Should().Contain("data");
     }
 
+    [Fact]
+    public async Task When_property_is_nodatime_instant_then_openapi_renders_date_time_format()
+    {
+        var (json, _) = await InvokeOpenApiEndpointAsync();
+        using var doc = JsonDocument.Parse(json);
+
+        var schemas = doc.RootElement.GetProperty("components").GetProperty("schemas");
+        var templateSchema = schemas.GetProperty("TemplateApiResource");
+        var props = templateSchema.GetProperty("properties");
+
+        // Non-nullable Instant → type: string, format: date-time
+        var createdAt = props.GetProperty("CreatedAt");
+        createdAt.GetProperty("type").GetString().Should().Be("string");
+        createdAt.GetProperty("format").GetString().Should().Be("date-time",
+            "NodaTime.Instant should map to OpenAPI format 'date-time'");
+
+        // Nullable Instant? → type: string, format: date-time, nullable: true
+        var modifiedAt = props.GetProperty("ModifiedAt");
+        modifiedAt.GetProperty("type").GetString().Should().Be("string");
+        modifiedAt.GetProperty("format").GetString().Should().Be("date-time",
+            "NodaTime.Instant? should map to OpenAPI format 'date-time'");
+        modifiedAt.GetProperty("nullable").GetBoolean().Should().BeTrue(
+            "Nullable<Instant> should be marked nullable in the schema");
+    }
+
     /// <summary>
     /// Resolves a request body's <c>$ref</c> schema pointer to the actual component schema element.
     /// After the request-body-to-$ref refactor, request body schemas live in <c>components/schemas</c>

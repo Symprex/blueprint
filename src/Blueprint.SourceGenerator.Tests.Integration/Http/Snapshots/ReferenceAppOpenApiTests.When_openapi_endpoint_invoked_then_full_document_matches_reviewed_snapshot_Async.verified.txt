@@ -2927,6 +2927,11 @@
           "$partial": {
             "type": "boolean"
           },
+          "CreatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "The instant when this template was created (UTC)."
+          },
           "HtmlSource": {
             "type": "string",
             "description": "The full HTML source content of this template."
@@ -2939,6 +2944,12 @@
           "IsArchived": {
             "type": "boolean",
             "description": "Whether the template has been archived (soft-deleted)."
+          },
+          "ModifiedAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time",
+            "description": "The instant when this template was last modified, or null if never modified."
           },
           "Name": {
             "type": "string",

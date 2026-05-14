@@ -37,6 +37,32 @@ namespace TestNamespace
 
             return client.SendAsync<global::Blueprint.Model.Results<global::Blueprint.Runtime.Exec.OkResult<string>, global::Blueprint.Runtime.Exec.NotFoundResult<string>>>(operation, cancellationToken);
         }
+
+        /// <summary>
+        /// Sends a pre-built <see cref="TestNamespace.GetItemQuery"/> (GET) to the remote API.
+        /// </summary>
+        /// <param name="client">The Blueprint HTTP client.</param>
+        /// <param name="operation">The operation to send.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>The deserialized response.</returns>
+        public static global::System.Threading.Tasks.Task<global::Blueprint.Model.Results<global::Blueprint.Runtime.Exec.OkResult<string>, global::Blueprint.Runtime.Exec.NotFoundResult<string>>> GetItemAsync(this global::Blueprint.HttpClient.BlueprintHttpClient<global::TestNamespace.TestApp> client, global::TestNamespace.GetItemQuery operation, global::System.Threading.CancellationToken cancellationToken = default)
+        {
+            return client.SendAsync<global::Blueprint.Model.Results<global::Blueprint.Runtime.Exec.OkResult<string>, global::Blueprint.Runtime.Exec.NotFoundResult<string>>>(operation, cancellationToken);
+        }
+
+        /// <summary>
+        /// Sends a pre-built <see cref="TestNamespace.GetItemQuery"/> (GET) to the remote API
+        /// with optional per-request customisation.
+        /// </summary>
+        /// <param name="client">The Blueprint HTTP client.</param>
+        /// <param name="operation">The operation to send.</param>
+        /// <param name="options">Optional call options to modify the outgoing request.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>The deserialized response.</returns>
+        public static global::System.Threading.Tasks.Task<global::Blueprint.Model.Results<global::Blueprint.Runtime.Exec.OkResult<string>, global::Blueprint.Runtime.Exec.NotFoundResult<string>>> GetItemAsync(this global::Blueprint.HttpClient.BlueprintHttpClient<global::TestNamespace.TestApp> client, global::TestNamespace.GetItemQuery operation, global::Blueprint.HttpClient.CallOptions? options, global::System.Threading.CancellationToken cancellationToken = default)
+        {
+            return client.SendAsync<global::Blueprint.Model.Results<global::Blueprint.Runtime.Exec.OkResult<string>, global::Blueprint.Runtime.Exec.NotFoundResult<string>>>(operation, options, cancellationToken);
+        }
     }
 }
 
