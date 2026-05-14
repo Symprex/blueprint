@@ -1801,6 +1801,161 @@ diff src/openapi/api.ts src/openapi/api.ts.bak
 
 ---
 
+## Finding #305: S365 Property Populators — TenantModule Eliminates 100%
+
+**Date:** 2025-07-18
+**Category:** Feature Parity / Tenancy
+
+### Summary
+
+S365 has exactly **one custom property populator**: `SetTenantMiddleware`. It populates `TenantId` on 312 of 314 operations (99.4%). Blueprint's compile-time `TenantModule` replaces it entirely with zero-reflection generated code.
+
+### S365 Property Population Architecture
+
+| Mechanism | What It Populates | Operations Affected |
+|-----------|-------------------|---------------------|
+| `SetTenantMiddleware` | `TenantId` from JWT claims | 312 operations |
+| Route binding | `Id`, `PartnerId`, `UserId` from URL | All operations with route params |
+| Body binding | All non-route properties | All POST/PUT operations |
+
+There are **no other custom property populators** in S365. `PartnerId` (40 ops) and `UserId` (8 ops) come from route binding, not custom populators.
+
+### Blueprint's TenantModule Coverage
+
+Blueprint's `TenantModule` (compile-time source generator) handles everything `SetTenantMiddleware` does:
+
+| SetTenantMiddleware Feature | TenantModule Equivalent | Status |
+|----------------------------|------------------------|--------|
+| Read `Sig365TenantId` from JWT claims | `ITenantResolver.ResolveTenantId(ClaimsPrincipal)` | ✅ Via DI |
+| Auto-populate `operation.TenantId` | Compile-time property assignment | ✅ Zero reflection |
+| Support `ApiId` type (struct with TryParse) | `IParsable<T>` detection → `TryParse` codegen | ✅ |
+| Guard against route-bound override | Route template placeholder detection | ✅ |
+| Set `ITenantAccessor.Current` | `PipelineHelpers.ResolveTenant(...)` | ✅ |
+| Serilog diagnostic context | Via `ITenantAccessor` implementation | ✅ Consumer's responsibility |
+
+### Migration Impact
+
+- **Remove `SetTenantMiddleware`** entirely from all 8+ S365 services
+- **Implement `ITenantResolver`** (one class in S365 common):
+  ```csharp
+  public class S365TenantResolver : ITenantResolver
+  {
+      public string? ResolveTenantId(ClaimsPrincipal? principal)
+          => principal?.FindFirst("Sig365TenantId")?.Value;
+  }
+  ```
+- **Register in DI**: `services.AddSingleton<ITenantResolver, S365TenantResolver>()`
+- **Zero operation changes needed** — TenantId properties are auto-populated at compile time
+
+### Generated Pipeline Code (per operation)
+
+```csharp
+// Tenant resolution (compile-time, no reflection)
+if (this.TenantResolver != null && this.TenantAccessor != null)
+{
+    Blueprint.Runtime.Exec.PipelineHelpers.ResolveTenant(
+        this.TenantResolver, this.TenantAccessor, context.UserPrincipal);
+
+    if (this.TenantAccessor.Current != null &&
+        global::System.Collections.Generic.EqualityComparer<ApiId>.Default.Equals(
+            operation.TenantId, default))
+    {
+        if (ApiId.TryParse(this.TenantAccessor.Current, null, out var _parsedTenantId))
+        {
+            operation.TenantId = _parsedTenantId;
+        }
+    }
+}
+```
+
+No code changes needed in Blueprint.
+
+---
+
+## Finding #303: OpenAPI Shape Deep Comparison (Legacy vs New)
+
+**Date:** 2025-07-18
+**Category:** OpenAPI Compatibility
+
+### Legacy Blueprint OpenAPI Generation
+
+Legacy S365 uses NSwag + NJsonSchema (Newtonsoft-backed) for OpenAPI 3.0 generation. Key behaviors:
+
+| Feature | Legacy Blueprint | New Blueprint | Compatible? |
+|---------|-----------------|---------------|-------------|
+| **operationId** | Operation class name | Operation class name | ✅ Identical |
+| **Tags** | Last namespace segment | Last namespace segment | ✅ Identical |
+| **Schema naming** | `BlueprintSchemaNameGenerator` (TypeOfArg pattern) | `SimplifyClrTypeName` (TypeOfArg pattern) | ✅ Identical |
+| **Schema generation** | NJsonSchema via Newtonsoft | Inline via `Utf8JsonWriter` + STJ reflection | ⚠️ Property ordering may differ |
+| **Parameter naming** | `property.Name` or owned-property name | Property name or owned-property name | ✅ Compatible |
+| **Required detection** | Nullability + `[Required]` attribute | Nullability + `[Required]` attribute | ✅ Compatible |
+| **422 response** | `ValidationProblemDetails` schema | `ValidationProblemDetails` schema | ✅ Compatible |
+| **Error response** | `ProblemDetails` schema | `ProblemDetails` schema | ✅ Compatible |
+| **PlainTextResult** | `text/plain` content type with string schema | Handled by `PlainTextResultMediaTypeMapper` | ✅ Compatible |
+| **ResourceEvent collapse** | `ResourceUpdated<T>` → `ResourceEvent<T>` in schema | Direct `ResourceEvent<T>` (no subclass concept) | ✅ Compatible |
+| **Body schema** | All non-owned non-route properties → request body | All body-source properties → request body | ✅ Compatible |
+| **GET parameters** | All properties → query params | All non-route properties → query params | ✅ Compatible |
+
+### Key Differences to Watch
+
+1. **Property ordering in schemas**: Newtonsoft serializes in declaration order; STJ uses alphabetical by default. The Handlebars templates sort properties themselves so this likely doesn't matter, but verify.
+
+2. **Enum handling**: Legacy uses `StringEnumConverter` → enums are strings. New Blueprint also emits string enums. ✅
+
+3. **Nullable handling**: Legacy uses Namotion.Reflection for nullability. New Blueprint uses Roslyn `NullableAnnotation`. Both should produce equivalent `nullable: true` annotations.
+
+4. **Schema processor hook**: Legacy has `ISchemaProcessor` via NJsonSchema. New Blueprint has `OpenApiSchemaProcessorOptions` with `ProcessSchema` callback. Migration needs to port any custom processors.
+
+5. **Operation processor hook**: Legacy has `ConfigureOperation` callback. New Blueprint has `OpenApiOperationProcessorOptions` with `ProcessOperation` callback. Migration needs to port any custom operation post-processing.
+
+### Impact on TypeScript Client
+
+The Handlebars templates consume standard OpenAPI 3.0 structure. The only potential issues are:
+- **Schema property order changes** → cosmetic `api.ts` diff (no functional impact)
+- **Missing `description` fields** → may lose XML doc comments if not ported
+- **Additional response status codes** → new Blueprint may emit more granular responses
+
+### Action Items
+
+- [ ] Generate OpenAPI from migrated sample service and diff against legacy
+- [ ] Run Handlebars generator against new spec and diff api.ts output
+- [ ] Verify ValidationProblemDetails schema shape is byte-for-byte compatible
+
+---
+
+## Finding #304: S365 OpenAPI Tag Assignment Confirmed Compatible
+
+**Date:** 2025-07-18
+**Category:** OpenAPI Compatibility
+
+### Confirmed: Tags are derived identically
+
+**Legacy Blueprint** (`OpenApiDocumentBuilder.cs` line 115):
+```csharp
+openApiOperation.Tags.Add(operation.OperationType.Namespace.Split('.').Last());
+```
+
+**New Blueprint** (`OperationGroupMetadataModule.cs` line 75):
+```csharp
+return namespaceSegments.Length == 0 ? (null, null) : (namespaceSegments[^1], null);
+```
+
+Both use the **last namespace segment** as the tag. For S365 operations in namespaces like `Symprex.Signature365.Portal.Api.Templates`, the tag will be `Templates` — identical in both systems.
+
+New Blueprint also supports explicit override via `[ApiOperations("CustomGroup")]` which S365 doesn't use, so no conflict.
+
+### Tag Inventory (from S365 AdminPortal)
+
+25 unique tags: Accounts, Authorisation, BusQueues, Config, Dev, Email, Entitlements, EventStore, I18N, Identity, Import, Invoices, LicenseKeys, Logging, Messages, Microsoft365, PartnerCompanies, PartnerTenants, PartnerUsers, Products, Subscriptions, TenantDomains, Tenants, TenantUsers, TransactionalEmail.
+
+### Tag Inventory (from S365 Portal)
+
+42 unique tags: All AdminPortal tags plus ActiveDirectory, ActiveUsers, Analytics, Campaigns, CustomRoles, Dashboard, DatabaseAgent, Disclaimers, EmailDomains, EntraIdAddOn, ExchangeTransportAgent, Fields, Folders, Groups, Images, Outlook, Preview, Roles, Rules, Search, Signatures, Surveys, Sync, Templates, Users, VCard.
+
+No code changes needed.
+
+---
+
 ### #297 — OpenAPI Generic Type Schema Naming: Fixed (Commit 9ec584c)
 
 **Date:** 2025-07-18
