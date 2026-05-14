@@ -1524,3 +1524,92 @@ Comprehensive gap analysis across 8 S365 pattern categories:
 | `IOperationFilter` | Not used | N/A | N/A |
 
 **Collection expression optimization**: Generated `_appliedModuleIds` arrays now use `[...]` collection expressions instead of `new string[] { ... }` — cleaner generated output, same performance (commit `eb51d37`).
+
+---
+
+### #289 — Body Reading Extraction: Already Optimal
+
+**Date**: 2025-07-16
+
+Analysis of body reading code across all pipeline types confirms the current architecture is the optimal split point:
+
+- `PipelineHelpers.ReadJsonBodyAsync<TOperation>` handles shared infrastructure (buffering, content-type validation, exception handling, ArrayPool)
+- Per-operation `PopulateFromJsonBody` is a static delegate doing property-specific `Utf8JsonReader` parsing
+- The operation is passed as a parameter to the delegate, enabling static lambdas (no closure allocation)
+- What varies per-operation: property names (u8 literals), type-specific reader calls (`GetString` vs `GetInt32` vs `JsonSerializer.Deserialize<T>`)
+- No further extraction is possible without adding reflection overhead or increasing IL size
+
+**No action needed.**
+
+---
+
+### #290 — Verb Hierarchy: Already Implemented
+
+**Date**: 2025-07-16
+
+S365 uses 5 authorization verbs: Create (21 ops), Read (142), Update (159), Delete (26), Manage (grants all 4).
+Blueprint's `ScopePairClaimAuthorizationProvider` already supports this:
+
+- Constructor accepts `verbInclusions` dictionary (e.g., `{"Manage": ["Create","Read","Update","Delete"]}`)
+- Builds inverse `FrozenDictionary` at startup: e.g., `"Read" → ["Manage"]` means a Manage claim satisfies Read requirements
+- Zero-allocation `Span<char>`-based comparison in `MatchesScopePair()` — no string interpolation per check
+- Integration tests in `ScopePairClaimAuthorizationProviderTests.cs` prove all 4 CRUD verbs are satisfied by Manage
+
+**No action needed** — S365 migrates `ScopeApiAuthoriser` to `ScopePairClaimAuthorizationProvider` with verb inclusions configured at startup.
+
+---
+
+### #291 — Testing Infrastructure: Fully S365-Compatible
+
+**Date**: 2025-07-16
+
+Deep comparison of S365's `WebApiFixtureFactory<TStartup>` + `ApiFixture` against Blueprint.Testing confirms 1:1 mapping:
+
+| S365 Pattern | Blueprint Equivalent | Match |
+|---|---|---|
+| `WebApiFixtureFactory<T>` | `BlueprintTestFixtureFactory<TApp,TExec>` | ✅ |
+| `ApiFixture` | `BlueprintTestFixture<TApp,TExec>` | ✅ |
+| `api.QueryAsync(query)` | `fixture.QueryAsync(query)` | ✅ |
+| `api.CommandAsync(command)` | `fixture.CommandAsync(command)` | ✅ |
+| `api.BackgroundTaskAsync(task)` | `fixture.BackgroundTaskAsync(task)` | ✅ |
+| `api.MessageAsync(msg)` | `fixture.MessageAsync(msg)` | ✅ |
+| `api.Authentication.Set/As/MakeAnonymous` | `fixture.Authentication.Set/As/MakeAnonymous` | ✅ |
+| `api.Bus.Should().HavePublishedSingle<T>()` | `fixture.Bus.Should().HavePublishedSingle<T>()` | ✅ |
+| `api.Bus.Should().NotHavePublished<T>()` | `fixture.Bus.Should().NotHavePublished<T>()` | ✅ |
+| `api.Bus.Should().HaveSent<T>()` | `fixture.Bus.Should().HaveSent<T>()` | ✅ |
+| `api.Bus.Clear()` | `fixture.Bus.Clear()` | ✅ |
+| `api.Tasks` (BackgroundTaskCollector) | `fixture.Tasks` (BackgroundTaskCollector) | ✅ |
+| `api.TaskRunnerOptions` | `fixture.GetRequiredService<TestTaskRunnerOptions>()` | ⚠️ |
+| `api.GetOptions<T>()` | `fixture.GetOptions<T>()` | ✅ |
+| `api.Services` | `fixture.Services` | ✅ |
+| `RunAllPublishedMessagesAsync()` | `fixture.RunAllPublishedMessagesAsync()` | ✅ |
+| `RunAndConsumeAllPublishedMessagesAsync()` | `fixture.RunAndConsumeAllPublishedMessagesAsync()` | ✅ |
+
+**Domain-specific auth helpers** (`AuthenticateAsTenantAdministrator`, `AuthenticateAsTenantUser`, etc.) are S365-specific extension methods on `ApiFixture`. Migration requires changing them to extend `BlueprintTestFixture<TApp,TExec>` instead — straightforward code change in S365's TestHelpers project only.
+
+**Estimated test migration churn**: Very low. 95%+ of test code compiles unchanged after updating the fixture type parameter.
+
+---
+
+### #292 — BPPO011 Diagnostic Helps S365 ApiId Migration
+
+**Date**: 2025-07-16
+
+New BPPO011 diagnostic (Info severity) warns when route/query properties use TypeConverter-based binding instead of the faster `IParsable<T>`/`TryParse` path. S365's `ApiId` struct has a `TypeConverter` attribute but no `TryParse` method — this diagnostic will flag all `ApiId` route/query parameters during migration, guiding developers to add the fast path.
+
+**Impact**: ~40+ S365 operations use `ApiId` in route parameters. Adding `TryParse` to `ApiId` eliminates TypeConverter overhead per-request.
+
+---
+
+### #293 — Route Deduplication: Already Implemented
+
+**Date**: 2025-07-16
+
+The route deduplication logic requested in the original steering was already implemented:
+
+- `ApplicationBuilderExtensions.MapBlueprintApi<T,TExec>()` tracks mapped `(route, operationType)` pairs via `HashSet<(string Route, Type OperationType)>`
+- Duplicate same-operation registrations are silently skipped
+- Cross-operation route collisions are detected and logged as warnings via `ILogger`
+- Uses `StringTupleComparer` and `RouteMethodComparer` for correct ordinal/case-insensitive matching
+
+**No action needed.**
