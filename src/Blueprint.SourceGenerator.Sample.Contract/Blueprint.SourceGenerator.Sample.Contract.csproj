@@ -12,6 +12,7 @@
     <ProjectReference Include="..\Blueprint.Runtime.Model\Blueprint.Runtime.Model.csproj" />
     <ProjectReference Include="..\Blueprint.Runtime\Blueprint.Runtime.csproj" />
     <ProjectReference Include="..\Blueprint.SourceGenerator\Blueprint.SourceGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\Blueprint.SourceGenerator.CodeFixes\Blueprint.SourceGenerator.CodeFixes.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
 </Project>

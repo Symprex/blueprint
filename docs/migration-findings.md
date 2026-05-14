@@ -265,6 +265,8 @@
 | [FromAuthContext(ClaimType)] | ✅ Done | Compile-time claim mapping: `[FromAuthContext(ClaimType = "partner_id")]` on string property generates code in Authentication stage to read specific claim value. BPPO009 error for non-string properties, BPPO010 warning when combined with route-owned properties. 4 generator tests + 4 integration tests. |
 | S365 Resource attribute deep analysis | ✅ Compatible | 349 `[Resource(noun, verb, template)]` usages, 158 `[FromResource(type, template)]`. Blueprint 3-arg constructor matches exactly. S365Nouns (96 constants), S365Verbs (4+Manage). Blueprint `ScopePairClaimAuthorizationProvider` with verb inclusions covers S365's `ScopeApiAuthoriser` + legacy scope mapper. |
 | S365 auth flow compatibility | ✅ Compatible | S365 `ScopeApiAuthoriser.CanExecuteOperationAsync` → Blueprint `IResourceAuthorizationProvider.IsAuthorizedAsync`. S365 checks `JwtClaimTypes.Scope` (default "scope") with Noun.Verb format (default ".") → Blueprint defaults match exactly. S365 no-scopes-allow behavior → subclass `AllowWhenNoScopeClaims()` returning true. |
+| RFC 9727 api-catalog | ✅ Done | `/.well-known/api-catalog` returns `application/linkset+json` with `service-desc` pointing to OpenAPI doc. Supports GET (body) + HEAD (Link header only). Existing `/.well-known/openapi` kept for backward compat. |
+| OpenAPI operation processors | ✅ Already exists | `OpenApiOperationProcessorOptions.Processors` list — S365 can remove TenantId params, add vendor extensions, override summaries. Equivalent to legacy `OpenApiOptions.ConfigureOperation`. |
 
 ---
 
