@@ -241,49 +241,71 @@ public static class EndpointRouteBuilderExtensions
     /// <summary>
     /// Creates an RFC 9727 api-catalog endpoint delegate that returns a Linkset JSON document
     /// pointing to the OpenAPI specification. The response uses <c>application/linkset+json</c>
-    /// content type with the RFC 9727 profile.
+    /// content type with the RFC 9727 profile. The JSON body and Link header are pre-rendered
+    /// per base URI and cached to avoid per-request string interpolation.
     /// </summary>
     private static RequestDelegate CreateApiCatalogDelegate(string openApiPath, string title)
     {
+        // Pre-render cache: avoids per-request string interpolation for the common case
+        // where scheme/host/pathBase are stable across requests.
+        string? cachedScheme = null;
+        string? cachedHost = null;
+        PathString cachedPathBase = default;
+        byte[]? cachedJsonBytes = null;
+        string? cachedLinkHeader = null;
+
         return context =>
         {
             var request = context.Request;
-            var baseUri = $"{request.Scheme}://{request.Host}{request.PathBase}";
-            var openApiHref = baseUri + openApiPath;
+            var scheme = request.Scheme;
+            var host = request.Host.Value;
+            var pathBase = request.PathBase;
+
+            if (cachedJsonBytes is null
+                || !string.Equals(scheme, cachedScheme, StringComparison.Ordinal)
+                || !string.Equals(host, cachedHost, StringComparison.Ordinal)
+                || pathBase != cachedPathBase)
+            {
+                var baseUri = $"{scheme}://{host}{pathBase}";
+                var openApiHref = baseUri + openApiPath;
+
+                cachedScheme = scheme;
+                cachedHost = host;
+                cachedPathBase = pathBase;
+                cachedLinkHeader = $"<{openApiHref}>; rel=\"service-desc\"; type=\"application/openapi+json;version=3.0\"";
+                cachedJsonBytes = System.Text.Encoding.UTF8.GetBytes($$"""
+                    {
+                      "linkset": [
+                        {
+                          "anchor": "{{baseUri}}/",
+                          "service-desc": [
+                            {
+                              "href": "{{openApiHref}}",
+                              "type": "application/openapi+json;version=3.0"
+                            }
+                          ],
+                          "service-doc": [
+                            {
+                              "href": "{{openApiHref}}",
+                              "type": "application/openapi+json;version=3.0",
+                              "title": "{{title}}"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                    """);
+            }
 
             context.Response.ContentType = "application/linkset+json; profile=\"https://www.rfc-editor.org/info/rfc9727\"";
-            context.Response.Headers["Link"] = $"<{openApiHref}>; rel=\"service-desc\"; type=\"application/openapi+json;version=3.0\"";
+            context.Response.Headers["Link"] = cachedLinkHeader;
 
             if (HttpMethods.IsHead(request.Method))
             {
                 return Task.CompletedTask;
             }
 
-            // RFC 9264 Linkset JSON format pointing to the OpenAPI document
-            var json = $$"""
-                {
-                  "linkset": [
-                    {
-                      "anchor": "{{baseUri}}/",
-                      "service-desc": [
-                        {
-                          "href": "{{openApiHref}}",
-                          "type": "application/openapi+json;version=3.0"
-                        }
-                      ],
-                      "service-doc": [
-                        {
-                          "href": "{{openApiHref}}",
-                          "type": "application/openapi+json;version=3.0",
-                          "title": "{{title}}"
-                        }
-                      ]
-                    }
-                  ]
-                }
-                """;
-
-            return context.Response.WriteAsync(json);
+            return context.Response.Body.WriteAsync(cachedJsonBytes).AsTask();
         };
     }
 
