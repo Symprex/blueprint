@@ -89,13 +89,13 @@ public sealed class UnitOfWorkModule : IBlueprintSourceGeneratorModule, IPipelin
     {
         return operationType.AllInterfaces.Any(static candidate =>
             candidate.Name is "ICommand"
-            && candidate.ContainingNamespace.ToDisplayString() == "Blueprint.Model");
+            && candidate.IsInNamespace("Blueprint", "Model"));
     }
 
     private static bool HasDoNotSaveChangesAttribute(INamedTypeSymbol operationType)
     {
         return operationType.GetAttributes().Any(static attr =>
             attr.AttributeClass?.Name is "DoNotSaveChangesAttribute"
-            && attr.AttributeClass.ContainingNamespace.ToDisplayString() == "Blueprint.Persistence");
+            && attr.AttributeClass.IsInNamespace("Blueprint", "Persistence"));
     }
 }

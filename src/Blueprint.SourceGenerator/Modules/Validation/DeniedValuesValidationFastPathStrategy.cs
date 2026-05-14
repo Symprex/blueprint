@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
+using Blueprint.SourceGenerator.Helpers;
 using Microsoft.CodeAnalysis;
 using CSharpSymbolDisplay = Microsoft.CodeAnalysis.CSharp.SymbolDisplay;
 
@@ -123,6 +124,6 @@ internal sealed class DeniedValuesValidationFastPathStrategy : IValidationFastPa
     {
         return attributeClass is not null
                && attributeClass.Name == "DeniedValuesAttribute"
-               && attributeClass.ContainingNamespace.ToDisplayString() == "System.ComponentModel.DataAnnotations";
+               && attributeClass.IsInNamespace("System", "ComponentModel", "DataAnnotations");
     }
 }

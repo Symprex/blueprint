@@ -12,7 +12,6 @@ namespace Blueprint.SourceGenerator.Modules;
 /// </summary>
 public sealed class TasksHostModule : IBlueprintSourceGeneratorModule, IDescriptorContributor, IEnabledHostContributor
 {
-    private const string BackgroundTaskNamespace = "Blueprint.Tasks";
     private const string BackgroundTaskInterfaceName = "IBackgroundTask";
 
     /// <inheritdoc />
@@ -54,7 +53,7 @@ public sealed class TasksHostModule : IBlueprintSourceGeneratorModule, IDescript
     {
         return operationType.AllInterfaces.Any(static candidate =>
             candidate.Name == BackgroundTaskInterfaceName
-            && candidate.ContainingNamespace.ToDisplayString() == BackgroundTaskNamespace);
+            && candidate.IsInNamespace("Blueprint", "Tasks"));
     }
 
     private static LocationInfo? FindBackgroundTaskLocation(INamedTypeSymbol operationType)

@@ -1,3 +1,4 @@
+using Blueprint.SourceGenerator.Helpers;
 using Blueprint.SourceGenerator.Planning;
 using Microsoft.CodeAnalysis;
 using Newtonsoft.Json.Linq;
@@ -71,6 +72,6 @@ internal sealed class PerformanceMetricsModule : IBlueprintSourceGeneratorModule
     {
         return operationType.GetAttributes().Any(static attr =>
             attr.AttributeClass?.Name is "DoNotRecordPerformanceMetricsAttribute"
-            && attr.AttributeClass.ContainingNamespace.ToDisplayString() == "Blueprint.Auditing");
+            && attr.AttributeClass.IsInNamespace("Blueprint", "Auditing"));
     }
 }

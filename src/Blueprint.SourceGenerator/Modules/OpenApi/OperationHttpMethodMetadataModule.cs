@@ -149,7 +149,7 @@ public sealed class OperationHttpMethodMetadataModule : IBlueprintSourceGenerato
     private static bool IsCommand(INamedTypeSymbol operationType)
     {
         return operationType.AllInterfaces.Any(static candidate =>
-            candidate.ContainingNamespace.ToDisplayString() == "Blueprint.Model"
+            candidate.IsInNamespace("Blueprint", "Model")
             && candidate.Name == "ICommand");
     }
 

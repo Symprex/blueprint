@@ -1,3 +1,4 @@
+using Blueprint.SourceGenerator.Helpers;
 using Blueprint.SourceGenerator.Planning;
 using Microsoft.CodeAnalysis;
 
@@ -48,13 +49,13 @@ internal sealed class MessageOutboxManifestModule : IBlueprintSourceGeneratorMod
     {
         return operationType.AllInterfaces.Any(static candidate =>
             candidate.Name is "ICommand"
-            && candidate.ContainingNamespace.ToDisplayString() == "Blueprint.Model");
+            && candidate.IsInNamespace("Blueprint", "Model"));
     }
 
     private static bool HasDoNotPublishMessagesAttribute(INamedTypeSymbol operationType)
     {
         return operationType.GetAttributes().Any(static attr =>
             attr.AttributeClass?.Name is "DoNotPublishMessagesAttribute"
-            && attr.AttributeClass.ContainingNamespace.ToDisplayString() == "Blueprint.Messaging");
+            && attr.AttributeClass.IsInNamespace("Blueprint", "Messaging"));
     }
 }

@@ -406,14 +406,14 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
             }
 
             if (current.Name is "OkResult" or "AcceptedResult" or "ConflictResult" or "NotFoundResult" or "CreatedResult" or "ResourceEventResult"
-                && current.ContainingNamespace.ToDisplayString() == "Blueprint.Runtime.Exec")
+                && current.IsInNamespace("Blueprint", "Runtime", "Exec"))
             {
                 return current.TypeArguments[0];
             }
 
             // Legacy Blueprint.Http.ResourceEvent<T> carries Data as the resource body
             if (current.Name == "ResourceEvent"
-                && current.ContainingNamespace.ToDisplayString() == "Blueprint.Http")
+                && current.IsInNamespace("Blueprint", "Http"))
             {
                 return current.TypeArguments[0];
             }

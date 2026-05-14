@@ -46,7 +46,7 @@ internal static class ValidationSymbolHelpers
     {
         return type.AllInterfaces.Any(static interfaceSymbol =>
             interfaceSymbol.MetadataName == "IValidatableObject"
-            && interfaceSymbol.ContainingNamespace.ToDisplayString() == "System.ComponentModel.DataAnnotations");
+            && interfaceSymbol.IsInNamespace("System", "ComponentModel", "DataAnnotations"));
     }
 
     /// <summary>
@@ -76,7 +76,7 @@ internal static class ValidationSymbolHelpers
     private static bool IsValidationAttributeExact(INamedTypeSymbol type)
     {
         return type.MetadataName == "ValidationAttribute"
-               && type.ContainingNamespace.ToDisplayString() == "System.ComponentModel.DataAnnotations";
+               && type.IsInNamespace("System", "ComponentModel", "DataAnnotations");
     }
 
     /// <summary>
@@ -88,7 +88,7 @@ internal static class ValidationSymbolHelpers
     {
         return attributeClass is not null
                && attributeClass.Name == "CompareAttribute"
-               && attributeClass.ContainingNamespace.ToDisplayString() == "System.ComponentModel.DataAnnotations";
+               && attributeClass.IsInNamespace("System", "ComponentModel", "DataAnnotations");
     }
 
     /// <summary>
@@ -100,7 +100,7 @@ internal static class ValidationSymbolHelpers
     {
         return attributeClass is not null
                && attributeClass.Name == "GreaterThanPropertyAttribute"
-               && attributeClass.ContainingNamespace.ToDisplayString() == "Blueprint.Validation";
+               && attributeClass.IsInNamespace("Blueprint", "Validation");
     }
 
     /// <summary>
@@ -112,7 +112,7 @@ internal static class ValidationSymbolHelpers
     {
         return attributeClass is not null
                && attributeClass.Name == "LessThanPropertyAttribute"
-               && attributeClass.ContainingNamespace.ToDisplayString() == "Blueprint.Validation";
+               && attributeClass.IsInNamespace("Blueprint", "Validation");
     }
 
     /// <summary>
@@ -124,7 +124,7 @@ internal static class ValidationSymbolHelpers
     {
         return attributeClass is not null
                && attributeClass.Name == "GreaterThanAttribute"
-               && attributeClass.ContainingNamespace.ToDisplayString() == "Blueprint.Validation";
+               && attributeClass.IsInNamespace("Blueprint", "Validation");
     }
 
     /// <summary>
@@ -136,7 +136,7 @@ internal static class ValidationSymbolHelpers
     {
         return attributeClass is not null
                && attributeClass.Name == "LessThanAttribute"
-               && attributeClass.ContainingNamespace.ToDisplayString() == "Blueprint.Validation";
+               && attributeClass.IsInNamespace("Blueprint", "Validation");
     }
 
     /// <summary>
@@ -148,7 +148,7 @@ internal static class ValidationSymbolHelpers
     {
         return attributeClass is not null
                && attributeClass.Name == "MustBeTrueAttribute"
-               && attributeClass.ContainingNamespace.ToDisplayString() == "Blueprint.Validation";
+               && attributeClass.IsInNamespace("Blueprint", "Validation");
     }
 
     /// <summary>
@@ -160,7 +160,7 @@ internal static class ValidationSymbolHelpers
     {
         return attributeClass is not null
                && attributeClass.Name == "InFutureAttribute"
-               && attributeClass.ContainingNamespace.ToDisplayString() == "Blueprint.Validation";
+               && attributeClass.IsInNamespace("Blueprint", "Validation");
     }
 
     /// <summary>
@@ -172,7 +172,7 @@ internal static class ValidationSymbolHelpers
     {
         return attributeClass is not null
                && attributeClass.Name == "InPastAttribute"
-               && attributeClass.ContainingNamespace.ToDisplayString() == "Blueprint.Validation";
+               && attributeClass.IsInNamespace("Blueprint", "Validation");
     }
 
     /// <summary>
@@ -184,7 +184,7 @@ internal static class ValidationSymbolHelpers
     {
         return attributeClass is not null
                && attributeClass.Name == "NotInFutureAttribute"
-               && attributeClass.ContainingNamespace.ToDisplayString() == "Blueprint.Validation";
+               && attributeClass.IsInNamespace("Blueprint", "Validation");
     }
 
     /// <summary>
@@ -196,7 +196,7 @@ internal static class ValidationSymbolHelpers
     {
         return attributeClass is not null
                && attributeClass.Name == "NotInPastAttribute"
-               && attributeClass.ContainingNamespace.ToDisplayString() == "Blueprint.Validation";
+               && attributeClass.IsInNamespace("Blueprint", "Validation");
     }
 
     /// <summary>
@@ -208,7 +208,7 @@ internal static class ValidationSymbolHelpers
     {
         return attributeClass is not null
                && attributeClass.Name == "NotEmptyListAttribute"
-               && attributeClass.ContainingNamespace.ToDisplayString() == "Blueprint.Validation";
+               && attributeClass.IsInNamespace("Blueprint", "Validation");
     }
 
     /// <summary>
@@ -220,7 +220,7 @@ internal static class ValidationSymbolHelpers
     {
         return attributeClass is not null
                && attributeClass.Name == "MaxItemsListAttribute"
-               && attributeClass.ContainingNamespace.ToDisplayString() == "Blueprint.Validation";
+               && attributeClass.IsInNamespace("Blueprint", "Validation");
     }
 
     /// <summary>
@@ -232,7 +232,7 @@ internal static class ValidationSymbolHelpers
     {
         return attributeClass is not null
                && attributeClass.Name == "GreaterThanOrEqualToAttribute"
-               && attributeClass.ContainingNamespace.ToDisplayString() == "Blueprint.Validation";
+               && attributeClass.IsInNamespace("Blueprint", "Validation");
     }
 
     /// <summary>
@@ -244,7 +244,7 @@ internal static class ValidationSymbolHelpers
     {
         return attributeClass is not null
                && attributeClass.Name == "LessThanOrEqualToAttribute"
-               && attributeClass.ContainingNamespace.ToDisplayString() == "Blueprint.Validation";
+               && attributeClass.IsInNamespace("Blueprint", "Validation");
     }
 
     /// <summary>
@@ -256,7 +256,7 @@ internal static class ValidationSymbolHelpers
     {
         return attributeClass is not null
                && attributeClass.Name == "MustBeGreaterThanOrEqualAttribute"
-               && attributeClass.ContainingNamespace.ToDisplayString() == "Blueprint.Validation";
+               && attributeClass.IsInNamespace("Blueprint", "Validation");
     }
 
     /// <summary>
@@ -268,7 +268,7 @@ internal static class ValidationSymbolHelpers
     {
         return attributeClass is not null
                && attributeClass.Name == "PasswordAttribute"
-               && attributeClass.ContainingNamespace.ToDisplayString() == "Blueprint.Validation";
+               && attributeClass.IsInNamespace("Blueprint", "Validation");
     }
 
     /// <summary>
@@ -280,7 +280,7 @@ internal static class ValidationSymbolHelpers
     {
         return attributeClass is not null
                && attributeClass.Name == "ResourceKeyAttribute"
-               && attributeClass.ContainingNamespace.ToDisplayString() == "Blueprint.Validation";
+               && attributeClass.IsInNamespace("Blueprint", "Validation");
     }
 
     /// <summary>
@@ -292,7 +292,7 @@ internal static class ValidationSymbolHelpers
     {
         return attributeClass is not null
                && attributeClass.Name == "UkPostcodeAttribute"
-               && attributeClass.ContainingNamespace.ToDisplayString() == "Blueprint.Validation";
+               && attributeClass.IsInNamespace("Blueprint", "Validation");
     }
 
     /// <summary>
@@ -304,7 +304,7 @@ internal static class ValidationSymbolHelpers
     {
         return attributeClass is not null
                && attributeClass.Name == "RequiredIfAttribute"
-               && attributeClass.ContainingNamespace.ToDisplayString() == "Blueprint.Validation";
+               && attributeClass.IsInNamespace("Blueprint", "Validation");
     }
 
     /// <summary>
@@ -316,7 +316,7 @@ internal static class ValidationSymbolHelpers
     {
         return attributeClass is not null
                && attributeClass.Name == "RequiredIfNotAttribute"
-               && attributeClass.ContainingNamespace.ToDisplayString() == "Blueprint.Validation";
+               && attributeClass.IsInNamespace("Blueprint", "Validation");
     }
 
     /// <summary>
@@ -328,7 +328,7 @@ internal static class ValidationSymbolHelpers
     {
         return attributeClass is not null
                && attributeClass.Name == "NotAllowedIfAttribute"
-               && attributeClass.ContainingNamespace.ToDisplayString() == "Blueprint.Validation";
+               && attributeClass.IsInNamespace("Blueprint", "Validation");
     }
 
     /// <summary>
@@ -358,7 +358,7 @@ internal static class ValidationSymbolHelpers
     {
         return attributeClass is not null
                && attributeClass.Name == "RequiredAttribute"
-               && attributeClass.ContainingNamespace.ToDisplayString() == "System.ComponentModel.DataAnnotations";
+               && attributeClass.IsInNamespace("System", "ComponentModel", "DataAnnotations");
     }
 
     /// <summary>
@@ -382,7 +382,7 @@ internal static class ValidationSymbolHelpers
     {
         return attributeClass is not null
                && attributeClass.Name == "MaxLengthAttribute"
-               && attributeClass.ContainingNamespace.ToDisplayString() == "System.ComponentModel.DataAnnotations";
+               && attributeClass.IsInNamespace("System", "ComponentModel", "DataAnnotations");
     }
 
     /// <summary>
@@ -394,7 +394,7 @@ internal static class ValidationSymbolHelpers
     {
         return attributeClass is not null
                && attributeClass.Name == "MinLengthAttribute"
-               && attributeClass.ContainingNamespace.ToDisplayString() == "System.ComponentModel.DataAnnotations";
+               && attributeClass.IsInNamespace("System", "ComponentModel", "DataAnnotations");
     }
 
     /// <summary>
@@ -406,7 +406,7 @@ internal static class ValidationSymbolHelpers
     {
         return attributeClass is not null
                && attributeClass.Name == "StringLengthAttribute"
-               && attributeClass.ContainingNamespace.ToDisplayString() == "System.ComponentModel.DataAnnotations";
+               && attributeClass.IsInNamespace("System", "ComponentModel", "DataAnnotations");
     }
 
     /// <summary>
@@ -418,7 +418,7 @@ internal static class ValidationSymbolHelpers
     {
         return attributeClass is not null
                && attributeClass.Name == "EmailAddressAttribute"
-               && attributeClass.ContainingNamespace.ToDisplayString() is "System.ComponentModel.DataAnnotations" or "Blueprint.Validation";
+               && (attributeClass.IsInNamespace("System", "ComponentModel", "DataAnnotations") || attributeClass.IsInNamespace("Blueprint", "Validation"));
     }
 
     /// <summary>
@@ -430,7 +430,7 @@ internal static class ValidationSymbolHelpers
     {
         return attributeClass is not null
                && attributeClass.Name == "RangeAttribute"
-               && attributeClass.ContainingNamespace.ToDisplayString() == "System.ComponentModel.DataAnnotations";
+               && attributeClass.IsInNamespace("System", "ComponentModel", "DataAnnotations");
     }
 
     /// <summary>
@@ -442,7 +442,7 @@ internal static class ValidationSymbolHelpers
     {
         return attributeClass is not null
                && attributeClass.Name == "RegularExpressionAttribute"
-               && attributeClass.ContainingNamespace.ToDisplayString() == "System.ComponentModel.DataAnnotations";
+               && attributeClass.IsInNamespace("System", "ComponentModel", "DataAnnotations");
     }
 
     /// <summary>
@@ -454,7 +454,7 @@ internal static class ValidationSymbolHelpers
     {
         return attributeClass is not null
                && attributeClass.Name == "PhoneAttribute"
-               && attributeClass.ContainingNamespace.ToDisplayString() == "System.ComponentModel.DataAnnotations";
+               && attributeClass.IsInNamespace("System", "ComponentModel", "DataAnnotations");
     }
 
     /// <summary>
@@ -466,7 +466,7 @@ internal static class ValidationSymbolHelpers
     {
         return attributeClass is not null
                && attributeClass.Name == "UrlAttribute"
-               && attributeClass.ContainingNamespace.ToDisplayString() is "System.ComponentModel.DataAnnotations" or "Blueprint.Validation";
+               && (attributeClass.IsInNamespace("System", "ComponentModel", "DataAnnotations") || attributeClass.IsInNamespace("Blueprint", "Validation"));
     }
 
     /// <summary>
@@ -478,7 +478,7 @@ internal static class ValidationSymbolHelpers
     {
         return type is INamedTypeSymbol namedType
                && namedType.Name == nameof(DateTimeOffset)
-               && namedType.ContainingNamespace.ToDisplayString() == "System";
+               && namedType.IsInRootNamespace("System");
     }
 
     /// <summary>
@@ -506,7 +506,7 @@ internal static class ValidationSymbolHelpers
             && (IsICollection(namedType)
                 || namedType.AllInterfaces.Any(static candidate =>
                     candidate.MetadataName == "ICollection"
-                    && candidate.ContainingNamespace.ToDisplayString() == "System.Collections")))
+                    && candidate.IsInNamespace("System", "Collections"))))
         {
             countExpression = $"((global::System.Collections.ICollection){propertyAccess}).Count";
             return true;
@@ -519,7 +519,7 @@ internal static class ValidationSymbolHelpers
     private static bool IsICollection(INamedTypeSymbol type)
     {
         return type.MetadataName == "ICollection"
-               && type.ContainingNamespace.ToDisplayString() == "System.Collections";
+               && type.IsInNamespace("System", "Collections");
     }
 
     /// <summary>

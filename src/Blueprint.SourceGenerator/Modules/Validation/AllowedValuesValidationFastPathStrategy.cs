@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
+using Blueprint.SourceGenerator.Helpers;
 using Microsoft.CodeAnalysis;
 using CSharpSymbolDisplay = Microsoft.CodeAnalysis.CSharp.SymbolDisplay;
 
@@ -119,6 +120,6 @@ internal sealed class AllowedValuesValidationFastPathStrategy : IValidationFastP
     {
         return attributeClass is not null
                && attributeClass.Name == "AllowedValuesAttribute"
-               && attributeClass.ContainingNamespace.ToDisplayString() == "System.ComponentModel.DataAnnotations";
+               && attributeClass.IsInNamespace("System", "ComponentModel", "DataAnnotations");
     }
 }

@@ -17,7 +17,6 @@ namespace Blueprint.SourceGenerator.Modules.Auditing;
 internal sealed class SensitivePropertyManifestModule : IBlueprintSourceGeneratorModule, IDebugManifestContributor
 {
     private const string SensitiveAttributeName = "SensitiveAttribute";
-    private const string SensitiveAttributeNamespace = "Blueprint.Auditing";
 
     /// <inheritdoc />
     public string ModuleId => nameof(SensitivePropertyManifestModule);
@@ -71,7 +70,7 @@ internal sealed class SensitivePropertyManifestModule : IBlueprintSourceGenerato
 
             var hasSensitive = property.GetAttributes()
                 .Any(static attr => attr.AttributeClass?.Name == SensitiveAttributeName
-                    && attr.AttributeClass.ContainingNamespace.ToDisplayString() == SensitiveAttributeNamespace);
+                    && attr.AttributeClass.ContainingNamespace is { Name: "Auditing", ContainingNamespace.Name: "Blueprint" });
 
             if (hasSensitive)
             {

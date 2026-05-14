@@ -134,5 +134,62 @@ namespace Blueprint.SourceGenerator.Helpers
 
             return false;
         }
+
+        /// <summary>
+        /// Checks whether a symbol's containing namespace matches a two-part dotted name (e.g. "Blueprint.Validation")
+        /// without allocating a <see cref="string"/> via <c>ToDisplayString()</c>.
+        /// </summary>
+        /// <param name="symbol">The symbol whose namespace is tested.</param>
+        /// <param name="outerPart">The outermost namespace segment (e.g. "Blueprint").</param>
+        /// <param name="innerPart">The inner namespace segment (e.g. "Validation").</param>
+        /// <returns><see langword="true"/> when the namespace matches <c>outerPart.innerPart</c> exactly.</returns>
+        public static bool IsInNamespace(this ISymbol symbol, string outerPart, string innerPart)
+        {
+            var ns = symbol.ContainingNamespace;
+
+            return ns is not null
+                && ns.Name == innerPart
+                && ns.ContainingNamespace is { IsGlobalNamespace: false } parent
+                && parent.Name == outerPart
+                && parent.ContainingNamespace is { IsGlobalNamespace: true };
+        }
+
+        /// <summary>
+        /// Checks whether a symbol's containing namespace matches a three-part dotted name
+        /// (e.g. "System.ComponentModel.DataAnnotations") without allocating a <see cref="string"/>.
+        /// </summary>
+        /// <param name="symbol">The symbol whose namespace is tested.</param>
+        /// <param name="outerPart">The outermost namespace segment (e.g. "System").</param>
+        /// <param name="middlePart">The middle namespace segment (e.g. "ComponentModel").</param>
+        /// <param name="innerPart">The innermost namespace segment (e.g. "DataAnnotations").</param>
+        /// <returns><see langword="true"/> when the namespace matches <c>outerPart.middlePart.innerPart</c> exactly.</returns>
+        public static bool IsInNamespace(this ISymbol symbol, string outerPart, string middlePart, string innerPart)
+        {
+            var ns = symbol.ContainingNamespace;
+
+            return ns is not null
+                && ns.Name == innerPart
+                && ns.ContainingNamespace is { IsGlobalNamespace: false } middle
+                && middle.Name == middlePart
+                && middle.ContainingNamespace is { IsGlobalNamespace: false } outer
+                && outer.Name == outerPart
+                && outer.ContainingNamespace is { IsGlobalNamespace: true };
+        }
+
+        /// <summary>
+        /// Checks whether a symbol's containing namespace is a single root namespace (e.g. "Blueprint")
+        /// without allocating a <see cref="string"/>.
+        /// </summary>
+        /// <param name="symbol">The symbol whose namespace is tested.</param>
+        /// <param name="namespaceName">The single namespace segment (e.g. "Blueprint").</param>
+        /// <returns><see langword="true"/> when the namespace matches <paramref name="namespaceName"/> exactly.</returns>
+        public static bool IsInRootNamespace(this ISymbol symbol, string namespaceName)
+        {
+            var ns = symbol.ContainingNamespace;
+
+            return ns is not null
+                && ns.Name == namespaceName
+                && ns.ContainingNamespace is { IsGlobalNamespace: true };
+        }
     }
 }

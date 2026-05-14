@@ -106,11 +106,9 @@ public sealed class ResourceEventMetadataModule : IBlueprintSourceGeneratorModul
         {
             if (current.IsGenericType && current.TypeArguments.Length == 1)
             {
-                var ns = current.ContainingNamespace.ToDisplayString();
-
-                if ((string.Equals(ns, "Blueprint.Runtime.Exec", StringComparison.Ordinal)
+                if ((current.IsInNamespace("Blueprint", "Runtime", "Exec")
                         && string.Equals(current.Name, "ResourceEventResult", StringComparison.Ordinal))
-                    || (string.Equals(ns, "Blueprint.Http", StringComparison.Ordinal)
+                    || (current.IsInNamespace("Blueprint", "Http")
                         && string.Equals(current.Name, "ResourceEvent", StringComparison.Ordinal)))
                 {
                     return current.TypeArguments[0];

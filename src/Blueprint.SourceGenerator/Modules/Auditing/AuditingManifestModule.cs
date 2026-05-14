@@ -72,6 +72,6 @@ internal sealed class AuditingManifestModule : IBlueprintSourceGeneratorModule, 
     {
         return operationType.GetAttributes().Any(static attr =>
             attr.AttributeClass?.Name is "DoNotAuditAttribute"
-            && attr.AttributeClass.ContainingNamespace.ToDisplayString() == "Blueprint.Auditing");
+            && attr.AttributeClass.ContainingNamespace is { Name: "Auditing", ContainingNamespace.Name: "Blueprint" });
     }
 }

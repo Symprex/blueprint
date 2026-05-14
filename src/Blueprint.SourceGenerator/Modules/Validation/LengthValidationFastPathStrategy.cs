@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
+using Blueprint.SourceGenerator.Helpers;
 using Microsoft.CodeAnalysis;
 
 namespace Blueprint.SourceGenerator.Modules;
@@ -50,6 +51,6 @@ internal sealed class LengthValidationFastPathStrategy : IValidationFastPathStra
     {
         return attributeClass is not null
                && attributeClass.Name == "LengthAttribute"
-               && attributeClass.ContainingNamespace.ToDisplayString() == "System.ComponentModel.DataAnnotations";
+               && attributeClass.IsInNamespace("System", "ComponentModel", "DataAnnotations");
     }
 }

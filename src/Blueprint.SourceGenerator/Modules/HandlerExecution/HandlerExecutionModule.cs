@@ -322,7 +322,7 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
 
         if (returnType is INamedTypeSymbol namedReturnType
             && namedReturnType.Name == "Task"
-            && namedReturnType.ContainingNamespace.ToDisplayString() == "System.Threading.Tasks")
+            && namedReturnType.IsInNamespace("System", "Threading", "Tasks"))
         {
             return namedReturnType.TypeArguments.Length == 1
                 ? namedReturnType.TypeArguments[0]
@@ -450,7 +450,7 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
             && namedType.IsGenericType
             && namedType.Name == "OkResult"
             && namedType.TypeArguments.Length == 1
-            && namedType.ContainingNamespace.ToDisplayString() == "Blueprint.Runtime.Exec")
+            && namedType.IsInNamespace("Blueprint", "Runtime", "Exec"))
         {
             payloadType = namedType.TypeArguments[0];
             return true;
@@ -477,7 +477,7 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
     {
         return operationType.AllInterfaces.Any(static candidate =>
             candidate.Name == "IBackgroundTask"
-            && candidate.ContainingNamespace.ToDisplayString() == "Blueprint.Tasks");
+            && candidate.IsInNamespace("Blueprint", "Tasks"));
     }
 
     private sealed record HandlerReturnNormalization(

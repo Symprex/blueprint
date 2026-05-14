@@ -100,14 +100,14 @@ public sealed class OperationDiscoveryManifestModule : IBlueprintSourceGenerator
     private static string GetOperationKind(INamedTypeSymbol typeSymbol)
     {
         if (typeSymbol.AllInterfaces.Any(static candidate =>
-                candidate.ContainingNamespace.ToDisplayString() == "Blueprint.Model"
+                candidate.IsInNamespace("Blueprint", "Model")
                 && candidate.Name == "ICommand"))
         {
             return "command";
         }
 
         if (typeSymbol.AllInterfaces.Any(static candidate =>
-                candidate.ContainingNamespace.ToDisplayString() == "Blueprint.Model"
+                candidate.IsInNamespace("Blueprint", "Model")
                 && candidate.Name == "IQuery"))
         {
             return "query";
@@ -129,7 +129,7 @@ public sealed class OperationDiscoveryManifestModule : IBlueprintSourceGenerator
     {
         return typeSymbol.GetAttributes().Any(static attr =>
             attr.AttributeClass?.Name is "UnexposedOperationAttribute" or "UnexposedOperation"
-            && attr.AttributeClass.ContainingNamespace.ToDisplayString() == "Blueprint");
+            && attr.AttributeClass.IsInRootNamespace("Blueprint"));
     }
 
     private static bool IsTasksOnlyExposure(string[] hostNames)
@@ -154,7 +154,7 @@ public sealed class OperationDiscoveryManifestModule : IBlueprintSourceGenerator
 
         foreach (var iface in typeSymbol.AllInterfaces)
         {
-            if (iface.ContainingNamespace.ToDisplayString() != "Blueprint.Model")
+            if (!iface.IsInNamespace("Blueprint", "Model"))
             {
                 continue;
             }

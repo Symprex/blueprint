@@ -1,3 +1,4 @@
+using Blueprint.SourceGenerator.Helpers;
 using Blueprint.SourceGenerator.Planning;
 using Microsoft.CodeAnalysis;
 
@@ -29,7 +30,6 @@ public sealed class RebusTransactionModule : IBlueprintSourceGeneratorModule, IP
 {
     private const string RebusTransactionScopeType = "Rebus.Transport.RebusTransactionScope";
     private const string NoRebusTransactionAttributeName = "NoRebusTransactionAttribute";
-    private const string NoRebusTransactionNamespace = "Blueprint.Rebus";
 
     /// <inheritdoc />
     public string ModuleId => nameof(RebusTransactionModule);
@@ -87,6 +87,6 @@ public sealed class RebusTransactionModule : IBlueprintSourceGeneratorModule, IP
     {
         return operationType.GetAttributes().Any(static attr =>
             attr.AttributeClass?.Name is NoRebusTransactionAttributeName
-            && attr.AttributeClass.ContainingNamespace.ToDisplayString() == NoRebusTransactionNamespace);
+            && attr.AttributeClass.IsInNamespace("Blueprint", "Rebus"));
     }
 }

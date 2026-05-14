@@ -1,3 +1,4 @@
+using Blueprint.SourceGenerator.Helpers;
 using Blueprint.SourceGenerator.Planning;
 using Microsoft.CodeAnalysis;
 using Newtonsoft.Json.Linq;
@@ -16,7 +17,6 @@ namespace Blueprint.SourceGenerator.Modules.OpenApi;
 /// </remarks>
 internal sealed class HttpMethodManifestModule : IBlueprintSourceGeneratorModule, IDebugManifestContributor
 {
-    private const string HttpMethodAttributeNamespace = "Blueprint.Model.Attributes";
 
     /// <inheritdoc />
     public string ModuleId => nameof(HttpMethodManifestModule);
@@ -80,7 +80,7 @@ internal sealed class HttpMethodManifestModule : IBlueprintSourceGeneratorModule
         for (var current = attributeClass; current is not null; current = current.BaseType)
         {
             if (current.Name == "HttpMethodAttribute"
-                && current.ContainingNamespace.ToDisplayString() == HttpMethodAttributeNamespace)
+                && current.IsInNamespace("Blueprint", "Model", "Attributes"))
             {
                 return true;
             }
@@ -92,7 +92,7 @@ internal sealed class HttpMethodManifestModule : IBlueprintSourceGeneratorModule
     private static string? ResolveHttpMethodValue(AttributeData attribute)
     {
         if (attribute.AttributeClass is not { } attrClass
-            || attrClass.ContainingNamespace.ToDisplayString() != HttpMethodAttributeNamespace)
+            || attrClass.IsInNamespace("Blueprint", "Model", "Attributes") == false)
         {
             return attribute.ConstructorArguments.Length > 0
                 ? attribute.ConstructorArguments[0].Value as string
@@ -116,6 +116,6 @@ internal sealed class HttpMethodManifestModule : IBlueprintSourceGeneratorModule
     {
         return operationType.AllInterfaces.Any(static candidate =>
             candidate.Name == "ICommand"
-            && candidate.ContainingNamespace.ToDisplayString() == "Blueprint.Model");
+            && candidate.IsInNamespace("Blueprint", "Model"));
     }
 }
