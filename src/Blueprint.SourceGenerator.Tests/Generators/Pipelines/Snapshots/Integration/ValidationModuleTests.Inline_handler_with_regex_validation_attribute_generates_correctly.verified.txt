@@ -16,7 +16,7 @@ namespace Blueprint.Generated
     public sealed partial class CreateUserCommandExecutorPipeline : Blueprint.OperationExecutorShell
     {
         static readonly string[] _appliedModuleIds =
-            new string[] { "TenantModule", "PropertyPopulationModule", "ValidationModule", "HandlerExecutionModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule" };
+            ["TenantModule", "PropertyPopulationModule", "ValidationModule", "HandlerExecutionModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule"];
         private static readonly System.ComponentModel.DataAnnotations.RegularExpressionAttribute _va_Code =
             new global::System.ComponentModel.DataAnnotations.RegularExpressionAttribute(@"^[A-Z]{2,5}$");
         private static readonly System.Text.RegularExpressions.Regex _vr_Code =

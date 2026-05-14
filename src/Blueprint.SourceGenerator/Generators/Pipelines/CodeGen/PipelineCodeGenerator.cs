@@ -193,7 +193,7 @@ internal static class PipelineCodeGenerator
         pipelineClass.AddProperty("_appliedModuleIds")
             .SetType("string[]")
             .MakeStatic()
-            .WithReadonlyValue($"new string[] {{ {arrayElements} }}");
+            .WithReadonlyValue($"[{arrayElements}]");
 
         pipelineClass.AddMethod("GetAppliedModules")
             .MakePublicMethod()
