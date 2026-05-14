@@ -1308,3 +1308,19 @@ Complete analysis of all 14 S365 services reveals a highly uniform registration 
 **PortalOperationScannerConvention**: Strips "Portal" from descriptor names (`descriptor.Name.Replace("Portal", string.Empty)`). In Blueprint source-gen, this can be handled via an OpenAPI operation processor in `configureOpenApiOperations:`.
 
 **BackgroundTaskAllowAnonymousConvention**: Sets `AnonymousAccessAllowed = true` and `IsExposed = false` for `IBackgroundTask` implementations. Blueprint source-gen handles this automatically for Rebus handlers and background tasks.
+
+---
+
+## 278. ✅ BPMIG202: Abstract Generic Base Classes
+
+**Problem**: S365 has 6 abstract generic base classes (e.g. `TenantOrderedPagedQuery<T>`, `OrderedPagedQuery<T>`) that implement `IQuery<T>`. Blueprint's `IOperation.Configure()` is `static abstract` — the source generator only emits `Configure()` for concrete types. Abstract bases can't satisfy this contract.
+
+**Solution**: New BPMIG202 migration analyzer detects abstract generic classes that directly implement `IQuery<T>` or `ICommand<T>` and reports a diagnostic guiding users to move the interface declaration to each concrete subclass.
+
+**Impact**: 6 abstract bases, 25 concrete subclasses. Only 3 subclasses already have explicit `IQuery<T>` — the other 22 need it added as part of migration.
+
+**Implementation**:
+- `AbstractBaseOperationAnalyzer.cs` — symbol-based analysis, reports on the interface in the base list (not the class declaration) for precise IDE experience
+- 8 test cases covering IQuery, ICommand, concrete exclusion, non-generic exclusion, inherited-only exclusion, abstract record support, and location targeting
+- Wired into codemod `SolutionAnalysisRunner.ResolveDescriptor` for migration reports
+- No code fix in v1 — cross-file refactoring (removing from base, adding to 25 subclasses across projects) is unsafe as an automated code fix
