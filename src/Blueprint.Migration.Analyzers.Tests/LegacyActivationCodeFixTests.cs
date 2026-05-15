@@ -265,6 +265,59 @@ public sealed class LegacyActivationCodeFixTests
         return await compilationWithAnalyzers.GetAnalyzerDiagnosticsAsync();
     }
 
+    [Xunit.Fact]
+    public async Task When_bpmig200_is_reported_then_code_fix_removes_the_resource_key_template_argument()
+    {
+        const string source = """
+            namespace Legacy.Blueprint;
+
+            [System.AttributeUsage(System.AttributeTargets.Class, AllowMultiple = true)]
+            public sealed class FromResourceAttribute : System.Attribute
+            {
+                public FromResourceAttribute(System.Type operationType, string resourceKeyTemplate) { }
+            }
+
+            public sealed class AccountLookupQuery { }
+
+            [FromResource(typeof(AccountLookupQuery), "/Tenants/{Auth:AccountId}/Accounts")]
+            public sealed class AccountCommand { }
+            """;
+
+        var fixedSource = await ApplyCodeFixAsync(source, "BPMIG200");
+
+        fixedSource.Should().Contain("[FromResource(typeof(AccountLookupQuery))]");
+        fixedSource.Should().NotContain("{Auth:AccountId}");
+        fixedSource.Should().NotContain("/Tenants/");
+    }
+
+    [Xunit.Fact]
+    public async Task When_bpmig200_is_reported_on_fromresource_with_only_one_argument_then_code_fix_does_not_change_the_attribute()
+    {
+        const string source = """
+            namespace Legacy.Blueprint;
+
+            [System.AttributeUsage(System.AttributeTargets.Class, AllowMultiple = true)]
+            public sealed class FromResourceAttribute : System.Attribute
+            {
+                public FromResourceAttribute(System.Type operationType, string resourceKeyTemplate) { }
+                public FromResourceAttribute(System.Type operationType) { }
+            }
+
+            public sealed class AccountLookupQuery { }
+
+            [FromResource(typeof(AccountLookupQuery))]
+            public sealed class AccountCommand { }
+            """;
+
+        // The diagnostic should not even be raised by the code fix for single-arg usage,
+        // but if it is, the fix provider requires ≥2 args, so nothing should change.
+        var diagnostics = await GetDiagnosticsAsync(CreateDocument(source));
+        diagnostics.Any(static d => d.Id == "BPMIG200").Should().BeTrue("the analyzer detects FromResource by name");
+
+        var fixedSource = await ApplyCodeFixAsync(source, "BPMIG200");
+        fixedSource.Should().Contain("[FromResource(typeof(AccountLookupQuery))]");
+    }
+
     private static Document CreateDocument(string source)
     {
         var projectId = ProjectId.CreateNewId("LegacyActivationCodeFixTests");
