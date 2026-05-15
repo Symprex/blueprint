@@ -58,6 +58,11 @@ public class HttpOperationResultExecutor
     [ThreadStatic]
     private static System.Buffers.ArrayBufferWriter<byte>? _threadLocalBuffer;
 
+    // Thread-local Utf8JsonWriter to eliminate the per-request class allocation (~96 B).
+    // Reset via Utf8JsonWriter.Reset(IBufferWriter<byte>) before each use (.NET 8+ API).
+    [ThreadStatic]
+    private static Utf8JsonWriter? _threadLocalWriter;
+
     /// <summary>
     /// Attempts to execute the supplied semantic result against the HTTP response.
     /// </summary>
@@ -297,7 +302,18 @@ public class HttpOperationResultExecutor
         // resource event envelope (typically < 1KB). The buffer is cleared after each use.
         var buffer = _threadLocalBuffer ??= new System.Buffers.ArrayBufferWriter<byte>(512);
         buffer.Clear();
-        using var writer = new Utf8JsonWriter(buffer);
+
+        // Reuse a thread-local Utf8JsonWriter to avoid per-request class allocation (~96 B).
+        var writer = _threadLocalWriter;
+        if (writer is null)
+        {
+            writer = new Utf8JsonWriter(buffer);
+            _threadLocalWriter = writer;
+        }
+        else
+        {
+            writer.Reset(buffer);
+        }
 
         writer.WriteStartObject();
 
