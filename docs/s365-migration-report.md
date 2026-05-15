@@ -127,8 +127,8 @@ Total instances across all projects: **2,896**.
 | BPMIG003 | Auto-fixable | Remove redundant `AddAuthorisation()` | 27 | Info |
 | BPMIG100 | Config required | Migrate configured `AddOpenApi(...)` | 21 | Warning |
 | BPMIG101 | Config required | Migrate configured `AddAuthentication(...)` | 27 | Warning |
-| BPMIG200 | Consumer rewrite | Migrate `FromResource(...)` usage | 161 | Warning |
-| BPMIG201 | Consumer rewrite | Migrate `{Auth:...}` placeholder | 139 | Warning |
+| BPMIG200 | Auto-fixable | Migrate `FromResource(...)` usage | 161 | Warning |
+| BPMIG201 | Auto-fixable | Migrate `{Auth:...}` placeholder | 139 | Warning |
 | BPMIG300 | Manual review | Update legacy Blueprint namespace | 1,399 | Warning |
 | BPMIG301 | Manual review | `IMiddlewareBuilder` → source-gen modules | 21 | Warning |
 | BPMIG302 | Manual review | `BlueprintApiBuilder` → `AddBlueprintApi<T,E>` | 43 | Warning |
@@ -137,16 +137,17 @@ Total instances across all projects: **2,896**.
 | BPMIG401 | Auto-fixable | Add `partial` to API resource class | 160 | Warning |
 
 **Category breakdown (by instance count):**
-- **Auto-fixable** (867 instances): BPMIG001-003, BPMIG400-401 — code fixes handle these automatically
-- **Configuration required** (48 instances): BPMIG100-101 — startup migration, manual but mechanical
-- **Consumer-extension rewrite** (300 instances): BPMIG200-201 — `[FromResource]` and `{Auth:...}` patterns
-- **Manual design review** (1,681 instances): BPMIG300-303 — namespace changes, middleware/builder rewrites
+- **Auto-fixable by codemod** (2,784 instances / 96%): BPMIG001-003, BPMIG200-201, BPMIG300, BPMIG303, BPMIG400-401 — 9 code fix providers handle these automatically
+- **Configuration required** (48 instances / 2%): BPMIG100-101 — startup migration, manual but mechanical
+- **Manual design review** (64 instances / 2%): BPMIG301-302 — middleware/builder rewrites
 
-**Automation potential:**
-- 867 instances (30%) are fully auto-fixable by codemod code fixes
-- 1,399 instances (48%) are namespace renames (BPMIG300) — automatable with a namespace-rename codemod
-- 218 instances (8%) are obsolete namespace removals (BPMIG303) — automatable with a using-removal codemod
-- Altogether, ~2,484 instances (86%) could be handled by automated tooling
+**Automation coverage: 96% (2,784 of 2,896 instances)**
+- BPMIG001-003: Remove redundant activation calls (60 instances) — `LegacyActivationCodeFixProvider`
+- BPMIG200: Strip resource key template from `[FromResource]` (161 instances) — `FromResourceCodeFixProvider`
+- BPMIG201: Remove `{Auth:...}` template arguments (139 instances) — `AuthPlaceholderCodeFixProvider`
+- BPMIG300: Replace legacy namespace usings (1,399 instances) — `LegacyNamespaceCodeFixProvider`
+- BPMIG303: Remove obsolete namespace usings (218 instances) — `LegacyRemovedNamespaceCodeFixProvider`
+- BPMIG400-401: Add `partial` to operation/resource classes (807 instances) — `MissingPartialCodeFixProvider`
 
 ## Known Blockers
 
@@ -156,8 +157,10 @@ None currently. All framework features are implemented.
 
 Each service follows the same mechanical steps:
 
-1. **Codemod apply** — Run `Blueprint.Codemod --apply` to auto-fix 7 diagnostic types:
+1. **Codemod apply** — Run `Blueprint.Codemod --apply` to auto-fix 9 diagnostic types (96% of instances):
    - BPMIG001-003: Remove redundant activation calls (60 instances)
+   - BPMIG200: Strip resource key from `[FromResource]` (161 instances)
+   - BPMIG201: Remove `{Auth:...}` template arguments (139 instances)
    - BPMIG300: Replace legacy namespace usings (1,399 instances)
    - BPMIG303: Remove obsolete namespace usings (218 instances)
    - BPMIG400: Add `partial` to operation classes (647 instances)
@@ -166,13 +169,11 @@ Each service follows the same mechanical steps:
 3. **Create BlueprintApp** — `[BlueprintAppScan]` partial class + `JsonSerializerContext`
 4. **Update startup** — Replace `AddBlueprintApi(...)` with new registration pattern
 5. **Update auth** — `[Resource]` stays; auth provider implements `IResourceAuthorizationProvider`
-6. **Migrate FromResource** — `[FromResource(typeof(X), "/path")]` → `[FromResource(typeof(X))]` (161 instances)
-7. **Migrate auth placeholders** — `{Auth:...}` templates move to generated metadata (139 instances)
-8. **IMiddlewareBuilder migration** — 21 instances to companion generator or ASP.NET middleware
-9. **BlueprintApiBuilder migration** — 43 instances to `AddBlueprintApi<T,E>` pattern
-10. **OpenAPI gate** — Compare OpenAPI output, verify TypeScript client generation
-11. **Test migration** — Replace `WebApiFixtureFactory` with `BlueprintTestFixtureFactory`
-12. **Integration test** — Run full test suite, verify all pass
+6. **IMiddlewareBuilder migration** — 21 instances to companion generator or ASP.NET middleware
+7. **BlueprintApiBuilder migration** — 43 instances to `AddBlueprintApi<T,E>` pattern
+8. **OpenAPI gate** — Compare OpenAPI output, verify TypeScript client generation
+9. **Test migration** — Replace `WebApiFixtureFactory` with `BlueprintTestFixtureFactory`
+10. **Integration test** — Run full test suite, verify all pass
 
 ## Metrics Tracking
 
