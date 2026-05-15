@@ -34,10 +34,13 @@ public class BlueprintEndpointMappingBenchmarks
     [GlobalSetup]
     public void GlobalSetup()
     {
+        this._descriptors = BlueprintAppBenchmarkScenarioFactory.CreateDescriptors(this.OperationCount);
+        BenchmarkBlueprintEndpointMappingApp.Descriptors = this._descriptors;
+
         this._serviceProvider = new ServiceCollection()
             .AddLogging()
+            .AddBlueprintApi<BenchmarkBlueprintEndpointMappingApp, BlueprintAppExecutor>()
             .BuildServiceProvider();
-        this._descriptors = BlueprintAppBenchmarkScenarioFactory.CreateDescriptors(this.OperationCount);
     }
 
     /// <summary>
