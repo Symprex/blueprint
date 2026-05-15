@@ -132,4 +132,15 @@ public sealed class DescriptorContributorContext
     {
         return this._plan.Diagnostics.Count != 0;
     }
+
+    /// <summary>
+    /// Gets the semantic model for the given syntax tree, enabling symbol resolution from syntax nodes.
+    /// Returns <see langword="null"/> when the underlying lookup does not support semantic model access.
+    /// </summary>
+    /// <param name="syntaxTree">The syntax tree to resolve symbols within.</param>
+    /// <returns>The semantic model, or <see langword="null"/>.</returns>
+    public SemanticModel? GetSemanticModel(SyntaxTree syntaxTree)
+    {
+        return this._operationLookup.GetSemanticModel(syntaxTree);
+    }
 }

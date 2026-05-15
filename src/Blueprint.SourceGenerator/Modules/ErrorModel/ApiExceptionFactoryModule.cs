@@ -84,7 +84,7 @@ public sealed class ApiExceptionFactoryModule : IBlueprintSourceGeneratorModule,
                 continue;
             }
 
-            if (TryExtractHttpStatus(field, out var httpStatus))
+            if (TryExtractHttpStatus(field, context, out var httpStatus))
             {
                 builder.Add(new ApiExceptionFactoryRegistration(field.Name, httpStatus));
             }
@@ -107,14 +107,32 @@ public sealed class ApiExceptionFactoryModule : IBlueprintSourceGeneratorModule,
     }
 
     /// <summary>
-    /// Extracts the HTTP status code from the field initializer. Supports both <c>int</c> literal and
-    /// <c>HttpStatusCode.X</c> enum member forms in the third positional constructor argument.
+    /// Extracts the HTTP status code from the field initializer. Supports direct <c>new ApiExceptionFactory(...)</c>
+    /// constructor calls (with <c>int</c> literal or <c>HttpStatusCode.X</c> enum forms in the third argument)
+    /// and single-hop field references (e.g. <c>CommonApiExceptions.NotFound</c>) that themselves have a
+    /// resolvable constructor initializer.
     /// </summary>
-    private static bool TryExtractHttpStatus(IFieldSymbol field, out int httpStatus)
+    private static bool TryExtractHttpStatus(
+        IFieldSymbol field,
+        DescriptorContributorContext context,
+        out int httpStatus)
+    {
+        return TryExtractHttpStatusCore(field, context, out httpStatus, depth: 0);
+    }
+
+    /// <summary>
+    /// Core extraction with depth guard to prevent infinite recursion on circular field references.
+    /// </summary>
+    private static bool TryExtractHttpStatusCore(
+        IFieldSymbol field,
+        DescriptorContributorContext context,
+        out int httpStatus,
+        int depth)
     {
         httpStatus = 0;
 
-        if (field.DeclaringSyntaxReferences.Length == 0)
+        // Guard against circular references or deep chains.
+        if (depth > 2 || field.DeclaringSyntaxReferences.Length == 0)
         {
             return false;
         }
@@ -122,7 +140,6 @@ public sealed class ApiExceptionFactoryModule : IBlueprintSourceGeneratorModule,
         var syntax = field.DeclaringSyntaxReferences[0].GetSyntax();
 
         // Walk through the syntax to find the initializer expression.
-        // Handles: `field = new ApiExceptionFactory(...)` and `field = new(...)`
         var initializerExpression = syntax switch
         {
             VariableDeclaratorSyntax { Initializer.Value: var value } => value,
@@ -143,14 +160,27 @@ public sealed class ApiExceptionFactoryModule : IBlueprintSourceGeneratorModule,
             _ => null,
         };
 
-        if (argumentList is null || argumentList.Arguments.Count < 3)
+        if (argumentList is { Arguments.Count: >= 3 })
         {
-            return false;
+            var statusArgExpression = argumentList.Arguments[2].Expression;
+            return TryResolveStatusCodeFromExpression(statusArgExpression, field, out httpStatus);
         }
 
-        // The third argument is the HTTP status code (int or HttpStatusCode enum).
-        var statusArgExpression = argumentList.Arguments[2].Expression;
-        return TryResolveStatusCodeFromExpression(statusArgExpression, field, out httpStatus);
+        // Follow field references using the semantic model: `field = CommonApiExceptions.NotFound`.
+        if (initializerExpression is MemberAccessExpressionSyntax or IdentifierNameSyntax)
+        {
+            var semanticModel = context.GetSemanticModel(initializerExpression.SyntaxTree);
+            if (semanticModel is not null)
+            {
+                var symbolInfo = semanticModel.GetSymbolInfo(initializerExpression);
+                if (symbolInfo.Symbol is IFieldSymbol referencedField)
+                {
+                    return TryExtractHttpStatusCore(referencedField, context, out httpStatus, depth + 1);
+                }
+            }
+        }
+
+        return false;
     }
 
     /// <summary>

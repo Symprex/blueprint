@@ -37,6 +37,14 @@ public interface IOperationLookup
     /// <param name="resourceType">The resource type symbol to look up self-link templates for.</param>
     /// <returns>The self-link bindings found, which may be empty if no self-links target this resource type.</returns>
     IReadOnlyList<SelfLinkBindingInfo> FindSelfLinksForResourceType(INamedTypeSymbol resourceType);
+
+    /// <summary>
+    /// Gets the semantic model for the given syntax tree, enabling symbol resolution from syntax nodes.
+    /// Returns <see langword="null"/> when the implementation does not have access to a compilation.
+    /// </summary>
+    /// <param name="syntaxTree">The syntax tree to get a semantic model for.</param>
+    /// <returns>The semantic model, or <see langword="null"/>.</returns>
+    SemanticModel? GetSemanticModel(SyntaxTree syntaxTree);
 }
 
 /// <summary>
@@ -92,6 +100,14 @@ public sealed class CompilationOperationLookup(Compilation compilation) : IOpera
         return this._selfLinkCache!.TryGetValue(resourceType, out var bindings)
             ? bindings
             : [];
+    }
+
+    /// <inheritdoc />
+    public SemanticModel? GetSemanticModel(SyntaxTree syntaxTree)
+    {
+        return compilation.ContainsSyntaxTree(syntaxTree)
+            ? compilation.GetSemanticModel(syntaxTree)
+            : null;
     }
 
     private void EnsureSelfLinkCache()

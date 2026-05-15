@@ -305,4 +305,65 @@ public class ApiExceptionFactoryModuleTests
         // Should have 404 but HttpResponseMetadataModule groups by status code
         descriptorSource.Should().Contain("404");
     }
+
+    [Fact]
+    public void When_factory_field_references_another_static_field_then_status_code_is_resolved()
+    {
+        const string source = """
+            using System.Net;
+            using System.Threading.Tasks;
+            using Blueprint;
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using Blueprint.Runtime.Exec;
+
+            namespace TestNamespace
+            {
+                public static class CommonApiExceptions
+                {
+                    public static readonly ApiExceptionFactory NotFound = new(
+                        "Not found",
+                        "not_found",
+                        HttpStatusCode.NotFound);
+
+                    public static readonly ApiExceptionFactory Conflict = new(
+                        "Conflict",
+                        "conflict",
+                        HttpStatusCode.Conflict);
+                }
+
+                [BlueprintAppScan]
+                public partial class TestApp : BlueprintApp { }
+
+                [RootLink("/things/{Id}")]
+                [HttpGet]
+                public partial class GetThingQuery : IQuery<OkResult<string>>
+                {
+                    public static readonly ApiExceptionFactory ThingNotFound = CommonApiExceptions.NotFound;
+
+                    public string Id { get; set; }
+
+                    public static Task<OkResult<string>> HandleAsync(GetThingQuery operation) =>
+                        Task.FromResult(new OkResult<string>("ok"));
+                }
+            }
+            """;
+
+        var generators = new[]
+        {
+            TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>(),
+        };
+
+        var result = TestHelpers.CompileWithTrackedGenerators(generators, [source], ["Input0.cs"]);
+
+        result.Diagnostics.Should().BeEmpty(
+            "the field-reference chain should be followed to resolve the HTTP status code");
+
+        var descriptorSources = result.GetGeneratedSources(nameof(OperationDescriptorSourceGenerator));
+        var descriptorSource = string.Join("\n", descriptorSources.Select(static s => s.SourceText));
+
+        // The 404 status code from the referenced CommonApiExceptions.NotFound should appear
+        descriptorSource.Should().Contain("404");
+        descriptorSource.Should().Contain("OperationHttpResponseMetadata");
+    }
 }
