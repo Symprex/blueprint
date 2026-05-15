@@ -45,14 +45,14 @@ All framework features required for S365 migration are implemented and tested:
 | EventStore | 0 | 1 | 4 | 2 | 1 | ✅ Proof compiled |
 | Templates | 0 | 1 | 2 | 0 | 2 | ✅ Proof compiled |
 | Generation | 0 | 6 | 12 | 2 | 2 | ✅ Proof compiled |
-| ExchangeTransportAgent | 4 | 3 | 9 | 7 | 3 | 🔲 Not started |
-| Microsoft365 | 4 | 1 | 10 | 2 | 3 | 🔲 Not started |
+| ExchangeTransportAgent | 4 | 3 | 9 | 7 | 3 | ✅ Proof compiled |
+| Microsoft365 | 4 | 1 | 10 | 2 | 3 | ✅ Proof compiled |
 | Outlook | 6 | 7 | 28 | 7 | 3 | ✅ Proof compiled |
-| Import | 12 | 6 | 47 | 5 | 3 | 🔲 Not started |
+| Import | 12 | 6 | 47 | 5 | 3 | ✅ Proof compiled (10 ops) |
 | VCard | 4 | 5 | 18 | 7 | 4 | ✅ Proof compiled |
-| Subscriptions | 16 | 10 | 64 | 24 | 5 | 🔲 Not started |
+| Subscriptions | 16 | 10 | 64 | 24 | 5 | ✅ Proof compiled (26 ops) |
 | Partners | 24 | 18 | 92 | 10 | 5 | 🔲 Not started |
-| Billing | 23 | 14 | 95 | 35 | 6 | 🔲 Not started |
+| Billing | 23 | 14 | 95 | 35 | 6 | ✅ Proof compiled (8 representative ops) |
 | IdentityServer | 29 | 13 | 92 | 43 | 6 | 🔲 Not started |
 | AdminPortal | 41 | 63 | 230 | 39 | 6 | 🔲 Not started |
 | Portal | 130 | 99 | 529 | 161 | 7 | 🔲 Not started |
