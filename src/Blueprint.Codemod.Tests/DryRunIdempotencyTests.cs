@@ -82,7 +82,7 @@ public sealed class DryRunIdempotencyTests
         return applier.ApplyAsync(options, cancellationToken);
     }
 
-    private static Task<Blueprint.Migration.Analyzers.MigrationReport> RunDryRunAsync(
+    private static Task<SolutionAnalysisRunner.AnalysisResult> RunDryRunAsync(
         SolutionAnalysisOptions options,
         CancellationToken cancellationToken)
     {
@@ -93,10 +93,11 @@ public sealed class DryRunIdempotencyTests
     private static Task WriteArtifactsAsync(
         Blueprint.Migration.Analyzers.MigrationReport report,
         string directory,
+        IReadOnlyDictionary<string, int>? instanceCounts,
         CancellationToken cancellationToken)
     {
         var artifactWriter = new CodemodArtifactWriter();
-        return artifactWriter.WriteAsync(report, directory, cancellationToken);
+        return artifactWriter.WriteAsync(report, directory, instanceCounts, cancellationToken);
     }
 
     private static string CreateWorkingFixtureRoot()

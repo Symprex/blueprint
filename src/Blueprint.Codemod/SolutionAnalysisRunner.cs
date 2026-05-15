@@ -17,8 +17,8 @@ public sealed class SolutionAnalysisRunner
     /// </summary>
     /// <param name="options">The solution-analysis options.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>The collected migration report.</returns>
-    public async Task<MigrationReport> DryRunAsync(SolutionAnalysisOptions options, CancellationToken cancellationToken = default)
+    /// <returns>The collected analysis result with migration report and instance counts.</returns>
+    public async Task<AnalysisResult> DryRunAsync(SolutionAnalysisOptions options, CancellationToken cancellationToken = default)
     {
         if (options is null)
         {
@@ -42,6 +42,7 @@ public sealed class SolutionAnalysisRunner
             var buildResult = await this.BuildSolutionWithSarifAsync(solutionPath, sarifDir, cancellationToken);
 
             var allDiagnosticIds = await ReadDiagnosticIdsFromDirectoryAsync(sarifDir, cancellationToken);
+            var allDiagnosticCounts = await ReadDiagnosticCountsFromDirectoryAsync(sarifDir, cancellationToken);
             var diagnosticIds = allDiagnosticIds
                 .Where(diagnosticId => MatchesDiagnosticFilter(diagnosticId, options.DiagnosticFilter))
                 .ToArray();
@@ -66,7 +67,14 @@ public sealed class SolutionAnalysisRunner
                 .Cast<DiagnosticDescriptor>()
                 .ToArray();
 
-            return MigrationReport.CreateMigrationDiagnostics(descriptors);
+            var report = MigrationReport.CreateMigrationDiagnostics(descriptors);
+
+            // Only include counts for diagnostics that passed the filter
+            var filteredCounts = allDiagnosticCounts
+                .Where(kvp => MatchesDiagnosticFilter(kvp.Key, options.DiagnosticFilter))
+                .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+
+            return new AnalysisResult(report, filteredCounts);
         }
         finally
         {
@@ -201,6 +209,31 @@ public sealed class SolutionAnalysisRunner
         return allIds.ToArray();
     }
 
+    private static async Task<Dictionary<string, int>> ReadDiagnosticCountsFromDirectoryAsync(string sarifDir, CancellationToken cancellationToken)
+    {
+        var sarifFiles = Directory.GetFiles(sarifDir, "*.sarif");
+        var aggregated = new Dictionary<string, int>(StringComparer.Ordinal);
+
+        foreach (var sarifFile in sarifFiles)
+        {
+            try
+            {
+                await using var stream = File.OpenRead(sarifFile);
+                var fileCounts = await SarifDiagnosticReader.ReadDiagnosticCountsAsync(stream, cancellationToken);
+                foreach (var (id, count) in fileCounts)
+                {
+                    aggregated[id] = aggregated.TryGetValue(id, out var current) ? current + count : count;
+                }
+            }
+            catch (Exception ex) when (ex is System.Text.Json.JsonException or InvalidOperationException)
+            {
+                // Skip malformed SARIF files from projects that failed to compile cleanly.
+            }
+        }
+
+        return aggregated;
+    }
+
     /// <summary>
     /// Determines whether a diagnostic identifier matches the configured codemod filter.
     /// </summary>
@@ -249,4 +282,14 @@ public sealed class SolutionAnalysisRunner
     private sealed record BuildResult(int ExitCode, string StandardOutput, string StandardError);
 
     private sealed record BuildOutput(string StandardOutput, string StandardError);
+
+    /// <summary>
+    /// Contains the migration report together with per-diagnostic instance counts collected from SARIF output.
+    /// </summary>
+    /// <param name="Report">The canonical migration report with distinct diagnostic findings.</param>
+    /// <param name="InstanceCounts">
+    /// A dictionary mapping diagnostic IDs to their total occurrence count across all projects.
+    /// Only includes diagnostics that passed the codemod filter.
+    /// </param>
+    public sealed record AnalysisResult(MigrationReport Report, IReadOnlyDictionary<string, int> InstanceCounts);
 }

@@ -38,10 +38,10 @@ public static class Program
                     var runner = new SolutionAnalysisRunner();
                     return runner.DryRunAsync(options, cancellationToken);
                 },
-                static (report, outputDirectory, cancellationToken) =>
+                static (report, outputDirectory, instanceCounts, cancellationToken) =>
                 {
                     var artifactWriter = new CodemodArtifactWriter();
-                    return artifactWriter.WriteAsync(report, outputDirectory, cancellationToken);
+                    return artifactWriter.WriteAsync(report, outputDirectory, instanceCounts, cancellationToken);
                 },
                 Console.Out,
                 Console.Error,
@@ -72,8 +72,8 @@ public static class Program
     internal static async Task<int> RunAsync(
         string[] args,
         Func<ApplyModeOptions, CancellationToken, Task> applyAsync,
-        Func<SolutionAnalysisOptions, CancellationToken, Task<MigrationReport>> dryRunAsync,
-        Func<MigrationReport, string, CancellationToken, Task> writeArtifactsAsync,
+        Func<SolutionAnalysisOptions, CancellationToken, Task<SolutionAnalysisRunner.AnalysisResult>> dryRunAsync,
+        Func<MigrationReport, string, IReadOnlyDictionary<string, int>?, CancellationToken, Task> writeArtifactsAsync,
         TextWriter standardOutput,
         TextWriter standardError,
         CancellationToken cancellationToken)
@@ -106,18 +106,45 @@ public static class Program
                 cancellationToken);
         }
 
-        var report = await dryRunAsync(
+        var analysisResult = await dryRunAsync(
             new SolutionAnalysisOptions(
                 solutionPath,
                 effectiveFilter),
             cancellationToken);
 
+        var report = analysisResult.Report;
+
         if (!string.IsNullOrWhiteSpace(outputDirectory))
         {
-            await writeArtifactsAsync(report, outputDirectory, cancellationToken);
+            await writeArtifactsAsync(report, outputDirectory, analysisResult.InstanceCounts, cancellationToken);
         }
 
-        await standardOutput.WriteLineAsync(JsonSerializer.Serialize(report));
+        // Build enriched output that includes instance counts when available
+        var outputObject = new
+        {
+            report.SchemaVersion,
+            report.ReportType,
+            Findings = report.Findings.Select(f =>
+            {
+                var hasCount = analysisResult.InstanceCounts.TryGetValue(f.DiagnosticId, out var count);
+                return new
+                {
+                    f.DiagnosticId,
+                    f.Title,
+                    f.Severity,
+                    f.Message,
+                    f.Description,
+                    f.Category,
+                    f.DocumentationPath,
+                    InstanceCount = hasCount ? (int?)count : null,
+                };
+            }).ToArray(),
+        };
+
+        await standardOutput.WriteLineAsync(JsonSerializer.Serialize(outputObject, new JsonSerializerOptions
+        {
+            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+        }));
         return 0;
     }
 

@@ -34,9 +34,9 @@ public sealed class ProgramCancellationTests
             (options, token) =>
             {
                 dryRunToken = token;
-                return Task.FromResult(report);
+                return Task.FromResult(new SolutionAnalysisRunner.AnalysisResult(report, new Dictionary<string, int>()));
             },
-            (emittedReport, directory, token) =>
+            (emittedReport, directory, counts, token) =>
             {
                 emittedReport.Should().BeSameAs(report);
                 outputDirectory = directory;
@@ -80,9 +80,9 @@ public sealed class ProgramCancellationTests
             (options, token) =>
             {
                 dryRunToken = token;
-                return Task.FromResult(MigrationReport.CreateMigrationDiagnostics());
+                return Task.FromResult(new SolutionAnalysisRunner.AnalysisResult(MigrationReport.CreateMigrationDiagnostics(), new Dictionary<string, int>()));
             },
-            (report, directory, token) =>
+            (report, directory, counts, token) =>
             {
                 artifactWriterCalled = true;
                 return Task.CompletedTask;

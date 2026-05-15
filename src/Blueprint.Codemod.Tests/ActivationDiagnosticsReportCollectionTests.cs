@@ -14,10 +14,10 @@ public sealed class ActivationDiagnosticsReportCollectionTests
                 solutionPath: GetFixtureSolutionPath(),
                 diagnosticFilter: "BPMIG*"));
 
-        report.SchemaVersion.Should().Be(1);
-        report.ReportType.Should().Be("migration-diagnostics");
-        report.Findings.Should().HaveCount(6);
-        report.Findings.Select(static finding => (finding.DiagnosticId, finding.Category))
+        report.Report.SchemaVersion.Should().Be(1);
+        report.Report.ReportType.Should().Be("migration-diagnostics");
+        report.Report.Findings.Should().HaveCount(6);
+        report.Report.Findings.Select(static finding => (finding.DiagnosticId, finding.Category))
             .Should()
             .Equal(
                 ("BPMIG001", "auto-fixable"),

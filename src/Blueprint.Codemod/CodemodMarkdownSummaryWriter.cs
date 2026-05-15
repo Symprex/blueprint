@@ -17,11 +17,12 @@ public sealed class CodemodMarkdownSummaryWriter
     ];
 
     /// <summary>
-    /// Renders a markdown summary from the canonical migration report contents alone.
+    /// Renders a markdown summary from the canonical migration report with optional instance counts.
     /// </summary>
     /// <param name="report">The canonical migration report.</param>
+    /// <param name="instanceCounts">Optional per-diagnostic instance counts from SARIF analysis.</param>
     /// <returns>The deterministic markdown summary.</returns>
-    public string Write(MigrationReport report)
+    public string Write(MigrationReport report, IReadOnlyDictionary<string, int>? instanceCounts = null)
     {
         if (report is null)
         {
@@ -52,6 +53,12 @@ public sealed class CodemodMarkdownSummaryWriter
             builder.AppendLine($"- Title: {finding.Title}");
             builder.AppendLine($"- Category: {finding.Category}");
             builder.AppendLine($"- Severity: {finding.Severity}");
+
+            if (instanceCounts is not null && instanceCounts.TryGetValue(finding.DiagnosticId, out var count))
+            {
+                builder.AppendLine($"- Instances: {count}");
+            }
+
             builder.AppendLine($"- Documentation: {finding.DocumentationPath}");
             builder.AppendLine($"- Message: {finding.Message}");
             builder.AppendLine();

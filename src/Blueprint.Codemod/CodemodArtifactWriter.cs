@@ -11,6 +11,7 @@ public sealed class CodemodArtifactWriter
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
+        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
     };
 
     private readonly CodemodMarkdownSummaryWriter _markdownSummaryWriter = new();
@@ -20,11 +21,13 @@ public sealed class CodemodArtifactWriter
     /// </summary>
     /// <param name="report">The canonical migration report to persist.</param>
     /// <param name="outputDirectory">The directory where the artifacts should be written.</param>
+    /// <param name="instanceCounts">Optional per-diagnostic instance counts from SARIF analysis.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A task that completes when both artifacts have been written.</returns>
     public async Task WriteAsync(
         MigrationReport report,
         string outputDirectory,
+        IReadOnlyDictionary<string, int>? instanceCounts = null,
         CancellationToken cancellationToken = default)
     {
         if (report is null)
@@ -49,7 +52,7 @@ public sealed class CodemodArtifactWriter
             cancellationToken);
         await File.WriteAllTextAsync(
             markdownPath,
-            this._markdownSummaryWriter.Write(report),
+            this._markdownSummaryWriter.Write(report, instanceCounts),
             cancellationToken);
     }
 }

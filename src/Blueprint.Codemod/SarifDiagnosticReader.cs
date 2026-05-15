@@ -63,4 +63,54 @@ internal static class SarifDiagnosticReader
 
         return diagnosticIds.ToArray();
     }
+
+    /// <summary>
+    /// Reads diagnostic identifiers with instance counts from a SARIF stream. Unlike <see cref="ReadDiagnosticIdsAsync"/>
+    /// which returns distinct IDs, this method counts every occurrence so the migration report can include scale information.
+    /// </summary>
+    /// <param name="sarifStream">The SARIF payload stream.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A dictionary mapping diagnostic IDs to their occurrence count in this SARIF file.</returns>
+    internal static async Task<Dictionary<string, int>> ReadDiagnosticCountsAsync(Stream sarifStream, CancellationToken cancellationToken)
+    {
+        if (sarifStream is null)
+        {
+            throw new ArgumentNullException(nameof(sarifStream));
+        }
+
+        using var document = await JsonDocument.ParseAsync(sarifStream, cancellationToken: cancellationToken);
+
+        if (!document.RootElement.TryGetProperty("runs", out var runsElement)
+            || runsElement.ValueKind != JsonValueKind.Array)
+        {
+            throw new InvalidOperationException("The codemod dry run expected the SARIF payload to contain a 'runs' array.");
+        }
+
+        var counts = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var runElement in runsElement.EnumerateArray())
+        {
+            if (!runElement.TryGetProperty("results", out var resultsElement)
+                || resultsElement.ValueKind != JsonValueKind.Array)
+            {
+                continue;
+            }
+
+            foreach (var resultElement in resultsElement.EnumerateArray())
+            {
+                if (!resultElement.TryGetProperty("ruleId", out var ruleIdElement)
+                    || ruleIdElement.ValueKind != JsonValueKind.String)
+                {
+                    continue;
+                }
+
+                var diagnosticId = ruleIdElement.GetString();
+                if (!string.IsNullOrWhiteSpace(diagnosticId))
+                {
+                    counts[diagnosticId] = counts.TryGetValue(diagnosticId, out var current) ? current + 1 : 1;
+                }
+            }
+        }
+
+        return counts;
+    }
 }

@@ -42,10 +42,10 @@ public sealed class TransformationApplier
         EnsureMsBuildRegistered();
 
         var runner = new SolutionAnalysisRunner();
-        var report = await runner.DryRunAsync(
+        var analysisResult = await runner.DryRunAsync(
             new SolutionAnalysisOptions(options.SolutionPath, options.DiagnosticFilter),
             cancellationToken);
-        var diagnosticsToApply = report.Findings
+        var diagnosticsToApply = analysisResult.Report.Findings
             .Select(static finding => finding.DiagnosticId)
             .Where(static diagnosticId => SupportedDiagnosticIds.Contains(diagnosticId))
             .Distinct(StringComparer.Ordinal)
