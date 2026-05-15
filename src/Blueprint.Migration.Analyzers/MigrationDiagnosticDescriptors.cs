@@ -169,4 +169,18 @@ public static class MigrationDiagnosticDescriptors
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
         description: "Blueprint source generators emit partial class extensions for operation types (descriptors, Configure() methods). Classes implementing ICommand<T> or IQuery<T> must be declared 'partial' for the generated code to compile.");
+
+    /// <summary>
+    /// Gets the diagnostic emitted when an API resource class inheriting <c>ApiResource</c> is missing
+    /// the <c>partial</c> keyword. The source generator emits the <c>Object</c> property override on a
+    /// partial extension, so the original declaration must be <c>partial</c>.
+    /// </summary>
+    public static DiagnosticDescriptor ResourceMissingPartialKeyword { get; } = new(
+        id: "BPMIG401",
+        title: "Add 'partial' to API resource class",
+        messageFormat: "Resource class '{0}' inherits from ApiResource but is not declared as 'partial'. Blueprint source generators require the 'partial' keyword to emit the Object property override.",
+        category: "BlueprintMigration",
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "Blueprint source generators emit a partial class extension with the Object property override for API resource types. Classes inheriting from ApiResource must be declared 'partial' for the generated code to compile.");
 }

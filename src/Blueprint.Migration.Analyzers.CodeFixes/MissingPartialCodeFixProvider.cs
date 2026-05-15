@@ -9,9 +9,11 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 namespace Blueprint.Migration.Analyzers.CodeFixes;
 
 /// <summary>
-/// Provides a code fix that adds the <c>partial</c> keyword to operation classes detected
-/// by <see cref="Analyzers.MissingPartialAnalyzer"/> (BPMIG400). Supports "Fix all in solution"
-/// for bulk migration of Signature 365's ~240+ operation classes.
+/// Provides a code fix that adds the <c>partial</c> keyword to classes detected
+/// by <see cref="Analyzers.MissingPartialAnalyzer"/> (BPMIG400) or
+/// <see cref="Analyzers.ResourceMissingPartialAnalyzer"/> (BPMIG401).
+/// Supports "Fix all in solution" for bulk migration of Signature 365's ~240+ operation
+/// classes and ~60 API resource classes in a single pass.
 /// </summary>
 [ExportCodeFixProvider(LanguageNames.CSharp, Name = nameof(MissingPartialCodeFixProvider))]
 [Shared]
@@ -19,7 +21,9 @@ public sealed class MissingPartialCodeFixProvider : CodeFixProvider
 {
     /// <inheritdoc />
     public override ImmutableArray<string> FixableDiagnosticIds { get; } =
-        ImmutableArray.Create(MigrationDiagnosticDescriptors.OperationMissingPartialKeyword.Id);
+        ImmutableArray.Create(
+            MigrationDiagnosticDescriptors.OperationMissingPartialKeyword.Id,
+            MigrationDiagnosticDescriptors.ResourceMissingPartialKeyword.Id);
 
     /// <inheritdoc />
     public override FixAllProvider GetFixAllProvider()
@@ -50,7 +54,7 @@ public sealed class MissingPartialCodeFixProvider : CodeFixProvider
                 CodeAction.Create(
                     $"Add 'partial' to {typeDecl.Identifier.Text}",
                     ct => AddPartialModifierAsync(context.Document, typeDecl, ct),
-                    equivalenceKey: "BPMIG400_AddPartial"),
+                    equivalenceKey: "BPMIG_AddPartial"),
                 diagnostic);
         }
     }

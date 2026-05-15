@@ -118,4 +118,14 @@ public sealed class MigrationDiagnosticDescriptorsTests
         Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.OperationMissingPartialKeyword.IsEnabledByDefault.Should().BeTrue();
         Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.OperationMissingPartialKeyword.MessageFormat.ToString().Should().Contain("partial");
     }
+
+    [Xunit.Fact]
+    public void When_loading_migration_diagnostic_descriptors_then_resource_missing_partial_uses_bpmig401()
+    {
+        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.ResourceMissingPartialKeyword.Id.Should().Be("BPMIG401");
+        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.ResourceMissingPartialKeyword.DefaultSeverity.Should().Be(Microsoft.CodeAnalysis.DiagnosticSeverity.Warning);
+        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.ResourceMissingPartialKeyword.IsEnabledByDefault.Should().BeTrue();
+        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.ResourceMissingPartialKeyword.MessageFormat.ToString().Should().Contain("ApiResource");
+        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.ResourceMissingPartialKeyword.MessageFormat.ToString().Should().Contain("partial");
+    }
 }
