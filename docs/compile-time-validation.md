@@ -88,6 +88,10 @@ Current property ownership IDs in active use:
 - `BPPO005`: explicit `[FromRoute]` without a matching route placeholder in the URL template.
 - `BPPO006`: multiple conflicting `[FromX]` binding attributes on the same property.
 - `BPPO007`: header- or cookie-bound property has a type that cannot be converted from a string value.
+- `BPPO008`: malformed route placeholder (e.g. missing closing brace or invalid characters).
+- `BPPO009`: `[FromAuthContext(ClaimType = "...")]` on a non-string property — only string properties support compile-time claim mapping (error).
+- `BPPO010`: `[FromAuthContext(ClaimType = "...")]` on a property that is also route-bound — route binding takes precedence, making the ClaimType dead configuration (warning).
+- `BPPO011`: route/query property type uses `[TypeConverter]` instead of the faster `IParsable<T>` / static `TryParse` path. TypeConverter uses exception-based control flow for invalid input (info).
 
 ### Operation discovery and host diagnostics
 

@@ -97,12 +97,16 @@ For detailed explanations, see [compile-time-validation.md](compile-time-validat
 | BPPO006 | Error | Conflicting `[FromX]` binding attributes |
 | BPPO007 | Error | Unsupported header/cookie property type |
 | BPPO008 | Error | Malformed route placeholder |
+| BPPO009 | Error | `[FromAuthContext]` ClaimType on non-string property |
+| BPPO010 | Warning | `[FromAuthContext]` ClaimType on route-owned property |
+| BPPO011 | Info | Property uses slow TypeConverter binding path |
 
 ## OpenAPI (BPOA)
 
 | ID | Severity | Title |
 |----|----------|-------|
 | BPOA001 | Error | Explicit HTTP method is null or whitespace |
+| BPOA002 | Warning | Operation declares multiple conflicting HTTP methods |
 
 ## Operation discovery (BPOD)
 

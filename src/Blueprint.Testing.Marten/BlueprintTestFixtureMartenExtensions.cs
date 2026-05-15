@@ -163,6 +163,7 @@ public static class BlueprintTestFixtureMartenExtensions
         string tenantId)
         where TApp : Model.BlueprintApp
         where TExec : BlueprintAppExecutor
+        where T : notnull
     {
         using var scope = fixture.Services.CreateScope();
         await using var db = scope.ServiceProvider.GetRequiredService<IDocumentStore>().LightweightSession(tenantId);
