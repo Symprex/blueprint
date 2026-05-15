@@ -206,7 +206,7 @@ public sealed class ApiLinkGenerator : IApiLinkGenerator
 
             for (var i = 0; i < props.Length; i++)
             {
-                computedAccessors[i] = (props[i].Name, CompiledPropertyAccessor.GetGetter(props[i]));
+                computedAccessors[i] = (ToCamelCase(props[i].Name), CompiledPropertyAccessor.GetGetter(props[i]));
             }
 
             accessors = _queryStringAccessors.GetOrAdd(queryStringType, computedAccessors);
@@ -235,5 +235,23 @@ public sealed class ApiLinkGenerator : IApiLinkGenerator
         }
 
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// Converts a PascalCase property name to camelCase to match the JSON/query-string
+    /// naming convention used by the generated pipeline bindings.
+    /// </summary>
+    private static string ToCamelCase(string name)
+    {
+        if (name.Length == 0 || char.IsLower(name[0]))
+        {
+            return name;
+        }
+
+        return string.Create(name.Length, name, static (span, source) =>
+        {
+            source.AsSpan().CopyTo(span);
+            span[0] = char.ToLowerInvariant(span[0]);
+        });
     }
 }

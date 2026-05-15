@@ -119,6 +119,31 @@ public class ApiLinkGeneratorTests
     }
 
     [Fact]
+    public void CreateSelfLink_with_query_string_uses_camelCase_parameter_names()
+    {
+        var (app, _) = CreateAppWithLink("resources/{Id}");
+        var generator = new ApiLinkGenerator(app, "https://api.example.com/");
+
+        var link = generator.CreateSelfLink<LinkGenTestResource>("abc", new { PageSize = 10, SortOrder = "asc" });
+
+        link.Href.Should().Be("https://api.example.com/resources/abc?pageSize=10&sortOrder=asc");
+    }
+
+    [Fact]
+    public void CreateUrl_with_query_string_null_values_are_skipped()
+    {
+        var (app, link) = CreateAppWithLink("resources/{Id}");
+        var generator = new ApiLinkGenerator(app, "https://api.example.com/");
+
+        var url = generator.CreateUrl(link, new { Id = "r1" });
+
+        // Now add query string to a self-link call
+        var selfLink = generator.CreateSelfLink<LinkGenTestResource>("r1", new { Active = (string?)null, Name = "test" });
+
+        selfLink.Href.Should().Be("https://api.example.com/resources/r1?name=test");
+    }
+
+    [Fact]
     public void HasPlaceholders_returns_true_when_url_has_braces()
     {
         var (_, link) = CreateAppWithLink("resources/{Id}");
@@ -157,18 +182,11 @@ public class ApiLinkGeneratorTests
         return (app, link);
     }
 
-    private class LinkGenTestResource : ILinkableResource
+    private class LinkGenTestResource : ApiResource
     {
-        private readonly Dictionary<string, Link> _links = new();
-
         public string Id { get; set; } = string.Empty;
 
-        public IDictionary<string, Link> Links => this._links;
-
-        public void AddLink(string rel, Link link)
-        {
-            this._links[rel] = link;
-        }
+        public override string Object => "linkGenTest";
     }
 
     private class LinkGenOtherResource : ILinkableResource
