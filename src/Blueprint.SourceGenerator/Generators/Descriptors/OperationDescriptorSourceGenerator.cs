@@ -123,7 +123,7 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
                 }
 
                 spc.AddSource(
-                    $"{classToGenerate.Operation.TypeName}_Descriptor.g.cs",
+                    $"{classToGenerate.Operation.Namespace}.{classToGenerate.Operation.TypeName}_Descriptor.g.cs",
                     SourceText.From(GenerateDescriptorClass(classToGenerate), Encoding.UTF8));
             });
     }

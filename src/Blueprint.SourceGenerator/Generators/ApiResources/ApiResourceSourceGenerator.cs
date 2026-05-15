@@ -49,7 +49,7 @@ public sealed class ApiResourceSourceGenerator : IIncrementalGenerator, ITracked
                 }
 
                 spc.AddSource(
-                    $"{classToGenerate.ClassName}_ObjectProperty.g.cs",
+                    $"{classToGenerate.Namespace}.{classToGenerate.ClassName}_ObjectProperty.g.cs",
                     SourceText.From(GenerateObjectProperty(classToGenerate), Encoding.UTF8));
             });
     }

@@ -437,7 +437,7 @@ public sealed class ResourceEventFamilySourceGenerator : IIncrementalGenerator, 
         sb.AppendLine("}");
 
         spc.AddSource(
-            $"{family.ClassName}_ResourceEvents.g.cs",
+            $"{family.Namespace}.{family.ClassName}_ResourceEvents.g.cs",
             SourceText.From(sb.ToString(), Encoding.UTF8));
     }
 
