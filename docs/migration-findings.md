@@ -348,6 +348,9 @@
 | Error response content type | ✅ Done | `OpenApiInfoOptions.UsePlainJsonForErrorResponses` — S365 uses `application/json` for all responses. Blueprint defaults to `application/problem+json` (RFC 9457). New option for backward compat (#356) |
 | OpenAPI param title | ✅ Not needed | S365 Handlebars templates do NOT read parameter `title` field — only used for enum schema naming. Cosmetic difference, zero impact on TypeScript generation (#357) |
 | Rebus/Marten auto-detection | ✅ Done | `RebusTransactionModule` and `MartenScopeModule` now auto-detect dependency types in the compilation via `FindTypeByMetadataName()` — included in default pipeline config, no companion generators needed. S365 just references runtime packages. (#358) |
+| Query string camelCase fix | ✅ Done | `ApiLinkGenerator.BuildUrl()` was using PascalCase C# `PropertyInfo.Name` for query string keys instead of camelCase — produced `?PageSize=10` instead of `?pageSize=10`. Fixed with `ToCamelCase()` using efficient `string.Create()` + static lambda. 2 new integration tests. Commit `4528b544`. |
+| BPMIG202 analyzer severity fix | ✅ Done | `AbstractGenericBaseImplementsOperation` tests expected `Warning`/`IsEnabled=true` but diagnostic was changed to `Info`/`IsEnabled=false` (the pattern is now fully supported). 6 analyzer test failures fixed. Commit `b2126225`. |
+| Pipeline duplication analysis | ✅ Assessed | String query/header/cookie binding is only 3-4 generated lines per property — method call overhead would match inline IL. `PopulateFromJsonBody` loop is already well-optimized with static delegate. No further extraction justified. |
 
 ---
 
