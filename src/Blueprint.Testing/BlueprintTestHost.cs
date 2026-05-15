@@ -39,6 +39,19 @@ public sealed class BlueprintTestHost<TApp, TExec> : IDisposable, IAsyncDisposab
     public IServiceProvider Services => this._rootProvider;
 
     /// <summary>
+    /// Gets the ambient authentication manager. Set a principal here to have it applied
+    /// automatically to every subsequent operation execution. This eliminates the need
+    /// for per-call <c>ctx.WithUser(...)</c> in tests that run many operations under
+    /// the same identity.
+    /// <para>
+    /// <strong>S365 migration note</strong>: this replaces <c>ApiFixture.Authentication</c>.
+    /// Use <c>Authentication.Set(identity)</c> for permanent auth or
+    /// <c>using (host.Authentication.As(identity))</c> for scoped auth, exactly as before.
+    /// </para>
+    /// </summary>
+    public TestAuthentication Authentication { get; } = new();
+
+    /// <summary>
     /// Initialises a new instance of the <see cref="BlueprintTestHost{TApp,TExec}"/> class.
     /// </summary>
     /// <param name="rootProvider">The DI root service provider that owns the host's lifetime.</param>
@@ -77,6 +90,13 @@ public sealed class BlueprintTestHost<TApp, TExec> : IDisposable, IAsyncDisposab
 
         using var scope = this._rootProvider.CreateScope();
         var httpContext = new DefaultHttpContext { RequestServices = scope.ServiceProvider };
+
+        // Apply ambient authentication if set (before user's configure callback so it can override)
+        if (this.Authentication.CurrentPrincipal is { } ambientPrincipal)
+        {
+            httpContext.User = ambientPrincipal;
+        }
+
         var context = new ApiOperationContext(
             scope.ServiceProvider,
             this.App,
@@ -85,6 +105,7 @@ public sealed class BlueprintTestHost<TApp, TExec> : IDisposable, IAsyncDisposab
         {
             Operation = operation,
             HttpContext = httpContext,
+            UserPrincipal = this.Authentication.CurrentPrincipal,
         };
 
         var testContext = new BlueprintTestContext(context, scope.ServiceProvider);

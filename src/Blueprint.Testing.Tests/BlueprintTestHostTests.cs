@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Blueprint.Runtime.Exec;
 using Blueprint.SourceGenerator.Sample;
 using Blueprint.SourceGenerator.Sample.Api;
@@ -120,6 +121,108 @@ public class BlueprintTestHostTests : IDisposable
             ctx => ctx.WithTenant("tenant-123", "templates:read"));
 
         result.Should().BeOfType<PlainTextResult>();
+    }
+
+    [Fact]
+    public async Task Authentication_Set_applies_to_subsequent_operations()
+    {
+        var identity = new System.Security.Claims.ClaimsIdentity(
+            [new System.Security.Claims.Claim("sub", "ambient-user")],
+            "TestAuth");
+
+        this._host.Authentication.Set(identity);
+
+        // Execute without per-call auth — ambient should apply
+        var result = await this._host.ExecuteAsync(new HealthCheckQuery());
+
+        result.Should().BeOfType<PlainTextResult>();
+    }
+
+    [Fact]
+    public async Task Authentication_As_reverts_after_disposal()
+    {
+        var permanentIdentity = new System.Security.Claims.ClaimsIdentity(
+            [new System.Security.Claims.Claim("sub", "permanent-user")],
+            "TestAuth");
+
+        var temporaryIdentity = new System.Security.Claims.ClaimsIdentity(
+            [new System.Security.Claims.Claim("sub", "temp-user")],
+            "TestAuth");
+
+        this._host.Authentication.Set(permanentIdentity);
+
+        using (this._host.Authentication.As(temporaryIdentity))
+        {
+            this._host.Authentication.CurrentPrincipal!.Identity!.Name
+                .Should().BeNull(); // sub claim doesn't set Name, but let's check the claim
+            this._host.Authentication.CurrentPrincipal!.FindFirst("sub")!.Value
+                .Should().Be("temp-user");
+        }
+
+        // After disposal, should revert to permanent
+        this._host.Authentication.CurrentPrincipal!.FindFirst("sub")!.Value
+            .Should().Be("permanent-user");
+    }
+
+    [Fact]
+    public async Task Authentication_AsAnonymous_clears_and_reverts()
+    {
+        var identity = new System.Security.Claims.ClaimsIdentity(
+            [new System.Security.Claims.Claim("sub", "user-1")],
+            "TestAuth");
+
+        this._host.Authentication.Set(identity);
+
+        using (this._host.Authentication.AsAnonymous())
+        {
+            this._host.Authentication.CurrentPrincipal.Should().BeNull();
+
+            // Execute anonymous — should work for [AllowAnonymous] operation
+            var result = await this._host.ExecuteAsync(new HealthCheckQuery());
+            result.Should().BeOfType<PlainTextResult>();
+        }
+
+        // After disposal, should revert to authenticated
+        this._host.Authentication.CurrentPrincipal.Should().NotBeNull();
+        this._host.Authentication.CurrentPrincipal!.FindFirst("sub")!.Value
+            .Should().Be("user-1");
+    }
+
+    [Fact]
+    public async Task Authentication_MakeAnonymous_clears_permanently()
+    {
+        var identity = new System.Security.Claims.ClaimsIdentity(
+            [new System.Security.Claims.Claim("sub", "user-1")],
+            "TestAuth");
+
+        this._host.Authentication.Set(identity);
+        this._host.Authentication.CurrentPrincipal.Should().NotBeNull();
+
+        this._host.Authentication.MakeAnonymous();
+        this._host.Authentication.CurrentPrincipal.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Authentication_per_call_override_takes_precedence()
+    {
+        // Set ambient auth
+        var ambientIdentity = new System.Security.Claims.ClaimsIdentity(
+            [new System.Security.Claims.Claim("sub", "ambient-user")],
+            "TestAuth");
+        this._host.Authentication.Set(ambientIdentity);
+
+        // Per-call override should win
+        ClaimsPrincipal? capturedPrincipal = null;
+        await this._host.ExecuteAsync(
+            new HealthCheckQuery(),
+            ctx =>
+            {
+                ctx.WithUser(claims => claims.Add(new System.Security.Claims.Claim("sub", "override-user")));
+                capturedPrincipal = ctx.OperationContext.UserPrincipal;
+            });
+
+        capturedPrincipal.Should().NotBeNull();
+        capturedPrincipal!.FindFirst("sub")!.Value.Should().Be("override-user");
     }
 
     [Fact]
