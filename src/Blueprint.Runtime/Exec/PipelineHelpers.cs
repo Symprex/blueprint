@@ -569,6 +569,21 @@ public static class PipelineHelpers
     }
 
     /// <summary>
+    /// Checks whether the current HTTP request has an authenticated identity.
+    /// Extracted from per-pipeline inline code to reduce IL size across all HTTP-exposed
+    /// operations that require authentication (~400+ in a typical S365-scale app).
+    /// </summary>
+    /// <param name="httpContext">The HTTP context for the current request.</param>
+    /// <returns><c>null</c> when the user is authenticated; <see cref="UnauthenticatedResult.Instance"/> otherwise.</returns>
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+    public static OperationResult? CheckHttpAuthenticated(Microsoft.AspNetCore.Http.HttpContext httpContext)
+    {
+        return httpContext.User.Identity?.IsAuthenticated != true
+            ? UnauthenticatedResult.Instance
+            : null;
+    }
+
+    /// <summary>
     /// Runs the pre-cached <see cref="Authorization.IApiAuthoriser"/> and
     /// <see cref="Authorization.IOperationAuthoriser"/> arrays against the current operation.
     /// Returns <c>null</c> when all authorisers pass, or an <see cref="UnauthenticatedResult"/>

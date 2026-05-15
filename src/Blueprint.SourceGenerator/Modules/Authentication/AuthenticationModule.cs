@@ -156,16 +156,17 @@ public sealed class AuthenticationModule : IBlueprintSourceGeneratorModule, IDes
 
     private static void RenderAuthenticationCheck(PipelineRenderContext context)
     {
-        var httpContextExpr = context.GetHttpContextExpression();
+        // Ensure the httpContext variable is declared before referencing it.
+        context.GetHttpContextExpression();
 
         context.If(
-            $"{httpContextExpr}.User.Identity?.IsAuthenticated != true",
+            "Blueprint.Runtime.Exec.PipelineHelpers.CheckHttpAuthenticated(httpContext) is { } _authCheckResult",
             branch =>
             {
                 branch.Return(
                     context.IsPipelineAsync()
-                        ? "Blueprint.Runtime.Exec.UnauthenticatedResult.Instance"
-                        : "System.Threading.Tasks.Task.FromResult<Blueprint.OperationResult>(Blueprint.Runtime.Exec.UnauthenticatedResult.Instance)");
+                        ? "_authCheckResult"
+                        : "System.Threading.Tasks.Task.FromResult<Blueprint.OperationResult>(_authCheckResult)");
             });
 
         context.WriteBlankLine();

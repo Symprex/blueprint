@@ -43,9 +43,9 @@ namespace Blueprint.Generated
             }
 
             await Blueprint.Runtime.Exec.PipelineHelpers.PopulatePropertiesAsync(this.PropertyPopulators, context).ConfigureAwait(false);
-            if (httpContext.User.Identity?.IsAuthenticated != true)
+            if (Blueprint.Runtime.Exec.PipelineHelpers.CheckHttpAuthenticated(httpContext) is { } _authCheckResult)
             {
-                return Blueprint.Runtime.Exec.UnauthenticatedResult.Instance;
+                return _authCheckResult;
             }
 
             await Blueprint.Runtime.Exec.PipelineHelpers.LoadUserContextAsync(context, httpContext, this.UserAuthorisationContextFactory).ConfigureAwait(false);
