@@ -106,6 +106,26 @@ public sealed class MigrationReportSerializationTests
         AssertMatchesMigrationReportJsonContract(document!);
     }
 
+    [Xunit.Fact]
+    public void When_projecting_bpmig400_then_it_uses_the_auto_fixable_bucket()
+    {
+        var finding = DiagnosticFinding.FromDescriptor(
+            MigrationDiagnosticDescriptors.OperationMissingPartialKeyword);
+
+        finding.Category.Should().Be("auto-fixable");
+        finding.DocumentationPath.Should().Be(@"migration\breaking-changes-and-migration-tooling\plan.md");
+    }
+
+    [Xunit.Fact]
+    public void When_projecting_bpmig401_then_it_uses_the_auto_fixable_bucket()
+    {
+        var finding = DiagnosticFinding.FromDescriptor(
+            MigrationDiagnosticDescriptors.ResourceMissingPartialKeyword);
+
+        finding.Category.Should().Be("auto-fixable");
+        finding.DocumentationPath.Should().Be(@"migration\breaking-changes-and-migration-tooling\plan.md");
+    }
+
     private static void AssertMatchesMigrationReportJsonContract(JsonNode document)
     {
         var root = document.AsObject();

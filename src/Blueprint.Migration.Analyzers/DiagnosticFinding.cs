@@ -132,7 +132,8 @@ public sealed class DiagnosticFinding
             >= 100 and <= 199 => ConfigurationRequiredCategory,
             >= 200 and <= 299 => ConsumerExtensionRewriteRequiredCategory,
             >= 300 and <= 399 => ManualDesignReviewRequiredCategory,
-            _ => throw new InvalidOperationException($"The migration report only supports the reserved BPMIG001-BPMIG399 range. '{diagnosticId}' falls outside the supported report range."),
+            >= 400 and <= 499 => AutoFixableCategory,
+            _ => throw new InvalidOperationException($"The migration report only supports the reserved BPMIG diagnostic ranges. '{diagnosticId}' falls outside the supported report range."),
         };
     }
 
@@ -143,6 +144,7 @@ public sealed class DiagnosticFinding
             "BPMIG001" or "BPMIG100" => @"migration\openapi\plan.md",
             "BPMIG002" => @"migration\resource-model-links-and-post-processing\plan.md",
             "BPMIG003" or "BPMIG101" or "BPMIG200" or "BPMIG201" => @"migration\authentication-and-authorisation\plan.md",
+            "BPMIG400" or "BPMIG401" => @"migration\breaking-changes-and-migration-tooling\plan.md",
             _ => @"migration\breaking-changes-and-migration-tooling\plan.md",
         };
     }
