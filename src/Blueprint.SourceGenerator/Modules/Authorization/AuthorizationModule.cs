@@ -56,6 +56,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
     public void ContributeToDescriptor(DescriptorContributorContext context)
     {
         var operationType = context.GetOperationTypeSymbol();
+        var operationLocation = operationType.Locations.FirstOrDefault();
         var directResourceAttributes = GetResourceAttributes(operationType);
         var fromResourceResult = GetFromResourceTarget(operationType);
 
@@ -65,7 +66,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
             context.AddDiagnostic(
                 new DiagnosticInfo(
                     AuthorizationDiagnosticDescriptors.FromResourceWithDirectResource,
-                    operationType.Locations.FirstOrDefault(),
+                    operationLocation,
                     [operationType.Name]));
 
             return;
@@ -86,7 +87,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
                 context.AddDiagnostic(
                     new DiagnosticInfo(
                         AuthorizationDiagnosticDescriptors.FromResourceTargetHasNoResource,
-                        operationType.Locations.FirstOrDefault(),
+                        operationLocation,
                         [operationType.Name, fromTarget.Name]));
 
                 return;
@@ -125,7 +126,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
                     context.AddDiagnostic(
                         new DiagnosticInfo(
                             AuthorizationDiagnosticDescriptors.EmptyResourceScopePairValue,
-                            operationType.Locations.FirstOrDefault(),
+                            operationLocation,
                             [operationType.Name, "noun"]));
 
                     hasValidationErrors = true;
@@ -136,7 +137,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
                     context.AddDiagnostic(
                         new DiagnosticInfo(
                             AuthorizationDiagnosticDescriptors.EmptyResourceScopePairValue,
-                            operationType.Locations.FirstOrDefault(),
+                            operationLocation,
                             [operationType.Name, "verb"]));
 
                     hasValidationErrors = true;
@@ -158,7 +159,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
                     context.AddDiagnostic(
                         new DiagnosticInfo(
                             AuthorizationDiagnosticDescriptors.DuplicateResourceScopePair,
-                            operationType.Locations.FirstOrDefault(),
+                            operationLocation,
                             [operationType.Name, noun, verb]));
                 }
             }
@@ -172,7 +173,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
             context.AddDiagnostic(
                 new DiagnosticInfo(
                     AuthorizationDiagnosticDescriptors.ResourceWithAllowAnonymous,
-                    operationType.Locations.FirstOrDefault(),
+                    operationLocation,
                     [operationType.Name]));
 
             return;
@@ -215,6 +216,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
     public void ContributeToPipeline(PipelineContributorContext context)
     {
         var operationType = context.Operation.TypeSymbol;
+        var operationLocation = operationType.Locations.FirstOrDefault();
         var directResourceAttributes = GetResourceAttributes(operationType);
         var fromResourceResult = GetFromResourceTarget(operationType);
 
@@ -277,7 +279,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
             context.AddDiagnostic(
                 new DiagnosticInfo(
                     AuthorizationDiagnosticDescriptors.ResourceOnNonHttpOperation,
-                    operationType.Locations.FirstOrDefault(),
+                    operationLocation,
                     [operationType.Name]));
 
             return;
@@ -313,7 +315,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
                     context.AddDiagnostic(
                         new DiagnosticInfo(
                             AuthorizationDiagnosticDescriptors.ResourceKeyTemplatePropertyNotFound,
-                            operationType.Locations.FirstOrDefault(),
+                            operationLocation,
                             [operationType.Name, token.Name]));
 
                     hasTemplateValidationErrors = true;
