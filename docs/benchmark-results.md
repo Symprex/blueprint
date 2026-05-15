@@ -5,9 +5,9 @@
 - **.NET Version:** 10.0
 - **OS:** Windows 11
 - **Hardware:** Development workstation
-- **Date:** 2025-07-14 (updated 2025-07-28, re-validated 2025-07-29, re-run 2025-07-30, latest 2025-08-01)
+- **Date:** 2025-07-14 (updated 2025-07-28, re-validated 2025-07-29, re-run 2025-07-30, latest 2025-08-04)
 - **CPU:** Intel Core Ultra 7 165H, 22 logical / 16 physical cores
-- **BenchmarkDotNet:** v0.14.0, InProcessEmitToolchain, MediumRun (15 iterations, 2 launches)
+- **BenchmarkDotNet:** v0.14.0, InProcessEmitToolchain, MediumRun (5 iterations, 2 launches)
 
 ## Full Pipeline Benchmarks
 
@@ -17,20 +17,18 @@ code path that runs in production HTTP requests (minus HTTP I/O and serializatio
 
 | Benchmark | Mean | Error | StdDev | Ratio | Gen0 | Allocated | Alloc Ratio |
 |-----------|-----:|------:|-------:|------:|-----:|----------:|------------:|
-| MinimalQuery (baseline) | 1.94 µs | 0.234 µs | 0.350 µs | 1.00 | 0.210 | 2.58 KB | 1.00 |
-| ValidatedQuery (invalid input) | 11.56 µs | 1.114 µs | 1.667 µs | 6.14 | 0.412 | 5.19 KB | 2.01 |
-| ValidatedQuery (valid input) | 11.67 µs | 1.414 µs | 2.116 µs | 6.20 | 0.412 | 5.19 KB | 2.01 |
-| FullStackCommand (validation failure) | 15.73 µs | 1.306 µs | 1.954 µs | 8.35 | 0.702 | 8.66 KB | 3.36 |
-| FullStackCommand (valid input) | 16.98 µs | 2.473 µs | 3.624 µs | 9.01 | 0.702 | 8.66 KB | 3.36 |
+| MinimalQuery (baseline) | 2.10 µs | 0.577 µs | 0.382 µs | 1.00 | 0.210 | 2.58 KB | 1.00 |
+| ValidatedQuery (valid input) | 13.78 µs | 5.803 µs | 3.838 µs | 6.75 | 0.397 | 5.19 KB | 2.01 |
+| ValidatedQuery (invalid input) | 16.58 µs | 2.143 µs | 1.121 µs | 8.11 | 0.397 | 5.19 KB | 2.01 |
+| FullStackCommand (validation failure) | 17.32 µs | 2.918 µs | 1.930 µs | 8.48 | 0.702 | 8.66 KB | 3.36 |
+| FullStackCommand (valid input) | 18.62 µs | 3.160 µs | 1.880 µs | 9.11 | 0.702 | 8.66 KB | 3.36 |
 
 ### Analysis
 
-**Baseline (MinimalQuery):** ~1.9 µs / 2.58 KB
+**Baseline (MinimalQuery):** ~2.1 µs / 2.58 KB
 - This is the absolute minimum pipeline overhead — no validation, just handler invocation
 - The 2.58 KB includes `ApiOperationContext` allocation, the operation instance, and scope setup
 - **This is the floor.** Any production operation will add to this baseline
-- Improved from ~3.0 µs baseline in earlier runs thanks to PopulateMetadata optimization
-  and other hot-path improvements
 
 **Validation cost:** ~10-12 µs / 2.6 KB additional
 - Validation adds ~10 µs latency and ~2.6 KB allocation over the baseline
@@ -78,17 +76,17 @@ JSON serialization performance for typical S365 response payloads. Compares sour
 
 | Benchmark | Mean | Error | StdDev | Ratio | Gen0 | Allocated | Alloc Ratio |
 |-----------|-----:|------:|-------:|------:|-----:|----------:|------------:|
-| SmallResource_SourceGenContext (baseline) | 265 ns | 31 ns | 46 ns | 1.00 | 0.004 | 56 B | 1.00 |
-| MediumResource_SourceGenContext | 450 ns | 60 ns | 89 ns | 1.74 | 0.004 | 56 B | 1.00 |
-| SmallResource_ReflectionFallback | 486 ns | 43 ns | 65 ns | 1.88 | 0.015 | 192 B | 3.43 |
-| ResourceEventEnvelope_Utf8Writer | 1,142 ns | 129 ns | 193 ns | 4.43 | 0.416 | 5,232 B | 93.43 |
-| PagedList25Items_SourceGenContext | 4,043 ns | 422 ns | 631 ns | 15.69 | 0.004 | 56 B | 1.00 |
+| SmallResource_SourceGenContext (baseline) | 304 ns | 92 ns | 61 ns | 1.00 | 0.004 | 56 B | 1.00 |
+| MediumResource_SourceGenContext | 381 ns | 127 ns | 75 ns | 1.30 | 0.004 | 56 B | 1.00 |
+| SmallResource_ReflectionFallback | 458 ns | 116 ns | 69 ns | 1.57 | 0.015 | 192 B | 3.43 |
+| ResourceEventEnvelope_Utf8Writer | 1,089 ns | 334 ns | 221 ns | 3.72 | 0.417 | 5,232 B | 93.43 |
+| PagedList25Items_SourceGenContext | 3,521 ns | 603 ns | 359 ns | 12.04 | 0.004 | 56 B | 1.00 |
 
 **Key insights:**
-- **Source-gen context serialization**: 265-450ns for typical resources, **only 56 bytes allocated**
-- **Reflection fallback**: 1.8x slower with 3.4x more allocation — justifies requiring `JsonSerializerContext`
-- **Paged list (25 items)**: 4.0µs — still fast, linear scaling with item count
-- **ResourceEvent envelope**: 987ns but 5.2KB allocation from `Guid.NewGuid().ToString()` and
+- **Source-gen context serialization**: 304-381ns for typical resources, **only 56 bytes allocated**
+- **Reflection fallback**: 1.5x slower with 3.4x more allocation — justifies requiring `JsonSerializerContext`
+- **Paged list (25 items)**: 3.5µs — still fast, linear scaling with item count
+- **ResourceEvent envelope**: 1.1µs but 5.2KB allocation from `Guid.NewGuid().ToString()` and
   `DateTime.UtcNow.ToString("O")` — production path uses pre-allocated values
 
 ## Deserialization Benchmarks
@@ -97,17 +95,17 @@ JSON deserialization (request body binding) performance for different strategies
 
 | Benchmark | Mean | Error | StdDev | Ratio | Gen0 | Allocated | Alloc Ratio |
 |-----------|-----:|------:|-------:|------:|-----:|----------:|------------:|
-| SmallBody_PropertyByProperty (baseline) | 110 ns | 7 ns | 10 ns | 1.00 | 0.010 | 120 B | 1.00 |
-| SmallBody_FullDeserialize | 209 ns | 30 ns | 44 ns | 1.93 | 0.010 | 120 B | 1.00 |
-| SmallBody_SourceGenDeserialize | 212 ns | 27 ns | 38 ns | 1.95 | 0.010 | 120 B | 1.00 |
-| MediumBody_PropertyByProperty | 529 ns | 65 ns | 95 ns | 4.87 | 0.057 | 712 B | 5.93 |
-| MediumBody_SourceGenDeserialize | 999 ns | 84 ns | 123 ns | 9.19 | 0.094 | 1,184 B | 9.87 |
+| SmallBody_PropertyByProperty (baseline) | 168 ns | 83 ns | 55 ns | 1.00 | 0.010 | 120 B | 1.00 |
+| SmallBody_SourceGenDeserialize | 176 ns | 30 ns | 18 ns | 1.14 | 0.010 | 120 B | 1.00 |
+| SmallBody_FullDeserialize | 230 ns | 72 ns | 48 ns | 1.49 | 0.010 | 120 B | 1.00 |
+| MediumBody_PropertyByProperty | 569 ns | 114 ns | 75 ns | 3.69 | 0.056 | 712 B | 5.93 |
+| MediumBody_SourceGenDeserialize | 795 ns | 417 ns | 218 ns | 5.16 | 0.094 | 1,184 B | 9.87 |
 
 **Key insights:**
-- **Property-by-property binding** (Blueprint's generated approach) is **fastest** at 110ns
-  for small bodies — 1.9x faster than full deserialization, 1.9x faster than source-gen context
-- **Medium body** (5+ properties with strings, arrays): 529ns property-by-property vs 999ns
-  source-gen — Blueprint's approach wins on both speed (1.9x) and allocation (1.7x less)
+- **Property-by-property binding** (Blueprint's generated approach) is **fastest** at 168ns
+  for small bodies — 1.4x faster than full deserialization, 1.05x faster than source-gen context
+- **Medium body** (5+ properties with strings, arrays): 569ns property-by-property vs 795ns
+  source-gen — Blueprint's approach wins on both speed (1.4x) and allocation (1.7x less)
 - **All strategies allocate only 120B for small bodies** — the operation object itself
 
 ---
@@ -119,21 +117,21 @@ Pipeline resolution and dispatch overhead, measured at different operation count
 
 | Method | Operations | Mean | Error | StdDev | Allocated |
 |--------|---:|-----:|------:|-------:|----------:|
-| ResolveRegisteredPipeline | 10 | 9.3 ns | 1.6 ns | 2.4 ns | 0 B |
-| ExecutePipelineDirectAsync | 10 | 32.1 ns | 3.6 ns | 5.3 ns | 144 B |
-| ExecuteThroughExecutorShellAsync | 10 | 44.5 ns | 7.3 ns | 11.0 ns | 144 B |
-| ResolveRegisteredPipeline | 100 | 8.6 ns | 1.6 ns | 2.3 ns | 0 B |
-| ExecutePipelineDirectAsync | 100 | 32.1 ns | 3.6 ns | 5.3 ns | 144 B |
-| ExecuteThroughExecutorShellAsync | 100 | 44.5 ns | 7.3 ns | 11.0 ns | 144 B |
-| ResolveRegisteredPipeline | 250 | 8.9 ns | 1.3 ns | 1.9 ns | 0 B |
-| ExecutePipelineDirectAsync | 250 | 30.5 ns | 3.0 ns | 4.5 ns | 144 B |
-| ExecuteThroughExecutorShellAsync | 250 | 38.6 ns | 4.8 ns | 7.1 ns | 144 B |
-| ResolveRegisteredPipeline | 500 | 8.0 ns | 1.0 ns | 1.4 ns | 0 B |
-| ExecutePipelineDirectAsync | 500 | 29.5 ns | 2.7 ns | 4.0 ns | 144 B |
-| ExecuteThroughExecutorShellAsync | 500 | 35.6 ns | 4.3 ns | 6.3 ns | 144 B |
+| ResolveRegisteredPipeline | 10 | 11.9 ns | 4.5 ns | 3.0 ns | 0 B |
+| ExecutePipelineDirectAsync | 10 | 38.8 ns | 10.9 ns | 6.5 ns | 144 B |
+| ExecuteThroughExecutorShellAsync | 10 | 40.9 ns | 10.8 ns | 5.7 ns | 144 B |
+| ResolveRegisteredPipeline | 100 | 9.9 ns | 3.3 ns | 2.2 ns | 0 B |
+| ExecutePipelineDirectAsync | 100 | 40.8 ns | 4.8 ns | 2.5 ns | 144 B |
+| ExecuteThroughExecutorShellAsync | 100 | 43.2 ns | 8.5 ns | 4.4 ns | 144 B |
+| ResolveRegisteredPipeline | 250 | 9.9 ns | 2.9 ns | 1.5 ns | 0 B |
+| ExecutePipelineDirectAsync | 250 | 31.7 ns | 5.9 ns | 3.9 ns | 144 B |
+| ExecuteThroughExecutorShellAsync | 250 | 48.4 ns | 22.1 ns | 11.6 ns | 144 B |
+| ResolveRegisteredPipeline | 500 | 13.7 ns | 2.9 ns | 1.9 ns | 0 B |
+| ExecutePipelineDirectAsync | 500 | 32.9 ns | 7.2 ns | 4.8 ns | 144 B |
+| ExecuteThroughExecutorShellAsync | 500 | 47.3 ns | 15.1 ns | 10.0 ns | 144 B |
 
-**Key insight:** Pipeline resolution is ~12-14ns with **zero allocations** regardless
-of operation count (dictionary lookup). Pipeline dispatch is ~25-43ns with a fixed
+**Key insight:** Pipeline resolution is ~10-14ns with **zero allocations** regardless
+of operation count (dictionary lookup). Pipeline dispatch is ~32-48ns with a fixed
 144B allocation (the `Task<OperationResult>` state machine). For S365's ~240 operations,
 the dispatch overhead is in single-digit nanoseconds — negligible.
 
@@ -145,14 +143,14 @@ Request binding overhead for different property population strategies.
 
 | Method | Mean | Error | StdDev | Gen0 | Allocated |
 |--------|-----:|------:|-------:|-----:|----------:|
-| RouteOnlyGetAsync (baseline) | 4.56 µs | 0.82 µs | 1.20 µs | 0.37 | 4.65 KB |
-| MixedRouteAndBodyPostAsync | 8.43 µs | 0.80 µs | 1.18 µs | 0.68 | 8.41 KB |
-| BodyOnly3StringsPostAsync | 9.37 µs | 1.10 µs | 1.62 µs | 0.67 | 8.38 KB |
-| TypedBodyPostAsync | 9.44 µs | 0.88 µs | 1.32 µs | 0.72 | 8.88 KB |
-| LargeBody10PropsPostAsync | 11.48 µs | 0.95 µs | 1.40 µs | 0.87 | 10.81 KB |
+| RouteOnlyGetAsync (baseline) | 2.83 µs | 1.35 µs | 0.81 µs | 0.36 | 4.42 KB |
+| MixedRouteAndBodyPostAsync | 8.21 µs | 0.95 µs | 0.63 µs | 0.69 | 8.48 KB |
+| BodyOnly3StringsPostAsync | 9.31 µs | 1.55 µs | 1.03 µs | 0.67 | 8.38 KB |
+| TypedBodyPostAsync | 8.48 µs | 1.64 µs | 0.98 µs | 0.70 | 8.66 KB |
+| LargeBody10PropsPostAsync | 11.84 µs | 3.90 µs | 2.32 µs | 0.87 | 10.81 KB |
 
-**Key insight:** Route-only binding is cheapest (~4.6µs). Body binding adds ~4-7µs overhead
-depending on property count. A 10-property operation body costs ~11.5µs
+**Key insight:** Route-only binding is cheapest (~2.8µs). Body binding adds ~5-9µs overhead
+depending on property count. A 10-property operation body costs ~11.8µs
 total — still well under HTTP I/O noise. The ArrayPool optimization (commit 22b1ece)
 reduced body-binding allocations by eliminating MemoryStream when Content-Length is known.
 
@@ -204,23 +202,23 @@ configured to match S365's pattern (CRUD verb hierarchy, `::` separator, no-scop
 
 | Scenario | Mean | Error | StdDev | Ratio | Gen0 | Allocated | Alloc Ratio |
 |----------|-----:|------:|-------:|------:|-----:|----------:|------------:|
-| NoScopes_AllowFullAccess | 56 ns | 5.99 ns | 8.97 ns | 0.54 | 0.003 | 40 B | 0.56 |
-| HierarchyMatch (Manage→Read) | 92 ns | 10.8 ns | 16.1 ns | 0.89 | 0.006 | 72 B | 1.00 |
-| UnresolvedScopePair_ExactMatch | 96 ns | 8.1 ns | 11.8 ns | 0.93 | 0.006 | 72 B | 1.00 |
-| ManyScopes (16) ExactMatch | 97 ns | 7.9 ns | 11.7 ns | 0.95 | 0.006 | 72 B | 1.00 |
-| AuthorizationFailure | 105 ns | 9.5 ns | 14.2 ns | 1.02 | 0.008 | 104 B | 1.44 |
-| ExactMatch_SingleScope (baseline) | 106 ns | 13.0 ns | 19.5 ns | 1.03 | 0.006 | 72 B | 1.00 |
-| ManyScopes_MultiRequired | 192 ns | 14.3 ns | 20.5 ns | 1.86 | 0.008 | 104 B | 1.44 |
+| NoScopes_AllowFullAccess | 60 ns | 14.6 ns | 9.7 ns | 0.48 | 0.003 | 40 B | 0.56 |
+| UnresolvedScopePair_ExactMatch | 106 ns | 13.5 ns | 8.9 ns | 0.86 | 0.006 | 72 B | 1.00 |
+| ManyScopes (16) ExactMatch | 122 ns | 24.5 ns | 16.2 ns | 0.98 | 0.006 | 72 B | 1.00 |
+| ExactMatch_SingleScope (baseline) | 126 ns | 26.1 ns | 17.2 ns | 1.02 | 0.006 | 72 B | 1.00 |
+| HierarchyMatch (Manage→Read) | 130 ns | 44.2 ns | 26.3 ns | 1.05 | 0.006 | 72 B | 1.00 |
+| AuthorizationFailure | 163 ns | 74.3 ns | 38.9 ns | 1.31 | 0.008 | 104 B | 1.44 |
+| ManyScopes_MultiRequired | 194 ns | 19.8 ns | 13.1 ns | 1.57 | 0.008 | 104 B | 1.44 |
 
 **Key insights:**
 - **All authorization paths are sub-200ns** — authorization is negligible pipeline cost
-- **NoScopes fast-path**: 55ns — internal users with `ReadWrite.All` scopes skip all checking
-- **CRUD hierarchy (Manage includes Read)**: 79ns — verb expansion is nearly free
-- **16-scope user scan**: 89ns — linear scan over real S365-scale scope counts is still fast
-- **Authorization failure**: 111ns with 104B allocation (includes failure result)
-- **Unresolved vs resolved scope pairs**: 96ns vs 110ns — runtime parsing has no penalty
+- **NoScopes fast-path**: 60ns — internal users with `ReadWrite.All` scopes skip all checking
+- **CRUD hierarchy (Manage includes Read)**: 130ns — verb expansion is nearly free
+- **16-scope user scan**: 122ns — linear scan over real S365-scale scope counts is still fast
+- **Authorization failure**: 163ns with 104B allocation (includes failure result)
+- **Unresolved vs resolved scope pairs**: 106ns vs 126ns — runtime parsing has no penalty
 - For S365's `[Resource("Template", "Read")]` pattern with typical users holding 10-20 scopes,
-  the authorization cost is **~90-110ns per request** — invisible in production
+  the authorization cost is **~100-130ns per request** — invisible in production
 
 ---
 

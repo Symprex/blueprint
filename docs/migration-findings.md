@@ -2179,12 +2179,12 @@ Revisit when pipeline count exceeds 1000+ or profiling shows state machine overh
 | `changeType` | `oneOf $ref ResourceEventChangeType` | ✅ | Enum: Created/Updated/Deleted |
 | `created` | `string` format `date-time` | ✅ | When event occurred |
 | `resourceObject` | `string` | ✅ | Resource type name |
-| `href` | `string` nullable | ❌ | Self-link URL |
+| `href` | `string` nullable | ✅ | Self-link URL |
 | `data` | `$ref` to inner type | ✅ | The actual resource |
-| `metadata` | `object` nullable, `additionalProperties: {}` | ❌ | Extra metadata dict |
-| `secureData` | `object` nullable, `additionalProperties: {}` | ❌ | Secure metadata dict |
-| `changedValues` | `object` nullable, `additionalProperties: {}` | ❌ | Changed properties dict |
-| `correlationId` | `string` nullable | ❌ | Correlation ID |
+| `metadata` | `object` nullable, `additionalProperties: {}` | ✅ | Extra metadata dict |
+| `secureData` | `object` nullable, `additionalProperties: {}` | ✅ | Secure metadata dict |
+| `changedValues` | `object` nullable, `additionalProperties: {}` | ✅ | Changed properties dict |
+| `correlationId` | `string` nullable | ✅ | Correlation ID |
 
 **Impact:** S365 TypeScript clients will now see the correct envelope shape for all `ResourceEventResult<T>` operations (~274 S365 operations affected). The `data` field correctly references the inner resource type for TypeScript type inference. Named component schemas enable S365's TypeScript generator to resolve `ResourceEventOf*` types from `$ref` paths just like any other class — no special handling needed.
 
@@ -4192,8 +4192,7 @@ app.MapBlueprintApi<App, AppExecutor>(configureOpenApi: o => {
 ```
 
 #### HTTP method coverage
-Generator handles: GET, POST, PUT, DELETE, HEAD, OPTIONS (lines 436-441). **Missing: PATCH.**
-S365 has no PATCH operations currently, so not blocking. If added, a one-line fix in the generator.
+Generator handles: GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS. All HTTP methods supported via `Map()` + `HttpMethodMetadata` pattern in endpoint registration. ✅ Complete.
 
 #### operationId format
 Both use PascalCase (class name as operationId). ✅ Identical.
