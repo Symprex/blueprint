@@ -34,6 +34,14 @@ public sealed class TestMessageCollector
     public IReadOnlyList<MessageEnvelope> Sent => this._sent;
 
     /// <summary>
+    /// Gets all captured messages (published + sent) as raw <see cref="object"/> instances.
+    /// S365-compatible alias for <c>FakeBus.Events</c> which exposes a flat list of all
+    /// bus interactions for advanced filtering (e.g. <c>Bus.Events.OfType&lt;T&gt;()</c>).
+    /// </summary>
+    public IEnumerable<object> Events =>
+        this._published.Select(static e => e.Message).Concat(this._sent.Select(static e => e.Message));
+
+    /// <summary>
     /// Records a published message (broadcast).
     /// </summary>
     /// <typeparam name="T">The message type.</typeparam>
