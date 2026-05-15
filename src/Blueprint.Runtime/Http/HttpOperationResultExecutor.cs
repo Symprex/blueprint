@@ -53,6 +53,11 @@ public class HttpOperationResultExecutor
 
     private static readonly BlueprintHttpOptions _defaultHttpOptions = new();
 
+    // Thread-local ArrayBufferWriter to avoid per-request allocation for resource event envelope
+    // serialization. Cleared after each use so the buffer is reusable within the same thread.
+    [ThreadStatic]
+    private static System.Buffers.ArrayBufferWriter<byte>? _threadLocalBuffer;
+
     /// <summary>
     /// Attempts to execute the supplied semantic result against the HTTP response.
     /// </summary>
@@ -288,12 +293,10 @@ public class HttpOperationResultExecutor
         var serializerContext = operationContext.App.AppOwnedSerializerContext;
         var serializerOptions = serializerContext?.Options ?? _emptyFallbackOptions;
 
-        // Buffer via ArrayBufferWriter then write the completed span to the response body
-        // in a single call. This avoids a subtle issue where Utf8JsonWriter's incremental
-        // flushes to the ASP.NET Core response pipe can lose data in certain host
-        // configurations (notably TestServer). ArrayBufferWriter is allocation-lighter
-        // than MemoryStream for small JSON payloads like resource event envelopes.
-        var buffer = new System.Buffers.ArrayBufferWriter<byte>(512);
+        // Reuse a thread-local ArrayBufferWriter to avoid per-request allocation for the
+        // resource event envelope (typically < 1KB). The buffer is cleared after each use.
+        var buffer = _threadLocalBuffer ??= new System.Buffers.ArrayBufferWriter<byte>(512);
+        buffer.Clear();
         using var writer = new Utf8JsonWriter(buffer);
 
         writer.WriteStartObject();
@@ -449,29 +452,36 @@ public class HttpOperationResultExecutor
         }
         else
         {
-            // Single-pass grouping that builds string[] values directly,
-            // avoiding the intermediate Dictionary<string, List<string>> copy.
-            var grouped = new Dictionary<string, string[]>(StringComparer.Ordinal);
+            // Single-pass grouping using List<string> to avoid O(n²) array expansion.
+            // Final conversion to string[] happens once per member after all entries are collected.
+            var grouped = new Dictionary<string, List<string>>(StringComparer.Ordinal);
 
             foreach (var validationResult in validationFailedResult.ValidationResults)
             {
                 foreach (var entry in ExpandValidationErrorEntries(validationResult))
                 {
-                    if (!grouped.TryGetValue(entry.MemberName, out var existing))
+                    if (!grouped.TryGetValue(entry.MemberName, out var list))
                     {
-                        grouped[entry.MemberName] = [entry.ErrorMessage];
+                        list = new List<string>(1);
+                        grouped[entry.MemberName] = list;
                     }
-                    else if (Array.IndexOf(existing, entry.ErrorMessage) < 0)
+
+                    if (!list.Contains(entry.ErrorMessage))
                     {
-                        var expanded = new string[existing.Length + 1];
-                        existing.CopyTo(expanded, 0);
-                        expanded[^1] = entry.ErrorMessage;
-                        grouped[entry.MemberName] = expanded;
+                        list.Add(entry.ErrorMessage);
                     }
                 }
             }
 
-            validationErrors = grouped;
+            // Convert List<string> → string[] in a single pass for the problem details dictionary.
+            var result = new Dictionary<string, string[]>(grouped.Count, StringComparer.Ordinal);
+
+            foreach (var kvp in grouped)
+            {
+                result[kvp.Key] = kvp.Value.ToArray();
+            }
+
+            validationErrors = result;
         }
 
         var problemDetails = new MvcValidationProblemDetails(validationErrors)
