@@ -193,7 +193,9 @@ public sealed class TypedHttpClientExtensionsGenerator : IIncrementalGenerator, 
                 }
             }
 
-            if (prop.GetAttributes().Any(static a => a.AttributeClass?.Name is "ObsoleteAttribute" or "JsonIgnoreAttribute"))
+            var propAttributes = prop.GetAttributes();
+
+            if (propAttributes.Any(static a => a.AttributeClass?.Name is "ObsoleteAttribute" or "JsonIgnoreAttribute"))
             {
                 continue;
             }
@@ -201,7 +203,7 @@ public sealed class TypedHttpClientExtensionsGenerator : IIncrementalGenerator, 
             var typeFqn = prop.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             var isNullable = prop.Type.NullableAnnotation == NullableAnnotation.Annotated;
             var isRequired = prop.IsRequired
-                || prop.GetAttributes().Any(static a => a.AttributeClass?.Name is "RequiredAttribute");
+                || propAttributes.Any(static a => a.AttributeClass?.Name is "RequiredAttribute");
 
             // FullyQualifiedFormat omits the `?` suffix for nullable reference types — add it
             if (isNullable && !typeFqn.EndsWith("?", StringComparison.Ordinal))

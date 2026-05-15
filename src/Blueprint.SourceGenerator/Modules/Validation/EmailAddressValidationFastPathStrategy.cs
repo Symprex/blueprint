@@ -27,13 +27,15 @@ internal sealed class EmailAddressValidationFastPathStrategy : IValidationFastPa
             return false;
         }
 
-        // Use the same attribute type as applied by the consumer for correct error message formatting
-        var qualifiedName = $"global::{attribute.AttributeClass!.ContainingNamespace.ToDisplayString()}.EmailAddressAttribute";
+        // Use the same attribute type as applied by the consumer for correct error message formatting.
+        // Cache the namespace string to avoid calling ToDisplayString() twice.
+        var namespaceFqn = attribute.AttributeClass!.ContainingNamespace.ToDisplayString();
+        var qualifiedName = $"global::{namespaceFqn}.EmailAddressAttribute";
 
         rule = new ValidationFastPathRule(
             $"global::Blueprint.Validation.ValidationRuntime.IsValidEmailAddress({propertyAccess}) == false",
             $"new {qualifiedName}()",
-            CachedAttributeTypeName: $"{attribute.AttributeClass!.ContainingNamespace.ToDisplayString()}.EmailAddressAttribute");
+            CachedAttributeTypeName: $"{namespaceFqn}.EmailAddressAttribute");
         return true;
     }
 }

@@ -353,8 +353,7 @@ public static class HandlerDiscovery
                     continue;
                 }
 
-                var typeName = property.Type.ToDisplayString();
-                var sourceExpression = GetPropertyInjectionSource(property.Name, typeName);
+                var sourceExpression = GetPropertyInjectionSource(property);
                 if (sourceExpression != null)
                 {
                     injections.Add(new HandlerPropertyInjection(property.Name, sourceExpression));
@@ -370,24 +369,50 @@ public static class HandlerDiscovery
     }
 
     /// <summary>
-    /// Maps well-known handler property types and names to pipeline source expressions.
-    /// The <c>HttpContext</c> and <c>ClaimsPrincipal</c> injections are only valid for
-    /// HTTP-hosted operations; non-HTTP pipelines will have these properties set to
-    /// <see langword="null"/> (matching the nullable <c>ApiOperationContext.HttpContext</c>
-    /// and <c>UserPrincipal</c> semantics).
+    /// Maps well-known handler property types to pipeline source expressions using structural
+    /// symbol checks (MetadataName + namespace) to avoid <c>ToDisplayString()</c> allocations.
     /// </summary>
-    private static string? GetPropertyInjectionSource(string propertyName, string typeName)
+    private static string? GetPropertyInjectionSource(IPropertySymbol property)
     {
-        return typeName switch
+        var type = property.Type;
+        var metadataName = type.MetadataName;
+
+        return metadataName switch
         {
-            "Blueprint.Runtime.Exec.ApiOperationContext" => "context",
-            "Blueprint.Authorization.IUserAuthorisationContext" =>
-                "context.UserAuthorisationContext ?? Blueprint.Authorization.AnonymousUserAuthorisationContext.Instance",
-            "System.Threading.CancellationToken" => "context.OperationCancelled",
-            "Microsoft.Extensions.Logging.ILogger" => "this.Logger",
-            "Microsoft.AspNetCore.Http.HttpContext" => "context.HttpContext",
-            "System.Security.Claims.ClaimsPrincipal" => "context.UserPrincipal",
+            "ApiOperationContext" when IsInNamespace(type, "Exec", "Runtime", "Blueprint")
+                => "context",
+            "IUserAuthorisationContext" when IsInNamespace(type, "Authorization", "Blueprint")
+                => "context.UserAuthorisationContext ?? Blueprint.Authorization.AnonymousUserAuthorisationContext.Instance",
+            "CancellationToken" when IsInNamespace(type, "Threading", "System")
+                => "context.OperationCancelled",
+            "ILogger" when IsInNamespace(type, "Logging", "Extensions", "Microsoft")
+                => "this.Logger",
+            "HttpContext" when IsInNamespace(type, "Http", "AspNetCore", "Microsoft")
+                => "context.HttpContext",
+            "ClaimsPrincipal" when IsInNamespace(type, "Claims", "Security", "System")
+                => "context.UserPrincipal",
             _ => null,
         };
+    }
+
+    /// <summary>
+    /// Verifies a type symbol's containing namespace matches the expected hierarchy without
+    /// calling <c>ToDisplayString()</c>. Arguments are innermost-first (e.g. "Exec", "Runtime", "Blueprint").
+    /// </summary>
+    private static bool IsInNamespace(ITypeSymbol type, params string[] parts)
+    {
+        var ns = type.ContainingNamespace;
+
+        foreach (var part in parts)
+        {
+            if (ns == null || ns.IsGlobalNamespace || ns.Name != part)
+            {
+                return false;
+            }
+
+            ns = ns.ContainingNamespace;
+        }
+
+        return ns is { IsGlobalNamespace: true };
     }
 }

@@ -595,16 +595,12 @@ internal static class ValidationSymbolHelpers
             return false;
         }
 
-        // Exclude primitives, enums, strings, and well-known framework types
+        // Exclude primitives, enums, strings, objects, and well-known framework types.
+        // SpecialType covers string (System_String) and object (System_Object) so no
+        // separate ToDisplayString() comparison is needed.
         if (namedType.SpecialType != SpecialType.None
             || namedType.TypeKind == TypeKind.Enum
             || namedType.IsValueType)
-        {
-            return false;
-        }
-
-        var fullName = namedType.ToDisplayString();
-        if (fullName is "string" or "System.String" or "object" or "System.Object")
         {
             return false;
         }
@@ -659,17 +655,23 @@ internal static class ValidationSymbolHelpers
             return null;
         }
 
-        var definition = type.ConstructedFrom.ToDisplayString();
-        if (definition is "System.Collections.Generic.IReadOnlyList<T>"
-            or "System.Collections.Generic.IList<T>"
-            or "System.Collections.Generic.List<T>"
-            or "System.Collections.Generic.IEnumerable<T>"
-            or "System.Collections.Generic.ICollection<T>"
-            or "System.Collections.Generic.IReadOnlyCollection<T>")
+        // Use MetadataName (no allocation) instead of ConstructedFrom.ToDisplayString().
+        // Generic arity-1 collection types have MetadataName like "IReadOnlyList`1".
+        var constructed = type.ConstructedFrom;
+        var metadataName = constructed.MetadataName;
+
+        if (metadataName is not ("IReadOnlyList`1" or "IList`1" or "List`1" or "IEnumerable`1" or "ICollection`1" or "IReadOnlyCollection`1"))
         {
-            return type.TypeArguments[0];
+            return null;
         }
 
-        return null;
+        // Verify the namespace is System.Collections.Generic
+        var ns = constructed.ContainingNamespace;
+        if (ns is not { Name: "Generic", ContainingNamespace: { Name: "Collections", ContainingNamespace: { Name: "System", ContainingNamespace.IsGlobalNamespace: true } } })
+        {
+            return null;
+        }
+
+        return type.TypeArguments[0];
     }
 }

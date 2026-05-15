@@ -51,12 +51,12 @@ public static class ParameterAnalyzer
     }
 
     /// <summary>
-    /// Determines how a parameter should be resolved.
+    /// Determines how a parameter should be resolved using structural symbol checks
+    /// (MetadataName + namespace) to avoid <c>ToDisplayString()</c> allocations.
     /// </summary>
     private static ParameterSource DetermineParameterSource(IParameterSymbol param, INamedTypeSymbol operationType)
     {
         var paramType = param.Type;
-        var paramTypeName = paramType.ToDisplayString();
 
         // Check if it's the operation itself
         if (SymbolEqualityComparer.Default.Equals(paramType, operationType))
@@ -64,14 +64,15 @@ public static class ParameterAnalyzer
             return ParameterSource.Operation;
         }
 
-        // Check for ApiOperationContext
-        if (paramTypeName == "Blueprint.Runtime.Exec.ApiOperationContext")
+        // Check for ApiOperationContext via MetadataName (no allocation)
+        if (paramType.MetadataName == "ApiOperationContext"
+            && IsInNamespace(paramType, "Exec", "Runtime", "Blueprint"))
         {
             return ParameterSource.FromContext;
         }
 
-        // Check for known context properties
-        if (IsContextProperty(paramTypeName, param.Name))
+        // Check for known context properties via MetadataName
+        if (IsContextPropertyBySymbol(paramType, param.Name))
         {
             return ParameterSource.FromContextProperty;
         }
@@ -81,57 +82,85 @@ public static class ParameterAnalyzer
     }
 
     /// <summary>
-    /// Checks if a parameter type/name combination represents a context property.
+    /// Checks if a parameter type represents a context property using structural symbol
+    /// checks (MetadataName + namespace) to avoid <c>ToDisplayString()</c> allocations.
     /// </summary>
-    private static bool IsContextProperty(string typeName, string paramName)
+    private static bool IsContextPropertyBySymbol(ITypeSymbol type, string paramName)
     {
-        // Match by type
-        switch (typeName)
+        // Match by MetadataName first (property access, no allocation), then verify namespace
+        switch (type.MetadataName)
         {
-            case "Blueprint.Model.BlueprintApp":
-            case "System.Threading.CancellationToken":
-            case "Blueprint.Authorization.IUserAuthorisationContext":
-            case "Microsoft.AspNetCore.Http.HttpContext":
-            case "Microsoft.AspNetCore.Http.HttpRequest":
-            case "Microsoft.AspNetCore.Http.HttpResponse":
-            case "System.Security.Claims.ClaimsPrincipal":
-            case "System.Security.Claims.ClaimsIdentity":
+            case "BlueprintApp" when IsInNamespace(type, "Model", "Blueprint"):
+            case "CancellationToken" when IsInNamespace(type, "Threading", "System"):
+            case "IUserAuthorisationContext" when IsInNamespace(type, "Authorization", "Blueprint"):
+            case "HttpContext" when IsInNamespace(type, "Http", "AspNetCore", "Microsoft"):
+            case "HttpRequest" when IsInNamespace(type, "Http", "AspNetCore", "Microsoft"):
+            case "HttpResponse" when IsInNamespace(type, "Http", "AspNetCore", "Microsoft"):
+            case "ClaimsPrincipal" when IsInNamespace(type, "Claims", "Security", "System"):
+            case "ClaimsIdentity" when IsInNamespace(type, "Claims", "Security", "System"):
                 return true;
         }
 
         // Match by parameter name convention (case-insensitive)
-        var lowerName = paramName.ToLowerInvariant();
-        return lowerName switch
+        return paramName.Equals("datamodel", StringComparison.OrdinalIgnoreCase)
+            || paramName.Equals("app", StringComparison.OrdinalIgnoreCase)
+            || paramName.Equals("cancellationtoken", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Gets the property name to access from ApiOperationContext for a given parameter
+    /// using structural symbol checks to avoid <c>ToDisplayString()</c> allocations.
+    /// </summary>
+    private static string GetContextPropertyName(IParameterSymbol param)
+    {
+        // Match by MetadataName first (cheap property access)
+        switch (param.Type.MetadataName)
         {
-            "datamodel" or "app" or "cancellationtoken" => true,
-            _ => false,
+            case "BlueprintApp" when IsInNamespace(param.Type, "Model", "Blueprint"):
+                return "App";
+            case "CancellationToken" when IsInNamespace(param.Type, "Threading", "System"):
+                return "OperationCancelled";
+            case "IUserAuthorisationContext" when IsInNamespace(param.Type, "Authorization", "Blueprint"):
+                return "UserAuthorisationContext!";
+            case "HttpContext" when IsInNamespace(param.Type, "Http", "AspNetCore", "Microsoft"):
+                return "HttpContext!";
+            case "HttpRequest" when IsInNamespace(param.Type, "Http", "AspNetCore", "Microsoft"):
+                return "HttpContext!.Request";
+            case "HttpResponse" when IsInNamespace(param.Type, "Http", "AspNetCore", "Microsoft"):
+                return "HttpContext!.Response";
+            case "ClaimsPrincipal" when IsInNamespace(param.Type, "Claims", "Security", "System"):
+                return "UserPrincipal!";
+            case "ClaimsIdentity" when IsInNamespace(param.Type, "Claims", "Security", "System"):
+                return "(System.Security.Claims.ClaimsIdentity)UserPrincipal!.Identity!";
+        }
+
+        return param.Name.ToLowerInvariant() switch
+        {
+            "datamodel" or "app" => "App",
+            "cancellationtoken" => "OperationCancelled",
+            _ => "App", // Default fallback
         };
     }
 
     /// <summary>
-    /// Gets the property name to access from ApiOperationContext for a given parameter.
+    /// Verifies a type symbol's containing namespace matches the expected hierarchy without
+    /// calling <c>ToDisplayString()</c>. Arguments are innermost-first (e.g. "Exec", "Runtime", "Blueprint").
     /// </summary>
-    private static string GetContextPropertyName(IParameterSymbol param)
+    private static bool IsInNamespace(ITypeSymbol type, params string[] parts)
     {
-        var typeName = param.Type.ToDisplayString();
+        var ns = type.ContainingNamespace;
 
-        return typeName switch
+        foreach (var part in parts)
         {
-            "Blueprint.Model.BlueprintApp" => "App",
-            "System.Threading.CancellationToken" => "OperationCancelled",
-            "Blueprint.Authorization.IUserAuthorisationContext" => "UserAuthorisationContext!",
-            "Microsoft.AspNetCore.Http.HttpContext" => "HttpContext!",
-            "Microsoft.AspNetCore.Http.HttpRequest" => "HttpContext!.Request",
-            "Microsoft.AspNetCore.Http.HttpResponse" => "HttpContext!.Response",
-            "System.Security.Claims.ClaimsPrincipal" => "UserPrincipal!",
-            "System.Security.Claims.ClaimsIdentity" => "(System.Security.Claims.ClaimsIdentity)UserPrincipal!.Identity!",
-            _ => param.Name.ToLowerInvariant() switch
+            if (ns == null || ns.IsGlobalNamespace || ns.Name != part)
             {
-                "datamodel" or "app" => "App",
-                "cancellationtoken" => "OperationCancelled",
-                _ => "App", // Default fallback
-            },
-        };
+                return false;
+            }
+
+            ns = ns.ContainingNamespace;
+        }
+
+        return ns is { IsGlobalNamespace: true };
     }
 
     /// <summary>
