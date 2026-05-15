@@ -56,6 +56,7 @@ public sealed class CompilationOperationLookup(Compilation compilation) : IOpera
     private const string OperationMetadataName = "Blueprint.Model.IOperation";
     private readonly INamedTypeSymbol? _operationInterface = compilation.GetTypeByMetadataName(OperationMetadataName);
     private Dictionary<INamedTypeSymbol, List<SelfLinkBindingInfo>>? _selfLinkCache;
+    private Dictionary<string, INamedTypeSymbol?>? _typeByMetadataNameCache;
 
     /// <inheritdoc />
     public OperationModel? FindByMetadataName(string metadataName)
@@ -72,7 +73,15 @@ public sealed class CompilationOperationLookup(Compilation compilation) : IOpera
     /// <inheritdoc />
     public INamedTypeSymbol? FindTypeByMetadataName(string metadataName)
     {
-        return compilation.GetTypeByMetadataName(NormalizeMetadataName(metadataName));
+        this._typeByMetadataNameCache ??= new Dictionary<string, INamedTypeSymbol?>(StringComparer.Ordinal);
+
+        if (!this._typeByMetadataNameCache.TryGetValue(metadataName, out var cached))
+        {
+            cached = compilation.GetTypeByMetadataName(NormalizeMetadataName(metadataName));
+            this._typeByMetadataNameCache[metadataName] = cached;
+        }
+
+        return cached;
     }
 
     /// <inheritdoc />

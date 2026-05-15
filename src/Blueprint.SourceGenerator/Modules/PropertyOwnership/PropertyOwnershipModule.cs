@@ -925,9 +925,21 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
 
     private static bool IsSystemProperty(IPropertySymbol property)
     {
-        var typeName = property.Type.ToDisplayString();
-        return typeName is "System.Threading.CancellationToken"
-            or "Microsoft.Extensions.Logging.ILogger";
+        var type = property.Type;
+
+        // CancellationToken: check Name first (cheap), then namespace
+        if (type.Name == "CancellationToken" && type.IsInNamespace("System", "Threading"))
+        {
+            return true;
+        }
+
+        // ILogger: check Name first, then namespace
+        if (type.Name == "ILogger" && type.IsInNamespace("Microsoft", "Extensions", "Logging"))
+        {
+            return true;
+        }
+
+        return false;
     }
 
     private static bool IsStringType(ITypeSymbol type)
@@ -962,18 +974,27 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
     private static bool IsSupportedScalarType(ITypeSymbol type)
     {
         var effectiveType = GetEffectiveBindingType(type);
-        var displayName = effectiveType.ToDisplayString();
-        return displayName is "string"
-            or "int"
-            or "long"
-            or "double"
-            or "float"
-            or "System.Guid"
-            or "System.DateTime"
-            or "System.DateTimeOffset"
-            or "bool"
-            or "decimal"
-            || effectiveType.TypeKind == TypeKind.Enum
+
+        // Use SpecialType for primitives (no allocation)
+        if (effectiveType.SpecialType is SpecialType.System_String
+            or SpecialType.System_Int32
+            or SpecialType.System_Int64
+            or SpecialType.System_Double
+            or SpecialType.System_Single
+            or SpecialType.System_Boolean
+            or SpecialType.System_Decimal)
+        {
+            return true;
+        }
+
+        // Check Guid, DateTime, DateTimeOffset by Name + namespace (no allocation)
+        if (effectiveType.Name is "Guid" or "DateTime" or "DateTimeOffset"
+            && effectiveType.ContainingNamespace is { Name: "System", ContainingNamespace.IsGlobalNamespace: true })
+        {
+            return true;
+        }
+
+        return effectiveType.TypeKind == TypeKind.Enum
             || IsStringParsable(effectiveType);
     }
 
@@ -1298,25 +1319,11 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         var unwrappedType = isNullableValueType
             ? ((INamedTypeSymbol)rawType).TypeArguments[0]
             : rawType;
-        var typeDisplay = unwrappedType.ToDisplayString();
 
-        // Map primitive types to their fast Utf8JsonReader accessor. Nullable value types use
-        // the same accessor wrapped with a JsonTokenType.Null guard, avoiding the much slower
-        // JsonSerializer.Deserialize<T?> path that requires reflection and converter lookup.
-        var fastReaderExpr = typeDisplay switch
-        {
-            "string" => "reader.GetString()",
-            "int" => "reader.GetInt32()",
-            "long" => "reader.GetInt64()",
-            "double" => "reader.GetDouble()",
-            "float" => "reader.GetSingle()",
-            "bool" => "reader.GetBoolean()",
-            "decimal" => "reader.GetDecimal()",
-            "System.Guid" => "reader.GetGuid()",
-            "System.DateTime" => "reader.GetDateTime()",
-            "System.DateTimeOffset" => "reader.GetDateTimeOffset()",
-            _ => null,
-        };
+        // Map primitive types to their fast Utf8JsonReader accessor via SpecialType (no allocation).
+        // Nullable value types use the same accessor wrapped with a JsonTokenType.Null guard,
+        // avoiding the much slower JsonSerializer.Deserialize<T?> path.
+        var fastReaderExpr = GetFastJsonReaderExpression(unwrappedType);
 
         string readerExpr;
         if (fastReaderExpr is not null)
@@ -1356,10 +1363,9 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
     private static void WriteRouteExtraction(PipelineRenderContext context, string operationExpr, PropertyOwnershipEntry entry)
     {
         var effectiveType = GetEffectiveBindingType(entry.TypeSymbol);
-        var typeDisplay = effectiveType.ToDisplayString();
         var routeValueExpr = $"httpContext.Request.RouteValues[\"{entry.BindingName}\"]";
 
-        if (typeDisplay == "string")
+        if (effectiveType.SpecialType == SpecialType.System_String)
         {
             context.WriteStatement(FormatPropertyAssignment(operationExpr, entry, $"(string){routeValueExpr}"));
         }
@@ -1419,9 +1425,9 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             effectiveType = namedType.TypeArguments[0];
         }
 
-        var effectiveDisplay = effectiveType.WithNullableAnnotation(NullableAnnotation.NotAnnotated).ToDisplayString();
+        var effectiveDisplay = effectiveType.WithNullableAnnotation(NullableAnnotation.NotAnnotated);
 
-        if (effectiveDisplay == "string")
+        if (effectiveDisplay.SpecialType == SpecialType.System_String)
         {
             var queryVar = $"_qv_{entry.PropertyName}";
             context.WriteStatement($"var {queryVar} = httpContext.Request.Query[\"{queryParamName}\"];");
@@ -1484,9 +1490,8 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         string queryParamName)
     {
         var elementType = arrayType.ElementType;
-        var elementDisplay = elementType.WithNullableAnnotation(NullableAnnotation.NotAnnotated).ToDisplayString();
 
-        if (elementDisplay == "string")
+        if (elementType.WithNullableAnnotation(NullableAnnotation.NotAnnotated).SpecialType == SpecialType.System_String)
         {
             var queryVar = $"_qv_{entry.PropertyName}";
             context.WriteStatement($"var {queryVar} = httpContext.Request.Query[\"{queryParamName}\"];");
@@ -1636,6 +1641,40 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Maps a type symbol to a fast <c>Utf8JsonReader.GetXxx()</c> expression using <see cref="SpecialType"/>
+    /// and structural namespace checks — avoids <c>ToDisplayString()</c> allocation on every body property.
+    /// Returns <c>null</c> when the type is not a known primitive and must fall through to
+    /// <c>JsonSerializer.Deserialize</c>.
+    /// </summary>
+    private static string? GetFastJsonReaderExpression(ITypeSymbol type)
+    {
+        switch (type.SpecialType)
+        {
+            case SpecialType.System_String: return "reader.GetString()";
+            case SpecialType.System_Int32: return "reader.GetInt32()";
+            case SpecialType.System_Int64: return "reader.GetInt64()";
+            case SpecialType.System_Double: return "reader.GetDouble()";
+            case SpecialType.System_Single: return "reader.GetSingle()";
+            case SpecialType.System_Boolean: return "reader.GetBoolean()";
+            case SpecialType.System_Decimal: return "reader.GetDecimal()";
+        }
+
+        // Guid, DateTime, DateTimeOffset live in the System namespace
+        if (type.ContainingNamespace is { Name: "System", ContainingNamespace.IsGlobalNamespace: true })
+        {
+            return type.Name switch
+            {
+                "Guid" => "reader.GetGuid()",
+                "DateTime" => "reader.GetDateTime()",
+                "DateTimeOffset" => "reader.GetDateTimeOffset()",
+                _ => null,
+            };
+        }
+
+        return null;
     }
 
     /// <summary>
