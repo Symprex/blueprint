@@ -20,7 +20,7 @@ All framework features required for S365 migration are implemented and tested:
 
 | Feature | Status | Tests | Notes |
 |---------|--------|-------|-------|
-| Source generator (44 modules) | ✅ Ready | 794 | Incremental, fully cached |
+| Source generator (44 modules) | ✅ Ready | 796 | Incremental, fully cached |
 | Integration tests | ✅ Ready | 1,178 | Pipeline execution proofs |
 | Blueprint.Marten | ✅ Ready | — | UoW, outbox, multi-tenancy |
 | Blueprint.Rebus | ✅ Ready | — | Auto-detecting module, tx scope |
@@ -41,10 +41,10 @@ All framework features required for S365 migration are implemented and tested:
 
 | Service | Cmds | Queries | Handlers | `[Resource]` | Tier | Status |
 |---------|------|---------|----------|-------------|------|--------|
-| Analytics | 1 | 1 | 6 | 2 | 1 | 🔲 Not started |
-| EventStore | 0 | 1 | 4 | 2 | 1 | 🔲 Not started |
-| Templates | 0 | 1 | 2 | 0 | 2 | 🔲 Not started |
-| Generation | 0 | 6 | 12 | 2 | 2 | 🔲 Not started |
+| Analytics | 1 | 1 | 6 | 2 | 1 | ✅ Proof compiled |
+| EventStore | 0 | 1 | 4 | 2 | 1 | ✅ Proof compiled |
+| Templates | 0 | 1 | 2 | 0 | 2 | ✅ Proof compiled |
+| Generation | 0 | 6 | 12 | 2 | 2 | ✅ Proof compiled |
 | ExchangeTransportAgent | 4 | 3 | 9 | 7 | 3 | 🔲 Not started |
 | Microsoft365 | 4 | 1 | 10 | 2 | 3 | 🔲 Not started |
 | Outlook | 6 | 7 | 28 | 7 | 3 | 🔲 Not started |

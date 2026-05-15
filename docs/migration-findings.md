@@ -7,7 +7,7 @@
 
 | Area | Status | Notes |
 |------|--------|-------|
-| Compile-time proof | ✅ Done | `.scratch/s365-proof/` compiles and emits 46 generated files |
+| Compile-time proof | ✅ Done | `.scratch/s365-proof/` compiles Analytics + EventStore (4 ops, NodaTime, ContinuationPagedApiResource) |
 | Authorization model | ✅ Verified | 349 `[Resource]` usages and 158 `[FromResource]` usages map directly to source-gen Blueprint |
 | Scope-pair provider | ✅ Done | `ScopePairClaimAuthorizationProvider` now matches S365 (`"::"`, CRUD hierarchy, ignored scopes, `allowWhenNoScopeClaims`) |
 | Claims-based auth removal | ✅ Done | Legacy claims-only authorization layer was removed; resource-based auth is the only path |
@@ -28,6 +28,8 @@
 | ApiOperations base class | ✅ Verified | `Context`, `Identity`, `Logger`, `CancellationToken`, `HttpContext`, `HttpRequest`, and `HttpResponse` map directly |
 | ResourceEvent contract | ✅ Verified | `ResourceEvent<T>`, convenience types, envelope shape, and audit hooks are compatible |
 | Compile-time diagnostics | ✅ Done | Auth, property ownership, HTTP, link, validation, result, and serializer diagnostics cover the migration surface |
+| ApiExceptionFactory resolution | ✅ Done | Field references (e.g. `CommonApiExceptions.NotFound`) resolved via semantic model; no BP010 warnings for S365 pattern |
+| BP001 ApiResource partial | ✅ Done | Downgraded from Error to Warning; non-partial resources work with virtual `Object` fallback |
 | Codemod run | ✅ Done | 10 BPMIG diagnostics found across 158 projects; code fixes exist for redundant setup and missing `partial` |
 | Pipeline helper extraction | ✅ Done | JSON, auth, validation, UoW, outbox, HATEOAS, and audit steps are centralized in `PipelineHelpers` |
 | Runtime hot-path optimization | ✅ Done | Binding helpers, async fast-paths, pre-sized collections, cached API catalog, and auth structs reduce overhead |
