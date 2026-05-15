@@ -39,7 +39,8 @@ public sealed class NoResultShapeSeparationModule : IBlueprintSourceGeneratorMod
 
         var noResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.NoResultOperationResult");
         var httpNoContentResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Http.HttpNoContentResult");
-        if (noResultType is null || httpNoContentResultType is null)
+        var httpAcceptedResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Http.HttpAcceptedResult");
+        if (noResultType is null || (httpNoContentResultType is null && httpAcceptedResultType is null))
         {
             return;
         }
@@ -51,8 +52,16 @@ public sealed class NoResultShapeSeparationModule : IBlueprintSourceGeneratorMod
             return;
         }
 
-        if (unionMembers.Any(member => SymbolEqualityComparer.Default.Equals(member, noResultType)) == false
-            || unionMembers.Any(member => SymbolEqualityComparer.Default.Equals(member, httpNoContentResultType)) == false)
+        var hasNoResult = unionMembers.Any(member => SymbolEqualityComparer.Default.Equals(member, noResultType));
+        if (hasNoResult == false)
+        {
+            return;
+        }
+
+        var hasHttpStatusOnly = unionMembers.Any(member =>
+            SymbolEqualityComparer.Default.Equals(member, httpNoContentResultType)
+            || SymbolEqualityComparer.Default.Equals(member, httpAcceptedResultType));
+        if (hasHttpStatusOnly == false)
         {
             return;
         }

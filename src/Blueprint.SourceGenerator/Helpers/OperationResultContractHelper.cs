@@ -114,6 +114,7 @@ public static class OperationResultContractHelper
     /// <param name="keyOnlyResourceEventResultType">The resolved <c>Blueprint.Runtime.Exec.KeyOnlyResourceEventResult</c> type when available.</param>
     /// <param name="resourceEventResultType">The resolved <c>Blueprint.Runtime.Exec.ResourceEventResult</c> type when available.</param>
     /// <param name="httpNoContentResultType">The resolved <c>Blueprint.Runtime.Http.HttpNoContentResult</c> type when available.</param>
+    /// <param name="httpAcceptedResultType">The resolved <c>Blueprint.Runtime.Http.HttpAcceptedResult</c> type when available.</param>
     /// <param name="plainTextResultType">The resolved <c>Blueprint.Runtime.Exec.PlainTextResult</c> type when available.</param>
     /// <param name="redirectResultType">The resolved <c>Blueprint.Runtime.Http.RedirectResult</c> type when available.</param>
     /// <param name="fileStreamResultType">The resolved <c>Blueprint.Runtime.Exec.FileStreamResult</c> type when available.</param>
@@ -133,6 +134,7 @@ public static class OperationResultContractHelper
         INamedTypeSymbol? keyOnlyResourceEventResultType,
         INamedTypeSymbol? resourceEventResultType,
         INamedTypeSymbol? httpNoContentResultType,
+        INamedTypeSymbol? httpAcceptedResultType = null,
         INamedTypeSymbol? plainTextResultType = null,
         INamedTypeSymbol? redirectResultType = null,
         INamedTypeSymbol? fileStreamResultType = null,
@@ -150,6 +152,7 @@ public static class OperationResultContractHelper
             || SymbolEqualityComparer.Default.Equals(resultType, keyOnlyResourceEventResultType)
             || IsTypeOrDerivedFromOptional(resultType, resourceEventResultType)
             || SymbolEqualityComparer.Default.Equals(resultType, httpNoContentResultType)
+            || SymbolEqualityComparer.Default.Equals(resultType, httpAcceptedResultType)
             || SymbolEqualityComparer.Default.Equals(resultType, plainTextResultType)
             || SymbolEqualityComparer.Default.Equals(resultType, redirectResultType)
             || SymbolEqualityComparer.Default.Equals(resultType, fileStreamResultType)
@@ -180,6 +183,7 @@ public static class OperationResultContractHelper
     /// <param name="statusCodeResultType">The resolved <c>Blueprint.Runtime.Exec.StatusCodeResult</c> base type when available.</param>
     /// <param name="resourceEventType">The resolved <c>Blueprint.Http.ResourceEvent</c> base type when available (legacy S365 pattern).</param>
     /// <param name="httpResultType">The resolved <c>Blueprint.Http.HttpResult</c> base type when available (self-executing HTTP result).</param>
+    /// <param name="httpAcceptedResultType">The resolved <c>Blueprint.Runtime.Http.HttpAcceptedResult</c> type when available.</param>
     /// <returns>Whether the current executor path has a deterministic response shape for the semantic result type.</returns>
     public static bool TryGetHttpOperationResultResponseShape(
         ITypeSymbol resultType,
@@ -200,7 +204,8 @@ public static class OperationResultContractHelper
         INamedTypeSymbol? fileStreamResultType = null,
         INamedTypeSymbol? statusCodeResultType = null,
         INamedTypeSymbol? resourceEventType = null,
-        INamedTypeSymbol? httpResultType = null)
+        INamedTypeSymbol? httpResultType = null,
+        INamedTypeSymbol? httpAcceptedResultType = null)
     {
         if (IsTypeOrDerivedFrom(resultType, okResultType))
         {
@@ -268,6 +273,13 @@ public static class OperationResultContractHelper
         if (SymbolEqualityComparer.Default.Equals(resultType, httpNoContentResultType))
         {
             statusCode = 204;
+            hasResponseBody = false;
+            return true;
+        }
+
+        if (SymbolEqualityComparer.Default.Equals(resultType, httpAcceptedResultType))
+        {
+            statusCode = 202;
             hasResponseBody = false;
             return true;
         }

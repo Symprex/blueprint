@@ -48,6 +48,7 @@ public sealed class HttpUnionDiscriminationStrategyModule : IBlueprintSourceGene
         var keyOnlyResourceEventResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.KeyOnlyResourceEventResult");
         var resourceEventResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.ResourceEventResult");
         var httpNoContentResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Http.HttpNoContentResult");
+        var httpAcceptedResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Http.HttpAcceptedResult");
         var plainTextResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.PlainTextResult");
         var redirectResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Http.RedirectResult");
         var fileStreamResultType = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.FileStreamResult");
@@ -69,7 +70,7 @@ public sealed class HttpUnionDiscriminationStrategyModule : IBlueprintSourceGene
         var translatedMembers = new List<TranslatedResultMember>(unionMembers.Length);
         foreach (var unionMember in unionMembers)
         {
-            if (OperationResultContractHelper.TryGetHttpOperationResultResponseShape(unionMember, okResultType, acceptedResultType, conflictResultType, notFoundResultType, createdResultType, validationFailedResultType, noResultType, keyOnlyResourceEventResultType, resourceEventResultType, httpNoContentResultType, out var statusCode, out var hasResponseBody, plainTextResultType, redirectResultType, fileStreamResultType, statusCodeResultType, resourceEventType, httpResultType) == false)
+            if (OperationResultContractHelper.TryGetHttpOperationResultResponseShape(unionMember, okResultType, acceptedResultType, conflictResultType, notFoundResultType, createdResultType, validationFailedResultType, noResultType, keyOnlyResourceEventResultType, resourceEventResultType, httpNoContentResultType, out var statusCode, out var hasResponseBody, plainTextResultType, redirectResultType, fileStreamResultType, statusCodeResultType, resourceEventType, httpResultType, httpAcceptedResultType) == false)
             {
                 return;
             }

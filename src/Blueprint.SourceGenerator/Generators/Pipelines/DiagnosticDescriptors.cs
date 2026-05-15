@@ -143,7 +143,7 @@ internal static class DiagnosticDescriptors
         category: Category,
         DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "Results unions must not mix host-neutral NoResultOperationResult with host-specific no-content or status-only result families such as HttpNoContentResult.");
+        description: "Results unions must not mix host-neutral NoResultOperationResult with host-specific no-content or status-only result families such as HttpNoContentResult or HttpAcceptedResult.");
 
     /// <summary>
     /// BP113: Multiple non-fallback exception translators overlap on the same exception family.

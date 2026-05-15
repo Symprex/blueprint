@@ -188,6 +188,9 @@ public class HttpOperationResultExecutor
             case HttpNoContentResult:
                 httpContext.Response.StatusCode = StatusCodes.Status204NoContent;
                 return true;
+            case HttpAcceptedResult:
+                httpContext.Response.StatusCode = StatusCodes.Status202Accepted;
+                return true;
             case PlainTextResult plainTextResult:
                 httpContext.Response.StatusCode = (int)plainTextResult.StatusCode;
                 httpContext.Response.ContentType = string.Equals(plainTextResult.ContentType, "text/plain", StringComparison.Ordinal)

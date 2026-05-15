@@ -412,6 +412,21 @@ public class HttpEndToEndIntegrationTests
     }
 
     [Fact]
+    public async Task When_accepted_command_then_returns_202()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/e2e/accepted-command");
+        endpoint.Should().NotBeNull();
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider);
+
+        response.StatusCode.Should().Be(StatusCodes.Status202Accepted);
+        response.Body.Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task When_GET_with_route_parameter_then_route_value_is_bound()
     {
         var endpoints = CreateEndpoints();
@@ -1823,6 +1838,21 @@ public partial class E2ENoContentCommand : ICommand<HttpNoContentResult>
     public static Task<HttpNoContentResult> HandleAsync()
     {
         return Task.FromResult(new HttpNoContentResult());
+    }
+}
+
+/// <summary>
+/// Command that returns HttpAcceptedResult — verifies 202 Accepted with no body.
+/// </summary>
+[Blueprint.Model.Attributes.RootLink("/e2e/accepted-command")]
+[Blueprint.Model.Attributes.AllowAnonymous]
+public partial class E2EAcceptedCommand : ICommand<HttpAcceptedResult>
+{
+    /// <summary>Returns 202 Accepted — typical async fire-and-forget response.</summary>
+    /// <returns>HttpAcceptedResult indicating the command was accepted for processing.</returns>
+    public static Task<HttpAcceptedResult> HandleAsync()
+    {
+        return Task.FromResult(new HttpAcceptedResult());
     }
 }
 
