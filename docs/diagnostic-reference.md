@@ -9,7 +9,7 @@ For detailed explanations, see [compile-time-validation.md](compile-time-validat
 
 | ID | Severity | Title |
 |----|----------|-------|
-| BP001 | Error | Class must be partial (API resource) |
+| BP001 | Warning | Class should be partial for optimized Object property (API resource) |
 | BP002 | Error | Class must be partial (app model) |
 | BP004 | Error | Cannot parse `[BlueprintAppScan]` attribute |
 | BP005 | Error | Class must be partial (descriptor) |

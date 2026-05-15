@@ -4,6 +4,6 @@ using Blueprint.Model;
 namespace TestNamespace;
 
 public class Test : ApiResource
-             ^^^^ [Error:BP001] The class 'Test' must be partial to generate the Object property
+             ^^^^ [Warning:BP001] The class 'Test' should be partial to generate an optimized Object property override; without partial, the base virtual implementation uses reflection at runtime
 {
 }

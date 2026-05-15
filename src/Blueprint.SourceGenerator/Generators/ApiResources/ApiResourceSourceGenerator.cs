@@ -15,10 +15,10 @@ public sealed class ApiResourceSourceGenerator : IIncrementalGenerator, ITracked
 {
     private static readonly DiagnosticDescriptor _missingPartialModifierRule = new(
         id: "BP001",
-        title: "Class must be partial",
-        messageFormat: "The class '{0}' must be partial to generate the Object property",
+        title: "Class should be partial for optimized Object property",
+        messageFormat: "The class '{0}' should be partial to generate an optimized Object property override; without partial, the base virtual implementation uses reflection at runtime",
         category: "ApiResourceSourceGenerator",
-        DiagnosticSeverity.Error,
+        DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
 
     /// <inheritdoc />

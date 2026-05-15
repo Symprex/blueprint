@@ -17,7 +17,7 @@ namespace Blueprint.SourceGenerator.Tests.Generators.ApiResource
                          """;
 
             await Compile(source)
-                .VerifyCompilationFailedAsync(SnapshotsFolder);
+                .VerifySuccessWithDiagnosticsAsync(SnapshotsFolder, "BP001");
         }
 
         [Fact]
