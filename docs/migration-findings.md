@@ -385,6 +385,7 @@
 | GetAttributes() caching | ✅ Done | `ValidationModule` and `ValidationPropertyPlanner` now cache `property.GetAttributes()` once per property — reduces 7→1 and 2→1 redundant calls per property per operation |
 | DescriptorPlan.Equals early-exit | ✅ Done | Count checks for Diagnostics, Metadata, and RenderSteps before expensive `SequenceEqual` — improves incremental generator caching performance |
 | AuthorizationModule location cache | ✅ Done | Cached `operationType.Locations.FirstOrDefault()` at method entry — avoids 8 redundant ImmutableArray traversals per operation |
+| BPMIG401 resource partial | ✅ Done | `ResourceMissingPartialAnalyzer` detects concrete `ApiResource` subclasses missing `partial` keyword. Shared `MissingPartialCodeFixProvider` handles both BPMIG400 (operations) and BPMIG401 (resources) in a single "Fix all in solution" pass. ~60 S365 resource classes auto-fixed. Commit `0f71847d`. |
 
 ---
 
@@ -615,12 +616,14 @@ This can be a codemod target. The `ConfigureOperation` OpenAPI workaround is no 
 
 Successfully ran Blueprint codemod against `Signature365.sln` (158 projects). Found **10 BPMIG diagnostics** across 4 categories:
 
-### Auto-fixable (3)
+### Auto-fixable (3+)
 | ID | Title | Action |
 |----|-------|--------|
 | BPMIG001 | Remove redundant `AddOpenApi()` | Delete call — OpenAPI is implied by HTTP host |
 | BPMIG002 | Remove redundant `AddHateoasLinks()` | Delete call — links are inferred from attributes |
 | BPMIG003 | Remove redundant `AddAuthorisation()` | Delete call — auth is inferred from `[Resource]` |
+| BPMIG400 | Add `partial` to operation classes | Auto-fix adds `partial` keyword (~240+ S365 operations) |
+| BPMIG401 | Add `partial` to API resource classes | Auto-fix adds `partial` keyword (~60 S365 resources) |
 
 ### Configuration Required (2)
 | ID | Title | Action |
