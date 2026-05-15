@@ -92,9 +92,9 @@ independent of Blueprint's API serialization and remains unchanged.
 
 #### OpenAPI Baseline (HARD GATE)
 1. Capture current OpenAPI JSON: `curl http://localhost:{port}/openapi -o openapi-baseline.json`
-2. Capture current NSwag TypeScript client output
+2. Capture current TypeScript client output (`api.ts` from Handlebars generator)
 3. These become the diff baseline — **service does not ship until OpenAPI diff is reviewed
-   and TypeScript client generates equivalent output**
+   and TypeScript Handlebars generator produces equivalent output**
 
 #### Dependency Audit
 1. List all `Blueprint.*` package references
@@ -269,7 +269,7 @@ Both toolchains emit `.g.cs` files with no name collisions. During migration, S3
 | **Rebus integration package** | `Blueprint.Rebus` — message subscription, outbox pattern | ✅ Implemented in `Blueprint.Rebus` |
 | **Hangfire integration package** | `Blueprint.Tasks.Hangfire` — background task scheduling | ✅ Implemented in `Blueprint.Tasks.Hangfire` + `Blueprint.Hangfire` |
 | **`OperationsHandlerScanner`** | S365 convention: scan `ApiOperations` base classes for handler methods | ✅ Not needed — source gen discovers `InvokeAsync` inline handlers automatically |
-| **NSwag → Built-in OpenAPI** | S365 uses NSwag for OpenAPI. New Blueprint has built-in OpenAPI with pluggable security schemes. | ✅ Feature-complete, TypeScript client gen compatible |
+| **NSwag → Built-in OpenAPI** | S365 uses NSwag server-side for OpenAPI. New Blueprint has built-in OpenAPI with pluggable security schemes. Custom Handlebars TS generator is unchanged. | ✅ Feature-complete, all required OpenAPI extensions emitted |
 | **`FromResourceAttribute` with path** | `[FromResource(typeof(X), "/Tenants/{Auth:AccountId}")]` — path override variant | ✅ Supported via `PropertyOwnershipModule` |
 | **`Link` attribute (non-self, non-root)** | `[Link(typeof(Resource), "/path", Rel = "name")]` — arbitrary HATEOAS links | ✅ Implemented |
 
@@ -886,14 +886,37 @@ In addition to standard checks, Generation requires:
 ## OpenAPI & TypeScript Client Generation
 
 ### Current S365 Setup
-- Uses NSwag (`NSwag.AspNetCore`, `NSwag.CodeGeneration.TypeScript`)
-- 23+ projects reference NSwag
-- TypeScript API clients are generated from OpenAPI specs
-- Custom `BlueprintLinkSchemaProcessor` for HATEOAS link schemas
+- Uses NSwag on the **server side** for OpenAPI document generation (NJsonSchema-based)
+- TypeScript API clients are generated using **custom Handlebars templates** (NOT NSwag CLI)
+- Three frontend apps each have their own generator: Admin, Portal, Partners
+- Generator lives in `frontend/apps/{app}/src/openapi/generator/index.mts`
+- Templates: `api.handlebars`, `apiInner.handlebars`, `model.handlebars`, `index.handlebars`
+- OpenAPI specs are saved to disk (e.g. `src/Apps/Portal/.../Spec/openapi.json`)
+- TS generation runs via `npm run openapi` in each frontend app
+
+### Critical OpenAPI Features Used by S365 TypeScript Generator
+
+| Feature | Used By Templates | Blueprint Status |
+|---------|-------------------|------------------|
+| `operationId` | Method naming (`apiInner.handlebars`) | ✅ Emitted |
+| `tags` | API class grouping | ✅ Emitted |
+| `$ref` to `components/schemas` | Type resolution | ✅ Emitted |
+| `parameters` array | Method signatures | ✅ Emitted |
+| `requestBody` | POST/PUT body param | ✅ Emitted |
+| `responses` | Return types | ✅ Emitted |
+| `enum` values | Enum generation (`model.handlebars`) | ✅ Emitted |
+| `x-links` | HATEOAS method generation | ✅ Emitted |
+| `x-enumNames` | Enum member naming | ✅ Emitted (+ `x-enum-varnames`) |
+| `nullable` | Optional type unions | ✅ Emitted |
+| `oneOf` | Discriminated unions | ✅ Emitted |
+| `required` array | Optional vs required params | ✅ Emitted |
+| `title` on properties | NOT USED by templates | ✅ Safe to omit |
 
 ### Migration Path
 
-1. **Keep NSwag for TS generation**: New Blueprint's built-in OpenAPI replaces NSwag's *server-side* doc generation, but NSwag CLI can still consume the OpenAPI JSON to generate TypeScript clients.
+1. **New Blueprint replaces NSwag server-side**: Built-in OpenAPI generator replaces
+   `NSwag.AspNetCore` + `NJsonSchema` on the server. The custom Handlebars TypeScript
+   generator is unchanged — it continues reading OpenAPI JSON from disk.
 
 2. **Verify OpenAPI shape compatibility**:
    ```powershell
@@ -908,27 +931,40 @@ In addition to standard checks, Generation requires:
    ```
 
 3. **Key differences to document**:
-   - Endpoint path: `/openapi` → `/api/.blueprint/openapi.json`
-   - HATEOAS link schemas: New Blueprint renders `_links` in schema definitions differently
-   - `operationId` format: May differ (new uses C# type name directly)
+   - Endpoint path: `/openapi` → `/api/.blueprint/openapi.json` (configurable)
+   - `operationId` format: New Blueprint uses C# type name (e.g. `GetTemplateQuery`)
+     — S365's `PortalOperationScannerConvention` strips app prefix; configure via
+     `configureOpenApiOperations` processor
    - Response shapes: `200 OK` vs `201 Created` — new Blueprint infers from result types
    - Security scheme: New Blueprint writes `bearerAuth` with document-level hoisting
+   - Schema naming: Configurable via `SchemaNameFormatter` delegate
 
 4. **TS client generation command** (post-migration):
    ```powershell
-   # Use NSwag CLI to generate from new Blueprint's OpenAPI
-   nswag openapi2tsclient /input:http://localhost:5000/api/.blueprint/openapi.json /output:api-client.ts
+   # Save the new OpenAPI spec to disk (replacing the old one)
+   curl http://localhost:5000/api/.blueprint/openapi.json -o src/Apps/Portal/.../Spec/openapi.json
+   
+   # Run the existing Handlebars generator unchanged
+   cd frontend/apps/portal && npm run openapi
    ```
 
 5. **Schema naming convention**: New Blueprint uses full CLR type name with underscores
    (e.g., `Symprex_Signature365_Portal_Contract_Api_TemplateApiResource`). Legacy Blueprint
-   used shorter names. This affects NSwag-generated TypeScript interface names. See
-   `docs/openapi-migration.md` for customization options via `configureOpenApiSchemas`.
+   used shorter names. Configure via `SchemaNameFormatter`:
+   ```csharp
+   configureOpenApi: options =>
+   {
+       options.SchemaNameFormatter = clrName => clrName
+           .Replace("Symprex.Signature365.", "")
+           .Replace("ApiResource", "")
+           .Replace(".", "");
+   }
+   ```
 
 ### Action Items
 - [ ] Create an OpenAPI comparison test that captures old vs new specs *(requires running S365 services)*
-- [ ] Document any breaking changes for frontend team *(requires S365 OpenAPI baseline)*
-- [ ] Test NSwag TS generation against new OpenAPI output *(requires S365 OpenAPI baseline)*
+- [ ] Verify Handlebars templates produce identical `api.ts` from new spec *(diff test)*
+- [ ] Document any `operationId` or schema naming differences for frontend team
 
 ---
 

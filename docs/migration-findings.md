@@ -2064,8 +2064,8 @@ After investigating all OpenAPI compatibility items against S365 requirements:
 | `additionalProperties: false` | ✅ Fixed (#298) | Now emitted on all object schemas |
 | Generic schema components | ✅ Fixed (#297) | Uses "Of/And" naming convention |
 | Generic response `$ref` | ✅ Fixed (#299) | Full CLR name → short name resolution |
-| Per-property `title` | ⚠️ Not emitted | S365 NJsonSchema emits `"title": "String"` etc.; Blueprint omits. Low impact for TS generation. |
-| Empty descriptions | ⚠️ Omitted | S365 renders `"description": ""`; Blueprint omits entirely. Semantically equivalent. |
+| Per-property `title` | ✅ Low impact | S365 NJsonSchema emits `"title": "String"` etc.; Blueprint omits. TS Handlebars templates do NOT use `title` — they use `@key` and `dataType`. No migration impact. |
+| Empty descriptions | ✅ Low impact | S365 renders `"description": ""`; Blueprint omits entirely. Semantically equivalent, no TS generation impact. |
 | Bearer auth security | ✅ Working | `bearerAuth` scheme with JWT bearer |
 | Deprecated operations | ✅ Working | `[Obsolete]` → `deprecated: true` + `x-deprecated-reason` |
 
@@ -2136,12 +2136,12 @@ Revisit when pipeline count exceeds 1000+ or profiling shows state machine overh
 | `changeType` | `string` enum `["Created","Updated","Deleted"]` | ✅ | Change type |
 | `created` | `string` format `date-time` | ✅ | When event occurred |
 | `resourceObject` | `string` | ✅ | Resource type name |
-| `href` | `string` nullable | ❌ | Self-link URL |
+| `href` | `string` nullable | ✅ | Self-link URL |
 | `data` | `$ref` to inner type | ✅ | The actual resource |
-| `metadata` | `object` nullable | ❌ | Extra metadata dict |
-| `secureData` | `object` nullable | ❌ | Secure metadata dict |
-| `changedValues` | `object` nullable | ❌ | Changed properties dict |
-| `correlationId` | `string` nullable | ❌ | Correlation ID |
+| `metadata` | `object` nullable | ✅ | Extra metadata dict |
+| `secureData` | `object` nullable | ✅ | Secure metadata dict |
+| `changedValues` | `object` nullable | ✅ | Changed properties dict |
+| `correlationId` | `string` nullable | ✅ | Correlation ID |
 
 **Impact:** S365 TypeScript clients will now see the correct envelope shape for all `ResourceEventResult<T>` operations (~274 S365 operations affected). The `data` field correctly references the inner resource type for TypeScript type inference.
 
@@ -3360,11 +3360,11 @@ registration point accepts the S365 implementation directly.**
 
 **Key compatibility requirements for Blueprint:**
 1. ✅ `x-links` extension data on schemas (Blueprint already generates link metadata)
-2. ⚠️ `x-enumNames` — need to verify Blueprint emits these for string enums
+2. ✅ `x-enumNames` — Blueprint emits both `x-enumNames` (NSwag) and `x-enum-varnames` (OpenAPI Generator)
 3. ✅ Tags from namespace (Blueprint uses tag convention)
 4. ✅ `operationId` naming (Blueprint uses operation type name)
 5. ✅ Response status codes (200/400/422/500 standard pattern)
-6. ⚠️ Schema naming — S365 uses `BlueprintSchemaNameGenerator`; Blueprint may differ
+6. ✅ Schema naming — Blueprint provides `SchemaNameFormatter` delegate for custom naming; S365 can port `BlueprintSchemaNameGenerator` logic
 
 ### #333 — S365 Gateway OpenAPI: Aggregation Pattern
 
