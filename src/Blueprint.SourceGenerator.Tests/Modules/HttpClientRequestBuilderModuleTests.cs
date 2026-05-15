@@ -275,7 +275,7 @@ public class HttpClientRequestBuilderModuleTests
 
         // Collection should use foreach to emit repeated keys
         source.Should().Contain("foreach (var _item in typed.Ids)");
-        source.Should().Contain("Ids=");
+        source.Should().Contain("ids=");
     }
 
     [Fact]

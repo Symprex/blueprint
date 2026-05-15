@@ -39,6 +39,7 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
     [
         nameof(LinkGenerationModule),
         nameof(OperationHttpMethodMetadataModule),
+        nameof(PropertyOwnershipModule),
     ];
 
     /// <inheritdoc />
@@ -73,6 +74,26 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
                 && !p.GetAttributes().Any(static a => a.AttributeClass?.Name is "ObsoleteAttribute"))
             .ToList();
 
+        // Read property ownership metadata to determine which properties are query params
+        // and their correct binding names (camelCase, [FromQuery(Name=...)] overrides, etc.)
+        var bindingEntries = context.GetMetadata<PropertyBindingEntriesMetadata>().FirstOrDefault();
+
+        // Build a lookup: CLR property name → query binding name (only for query-source properties).
+        // URL placeholder properties are excluded even if the ownership module classified them as
+        // Query — the URL builder already handles them as path parameters.
+        var queryBindingNames = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (bindingEntries != null)
+        {
+            foreach (var entry in bindingEntries.Entries)
+            {
+                if (entry.Source == PropertyOwnershipModule.PropertyOwnershipSource.Query
+                    && !placeholders.Contains(entry.PropertyName))
+                {
+                    queryBindingNames[entry.PropertyName] = entry.BindingName ?? entry.PropertyName;
+                }
+            }
+        }
+
         // Determine if this operation uses query string parameters (GET and DELETE carry
         // non-URL properties as query string rather than body)
         var isQueryMethod = context.GetMetadata<OperationHttpMethodMetadataRegistration>()
@@ -81,7 +102,7 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
 
         context.AddRenderStep(codeWriter =>
         {
-            RenderCompiledHttpRequestFeatureData(codeWriter, operationFqn, urlTemplate, placeholders, properties, isQueryMethod);
+            RenderCompiledHttpRequestFeatureData(codeWriter, operationFqn, urlTemplate, placeholders, properties, isQueryMethod, queryBindingNames);
         });
     }
 
@@ -91,7 +112,8 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
         string urlTemplate,
         HashSet<string> placeholders,
         List<IPropertySymbol> properties,
-        bool isQueryMethod)
+        bool isQueryMethod,
+        Dictionary<string, string> queryBindingNames)
     {
         // Build the URL builder lambda
         var urlBuilderLambda = BuildUrlBuilderLambda(operationFqn, urlTemplate, placeholders, properties);
@@ -99,7 +121,7 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
         // Build the query string builder lambda for methods that carry non-URL properties
         // as query string rather than body (GET and DELETE)
         var queryStringLambda = isQueryMethod
-            ? BuildQueryStringLambda(operationFqn, placeholders, properties)
+            ? BuildQueryStringLambda(operationFqn, placeholders, properties, queryBindingNames)
             : null;
 
         codeWriter.AppendLine(
@@ -220,12 +242,25 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
     private static string? BuildQueryStringLambda(
         string operationFqn,
         HashSet<string> placeholders,
-        List<IPropertySymbol> properties)
+        List<IPropertySymbol> properties,
+        Dictionary<string, string> queryBindingNames)
     {
-        // Properties eligible for query string: public, not in URL placeholders
-        var queryProperties = properties
-            .Where(p => !placeholders.Contains(p.Name))
-            .ToList();
+        // When ownership metadata is available, use it as the source of truth for which
+        // properties are query params. When not available (e.g. no HTTP exposure analysis),
+        // fall back to the previous heuristic: non-placeholder properties on GET/DELETE.
+        List<IPropertySymbol> queryProperties;
+        if (queryBindingNames.Count > 0)
+        {
+            queryProperties = properties
+                .Where(p => queryBindingNames.ContainsKey(p.Name))
+                .ToList();
+        }
+        else
+        {
+            queryProperties = properties
+                .Where(p => !placeholders.Contains(p.Name))
+                .ToList();
+        }
 
         if (queryProperties.Count == 0)
         {
@@ -238,8 +273,8 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
         var hasCollections = queryProperties.Any(p => IsEnumerableType(p.Type, out _));
 
         return hasCollections
-            ? BuildQueryStringLambdaWithList(operationFqn, queryProperties)
-            : BuildQueryStringLambdaScalarOnly(operationFqn, queryProperties);
+            ? BuildQueryStringLambdaWithList(operationFqn, queryProperties, queryBindingNames)
+            : BuildQueryStringLambdaScalarOnly(operationFqn, queryProperties, queryBindingNames);
     }
 
     /// <summary>
@@ -248,13 +283,14 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
     /// </summary>
     private static string BuildQueryStringLambdaScalarOnly(
         string operationFqn,
-        List<IPropertySymbol> queryProperties)
+        List<IPropertySymbol> queryProperties,
+        Dictionary<string, string> queryBindingNames)
     {
         // Pattern: track separator char, build string with direct concatenation.
         // Generated code shape:
         //   var sep = url.Contains('?') ? '&' : '?';
         //   var qs = url;
-        //   qs += sep + "Prop=..." ; sep = '&';
+        //   qs += sep + "prop=..." ; sep = '&';
         //   return qs;
         var parts = new List<string>
         {
@@ -266,7 +302,8 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
         foreach (var prop in queryProperties)
         {
             var propAccess = $"typed.{prop.Name}";
-            var escapedName = Uri.EscapeDataString(prop.Name);
+            var bindingName = ResolveQueryBindingName(prop.Name, queryBindingNames);
+            var escapedName = Uri.EscapeDataString(bindingName);
 
             if (prop.Type.SpecialType == SpecialType.System_Boolean)
             {
@@ -309,7 +346,8 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
     /// </summary>
     private static string BuildQueryStringLambdaWithList(
         string operationFqn,
-        List<IPropertySymbol> queryProperties)
+        List<IPropertySymbol> queryProperties,
+        Dictionary<string, string> queryBindingNames)
     {
         var parts = new List<string>
         {
@@ -320,7 +358,8 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
         foreach (var prop in queryProperties)
         {
             var propAccess = $"typed.{prop.Name}";
-            var escapedName = Uri.EscapeDataString(prop.Name);
+            var bindingName = ResolveQueryBindingName(prop.Name, queryBindingNames);
+            var escapedName = Uri.EscapeDataString(bindingName);
 
             if (IsEnumerableType(prop.Type, out var elementType))
             {
@@ -444,5 +483,34 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
 
         parts.Add("}");
         parts.Add("}");
+    }
+
+    /// <summary>
+    /// Resolves the query string key for a property by looking up the binding name assigned by
+    /// <see cref="PropertyOwnershipModule"/>. Falls back to <see cref="GetCamelCaseName"/> when
+    /// ownership metadata is not available (defensive — should not happen in normal flow).
+    /// </summary>
+    private static string ResolveQueryBindingName(string propertyName, Dictionary<string, string> queryBindingNames)
+    {
+        if (queryBindingNames.TryGetValue(propertyName, out var bindingName))
+        {
+            return bindingName;
+        }
+
+        return GetCamelCaseName(propertyName);
+    }
+
+    /// <summary>
+    /// Lowercases the first character of a property name, matching the convention used by
+    /// <see cref="PropertyOwnershipModule"/> for query string binding names.
+    /// </summary>
+    private static string GetCamelCaseName(string name)
+    {
+        if (name.Length == 0 || char.IsLower(name[0]))
+        {
+            return name;
+        }
+
+        return char.ToLowerInvariant(name[0]) + name.Substring(1);
     }
 }

@@ -575,6 +575,96 @@ public sealed class BlueprintHttpClient<TApp>
 
     private static string AppendQueryString(string url, ApiOperationDescriptor descriptor, IOperation operation)
     {
+        // When property ownership metadata is available, use it as the source of truth
+        // for binding names (camelCase, [FromQuery(Name=...)] overrides) and which properties
+        // are query-bound (excluding header/cookie/auth/system properties).
+        if (descriptor.TryGetFeatureData<OperationPropertyOwnershipFeatureData>(out var ownershipData))
+        {
+            return AppendQueryStringFromOwnership(url, ownershipData, operation);
+        }
+
+        // Fallback: reflect over all public properties excluding URL placeholders (pre-existing behavior)
+        return AppendQueryStringFallback(url, descriptor, operation);
+    }
+
+    private static string AppendQueryStringFromOwnership(
+        string url,
+        OperationPropertyOwnershipFeatureData ownershipData,
+        IOperation operation)
+    {
+        var operationType = operation.GetType();
+        System.Text.StringBuilder? queryBuilder = null;
+
+        foreach (var entry in ownershipData.Entries)
+        {
+            if (entry.Source != PropertyBindingSource.Query)
+            {
+                continue;
+            }
+
+            var property = operationType.GetProperty(entry.PropertyName, BindingFlags.Instance | BindingFlags.Public);
+            if (property is null)
+            {
+                continue;
+            }
+
+            var value = property.GetValue(operation);
+            if (value is null)
+            {
+                continue;
+            }
+
+            var bindingName = entry.BindingName ?? entry.PropertyName;
+            var escapedName = Uri.EscapeDataString(bindingName);
+
+            // Handle collection types (arrays, List<T>, IEnumerable<T>) by emitting repeated keys
+            if (value is not string && value is System.Collections.IEnumerable enumerable)
+            {
+                foreach (var item in enumerable)
+                {
+                    if (item is null)
+                    {
+                        continue;
+                    }
+
+                    var itemStr = item.ToString();
+                    if (!string.IsNullOrEmpty(itemStr))
+                    {
+                        queryBuilder ??= new System.Text.StringBuilder();
+                        queryBuilder.Append(queryBuilder.Length == 0 ? (url.Contains('?') ? '&' : '?') : '&');
+                        queryBuilder.Append(escapedName).Append('=').Append(Uri.EscapeDataString(itemStr));
+                    }
+                }
+
+                continue;
+            }
+
+            var stringValue = value switch
+            {
+                bool b => b ? "true" : "false",
+                _ => value.ToString(),
+            };
+
+            if (string.IsNullOrEmpty(stringValue))
+            {
+                continue;
+            }
+
+            queryBuilder ??= new System.Text.StringBuilder();
+            queryBuilder.Append(queryBuilder.Length == 0 ? (url.Contains('?') ? '&' : '?') : '&');
+            queryBuilder.Append(escapedName).Append('=').Append(Uri.EscapeDataString(stringValue));
+        }
+
+        if (queryBuilder is null)
+        {
+            return url;
+        }
+
+        return string.Concat(url, queryBuilder.ToString());
+    }
+
+    private static string AppendQueryStringFallback(string url, ApiOperationDescriptor descriptor, IOperation operation)
+    {
         // Collect URL placeholder property names to exclude from query string
         var urlPlaceholders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var urlDef in descriptor.Urls)
