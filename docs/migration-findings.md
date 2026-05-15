@@ -380,6 +380,11 @@
 | S365 ResourceEvent<T> pattern | ✅ Full parity | 131 handlers (34%) return `ResourceEvent<T>`. Blueprint preserves `ResourceEvent<T>` unchanged (in `Blueprint.Http` namespace) — **no migration to `ResourceEventResult<T>` needed**. Blueprint also has `ResourceEventResult<T>` for new source-gen code, but S365 should keep its existing type. S365's `ResourceEventHandler` middleware maps to Blueprint's `ResourceEventAuditModule` + `ResourceEventSelfQueryModule`. |
 | S365 handler return types | ✅ All mapped | Plain `Task<T>` (110 handlers, 29%) → `OkResult<T>` or plain T. `ResourceEvent<T>` (131, 34%) → **unchanged** (Blueprint preserves `ResourceEvent<T>` — no migration needed). `StatusCodeResult` (7, 2%) → `NoResultOperationResult` / `AcceptedResult`. Rebus event handlers (132, 35%) → `IHandleMessages<T>` via Blueprint.Rebus. |
 | S365 multi-handler operations | ✅ Events only | 10 operations have multiple handlers — all are Rebus domain events (e.g. `TenantSignedUpEvent` has 4 handlers). No HTTP operations have multiple handlers. Blueprint.Rebus handles this via `IHandleMessages<T>` — each handler is an independent message consumer. |
+| FindTypeByMetadataName caching | ✅ Done | `CompilationOperationLookup` caches `FindTypeByMetadataName` results in per-compilation Dictionary — eliminates ~1500+ redundant lookups across 4+ modules per 100 operations |
+| PropertyOwnership SpecialType | ✅ Done | `IsSystemProperty`, `IsSupportedScalarType`, `WriteUtf8ReaderAssignment` use `SpecialType` enum switch + structural namespace checks instead of `ToDisplayString()` — zero-alloc type comparison in binding hot path |
+| GetAttributes() caching | ✅ Done | `ValidationModule` and `ValidationPropertyPlanner` now cache `property.GetAttributes()` once per property — reduces 7→1 and 2→1 redundant calls per property per operation |
+| DescriptorPlan.Equals early-exit | ✅ Done | Count checks for Diagnostics, Metadata, and RenderSteps before expensive `SequenceEqual` — improves incremental generator caching performance |
+| AuthorizationModule location cache | ✅ Done | Cached `operationType.Locations.FirstOrDefault()` at method entry — avoids 8 redundant ImmutableArray traversals per operation |
 
 ---
 
