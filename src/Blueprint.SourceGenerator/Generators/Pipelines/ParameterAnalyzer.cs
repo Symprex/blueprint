@@ -66,7 +66,7 @@ public static class ParameterAnalyzer
 
         // Check for ApiOperationContext via MetadataName (no allocation)
         if (paramType.MetadataName == "ApiOperationContext"
-            && IsInNamespace(paramType, "Exec", "Runtime", "Blueprint"))
+            && paramType.IsInNamespace("Blueprint", "Runtime", "Exec"))
         {
             return ParameterSource.FromContext;
         }
@@ -90,14 +90,14 @@ public static class ParameterAnalyzer
         // Match by MetadataName first (property access, no allocation), then verify namespace
         switch (type.MetadataName)
         {
-            case "BlueprintApp" when IsInNamespace(type, "Model", "Blueprint"):
-            case "CancellationToken" when IsInNamespace(type, "Threading", "System"):
-            case "IUserAuthorisationContext" when IsInNamespace(type, "Authorization", "Blueprint"):
-            case "HttpContext" when IsInNamespace(type, "Http", "AspNetCore", "Microsoft"):
-            case "HttpRequest" when IsInNamespace(type, "Http", "AspNetCore", "Microsoft"):
-            case "HttpResponse" when IsInNamespace(type, "Http", "AspNetCore", "Microsoft"):
-            case "ClaimsPrincipal" when IsInNamespace(type, "Claims", "Security", "System"):
-            case "ClaimsIdentity" when IsInNamespace(type, "Claims", "Security", "System"):
+            case "BlueprintApp" when type.IsInNamespace("Blueprint", "Model"):
+            case "CancellationToken" when type.IsInNamespace("System", "Threading"):
+            case "IUserAuthorisationContext" when type.IsInNamespace("Blueprint", "Authorization"):
+            case "HttpContext" when type.IsInNamespace("Microsoft", "AspNetCore", "Http"):
+            case "HttpRequest" when type.IsInNamespace("Microsoft", "AspNetCore", "Http"):
+            case "HttpResponse" when type.IsInNamespace("Microsoft", "AspNetCore", "Http"):
+            case "ClaimsPrincipal" when type.IsInNamespace("System", "Security", "Claims"):
+            case "ClaimsIdentity" when type.IsInNamespace("System", "Security", "Claims"):
                 return true;
         }
 
@@ -116,21 +116,21 @@ public static class ParameterAnalyzer
         // Match by MetadataName first (cheap property access)
         switch (param.Type.MetadataName)
         {
-            case "BlueprintApp" when IsInNamespace(param.Type, "Model", "Blueprint"):
+            case "BlueprintApp" when param.Type.IsInNamespace("Blueprint", "Model"):
                 return "App";
-            case "CancellationToken" when IsInNamespace(param.Type, "Threading", "System"):
+            case "CancellationToken" when param.Type.IsInNamespace("System", "Threading"):
                 return "OperationCancelled";
-            case "IUserAuthorisationContext" when IsInNamespace(param.Type, "Authorization", "Blueprint"):
+            case "IUserAuthorisationContext" when param.Type.IsInNamespace("Blueprint", "Authorization"):
                 return "UserAuthorisationContext!";
-            case "HttpContext" when IsInNamespace(param.Type, "Http", "AspNetCore", "Microsoft"):
+            case "HttpContext" when param.Type.IsInNamespace("Microsoft", "AspNetCore", "Http"):
                 return "HttpContext!";
-            case "HttpRequest" when IsInNamespace(param.Type, "Http", "AspNetCore", "Microsoft"):
+            case "HttpRequest" when param.Type.IsInNamespace("Microsoft", "AspNetCore", "Http"):
                 return "HttpContext!.Request";
-            case "HttpResponse" when IsInNamespace(param.Type, "Http", "AspNetCore", "Microsoft"):
+            case "HttpResponse" when param.Type.IsInNamespace("Microsoft", "AspNetCore", "Http"):
                 return "HttpContext!.Response";
-            case "ClaimsPrincipal" when IsInNamespace(param.Type, "Claims", "Security", "System"):
+            case "ClaimsPrincipal" when param.Type.IsInNamespace("System", "Security", "Claims"):
                 return "UserPrincipal!";
-            case "ClaimsIdentity" when IsInNamespace(param.Type, "Claims", "Security", "System"):
+            case "ClaimsIdentity" when param.Type.IsInNamespace("System", "Security", "Claims"):
                 return "(System.Security.Claims.ClaimsIdentity)UserPrincipal!.Identity!";
         }
 
@@ -140,27 +140,6 @@ public static class ParameterAnalyzer
             "cancellationtoken" => "OperationCancelled",
             _ => "App", // Default fallback
         };
-    }
-
-    /// <summary>
-    /// Verifies a type symbol's containing namespace matches the expected hierarchy without
-    /// calling <c>ToDisplayString()</c>. Arguments are innermost-first (e.g. "Exec", "Runtime", "Blueprint").
-    /// </summary>
-    private static bool IsInNamespace(ITypeSymbol type, params string[] parts)
-    {
-        var ns = type.ContainingNamespace;
-
-        foreach (var part in parts)
-        {
-            if (ns == null || ns.IsGlobalNamespace || ns.Name != part)
-            {
-                return false;
-            }
-
-            ns = ns.ContainingNamespace;
-        }
-
-        return ns is { IsGlobalNamespace: true };
     }
 
     /// <summary>

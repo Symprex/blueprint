@@ -76,10 +76,7 @@ public sealed class ResourceMissingPartialAnalyzer : DiagnosticAnalyzer
         while (baseType is not null)
         {
             if (baseType.Name == "ApiResource"
-                && string.Equals(
-                    baseType.ContainingNamespace?.ToDisplayString(),
-                    "Blueprint.Model",
-                    System.StringComparison.Ordinal))
+                && NamespaceHelper.IsInNamespace(baseType, "Blueprint", "Model"))
             {
                 return true;
             }

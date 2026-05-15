@@ -379,40 +379,19 @@ public static class HandlerDiscovery
 
         return metadataName switch
         {
-            "ApiOperationContext" when IsInNamespace(type, "Exec", "Runtime", "Blueprint")
+            "ApiOperationContext" when type.IsInNamespace("Blueprint", "Runtime", "Exec")
                 => "context",
-            "IUserAuthorisationContext" when IsInNamespace(type, "Authorization", "Blueprint")
+            "IUserAuthorisationContext" when type.IsInNamespace("Blueprint", "Authorization")
                 => "context.UserAuthorisationContext ?? Blueprint.Authorization.AnonymousUserAuthorisationContext.Instance",
-            "CancellationToken" when IsInNamespace(type, "Threading", "System")
+            "CancellationToken" when type.IsInNamespace("System", "Threading")
                 => "context.OperationCancelled",
-            "ILogger" when IsInNamespace(type, "Logging", "Extensions", "Microsoft")
+            "ILogger" when type.IsInNamespace("Microsoft", "Extensions", "Logging")
                 => "this.Logger",
-            "HttpContext" when IsInNamespace(type, "Http", "AspNetCore", "Microsoft")
+            "HttpContext" when type.IsInNamespace("Microsoft", "AspNetCore", "Http")
                 => "context.HttpContext",
-            "ClaimsPrincipal" when IsInNamespace(type, "Claims", "Security", "System")
+            "ClaimsPrincipal" when type.IsInNamespace("System", "Security", "Claims")
                 => "context.UserPrincipal",
             _ => null,
         };
-    }
-
-    /// <summary>
-    /// Verifies a type symbol's containing namespace matches the expected hierarchy without
-    /// calling <c>ToDisplayString()</c>. Arguments are innermost-first (e.g. "Exec", "Runtime", "Blueprint").
-    /// </summary>
-    private static bool IsInNamespace(ITypeSymbol type, params string[] parts)
-    {
-        var ns = type.ContainingNamespace;
-
-        foreach (var part in parts)
-        {
-            if (ns == null || ns.IsGlobalNamespace || ns.Name != part)
-            {
-                return false;
-            }
-
-            ns = ns.ContainingNamespace;
-        }
-
-        return ns is { IsGlobalNamespace: true };
     }
 }

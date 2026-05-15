@@ -158,10 +158,7 @@ public sealed class LegacyActivationAnalyzer : DiagnosticAnalyzer
 
     private static bool IsNewBlueprintFrameworkAttribute(INamedTypeSymbol attributeType)
     {
-        return string.Equals(
-            attributeType.ContainingNamespace?.ToDisplayString(),
-            "Blueprint.Model.Attributes",
-            StringComparison.Ordinal);
+        return NamespaceHelper.IsInNamespace(attributeType, "Blueprint", "Model", "Attributes");
     }
 
     private static bool TryGetAuthPlaceholderLocation(
