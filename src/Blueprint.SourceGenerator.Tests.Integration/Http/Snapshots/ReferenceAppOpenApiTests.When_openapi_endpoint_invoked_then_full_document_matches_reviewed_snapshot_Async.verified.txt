@@ -2711,6 +2711,15 @@
             "format": "uri",
             "description": "Callback URL for template lifecycle events."
           },
+          "defaultSortOrder": {
+            "nullable": true,
+            "description": "Default sort order preference for this template.",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TemplateSortOrder"
+              }
+            ]
+          },
           "legacyCategory": {
             "type": "string",
             "nullable": true,

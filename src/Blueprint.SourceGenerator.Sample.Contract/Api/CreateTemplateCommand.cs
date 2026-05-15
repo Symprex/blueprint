@@ -99,6 +99,14 @@ public partial class CreateTemplateCommand : ICommand<ResourceEventResult<Templa
     public string? CallbackUrl { get; set; }
 
     /// <summary>
+    /// The default sort order preference for search results within this template's collection.
+    /// Demonstrates enum-typed request body properties rendered as <c>oneOf: [{ $ref }]</c>
+    /// referencing a top-level enum component schema.
+    /// </summary>
+    [Description("Default sort order preference for this template.")]
+    public TemplateSortOrder? DefaultSortOrder { get; set; }
+
+    /// <summary>
     /// Legacy template category. Superseded by Tags.
     /// Demonstrates property-level <c>deprecated: true</c> in OpenAPI schema.
     /// </summary>

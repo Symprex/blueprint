@@ -350,6 +350,50 @@ public class ReferenceAppOpenApiTests
     }
 
     [Fact]
+    public async Task When_request_body_property_is_enum_then_openapi_renders_ref_to_component_schema()
+    {
+        var (json, _) = await InvokeOpenApiEndpointAsync();
+        using var doc = JsonDocument.Parse(json);
+
+        // CreateTemplateCommand has a nullable DefaultSortOrder enum property in its request body
+        var createPath = doc.RootElement.GetProperty("paths").GetProperty("/templates");
+        var requestBody = createPath.GetProperty("post").GetProperty("requestBody");
+        var bodySchema = requestBody.GetProperty("content")
+            .GetProperty("application/json")
+            .GetProperty("schema");
+
+        // Request body may use $ref to a component schema
+        if (bodySchema.TryGetProperty("$ref", out var bodyRef))
+        {
+            // Resolve the component schema
+            var schemaName = bodyRef.GetString()!.Split('/')[^1];
+            var schemas = doc.RootElement.GetProperty("components").GetProperty("schemas");
+            var bodyComponentSchema = schemas.GetProperty(schemaName);
+            var properties = bodyComponentSchema.GetProperty("properties");
+
+            var sortOrderProp = properties.GetProperty("defaultSortOrder");
+            sortOrderProp.TryGetProperty("enum", out _).Should().BeFalse(
+                "request body enum properties should use $ref, not inline enum");
+            sortOrderProp.GetProperty("nullable").GetBoolean().Should().BeTrue();
+            var refOneOf = sortOrderProp.GetProperty("oneOf");
+            refOneOf.GetArrayLength().Should().Be(1);
+            refOneOf[0].GetProperty("$ref").GetString().Should().Be("#/components/schemas/TemplateSortOrder");
+        }
+        else
+        {
+            // Inline schema — check directly
+            var properties = bodySchema.GetProperty("properties");
+            var sortOrderProp = properties.GetProperty("defaultSortOrder");
+            sortOrderProp.TryGetProperty("enum", out _).Should().BeFalse(
+                "request body enum properties should use $ref, not inline enum");
+            sortOrderProp.GetProperty("nullable").GetBoolean().Should().BeTrue();
+            var refOneOf = sortOrderProp.GetProperty("oneOf");
+            refOneOf.GetArrayLength().Should().Be(1);
+            refOneOf[0].GetProperty("$ref").GetString().Should().Be("#/components/schemas/TemplateSortOrder");
+        }
+    }
+
+    [Fact]
     public async Task When_query_parameter_is_array_type_then_openapi_renders_items_and_style()
     {
         var (json, _) = await InvokeOpenApiEndpointAsync();

@@ -98,7 +98,8 @@
 | Auth docs update | ✅ Done | Added WithCrudVerbHierarchy factory pattern and allowWhenNoScopeClaims (#350) |
 | CallAsync / nested execution | ✅ Compatible | Blueprint has CreateNested, ExecuteAsync, ExecuteWithNewScopeAsync — full match (#351) |
 | Property populators | ✅ Compile-time | No custom populators in S365; Blueprint's compile-time modules replace all 3 sources (#352) |
-| TypeScript client generation | ⚠️ Critical | Custom Handlebars generator — OpenAPI shape must match exactly (#353) |
+| TypeScript client generation | ✅ Analysed | Custom Handlebars generator — OpenAPI shape must match exactly (#353) |
+| OpenAPI enum $ref rendering | ✅ Done | Body/response enum props render as `oneOf: [{ $ref }]` to component schemas — matches S365 exactly |
 | S365 partner vs tenant distinction | ✅ S365-owned | PartnerId claim handling stays in S365's ITenantResolver implementation |
 | InvokeAsync inline handlers | ✅ Verified | HandlerDiscovery supports Invoke/InvokeAsync/Handle/HandleAsync on operation class |
 | x-links OpenAPI extension | ✅ Verified | Blueprint emits x-links with rel/operationId/method; matches S365 Handlebars templates |
@@ -2928,7 +2929,11 @@ Handlebars templates, and generates `api.ts` and `index.ts`.
 **Potential issues to verify:**
 - Schema property naming (camelCase? PascalCase?)
 - Nullable handling (`nullable: true` vs `oneOf` with null)
-- Enum schema shape (S365 generator expects `title` on inline enums)
+- ~~Enum schema shape~~ ✅ **RESOLVED**: Enum properties in body/response schemas now render as
+  `oneOf: [{ $ref: "#/components/schemas/EnumName" }]` with top-level enum component schemas including
+  `type`, `enum`, `x-enumNames`, `x-enum-varnames`. Non-nullable omits `nullable`, nullable adds
+  `nullable: true`. Query/path parameter enums remain inline. Matches S365's exact pattern (0 inline
+  enums, 146 ref-to-enum, 65 enum component schemas).
 - `additionalProperties: false` (Blueprint emits this — may need verification)
 
 ### #307 — S365 OpenAPI TenantId Stripping
