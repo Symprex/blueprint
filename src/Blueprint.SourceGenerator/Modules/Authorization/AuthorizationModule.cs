@@ -147,6 +147,21 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
             {
                 return;
             }
+
+            // Check for duplicate noun+verb pairs — same scope pair declared twice is almost always a copy-paste error
+            var seen = new HashSet<(string Noun, string Verb)>();
+
+            foreach (var (noun, verb, _) in effectiveScopePairs)
+            {
+                if (!seen.Add((noun.ToUpperInvariant(), verb.ToUpperInvariant())))
+                {
+                    context.AddDiagnostic(
+                        new DiagnosticInfo(
+                            AuthorizationDiagnosticDescriptors.DuplicateResourceScopePair,
+                            operationType.Locations.FirstOrDefault(),
+                            [operationType.Name, noun, verb]));
+                }
+            }
         }
 
         // Check for conflict with [AllowAnonymous]

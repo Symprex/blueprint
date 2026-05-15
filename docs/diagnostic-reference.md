@@ -55,6 +55,8 @@ For detailed explanations, see [compile-time-validation.md](compile-time-validat
 | BPAU005 | Error | Both `[FromResource]` and `[Resource]` applied |
 | BPAU006 | Error | `[FromResource]` target has no `[Resource]` attributes |
 | BPAU007 | Warning | Resource key template `{Token}` does not match a property |
+| BPAU008 | Warning | `[Resource]` on non-HTTP operation |
+| BPAU009 | Warning | Duplicate `[Resource]` scope pair |
 
 ## Link generation (BPLG)
 
@@ -100,6 +102,8 @@ For detailed explanations, see [compile-time-validation.md](compile-time-validat
 | BPPO009 | Error | `[FromAuthContext]` ClaimType on non-string property |
 | BPPO010 | Warning | `[FromAuthContext]` ClaimType on route-owned property |
 | BPPO011 | Info | Property uses slow TypeConverter binding path |
+| BPPO012 | Error | Route placeholder without matching property |
+| BPPO013 | Info | Nullable route parameter |
 
 ## OpenAPI (BPOA)
 

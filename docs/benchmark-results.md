@@ -289,26 +289,36 @@ the fallback path, the overhead is still only ~4.5µs per attribute invocation.
 Measures the source generator's compile-time performance with synthetic apps of different sizes.
 Both initial (full) and incremental (cached) runs are measured to quantify scaling and cache efficacy.
 
-| Benchmark | Mean | Error | StdDev | Gen0 | Gen1 | Allocated |
-|-----------|-----:|------:|-------:|-----:|-----:|----------:|
-| AppRegistration_100Ops | 10.24 ms | 4.99 ms | 1.78 ms | 265 | 62 | 3.36 MB |
-| PipelineOnly_100Ops | 14.06 ms | 10.25 ms | 3.66 ms | 1,218 | 640 | 14.69 MB |
-| IncrementalCachedRun_100Ops | 24.50 ms | 21.86 ms | 7.80 ms | 1,000 | — | 16.39 MB |
-| InitialRun_10Ops | 32.43 ms | 64.66 ms | 23.06 ms | 281 | 125 | 3.39 MB |
-| InitialRun_50Ops | 29.30 ms | 13.28 ms | 4.74 ms | 1,281 | 875 | 15.55 MB |
-| DescriptorOnly_100Ops | 33.63 ms | 3.50 ms | 1.25 ms | 1,031 | 500 | 12.01 MB |
-| InitialRun_100Ops | 54.06 ms | 34.32 ms | 12.24 ms | 2,666 | 666 | 30.89 MB |
-| InitialRun_250Ops | 164.13 ms | 113.95 ms | 40.63 ms | 6,750 | 2,000 | 76.84 MB |
+**Last updated:** 2025-08-04 | .NET 10.0.8 | MediumRun (15 iterations)
+
+### Full compilation scaling
+
+| Benchmark | Operations | Mean | Error | StdDev | Allocated |
+|-----------|----------:|---------:|-------:|-------:|----------:|
+| InitialRun_10Ops | 10 | 13.91 ms | 2.22 ms | 3.11 ms | 3.1 MB |
+| InitialRun_50Ops | 50 | 46.41 ms | 4.59 ms | 6.58 ms | 14.02 MB |
+| InitialRun_100Ops | 100 | 96.43 ms | 10.87 ms | 16.26 ms | 27.79 MB |
+| InitialRun_250Ops | 250 | 206.89 ms | 22.36 ms | 33.46 ms | 69.19 MB |
+| InitialRun_500Ops | 500 | 305.02 ms | 20.30 ms | 28.45 ms | 138.22 MB |
+
+### Incremental and per-phase breakdown (100 operations)
+
+| Benchmark | Mean | Allocated |
+|-----------|-----:|----------:|
+| IncrementalCachedRun_100Ops | 42.79 ms | 13.32 MB |
+| DescriptorOnly_100Ops | 38.89 ms | 11.90 MB |
+| AppRegistration_100Ops | 15.22 ms | 3.12 MB |
+| PipelineOnly_100Ops | 14.93 ms | 11.74 MB |
 
 **Key insights:**
-- **Initial run scales roughly linearly**: 10 ops → 32ms, 100 ops → 54ms, 250 ops → 164ms
-- **Incremental cached run** (100 ops): 24.5ms — good cacheability, but Roslyn infrastructure
-  still dominates. The cache avoids regeneration but not Roslyn's own bookkeeping.
-- **Allocations per operation**: ~300KB per operation for a full initial run (30.89 MB ÷ 100)
-- **S365 impact**: The largest S365 service (Portal, ~70 ops) would add ~40-50ms to compilation.
-  For a typical 5-10 op service, the generator adds ~30-35ms — negligible in CI builds.
-- **Pipeline generation dominates**: Descriptors (12 MB for 100 ops) + Pipelines (14.7 MB) are
-  the main cost. App registration is cheap (3.4 MB).
+- **Near-linear scaling**: ~0.6 ms per additional operation for initial runs
+- **500 operations (S365 scale)**: 305 ms compile time, 138 MB — well within CI budget
+- **Incremental cached run**: 45% faster than full recompilation, 48% less memory
+- **Descriptor generation dominates** at 38.89 ms (40% of total for 100 ops).
+  Pipeline generation is faster at 14.93 ms. App registration is cheap at 15.22 ms.
+- **Memory per operation**: ~276 KB/op (138 MB ÷ 500) for full initial run
+- **S365 impact**: The largest service (Portal, ~70 ops) adds ~60-70 ms to compilation.
+  Typical 5-10 op services add ~15-20 ms — negligible in CI builds.
 
 ---
 

@@ -80,4 +80,16 @@ internal static class AuthorizationDiagnosticDescriptors
         category: "Blueprint.Authorization",
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
+
+    /// <summary>
+    /// BPAU009: The same noun+verb pair appears more than once in <c>[Resource]</c> attributes on a single operation.
+    /// Duplicate scope pairs produce redundant authorization metadata and almost always indicate a copy-paste error.
+    /// </summary>
+    public static readonly DiagnosticDescriptor DuplicateResourceScopePair = new(
+        id: "BPAU009",
+        title: "Duplicate [Resource] scope pair",
+        messageFormat: "Operation '{0}' declares [Resource(\"{1}\", \"{2}\")] more than once. Remove the duplicate attribute.",
+        category: "Blueprint.Authorization",
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
 }

@@ -1009,6 +1009,56 @@ public class AuthorizationModuleTests
             "Auth:ClaimType tokens should not be validated as operation properties");
     }
 
+    // ── Duplicate scope pair detection ─────────────────────────────
+
+    [Fact]
+    public void When_Resource_has_duplicate_noun_verb_pair_then_reports_BPAU009_diagnostic()
+    {
+        var result = CompileDescriptor(
+            """
+            [RootLink("/items/{Id}")]
+            [Resource("item", "read")]
+            [Resource("item", "read")]
+            public partial class GetItemQuery : IQuery<string>
+            {
+                public string Id { get; set; }
+
+                public static Task<string> HandleAsync(GetItemQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().Contain(
+            static d => d.Id == "BPAU009",
+            "duplicate [Resource(\"item\", \"read\")] should report BPAU009");
+    }
+
+    [Fact]
+    public void When_Resource_has_different_noun_verb_pairs_then_no_BPAU009_diagnostic()
+    {
+        var result = CompileDescriptor(
+            """
+            [RootLink("/items/{Id}")]
+            [Resource("item", "read")]
+            [Resource("item", "write")]
+            public partial class GetItemQuery : IQuery<string>
+            {
+                public string Id { get; set; }
+
+                public static Task<string> HandleAsync(GetItemQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().NotContain(
+            static d => d.Id == "BPAU009",
+            "different noun/verb pairs should not trigger BPAU009");
+    }
+
     // ── Pipeline snapshot test ──────────────────────────────────────
 
     [Fact]
