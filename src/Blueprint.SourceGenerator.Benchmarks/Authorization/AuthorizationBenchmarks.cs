@@ -53,10 +53,6 @@ public class AuthorizationBenchmarks
         new ResolvedScopePair("Template", "Manage", null, null),
     ];
 
-    // Single required un-resolved scope pair (for the IResourceAuthorizationProvider path)
-    private static readonly ScopePair[] _singleUnresolved =
-        [new ScopePair("Template", "Read")];
-
     // User with exact matching scope
     private static readonly ClaimsPrincipal _exactMatch = BuildPrincipal("Template::Read");
 
@@ -151,17 +147,6 @@ public class AuthorizationBenchmarks
     public Task<bool> AuthorizationFailure()
     {
         return _provider.IsAuthorizedAsync(_dummyContext, _noMatch, _singleRequired, default);
-    }
-
-    /// <summary>
-    /// Un-resolved scope pair path — exercises the <see cref="IResourceAuthorizationProvider"/>
-    /// overload that needs to parse noun/verb at runtime. Comparison baseline against resolved.
-    /// </summary>
-    /// <returns>The authorization result via the un-resolved path.</returns>
-    [Benchmark]
-    public Task<bool> UnresolvedScopePair_ExactMatch()
-    {
-        return _provider.IsAuthorizedAsync(_dummyContext, _exactMatch, _singleUnresolved, default);
     }
 
     private static ClaimsPrincipal BuildPrincipal(params string[] scopes)

@@ -22,6 +22,11 @@ namespace Blueprint.Authorization;
 /// <c>[Resource]</c> attributes on a single operation represent alternative permission paths.
 /// </para>
 /// <para>
+/// Each <see cref="ResolvedScopePair"/> carries the noun, verb, optional original template, and
+/// the compile-time–expanded resource key. When <see cref="ResolvedScopePair.ExpandedResourceKey"/>
+/// is <see langword="null"/>, no template was declared (noun+verb only).
+/// </para>
+/// <para>
 /// The <see cref="ApiOperationContext"/> parameter provides access to the operation instance
 /// and its properties, enabling ownership-based authorization patterns where the provider
 /// inspects operation properties (e.g. <c>TenantId</c>) or claim values to determine whether
@@ -32,7 +37,7 @@ public interface IResourceAuthorizationProvider
 {
     /// <summary>
     /// Evaluates whether the <paramref name="principal"/> satisfies at least one of the
-    /// supplied <paramref name="requiredScopePairs"/> for the current operation.
+    /// supplied <paramref name="resolvedScopePairs"/> for the current operation.
     /// </summary>
     /// <param name="operationContext">
     /// The current operation execution context, providing access to the operation instance,
@@ -41,9 +46,9 @@ public interface IResourceAuthorizationProvider
     /// claim matches the operation's <c>TenantId</c> property).
     /// </param>
     /// <param name="principal">The authenticated caller's claims principal.</param>
-    /// <param name="requiredScopePairs">
-    /// The resource scope pairs declared on the operation. Any-of semantics:
-    /// return <see langword="true"/> if at least one pair is satisfied.
+    /// <param name="resolvedScopePairs">
+    /// The resource scope pairs declared on the operation, with compile-time–expanded resource
+    /// keys. Any-of semantics: return <see langword="true"/> if at least one pair is satisfied.
     /// </param>
     /// <param name="cancellationToken">Cancellation token for the authorization evaluation.</param>
     /// <returns>
@@ -53,6 +58,6 @@ public interface IResourceAuthorizationProvider
     Task<bool> IsAuthorizedAsync(
         ApiOperationContext operationContext,
         ClaimsPrincipal principal,
-        IReadOnlyList<ScopePair> requiredScopePairs,
+        IReadOnlyList<ResolvedScopePair> resolvedScopePairs,
         CancellationToken cancellationToken);
 }

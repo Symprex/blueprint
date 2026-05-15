@@ -41,7 +41,6 @@ public sealed class PipelineServices
         this.TenantResolver = serviceProvider.GetService<ITenantResolver>();
         this.PropertyPopulators = PipelineHelpers.ResolveServiceArray<IPropertyPopulator>(serviceProvider);
         this.AuditSink = serviceProvider.GetService<IAuditSink>();
-        this.ResolvedResourceAuthorizationProvider = serviceProvider.GetService<IResolvedResourceAuthorizationProvider>();
         this.ResourceAuthorizationProvider = serviceProvider.GetService<IResourceAuthorizationProvider>();
         this.ApiAuthorisers = PipelineHelpers.ResolveServiceArray<IApiAuthoriser>(serviceProvider);
         this.OperationAuthorisers = PipelineHelpers.ResolveServiceArray<IOperationAuthoriser>(serviceProvider);
@@ -69,9 +68,6 @@ public sealed class PipelineServices
 
     /// <inheritdoc cref="OperationExecutorShell.AuditSink"/>
     public IAuditSink? AuditSink { get; }
-
-    /// <inheritdoc cref="OperationExecutorShell.ResolvedResourceAuthorizationProvider"/>
-    public IResolvedResourceAuthorizationProvider? ResolvedResourceAuthorizationProvider { get; }
 
     /// <inheritdoc cref="OperationExecutorShell.ResourceAuthorizationProvider"/>
     public IResourceAuthorizationProvider? ResourceAuthorizationProvider { get; }

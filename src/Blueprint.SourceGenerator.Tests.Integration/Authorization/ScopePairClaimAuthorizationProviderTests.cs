@@ -27,7 +27,7 @@ public class ScopePairClaimAuthorizationProviderTests
             });
 
         var principal = CreatePrincipal("User.Manage");
-        ScopePair[] scopePairs = [new ScopePair("User", "Read")];
+        var scopePairs = Resolve(new ScopePair("User", "Read"));
 
         var result = await provider.IsAuthorizedAsync(
             null!, principal, scopePairs, CancellationToken.None);
@@ -54,7 +54,7 @@ public class ScopePairClaimAuthorizationProviderTests
             var result = await provider.IsAuthorizedAsync(
                 null!,
                 principal,
-                new ScopePair[] { new("Template", verb) },
+                Resolve(new ScopePair("Template", verb)),
                 CancellationToken.None);
 
             result.Should().BeTrue($"Manage should include {verb}");
@@ -74,7 +74,7 @@ public class ScopePairClaimAuthorizationProviderTests
             });
 
         var principal = CreatePrincipal("User.Read");
-        ScopePair[] scopePairs = [new ScopePair("User", "Manage")];
+        var scopePairs = Resolve(new ScopePair("User", "Manage"));
 
         var result = await provider.IsAuthorizedAsync(
             null!, principal, scopePairs, CancellationToken.None);
@@ -95,7 +95,7 @@ public class ScopePairClaimAuthorizationProviderTests
             });
 
         var principal = CreatePrincipal("User.Manage");
-        ScopePair[] scopePairs = [new ScopePair("User", "Manage")];
+        var scopePairs = Resolve(new ScopePair("User", "Manage"));
 
         var result = await provider.IsAuthorizedAsync(
             null!, principal, scopePairs, CancellationToken.None);
@@ -116,7 +116,7 @@ public class ScopePairClaimAuthorizationProviderTests
             });
 
         var principal = CreatePrincipal("User.Manage");
-        ScopePair[] scopePairs = [new ScopePair("Template", "Read")];
+        var scopePairs = Resolve(new ScopePair("Template", "Read"));
 
         var result = await provider.IsAuthorizedAsync(
             null!, principal, scopePairs, CancellationToken.None);
@@ -134,7 +134,7 @@ public class ScopePairClaimAuthorizationProviderTests
             verbInclusions: null);
 
         var principal = CreatePrincipal("User.Manage");
-        ScopePair[] scopePairs = [new ScopePair("User", "Read")];
+        var scopePairs = Resolve(new ScopePair("User", "Read"));
 
         var result = await provider.IsAuthorizedAsync(
             null!, principal, scopePairs, CancellationToken.None);
@@ -181,7 +181,7 @@ public class ScopePairClaimAuthorizationProviderTests
         var result = await provider.IsAuthorizedAsync(
             null!,
             principal,
-            new ScopePair[] { new("User", "Create") },
+            Resolve(new ScopePair("User", "Create")),
             CancellationToken.None);
 
         result.Should().BeTrue("Admin includes Create");
@@ -189,7 +189,7 @@ public class ScopePairClaimAuthorizationProviderTests
         var result2 = await provider.IsAuthorizedAsync(
             null!,
             principal,
-            new ScopePair[] { new("User", "Manage") },
+            Resolve(new ScopePair("User", "Manage")),
             CancellationToken.None);
 
         result2.Should().BeTrue("Admin includes Manage");
@@ -202,7 +202,7 @@ public class ScopePairClaimAuthorizationProviderTests
     {
         var provider = new ScopePairClaimAuthorizationProvider();
         var principal = CreatePrincipal("Template::Read");
-        ScopePair[] scopePairs = [new ScopePair("Template", "Read")];
+        var scopePairs = Resolve(new ScopePair("Template", "Read"));
 
         var result = await provider.IsAuthorizedAsync(
             null!, principal, scopePairs, CancellationToken.None);
@@ -215,7 +215,7 @@ public class ScopePairClaimAuthorizationProviderTests
     {
         var provider = new ScopePairClaimAuthorizationProvider();
         var principal = CreatePrincipal("template::read");
-        ScopePair[] scopePairs = [new ScopePair("Template", "Read")];
+        var scopePairs = Resolve(new ScopePair("Template", "Read"));
 
         var result = await provider.IsAuthorizedAsync(
             null!, principal, scopePairs, CancellationToken.None);
@@ -230,7 +230,7 @@ public class ScopePairClaimAuthorizationProviderTests
         var principal = CreatePrincipal("Template::Read");
 
         var result = await provider.IsAuthorizedAsync(
-            null!, principal, Array.Empty<ScopePair>(), CancellationToken.None);
+            null!, principal, Array.Empty<ResolvedScopePair>(), CancellationToken.None);
 
         result.Should().BeTrue("empty requirements should always pass");
     }
@@ -240,7 +240,7 @@ public class ScopePairClaimAuthorizationProviderTests
     {
         var provider = new ScopePairClaimAuthorizationProvider();
         var principal = new ClaimsPrincipal(new ClaimsIdentity());
-        ScopePair[] scopePairs = [new ScopePair("Template", "Read")];
+        var scopePairs = Resolve(new ScopePair("Template", "Read"));
 
         var result = await provider.IsAuthorizedAsync(
             null!, principal, scopePairs, CancellationToken.None);
@@ -253,7 +253,7 @@ public class ScopePairClaimAuthorizationProviderTests
     {
         var provider = new ScopePairClaimAuthorizationProvider();
         var principal = CreatePrincipal("Template::Read");
-        ScopePair[] scopePairs = [new ScopePair("Template", "Delete")];
+        var scopePairs = Resolve(new ScopePair("Template", "Delete"));
 
         var result = await provider.IsAuthorizedAsync(
             null!, principal, scopePairs, CancellationToken.None);
@@ -272,7 +272,7 @@ public class ScopePairClaimAuthorizationProviderTests
             ["openid", "profile"]);
 
         var principal = CreatePrincipal("openid", "profile");
-        ScopePair[] scopePairs = [new ScopePair("Template", "Read")];
+        var scopePairs = Resolve(new ScopePair("Template", "Read"));
 
         var result = await provider.IsAuthorizedAsync(
             null!, principal, scopePairs, CancellationToken.None);
@@ -288,7 +288,7 @@ public class ScopePairClaimAuthorizationProviderTests
     {
         var provider = new ScopePairClaimAuthorizationProvider();
         var principal = CreatePrincipalWithoutScopes();
-        ScopePair[] scopePairs = [new ScopePair("Template", "Read")];
+        var scopePairs = Resolve(new ScopePair("Template", "Read"));
 
         var result = await provider.IsAuthorizedAsync(
             null!, principal, scopePairs, CancellationToken.None);
@@ -301,7 +301,7 @@ public class ScopePairClaimAuthorizationProviderTests
     {
         var provider = new PermissiveNoScopesProvider("scope", "::");
         var principal = CreatePrincipalWithoutScopes();
-        ScopePair[] scopePairs = [new ScopePair("Template", "Read")];
+        var scopePairs = Resolve(new ScopePair("Template", "Read"));
 
         var result = await provider.IsAuthorizedAsync(
             null!, principal, scopePairs, CancellationToken.None);
@@ -316,11 +316,9 @@ public class ScopePairClaimAuthorizationProviderTests
     {
         var provider = new ScopePairClaimAuthorizationProvider();
         var principal = CreatePrincipal("Template::Delete");
-        ScopePair[] scopePairs =
-        [
+        var scopePairs = Resolve(
             new ScopePair("Template", "Read"),
-            new ScopePair("Template", "Delete"),
-        ];
+            new ScopePair("Template", "Delete"));
 
         var result = await provider.IsAuthorizedAsync(
             null!, principal, scopePairs, CancellationToken.None);
@@ -343,6 +341,17 @@ public class ScopePairClaimAuthorizationProviderTests
         return new ClaimsPrincipal(new ClaimsIdentity(
             [new Claim(ClaimTypes.Name, "test-user")],
             "TestAuth"));
+    }
+
+    private static ResolvedScopePair[] Resolve(params ScopePair[] scopePairs)
+    {
+        return scopePairs
+            .Select(static scopePair => new ResolvedScopePair(
+                scopePair.Noun,
+                scopePair.Verb,
+                scopePair.ResourceKeyTemplate,
+                scopePair.ResourceKeyTemplate))
+            .ToArray();
     }
 
     // ─── Test doubles ─────────────────────────────────────────────────
@@ -373,7 +382,7 @@ public class ScopePairClaimAuthorizationProviderTests
         var provider = ScopePairClaimAuthorizationProvider.WithCrudVerbHierarchy();
 
         var principal = CreatePrincipal("Template::Manage");
-        ScopePair[] scopePairs = [new ScopePair("Template", "Read")];
+        var scopePairs = Resolve(new ScopePair("Template", "Read"));
 
         var result = await provider.IsAuthorizedAsync(
             null!, principal, scopePairs, CancellationToken.None);
@@ -389,7 +398,7 @@ public class ScopePairClaimAuthorizationProviderTests
 
         foreach (var verb in new[] { "Create", "Read", "Update", "Delete" })
         {
-            ScopePair[] scopePairs = [new ScopePair("User", verb)];
+            var scopePairs = Resolve(new ScopePair("User", verb));
 
             var result = await provider.IsAuthorizedAsync(
                 null!, principal, scopePairs, CancellationToken.None);
@@ -412,7 +421,7 @@ public class ScopePairClaimAuthorizationProviderTests
             ],
             "TestAuth"));
 
-        ScopePair[] scopePairs = [new ScopePair("User", "Read")];
+        var scopePairs = Resolve(new ScopePair("User", "Read"));
 
         var result = await provider.IsAuthorizedAsync(
             null!, principal, scopePairs, CancellationToken.None);
@@ -433,7 +442,7 @@ public class ScopePairClaimAuthorizationProviderTests
             ],
             "TestAuth"));
 
-        ScopePair[] scopePairs = [new ScopePair("User", "Read")];
+        var scopePairs = Resolve(new ScopePair("User", "Read"));
 
         var result = await provider.IsAuthorizedAsync(
             null!, principal, scopePairs, CancellationToken.None);
@@ -464,7 +473,7 @@ public class ScopePairClaimAuthorizationProviderTests
             });
 
         var principal = CreatePrincipal("CompiledSignature::Read");
-        ScopePair[] scopePairs = [new ScopePair("MyCompiledSignature", "Read")];
+        var scopePairs = Resolve(new ScopePair("MyCompiledSignature", "Read"));
 
         var result = await provider.IsAuthorizedAsync(
             null!, principal, scopePairs, CancellationToken.None);
@@ -480,7 +489,7 @@ public class ScopePairClaimAuthorizationProviderTests
             legacyScopeMapper: static _ => null);
 
         var principal = CreatePrincipal("Template::Read");
-        ScopePair[] scopePairs = [new ScopePair("Template", "Read")];
+        var scopePairs = Resolve(new ScopePair("Template", "Read"));
 
         var result = await provider.IsAuthorizedAsync(
             null!, principal, scopePairs, CancellationToken.None);
@@ -500,7 +509,7 @@ public class ScopePairClaimAuthorizationProviderTests
             });
 
         var principal = CreatePrincipal("UserFieldValue::ManageMine");
-        ScopePair[] scopePairs = [new ScopePair("UserFieldValue", "Read")];
+        var scopePairs = Resolve(new ScopePair("UserFieldValue", "Read"));
 
         var result = await provider.IsAuthorizedAsync(
             null!, principal, scopePairs, CancellationToken.None);
@@ -516,7 +525,7 @@ public class ScopePairClaimAuthorizationProviderTests
             legacyScopeMapper: null);
 
         var principal = CreatePrincipal("Template.Read");
-        ScopePair[] scopePairs = [new ScopePair("Template", "Read")];
+        var scopePairs = Resolve(new ScopePair("Template", "Read"));
 
         var result = await provider.IsAuthorizedAsync(
             null!, principal, scopePairs, CancellationToken.None);
@@ -538,7 +547,7 @@ public class ScopePairClaimAuthorizationProviderTests
             allowWhenNoScopeClaims: true);
 
         var principal = CreatePrincipalWithoutScopes();
-        ScopePair[] scopePairs = [new ScopePair("Template", "Read")];
+        var scopePairs = Resolve(new ScopePair("Template", "Read"));
 
         var result = await provider.IsAuthorizedAsync(
             null!, principal, scopePairs, CancellationToken.None);
@@ -558,7 +567,7 @@ public class ScopePairClaimAuthorizationProviderTests
             allowWhenNoScopeClaims: false);
 
         var principal = CreatePrincipalWithoutScopes();
-        ScopePair[] scopePairs = [new ScopePair("Template", "Read")];
+        var scopePairs = Resolve(new ScopePair("Template", "Read"));
 
         var result = await provider.IsAuthorizedAsync(
             null!, principal, scopePairs, CancellationToken.None);
@@ -577,7 +586,7 @@ public class ScopePairClaimAuthorizationProviderTests
 
         // Principal has only ignored scopes — should still be granted access
         var principal = CreatePrincipal("openid", "profile", "Signature365.ReadWrite.All");
-        ScopePair[] scopePairs = [new ScopePair("Template", "Read")];
+        var scopePairs = Resolve(new ScopePair("Template", "Read"));
 
         var result = await provider.IsAuthorizedAsync(
             null!, principal, scopePairs, CancellationToken.None);
@@ -597,7 +606,7 @@ public class ScopePairClaimAuthorizationProviderTests
         // Unauthenticated principal — should still be denied even with permissive no-scopes
         var identity = new ClaimsIdentity(); // not authenticated (no authenticationType)
         var principal = new ClaimsPrincipal(identity);
-        ScopePair[] scopePairs = [new ScopePair("Template", "Read")];
+        var scopePairs = Resolve(new ScopePair("Template", "Read"));
 
         var result = await provider.IsAuthorizedAsync(
             null!, principal, scopePairs, CancellationToken.None);

@@ -28,7 +28,7 @@ public class AuthorizationModuleIntegrationTests
     {
         var app = new IntegrationTestBlueprintApp();
         var serviceProvider = new ServiceCollection()
-            .AddSingleton<IResolvedResourceAuthorizationProvider, MatchingClaimResolvedResourceAuthorizationProvider>()
+            .AddSingleton<IResourceAuthorizationProvider, MatchingClaimResolvedResourceAuthorizationProvider>()
             .BuildServiceProvider();
         var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
         var pipeline = executor.GetPipeline(typeof(UpdateTenantAuthorizationCommand));
@@ -80,7 +80,7 @@ public class AuthorizationModuleIntegrationTests
     {
         var app = new IntegrationTestBlueprintApp();
         var serviceProvider = new ServiceCollection()
-            .AddSingleton<IResolvedResourceAuthorizationProvider, MatchingClaimResolvedResourceAuthorizationProvider>()
+            .AddSingleton<IResourceAuthorizationProvider, MatchingClaimResolvedResourceAuthorizationProvider>()
             .BuildServiceProvider();
         var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
         var pipeline = executor.GetPipeline(typeof(GetMyAccountAuthorizationQuery));
@@ -109,7 +109,7 @@ public class AuthorizationModuleIntegrationTests
     {
         var app = new IntegrationTestBlueprintApp();
         var serviceProvider = new ServiceCollection()
-            .AddSingleton<IResolvedResourceAuthorizationProvider, MatchingClaimResolvedResourceAuthorizationProvider>()
+            .AddSingleton<IResourceAuthorizationProvider, MatchingClaimResolvedResourceAuthorizationProvider>()
             .BuildServiceProvider();
         var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
         var pipeline = executor.GetPipeline(typeof(GetMyAccountAuthorizationQuery));
@@ -137,7 +137,7 @@ public class AuthorizationModuleIntegrationTests
     {
         var app = new IntegrationTestBlueprintApp();
         var serviceProvider = new ServiceCollection()
-            .AddSingleton<IResolvedResourceAuthorizationProvider, MatchingClaimResolvedResourceAuthorizationProvider>()
+            .AddSingleton<IResourceAuthorizationProvider, MatchingClaimResolvedResourceAuthorizationProvider>()
             .BuildServiceProvider();
         var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
         var pipeline = executor.GetPipeline(typeof(GetBillingAuthorizationQuery));
@@ -219,7 +219,7 @@ public class AuthorizationModuleIntegrationTests
         }
     }
 
-    private sealed class MatchingClaimResolvedResourceAuthorizationProvider : IResolvedResourceAuthorizationProvider
+    private sealed class MatchingClaimResolvedResourceAuthorizationProvider : IResourceAuthorizationProvider
     {
         public Task<bool> IsAuthorizedAsync(
             ApiOperationContext operationContext,

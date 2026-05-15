@@ -1647,7 +1647,7 @@ internal sealed class TestResourceAuthorizationProvider(bool authorized) : Bluep
     public Task<bool> IsAuthorizedAsync(
         Blueprint.Runtime.Exec.ApiOperationContext operationContext,
         System.Security.Claims.ClaimsPrincipal principal,
-        IReadOnlyList<Blueprint.Model.ScopePair> requiredScopePairs,
+        IReadOnlyList<Blueprint.Model.ResolvedScopePair> requiredScopePairs,
         CancellationToken cancellationToken)
     {
         return Task.FromResult(authorized);
@@ -1665,7 +1665,7 @@ internal sealed class OwnershipAwareAuthorizationProvider : Blueprint.Authorizat
     public Task<bool> IsAuthorizedAsync(
         Blueprint.Runtime.Exec.ApiOperationContext operationContext,
         System.Security.Claims.ClaimsPrincipal principal,
-        IReadOnlyList<Blueprint.Model.ScopePair> requiredScopePairs,
+        IReadOnlyList<Blueprint.Model.ResolvedScopePair> requiredScopePairs,
         CancellationToken cancellationToken)
     {
         // Check scope pairs (any-of)

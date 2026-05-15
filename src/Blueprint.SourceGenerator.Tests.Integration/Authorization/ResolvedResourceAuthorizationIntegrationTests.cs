@@ -13,8 +13,7 @@ namespace Blueprint.SourceGenerator.Tests.Integration.Authorization;
 
 /// <summary>
 /// Proves that the generated pipeline expands resource key template tokens inline
-/// and delegates to <see cref="IResolvedResourceAuthorizationProvider"/> when registered,
-/// falling back to <see cref="IResourceAuthorizationProvider"/> otherwise.
+/// and delegates the resolved scope pairs to <see cref="IResourceAuthorizationProvider"/>.
 /// </summary>
 public class ResolvedResourceAuthorizationIntegrationTests
 {
@@ -27,7 +26,7 @@ public class ResolvedResourceAuthorizationIntegrationTests
             .AddLogging()
             .AddSingleton<IntegrationTestBlueprintApp>()
             .AddSingleton<IntegrationTestBlueprintAppExecutor>()
-            .AddSingleton<IResolvedResourceAuthorizationProvider>(provider);
+            .AddSingleton<IResourceAuthorizationProvider>(provider);
 
         var endpoints = new TestEndpointRouteBuilder(services.BuildServiceProvider());
         endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
@@ -64,7 +63,7 @@ public class ResolvedResourceAuthorizationIntegrationTests
             .AddLogging()
             .AddSingleton<IntegrationTestBlueprintApp>()
             .AddSingleton<IntegrationTestBlueprintAppExecutor>()
-            .AddSingleton<IResolvedResourceAuthorizationProvider>(provider);
+            .AddSingleton<IResourceAuthorizationProvider>(provider);
 
         var endpoints = new TestEndpointRouteBuilder(services.BuildServiceProvider());
         endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
@@ -177,7 +176,7 @@ public class ResolvedResourceAuthorizationIntegrationTests
 
     // ─── Test doubles ─────────────────────────────────────────────────
 
-    private sealed class CapturingResolvedProvider(bool authorized) : IResolvedResourceAuthorizationProvider
+    private sealed class CapturingResolvedProvider(bool authorized) : IResourceAuthorizationProvider
     {
         public IReadOnlyList<Blueprint.Model.ResolvedScopePair>? CapturedScopePairs { get; private set; }
 
@@ -194,12 +193,12 @@ public class ResolvedResourceAuthorizationIntegrationTests
 
     private sealed class CapturingLegacyProvider(bool authorized) : IResourceAuthorizationProvider
     {
-        public IReadOnlyList<Blueprint.Model.ScopePair>? CapturedScopePairs { get; private set; }
+        public IReadOnlyList<Blueprint.Model.ResolvedScopePair>? CapturedScopePairs { get; private set; }
 
         public Task<bool> IsAuthorizedAsync(
             ApiOperationContext operationContext,
             System.Security.Claims.ClaimsPrincipal principal,
-            IReadOnlyList<Blueprint.Model.ScopePair> scopePairs,
+            IReadOnlyList<Blueprint.Model.ResolvedScopePair> scopePairs,
             CancellationToken cancellationToken)
         {
             this.CapturedScopePairs = scopePairs;

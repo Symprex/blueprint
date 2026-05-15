@@ -50,7 +50,7 @@ namespace Blueprint.Authorization;
 public delegate string[]? LegacyScopeMapperFunc(string scopeClaimValue);
 
 /// <inheritdoc cref="ScopePairClaimAuthorizationProvider"/>
-public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvider, IResolvedResourceAuthorizationProvider
+public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvider
 {
     private static readonly Task<bool> _trueResult = Task.FromResult(true);
     private static readonly Task<bool> _falseResult = Task.FromResult(false);
@@ -201,91 +201,6 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
     public Task<bool> IsAuthorizedAsync(
         ApiOperationContext operationContext,
         ClaimsPrincipal principal,
-        IReadOnlyList<ScopePair> requiredScopePairs,
-        CancellationToken cancellationToken)
-    {
-        if (requiredScopePairs.Count == 0)
-        {
-            return _trueResult;
-        }
-
-        var identity = principal.Identity as ClaimsIdentity;
-
-        if (identity is not { IsAuthenticated: true })
-        {
-            return _falseResult;
-        }
-
-        // Collect non-ignored scope claims
-        var hasAnyScopeClaims = false;
-
-        foreach (var claim in identity.Claims)
-        {
-            if (!string.Equals(claim.Type, this._scopeClaimType, StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            if (this._ignoredScopes.Count > 0 && this._ignoredScopes.Contains(claim.Value))
-            {
-                continue;
-            }
-
-            hasAnyScopeClaims = true;
-
-            // Check if this scope claim matches any required scope pair.
-            // Uses span-based comparison to avoid per-comparison string allocation.
-            if (this.MatchesAnyRequired(claim.Value, requiredScopePairs))
-            {
-                return _trueResult;
-            }
-
-            // Legacy scope remapping: if the claim didn't directly match, try mapped values
-            if (this._legacyScopeMapper is not null)
-            {
-                var mappedScopes = this._legacyScopeMapper(claim.Value);
-
-                if (mappedScopes is not null)
-                {
-                    foreach (var mapped in mappedScopes)
-                    {
-                        if (this.MatchesAnyRequired(mapped, requiredScopePairs))
-                        {
-                            return _trueResult;
-                        }
-                    }
-                }
-            }
-        }
-
-        // If the identity has no API scope claims at all, fall through to the
-        // configurable no-scopes behavior (default: deny)
-        if (!hasAnyScopeClaims)
-        {
-            return this.AllowWhenNoScopeClaims(operationContext, principal) ? _trueResult : _falseResult;
-        }
-
-        return _falseResult;
-    }
-
-    /// <summary>
-    /// Evaluates authorization using pre-expanded <see cref="ResolvedScopePair"/> instances.
-    /// The same any-of semantics as the legacy overload apply: the caller is authorized if
-    /// any expanded scope pair matches any scope claim in the principal's identity.
-    /// </summary>
-    /// <remarks>
-    /// This overload is preferred by generated pipelines when both interfaces are registered
-    /// on the same instance. It avoids the template-expansion overhead entirely because the
-    /// generated code already substitutes operation properties and claim values at compile time.
-    /// </remarks>
-    /// <param name="operationContext">The current operation context.</param>
-    /// <param name="principal">The authenticated principal.</param>
-    /// <param name="resolvedScopePairs">Pre-expanded scope pairs from the generated pipeline.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns><see langword="true"/> when at least one scope pair is satisfied.</returns>
-    public Task<bool> IsAuthorizedAsync(
-        ApiOperationContext operationContext,
-        ClaimsPrincipal principal,
         IReadOnlyList<ResolvedScopePair> resolvedScopePairs,
         CancellationToken cancellationToken)
     {
@@ -317,8 +232,7 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
 
             hasAnyScopeClaims = true;
 
-            // Uses span-based comparison to avoid per-comparison string allocation.
-            if (this.MatchesAnyResolved(claim.Value, resolvedScopePairs))
+            if (this.MatchesAnyScopePair(claim.Value, resolvedScopePairs))
             {
                 return _trueResult;
             }
@@ -332,7 +246,7 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
                 {
                     foreach (var mapped in mappedScopes)
                     {
-                        if (this.MatchesAnyResolved(mapped, resolvedScopePairs))
+                        if (this.MatchesAnyScopePair(mapped, resolvedScopePairs))
                         {
                             return _trueResult;
                         }
@@ -369,42 +283,12 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
     }
 
     /// <summary>
-    /// Checks whether a scope value (claim or mapped) matches any of the required scope pairs,
-    /// including verb hierarchy expansion.
-    /// </summary>
-    private bool MatchesAnyRequired(string scopeValue, IReadOnlyList<ScopePair> requiredScopePairs)
-    {
-        foreach (var required in requiredScopePairs)
-        {
-            if (MatchesScopePair(scopeValue, required.Noun, this._separator, required.Verb))
-            {
-                return true;
-            }
-
-            // Verb hierarchy: if the scope value carries a parent verb (e.g. "Manage"),
-            // check whether it includes the required verb (e.g. "Create").
-            if (this._verbIncludedIn.TryGetValue(required.Verb, out var parentVerbs))
-            {
-                foreach (var parentVerb in parentVerbs)
-                {
-                    if (MatchesScopePair(scopeValue, required.Noun, this._separator, parentVerb))
-                    {
-                        return true;
-                    }
-                }
-            }
-        }
-
-        return false;
-    }
-
-    /// <summary>
     /// Checks whether a scope value (claim or mapped) matches any of the resolved scope pairs,
     /// including verb hierarchy expansion.
     /// </summary>
-    private bool MatchesAnyResolved(string scopeValue, IReadOnlyList<ResolvedScopePair> resolvedScopePairs)
+    private bool MatchesAnyScopePair(string scopeValue, IReadOnlyList<ResolvedScopePair> scopePairs)
     {
-        foreach (var required in resolvedScopePairs)
+        foreach (var required in scopePairs)
         {
             if (MatchesScopePair(scopeValue, required.Noun, this._separator, required.Verb))
             {

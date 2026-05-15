@@ -648,156 +648,61 @@ public static class PipelineHelpers
     }
 
     /// <summary>
-    /// Checks resource authorization using the compile-time-expanded
-    /// <see cref="Authorization.IResolvedResourceAuthorizationProvider"/>. Returns
-    /// <see cref="ForbiddenResult.Instance"/> when the provider denies access, or <c>null</c>
+    /// Checks resource authorization using the <see cref="Authorization.IResourceAuthorizationProvider"/>.
+    /// Returns <see cref="ForbiddenResult.Instance"/> when the provider denies access, or <c>null</c>
     /// when the caller is authorized or the provider is not registered (permissive default).
     /// </summary>
-    /// <remarks>
-    /// Generated pipelines call this overload inside the <c>if (_resolvedResourceAuthorizationProvider != null)</c>
-    /// branch so resolved scope-pair construction (which contains compile-time expanded expressions)
-    /// is lazy and only runs when a resolved provider is actually registered.
-    /// </remarks>
     /// <param name="context">The current operation execution context.</param>
     /// <param name="principal">The authenticated caller's claims principal.</param>
-    /// <param name="resolvedProvider">The resolved resource authorization provider, or <c>null</c> if none is registered.</param>
+    /// <param name="provider">The resource authorization provider, or <c>null</c> if none is registered.</param>
     /// <param name="resolvedScopes">The compile-time expanded scope pairs for this operation.</param>
     /// <param name="cancellationToken">Cancellation token for the authorization evaluation.</param>
     /// <returns><c>null</c> when authorized; <see cref="ForbiddenResult.Instance"/> when denied.</returns>
     public static async Task<OperationResult?> CheckResourceAuthorizationAsync(
         ApiOperationContext context,
         ClaimsPrincipal principal,
-        Authorization.IResolvedResourceAuthorizationProvider? resolvedProvider,
+        Authorization.IResourceAuthorizationProvider? provider,
         IReadOnlyList<ResolvedScopePair> resolvedScopes,
         CancellationToken cancellationToken)
     {
-        if (resolvedProvider == null)
+        if (provider == null)
         {
             return null;
         }
 
-        var isAuthorized = await resolvedProvider.IsAuthorizedAsync(context, principal, resolvedScopes, cancellationToken).ConfigureAwait(false);
+        var isAuthorized = await provider.IsAuthorizedAsync(context, principal, resolvedScopes, cancellationToken).ConfigureAwait(false);
 
         return isAuthorized ? null : ForbiddenResult.Instance;
     }
 
     /// <summary>
-    /// Single-element overload for <see cref="CheckResourceAuthorizationAsync(ApiOperationContext, ClaimsPrincipal, Authorization.IResolvedResourceAuthorizationProvider, IReadOnlyList{ResolvedScopePair}, CancellationToken)"/>.
+    /// Single-element overload for <see cref="CheckResourceAuthorizationAsync(ApiOperationContext, ClaimsPrincipal, Authorization.IResourceAuthorizationProvider, IReadOnlyList{ResolvedScopePair}, CancellationToken)"/>.
     /// Avoids per-request array allocation for the common case of operations with exactly one
     /// <c>[Resource]</c> attribute. The scope pair is passed by value and wrapped in a stack-allocated
     /// <see cref="SingleItemList{T}"/> that implements <see cref="IReadOnlyList{T}"/>.
     /// </summary>
     /// <param name="context">The current operation execution context.</param>
     /// <param name="principal">The authenticated caller's claims principal.</param>
-    /// <param name="resolvedProvider">The resolved resource authorization provider, or <c>null</c> if none is registered.</param>
+    /// <param name="provider">The resource authorization provider, or <c>null</c> if none is registered.</param>
     /// <param name="singleScope">The single compile-time expanded scope pair for this operation.</param>
     /// <param name="cancellationToken">Cancellation token for the authorization evaluation.</param>
     /// <returns><c>null</c> when authorized; <see cref="ForbiddenResult.Instance"/> when denied.</returns>
     public static async Task<OperationResult?> CheckResourceAuthorizationAsync(
         ApiOperationContext context,
         ClaimsPrincipal principal,
-        Authorization.IResolvedResourceAuthorizationProvider? resolvedProvider,
+        Authorization.IResourceAuthorizationProvider? provider,
         ResolvedScopePair singleScope,
         CancellationToken cancellationToken)
     {
-        if (resolvedProvider == null)
+        if (provider == null)
         {
             return null;
         }
 
         var scopeList = new SingleItemList<ResolvedScopePair>(singleScope);
-        var isAuthorized = await resolvedProvider.IsAuthorizedAsync(context, principal, scopeList, cancellationToken).ConfigureAwait(false);
+        var isAuthorized = await provider.IsAuthorizedAsync(context, principal, scopeList, cancellationToken).ConfigureAwait(false);
 
         return isAuthorized ? null : ForbiddenResult.Instance;
-    }
-
-    /// <summary>
-    /// Checks resource authorization using the legacy <see cref="Authorization.IResourceAuthorizationProvider"/>
-    /// with raw template strings. Returns <see cref="ForbiddenResult.Instance"/> when the provider
-    /// denies access, or <c>null</c> when the caller is authorized or the provider is not registered
-    /// (permissive default).
-    /// </summary>
-    /// <param name="context">The current operation execution context.</param>
-    /// <param name="principal">The authenticated caller's claims principal.</param>
-    /// <param name="legacyProvider">The resource authorization provider, or <c>null</c> if none is registered.</param>
-    /// <param name="legacyScopes">The static scope pairs for this operation (raw template strings).</param>
-    /// <param name="cancellationToken">Cancellation token for the authorization evaluation.</param>
-    /// <returns><c>null</c> when authorized; <see cref="ForbiddenResult.Instance"/> when denied.</returns>
-    public static async Task<OperationResult?> CheckResourceAuthorizationAsync(
-        ApiOperationContext context,
-        ClaimsPrincipal principal,
-        Authorization.IResourceAuthorizationProvider? legacyProvider,
-        IReadOnlyList<ScopePair> legacyScopes,
-        CancellationToken cancellationToken)
-    {
-        if (legacyProvider == null)
-        {
-            return null;
-        }
-
-        var isAuthorized = await legacyProvider.IsAuthorizedAsync(context, principal, legacyScopes, cancellationToken).ConfigureAwait(false);
-
-        return isAuthorized ? null : ForbiddenResult.Instance;
-    }
-
-    /// <summary>
-    /// Unified authorization check that prefers the compile-time resolved provider when available,
-    /// falling back to the legacy provider. Consolidates the if/else dispatch that was previously
-    /// emitted inline in every generated pipeline, reducing per-pipeline IL by ~10 lines.
-    /// Single-scope-pair overload avoids per-request array allocation via <see cref="SingleItemList{T}"/>.
-    /// </summary>
-    /// <param name="context">The current operation execution context.</param>
-    /// <param name="principal">The authenticated caller's claims principal.</param>
-    /// <param name="resolvedProvider">The resolved resource authorization provider, or <c>null</c>.</param>
-    /// <param name="legacyProvider">The legacy resource authorization provider, or <c>null</c>.</param>
-    /// <param name="resolvedScope">The single compile-time expanded scope pair.</param>
-    /// <param name="legacyScopes">The static scope pairs (raw template strings) for legacy fallback.</param>
-    /// <param name="cancellationToken">Cancellation token for the authorization evaluation.</param>
-    /// <returns><c>null</c> when authorized; <see cref="ForbiddenResult.Instance"/> when denied.</returns>
-    public static Task<OperationResult?> CheckResourceAuthorizationAsync(
-        ApiOperationContext context,
-        ClaimsPrincipal principal,
-        Authorization.IResolvedResourceAuthorizationProvider? resolvedProvider,
-        Authorization.IResourceAuthorizationProvider? legacyProvider,
-        ResolvedScopePair resolvedScope,
-        ScopePair[] legacyScopes,
-        CancellationToken cancellationToken)
-    {
-        if (resolvedProvider != null)
-        {
-            return CheckResourceAuthorizationAsync(context, principal, resolvedProvider, resolvedScope, cancellationToken);
-        }
-
-        return CheckResourceAuthorizationAsync(context, principal, legacyProvider, legacyScopes, cancellationToken);
-    }
-
-    /// <summary>
-    /// Unified authorization check for operations with multiple <c>[Resource]</c> attributes.
-    /// Prefers the resolved provider when available, falling back to the legacy provider.
-    /// </summary>
-    /// <param name="context">The current operation execution context.</param>
-    /// <param name="principal">The authenticated caller's claims principal.</param>
-    /// <param name="resolvedProvider">The resolved resource authorization provider, or <c>null</c>.</param>
-    /// <param name="legacyProvider">The legacy resource authorization provider, or <c>null</c>.</param>
-    /// <param name="resolvedScopes">The compile-time expanded scope pairs.</param>
-    /// <param name="legacyScopes">The static scope pairs (raw template strings) for legacy fallback.</param>
-    /// <param name="cancellationToken">Cancellation token for the authorization evaluation.</param>
-    /// <returns><c>null</c> when authorized; <see cref="ForbiddenResult.Instance"/> when denied.</returns>
-    public static Task<OperationResult?> CheckResourceAuthorizationAsync(
-        ApiOperationContext context,
-        ClaimsPrincipal principal,
-        Authorization.IResolvedResourceAuthorizationProvider? resolvedProvider,
-        Authorization.IResourceAuthorizationProvider? legacyProvider,
-        ResolvedScopePair[] resolvedScopes,
-        ScopePair[] legacyScopes,
-        CancellationToken cancellationToken)
-    {
-        if (resolvedProvider != null)
-        {
-            return CheckResourceAuthorizationAsync(context, principal, resolvedProvider, resolvedScopes, cancellationToken);
-        }
-
-        return CheckResourceAuthorizationAsync(context, principal, legacyProvider, legacyScopes, cancellationToken);
     }
 
     /// <summary>

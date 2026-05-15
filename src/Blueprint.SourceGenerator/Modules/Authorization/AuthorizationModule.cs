@@ -333,54 +333,34 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
         // Add authorization check after authentication
         context.RequireAsync();
 
-        // Cache the ScopePair[] as a static readonly field to avoid per-request allocation
-        // (all values are compile-time string literals)
-        var scopePairFieldName = "_scopePairs_" + context.Operation.TypeName.Replace(".", "_").Replace("+", "_");
-        var scopePairArrayExpr = BuildScopePairArrayExpression(effectiveScopePairs);
-
-        context.AddDeferredClassMember(classBuilder =>
-        {
-            classBuilder.AddProperty(scopePairFieldName, Accessibility.Private)
-                .SetType("Blueprint.Model.ScopePair[]")
-                .MakeStatic()
-                .WithReadonlyValue($"[{scopePairArrayExpr}]");
-        });
-
         context.AddRenderStep(
             PipelineStage.Authorisation,
-            ctx => RenderAuthorizationCheck(ctx, effectiveScopePairs, hasTemplateValidationErrors, scopePairFieldName, valueTypePropertyNames));
+            ctx => RenderAuthorizationCheck(ctx, effectiveScopePairs, hasTemplateValidationErrors, valueTypePropertyNames));
     }
 
     private static void RenderAuthorizationCheck(
         PipelineRenderContext context,
         List<(string Noun, string Verb, string? ResourceKeyTemplate)> scopePairs,
         bool hasTemplateValidationErrors,
-        string scopePairFieldName,
         HashSet<string> valueTypePropertyNames)
     {
-        var hasTemplates = scopePairs.Any(static sp => sp.ResourceKeyTemplate is not null);
+        // BPAU007 is now an error, so hasTemplateValidationErrors means no code is emitted
+        // (the build will fail). We only need the resolved path.
+        if (hasTemplateValidationErrors)
+        {
+            return;
+        }
 
-        // When templates are valid, prefer the resolved provider for zero-reflection expansion
-        if (hasTemplates && !hasTemplateValidationErrors)
-        {
-            RenderResolvedAuthorizationCheck(context, scopePairs, scopePairFieldName, valueTypePropertyNames);
-        }
-        else
-        {
-            RenderLegacyAuthorizationCheck(context, scopePairFieldName);
-        }
+        RenderResolvedAuthorizationCheck(context, scopePairs, valueTypePropertyNames);
     }
 
     /// <summary>
-    /// Generates pipeline code that uses the unified <c>PipelineHelpers.CheckResourceAuthorizationAsync</c>
-    /// overload, which internally prefers <c>IResolvedResourceAuthorizationProvider</c> when available
-    /// and falls back to <c>IResourceAuthorizationProvider</c>. This replaces the previous if/else
-    /// pattern that emitted ~14 lines per pipeline with a single ~4-line helper call.
+    /// Generates pipeline code that calls <c>PipelineHelpers.CheckResourceAuthorizationAsync</c>
+    /// with compile-time–expanded <c>ResolvedScopePair</c> instances.
     /// </summary>
     private static void RenderResolvedAuthorizationCheck(
         PipelineRenderContext context,
         List<(string Noun, string Verb, string? ResourceKeyTemplate)> scopePairs,
-        string scopePairFieldName,
         HashSet<string> valueTypePropertyNames)
     {
         var operationExpr = context.GetOperationExpression();
@@ -409,7 +389,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
 
         context.DeclareVariable(
             "authorizationDenial",
-            $"await Blueprint.Runtime.Exec.PipelineHelpers.CheckResourceAuthorizationAsync(context, {principalExpr}, this.ResolvedResourceAuthorizationProvider, this.ResourceAuthorizationProvider, {resolvedScopeArg}, {scopePairFieldName}, {httpContextExpr}.RequestAborted).ConfigureAwait(false)");
+            $"await Blueprint.Runtime.Exec.PipelineHelpers.CheckResourceAuthorizationAsync(context, {principalExpr}, this.ResourceAuthorizationProvider, {resolvedScopeArg}, {httpContextExpr}.RequestAborted).ConfigureAwait(false)");
 
         context.If(
             "authorizationDenial != null",
@@ -432,53 +412,6 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
             sp.ResourceKeyTemplate!, tokens, operationExpr, principalExpr, "context", valueTypePropertyNames);
 
         return $"new Blueprint.Model.ResolvedScopePair(\"{sp.Noun}\", \"{sp.Verb}\", \"{sp.ResourceKeyTemplate}\", {expandedExpr})";
-    }
-
-    /// <summary>
-    /// Generates pipeline code that uses the legacy <c>IResourceAuthorizationProvider</c> with
-    /// raw template strings (runtime expansion via regex/reflection). The helper handles the
-    /// null-provider permissive fallback internally.
-    /// </summary>
-    private static void RenderLegacyAuthorizationCheck(
-        PipelineRenderContext context,
-        string scopePairFieldName)
-    {
-        RenderLegacyHelperCall(context, scopePairFieldName);
-        context.WriteBlankLine();
-    }
-
-    /// <summary>
-    /// Emits a single <c>PipelineHelpers.CheckResourceAuthorizationAsync</c> call for the
-    /// legacy <c>IResourceAuthorizationProvider</c> path. Reused by both <see cref="RenderLegacyAuthorizationCheck"/>
-    /// (standalone) and <see cref="RenderResolvedAuthorizationCheck"/> (inside the else branch).
-    /// </summary>
-    private static void RenderLegacyHelperCall(
-        PipelineRenderContext context,
-        string scopePairFieldName)
-    {
-        var httpContextExpr = context.GetHttpContextExpression();
-        var principalExpr = $"{httpContextExpr}.User";
-
-        context.DeclareVariable(
-            "authorizationDenial",
-            $"await Blueprint.Runtime.Exec.PipelineHelpers.CheckResourceAuthorizationAsync(context, {principalExpr}, this.ResourceAuthorizationProvider, {scopePairFieldName}, {httpContextExpr}.RequestAborted).ConfigureAwait(false)");
-
-        context.If(
-            "authorizationDenial != null",
-            deniedBranch =>
-            {
-                deniedBranch.Return("authorizationDenial");
-            });
-    }
-
-    private static string BuildScopePairArrayExpression(
-        List<(string Noun, string Verb, string? ResourceKeyTemplate)> scopePairs)
-    {
-        return string.Join(
-            ", ",
-            scopePairs.Select(static sp => sp.ResourceKeyTemplate is not null
-                ? $"new Blueprint.Model.ScopePair(\"{sp.Noun}\", \"{sp.Verb}\", \"{sp.ResourceKeyTemplate}\")"
-                : $"new Blueprint.Model.ScopePair(\"{sp.Noun}\", \"{sp.Verb}\")"));
     }
 
     private static List<(string Noun, string Verb, string? ResourceKeyTemplate)> GetResourceAttributes(INamedTypeSymbol operationType)

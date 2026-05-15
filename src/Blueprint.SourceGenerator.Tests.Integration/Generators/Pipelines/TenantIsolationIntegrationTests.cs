@@ -13,7 +13,7 @@ namespace Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines;
 
 /// <summary>
 /// Proves the S365-style tenant isolation flow works end-to-end through generated pipelines:
-/// resource authorization via <see cref="IResolvedResourceAuthorizationProvider"/> combined with
+/// resource authorization via <see cref="IResourceAuthorizationProvider"/> combined with
 /// business-level tenant isolation via <see cref="IOperationAuthoriser"/>, including
 /// <c>{Auth:AccountId}</c> template expansion.
 /// </summary>
@@ -24,7 +24,7 @@ public class TenantIsolationIntegrationTests
     {
         var app = new IntegrationTestBlueprintApp();
         var serviceProvider = new ServiceCollection()
-            .AddSingleton<IResolvedResourceAuthorizationProvider, S365StyleResourceAuthorizationProvider>()
+            .AddSingleton<IResourceAuthorizationProvider, S365StyleResourceAuthorizationProvider>()
             .AddSingleton<IOperationAuthoriser, S365TenantIsolationAuthoriser>()
             .BuildServiceProvider();
         var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
@@ -52,7 +52,7 @@ public class TenantIsolationIntegrationTests
     {
         var app = new IntegrationTestBlueprintApp();
         var serviceProvider = new ServiceCollection()
-            .AddSingleton<IResolvedResourceAuthorizationProvider, S365StyleResourceAuthorizationProvider>()
+            .AddSingleton<IResourceAuthorizationProvider, S365StyleResourceAuthorizationProvider>()
             .AddSingleton<IOperationAuthoriser, S365TenantIsolationAuthoriser>()
             .BuildServiceProvider();
         var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
@@ -81,7 +81,7 @@ public class TenantIsolationIntegrationTests
     {
         var app = new IntegrationTestBlueprintApp();
         var serviceProvider = new ServiceCollection()
-            .AddSingleton<IResolvedResourceAuthorizationProvider, S365StyleResourceAuthorizationProvider>()
+            .AddSingleton<IResourceAuthorizationProvider, S365StyleResourceAuthorizationProvider>()
             .AddSingleton<IOperationAuthoriser, S365TenantIsolationAuthoriser>()
             .BuildServiceProvider();
         var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
@@ -106,7 +106,7 @@ public class TenantIsolationIntegrationTests
     {
         var app = new IntegrationTestBlueprintApp();
         var serviceProvider = new ServiceCollection()
-            .AddSingleton<IResolvedResourceAuthorizationProvider, S365StyleResourceAuthorizationProvider>()
+            .AddSingleton<IResourceAuthorizationProvider, S365StyleResourceAuthorizationProvider>()
             .AddSingleton<IOperationAuthoriser, S365TenantIsolationAuthoriser>()
             .BuildServiceProvider();
         var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
@@ -136,7 +136,7 @@ public class TenantIsolationIntegrationTests
     {
         var app = new IntegrationTestBlueprintApp();
         var serviceProvider = new ServiceCollection()
-            .AddSingleton<IResolvedResourceAuthorizationProvider, S365StyleResourceAuthorizationProvider>()
+            .AddSingleton<IResourceAuthorizationProvider, S365StyleResourceAuthorizationProvider>()
             .AddSingleton<IOperationAuthoriser, S365TenantIsolationAuthoriser>()
             .BuildServiceProvider();
         var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
@@ -284,7 +284,7 @@ public class TenantIsolationIntegrationTests
     /// <summary>
     /// Mirrors S365's ScopeApiAuthoriser: checks resource-access claims against expanded resource keys.
     /// </summary>
-    private sealed class S365StyleResourceAuthorizationProvider : IResolvedResourceAuthorizationProvider
+    private sealed class S365StyleResourceAuthorizationProvider : IResourceAuthorizationProvider
     {
         public Task<bool> IsAuthorizedAsync(
             ApiOperationContext operationContext,

@@ -8,8 +8,7 @@ namespace Blueprint.SourceGenerator.Sample.Api;
 /// <summary>
 /// A sample <see cref="IResourceAuthorizationProvider"/> that demonstrates resource-level
 /// authorization by checking for a <c>scope</c> claim matching the requested resource scope pairs
-/// and optionally performing hierarchical resource key template expansion for instance-level
-/// authorization checks.
+/// and optionally verifying hierarchical resource key claims for instance-level authorization.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -18,11 +17,10 @@ namespace Blueprint.SourceGenerator.Sample.Api;
 /// such as OpenFGA or OPA). This sample uses simple claim-matching to illustrate the contract.
 /// </para>
 /// <para>
-/// When a scope pair carries a <see cref="ScopePair.ResourceKeyTemplate"/>, this provider
-/// uses <see cref="ResourceKeyTemplateExpander"/> to expand the template (substituting
-/// <c>{PropertyName}</c> tokens from the operation and <c>{Auth:ClaimType}</c> tokens from
-/// the principal's claims), then checks whether the caller holds a matching hierarchical
-/// resource key claim.
+/// When a scope pair carries a non-null <see cref="ResolvedScopePair.ExpandedResourceKey"/>,
+/// this provider checks whether the caller holds a matching hierarchical resource key claim.
+/// The generated pipeline has already expanded template tokens at compile time, so no
+/// reflection or regex expansion is needed here.
 /// </para>
 /// </remarks>
 public sealed class SampleResourceAuthorizationProvider(ILogger<SampleResourceAuthorizationProvider> logger) : IResourceAuthorizationProvider
@@ -31,11 +29,11 @@ public sealed class SampleResourceAuthorizationProvider(ILogger<SampleResourceAu
     public Task<bool> IsAuthorizedAsync(
         ApiOperationContext operationContext,
         ClaimsPrincipal principal,
-        IReadOnlyList<ScopePair> requiredScopePairs,
+        IReadOnlyList<ResolvedScopePair> resolvedScopePairs,
         CancellationToken cancellationToken)
     {
         // Any-of semantics: authorized if the principal has ANY matching scope claim
-        foreach (var scopePair in requiredScopePairs)
+        foreach (var scopePair in resolvedScopePairs)
         {
             var requiredScope = $"{scopePair.Noun}:{scopePair.Verb}";
 
@@ -44,26 +42,19 @@ public sealed class SampleResourceAuthorizationProvider(ILogger<SampleResourceAu
                 continue;
             }
 
-            // When a resource key template is present, expand it and verify the caller holds
-            // a matching hierarchical resource key claim. This is the S365-style pattern where
-            // permissions are scoped to specific resource instances (e.g. /Tenants/T-1/Templates/T-99).
-            if (scopePair.ResourceKeyTemplate is not null)
+            // When an expanded resource key is present, verify the caller holds
+            // a matching hierarchical resource key claim.
+            if (scopePair.ExpandedResourceKey is not null)
             {
-                var expandedKey = ResourceKeyTemplateExpander.Expand(
-                    scopePair.ResourceKeyTemplate,
-                    operationContext.Operation,
-                    principal);
-
-                // Check if caller holds a claim that is an ancestor of or equal to the expanded key
                 var hasResourceClaim = principal.Claims
                     .Where(static c => c.Type == "resource_key")
-                    .Any(c => expandedKey.StartsWith(c.Value, StringComparison.OrdinalIgnoreCase));
+                    .Any(c => scopePair.ExpandedResourceKey.StartsWith(c.Value, StringComparison.OrdinalIgnoreCase));
 
                 if (!hasResourceClaim)
                 {
                     logger.LogInformation(
                         "Authorization denied: caller lacks resource key claim for {ExpandedKey}",
-                        expandedKey);
+                        scopePair.ExpandedResourceKey);
 
                     return Task.FromResult(false);
                 }
@@ -71,7 +62,7 @@ public sealed class SampleResourceAuthorizationProvider(ILogger<SampleResourceAu
                 logger.LogDebug(
                     "Authorization granted for scope {Scope} with resource key {ResourceKey}",
                     requiredScope,
-                    expandedKey);
+                    scopePair.ExpandedResourceKey);
 
                 return Task.FromResult(true);
             }
@@ -86,7 +77,7 @@ public sealed class SampleResourceAuthorizationProvider(ILogger<SampleResourceAu
 
         logger.LogInformation(
             "Authorization denied: principal lacks required scopes [{Scopes}]",
-            string.Join(", ", requiredScopePairs.Select(static sp => $"{sp.Noun}:{sp.Verb}")));
+            string.Join(", ", resolvedScopePairs.Select(static sp => $"{sp.Noun}:{sp.Verb}")));
 
         return Task.FromResult(false);
     }
