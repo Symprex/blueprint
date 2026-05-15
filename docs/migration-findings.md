@@ -7,7 +7,7 @@
 
 | Area | Status | Notes |
 |------|--------|-------|
-| Compile-time proof | ✅ Done | `.scratch/s365-proof/` compiles Analytics + EventStore (4 ops, NodaTime, ContinuationPagedApiResource) |
+| Compile-time proof | ✅ Done | `.scratch/s365-proof/` compiles 8 services, 42 ops (Analytics, EventStore, Templates, Generation, Outlook, VCard, ETA, Billing) |
 | Authorization model | ✅ Verified | 349 `[Resource]` usages and 158 `[FromResource]` usages map directly to source-gen Blueprint |
 | Scope-pair provider | ✅ Done | `ScopePairClaimAuthorizationProvider` now matches S365 (`"::"`, CRUD hierarchy, ignored scopes, `allowWhenNoScopeClaims`) |
 | Claims-based auth removal | ✅ Done | Legacy claims-only authorization layer was removed; resource-based auth is the only path |
@@ -26,7 +26,7 @@
 | HTTP client / gateway support | ✅ Done | `CallAsync` shims, `CallOptions`, JWT forwarding, `StatusCodeResult`, `PlainTextResult`, `ProxyResult`, and timeout mapping are supported |
 | Handler discovery | ✅ Verified | Inline `Invoke`/`InvokeAsync`/`Handle`/`HandleAsync` plus external handler classes all work |
 | ApiOperations base class | ✅ Verified | `Context`, `Identity`, `Logger`, `CancellationToken`, `HttpContext`, `HttpRequest`, and `HttpResponse` map directly |
-| ResourceEvent contract | ✅ Verified | `ResourceEvent<T>`, convenience types, envelope shape, and audit hooks are compatible |
+| ResourceEvent contract | ✅ Verified | `ResourceEventResult<T>` with `[ResourceEventFamily]`/`[ResourceEventReason]` source-generated records; handlers return event records that auto-convert |
 | Compile-time diagnostics | ✅ Done | Auth, property ownership, HTTP, link, validation, result, and serializer diagnostics cover the migration surface |
 | ApiExceptionFactory resolution | ✅ Done | Field references (e.g. `CommonApiExceptions.NotFound`) resolved via semantic model; no BP010 warnings for S365 pattern |
 | BP001 ApiResource partial | ✅ Done | Downgraded from Error to Warning; non-partial resources work with virtual `Object` fallback |
@@ -60,7 +60,7 @@
 | Recurring scheduler implementations | ~16 |
 | Committed `openapi.json` files | 21 |
 | S365 test projects | 42 total; many are SMTP or legacy-framework tests rather than migration-critical HTTP tests |
-| Proof-project generated files | 46 |
+| Proof-project generated files | 183 (63 Blueprint + 120 STJ) |
 | Estimated pipeline IL savings | ~25,000+ lines across the ~540 HTTP operation set |
 
 > Count discrepancies in the original file came from different audit scopes. This rewrite keeps both numbers where they were materially different and explains the scope change.
@@ -349,6 +349,37 @@ S365 already uses `System.Text.Json` for HTTP payloads and keeps Newtonsoft.Json
 
 ### Serializer-context wiring and the read-only options fix
 Blueprint’s `ConfigureJson()` and serializer-context flow now matches what migrated services need. A key bug was fixed in `ApplySerializerOptions`: the runtime no longer freezes shared `JsonSerializerOptions` prematurely when building the context, and instead creates the context from a copy while composing resolvers safely. One operational gotcha remains worth keeping in this doc: do not build or consume a serializer context from app JSON options before `MapBlueprintApi`, because the options become read-only once the app pipeline is locked.
+
+### Handler and ResourceEvent migration pattern
+
+**This is the highest-churn migration step**, affecting ~257 ICommand operations and all handler files.
+
+**Operations**: S365 declares `ICommand<ResourceEvent<T>>` (from `Blueprint.Http`). New Blueprint requires `ICommand<ResourceEventResult<T>>` (from `Blueprint.Runtime.Exec`). This is a mechanical find-and-replace across all command operations.
+
+**Handlers**: S365 implements `IApiOperationHandler<TOperation, TResult>`. New Blueprint uses convention-based discovery — plain classes with `Handle`/`HandleAsync`/`Invoke`/`InvokeAsync` methods. The interface does not exist in new Blueprint; handlers just declare a method accepting the operation type and returning the result type.
+
+**ResourceEventFamily pattern**: New Blueprint uses `[ResourceEventFamily]` + `[ResourceEventReason]` on partial record types. The source generator creates implicit conversion operators so handlers return event records that auto-convert to `ResourceEventResult<T>`:
+
+```csharp
+// Declare the family (one per resource type)
+[ResourceEventFamily(typeof(TemplateApiResource), ResourceObject = "template")]
+public static partial class TemplateResourceEvents
+{
+    [ResourceEventReason(ChangeType.Created, "created")]
+    public sealed partial record Created(TemplateApiResource Resource);
+
+    [ResourceEventReason(ChangeType.Updated, "updated")]
+    public sealed partial record Updated(TemplateApiResource Resource);
+}
+
+// Handler returns the event record (auto-converts to ResourceEventResult<T>)
+public ResourceEventResult<TemplateApiResource> Handle(CreateTemplateCommand cmd)
+    => new TemplateResourceEvents.Created(new TemplateApiResource { Id = "..." });
+```
+
+**BPRE006 diagnostic**: Resource types used in resource event families must have a public `Id` property. S365 resources that use `TenantId` or other identifiers need a computed `public string Id => TenantId;` property added.
+
+**Codemod coverage**: The `ResourceEvent<T>` → `ResourceEventResult<T>` and `IApiOperationHandler` → convention-based handler changes are mechanical and should be handled by a codemod pass.
 
 ### ResourceEvent wire-format compatibility
 Several duplicated findings all boiled down to one serialization requirement: S365’s `ResourceEvent` wire format must stay stable. The new runtime now writes the envelope directly with `Utf8JsonWriter`, emits `$object = "event"`, serializes `ResourceEventChangeType` as a string enum instead of `0/1/2`, and includes the full envelope surface (`eventId`, `changeType`, `created`, `resourceObject`, `href`, `data`, `metadata`, `secureData`, `changedValues`, `correlationId`). That keeps both HTTP output and generated OpenAPI schemas aligned with S365’s existing clients.
