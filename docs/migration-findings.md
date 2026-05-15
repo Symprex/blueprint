@@ -303,7 +303,7 @@
 | FindOperation dead code fix | ✅ Done | Changed from `FindOperation` (throws) to `TryFindOperation` (returns bool) in SelfQuery preflight — eliminates dead null-check branch |
 | Value-type template expansion fix | ✅ Done | `ResourceKeyTemplateParser` now accepts `valueTypePropertyNames` set — generates `.ToString()` (no `?.`) for value types like `ApiId`, avoiding CS0023. `AuthorizationModule` collects value-type properties during template validation. |
 | S365 namespace mapping | ✅ Documented | `using Blueprint;` → `using Blueprint.Model; using Blueprint.Model.Attributes;`. `using Blueprint.Http;` → stays for `ResourceEvent<T>`, `ProxyResult`, etc. Mechanical find-and-replace, ideal for codemod. |
-| Abstract generic base + IOperation | ⚠️ Migration change | `TenantOrderedPagedQuery<T> : OrderedPagedQuery, IQuery<T>` CANNOT work — `IOperation.Configure()` is `static abstract`, abstract generic bases can't implement it. Fix: concrete subclass must declare `IQuery<T>` explicitly. ~15 S365 abstract bases affected. |
+| Abstract generic base + IOperation | ✅ Resolved | `IOperation` no longer declares `static abstract Configure()`. Abstract generic bases (e.g. `TenantOrderedPagedQuery<T> : IQuery<T>`) now compile without changes. The source generator emits `Configure()` only on concrete `partial` classes. Commit `eaa7689c`. |
 | Resources need `partial` | ✅ Expected | All `ApiResource` subclasses require `partial` for generated `Object` property — BP001 diagnostic guides this. ~60 S365 resource classes need `partial` added. |
 | ProblemDetails in serializer context | ✅ Expected | BP006 diagnostic requires `ProblemDetails` + `ValidationProblemDetails` in `JsonSerializerContext` — mandatory for every app. Easy codemod. |
 | S365 compile proof complete | ✅ Done | Analytics.Contract patterns (ApiId struct, TenantOrderedPagedQuery, [Resource] with template, [SelfLink], [RootLink]) compile cleanly against Blueprint source-gen. Generated pipelines correct. |
@@ -1381,13 +1381,13 @@ Complete analysis of all 14 S365 services reveals a highly uniform registration 
 
 ---
 
-## 278. ✅ BPMIG202: Abstract Generic Base Classes
+## 278. ✅ BPMIG202: Abstract Generic Base Classes (RESOLVED)
 
-**Problem**: S365 has 6 abstract generic base classes (e.g. `TenantOrderedPagedQuery<T>`, `OrderedPagedQuery<T>`) that implement `IQuery<T>`. Blueprint's `IOperation.Configure()` is `static abstract` — the source generator only emits `Configure()` for concrete types. Abstract bases can't satisfy this contract.
+**Problem**: S365 has 6 abstract generic base classes (e.g. `TenantOrderedPagedQuery<T>`, `OrderedPagedQuery<T>`) that implement `IQuery<T>`. Previously `IOperation.Configure()` was `static abstract`, meaning abstract bases couldn't satisfy it.
 
-**Solution**: New BPMIG202 migration analyzer detects abstract generic classes that directly implement `IQuery<T>` or `ICommand<T>` and reports a diagnostic guiding users to move the interface declaration to each concrete subclass.
+**Resolution**: Removed `static abstract Configure()` from `IOperation` (commit `eaa7689c`). Abstract generic bases now compile without any changes. The source generator emits `Configure()` only on concrete `partial` classes, which is the correct behaviour. BPMIG202 downgraded to Info/disabled-by-default since the pattern is now supported.
 
-**Impact**: 6 abstract bases, 25 concrete subclasses. Only 3 subclasses already have explicit `IQuery<T>` — the other 22 need it added as part of migration.
+**Impact**: Zero S365 migration work required for abstract bases. No need to move `IQuery<T>` from abstract classes to concrete subclasses.
 
 **Implementation**:
 - `AbstractBaseOperationAnalyzer.cs` — symbol-based analysis, reports on the interface in the base list (not the class declaration) for precise IDE experience
@@ -2992,7 +2992,7 @@ Verified 10 generated files including 2 complete executor pipelines.
 **Changes required from original S365 source:**
 1. **Add `partial` keyword** to operation and resource classes (required by all source generators)
 2. **Remove 3rd parameter from `[Resource]`** — `[Resource("SentEmail", "Read", "/Tenants/{...}")]` → `[Resource("SentEmail", "Read")]`
-3. **Add `IQuery<T>` to concrete types** — Abstract bases like `TenantOrderedPagedQuery<T>` cannot implement `IQuery<T>` because `IOperation.Configure()` is `static abstract` (static members don't inherit). Move the interface to concrete classes.
+3. **~~Add `IQuery<T>` to concrete types~~** — No longer needed. Abstract bases can now implement `IQuery<T>` directly (commit `eaa7689c`).
 4. **Add `[BlueprintAppSerializerContext]`** with a `JsonSerializerContext` listing response body types + `ProblemDetails`/`ValidationProblemDetails`
 5. **Create `BlueprintApp` class** with `[BlueprintAppScan]` attribute
 
@@ -3017,24 +3017,20 @@ Verified 10 generated files including 2 complete executor pipelines.
 **Warnings (expected, informational):**
 - BPV012: `[Required]` on `ApiId TenantId` (non-nullable value type) — harmless, no behavioral impact
 
-### #312 — Static Abstract Interface Member Gap (IOperation.Configure)
+### #312 — Static Abstract Interface Member Gap (IOperation.Configure) — RESOLVED
 
-**Impact: ~24 S365 operations using abstract base types with `IQuery<T>`**
+**Status: ✅ Resolved in commit `eaa7689c`**
 
-In C#, `static abstract` interface members must be implemented by every type that directly declares the interface — including abstract classes. Since `IOperation.Configure()` is `static abstract`, abstract classes like `TenantOrderedPagedQuery<T>` that implement `IQuery<T>` (which extends `IOperation`) cannot satisfy the requirement because static methods don't participate in inheritance.
+Previously `IOperation.Configure()` was `static abstract`, which prevented abstract generic bases from implementing `IQuery<T>`. This has been fixed by removing the `static abstract` constraint from `IOperation`. The source generator emits `Configure()` only on concrete `partial` classes — the interface no longer requires it.
 
-**Affected S365 base types:**
-- `TenantOrderedPagedQuery<T>` (most common)
-- `PartnerOrderedPagedQuery<T>`
-- `TenantContinuationQuery<T>`
-- `ContinuationQuery<T>`
-- `OrderedPagedQuery<T>` (S365 version)
+**Affected S365 base types (no longer a problem):**
+- `TenantOrderedPagedQuery<T>` — works as-is
+- `PartnerOrderedPagedQuery<T>` — works as-is
+- `TenantContinuationQuery<T>` — works as-is
+- `ContinuationQuery<T>` — works as-is
+- `OrderedPagedQuery<T>` (S365 version) — works as-is
 
-**Fix:** Remove `IQuery<T>` from the abstract base and add it to each concrete operation class.
-Blueprint's own `OrderedPagedQuery<T>` already follows this pattern (does NOT implement `IQuery<T>`).
-
-**Migration cost:** ~24 operations need one extra `, IQuery<XxxPagedApiResource<T>>` in their class declaration.
-A codemod could automate this (regex: find classes extending `TenantOrderedPagedQuery<T>`, add the interface).
+**Migration cost:** Zero — no S365 code changes needed for abstract bases.
 
 ### #313 — Handler Discovery: ApiOperations Base Class Property Injection
 

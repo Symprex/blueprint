@@ -122,6 +122,63 @@ public class BlueprintTestHostTests : IDisposable
         result.Should().BeOfType<PlainTextResult>();
     }
 
+    [Fact]
+    public async Task MessageAsync_executes_as_anonymous_without_throwing()
+    {
+        // MessageAsync is for bus-dispatched messages — always anonymous, throws on failure
+        await this._host.MessageAsync(new HealthCheckQuery());
+    }
+
+    [Fact]
+    public async Task MessageAsync_with_configure_invokes_callback()
+    {
+        var callbackInvoked = false;
+
+        await this._host.MessageAsync(
+            new HealthCheckQuery(),
+            configure: _ => callbackInvoked = true);
+
+        callbackInvoked.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task MessageAsync_throws_on_validation_failure()
+    {
+        // SearchTemplatesQuery requires Q — omitting it should cause a validation failure
+        var act = () => this._host.MessageAsync(new SearchTemplatesQuery());
+
+        await act.Should().ThrowAsync<BlueprintTestExecutionException>()
+            .Where(static ex => ex.IsValidationFailure);
+    }
+
+    [Fact]
+    public async Task BackgroundTaskAsync_executes_as_anonymous_without_throwing()
+    {
+        // BackgroundTaskAsync is for scheduled/recurring tasks — always anonymous
+        await this._host.BackgroundTaskAsync(new HealthCheckQuery());
+    }
+
+    [Fact]
+    public async Task BackgroundTaskAsync_with_configure_invokes_callback()
+    {
+        var callbackInvoked = false;
+
+        await this._host.BackgroundTaskAsync(
+            new HealthCheckQuery(),
+            configure: _ => callbackInvoked = true);
+
+        callbackInvoked.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task BackgroundTaskAsync_throws_on_validation_failure()
+    {
+        var act = () => this._host.BackgroundTaskAsync(new SearchTemplatesQuery());
+
+        await act.Should().ThrowAsync<BlueprintTestExecutionException>()
+            .Where(static ex => ex.IsValidationFailure);
+    }
+
     public void Dispose()
     {
         this._host.Dispose();

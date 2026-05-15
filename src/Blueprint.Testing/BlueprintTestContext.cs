@@ -100,6 +100,26 @@ public sealed class BlueprintTestContext
     }
 
     /// <summary>
+    /// Clears the user principal and authorization context, simulating an anonymous/unauthenticated
+    /// execution. This is the default state for message handlers and background tasks in production
+    /// because they run outside a user request context.
+    /// </summary>
+    /// <returns>This context for chaining.</returns>
+    public BlueprintTestContext AsAnonymous()
+    {
+        this._context.UserPrincipal = null;
+        this._context.UserAuthorisationContext = null;
+        this._context.SkipAuthorisation = true;
+
+        if (this._context.HttpContext is { } httpContext)
+        {
+            httpContext.User = new System.Security.Claims.ClaimsPrincipal();
+        }
+
+        return this;
+    }
+
+    /// <summary>
     /// Stores an arbitrary key-value pair in the context's data dictionary.
     /// Useful for injecting test state that middleware or handlers read from context.
     /// </summary>

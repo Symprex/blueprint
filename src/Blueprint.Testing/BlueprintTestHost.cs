@@ -231,6 +231,123 @@ public sealed class BlueprintTestHost<TApp, TExec> : IDisposable, IAsyncDisposab
     }
 
     /// <summary>
+    /// Executes a message (a published event or command that would be dispatched by a message bus)
+    /// through the pipeline as an anonymous user. This is a migration shim for S365's
+    /// <c>ApiFixture.MessageAsync(object, Action, int)</c>.
+    /// <para>
+    /// Messages are always executed without authentication context, matching the behaviour of
+    /// bus-dispatched message handlers in production. If <paramref name="retryAttempts"/> is
+    /// greater than zero, execution retries on unhandled exceptions with a 1-second delay.
+    /// </para>
+    /// </summary>
+    /// <param name="message">The message/event instance to dispatch. Must be a registered operation.</param>
+    /// <param name="configure">
+    /// An optional callback to configure the <see cref="BlueprintTestContext"/> before execution.
+    /// </param>
+    /// <param name="retryAttempts">
+    /// Number of retry attempts if the handler throws. Default is 0 (no retries).
+    /// </param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A task that completes when the message has been handled.</returns>
+    public async Task MessageAsync(
+        IOperation message,
+        Action<BlueprintTestContext>? configure = null,
+        int retryAttempts = 0,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+
+        Action<BlueprintTestContext> messageConfig = ctx =>
+        {
+            // Messages are always anonymous (no auth context)
+            ctx.AsAnonymous();
+            configure?.Invoke(ctx);
+        };
+
+        OperationResult result;
+
+        if (retryAttempts <= 0)
+        {
+            result = await this.ExecuteAsync(message, messageConfig, cancellationToken);
+        }
+        else
+        {
+            var attempt = 0;
+
+            while (true)
+            {
+                result = await this.ExecuteAsync(message, messageConfig, cancellationToken);
+
+                if (result is not UnhandledExceptionResult || attempt >= retryAttempts)
+                {
+                    break;
+                }
+
+                attempt++;
+                await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
+            }
+        }
+
+        // Force exceptions to propagate (matches S365 MessageAsync behaviour)
+        if (result is UnhandledExceptionResult unhandled)
+        {
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(unhandled.Exception).Throw();
+        }
+
+        if (result is ValidationFailedResult validationFailed)
+        {
+            throw new BlueprintTestExecutionException(
+                $"MessageAsync failed: validation errors occurred while handling {message.GetType().Name}.",
+                validationFailed);
+        }
+    }
+
+    /// <summary>
+    /// Executes a background task through the pipeline without authentication context.
+    /// This is a migration shim for S365's <c>ApiFixture.BackgroundTaskAsync(IBackgroundTask, Action)</c>.
+    /// <para>
+    /// Background tasks are always executed without authentication, matching the production
+    /// behaviour where scheduled/recurring tasks run outside a user request context.
+    /// </para>
+    /// </summary>
+    /// <param name="task">The background task operation instance.</param>
+    /// <param name="configure">
+    /// An optional callback to configure the <see cref="BlueprintTestContext"/> before execution.
+    /// </param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A task that completes when the background task has been handled.</returns>
+    public async Task BackgroundTaskAsync(
+        IOperation task,
+        Action<BlueprintTestContext>? configure = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(task);
+
+        var result = await this.ExecuteAsync(
+            task,
+            ctx =>
+            {
+                // Background tasks never have an authentication context
+                ctx.AsAnonymous();
+                configure?.Invoke(ctx);
+            },
+            cancellationToken);
+
+        // Force exceptions to propagate (matches S365 BackgroundTaskAsync behaviour)
+        if (result is UnhandledExceptionResult unhandled)
+        {
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(unhandled.Exception).Throw();
+        }
+
+        if (result is ValidationFailedResult validationFailed)
+        {
+            throw new BlueprintTestExecutionException(
+                $"BackgroundTaskAsync failed: validation errors occurred while handling {task.GetType().Name}.",
+                validationFailed);
+        }
+    }
+
+    /// <summary>
     /// Executes an operation with an authenticated user built from the provided claims.
     /// This is a direct migration shim for S365's <c>TestApiOperationExecutor.ExecuteWithAuth(operation, claims...)</c>.
     /// </summary>
