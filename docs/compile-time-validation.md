@@ -69,6 +69,8 @@ This is the clearest current example of the repository principle that string lit
 
 `BPLG004` additionally warns when multiple self-link URL templates target the same resource type, creating ambiguity in link population.
 
+`BPLG007` is a cross-operation route collision diagnostic raised in `AppDataModelSourceGenerator.FindOperations`. It fires when two distinct operations declare the same route template and HTTP method combination across their link attributes. Both endpoints would be registered by ASP.NET Core, causing an `AmbiguousMatchException` at request time. The runtime already logs this situation, but this diagnostic catches it at build time. It is a **Warning** rather than an Error because temporary collisions may exist during migration.
+
 ### Property ownership and binding diagnostics
 
 Property ownership and binding diagnostics detect misapplied binding attributes, unsupported conversion types, and body semantics that conflict with the HTTP method.

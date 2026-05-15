@@ -10,6 +10,7 @@ namespace Blueprint.SourceGenerator.Helpers;
 /// </summary>
 internal static class HttpHostExposureHelper
 {
+    private const string HttpMethodAttributeMetadataName = "Blueprint.Model.Attributes.HttpMethodAttribute";
 
     /// <summary>
     /// Returns <c>true</c> when the operation symbol carries at least one link attribute
@@ -46,53 +47,150 @@ internal static class HttpHostExposureHelper
 
         foreach (var attribute in operationType.GetAttributes())
         {
-            var attrClass = attribute.AttributeClass;
-
-            if (attrClass is null || !IsInAttributeNamespace(attrClass))
+            if (TryExtractRouteTemplate(attribute, out var url))
             {
-                continue;
-            }
-
-            var name = attrClass.Name;
-
-            switch (name)
-            {
-                case "RootLinkAttribute" when attribute.ConstructorArguments.Length >= 1:
-                    {
-                        // RootLinkAttribute(string url)
-                        if (attribute.ConstructorArguments[0].Value is string url && !string.IsNullOrWhiteSpace(url))
-                        {
-                            templates.Add(url);
-                        }
-
-                        break;
-                    }
-
-                case "SelfLinkAttribute" when attribute.ConstructorArguments.Length >= 2:
-                    {
-                        // SelfLinkAttribute(Type resourceType, string url)
-                        if (attribute.ConstructorArguments[1].Value is string url && !string.IsNullOrWhiteSpace(url))
-                        {
-                            templates.Add(url);
-                        }
-
-                        break;
-                    }
-
-                case "LinkAttribute" when attribute.ConstructorArguments.Length >= 2:
-                    {
-                        // LinkAttribute(Type? resourceType, string routePattern, string? rel = null)
-                        if (attribute.ConstructorArguments[1].Value is string url && !string.IsNullOrWhiteSpace(url))
-                        {
-                            templates.Add(url);
-                        }
-
-                        break;
-                    }
+                templates.Add(url);
             }
         }
 
         return templates;
+    }
+
+    /// <summary>
+    /// Collects all route templates with their source locations for richer diagnostic reporting.
+    /// Each entry pairs a raw route pattern string with the location of the attribute that declared it.
+    /// </summary>
+    /// <param name="operationType">The operation type symbol to inspect for link attributes.</param>
+    /// <returns>Route template strings paired with their source location (if available).</returns>
+    public static List<(string Template, LocationInfo? Location)> GetAllRouteTemplatesWithLocations(INamedTypeSymbol operationType)
+    {
+        var templates = new List<(string, LocationInfo?)>();
+
+        foreach (var attribute in operationType.GetAttributes())
+        {
+            if (TryExtractRouteTemplate(attribute, out var url))
+            {
+                var location = attribute.ApplicationSyntaxReference?.GetSyntax().GetLocation();
+                templates.Add((url, location is null ? null : LocationInfo.CreateFrom(location)));
+            }
+        }
+
+        return templates;
+    }
+
+    /// <summary>
+    /// Resolves the HTTP methods declared on an operation via explicit HTTP method attributes,
+    /// falling back to POST for commands and GET for queries. This is the shared resolution logic
+    /// used by both per-operation modules and cross-operation app-level diagnostics.
+    /// </summary>
+    /// <param name="operationType">The operation type symbol to inspect.</param>
+    /// <returns>An array of normalised HTTP method strings (e.g. <c>["GET"]</c>, <c>["POST"]</c>).</returns>
+    public static string[] ResolveHttpMethods(INamedTypeSymbol operationType)
+    {
+        var explicitMethods = new List<string>();
+
+        foreach (var attribute in operationType.GetAttributes())
+        {
+            if (attribute.AttributeClass is not { } attrClass || !IsOrInheritsFromHttpMethodAttribute(attrClass))
+            {
+                continue;
+            }
+
+            var method = ResolveHttpMethodFromAttribute(attrClass, attribute);
+            if (method is not null)
+            {
+                explicitMethods.Add(method);
+            }
+        }
+
+        if (explicitMethods.Count > 0)
+        {
+            return explicitMethods.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        }
+
+        return IsCommand(operationType) ? ["POST"] : ["GET"];
+    }
+
+    private static string? ResolveHttpMethodFromAttribute(INamedTypeSymbol attrClass, AttributeData attribute)
+    {
+        var name = attrClass.Name;
+
+        return name switch
+        {
+            "HttpGetAttribute" => "GET",
+            "HttpPostAttribute" => "POST",
+            "HttpPutAttribute" => "PUT",
+            "HttpPatchAttribute" => "PATCH",
+            "HttpDeleteAttribute" => "DELETE",
+            _ => attribute.ConstructorArguments.Length > 0
+                ? (attribute.ConstructorArguments[0].Value as string)?.Trim().ToUpperInvariant()
+                : null,
+        };
+    }
+
+    private static bool IsOrInheritsFromHttpMethodAttribute(INamedTypeSymbol attributeClass)
+    {
+        for (var current = attributeClass; current is not null; current = current.BaseType)
+        {
+            if (string.Equals(current.ToFullMetadataName(), HttpMethodAttributeMetadataName, StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsCommand(INamedTypeSymbol operationType)
+    {
+        return operationType.AllInterfaces.Any(static candidate =>
+            candidate.IsInNamespace("Blueprint", "Model")
+            && candidate.Name == "ICommand");
+    }
+
+    private static bool TryExtractRouteTemplate(AttributeData attribute, out string url)
+    {
+        url = string.Empty;
+        var attrClass = attribute.AttributeClass;
+
+        if (attrClass is null || !IsInAttributeNamespace(attrClass))
+        {
+            return false;
+        }
+
+        var name = attrClass.Name;
+
+        switch (name)
+        {
+            case "RootLinkAttribute" when attribute.ConstructorArguments.Length >= 1:
+                if (attribute.ConstructorArguments[0].Value is string rootUrl && !string.IsNullOrWhiteSpace(rootUrl))
+                {
+                    url = rootUrl;
+                    return true;
+                }
+
+                break;
+
+            case "SelfLinkAttribute" when attribute.ConstructorArguments.Length >= 2:
+                if (attribute.ConstructorArguments[1].Value is string selfUrl && !string.IsNullOrWhiteSpace(selfUrl))
+                {
+                    url = selfUrl;
+                    return true;
+                }
+
+                break;
+
+            case "LinkAttribute" when attribute.ConstructorArguments.Length >= 2:
+                if (attribute.ConstructorArguments[1].Value is string linkUrl && !string.IsNullOrWhiteSpace(linkUrl))
+                {
+                    url = linkUrl;
+                    return true;
+                }
+
+                break;
+        }
+
+        return false;
     }
 
     private static bool IsLinkAttribute(INamedTypeSymbol? attrClass)

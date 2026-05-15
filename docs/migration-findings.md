@@ -351,6 +351,11 @@
 | Query string camelCase fix | ✅ Done | `ApiLinkGenerator.BuildUrl()` was using PascalCase C# `PropertyInfo.Name` for query string keys instead of camelCase — produced `?PageSize=10` instead of `?pageSize=10`. Fixed with `ToCamelCase()` using efficient `string.Create()` + static lambda. 2 new integration tests. Commit `4528b544`. |
 | BPMIG202 analyzer severity fix | ✅ Done | `AbstractGenericBaseImplementsOperation` tests expected `Warning`/`IsEnabled=true` but diagnostic was changed to `Info`/`IsEnabled=false` (the pattern is now fully supported). 6 analyzer test failures fixed. Commit `b2126225`. |
 | Pipeline duplication analysis | ✅ Assessed | String query/header/cookie binding is only 3-4 generated lines per property — method call overhead would match inline IL. `PopulateFromJsonBody` loop is already well-optimized with static delegate. No further extraction justified. |
+| BPPO012 unresolved route placeholder | ✅ Done | Compile-time error when route template `{Foo}` has no matching property on the operation. `RouteTemplateInfo` record tracks attribute syntax location for precise error squiggles. Fires alongside BPLG001 (link-level validation). |
+| BPPO013 nullable route parameter | ✅ Done | Info-severity diagnostic when route-bound property is nullable (`string?`). Route params are always required; nullable types signal a migration contract mismatch. Info (not Warning) to avoid breaking builds during migration. |
+| BPAU008 Resource on non-HTTP | ✅ Done | Warning when `[Resource]` or `[FromResource]` is applied to a non-HTTP operation. Auth requires HTTP context — resource-auth metadata on message-only operations is dead configuration. |
+| ProblemDetails RFC type URIs | ✅ Done | `ValidationProblemDetails` and unhandled error responses now include RFC-compliant `type` URIs (`https://tools.ietf.org/html/rfc9110#section-15.5.1` etc.) and `title` fields. Commit `2fddcdff`. |
+| Auth check IL extraction | ✅ Done | `PipelineHelpers.CheckAuthenticationAsync` extracts authentication check to shared helper — reduces IL duplication across ~405 auth pipelines. Commit `3908c934`. |
 
 ---
 

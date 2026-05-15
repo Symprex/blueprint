@@ -41,6 +41,13 @@ public sealed partial class AppDataModelSourceGenerator
         var requiredSerializerCoverageTypeNames = new HashSet<string>(StringComparer.Ordinal);
         var requiredSerializerCoverageOperations = new HashSet<string>(StringComparer.Ordinal);
         var strippedNameToOperations = new Dictionary<string, List<string>>(128, StringComparer.Ordinal);
+
+        // Track (route, HTTP method) → first operation to detect cross-operation route collisions.
+        // Key is the (route template, HTTP method) pair; value is (operation FQN, operation name, attribute location).
+        var routeMethodOwners = new Dictionary<(string Route, string Method), (string OperationFqn, string OperationName, LocationInfo? Location)>(128);
+
+        // Track operations by FQN to avoid false collision reports from overlapping scans.
+        var seenOperationFqns = new HashSet<string>(StringComparer.Ordinal);
         var coveredSerializerContextTypeNames = dataModelClass.SerializerContextTypeName is null
             ? null
             : new HashSet<string>(dataModelClass.SerializerContextBodyTypeNames.AsArray(), StringComparer.Ordinal);
@@ -66,6 +73,45 @@ public sealed partial class AppDataModelSourceGenerator
                 }
 
                 operationNames.Add(operation.Name);
+
+                // Cross-operation route collision detection: collect (route, method) pairs and
+                // flag when a second operation claims the same combination.
+                var operationFqn = operation.ToFullMetadataName();
+                if (seenOperationFqns.Add(operationFqn))
+                {
+                    var routeTemplates = HttpHostExposureHelper.GetAllRouteTemplatesWithLocations(operation);
+                    if (routeTemplates.Count > 0)
+                    {
+                        var httpMethods = HttpHostExposureHelper.ResolveHttpMethods(operation);
+
+                        foreach (var (template, templateLocation) in routeTemplates)
+                        {
+                            foreach (var method in httpMethods)
+                            {
+                                var routeKey = (template, method);
+
+                                if (routeMethodOwners.TryGetValue(routeKey, out var existing)
+                                    && !string.Equals(existing.OperationFqn, operationFqn, StringComparison.Ordinal))
+                                {
+                                    diagnostics.Add(
+                                        new DiagnosticInfo(
+                                            _crossOperationRouteCollisionRule,
+                                            templateLocation ?? dataModelClass.DeclarationLocation,
+                                            [
+                                                existing.OperationName,
+                                                operation.Name,
+                                                template,
+                                                method,
+                                            ]));
+                                }
+                                else
+                                {
+                                    routeMethodOwners[routeKey] = (operationFqn, operation.Name, templateLocation);
+                                }
+                            }
+                        }
+                    }
+                }
 
                 var requiredTypeNames = GetRequiredSerializerContextCoverage(
                     operation,

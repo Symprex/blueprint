@@ -77,6 +77,15 @@ public sealed partial class AppDataModelSourceGenerator : IIncrementalGenerator,
         isEnabledByDefault: true,
         description: "Blueprint strips 'Query' and 'Command' suffixes from operation type names to produce descriptor names that flow through to OpenAPI operationId values. When two operations produce the same stripped name (e.g. FooQuery and FooCommand both become Foo), the collision must be resolved by renaming one of the operations.");
 
+    private static readonly DiagnosticDescriptor _crossOperationRouteCollisionRule = new(
+        id: "BPLG007",
+        title: "Cross-operation route collision",
+        messageFormat: "Operations '{0}' and '{1}' both declare route '{2}' with HTTP method {3}. Both endpoints will be registered, causing an AmbiguousMatchException at runtime when a request matches this route.",
+        category: "LinkGeneration",
+        DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "Two different operations declare the same route template and HTTP method combination via link attributes. ASP.NET Core will register both endpoints, but requests matching the route will fail with an AmbiguousMatchException because the router cannot disambiguate between them. Rename one route or consolidate the operations.");
+
     private readonly BlueprintSourceGenerationConfig _config;
 
     /// <summary>
