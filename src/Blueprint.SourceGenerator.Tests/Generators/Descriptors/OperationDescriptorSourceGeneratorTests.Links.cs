@@ -25,7 +25,7 @@ public class OperationDescriptorSourceGeneratorTestsLinkTests
     }
 
     [Fact]
-    public async Task When_link_missing_rel_then_reports_diagnostic()
+    public async Task When_link_missing_rel_then_infers_from_resource_type()
     {
         // language=csharp
         var source = """
@@ -43,7 +43,7 @@ public class OperationDescriptorSourceGeneratorTestsLinkTests
                      """;
 
         await OperationDescriptorSourceGeneratorTests.Compile(source)
-            .VerifyCompilationFailedAsync(OperationDescriptorSourceGeneratorTests.SnapshotsFolder);
+            .VerifySuccessAsync(OperationDescriptorSourceGeneratorTests.SnapshotsFolder);
     }
 
     [Fact]

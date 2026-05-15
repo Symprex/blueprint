@@ -556,19 +556,26 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
                 continue;
             }
 
-            // Non-null resourceType: require a Rel value for non-self links
+            // Non-null resourceType: infer Rel from resource type name when omitted
             if (string.IsNullOrWhiteSpace(rel))
             {
-                var diagLocation = locationInfo ?? (operationType.Locations.FirstOrDefault() is { } fallbackLoc
-                    ? LocationInfo.CreateFrom(fallbackLoc) : null);
+                if (resourceTypeArg.Value is INamedTypeSymbol inferTarget && inferTarget.TypeKind != TypeKind.Error)
+                {
+                    rel = InferRelFromResourceType(inferTarget);
+                }
+                else
+                {
+                    var diagLocation = locationInfo ?? (operationType.Locations.FirstOrDefault() is { } fallbackLoc
+                        ? LocationInfo.CreateFrom(fallbackLoc) : null);
 
-                context.AddDiagnostic(
-                    new DiagnosticInfo(
-                        _linkMissingRelError,
-                        diagLocation,
-                        [operationType.Name]));
+                    context.AddDiagnostic(
+                        new DiagnosticInfo(
+                            _linkMissingRelError,
+                            diagLocation,
+                            [operationType.Name]));
 
-                continue;
+                    continue;
+                }
             }
 
             if (resourceTypeArg.Value is not INamedTypeSymbol resourceTypeSymbol || resourceTypeSymbol.TypeKind == TypeKind.Error)
@@ -966,4 +973,32 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
     }
 
     private sealed record LinkableResourceBinding(INamedTypeSymbol ResourceType, string ContentAccessExpression, string GuardTypeName);
+
+    /// <summary>
+    /// Infers a rel name from a resource type symbol by stripping common suffixes
+    /// ("ApiResource", "Resource") and converting to camelCase.
+    /// For example: <c>TemplateApiResource</c> → <c>"template"</c>,
+    /// <c>GeneratedSignatureApiResource</c> → <c>"generatedSignature"</c>.
+    /// </summary>
+    private static string InferRelFromResourceType(INamedTypeSymbol resourceType)
+    {
+        var name = resourceType.Name;
+
+        if (name.EndsWith("ApiResource", StringComparison.Ordinal) && name.Length > "ApiResource".Length)
+        {
+            name = name.Substring(0, name.Length - "ApiResource".Length);
+        }
+        else if (name.EndsWith("Resource", StringComparison.Ordinal) && name.Length > "Resource".Length)
+        {
+            name = name.Substring(0, name.Length - "Resource".Length);
+        }
+
+        // camelCase: lowercase first char
+        if (name.Length > 0 && char.IsUpper(name[0]))
+        {
+            name = char.ToLowerInvariant(name[0]) + name.Substring(1);
+        }
+
+        return name;
+    }
 }

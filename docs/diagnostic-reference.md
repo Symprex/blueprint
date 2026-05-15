@@ -66,7 +66,7 @@ For detailed explanations, see [compile-time-validation.md](compile-time-validat
 | BPLG003 | Error | Resource type is not `ILinkableResource` |
 | BPLG004 | Warning | Ambiguous self-link declarations |
 | BPLG005 | Error | Empty route template |
-| BPLG006 | Error | Link missing Rel value |
+| BPLG006 | Error | Link missing Rel value (only when resource type cannot be resolved for inference) |
 
 ## Validation (BPV)
 
