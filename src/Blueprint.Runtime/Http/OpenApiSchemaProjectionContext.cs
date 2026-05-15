@@ -157,7 +157,7 @@ public sealed record OpenApiSchemaProjectionContext(
         var maximum = GetMaximum(validationAttributes);
         var isNullable = IsNullableProperty(property, nullabilityContext);
         var format = MapFormatFromValidationAttributes(validationAttributes) ?? MapFormat(property.PropertyType);
-        var enumValues = MapEnumValues(property.PropertyType);
+        var (enumValues, enumSchemaName) = MapEnumValues(property.PropertyType);
         var description = GetPropertyDescription(property);
         var obsoleteAttr = property.AttributeProvider is MemberInfo deprecatedMember
             ? deprecatedMember.GetCustomAttribute<ObsoleteAttribute>(inherit: true)
@@ -206,6 +206,7 @@ public sealed record OpenApiSchemaProjectionContext(
             isNullable,
             format,
             enumValues,
+            enumSchemaName,
             description,
             GetMinLength(validationAttributes),
             GetMaxLength(validationAttributes),
@@ -530,16 +531,16 @@ public sealed record OpenApiSchemaProjectionContext(
         "Trimming",
         "IL2067",
         Justification = "Enum types used in STJ-serializable operations are preserved by the generated serializer context.")]
-    private static ImmutableArray<string> MapEnumValues(Type propertyType)
+    private static (ImmutableArray<string> Values, string? SchemaName) MapEnumValues(Type propertyType)
     {
         var underlying = Nullable.GetUnderlyingType(propertyType) ?? propertyType;
 
         if (!underlying.IsEnum)
         {
-            return ImmutableArray<string>.Empty;
+            return (ImmutableArray<string>.Empty, null);
         }
 
-        return Enum.GetNames(underlying).ToImmutableArray();
+        return (Enum.GetNames(underlying).ToImmutableArray(), FormatTypeName(underlying));
     }
 
     /// <summary>
@@ -1030,6 +1031,7 @@ public sealed record OpenApiSchemaModel(
 /// <param name="IsNullable">Whether this property is nullable (NRT-annotated reference type or <c>Nullable&lt;T&gt;</c>).</param>
 /// <param name="Format">The OpenAPI format hint (e.g. <c>int32</c>, <c>date-time</c>, <c>uuid</c>) when the CLR type has a standard mapping.</param>
 /// <param name="EnumValues">The enum member names when the property is an enum type, or empty when not an enum.</param>
+/// <param name="EnumSchemaName">The simplified CLR enum type name used as a component schema key for <c>$ref</c>-based enum rendering, or null when the property is not an enum.</param>
 /// <param name="Description">The property description from <c>[Description]</c> attribute when specified.</param>
 /// <param name="MinLength">The inclusive minimum string/collection length when validation attributes expose one.</param>
 /// <param name="MaxLength">The inclusive maximum string/collection length when validation attributes expose one.</param>
@@ -1061,6 +1063,7 @@ public sealed record OpenApiSchemaPropertyModel(
     bool IsNullable,
     string? Format,
     ImmutableArray<string> EnumValues,
+    string? EnumSchemaName,
     string? Description,
     int? MinLength = null,
     int? MaxLength = null,

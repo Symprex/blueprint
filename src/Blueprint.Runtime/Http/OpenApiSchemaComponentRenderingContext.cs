@@ -75,6 +75,7 @@ public sealed record OpenApiSchemaComponentRenderingContext(
             property.IsNullable,
             property.Format,
             property.EnumValues,
+            property.EnumSchemaName,
             property.Description,
             property.MinLength,
             property.MaxLength,
@@ -133,6 +134,11 @@ public sealed record OpenApiSchemaComponentRenderingContext(
 /// Whether the original CLR type has a <c>[JsonExtensionData]</c> property, indicating it accepts arbitrary
 /// additional JSON members. When true, the schema should NOT emit <c>additionalProperties: false</c>.
 /// </param>
+/// <param name="ComponentEnumValues">
+/// When non-empty, this component represents an enum type rather than an object and the values are the
+/// string enum members. Enum components are rendered as <c>type: string</c> with <c>enum</c> and
+/// <c>x-enumNames</c> arrays, and properties that reference them use <c>$ref</c> via <c>oneOf</c>.
+/// </param>
 public sealed record OpenApiSchemaComponentModel(
     string BodyTypeName,
     string? Type,
@@ -141,7 +147,8 @@ public sealed record OpenApiSchemaComponentModel(
     string? Description = null,
     string? Title = null,
     ImmutableArray<OpenApiSchemaLinkExtension> Links = default,
-    bool HasExtensionData = false);
+    bool HasExtensionData = false,
+    ImmutableArray<string> ComponentEnumValues = default);
 
 /// <summary>
 /// Represents one entry in the <c>x-links</c> vendor extension array for an OpenAPI schema component.
@@ -162,6 +169,7 @@ public sealed record OpenApiSchemaLinkExtension(string Rel, string OperationId, 
 /// <param name="IsNullable">Whether this property is nullable (NRT-annotated reference type or <c>Nullable&lt;T&gt;</c>).</param>
 /// <param name="Format">The OpenAPI format hint (e.g. <c>int32</c>, <c>date-time</c>, <c>uuid</c>) when the CLR type has a standard mapping.</param>
 /// <param name="EnumValues">The enum member names when the property is an enum type, or empty when not an enum.</param>
+/// <param name="EnumSchemaRef">The component schema name for enum-typed properties, enabling <c>$ref</c> rendering via <c>oneOf</c> instead of inline <c>enum</c> arrays.</param>
 /// <param name="Description">The property description from <c>[Description]</c> attribute when specified.</param>
 /// <param name="MinLength">The inclusive minimum string/collection length when validation attributes expose one.</param>
 /// <param name="MaxLength">The inclusive maximum string/collection length when validation attributes expose one.</param>
@@ -192,6 +200,7 @@ public sealed record OpenApiSchemaComponentPropertyModel(
     bool IsNullable,
     string? Format = null,
     ImmutableArray<string> EnumValues = default,
+    string? EnumSchemaRef = null,
     string? Description = null,
     int? MinLength = null,
     int? MaxLength = null,

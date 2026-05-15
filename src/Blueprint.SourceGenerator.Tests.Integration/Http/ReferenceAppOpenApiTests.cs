@@ -304,6 +304,52 @@ public class ReferenceAppOpenApiTests
     }
 
     [Fact]
+    public async Task When_response_property_is_enum_then_openapi_renders_ref_to_component_schema()
+    {
+        var (json, _) = await InvokeOpenApiEndpointAsync();
+        using var doc = JsonDocument.Parse(json);
+
+        // TemplateApiResource has DefaultSortOrder (non-nullable) and OverrideSortOrder (nullable) enum properties
+        var schemas = doc.RootElement.GetProperty("components").GetProperty("schemas");
+        var templateSchema = schemas.GetProperty("TemplateApiResource");
+        var properties = templateSchema.GetProperty("properties");
+
+        // Non-nullable enum property should use oneOf with $ref (not inline enum)
+        var defaultSortOrder = properties.GetProperty("DefaultSortOrder");
+        defaultSortOrder.TryGetProperty("enum", out _).Should().BeFalse(
+            "enum properties on response schemas should use $ref, not inline enum");
+        var oneOf = defaultSortOrder.GetProperty("oneOf");
+        oneOf.GetArrayLength().Should().Be(1);
+        oneOf[0].GetProperty("$ref").GetString().Should().Be("#/components/schemas/TemplateSortOrder");
+        defaultSortOrder.TryGetProperty("nullable", out _).Should().BeFalse(
+            "non-nullable enum should not have nullable: true");
+
+        // Nullable enum property should use oneOf with $ref AND nullable: true
+        var overrideSortOrder = properties.GetProperty("OverrideSortOrder");
+        overrideSortOrder.TryGetProperty("enum", out _).Should().BeFalse(
+            "nullable enum properties on response schemas should use $ref, not inline enum");
+        overrideSortOrder.GetProperty("nullable").GetBoolean().Should().BeTrue();
+        var nullableOneOf = overrideSortOrder.GetProperty("oneOf");
+        nullableOneOf.GetArrayLength().Should().Be(1);
+        nullableOneOf[0].GetProperty("$ref").GetString().Should().Be("#/components/schemas/TemplateSortOrder");
+
+        // The enum component schema should exist in components/schemas
+        var enumSchema = schemas.GetProperty("TemplateSortOrder");
+        enumSchema.GetProperty("type").GetString().Should().Be("string");
+
+        var enumValues = enumSchema.GetProperty("enum").EnumerateArray()
+            .Select(static e => e.GetString())
+            .ToArray();
+        enumValues.Should().BeEquivalentTo(["Name", "CreatedDate", "LastModified"]);
+
+        // x-enumNames and x-enum-varnames should be present for TypeScript generators
+        enumSchema.TryGetProperty("x-enumNames", out _).Should().BeTrue(
+            "enum component schemas should include x-enumNames for TypeScript generators");
+        enumSchema.TryGetProperty("x-enum-varnames", out _).Should().BeTrue(
+            "enum component schemas should include x-enum-varnames for TypeScript generators");
+    }
+
+    [Fact]
     public async Task When_query_parameter_is_array_type_then_openapi_renders_items_and_style()
     {
         var (json, _) = await InvokeOpenApiEndpointAsync();

@@ -41,6 +41,17 @@ public sealed record OpenApiDocumentRenderingContext(
         var app = pathItemRendering.OperationRendering.ResponseObjects.SchemaComponents.SchemaProjection.Document.App;
         schemaComponents = EnrichWithResourceLinks(schemaComponents, app);
 
+        // Collect distinct enum types referenced across all schema component properties and emit them
+        // as top-level component schemas so properties can use $ref instead of inline enum arrays.
+        var enumComponents = CollectEnumSchemaComponents(schemaComponents);
+
+        if (!enumComponents.IsEmpty)
+        {
+            schemaComponents = schemaComponents.AddRange(enumComponents)
+                .OrderBy(static component => component.BodyTypeName, StringComparer.Ordinal)
+                .ToImmutableArray();
+        }
+
         return new OpenApiDocumentRenderingContext(pathItemRendering, paths, schemaComponents);
     }
 
@@ -83,6 +94,7 @@ public sealed record OpenApiDocumentRenderingContext(
                         bodyProperty.IsNullable,
                         bodyProperty.SchemaFormat,
                         bodyProperty.EnumValues,
+                        bodyProperty.EnumSchemaRef,
                         bodyProperty.Description,
                         bodyProperty.MinLength,
                         bodyProperty.MaxLength,
@@ -181,6 +193,48 @@ public sealed record OpenApiDocumentRenderingContext(
             {
                 builder.Add(component);
             }
+        }
+
+        return builder.MoveToImmutable();
+    }
+
+    /// <summary>
+    /// Scans all schema component properties for enum references (<see cref="OpenApiSchemaComponentPropertyModel.EnumSchemaRef"/>)
+    /// and creates a distinct set of enum component schemas. Each enum component is rendered as
+    /// <c>type: string</c> with <c>enum</c>, <c>x-enumNames</c>, and <c>x-enum-varnames</c> arrays, matching the
+    /// standard pattern expected by TypeScript generators and other OpenAPI tooling.
+    /// </summary>
+    private static ImmutableArray<OpenApiSchemaComponentModel> CollectEnumSchemaComponents(
+        ImmutableArray<OpenApiSchemaComponentModel> existingComponents)
+    {
+        var enumSchemas = new Dictionary<string, ImmutableArray<string>>(StringComparer.Ordinal);
+
+        foreach (var component in existingComponents)
+        {
+            foreach (var property in component.Properties)
+            {
+                if (property.EnumSchemaRef is not null && !property.EnumValues.IsDefaultOrEmpty)
+                {
+                    enumSchemas.TryAdd(property.EnumSchemaRef, property.EnumValues);
+                }
+            }
+        }
+
+        if (enumSchemas.Count == 0)
+        {
+            return ImmutableArray<OpenApiSchemaComponentModel>.Empty;
+        }
+
+        var builder = ImmutableArray.CreateBuilder<OpenApiSchemaComponentModel>(enumSchemas.Count);
+
+        foreach (var (name, values) in enumSchemas)
+        {
+            builder.Add(new OpenApiSchemaComponentModel(
+                name,
+                "string",
+                ImmutableArray<string>.Empty,
+                ImmutableArray<OpenApiSchemaComponentPropertyModel>.Empty,
+                ComponentEnumValues: values));
         }
 
         return builder.MoveToImmutable();

@@ -2928,6 +2928,14 @@
             "format": "date-time",
             "description": "The instant when this template was created (UTC)."
           },
+          "DefaultSortOrder": {
+            "description": "The default sort order preference for this template.",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TemplateSortOrder"
+              }
+            ]
+          },
           "HtmlSource": {
             "type": "string",
             "description": "The full HTML source content of this template."
@@ -2954,6 +2962,15 @@
           "Object": {
             "type": "string",
             "readOnly": true
+          },
+          "OverrideSortOrder": {
+            "nullable": true,
+            "description": "An optional sort order override, or null for default.",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TemplateSortOrder"
+              }
+            ]
           },
           "Owner": {
             "type": "object",
@@ -3011,6 +3028,24 @@
           }
         },
         "additionalProperties": false
+      },
+      "TemplateSortOrder": {
+        "type": "string",
+        "enum": [
+          "Name",
+          "CreatedDate",
+          "LastModified"
+        ],
+        "x-enumNames": [
+          "Name",
+          "CreatedDate",
+          "LastModified"
+        ],
+        "x-enum-varnames": [
+          "Name",
+          "CreatedDate",
+          "LastModified"
+        ]
       },
       "TemplateVersionApiResource": {
         "title": "TemplateVersionApiResource",

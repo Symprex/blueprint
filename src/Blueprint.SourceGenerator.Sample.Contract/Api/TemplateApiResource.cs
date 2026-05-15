@@ -77,6 +77,20 @@ public partial class TemplateApiResource : ApiResource
     public Instant? ModifiedAt { get; init; }
 
     /// <summary>
+    /// The default sort order for this template's related items. Demonstrates enum-typed properties
+    /// in response schemas rendered as <c>oneOf: [{ $ref }]</c> referencing top-level enum component schemas.
+    /// </summary>
+    [Description("The default sort order preference for this template.")]
+    public TemplateSortOrder DefaultSortOrder { get; init; }
+
+    /// <summary>
+    /// An optional sort order override. Demonstrates nullable enum-typed properties rendered as
+    /// <c>nullable: true, oneOf: [{ $ref }]</c>.
+    /// </summary>
+    [Description("An optional sort order override, or null for default.")]
+    public TemplateSortOrder? OverrideSortOrder { get; init; }
+
+    /// <summary>
     /// The owner of this template. Expandable via <c>?expand=Owner</c> query parameter,
     /// which causes the generated pipeline to resolve an <c>IResourceExpander</c> from DI
     /// and populate <see cref="Expandable{T}.Value"/> with the full <see cref="OwnerApiResource"/>.

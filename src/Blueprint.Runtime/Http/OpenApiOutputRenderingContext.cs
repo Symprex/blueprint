@@ -1267,6 +1267,16 @@ public sealed record OpenApiOutputRenderingContext(
         writer.WritePropertyName(SanitiseSchemaKey(component.BodyTypeName, schemaNameFormatter));
         writer.WriteStartObject();
 
+        // Enum components are rendered as a flat type: string schema with enum/x-enumNames arrays
+        // instead of the object schema shape used for regular body types.
+        if (!component.ComponentEnumValues.IsDefaultOrEmpty)
+        {
+            writer.WriteString("type", "string");
+            WriteEnumValues(writer, component.ComponentEnumValues);
+            writer.WriteEndObject();
+            return;
+        }
+
         // Prefer an explicit [DisplayName] title; fall back to the simplified CLR type name
         // (which correctly handles generics via the "Of" convention).
         var shortTitle = component.Title ?? SimplifyClrTypeName(component.BodyTypeName);
@@ -1359,6 +1369,32 @@ public sealed record OpenApiOutputRenderingContext(
     {
         writer.WritePropertyName(property.Name);
         writer.WriteStartObject();
+
+        // Enum-typed properties are rendered as oneOf: [{ $ref: ... }] pointing at the enum's
+        // top-level component schema, matching the pattern established by NJsonSchema / S365 and
+        // expected by TypeScript generators that resolve type names from $ref paths.
+        if (property.EnumSchemaRef is not null)
+        {
+            if (property.IsNullable)
+            {
+                writer.WriteBoolean("nullable", true);
+            }
+
+            if (property.Description is not null)
+            {
+                writer.WriteString("description", property.Description);
+            }
+
+            writer.WritePropertyName("oneOf");
+            writer.WriteStartArray();
+            writer.WriteStartObject();
+            writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(property.EnumSchemaRef, schemaNameFormatter)}");
+            writer.WriteEndObject();
+            writer.WriteEndArray();
+
+            writer.WriteEndObject();
+            return;
+        }
 
         if (property.Type is not null)
         {

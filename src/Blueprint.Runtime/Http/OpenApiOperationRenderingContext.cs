@@ -227,6 +227,7 @@ public sealed record OpenApiOperationRenderingContext(
             var constraints = OpenApiValidationConstraints.ExtractFromProperty(clrProperty);
             var description = GetPropertyDescription(clrProperty, entry.PropertyName, docData);
             var enumValues = GetEnumValues(clrProperty);
+            var enumSchemaRef = GetEnumSchemaRef(clrProperty);
 
             // Validation-derived format (email, uri, phone) takes precedence over CLR type format.
             var effectiveFormat = constraints.Format ?? schemaFormat;
@@ -367,6 +368,7 @@ public sealed record OpenApiOperationRenderingContext(
                         ExclusiveMinimum = constraints.ExclusiveMinimum,
                         ExclusiveMaximum = constraints.ExclusiveMaximum,
                         EnumValues = enumValues,
+                        EnumSchemaRef = enumSchemaRef,
                         IsNullable = entry.IsNullable,
                         ItemsType = bodyItemsType,
                         ItemsFormat = bodyItemsFormat,
@@ -495,6 +497,23 @@ public sealed record OpenApiOperationRenderingContext(
         }
 
         return ImmutableArray<string>.Empty;
+    }
+
+    /// <summary>
+    /// Returns the simplified CLR enum type name for a property when it is an enum type,
+    /// or <c>null</c> when the property is not an enum. This name is used as the component
+    /// schema key for <c>$ref</c>-based enum rendering in OpenAPI.
+    /// </summary>
+    private static string? GetEnumSchemaRef(System.Reflection.PropertyInfo? property)
+    {
+        if (property is null)
+        {
+            return null;
+        }
+
+        var propertyType = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
+
+        return propertyType.IsEnum ? propertyType.Name : null;
     }
 
     /// <summary>
