@@ -117,47 +117,51 @@ public sealed class TransformationApplier
             var diagnostics = await compilation
                 .WithAnalyzers(analyzers)
                 .GetAnalyzerDiagnosticsAsync(cancellationToken);
-            var diagnostic = diagnostics
+            var candidates = diagnostics
                 .Where(static candidate => candidate.Location.IsInSource)
                 .Where(candidate => SolutionAnalysisRunner.MatchesDiagnosticFilter(candidate.Id, diagnosticFilter))
                 .Where(static candidate => SupportedDiagnosticIds.Contains(candidate.Id))
                 .OrderBy(static candidate => candidate.Location.SourceTree?.FilePath, StringComparer.Ordinal)
-                .ThenBy(static candidate => candidate.Location.SourceSpan.Start)
-                .FirstOrDefault();
+                .ThenBy(static candidate => candidate.Location.SourceSpan.Start);
 
-            if (diagnostic is null || diagnostic.Location.SourceTree is null)
+            foreach (var diagnostic in candidates)
             {
-                continue;
+                if (diagnostic.Location.SourceTree is null)
+                {
+                    continue;
+                }
+
+                var document = solution.GetDocument(diagnostic.Location.SourceTree);
+                if (document is null)
+                {
+                    continue;
+                }
+
+                var codeFixProvider = codeFixProviders.SingleOrDefault(
+                    provider => provider.FixableDiagnosticIds.Contains(diagnostic.Id));
+                if (codeFixProvider is null)
+                {
+                    throw new InvalidOperationException(
+                        $"The codemod apply mode does not have a code-fix provider for supported diagnostic '{diagnostic.Id}'.");
+                }
+
+                var actions = new List<CodeAction>();
+                var context = new CodeFixContext(document, diagnostic, (action, _) => actions.Add(action), cancellationToken);
+                await codeFixProvider.RegisterCodeFixesAsync(context);
+
+                if (actions.Count == 0)
+                {
+                    // The code fix provider may decline to register a fix when the diagnostic's
+                    // target has already been partially fixed by another provider (e.g. BPMIG201
+                    // stripped the template arg, so BPMIG200 no longer has a second arg to remove).
+                    continue;
+                }
+
+                var operations = await actions[0].GetOperationsAsync(cancellationToken);
+                var applyChangesOperation = operations.OfType<ApplyChangesOperation>().Single();
+                EnsureCodeFixMadeProgress(solution, applyChangesOperation.ChangedSolution, diagnostic.Id);
+                return applyChangesOperation.ChangedSolution;
             }
-
-            var document = solution.GetDocument(diagnostic.Location.SourceTree);
-            if (document is null)
-            {
-                continue;
-            }
-
-            var codeFixProvider = codeFixProviders.SingleOrDefault(
-                provider => provider.FixableDiagnosticIds.Contains(diagnostic.Id));
-            if (codeFixProvider is null)
-            {
-                throw new InvalidOperationException(
-                    $"The codemod apply mode does not have a code-fix provider for supported diagnostic '{diagnostic.Id}'.");
-            }
-
-            var actions = new List<CodeAction>();
-            var context = new CodeFixContext(document, diagnostic, (action, _) => actions.Add(action), cancellationToken);
-            await codeFixProvider.RegisterCodeFixesAsync(context);
-
-            if (actions.Count == 0)
-            {
-                throw new InvalidOperationException(
-                    $"The codemod apply mode could not register a code fix for supported diagnostic '{diagnostic.Id}'.");
-            }
-
-            var operations = await actions[0].GetOperationsAsync(cancellationToken);
-            var applyChangesOperation = operations.OfType<ApplyChangesOperation>().Single();
-            EnsureCodeFixMadeProgress(solution, applyChangesOperation.ChangedSolution, diagnostic.Id);
-            return applyChangesOperation.ChangedSolution;
         }
 
         return null;

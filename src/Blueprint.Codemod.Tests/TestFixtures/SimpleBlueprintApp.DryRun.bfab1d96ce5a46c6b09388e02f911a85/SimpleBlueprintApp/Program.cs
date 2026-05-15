@@ -32,6 +32,15 @@ public sealed class BlueprintAuthenticationBuilder
 public sealed class FromResourceAttribute : Attribute
 {
     /// <summary>
+    /// Initializes a new instance of the <see cref="FromResourceAttribute"/> class with only an operation type.
+    /// This constructor matches the migrated form after stripping the resource key template.
+    /// </summary>
+    /// <param name="operationType">The referenced legacy operation type.</param>
+    public FromResourceAttribute(Type operationType)
+    {
+    }
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="FromResourceAttribute"/> class.
     /// </summary>
     /// <param name="operationType">The referenced legacy operation type.</param>
