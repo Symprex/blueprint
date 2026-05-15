@@ -96,19 +96,13 @@ public abstract class OrderedPagedQuery
 
 /// <summary>
 /// Generic ordered paged query that returns a <see cref="PagedApiResource{T}"/>.
-/// Concrete query classes extend this and implement <see cref="IQuery{TResult}"/>
-/// with their specific resource type.
+/// Implements <see cref="IQuery{TResult}"/> so concrete subclasses inherit the
+/// query contract automatically — matching the legacy Blueprint convention where
+/// <c>class MyQuery : OrderedPagedQuery&lt;MyResource&gt;</c> is sufficient.
 /// </summary>
 /// <typeparam name="T">The API resource type contained in each page.</typeparam>
-/// <remarks>
-/// This base class provides the pagination and ordering properties; the concrete
-/// subclass must also implement <see cref="IQuery{TResult}"/> so that the source
-/// generator can emit the <c>Configure()</c> method on the concrete type.
-/// Use the <c>partial class MyQuery : OrderedPagedQuery, IQuery&lt;PagedApiResource&lt;T&gt;&gt;</c>
-/// pattern, or just inherit from this generic variant and add the interface on the concrete class.
-/// </remarks>
 [PublicAPI]
-public abstract class OrderedPagedQuery<T> : OrderedPagedQuery
+public abstract class OrderedPagedQuery<T> : OrderedPagedQuery, IQuery<PagedApiResource<T>>
     where T : ApiResource
 {
 }

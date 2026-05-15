@@ -15,9 +15,12 @@ public abstract class ApiResource : ILinkableResource, IHaveResourceKey
     /// <summary>
     /// The object type of this resource, used to indicate to clients what they
     /// are dealing with (i.e. 'user', 'account', 'group').
+    /// Override in derived classes to supply a static string for zero-allocation serialization;
+    /// the default implementation derives the name at runtime from the concrete type via
+    /// <see cref="GetTypeName"/>.
     /// </summary>
     [JsonPropertyName("$object")]
-    public abstract string Object { get; }
+    public virtual string Object => GetTypeName(this.GetType());
 
     /// <summary>
     /// The links for this resource, other endpoints that apply to this resource

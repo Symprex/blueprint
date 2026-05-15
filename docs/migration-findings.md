@@ -68,6 +68,17 @@
 ### Resource attributes and compatibility
 S365 uses resource-based authorization almost exclusively. The migration surface is stable: 349 operations use `[Resource(noun, verb, resourceKeyTemplate)]`, 158 use `[FromResource(typeof(X), template)]`, and the new Blueprint keeps those shapes unchanged apart from namespace updates. `[AllowAnonymous]` is already supported for 57+ operations, `[MustBeAuthenticated]` is unchanged, and there is no `Permission` / `PermissionFor` branch to preserve because source-gen Blueprint is intentionally resource-only.
 
+| Authorization inventory | Count / note |
+|---|---|
+| `[Resource(...)]` usages | 349 |
+| `[FromResource(...)]` usages | 158 |
+| Unique nouns in active use | 81 |
+| S365 noun constants defined | 96 |
+| Most common template | `/Tenants/{TenantId}` (~115 usages) |
+| Auth-context template | `/Tenants/{Auth:AccountId}` (~70 usages) |
+| Multi-resource operations | ~20 OR-logic authorization cases |
+| Anonymous HTTP operations | 57+ |
+
 ### Scope-pair provider and S365 defaults
 `ScopePairClaimAuthorizationProvider` is the direct S365 replacement for `ScopeApiAuthoriser`. The critical compatibility details are now baked in: S365 uses `"::"` as the separator, `Manage` expands to `Create/Read/Update/Delete`, and the provider exposes `allowWhenNoScopeClaims: true` for S365’s “no scopes means full access” model. The implementation also preserves the ignored-scope behavior for `Signature365.ReadWrite.All`, `Signature365ReadWrite`, `Signature365Admin.ReadWrite.All`, `Signature365Admin.ReadWrite`, and `Signature365Partner.ReadWrite`.
 
@@ -110,6 +121,14 @@ The migration only needs the framework to pass through the claims S365 already u
 
 ### What stays S365-owned in authorization
 Some auth pieces should remain explicitly outside Blueprint so the migration does not overreach. `Signature365UserAuthorisationContextFactory` keeps parsing S365-specific claims, `IS365ResourceKeyExpander` keeps handling hierarchical resource expansion, and `IRoleToApiOperationMapper` continues to power role-to-operation UI/reporting because it is a presentation concern that already reads `[Resource]` metadata directly.
+
+| S365-owned auth concern | Why it stays outside Blueprint |
+|---|---|
+| `Signature365UserAuthorisationContextFactory` | Parses S365-specific JWT claims and account derivation rules |
+| `IS365ResourceKeyExpander` | Encodes consumer-specific hierarchical resource expansion |
+| Legacy scope mapper | Knows S365-specific scope renames and migration behavior |
+| Role/group expansion helpers | Reflect S365 product-role semantics, not framework semantics |
+| `IRoleToApiOperationMapper` | Drives UI/reporting over operation metadata rather than pipeline execution |
 
 ### Authorization audit notes worth preserving
 The deeper audits all reached the same practical conclusion even when they used different wording: S365’s auth model is already a Blueprint-shaped model. There are no migration-blocking permission systems hiding behind the old runtime, the verb hierarchy matches exactly, wildcard expansion remains consumer-owned, and the outstanding work is registration plus context loading rather than attribute or handler rewrites.
@@ -186,6 +205,15 @@ The compatibility work intentionally kept the small ergonomic details that matte
 ### Testing scale and migration risk
 The repo still reports 42 S365 test projects, but the migration-relevant HTTP surface is much smaller than that raw number suggests because many projects are SMTP-specific or tied to the legacy Blueprint framework. The corrected deep dive found only a few dozen files using the executor-style API directly, which means test infrastructure is not a blocker; the remaining work is mostly factory/host wiring rather than mass assertion rewrites.
 
+| Earlier API-surface scan | Approximate count / note |
+|---|---|
+| `CommandAsync<T>` references | ~3,000 |
+| `QueryAsync<T>` references | ~2,200 |
+| `MessageAsync(...)` references | ~230 |
+| Bus assertion chains | ~750 |
+| `Authentication.As(...)` uses | ~1,500 |
+| Background-task assertions | ~100 |
+
 | Usage signal | Consolidated note |
 |---|---|
 | `ExecuteAsync(...)` | The corrected audit identified this as the primary S365 operation-test path |
@@ -233,6 +261,23 @@ app.MapBlueprintApi<App, AppExecutor>(
 
 ### S365’s actual TypeScript generation architecture
 All three frontend apps (`admin`, `portal`, `partners`) use custom Handlebars generators, not NSwag. Each app has `api.handlebars`, `apiInner.handlebars`, `model.handlebars`, and `index.handlebars` under `frontend/apps/{app}/src/openapi/generator/`, driven by `index.mts`. The generator reads committed `Spec/openapi.json` files from disk, emits `api.ts` with model classes, AJV schemas, RTTI metadata, HATEOAS helpers, `setData()` constructors, and per-tag API classes, and is run through `npm run openapi`.
+
+| Frontend app | Spec source | Generated output |
+|---|---|---|
+| admin | `src/Apps/AdminPortal/.../Spec/openapi.json` | `frontend/apps/admin/src/openapi/api.ts` |
+| portal | `src/Apps/Portal/.../Spec/openapi.json` | `frontend/apps/portal/src/openapi/api.ts` |
+| partners | `src/Apps/Partners/.../Spec/openapi.json` | `frontend/apps/partners/src/openapi/api.ts` |
+
+| Template / helper | Purpose |
+|---|---|
+| `api.handlebars` | Top-level `api.ts` generation |
+| `apiInner.handlebars` | Per-tag API classes |
+| `model.handlebars` | Model/resource classes and enum metadata |
+| `index.handlebars` | Entry-point generation |
+| `pathGenerator` | URL/path construction |
+| `ajvSchema` | AJV schema emission |
+| `withOperation` | Links `operationId` back to operation metadata |
+| `camelcase` / `requiresRtti` | Naming + RTTI generation helpers |
 
 | Generator input | Why it matters |
 |---|---|
@@ -306,6 +351,19 @@ Blueprint’s `ConfigureJson()` and serializer-context flow now matches what mig
 ### ResourceEvent wire-format compatibility
 Several duplicated findings all boiled down to one serialization requirement: S365’s `ResourceEvent` wire format must stay stable. The new runtime now writes the envelope directly with `Utf8JsonWriter`, emits `$object = "event"`, serializes `ResourceEventChangeType` as a string enum instead of `0/1/2`, and includes the full envelope surface (`eventId`, `changeType`, `created`, `resourceObject`, `href`, `data`, `metadata`, `secureData`, `changedValues`, `correlationId`). That keeps both HTTP output and generated OpenAPI schemas aligned with S365’s existing clients.
 
+| ResourceEvent envelope field | Why it stays visible in the migration doc |
+|---|---|
+| `$object` | S365 clients expect the discriminator value `"event"` |
+| `eventId` | Preserved event identity |
+| `changeType` | Must serialize as enum text, not integer values |
+| `created` | Preserved audit timestamp |
+| `resourceObject` / `href` | Needed by HATEOAS-aware clients |
+| `data` | Typed payload for the actual resource |
+| `metadata` | Consumer-owned event metadata bag |
+| `secureData` | Part of S365’s established wire shape |
+| `changedValues` | Preserves partial-change information |
+| `correlationId` | Required for downstream traceability |
+
 ### Body-reading and primitive fast paths
 JSON body parsing now avoids unnecessary fallback work. Reference-type body readers explicitly guard `JsonTokenType.Null`, nullable primitives use direct `Utf8JsonReader.GetXxx()` paths instead of `JsonSerializer.Deserialize<T?>()`, and `ReadJsonBodyAsync` already passes the operation object into the populate delegate so generated lambdas can be `static` and closure-free. Those improvements matter at S365 scale because POST/PUT operations are common and the old document repeatedly flagged body-reading overhead.
 
@@ -322,6 +380,15 @@ JSON body parsing now avoids unnecessary fallback work. Reference-type body read
 
 ### Serialization summary
 The combined effect of these changes is that migration risk is mostly configuration risk, not runtime-framework risk. S365 still owns some converters and Marten serialization choices, but the Blueprint runtime now preserves the wire formats and envelope shapes that the repo’s HTTP clients, OpenAPI generators, and persistence layers actually depend on.
+
+| Converter / serializer concern | Ownership |
+|---|---|
+| `ApiIdJsonConverter` | S365-owned converter; works unchanged in STJ serializer context |
+| `FolderReference` / `Role` converters | S365-owned |
+| `ObjectValue` / dictionary-object converters | S365-owned |
+| NodaTime serialization | Service configuration concern, not a Blueprint built-in package dependency |
+| Marten `JsonNetSerializer` | S365-owned persistence choice |
+| Problem-details JSON shape | Framework concern; now enforced and stable |
 
 ## Persistence (Marten / Rebus / Hangfire)
 
@@ -345,6 +412,30 @@ The platform-specific Hangfire pieces do not belong in Blueprint and do not need
 
 ### Concrete recurring job inventory
 The important recurring-job examples are still worth keeping in one place because they are representative migration tests: tenant hard delete, user-group hard delete, Graph webhook renewal, Entra ID import, domain-info refresh, and billing cleanup. Those all map cleanly onto the new scheduling abstractions and prove that S365’s recurring-workload shape is ordinary rather than exotic.
+
+| Recurring/background workload | Typical S365 example |
+|---|---|
+| Tenant cleanup | `TenantHardDeleteRecurringTaskScheduler` |
+| User-group cleanup | `UserGroupHardDeleteBackgroundTaskScheduler` |
+| Graph subscription renewal | `GraphWebhookRecurringTaskScheduler` |
+| Entra ID import | `Microsoft365RecurringTaskScheduler` |
+| Domain refresh | `DomainInfoRefreshTask` |
+| Billing cleanup | `BillingSoftDeleteScheduler` |
+
+| Representative service inventory | Notes |
+|---|---|
+| Portal | Marten + Rebus + tenant middleware + HATEOAS + resource expansion |
+| Billing | Marten + Rebus + resource events; no tenant middleware |
+| Analytics | Rebus-heavy read-oriented service; no Marten |
+| Partners | Marten + Rebus + tenant middleware + HATEOAS |
+| Outlook | Marten + Rebus + tenant middleware |
+| VCard | Marten + Rebus + tenant middleware + HATEOAS |
+| Templates | Minimal host; no Marten, no HATEOAS |
+| Generation | Marten + Rebus; no tenant middleware |
+| IdentityServer | Rebus + auth-heavy startup; no Marten |
+| EventStore | Rebus + tenant middleware; event-oriented host |
+| Import | Marten + Rebus + tenant middleware |
+| Microsoft365 | Marten + Rebus; background-task heavy |
 
 | Service capability snapshot | Consolidated count |
 |---|---|
@@ -403,6 +494,17 @@ Cross-cutting service lookups were hoisted out of individual generated pipelines
 
 ### Generator-time performance improvements
 Incremental generator work was trimmed across the board. `ToDisplayString` namespace churn was replaced with structural namespace checks, `CompilationOperationLookup` caches repeated `FindTypeByMetadataName` calls, validation caches `GetAttributes()` results, `DescriptorPlan.Equals` short-circuits on counts before `SequenceEqual`, `ExternalHandlerIndex` is dictionary-backed instead of linear, property-ownership scans were flattened into a single pass, and small list/collection helpers were rewritten to avoid conversion churn. These changes matter because S365 is large enough for incremental-generator costs to be visible.
+
+| Generator/runtime optimization | Consolidated effect |
+|---|---|
+| `CompilationOperationLookup` cache | Eliminates repeated metadata-name lookups per compilation |
+| `ExternalHandlerIndex` dictionary | O(1) handler lookups instead of linear scans |
+| `DescriptorPlan.Equals` count check | Avoids unnecessary sequence comparisons |
+| Attribute caching in validation | Reduces repeated `GetAttributes()` work |
+| Single-pass property ownership | Avoids repeated scans through the same symbols |
+| Pre-sized endpoint collections | Reduces startup reallocations for large apps |
+| Cached API catalog bytes | Avoids re-rendering static discovery documents |
+| Shared auth structs/lists | Reduces allocations on every authorized request |
 
 ### Runtime hot-path work
 The runtime side also shed unnecessary work. Binding helpers use static parse delegates, several helper methods gained non-async fast paths to skip state-machine allocation on the common path, `LinkGeneratorHandler` avoids async machinery when there is no content to decorate, `CreateNested()` now preserves the parent data dictionary correctly, endpoint-registration collections are pre-sized from `BlueprintApp.OperationCount`, route collisions emit structured warnings, and the API catalog response is cached as pre-rendered bytes until the public host changes.
@@ -484,6 +586,15 @@ S365’s custom `ServiceApiSourceGenerator` is orthogonal to Blueprint source ge
 ### Gateway migration summary
 The repeated gateway findings all resolve to the same practical rule: keep forwarding/aggregation logic in S365, keep typed client generators if they still provide value, and let Blueprint.HttpClient own transport mechanics such as URL generation, token forwarding, error mapping, and `ResourceEvent` envelope parsing.
 
+| Gateway behavior | Supported path |
+|---|---|
+| Plain forwarding | `BlueprintHttpClient<TApp>` request generation + response handling |
+| Multi-service aggregation | Consumer-owned handler logic composing multiple downstream calls |
+| Fallback on downstream failure | Consumer-owned `try/catch` around client calls |
+| Downstream pass-through response | `ProxyResult` |
+| JWT forwarding | `HttpClientTokenForwarding.ForwardAuthorizationHeader(...)` |
+| Typed client wrappers | Keep S365 generator or move gradually to Blueprint-generated extensions |
+
 ### Hosting details that stay outside Blueprint
 Health checks and CORS are still ordinary ASP.NET Core concerns rather than Blueprint-specific migration items. S365 can keep `services.AddHealthChecks()` and `MapSig365HealthChecks()` alongside `MapBlueprintApi()`, preserve the existing `/health`, `/health/readiness`, and `/health/liveness` layout, and continue to use any separate `HEALTHCHECK_PORT` deployment pattern without framework interference.
 
@@ -502,6 +613,16 @@ S365 uses two HTTP handler shapes in meaningful numbers: inline operation method
 
 ### `ApiOperations` base class parity
 `ApiOperations` is a direct migration seam rather than a rewrite point. Blueprint injects `Context`, `Identity`, `Logger`, `CancellationToken`, `HttpContext`, `HttpRequest`, and `HttpResponse` in the same shape S365 expects, and it also auto-detects those property injections across the type hierarchy. That means handler logic that depends on the base class can usually move with only namespace updates.
+
+| Injected member | Migration note |
+|---|---|
+| `Context` | Same `ApiOperationContext` concept and usage |
+| `Identity` | Same `IUserAuthorisationContext` seam |
+| `Logger` | Same handler-level logger pattern |
+| `CancellationToken` | Same pipeline-injected cancellation source |
+| `HttpContext` | Computed from `Context`, no separate migration seam |
+| `HttpRequest` / `HttpResponse` | Same convenience surface as legacy `ApiOperations` |
+| `ClaimsPrincipal` | Available through handler/property injection when needed |
 
 ### Return-type compatibility
 The return-type audit is stronger than the original document’s scattered notes suggested. `ResourceEvent<T>`, `ResourceCreated<T>`, `ResourceUpdated<T>`, `ResourceDeleted<T>`, `StatusCodeResult.Accepted/Created/NoContent/OK`, `PlainTextResult`, `HttpResult`, plain `ApiResource` responses, `ListApiResource<T>`, `PagedApiResource<T>`, and S365-owned list subclasses all work. S365 does not use `Results<T1,T2>` unions in practice, and `IReturn<T>` is largely a client-side concern rather than the dominant operation interface shape.
@@ -565,6 +686,15 @@ A few smaller compatibility fixes are easy to lose if the document is too aggres
 
 ### S365-owned generators and adjacent tooling
 S365’s `DtoSourceGenerator`, `MetricsSourceGenerator`, and legacy `ServiceApiSourceGenerator` are orthogonal to Blueprint source generation rather than blocked by it. Likewise, the old `Blueprint.Compiler` runtime Roslyn compiler is simply superseded by source generation; it is historical context, not a migration feature gap.
+
+| Resource / helper type | Migration stance |
+|---|---|
+| `ListApiResource<T>` | Built into Blueprint |
+| `PagedApiResource<T>` | Built into Blueprint |
+| `ContinuationPagedApiResource<T>` | Built into Blueprint |
+| `TenantListApiResource<T>` | S365-owned thin wrapper over shared collection types |
+| `PartnerListApiResource<T>` | S365-owned thin wrapper over shared collection types |
+| `ResourceEvent<ListApiResource<T>>`-style nesting | Supported; no longer considered a gap |
 
 | Adjacent generator / tool | Migration stance |
 |---|---|
@@ -672,6 +802,14 @@ A few items were intentionally left outside codemod automation. Service-specific
 
 ### Migration posture after codemod consolidation
 The codemod findings support the same overall conclusion as the rest of this document: migration is mostly mechanical, but it still needs deliberate service-level review at the seams where S365 intentionally owns behavior—auth context loading, service startup composition, infrastructure registration, and frontend OpenAPI consumption.
+
+| Delivered codemod support | Status |
+|---|---|
+| Per-project SARIF output | Implemented |
+| Lenient build-failure handling when BPMIG diagnostics exist | Implemented |
+| Redundant activation cleanup | Implemented |
+| Missing `partial` code fixes | Implemented |
+| Abstract generic base false-positive removal (`BPMIG202`) | Resolved |
 
 ## Open Questions
 
