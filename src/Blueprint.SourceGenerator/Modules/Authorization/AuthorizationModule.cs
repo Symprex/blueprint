@@ -15,7 +15,8 @@ namespace Blueprint.SourceGenerator.Modules.Authorization;
 /// Reports BPAU003 when resource authorization is combined with <c>[AllowAnonymous]</c>,
 /// BPAU004 when noun or verb values are empty or whitespace,
 /// BPAU005 when both <c>[FromResource]</c> and <c>[Resource]</c> are used on the same operation,
-/// and BPAU006 when <c>[FromResource]</c> references a type that has no <c>[Resource]</c> attributes.
+/// BPAU006 when <c>[FromResource]</c> references a type that has no <c>[Resource]</c> attributes,
+/// and BPAU008 when resource authorization is declared on a non-HTTP operation.
 /// </para>
 /// <para>
 /// Permissioned operations implicitly require authentication; this module coordinates
@@ -256,6 +257,14 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
 
         if (!HttpHostExposureHelper.HasHttpHostExposure(operationType))
         {
+            // BPAU008: Resource authorization requires an HTTP context to extract the principal.
+            // Descriptor metadata is still projected above, but the pipeline check is absent.
+            context.AddDiagnostic(
+                new DiagnosticInfo(
+                    AuthorizationDiagnosticDescriptors.ResourceOnNonHttpOperation,
+                    operationType.Locations.FirstOrDefault(),
+                    [operationType.Name]));
+
             return;
         }
 

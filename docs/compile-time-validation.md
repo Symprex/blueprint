@@ -92,6 +92,8 @@ Current property ownership IDs in active use:
 - `BPPO009`: `[FromAuthContext(ClaimType = "...")]` on a non-string property — only string properties support compile-time claim mapping (error).
 - `BPPO010`: `[FromAuthContext(ClaimType = "...")]` on a property that is also route-bound — route binding takes precedence, making the ClaimType dead configuration (warning).
 - `BPPO011`: route/query property type uses `[TypeConverter]` instead of the faster `IParsable<T>` / static `TryParse` path. TypeConverter uses exception-based control flow for invalid input (info).
+- `BPPO012`: route template contains a placeholder with no matching operation property, so the generated pipeline would never be able to populate that route segment (error).
+- `BPPO013`: route-bound property is nullable even though route parameters are always required, highlighting a migration contract mismatch before runtime (warning).
 
 ### Operation discovery and host diagnostics
 

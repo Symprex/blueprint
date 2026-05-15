@@ -358,7 +358,7 @@ public class AuthorizationModuleTests
     }
 
     [Fact]
-    public void When_Resource_on_non_http_operation_then_no_authentication_stage()
+    public void When_Resource_on_non_http_operation_then_no_authentication_stage_and_warns_BPAU008()
     {
         var compilation = CreateCompilation(
             """
@@ -381,7 +381,9 @@ public class AuthorizationModuleTests
         var config = new BlueprintSourceGenerationConfig([new AuthenticationModule(), new AuthorizationModule()]);
         var result = config.BuildPipelinePlan("TestNamespace.ProcessAccountCommand", compilation);
 
-        result.Diagnostics.Should().BeEmpty();
+        result.Diagnostics.Should().ContainSingle(
+            static d => d.Descriptor.Id == "BPAU008",
+            "resource authorization on a non-HTTP operation should warn");
         result.Value.Should().NotBeNull();
 
         // Non-HTTP operations don't get pipeline checks
@@ -877,6 +879,37 @@ public class AuthorizationModuleTests
     }
 
     // ── Resource key template validation tests ──────────────────────
+
+    [Fact]
+    public void When_Resource_on_non_HTTP_operation_then_reports_BPAU008()
+    {
+        var compilation = CreateCompilation(
+            """
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace;
+
+            [Resource("account", "read")]
+            public partial class ProcessAccountCommand : ICommand<string>
+            {
+                public string Id { get; set; }
+
+                public static Task<string> HandleAsync(ProcessAccountCommand operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        var config = new BlueprintSourceGenerationConfig([new AuthenticationModule(), new AuthorizationModule()]);
+        var result = config.BuildPipelinePlan("TestNamespace.ProcessAccountCommand", compilation);
+
+        result.Diagnostics.Should().Contain(
+            static d => d.Descriptor.Id == "BPAU008",
+            "resource authorization on a non-HTTP operation should warn because the runtime check cannot be generated");
+    }
 
     [Fact]
     public void When_Resource_template_token_references_missing_property_then_reports_BPAU007()

@@ -167,14 +167,14 @@ public class PopulationPipelineBenchmarks
 public partial class RouteOnlyGetBenchmarkQuery : IQuery<string>
 {
     /// <summary>Gets or sets the route-bound identifier.</summary>
-    public string? Id { get; set; }
+    public string Id { get; set; } = string.Empty;
 
     /// <summary>Returns the bound identifier so the benchmark exercises the full pipeline path.</summary>
     /// <param name="operation">The populated operation instance.</param>
     /// <returns>A completed task containing a concatenated value representing all bound properties.</returns>
     public static Task<string> HandleAsync(RouteOnlyGetBenchmarkQuery operation)
     {
-        return Task.FromResult(operation.Id ?? string.Empty);
+        return Task.FromResult(operation.Id);
     }
 }
 
@@ -209,7 +209,7 @@ public partial class BodyOnly3StringsBenchmarkCommand : ICommand<string>
 public partial class MixedRouteBodyBenchmarkCommand : ICommand<string>
 {
     /// <summary>Gets or sets the route-bound identifier.</summary>
-    public string? Id { get; set; }
+    public string Id { get; set; } = string.Empty;
 
     /// <summary>Gets or sets a body-bound name value.</summary>
     public string? Name { get; set; }
@@ -233,7 +233,7 @@ public partial class MixedRouteBodyBenchmarkCommand : ICommand<string>
 public partial class TypedBodyBenchmarkCommand : ICommand<string>
 {
     /// <summary>Gets or sets the route-bound identifier.</summary>
-    public string? Id { get; set; }
+    public string Id { get; set; } = string.Empty;
 
     /// <summary>Gets or sets an integer body-bound value.</summary>
     public int Count { get; set; }

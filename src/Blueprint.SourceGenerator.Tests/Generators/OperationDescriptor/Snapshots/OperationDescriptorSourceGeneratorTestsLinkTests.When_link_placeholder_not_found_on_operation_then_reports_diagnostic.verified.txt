@@ -6,6 +6,7 @@ namespace TestNamespace;
 
 [Link(typeof(ApiResourceWithProps), "/items/{DoesNotExist}", Rel = "item")]
           ^^^^^^^^^^^^ [Error:BPLG001] A public property 'DoesNotExist' cannot be found on type 'GetItemOperation'
+                                    ^^^^^^^^^^^^^^^^^^^^^^^ [Error:BPPO012] Route template '/items/{DoesNotExist}' on operation 'GetItemOperation' contains placeholder '{DoesNotExist}' but the operation has no property named 'DoesNotExist'
 public partial class GetItemOperation : IOperation {}
 
 public class ApiResourceWithProps : ApiResource

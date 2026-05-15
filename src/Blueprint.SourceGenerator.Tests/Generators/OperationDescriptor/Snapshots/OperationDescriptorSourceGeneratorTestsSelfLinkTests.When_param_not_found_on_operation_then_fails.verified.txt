@@ -5,6 +5,7 @@ using Blueprint.Model.Attributes;
 namespace TestNamespace;
 
 [SelfLink(typeof(ApiResourceWithoutProps), "/operations/a/{DoesNotExist}")]
+                                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [Error:BPPO012] Route template '/operations/a/{DoesNotExist}' on operation 'OperationA' contains placeholder '{DoesNotExist}' but the operation has no property named 'DoesNotExist'
                                                            ^^^^^^^^^^^^ [Error:BPLG001] A public property 'DoesNotExist' cannot be found on type 'OperationA'
 public partial class OperationA : IOperation {}
 

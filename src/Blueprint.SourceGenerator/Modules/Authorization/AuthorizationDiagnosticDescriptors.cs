@@ -66,4 +66,18 @@ internal static class AuthorizationDiagnosticDescriptors
         category: "Blueprint.Authorization",
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
+
+    /// <summary>
+    /// BPAU008: <c>[Resource]</c> or <c>[FromResource]</c> declared on an operation that is not exposed
+    /// via an HTTP host. The pipeline authorization check will not be generated because authorization
+    /// requires an HTTP context to extract the authenticated principal. The descriptor metadata is still
+    /// projected, but the runtime enforcement is absent — which is almost certainly a misconfiguration.
+    /// </summary>
+    public static readonly DiagnosticDescriptor ResourceOnNonHttpOperation = new(
+        id: "BPAU008",
+        title: "[Resource] on non-HTTP operation",
+        messageFormat: "Operation '{0}' declares resource authorization requirements but is not exposed via an HTTP host. The authorization check will not be generated. Add an HTTP link or remove the authorization attributes.",
+        category: "Blueprint.Authorization",
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
 }

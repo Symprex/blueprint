@@ -726,6 +726,27 @@ public class PropertyOwnershipModuleTests
     }
 
     [Fact]
+    public void When_route_template_has_unresolved_placeholder_then_reports_BPPO012()
+    {
+        var result = CompileDescriptor(
+            """
+            [global::Blueprint.Model.Attributes.RootLink("/items/{Id}/{Slug}")]
+            public partial class GetItemQuery : IQuery<string>
+            {
+                public string Id { get; set; }
+
+                public static Task<string> HandleAsync(GetItemQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Where(static d => d.Id == "BPPO012")
+            .Should().ContainSingle();
+    }
+
+    [Fact]
     public void When_property_has_conflicting_FromX_attributes_then_reports_BPPO006()
     {
         var result = CompileDescriptor(
@@ -1720,6 +1741,76 @@ public class PropertyOwnershipModuleTests
             """);
 
         result.Diagnostics.Should().Contain(d => d.Id == "BPPO001");
+    }
+
+    [Fact]
+    public void When_route_parameter_is_nullable_reference_type_then_reports_BPPO013()
+    {
+        var result = CompileDescriptor(
+            """
+            #nullable enable
+            [global::Blueprint.Model.Attributes.RootLink("/items/{Id}")]
+            public partial class GetNullableRouteQuery : IQuery<string>
+            {
+                public string? Id { get; set; }
+
+                public static Task<string> HandleAsync(GetNullableRouteQuery operation)
+                {
+                    return Task.FromResult(operation.Id ?? string.Empty);
+                }
+            }
+            """);
+
+        result.Diagnostics.Where(static d => d.Id == "BPPO013")
+            .Should().ContainSingle();
+    }
+
+    [Fact]
+    public void When_route_parameter_is_nullable_value_type_then_reports_BPPO013_without_BPPO001()
+    {
+        const string source = """
+            #nullable enable
+            using Blueprint;
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using System;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace
+            {
+                [BlueprintAppScan]
+                public partial class TestApp : BlueprintApp { }
+
+                [RootLink("/items/{Id}")]
+                public partial class GetNullableGuidRouteQuery : IQuery<string>
+                {
+                    public Guid? Id { get; set; }
+
+                    public static Task<string> HandleAsync(GetNullableGuidRouteQuery operation)
+                    {
+                        return Task.FromResult(operation.Id?.ToString() ?? string.Empty);
+                    }
+                }
+            }
+            """;
+
+        var generators = new[]
+        {
+            TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>(),
+            TestHelpers.CreateTrackedGenerator<OperationExecutorPipelineSourceGenerator>(),
+        };
+
+        var result = TestHelpers.CompileWithTrackedGenerators(
+            generators,
+            [source],
+            ["Input0.cs"]);
+
+        result.Diagnostics.Where(static d => d.Severity == DiagnosticSeverity.Error)
+            .Should().BeEmpty("nullable route value types should still compile and bind through the generated pipeline");
+        result.Diagnostics.Where(static d => d.Id == "BPPO001")
+            .Should().BeEmpty("nullable route value types should not be rejected as unsupported");
+        result.Diagnostics.Where(static d => d.Id == "BPPO013")
+            .Should().ContainSingle();
     }
 
     [Fact]

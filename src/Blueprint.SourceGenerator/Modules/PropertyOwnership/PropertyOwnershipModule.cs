@@ -4,6 +4,7 @@ using Blueprint.SourceGenerator.Helpers;
 using Blueprint.SourceGenerator.Modules.Tenancy;
 using Blueprint.SourceGenerator.Planning;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using CSharpSymbolDisplay = Microsoft.CodeAnalysis.CSharp.SymbolDisplay;
 
 namespace Blueprint.SourceGenerator.Modules;
@@ -15,6 +16,8 @@ namespace Blueprint.SourceGenerator.Modules;
 public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, IDescriptorContributor, IPipelineContributor
 {
     private static readonly Regex PlaceholderRegex = new(@"\{\*{0,2}([A-Za-z0-9_]+)\}", RegexOptions.Compiled);
+
+    private sealed record RouteTemplateInfo(string Template, LocationInfo? Location);
 
     /// <inheritdoc />
     public string ModuleId => nameof(PropertyOwnershipModule);
@@ -42,8 +45,11 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         {
             return;
         }
-        var routePlaceholders = ExtractRoutePlaceholders(operationType);
-        ValidateRoutePlaceholderSyntax(operationType, context);
+
+        var routeTemplates = GetRouteTemplates(operationType);
+        var routePlaceholders = ExtractRoutePlaceholders(routeTemplates);
+        ValidateRoutePlaceholderSyntax(operationType, routeTemplates, context);
+        ValidateRoutePlaceholdersResolveToProperties(operationType, routeTemplates, context);
         var httpMethods = ResolveHttpMethods(context, operationType);
 
         var diagnostics = new List<DiagnosticInfo>();
@@ -85,7 +91,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             return;
         }
 
-        var routePlaceholders = ExtractRoutePlaceholders(operationType);
+        var routePlaceholders = ExtractRoutePlaceholders(GetRouteTemplates(operationType));
         var httpMethods = ResolveHttpMethods(operationType);
         var isTenancyEnabled = TenantIdConventionHelper.IsTenancyEnabled(context.FindTypeByMetadataName);
         var entries = AnalyzePropertyOwnership(operationType, routePlaceholders, httpMethods, diagnostics: null, isTenancyEnabled);
@@ -158,13 +164,13 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         }
     }
 
-    private static List<string> ExtractRoutePlaceholders(INamedTypeSymbol operationType)
+    private static List<string> ExtractRoutePlaceholders(IEnumerable<RouteTemplateInfo> routeTemplates)
     {
         var placeholders = new List<string>();
 
-        foreach (var url in HttpHostExposureHelper.GetAllRouteTemplates(operationType))
+        foreach (var routeTemplate in routeTemplates)
         {
-            foreach (Match match in PlaceholderRegex.Matches(url))
+            foreach (Match match in PlaceholderRegex.Matches(routeTemplate.Template))
             {
                 var name = match.Groups[1].Value;
                 if (!placeholders.Contains(name, StringComparer.Ordinal))
@@ -181,10 +187,14 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
     /// Validates route template syntax for unbalanced braces and empty placeholder names,
     /// reporting BPPO008 for each malformed segment.
     /// </summary>
-    private static void ValidateRoutePlaceholderSyntax(INamedTypeSymbol operationType, DescriptorContributorContext context)
+    private static void ValidateRoutePlaceholderSyntax(
+        INamedTypeSymbol operationType,
+        IEnumerable<RouteTemplateInfo> routeTemplates,
+        DescriptorContributorContext context)
     {
-        foreach (var url in HttpHostExposureHelper.GetAllRouteTemplates(operationType))
+        foreach (var routeTemplate in routeTemplates)
         {
+            var url = routeTemplate.Template;
             var openCount = 0;
 
             for (var i = 0; i < url.Length; i++)
@@ -195,7 +205,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
                         openCount++;
                         if (openCount > 1)
                         {
-                            context.AddDiagnostic(CreateRouteDiagnostic(operationType, url, "nested or consecutive opening braces"));
+                            context.AddDiagnostic(CreateRouteDiagnostic(operationType, url, "nested or consecutive opening braces", routeTemplate.Location));
                             return;
                         }
 
@@ -204,7 +214,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
                     case '}':
                         if (openCount == 0)
                         {
-                            context.AddDiagnostic(CreateRouteDiagnostic(operationType, url, "closing brace without matching opening brace"));
+                            context.AddDiagnostic(CreateRouteDiagnostic(operationType, url, "closing brace without matching opening brace", routeTemplate.Location));
                             return;
                         }
 
@@ -215,15 +225,94 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
 
             if (openCount > 0)
             {
-                context.AddDiagnostic(CreateRouteDiagnostic(operationType, url, "opening brace without matching closing brace"));
+                context.AddDiagnostic(CreateRouteDiagnostic(operationType, url, "opening brace without matching closing brace", routeTemplate.Location));
             }
 
             // Check for empty placeholders: "{}" with nothing inside.
             if (url.Contains("{}", StringComparison.Ordinal))
             {
-                context.AddDiagnostic(CreateRouteDiagnostic(operationType, url, "empty placeholder name"));
+                context.AddDiagnostic(CreateRouteDiagnostic(operationType, url, "empty placeholder name", routeTemplate.Location));
             }
         }
+    }
+
+    /// <summary>
+    /// Reports unresolved placeholders as soon as the route template and operation symbol disagree,
+    /// preventing migrations from shipping a route segment that can never be populated at runtime.
+    /// </summary>
+    private static void ValidateRoutePlaceholdersResolveToProperties(
+        INamedTypeSymbol operationType,
+        IEnumerable<RouteTemplateInfo> routeTemplates,
+        DescriptorContributorContext context)
+    {
+        var propertyNames = operationType.GetAllMembers()
+            .OfType<IPropertySymbol>()
+            .Select(static property => property.Name)
+            .ToHashSet(StringComparer.Ordinal);
+
+        foreach (var routeTemplate in routeTemplates)
+        {
+            foreach (Match match in PlaceholderRegex.Matches(routeTemplate.Template))
+            {
+                var placeholderName = match.Groups[1].Value;
+                if (propertyNames.Contains(placeholderName))
+                {
+                    continue;
+                }
+
+                context.AddDiagnostic(new DiagnosticInfo(
+                    PropertyOwnershipDiagnosticDescriptors.UnresolvedRoutePlaceholder,
+                    routeTemplate.Location ?? GetOperationLocation(operationType),
+                    [placeholderName, operationType.Name, routeTemplate.Template]));
+            }
+        }
+    }
+
+    private static List<RouteTemplateInfo> GetRouteTemplates(INamedTypeSymbol operationType)
+    {
+        var routeTemplates = new List<RouteTemplateInfo>();
+
+        foreach (var attribute in operationType.GetAttributes())
+        {
+            var attributeClass = attribute.AttributeClass;
+            if (attributeClass is null || !attributeClass.IsInNamespace("Blueprint", "Model", "Attributes"))
+            {
+                continue;
+            }
+
+            var (template, argumentIndex) = attributeClass.Name switch
+            {
+                "RootLinkAttribute" when attribute.ConstructorArguments.Length >= 1 => (attribute.ConstructorArguments[0].Value as string, 0),
+                "SelfLinkAttribute" when attribute.ConstructorArguments.Length >= 2 => (attribute.ConstructorArguments[1].Value as string, 1),
+                "LinkAttribute" when attribute.ConstructorArguments.Length >= 2 => (attribute.ConstructorArguments[1].Value as string, 1),
+                _ => (null, -1),
+            };
+
+            if (string.IsNullOrWhiteSpace(template))
+            {
+                continue;
+            }
+
+            routeTemplates.Add(new RouteTemplateInfo(template!, GetRouteTemplateLocation(attribute, argumentIndex)));
+        }
+
+        return routeTemplates;
+    }
+
+    private static LocationInfo? GetRouteTemplateLocation(AttributeData attribute, int argumentIndex)
+    {
+        if (argumentIndex < 0 || attribute.ApplicationSyntaxReference?.GetSyntax() is not AttributeSyntax attributeSyntax)
+        {
+            return null;
+        }
+
+        if (attributeSyntax.ArgumentList is { Arguments.Count: > 0 } argumentList
+            && argumentIndex < argumentList.Arguments.Count)
+        {
+            return LocationInfo.CreateFrom(argumentList.Arguments[argumentIndex].Expression);
+        }
+
+        return LocationInfo.CreateFrom(attributeSyntax);
     }
 
     private static string[] ResolveHttpMethods(DescriptorContributorContext context, INamedTypeSymbol operationType)
@@ -492,6 +581,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
                     continue;
                 }
 
+                ReportNullableRouteParameter(member, operationType, diagnostics);
                 entries.Add(new PropertyOwnershipEntry(member.Name, member.Type, PropertyOwnershipSource.Route, member.Name, isInitOnly));
 
                 if (IsTypeConverterOnlyType(member.Type))
@@ -575,6 +665,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             return;
         }
 
+        ReportNullableRouteParameter(member, operationType, diagnostics);
         entries.Add(new PropertyOwnershipEntry(member.Name, member.Type, PropertyOwnershipSource.Route, member.Name, isInitOnly));
 
         if (IsTypeConverterOnlyType(member.Type))
@@ -754,20 +845,43 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             new EquatableList<string>(args.ToArray()));
     }
 
+    private static void ReportNullableRouteParameter(
+        IPropertySymbol member,
+        INamedTypeSymbol operationType,
+        List<DiagnosticInfo>? diagnostics)
+    {
+        if (diagnostics is null || !IsNullableType(member.Type))
+        {
+            return;
+        }
+
+        diagnostics.Add(CreatePropertyDiagnostic(
+            PropertyOwnershipDiagnosticDescriptors.NullableRouteParameter,
+            member,
+            operationType,
+            member.Type.ToDisplayString()));
+    }
+
     /// <summary>
     /// Creates a <see cref="DiagnosticInfo"/> for a route template diagnostic, locating
-    /// the error on the operation type declaration.
+    /// the error on the route template expression when available.
     /// </summary>
     private static DiagnosticInfo CreateRouteDiagnostic(
         INamedTypeSymbol operationType,
         string url,
-        string reason)
+        string reason,
+        LocationInfo? location = null)
     {
-        var location = operationType.Locations.FirstOrDefault(static l => l.IsInSource);
         return new DiagnosticInfo(
             PropertyOwnershipDiagnosticDescriptors.MalformedRoutePlaceholder,
-            location is not null ? LocationInfo.CreateFrom(location) : null,
+            location ?? GetOperationLocation(operationType),
             new EquatableList<string>([url, operationType.Name, reason]));
+    }
+
+    private static LocationInfo? GetOperationLocation(INamedTypeSymbol operationType)
+    {
+        var location = operationType.Locations.FirstOrDefault(static l => l.IsInSource);
+        return location is not null ? LocationInfo.CreateFrom(location) : null;
     }
 
     /// <summary>
@@ -823,25 +937,8 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
 
     private static bool IsSupportedRouteType(ITypeSymbol type)
     {
-        // Strip nullable annotation for type checking
-        var checkType = type.NullableAnnotation == NullableAnnotation.Annotated && type.OriginalDefinition.SpecialType != SpecialType.System_Nullable_T
-            ? type.WithNullableAnnotation(NullableAnnotation.NotAnnotated)
-            : type;
-
-        var displayName = checkType.ToDisplayString();
-        return displayName is "string"
-            or "int"
-            or "long"
-            or "double"
-            or "float"
-            or "System.Guid"
-            or "System.DateTime"
-            or "System.DateTimeOffset"
-            or "bool"
-            or "decimal"
-            || type.TypeKind == TypeKind.Enum
-            || IsStringParsable(type)
-            || HasTypeConverterAttribute(type);
+        var effectiveType = GetEffectiveBindingType(type);
+        return IsSupportedScalarType(effectiveType) || HasTypeConverterAttribute(effectiveType);
     }
 
     private static bool IsSupportedQueryType(ITypeSymbol type)
@@ -864,11 +961,8 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
 
     private static bool IsSupportedScalarType(ITypeSymbol type)
     {
-        var checkType = type.NullableAnnotation == NullableAnnotation.Annotated && type.OriginalDefinition.SpecialType != SpecialType.System_Nullable_T
-            ? type.WithNullableAnnotation(NullableAnnotation.NotAnnotated)
-            : type;
-
-        var displayName = checkType.ToDisplayString();
+        var effectiveType = GetEffectiveBindingType(type);
+        var displayName = effectiveType.ToDisplayString();
         return displayName is "string"
             or "int"
             or "long"
@@ -879,8 +973,20 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             or "System.DateTimeOffset"
             or "bool"
             or "decimal"
-            || type.TypeKind == TypeKind.Enum
-            || IsStringParsable(type);
+            || effectiveType.TypeKind == TypeKind.Enum
+            || IsStringParsable(effectiveType);
+    }
+
+    private static ITypeSymbol GetEffectiveBindingType(ITypeSymbol type)
+    {
+        if (type.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T && type is INamedTypeSymbol namedType)
+        {
+            return namedType.TypeArguments[0];
+        }
+
+        return type.NullableAnnotation == NullableAnnotation.Annotated
+            ? type.WithNullableAnnotation(NullableAnnotation.NotAnnotated)
+            : type;
     }
 
     /// <summary>
@@ -1254,7 +1360,8 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
 
     private static void WriteRouteExtraction(PipelineRenderContext context, string operationExpr, PropertyOwnershipEntry entry)
     {
-        var typeDisplay = entry.TypeSymbol.WithNullableAnnotation(NullableAnnotation.NotAnnotated).ToDisplayString();
+        var effectiveType = GetEffectiveBindingType(entry.TypeSymbol);
+        var typeDisplay = effectiveType.ToDisplayString();
         var routeValueExpr = $"httpContext.Request.RouteValues[\"{entry.BindingName}\"]";
 
         if (typeDisplay == "string")
@@ -1263,7 +1370,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         }
         else if (IsTypeConverterOnlyType(entry.TypeSymbol))
         {
-            var fqType = entry.TypeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            var fqType = effectiveType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
             context.If($"{routeValueExpr} is string routeStr_{entry.PropertyName}", ifCtx =>
             {
@@ -1283,7 +1390,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         }
         else
         {
-            var lambda = TypeConversionHelpers.GetTryParseLambda(entry.TypeSymbol);
+            var lambda = TypeConversionHelpers.GetTryParseLambda(effectiveType);
             var errVar = $"_routeErr_{entry.PropertyName}";
             var parsedVar = $"_parsed_{entry.PropertyName}";
 

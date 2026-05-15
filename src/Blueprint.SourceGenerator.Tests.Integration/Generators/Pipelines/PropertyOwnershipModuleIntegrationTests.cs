@@ -895,7 +895,7 @@ public partial class UpdateUserPopulationCommand : ICommand<string>
 {
     public static int HandlerCallCount { get; private set; }
 
-    public string? Id { get; set; }
+    public string Id { get; set; } = string.Empty;
 
     public string? Name { get; set; }
 
@@ -917,7 +917,7 @@ public partial class UpdateUserPopulationCommand : ICommand<string>
 [Blueprint.Model.Attributes.RootLink("/population-test/users/{Id}")]
 public partial class GetUserPopulationQuery : IQuery<string>
 {
-    public string? Id { get; set; }
+    public string Id { get; set; } = string.Empty;
 
     public string? Name { get; set; }
 
@@ -942,7 +942,7 @@ public partial class GetUserByIntIdQuery : IQuery<string>
 [Blueprint.Model.Attributes.SelfLink(typeof(SelfLinkRoutePopulationApiResource), "/population-test/self/{Id}")]
 public partial class SelfLinkRoutePopulationQuery : IQuery<string>
 {
-    public string? Id { get; set; }
+    public string Id { get; set; } = string.Empty;
 
     public static Task<string> HandleAsync(SelfLinkRoutePopulationQuery operation)
     {
@@ -1066,7 +1066,7 @@ public partial class FilterPopulationQuery : IQuery<string>
 public partial class DeleteItemPopulationCommand : ICommand<string>
 {
     /// <summary>The item identifier.</summary>
-    public string? Id { get; set; }
+    public string Id { get; set; } = string.Empty;
 
     /// <summary>Whether to force-delete the item.</summary>
     public bool Force { get; set; }
@@ -1159,7 +1159,7 @@ public partial class ConstructorQueryPopulationCommand : ICommand<string>
 public partial class MixedBindingPopulationCommand : ICommand<string>
 {
     /// <summary>Route-owned by convention (placeholder match).</summary>
-    public string? OrgId { get; set; }
+    public string OrgId { get; set; } = string.Empty;
 
     /// <summary>Query-owned via explicit attribute on a POST command.</summary>
     [Blueprint.Model.Attributes.FromQuery]
@@ -1515,9 +1515,9 @@ public partial class ListAuthContextItemsQuery : IQuery<string>
 public partial class GetAuthContextRouteItemQuery : IQuery<string>
 {
     [Blueprint.Model.Attributes.FromAuthContext]
-    public string? TenantId { get; set; }
+    public string TenantId { get; set; } = string.Empty;
 
-    public string? Id { get; set; }
+    public string Id { get; set; } = string.Empty;
 
     public static Task<string> HandleAsync(GetAuthContextRouteItemQuery operation)
     {
@@ -1584,7 +1584,7 @@ public partial class SearchByEnumStatusPopulationQuery : IQuery<string>
 [Blueprint.Model.Attributes.RootLink("/population-test/claim-mapped-items/{Id}")]
 public partial class GetClaimMappedItemQuery : IQuery<string>
 {
-    public string? Id { get; set; }
+    public string Id { get; set; } = string.Empty;
 
     [Blueprint.Model.Attributes.FromAuthContext(ClaimType = "partner_id")]
     public string? PartnerId { get; set; }

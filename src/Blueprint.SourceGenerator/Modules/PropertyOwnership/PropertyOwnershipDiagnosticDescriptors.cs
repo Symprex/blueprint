@@ -134,4 +134,28 @@ internal static class PropertyOwnershipDiagnosticDescriptors
         category: "PropertyOwnership",
         DiagnosticSeverity.Info,
         isEnabledByDefault: true);
+
+    /// <summary>
+    /// BPPO012: A route template declares a placeholder that no operation property can satisfy,
+    /// so the generated pipeline would never be able to populate that route value.
+    /// </summary>
+    public static readonly DiagnosticDescriptor UnresolvedRoutePlaceholder = new(
+        id: "BPPO012",
+        title: "Route placeholder without matching property",
+        messageFormat: "Route template '{2}' on operation '{1}' contains placeholder '{{{0}}}' but the operation has no property named '{0}'",
+        category: "PropertyOwnership",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    /// <summary>
+    /// BPPO013: Route placeholders are always required, so nullable route-bound properties signal a mismatched contract
+    /// that should be made explicit during migration instead of relying on runtime assumptions.
+    /// </summary>
+    public static readonly DiagnosticDescriptor NullableRouteParameter = new(
+        id: "BPPO013",
+        title: "Nullable route parameter",
+        messageFormat: "Property '{0}' on operation '{1}' is bound from route placeholder '{{{0}}}' but its type '{2}' is nullable. Route parameters are always required; prefer a non-nullable type.",
+        category: "PropertyOwnership",
+        DiagnosticSeverity.Info,
+        isEnabledByDefault: true);
 }

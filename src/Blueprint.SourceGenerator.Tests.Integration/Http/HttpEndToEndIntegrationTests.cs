@@ -1716,7 +1716,7 @@ internal sealed class OwnershipAwareAuthorizationProvider : Blueprint.Authorizat
 public partial class E2ETenantResourceQuery : IQuery<string>
 {
     /// <summary>Tenant identifier bound from the route, used in ownership authorization checks.</summary>
-    public string? TenantId { get; set; }
+    public string TenantId { get; set; } = string.Empty;
 
     public static Task<string> HandleAsync(E2ETenantResourceQuery query)
     {
@@ -1834,7 +1834,7 @@ public partial class E2ENoContentCommand : ICommand<HttpNoContentResult>
 public partial class E2ERouteParamQuery : IQuery<string>
 {
     /// <summary>Bound from the {ItemId} route segment.</summary>
-    public string? ItemId { get; set; }
+    public string ItemId { get; set; } = string.Empty;
 
     /// <summary>Echoes the route-bound ItemId value.</summary>
     /// <param name="query">The query with the route-bound property.</param>
@@ -1902,7 +1902,7 @@ public class E2EWidgetResponse
 public partial class E2EMaybeItemQuery : IQuery<Results<OkResult<E2EWidgetResponse>, NotFoundResult<E2EWidgetResponse>>>
 {
     /// <summary>Bound from the {ItemId} route segment; "missing" triggers the 404 path.</summary>
-    public string? ItemId { get; set; }
+    public string ItemId { get; set; } = string.Empty;
 
     /// <summary>Returns Ok for any ID except "missing".</summary>
     /// <param name="query">The query with the route-bound ItemId.</param>
@@ -2185,7 +2185,7 @@ public partial class E2EBulkItemsCommand : ICommand<string>
 public partial class E2EPatchTemplateCommand : ICommand<string>
 {
     /// <summary>The template identifier from the route.</summary>
-    public string? Id { get; set; }
+    public string Id { get; set; } = string.Empty;
 
     /// <summary>An optional description update from the body.</summary>
     public string? Description { get; set; }
@@ -2210,7 +2210,7 @@ public partial class E2EPatchTemplateCommand : ICommand<string>
 public partial class E2EPutSettingCommand : ICommand<string>
 {
     /// <summary>The setting identifier from the route.</summary>
-    public string? Id { get; set; }
+    public string Id { get; set; } = string.Empty;
 
     /// <summary>The setting value from the body.</summary>
     public string? Value { get; set; }
@@ -2235,7 +2235,7 @@ public partial class E2EPutSettingCommand : ICommand<string>
 public partial class E2EDeleteItemCommand : ICommand<HttpNoContentResult>
 {
     /// <summary>The item identifier to delete.</summary>
-    public string? Id { get; set; }
+    public string Id { get; set; } = string.Empty;
 
     /// <summary>Returns 204 No Content after deletion.</summary>
     /// <returns>An <see cref="HttpNoContentResult"/>.</returns>
