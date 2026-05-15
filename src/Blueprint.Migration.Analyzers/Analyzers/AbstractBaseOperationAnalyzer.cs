@@ -75,7 +75,8 @@ public sealed class AbstractBaseOperationAnalyzer : DiagnosticAnalyzer
         var original = iface.OriginalDefinition;
 
         return original.MetadataName is "IQuery`1" or "ICommand`1"
-               && NamespaceHelper.IsInNamespace(original, "Blueprint", "Model");
+               && (NamespaceHelper.IsInNamespace(original, "Blueprint", "Model")
+                   || NamespaceHelper.IsInNamespace(original, "Blueprint"));
     }
 
     private static Location? FindBaseTypeSyntaxLocation(

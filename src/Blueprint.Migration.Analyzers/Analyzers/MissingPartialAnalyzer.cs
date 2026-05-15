@@ -86,7 +86,8 @@ public sealed class MissingPartialAnalyzer : DiagnosticAnalyzer
             var original = iface.OriginalDefinition;
 
             if (original.MetadataName is "IQuery`1" or "ICommand`1"
-                && NamespaceHelper.IsInNamespace(original, "Blueprint", "Model"))
+                && (NamespaceHelper.IsInNamespace(original, "Blueprint", "Model")
+                    || NamespaceHelper.IsInNamespace(original, "Blueprint")))
             {
                 return iface;
             }

@@ -124,6 +124,56 @@ public sealed class ResourceMissingPartialAnalyzerTests
     }
 
     [Xunit.Fact]
+    public async Task When_concrete_class_inherits_legacy_Blueprint_Http_ApiResource_without_partial_then_reports_bpmig401()
+    {
+        const string legacyStub = """
+            namespace Blueprint.Http
+            {
+                public abstract class ApiResource { }
+            }
+            """;
+
+        var source = legacyStub + """
+
+            namespace TestConsumer
+            {
+                public class SentEmailApiResource : Blueprint.Http.ApiResource { }
+            }
+            """;
+
+        var diagnostics = await GetDiagnosticsAsync(source);
+
+        diagnostics.Should().ContainSingle(static d => d.Id == "BPMIG401");
+        diagnostics.Single(static d => d.Id == "BPMIG401")
+            .GetMessage().Should().Contain("SentEmailApiResource");
+    }
+
+    [Xunit.Fact]
+    public async Task When_concrete_class_inherits_legacy_root_Blueprint_ApiResource_without_partial_then_reports_bpmig401()
+    {
+        const string legacyStub = """
+            namespace Blueprint
+            {
+                public abstract class ApiResource { }
+            }
+            """;
+
+        var source = legacyStub + """
+
+            namespace TestConsumer
+            {
+                public class UserApiResource : Blueprint.ApiResource { }
+            }
+            """;
+
+        var diagnostics = await GetDiagnosticsAsync(source);
+
+        diagnostics.Should().ContainSingle(static d => d.Id == "BPMIG401");
+        diagnostics.Single(static d => d.Id == "BPMIG401")
+            .GetMessage().Should().Contain("UserApiResource");
+    }
+
+    [Xunit.Fact]
     public async Task Code_fix_adds_partial_to_resource_class()
     {
         var source = ApiResourceStub + """

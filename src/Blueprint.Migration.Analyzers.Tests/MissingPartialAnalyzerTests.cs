@@ -148,6 +148,52 @@ public sealed class MissingPartialAnalyzerTests
     }
 
     [Xunit.Fact]
+    public async Task When_concrete_class_implements_legacy_Blueprint_IQuery_without_partial_then_reports_bpmig400()
+    {
+        const string source = """
+            namespace Blueprint
+            {
+                public interface IReturn<T> { }
+                public interface IQuery<T> : IReturn<T> { }
+            }
+
+            namespace TestConsumer
+            {
+                public class GetUsersQuery : Blueprint.IQuery<string> { }
+            }
+            """;
+
+        var diagnostics = await GetDiagnosticsAsync(source);
+
+        diagnostics.Should().ContainSingle(static d => d.Id == "BPMIG400");
+        diagnostics.Single(static d => d.Id == "BPMIG400")
+            .GetMessage().Should().Contain("GetUsersQuery");
+    }
+
+    [Xunit.Fact]
+    public async Task When_concrete_class_implements_legacy_Blueprint_ICommand_without_partial_then_reports_bpmig400()
+    {
+        const string source = """
+            namespace Blueprint
+            {
+                public interface IReturn<T> { }
+                public interface ICommand<T> : IReturn<T> { }
+            }
+
+            namespace TestConsumer
+            {
+                public class CreateUserCommand : Blueprint.ICommand<string> { }
+            }
+            """;
+
+        var diagnostics = await GetDiagnosticsAsync(source);
+
+        diagnostics.Should().ContainSingle(static d => d.Id == "BPMIG400");
+        diagnostics.Single(static d => d.Id == "BPMIG400")
+            .GetMessage().Should().Contain("CreateUserCommand");
+    }
+
+    [Xunit.Fact]
     public async Task Code_fix_adds_partial_to_class_declaration()
     {
         const string source = """

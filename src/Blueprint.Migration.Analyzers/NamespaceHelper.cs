@@ -11,6 +11,22 @@ namespace Blueprint.Migration.Analyzers;
 internal static class NamespaceHelper
 {
     /// <summary>
+    /// Checks whether a symbol's containing namespace matches a single root namespace
+    /// (e.g. "Blueprint") without allocating a string.
+    /// </summary>
+    /// <param name="symbol">The symbol whose containing namespace is checked.</param>
+    /// <param name="namespaceName">The root namespace name.</param>
+    /// <returns><see langword="true"/> when the namespace matches <paramref name="namespaceName"/> exactly.</returns>
+    public static bool IsInNamespace(ISymbol symbol, string namespaceName)
+    {
+        var ns = symbol.ContainingNamespace;
+
+        return ns is not null
+            && ns.Name == namespaceName
+            && ns.ContainingNamespace is { IsGlobalNamespace: true };
+    }
+
+    /// <summary>
     /// Checks whether a symbol's containing namespace matches a two-part dotted name
     /// (e.g. "Blueprint.Model") without allocating a string.
     /// </summary>
