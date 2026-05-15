@@ -44,6 +44,38 @@ This document maps Signature 365's testing patterns to Blueprint.Testing equival
 | `BlueprintTestContext` | Per-execution config | Auth/tenant/setup |
 | `ResultAssertionExtensions` | Fluent result assertions | Assertion helpers |
 
+### Method-Level Mapping
+
+| S365 Method / Property | Blueprint.Testing Equivalent | Notes |
+|---|---|---|
+| `apiFactory.Create(s => ...)` | `factory.Create(s => ...)` | Same signature and semantics |
+| `fixture.CommandAsync<T>(cmd)` | `fixture.CommandAsync<T>(cmd)` | ✅ Direct match |
+| `fixture.QueryAsync<T>(query)` | `fixture.QueryAsync<T>(query)` | ✅ Direct match |
+| `fixture.BackgroundTaskAsync(task)` | `fixture.BackgroundTaskAsync(task)` | ✅ Direct match, auto-clears auth |
+| `fixture.MessageAsync(msg, retry)` | `fixture.MessageAsync(msg, retry)` | ✅ Direct match with retry support |
+| `fixture.ExecuteAsync(op)` | `fixture.ExecuteAsync(op)` | ✅ Direct match |
+| `fixture.Bus` | `fixture.Bus` | ✅ Alias for `TestMessageCollector` |
+| `fixture.Bus.Should().HavePublishedSingle<T>()` | `fixture.Bus.Should().HavePublishedSingle<T>()` | ✅ Direct match |
+| `fixture.Bus.Should().HavePublished<T>()` | `fixture.Bus.Should().HavePublished<T>()` | ✅ Direct match |
+| `fixture.Bus.Should().NotHavePublished<T>()` | `fixture.Bus.Should().NotHavePublished<T>()` | ✅ Direct match |
+| `fixture.Bus.Should().HaveSent<T>()` | `fixture.Bus.Should().HaveSent<T>()` | ✅ Direct match |
+| `fixture.Bus.Should().NotHaveSent<T>()` | `fixture.Bus.Should().NotHaveSent<T>()` | ✅ Direct match |
+| `fixture.Bus.Clear()` | `fixture.Bus.Clear()` | ✅ Direct match |
+| `fixture.Bus.Events` | `fixture.Bus.Events` | ✅ Direct match (flat object list) |
+| `fixture.Tasks.All` | `fixture.Tasks.All` | ✅ Direct match |
+| `fixture.Tasks.Enqueued` | `fixture.Tasks.Enqueued` | ✅ Direct match |
+| `fixture.Tasks.Scheduled` | `fixture.Tasks.Scheduled` | ✅ Direct match |
+| `fixture.GetOptions<T>()` | `fixture.GetOptions<T>()` | ✅ Direct match |
+| `fixture.Services` | `fixture.Services` | ✅ Direct match |
+| `fixture.Authentication.Set(identity)` | `fixture.Authentication.Set(identity)` | ✅ Direct match |
+| `fixture.Authentication.As(identity)` | `fixture.Authentication.As(identity)` | ✅ Direct match (scoped override) |
+| `fixture.Authentication.MakeAnonymous()` | `fixture.Authentication.MakeAnonymous()` | ✅ Direct match |
+| `fixture.RunAllPublishedMessagesAsync()` | `fixture.RunAllPublishedMessagesAsync()` | ✅ Direct match |
+| `fixture.RunAndConsumeAllPublishedMessagesAsync()` | `fixture.RunAndConsumeAllPublishedMessagesAsync()` | ✅ Direct match |
+| `AuthenticateAsTenantAdministrator()` | Consumer-owned helper using `Authentication.Set(claims)` | S365 keeps own helper |
+| `CreateTenantUser()` | Consumer-owned helper | S365 keeps own helper |
+| `fixture.CreateClient()` | Use `BlueprintHttpTestHost.CreateClient()` for HTTP-level tests | Different host type |
+
 ---
 
 ## Migration Steps Per Test Project
@@ -589,15 +621,18 @@ public class TemplateQueryTests
 
 For each of the 42 S365 test projects:
 
-- [ ] Replace `WebApiFixtureFactory<T>` with `BlueprintTestHostBuilder<TApp, TExec>`
-- [ ] Replace `fixture.CommandAsync` / `fixture.QueryAsync` with `host.ExecuteAsync`
-- [ ] Replace auth helpers with `BlueprintTestContext` fluent API
-- [ ] Replace result assertions with `ResultAssertionExtensions`
-- [ ] Replace `FakeBus` with `TestMessageCollector` registration
-- [ ] Replace `BackgroundTaskCollector` usage (same concept, different access path)
-- [ ] Replace Marten UoW with `InMemoryUnitOfWork` for pure logic tests
-- [ ] Verify Marten test session isolation approach for persistence tests
-- [ ] Verify OpenAPI snapshot tests still match (if applicable)
+- [ ] Create a `BlueprintTestFixtureFactory<TApp, TExec>` subclass (1:1 replacement for `WebApiFixtureFactory<T>`)
+- [ ] Register via `IClassFixture<YourFactory>` (same xUnit pattern as S365)
+- [ ] `fixture.CommandAsync<T>(cmd)` works as-is — Blueprint provides same signature
+- [ ] `fixture.QueryAsync<T>(query)` works as-is — Blueprint provides same signature
+- [ ] `fixture.BackgroundTaskAsync(task)` works as-is — same signature, auto-clears auth
+- [ ] `fixture.MessageAsync(msg)` works as-is — same signature, auto-clears auth
+- [ ] `fixture.Bus.Should().HavePublishedSingle<T>()` works on `TestMessageCollector` (same API)
+- [ ] `fixture.Bus.Clear()` works on `TestMessageCollector` (same API)
+- [ ] `fixture.Tasks.All` / `Enqueued` / `Scheduled` work on `BackgroundTaskCollector` (same shape)
+- [ ] Replace auth helpers with claims-based equivalents (S365-specific helpers stay consumer-owned)
+- [ ] Replace result assertions with `ResultAssertionExtensions` where needed
+- [ ] Verify Marten test session isolation (per-test `LightweightSession()` via DI)
 - [ ] Run all tests in the project and confirm green
 
 ---

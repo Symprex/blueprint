@@ -223,23 +223,14 @@ public sealed class TestMessageCollector
 
     /// <summary>
     /// S365-compatible: returns all published messages of the specified type (zero or more).
-    /// Unlike <see cref="HavePublished{T}"/> this does not assert a minimum count.
-    /// Matches S365's <c>bus.Should().HavePublishedAny&lt;T&gt;()</c> but also allows empty.
+    /// Unlike <see cref="HavePublished{T}"/> this does not assert a minimum count, matching
+    /// S365's <c>bus.Should().HavePublishedAny&lt;T&gt;()</c> for optional presence checks.
     /// </summary>
     /// <typeparam name="T">The message type to filter by.</typeparam>
-    /// <returns>All matching message instances.</returns>
+    /// <returns>All matching message instances (may be empty).</returns>
     public IEnumerable<T> HavePublishedAny<T>() where T : notnull
     {
-        var matches = this.GetAllPublished<T>();
-
-        if (matches.Count == 0)
-        {
-            throw new InvalidOperationException(
-                $"Expected at least one published message of type {typeof(T).Name} but none were published. " +
-                $"Published types: {FormatMessageTypes(this._published)}");
-        }
-
-        return matches;
+        return this.GetAllPublished<T>();
     }
 
     /// <summary>
