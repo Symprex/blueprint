@@ -107,33 +107,6 @@ public static class MigrationDiagnosticDescriptors
         description: "Abstract generic bases implementing IQuery<T>/ICommand are now supported because IOperation no longer declares static abstract Configure(). This diagnostic is retained for informational purposes only.");
 
     /// <summary>
-    /// Gets the diagnostic emitted when code references <c>ResourceEvent&lt;T&gt;</c>, which has been
-    /// renamed to <c>ResourceEventResult&lt;T&gt;</c> in the source-generated framework.
-    /// This is a high-volume rename in S365 (131+ handlers return <c>ResourceEvent&lt;T&gt;</c>).
-    /// </summary>
-    public static DiagnosticDescriptor LegacyResourceEventTypeRename { get; } = new(
-        id: "BPMIG203",
-        title: "Rename ResourceEvent<T> to ResourceEventResult<T>",
-        messageFormat: "Replace '{0}' with '{1}' for the source-generated Blueprint framework.",
-        category: "BlueprintMigration",
-        defaultSeverity: DiagnosticSeverity.Warning,
-        isEnabledByDefault: true,
-        description: "Legacy Blueprint's ResourceEvent<T> has been renamed to ResourceEventResult<T> in the source-generated framework. The new type carries additional metadata (resourceId, correlationId, changedValues) and integrates with the generated resource-event pipeline modules.");
-
-    /// <summary>
-    /// Gets the diagnostic emitted when code references <c>ResourceEventChangeType</c>, which has been
-    /// renamed to <c>ChangeType</c> in the source-generated framework.
-    /// </summary>
-    public static DiagnosticDescriptor LegacyChangeTypeRename { get; } = new(
-        id: "BPMIG204",
-        title: "Rename ResourceEventChangeType to ChangeType",
-        messageFormat: "Replace '{0}' with '{1}' for the source-generated Blueprint framework.",
-        category: "BlueprintMigration",
-        defaultSeverity: DiagnosticSeverity.Warning,
-        isEnabledByDefault: true,
-        description: "Legacy Blueprint's ResourceEventChangeType enum has been renamed to ChangeType in the source-generated framework for brevity.");
-
-    /// <summary>
     /// Gets the diagnostic emitted when a using directive references a legacy Blueprint namespace that has been renamed or reorganised.
     /// </summary>
     public static DiagnosticDescriptor LegacyNamespaceUsing { get; } = new(
