@@ -59,4 +59,17 @@ public interface IUserAuthorisationContext
     /// </summary>
     /// <param name="add">A callback that receives key-value pairs to record.</param>
     void PopulateMetadata(Action<string, object> add);
+
+    /// <summary>
+    /// Populates metadata about this user onto an external store, passing through a
+    /// <typeparamref name="TState"/> parameter so the callback can be a <c>static</c> delegate
+    /// (zero closure allocation per request).
+    /// </summary>
+    /// <typeparam name="TState">The type of the state passed through to the callback.</typeparam>
+    /// <param name="add">A static callback that receives key, value, and state.</param>
+    /// <param name="state">The state to pass through to each callback invocation.</param>
+    void PopulateMetadata<TState>(Action<string, object, TState> add, TState state)
+    {
+        this.PopulateMetadata((key, value) => add(key, value, state));
+    }
 }

@@ -48,4 +48,10 @@ public sealed class AnonymousUserAuthorisationContext : IUserAuthorisationContex
     {
         add("enduser.anonymous", true);
     }
+
+    /// <inheritdoc />
+    public void PopulateMetadata<TState>(Action<string, object, TState> add, TState state)
+    {
+        add("enduser.anonymous", true, state);
+    }
 }

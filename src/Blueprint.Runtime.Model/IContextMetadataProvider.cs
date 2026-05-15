@@ -30,4 +30,16 @@ public interface IContextMetadataProvider
     /// (e.g. "tenant.id", "correlation.id", "user.email").
     /// </param>
     void PopulateMetadata(Action<string, string> add);
+
+    /// <summary>
+    /// Populates metadata entries, passing through a <typeparamref name="TState"/> parameter so
+    /// the callback can be a <c>static</c> delegate (zero closure allocation).
+    /// </summary>
+    /// <typeparam name="TState">The type of the state passed through to the callback.</typeparam>
+    /// <param name="add">A static callback that receives key, value, and state.</param>
+    /// <param name="state">The state to pass through to each callback invocation.</param>
+    void PopulateMetadata<TState>(Action<string, string, TState> add, TState state)
+    {
+        this.PopulateMetadata((key, value) => add(key, value, state));
+    }
 }

@@ -68,4 +68,11 @@ public sealed class SampleUserContext(string id, string accountId, string email,
         add("enduser.id", this.Id);
         add("enduser.account_id", this.AccountId);
     }
+
+    /// <inheritdoc />
+    public void PopulateMetadata<TState>(Action<string, object, TState> add, TState state)
+    {
+        add("enduser.id", this.Id, state);
+        add("enduser.account_id", this.AccountId, state);
+    }
 }

@@ -473,7 +473,7 @@ public static class PipelineHelpers
             var activity = context.Activity;
             activity.SetTag("enduser.id", context.UserAuthorisationContext.Id);
             activity.SetTag("enduser.account_id", context.UserAuthorisationContext.AccountId);
-            context.UserAuthorisationContext.PopulateMetadata((key, value) => activity.SetTag(key, value));
+            context.UserAuthorisationContext.PopulateMetadata(static (key, value, act) => act.SetTag(key, value), activity);
         }
     }
 
