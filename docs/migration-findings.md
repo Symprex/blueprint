@@ -1963,7 +1963,7 @@ The Handlebars templates consume standard OpenAPI 3.0 structure. The only potent
 
 - [ ] Generate OpenAPI from migrated sample service and diff against legacy
 - [ ] Run Handlebars generator against new spec and diff api.ts output
-- [ ] Verify ValidationProblemDetails schema shape is byte-for-byte compatible
+- [x] Verify ValidationProblemDetails schema shape is byte-for-byte compatible — Verified: uses standard `Microsoft.AspNetCore.Mvc.ValidationProblemDetails` with `type`, `title`, `status`, `detail`, `instance`, `errors` properties; RFC-compliant `type` URIs and `title` now set on all error responses
 
 ---
 
