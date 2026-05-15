@@ -389,6 +389,10 @@ public static class HandlerDiscovery
                 => "this.Logger",
             "HttpContext" when type.IsInNamespace("Microsoft", "AspNetCore", "Http")
                 => "context.HttpContext",
+            "HttpRequest" when type.IsInNamespace("Microsoft", "AspNetCore", "Http")
+                => "context.HttpContext.Request",
+            "HttpResponse" when type.IsInNamespace("Microsoft", "AspNetCore", "Http")
+                => "context.HttpContext.Response",
             "ClaimsPrincipal" when type.IsInNamespace("System", "Security", "Claims")
                 => "context.UserPrincipal",
             _ => null,
