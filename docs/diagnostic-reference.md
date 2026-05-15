@@ -54,7 +54,7 @@ For detailed explanations, see [compile-time-validation.md](compile-time-validat
 | BPAU004 | Error | Empty scope pair value in `[Resource]` |
 | BPAU005 | Error | Both `[FromResource]` and `[Resource]` applied |
 | BPAU006 | Error | `[FromResource]` target has no `[Resource]` attributes |
-| BPAU007 | Warning | Resource key template `{Token}` does not match a property |
+| BPAU007 | Error | Resource key template `{Token}` does not match a property |
 | BPAU008 | Warning | `[Resource]` on non-HTTP operation |
 | BPAU009 | Warning | Duplicate `[Resource]` scope pair |
 
@@ -181,3 +181,12 @@ See also [consumer-migration-guide.md](consumer-migration-guide.md).
 | BPMIG300 | Warning | Namespace rename | Update legacy Blueprint namespace using directive |
 | BPMIG301 | Warning | Consumer rewrite | `IMiddlewareBuilder` replaced by source-generator modules |
 | BPMIG302 | Warning | Consumer rewrite | `BlueprintApiBuilder` replaced by `AddBlueprintApi<TApp, TExec>` |
+| BPMIG303 | Warning | Auto-fixable | Remove obsolete Blueprint namespace |
+| BPMIG400 | Warning | Auto-fixable | Add `partial` to operation class |
+| BPMIG401 | Warning | Auto-fixable | Add `partial` to API resource class |
+
+### Informational / disabled
+
+| ID | Severity | Category | Title |
+|----|----------|----------|-------|
+| BPMIG202 | Info | Informational | Abstract generic base implements IQuery/ICommand (now supported) |
