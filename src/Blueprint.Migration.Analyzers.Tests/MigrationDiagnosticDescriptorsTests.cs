@@ -109,4 +109,13 @@ public sealed class MigrationDiagnosticDescriptorsTests
         Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.AbstractGenericBaseImplementsOperation.IsEnabledByDefault.Should().BeFalse();
         Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.AbstractGenericBaseImplementsOperation.MessageFormat.ToString().Should().Contain("concrete subclasses");
     }
+
+    [Xunit.Fact]
+    public void When_loading_migration_diagnostic_descriptors_then_missing_partial_uses_bpmig400()
+    {
+        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.OperationMissingPartialKeyword.Id.Should().Be("BPMIG400");
+        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.OperationMissingPartialKeyword.DefaultSeverity.Should().Be(Microsoft.CodeAnalysis.DiagnosticSeverity.Warning);
+        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.OperationMissingPartialKeyword.IsEnabledByDefault.Should().BeTrue();
+        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.OperationMissingPartialKeyword.MessageFormat.ToString().Should().Contain("partial");
+    }
 }

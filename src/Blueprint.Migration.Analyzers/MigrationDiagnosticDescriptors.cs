@@ -143,4 +143,17 @@ public static class MigrationDiagnosticDescriptors
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
         description: "Legacy Blueprint's BlueprintApiBuilder configuration pattern has been replaced by the source-generated AddBlueprintApi<TApp, TExec>() registration and BlueprintServiceBuilder for infrastructure services.");
+
+    /// <summary>
+    /// Gets the diagnostic emitted when an operation class implementing <c>ICommand&lt;T&gt;</c> or
+    /// <c>IQuery&lt;T&gt;</c> is missing the <c>partial</c> keyword required by the source generator.
+    /// </summary>
+    public static DiagnosticDescriptor OperationMissingPartialKeyword { get; } = new(
+        id: "BPMIG400",
+        title: "Add 'partial' to operation class",
+        messageFormat: "Operation '{0}' implements '{1}' but is not declared as 'partial'. Blueprint source generators require the 'partial' keyword to emit descriptors and pipeline code.",
+        category: "BlueprintMigration",
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "Blueprint source generators emit partial class extensions for operation types (descriptors, Configure() methods). Classes implementing ICommand<T> or IQuery<T> must be declared 'partial' for the generated code to compile.");
 }
