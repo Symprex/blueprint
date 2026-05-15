@@ -55,7 +55,7 @@ All framework features required for S365 migration are implemented and tested:
 | Billing | 23 | 14 | 95 | 35 | 6 | ✅ Proof compiled (8 representative ops) |
 | IdentityServer | 29 | 13 | 92 | 43 | 6 | ✅ Proof compiled (42 ops) |
 | AdminPortal | 41 | 63 | 230 | 39 | 6 | ✅ Proof compiled (28 ops) |
-| Portal | 130 | 99 | 529 | 161 | 7 | 🔲 Not started |
+| Portal | 130 | 99 | 529 | 161 | 7 | ✅ Proof compiled (78 ops) |
 | EntraId | 0 | 0 | 0 | 0 | — | 🔲 Evaluate if Blueprint-dependent |
 | GraphProxy | 0 | 0 | 0 | 0 | — | 🔲 Evaluate if Blueprint-dependent |
 | **Totals** | **294** | **248** | **1,238** | **346** | | |
