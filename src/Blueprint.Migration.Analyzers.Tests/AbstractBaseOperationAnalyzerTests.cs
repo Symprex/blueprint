@@ -198,7 +198,13 @@ public sealed class AbstractBaseOperationAnalyzerTests
             references: AppDomain.CurrentDomain.GetAssemblies()
                 .Where(static assembly => !assembly.IsDynamic && !string.IsNullOrWhiteSpace(assembly.Location))
                 .Select(static assembly => MetadataReference.CreateFromFile(assembly.Location)),
-            options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+            options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
+                .WithSpecificDiagnosticOptions(
+                    new Dictionary<string, ReportDiagnostic>
+                    {
+                        // BPMIG202 is disabled by default (informational audit diagnostic) — opt it in for testing.
+                        ["BPMIG202"] = ReportDiagnostic.Info,
+                    }));
 
         var analyzer = new Analyzers.AbstractBaseOperationAnalyzer();
         var compilationWithAnalyzers = compilation.WithAnalyzers(ImmutableArray.Create<DiagnosticAnalyzer>(analyzer));

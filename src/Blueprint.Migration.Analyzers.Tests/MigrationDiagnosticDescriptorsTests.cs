@@ -105,8 +105,8 @@ public sealed class MigrationDiagnosticDescriptorsTests
     public void When_loading_migration_diagnostic_descriptors_then_abstract_generic_base_uses_bpmig202()
     {
         Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.AbstractGenericBaseImplementsOperation.Id.Should().Be("BPMIG202");
-        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.AbstractGenericBaseImplementsOperation.DefaultSeverity.Should().Be(Microsoft.CodeAnalysis.DiagnosticSeverity.Warning);
-        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.AbstractGenericBaseImplementsOperation.IsEnabledByDefault.Should().BeTrue();
+        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.AbstractGenericBaseImplementsOperation.DefaultSeverity.Should().Be(Microsoft.CodeAnalysis.DiagnosticSeverity.Info);
+        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.AbstractGenericBaseImplementsOperation.IsEnabledByDefault.Should().BeFalse();
         Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.AbstractGenericBaseImplementsOperation.MessageFormat.ToString().Should().Contain("concrete subclasses");
     }
 }
