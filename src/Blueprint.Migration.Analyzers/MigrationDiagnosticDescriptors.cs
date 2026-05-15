@@ -92,18 +92,19 @@ public static class MigrationDiagnosticDescriptors
         description: "Legacy Blueprint migrations should treat raw {Auth:...} placeholder templates as consumer-extension rewrite work because the replacement auth/resource model needs explicit generated placeholder bindings instead of runtime string expansion.");
 
     /// <summary>
-    /// Gets the diagnostic emitted when an abstract generic class directly implements <c>IQuery&lt;T&gt;</c> or <c>ICommand&lt;T&gt;</c>,
-    /// which is incompatible with Blueprint's <c>static abstract Configure()</c> requirement on <see cref="M:Blueprint.Model.IOperation.Configure" />.
-    /// Concrete subclasses must declare the interface explicitly instead.
+    /// Gets the diagnostic emitted when an abstract generic class directly implements <c>IQuery&lt;T&gt;</c> or
+    /// <c>ICommand&lt;T&gt;</c>. This pattern is now fully supported — <c>IOperation</c> no longer declares a
+    /// <c>static abstract Configure()</c> member. The diagnostic is retained (disabled by default, informational
+    /// severity) for migration audit purposes only.
     /// </summary>
     public static DiagnosticDescriptor AbstractGenericBaseImplementsOperation { get; } = new(
         id: "BPMIG202",
-        title: "Move IQuery/ICommand to concrete subclasses",
-        messageFormat: "Abstract generic class '{0}' should not directly implement '{1}'. Move '{1}' to concrete subclasses because Blueprint only generates Configure() for concrete operations.",
+        title: "Abstract generic base implements IQuery/ICommand (informational — now supported)",
+        messageFormat: "Abstract generic class '{0}' implements '{1}'. Blueprint now supports this pattern; the source generator will generate Configure() on concrete subclasses only.",
         category: "BlueprintMigration",
-        defaultSeverity: DiagnosticSeverity.Warning,
-        isEnabledByDefault: true,
-        description: "Blueprint's IOperation.Configure() is static abstract, so abstract generic bases cannot satisfy it. Remove the IQuery<T>/ICommand<T> interface from the abstract class and add it to each concrete subclass instead.");
+        defaultSeverity: DiagnosticSeverity.Info,
+        isEnabledByDefault: false,
+        description: "Abstract generic bases implementing IQuery<T>/ICommand are now supported because IOperation no longer declares static abstract Configure(). This diagnostic is retained for informational purposes only.");
 
     /// <summary>
     /// Gets the diagnostic emitted when a using directive references a legacy Blueprint namespace that has been renamed or reorganised.

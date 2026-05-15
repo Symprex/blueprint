@@ -7,9 +7,9 @@ namespace Blueprint.Migration.Analyzers.Analyzers;
 
 /// <summary>
 /// Detects abstract generic classes that directly implement <c>IQuery&lt;T&gt;</c> or <c>ICommand&lt;T&gt;</c>.
-/// Blueprint's <c>IOperation.Configure()</c> is <c>static abstract</c>, so the source generator can only
-/// generate the implementation for concrete types. Abstract generic bases must remove the interface and let
-/// each concrete subclass declare it explicitly.
+/// This pattern is now fully supported after <c>IOperation.Configure()</c> was changed from
+/// <c>static abstract</c> to a source-generated method on concrete types only. The analyzer is retained
+/// (disabled by default) for informational purposes during migration audits.
 /// </summary>
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class AbstractBaseOperationAnalyzer : DiagnosticAnalyzer

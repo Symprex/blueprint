@@ -7,7 +7,6 @@ namespace TestNamespace;
 using Blueprint.Validation;
 
 public partial class IncludedOperation : IOperation
-                                         ^^^^^^^^^^ [Error:CS0535] 'IncludedOperation' does not implement interface member 'IOperation.Configure()'
 {
     [MustBeGreaterThanOrEqual("MissingProperty")]
                               ^^^^^^^^^^^^^^^^^ [Error:BPV007] The property 'MissingProperty' referenced by MustBeGreaterThanOrEqualAttribute on 'Maximum' does not exist on operation 'IncludedOperation'

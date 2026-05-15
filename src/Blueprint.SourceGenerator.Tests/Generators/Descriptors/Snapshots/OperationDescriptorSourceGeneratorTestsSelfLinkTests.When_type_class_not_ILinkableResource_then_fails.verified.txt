@@ -1,4 +1,4 @@
-﻿File: Input0.cs
+File: Input0.cs
 using Blueprint.Model;
 using Blueprint.Model.Attributes;
 
@@ -7,7 +7,6 @@ namespace TestNamespace;
 [SelfLink(typeof(NonLinkableResource), "/operations/a")]
           ^^^^^^^^^^^^^^^^^^^^^^^^^^^ [Error:BPLG003] The resource type 'TestNamespace.NonLinkableResource' is not an ILinkableResource. Check the link attributes on 'TestNamespace.OperationA'.
 public partial class OperationA : IOperation {}
-                                  ^^^^^^^^^^ [Error:CS0535] 'OperationA' does not implement interface member 'IOperation.Configure()'
 
 public class NonLinkableResource 
 {

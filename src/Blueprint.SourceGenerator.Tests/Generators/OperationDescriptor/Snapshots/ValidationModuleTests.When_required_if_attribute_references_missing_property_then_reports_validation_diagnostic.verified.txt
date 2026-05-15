@@ -7,10 +7,8 @@ namespace TestNamespace;
 using Blueprint.Validation;
 
 public partial class IncludedOperation : IOperation
-                                         ^^^^^^^^^^ [Error:CS0535] 'IncludedOperation' does not implement interface member 'IOperation.Configure()'
 {
     [RequiredIf("MissingProperty", true)]
                 ^^^^^^^^^^^^^^^^^ [Error:BPV003] The property 'MissingProperty' referenced by RequiredIfAttribute on 'Name' does not exist on operation 'IncludedOperation'
     public string? Name { get; set; }
-                 ^ [Warning:CS8632] The annotation for nullable reference types should only be used in code within a '#nullable' annotations context.
 }

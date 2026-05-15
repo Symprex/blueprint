@@ -1424,13 +1424,22 @@ dotnet-trace collect -- dotnet build src/Blueprint.SourceGenerator.Sample/...
 
 | Metric | Legacy Blueprint | New Blueprint | Target |
 |--------|-----------------|---------------|--------|
-| Requests/sec (simple query) | TBD | TBD | ≥ legacy |
-| P99 latency (query) | TBD | TBD | ≤ legacy |
-| P99 latency (command) | TBD | TBD | ≤ legacy |
-| Memory per request | TBD | TBD | < legacy |
-| Startup time | TBD | TBD | ≤ legacy |
-| Compilation time (generator) | N/A | TBD | < 5s for 100 ops |
-| Validation failure (no exception) | TBD | TBD | 10x faster (no throw) |
+| Pipeline latency (minimal query) | TBD (runtime) | **3.0 μs** (BDN MediumRun) | ≥ legacy |
+| Pipeline latency (validated query) | TBD (runtime) | **16.6 μs** | ≤ legacy |
+| Pipeline latency (full command) | TBD (runtime) | **18.6 μs** | ≤ legacy |
+| Memory per request (minimal query) | TBD | **4.05 KB** | < legacy |
+| Memory per request (full command) | TBD | **8.66 KB** | < legacy |
+| Auth check latency | TBD (runtime) | **55–192 ns** (7 scenarios) | negligible |
+| Auth allocation | TBD | **40–104 B** per check | negligible |
+| Serialization (source-gen) | TBD | **265 ns / 56 B** | < legacy |
+| Deserialization (property-by-property) | TBD | **110 ns / 120 B** | < legacy |
+| Compilation time (generator, 100 ops) | N/A | **340 ms / 28 MB** | < 5s ✅ |
+| Compilation time (generator, 500 ops) | N/A | **845 ms / 140 MB** | < 5s ✅ |
+| Validation failure (no exception) | TBD (throws) | **16.3 μs** (short-circuit) | 10x faster ✅ |
+
+> **Note:** Legacy Blueprint metrics require running S365 services against the old framework.
+> New Blueprint numbers are from BenchmarkDotNet MediumRun (.NET 10.0.8).
+> Full results in [`docs/benchmark-results.md`](benchmark-results.md).
 
 ### Action Items
 - [x] Create `Blueprint.LoadTests` project with NBomber — **Done** (9 scenarios)

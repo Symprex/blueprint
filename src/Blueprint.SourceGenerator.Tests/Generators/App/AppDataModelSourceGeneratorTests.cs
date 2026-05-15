@@ -77,6 +77,31 @@ public class AppDataModelSourceGeneratorTests
     }
 
     [Fact]
+    public async Task When_abstract_generic_base_with_concrete_subclass_then_only_concrete_is_registered()
+    {
+        var source = """
+                     public abstract class OrderedPagedQuery<T> : IQuery<T>
+                     {
+                         public int PageSize { get; set; }
+                         public int PageNumber { get; set; }
+                     }
+
+                     public partial class GetItemsQuery : OrderedPagedQuery<string>
+                     {
+                         public static ApiOperationDescriptor Configure() => throw new System.NotImplementedException();
+                     }
+
+                     [BlueprintAppScan]
+                     public partial class TestBlueprintApp : BlueprintApp
+                     {
+                     }
+                     """;
+
+        await Compile(source)
+            .VerifySuccessAsync(SnapshotsFolder);
+    }
+
+    [Fact]
     public async Task When_scan_attribute_has_error_type_then_reports_BP004()
     {
         var source = """

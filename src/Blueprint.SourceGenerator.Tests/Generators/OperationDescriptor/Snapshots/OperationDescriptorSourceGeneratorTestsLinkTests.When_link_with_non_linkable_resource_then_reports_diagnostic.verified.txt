@@ -7,7 +7,6 @@ namespace TestNamespace;
 [Link(typeof(NonLinkableResource), "/items/{Id}", Rel = "item")]
  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [Error:BPLG003] The resource type 'TestNamespace.NonLinkableResource' is not an ILinkableResource. Check the link attributes on 'TestNamespace.GetItemOperation'.
 public partial class GetItemOperation : IOperation
-                                        ^^^^^^^^^^ [Error:CS0535] 'GetItemOperation' does not implement interface member 'IOperation.Configure()'
 {
     public required string Id { get; set; }
 }
