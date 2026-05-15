@@ -119,6 +119,19 @@ public static class MigrationDiagnosticDescriptors
         description: "Legacy Blueprint namespaces have been reorganised in the source-generated framework. Update using directives to the new namespace locations.");
 
     /// <summary>
+    /// Gets the diagnostic emitted when a using directive references a legacy Blueprint namespace that has been
+    /// removed entirely (e.g. compile-time code-generation namespaces like <c>Blueprint.Compiler</c>).
+    /// </summary>
+    public static DiagnosticDescriptor LegacyNamespaceRemoved { get; } = new(
+        id: "BPMIG303",
+        title: "Remove obsolete Blueprint namespace",
+        messageFormat: "Remove 'using {0};' because this namespace has no equivalent in the source-generated Blueprint framework. Code-generation is now handled entirely at compile time by the source generator.",
+        category: "BlueprintMigration",
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "Legacy Blueprint compile-time namespaces (Blueprint.Compiler, Blueprint.CodeGen) have no runtime equivalent in the source-generated framework. Remove the using directive and migrate any dependent code to source-generator modules or ASP.NET Core middleware.");
+
+    /// <summary>
     /// Gets the diagnostic emitted when code implements or references <c>IMiddlewareBuilder</c>,
     /// which has been replaced by the source-generator module system.
     /// </summary>

@@ -31,11 +31,19 @@ public sealed class LegacyNamespaceAnalyzer : DiagnosticAnalyzer
             new KeyValuePair<string, ImmutableArray<string>>("Blueprint.ThirdParty", ImmutableArray.Create("Blueprint.Utilities")),
             new KeyValuePair<string, ImmutableArray<string>>("Blueprint.Configuration", ImmutableArray.Create("Microsoft.Extensions.DependencyInjection")),
             new KeyValuePair<string, ImmutableArray<string>>("Blueprint.Properties", ImmutableArray.Create("Blueprint.Model")),
+            new KeyValuePair<string, ImmutableArray<string>>("Blueprint.OpenApi", ImmutableArray.Create("Blueprint.Runtime.Http")),
+            new KeyValuePair<string, ImmutableArray<string>>("Blueprint.CodeGen", ImmutableArray.Create<string>()),
+            new KeyValuePair<string, ImmutableArray<string>>("Blueprint.Compiler", ImmutableArray.Create<string>()),
+            new KeyValuePair<string, ImmutableArray<string>>("Blueprint.Compiler.Frames", ImmutableArray.Create<string>()),
+            new KeyValuePair<string, ImmutableArray<string>>("Blueprint.Compiler.Model", ImmutableArray.Create<string>()),
+            new KeyValuePair<string, ImmutableArray<string>>("Blueprint.Compiler.Util", ImmutableArray.Create<string>()),
+            new KeyValuePair<string, ImmutableArray<string>>("Blueprint.Tasks.AspNetCore", ImmutableArray.Create("Blueprint.Runtime.Tasks")),
+            new KeyValuePair<string, ImmutableArray<string>>("Blueprint.Tasks.Provider", ImmutableArray.Create("Blueprint.Tasks")),
         });
 
     /// <inheritdoc />
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } =
-        ImmutableArray.Create(MigrationDiagnosticDescriptors.LegacyNamespaceUsing);
+        ImmutableArray.Create(MigrationDiagnosticDescriptors.LegacyNamespaceUsing, MigrationDiagnosticDescriptors.LegacyNamespaceRemoved);
 
     /// <inheritdoc />
     public override void Initialize(AnalysisContext context)
@@ -65,10 +73,20 @@ public sealed class LegacyNamespaceAnalyzer : DiagnosticAnalyzer
 
         var replacements = NamespaceReplacements[namespaceName];
 
-        context.ReportDiagnostic(Diagnostic.Create(
-            MigrationDiagnosticDescriptors.LegacyNamespaceUsing,
-            usingDirective.GetLocation(),
-            namespaceName,
-            string.Join(", ", replacements)));
+        if (replacements.IsEmpty)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                MigrationDiagnosticDescriptors.LegacyNamespaceRemoved,
+                usingDirective.GetLocation(),
+                namespaceName));
+        }
+        else
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                MigrationDiagnosticDescriptors.LegacyNamespaceUsing,
+                usingDirective.GetLocation(),
+                namespaceName,
+                string.Join(", ", replacements)));
+        }
     }
 }
