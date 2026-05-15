@@ -2,6 +2,19 @@
 
 This document maps Signature 365's testing patterns to Blueprint.Testing equivalents, providing concrete migration steps for the 42 test projects in S365.
 
+## S365 Test Infrastructure Scale
+
+| Metric | Count |
+|--------|-------|
+| Total test files | ~711 |
+| `CommandAsync` usages | ~4,659 |
+| `QueryAsync` usages | ~1,291 |
+| `FakeBus.Should()` assertions | ~158 |
+| `BackgroundTask` assertions | ~130 |
+| HTTP-level tests (`CreateClient`) | ~101 |
+| `WithDatabaseAsync` (Marten) | ~140 |
+| Auth helper methods | 8 |
+
 ---
 
 ## Test Infrastructure Comparison
@@ -732,10 +745,11 @@ high-level API that mirrors S365's `ApiFixture` pattern:
 | `fixture.Authentication.MakeAnonymous()` | `fixture.Authentication.MakeAnonymous()` | ✅ None |
 | `fixture.GetRequiredService<T>()` | `fixture.GetRequiredService<T>()` | ✅ None |
 | `fixture.GetOptions<T>()` | `fixture.GetOptions<T>()` | ✅ None |
-| `fixture.Bus` (returns `FakeBus`) | `fixture.GetServiceAs<IBus, FakeBus>()` | ⚠️ Minor |
+| `fixture.Bus` (returns `FakeBus`) | `fixture.Bus` (returns `TestMessageCollector`) | ✅ None |
 | `fixture.Tasks.Enqueued` | `fixture.Tasks.Enqueued` | ✅ None |
 | `fixture.CreateClient()` | Use `BlueprintHttpTestHost` | 🔄 Separate |
-| `fixture.Bus.Should().HavePublishedSingle<T>()` | `fakeBus.Events.OfType<MessagePublished<T>>()` | ⚠️ Minor |
+| `fixture.Bus.Should().HavePublishedSingle<T>()` | `fixture.Bus.Should().HavePublishedSingle<T>()` | ✅ None |
 
-> **Tip:** S365 can eliminate the `Bus` churn by adding a one-liner property
-> to its derived fixture: `public FakeBus Bus => GetServiceAs<IBus, FakeBus>();`
+> **Note:** `fixture.Bus` returns a `TestMessageCollector` (not `FakeBus`) — it supports
+> the same assertion methods (`HavePublishedSingle<T>()`, `NotHavePublished<T>()`, etc.)
+> so S365 `api.Bus.Should().HavePublishedSingle<T>()` works unchanged.
