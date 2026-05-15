@@ -686,7 +686,7 @@ high-level API that mirrors S365's `ApiFixture` pattern:
 
 | Property | Type | Description |
 |---|---|---|
-| `Authentication` | `TestAuthenticationManager` | Ambient auth — `.Set()`, `.As()`, `.MakeAnonymous()` |
+| `Authentication` | `TestAuthentication` | Ambient auth — `.Set()`, `.As()`, `.MakeAnonymous()` |
 | `Tasks` | `BackgroundTaskCollector?` | Captured background tasks (null if not registered) |
 | `Messages` | `TestMessageCollector?` | Captured published/sent messages |
 | `UnitOfWork` | `InMemoryUnitOfWork?` | Unit of work test double |

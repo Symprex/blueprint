@@ -49,7 +49,7 @@ public sealed class BlueprintTestHost<TApp, TExec> : IDisposable, IAsyncDisposab
     /// <c>using (host.Authentication.As(identity))</c> for scoped auth, exactly as before.
     /// </para>
     /// </summary>
-    public TestAuthentication Authentication { get; } = new();
+    public TestAuthenticationManager Authentication { get; } = new();
 
     /// <summary>
     /// Initialises a new instance of the <see cref="BlueprintTestHost{TApp,TExec}"/> class.
@@ -90,13 +90,6 @@ public sealed class BlueprintTestHost<TApp, TExec> : IDisposable, IAsyncDisposab
 
         using var scope = this._rootProvider.CreateScope();
         var httpContext = new DefaultHttpContext { RequestServices = scope.ServiceProvider };
-
-        // Apply ambient authentication if set (before user's configure callback so it can override)
-        if (this.Authentication.CurrentPrincipal is { } ambientPrincipal)
-        {
-            httpContext.User = ambientPrincipal;
-        }
-
         var context = new ApiOperationContext(
             scope.ServiceProvider,
             this.App,
@@ -105,10 +98,13 @@ public sealed class BlueprintTestHost<TApp, TExec> : IDisposable, IAsyncDisposab
         {
             Operation = operation,
             HttpContext = httpContext,
-            UserPrincipal = this.Authentication.CurrentPrincipal,
         };
 
         var testContext = new BlueprintTestContext(context, scope.ServiceProvider);
+
+        // Apply ambient authentication before user's callback so per-call overrides take precedence
+        this.Authentication.Apply(testContext);
+
         configure?.Invoke(testContext);
 
         return await this.Executor.ExecuteAsync(context);
