@@ -356,6 +356,9 @@
 | BPAU008 Resource on non-HTTP | ✅ Done | Warning when `[Resource]` or `[FromResource]` is applied to a non-HTTP operation. Auth requires HTTP context — resource-auth metadata on message-only operations is dead configuration. |
 | ProblemDetails RFC type URIs | ✅ Done | `ValidationProblemDetails` and unhandled error responses now include RFC-compliant `type` URIs (`https://tools.ietf.org/html/rfc9110#section-15.5.1` etc.) and `title` fields. Commit `2fddcdff`. |
 | Auth check IL extraction | ✅ Done | `PipelineHelpers.CheckAuthenticationAsync` extracts authentication check to shared helper — reduces IL duplication across ~405 auth pipelines. Commit `3908c934`. |
+| BPLG007 route collision diagnostic | ✅ Done | Compile-time diagnostic when different operations claim the same route+HTTP method. Fires on `[Link]`/`[SelfLink]` attributes with matching URL patterns. Commit `e06754bf`. |
+| BPMIG001/002/003 code fixes | ✅ Done | `LegacyActivationCodeFixProvider` auto-removes redundant `AddOpenApi()`, `AddHateoasLinks()`, `AddAuthorisation()` — both chain removal and standalone statement removal. Commit `fa052a31`. |
+| BPMIG400 missing partial | ✅ Done | `MissingPartialAnalyzer` + `MissingPartialCodeFixProvider` detects concrete `ICommand<T>`/`IQuery<T>` classes missing `partial` keyword and auto-fixes with "Fix all in solution". Highest-volume migration automation (~240+ S365 operations). Commit `2d524a4c`. |
 
 ---
 

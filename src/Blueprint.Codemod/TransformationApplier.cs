@@ -19,6 +19,9 @@ public sealed class TransformationApplier
     private static readonly ImmutableArray<string> SupportedDiagnosticIds =
     [
         "BPMIG001",
+        "BPMIG002",
+        "BPMIG003",
+        "BPMIG400",
     ];
 
     private static int _msbuildRegistered;

@@ -239,6 +239,7 @@ public sealed class SolutionAnalysisRunner
             "BPMIG300" => MigrationDiagnosticDescriptors.LegacyNamespaceUsing,
             "BPMIG301" => MigrationDiagnosticDescriptors.LegacyMiddlewareBuilderUsage,
             "BPMIG302" => MigrationDiagnosticDescriptors.LegacyBlueprintApiBuilderUsage,
+            "BPMIG400" => MigrationDiagnosticDescriptors.OperationMissingPartialKeyword,
             _ => null, // Unknown diagnostics are silently skipped — they may come from the target solution's own analyzers.
         };
     }
