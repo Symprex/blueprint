@@ -43,9 +43,9 @@ public sealed class BlueprintHttpClientTests : IClassFixture<SampleAppFixture>
         captured.Should().NotBeNull();
         captured!.Method.Should().Be(HttpMethod.Get);
         captured.RequestUri!.PathAndQuery.Should().Contain("/templates/search");
-        captured.RequestUri.Query.Should().Contain("Q=hello", "query string properties should be appended for GET");
-        captured.RequestUri.Query.Should().Contain("Page=1");
-        captured.RequestUri.Query.Should().Contain("PageSize=10");
+        captured.RequestUri.Query.Should().Contain("q=hello", "query string properties should be appended for GET");
+        captured.RequestUri.Query.Should().Contain("page=1");
+        captured.RequestUri.Query.Should().Contain("pageSize=10");
     }
 
     [Fact]

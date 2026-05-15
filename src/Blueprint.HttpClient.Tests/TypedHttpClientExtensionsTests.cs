@@ -36,11 +36,11 @@ public sealed class TypedHttpClientExtensionsTests : IClassFixture<SampleAppFixt
         captured.Should().NotBeNull();
         captured!.Method.Should().Be(HttpMethod.Get);
         captured.RequestUri!.PathAndQuery.Should().Contain("/templates/search");
-        captured.RequestUri.Query.Should().Contain("Q=hello");
-        captured.RequestUri.Query.Should().Contain("Page=2");
-        captured.RequestUri.Query.Should().Contain("PageSize=10");
-        captured.RequestUri.Query.Should().Contain("MaxResults=50");
-        captured.RequestUri.Query.Should().Contain("MinResults=5");
+        captured.RequestUri.Query.Should().Contain("q=hello");
+        captured.RequestUri.Query.Should().Contain("page=2");
+        captured.RequestUri.Query.Should().Contain("pageSize=10");
+        captured.RequestUri.Query.Should().Contain("maxResults=50");
+        captured.RequestUri.Query.Should().Contain("minResults=5");
     }
 
     [Fact]
