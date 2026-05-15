@@ -81,8 +81,9 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
     /// <inheritdoc/>
     public void RegisterMarkerAttributes(IncrementalGeneratorPostInitializationContext initializationContext)
     {
-        RootLinkAttributeDescriptor.Instance.AddSource(initializationContext);
-        SelfLinkAttributeDescriptor.Instance.AddSource(initializationContext);
+        // SelfLinkAttribute and RootLinkAttribute are now real classes in Blueprint.Runtime.Model,
+        // so we no longer inject them as marker-attribute source. The descriptor ParseSingle/ParseAll
+        // methods still work because they match by attribute name, not by reference.
     }
 
     /// <inheritdoc />
