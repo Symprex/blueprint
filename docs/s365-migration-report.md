@@ -47,9 +47,9 @@ All framework features required for S365 migration are implemented and tested:
 | Generation | 0 | 6 | 12 | 2 | 2 | ✅ Proof compiled |
 | ExchangeTransportAgent | 4 | 3 | 9 | 7 | 3 | 🔲 Not started |
 | Microsoft365 | 4 | 1 | 10 | 2 | 3 | 🔲 Not started |
-| Outlook | 6 | 7 | 28 | 7 | 3 | 🔲 Not started |
+| Outlook | 6 | 7 | 28 | 7 | 3 | ✅ Proof compiled |
 | Import | 12 | 6 | 47 | 5 | 3 | 🔲 Not started |
-| VCard | 4 | 5 | 18 | 7 | 4 | 🔲 Not started |
+| VCard | 4 | 5 | 18 | 7 | 4 | ✅ Proof compiled |
 | Subscriptions | 16 | 10 | 64 | 24 | 5 | 🔲 Not started |
 | Partners | 24 | 18 | 92 | 10 | 5 | 🔲 Not started |
 | Billing | 23 | 14 | 95 | 35 | 6 | 🔲 Not started |
