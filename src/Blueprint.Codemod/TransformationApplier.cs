@@ -22,6 +22,7 @@ public sealed class TransformationApplier
         "BPMIG002",
         "BPMIG003",
         "BPMIG200",
+        "BPMIG201",
         "BPMIG300",
         "BPMIG303",
         "BPMIG400",

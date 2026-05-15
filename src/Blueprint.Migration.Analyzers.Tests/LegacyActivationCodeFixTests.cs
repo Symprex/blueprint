@@ -318,6 +318,53 @@ public sealed class LegacyActivationCodeFixTests
         fixedSource.Should().Contain("[FromResource(typeof(AccountLookupQuery))]");
     }
 
+    [Xunit.Fact]
+    public async Task When_bpmig201_is_reported_on_resource_attribute_then_code_fix_removes_the_auth_template_argument()
+    {
+        const string source = """
+            namespace Legacy.Blueprint;
+
+            [System.AttributeUsage(System.AttributeTargets.Class)]
+            public sealed class ResourceAttribute : System.Attribute
+            {
+                public ResourceAttribute(string noun, string verb, string resourceKeyTemplate) { }
+            }
+
+            [Resource("Account", "Read", "/Tenants/{Auth:AccountId}/Accounts")]
+            public sealed class GetAccountQuery { }
+            """;
+
+        var fixedSource = await ApplyCodeFixAsync(source, "BPMIG201");
+
+        fixedSource.Should().Contain("[Resource(\"Account\", \"Read\")]");
+        fixedSource.Should().NotContain("{Auth:AccountId}");
+        fixedSource.Should().NotContain("/Tenants/");
+    }
+
+    [Xunit.Fact]
+    public async Task When_bpmig201_is_reported_on_fromresource_attribute_then_code_fix_removes_the_auth_template_argument()
+    {
+        const string source = """
+            namespace Legacy.Blueprint;
+
+            [System.AttributeUsage(System.AttributeTargets.Class, AllowMultiple = true)]
+            public sealed class FromResourceAttribute : System.Attribute
+            {
+                public FromResourceAttribute(System.Type operationType, string resourceKeyTemplate) { }
+            }
+
+            public sealed class AccountLookupQuery { }
+
+            [FromResource(typeof(AccountLookupQuery), "/Tenants/{Auth:AccountId}/Accounts")]
+            public sealed class AccountCommand { }
+            """;
+
+        var fixedSource = await ApplyCodeFixAsync(source, "BPMIG201");
+
+        fixedSource.Should().Contain("[FromResource(typeof(AccountLookupQuery))]");
+        fixedSource.Should().NotContain("{Auth:AccountId}");
+    }
+
     private static Document CreateDocument(string source)
     {
         var projectId = ProjectId.CreateNewId("LegacyActivationCodeFixTests");
