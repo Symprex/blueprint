@@ -1005,12 +1005,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
 
     private static string GetCamelCaseName(string name)
     {
-        if (string.IsNullOrEmpty(name))
-        {
-            return name;
-        }
-
-        return char.ToLowerInvariant(name[0]) + name.Substring(1);
+        return name.Camelize();
     }
 
     private static bool ImplementsIParsable(ITypeSymbol type)

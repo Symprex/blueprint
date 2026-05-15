@@ -938,6 +938,11 @@ In addition to standard checks, Generation requires:
    - Response shapes: `200 OK` vs `201 Created` — new Blueprint infers from result types
    - Security scheme: New Blueprint writes `bearerAuth` with document-level hoisting
    - Schema naming: Configurable via `SchemaNameFormatter` delegate
+   - **Query parameter naming**: Legacy Blueprint uses **PascalCase** (`?Id=...&TenantId=...`);
+     new Blueprint uses **camelCase** (`?id=...&tenantId=...`), matching `System.Text.Json`
+     naming policy and modern REST conventions. TypeScript clients that construct query URLs
+     will need the parameter names updated to lowercase-first. This affects `parameters` entries
+     in the OpenAPI spec and all query string construction in frontend code.
 
 4. **TS client generation command** (post-migration):
    ```powershell

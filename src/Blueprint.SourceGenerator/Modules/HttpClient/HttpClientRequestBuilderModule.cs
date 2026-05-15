@@ -506,11 +506,6 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
     /// </summary>
     private static string GetCamelCaseName(string name)
     {
-        if (name.Length == 0 || char.IsLower(name[0]))
-        {
-            return name;
-        }
-
-        return char.ToLowerInvariant(name[0]) + name.Substring(1);
+        return name.Camelize();
     }
 }
