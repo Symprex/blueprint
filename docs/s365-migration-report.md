@@ -30,8 +30,8 @@ All framework features required for S365 migration are implemented and tested:
 | `[Resource]` auth (built-in) | ✅ Ready | — | Noun/verb, template expansion |
 | TenantModule (first-class) | ✅ Ready | — | Claim-based, compile-time |
 | OpenAPI (well-known) | ✅ Ready | — | RFC 9264 + API catalog |
-| Migration analyzers | ✅ Ready | 89 | 10 BPMIG diagnostics |
-| Codemod tool | ✅ Ready | — | Per-project SARIF reports |
+| Migration analyzers | ✅ Ready | 95 | 13 BPMIG diagnostics |
+| Codemod tool | ✅ Ready | — | All 13 diagnostics detected in S365 scan |
 | Route deduplication | ✅ Ready | — | HashSet-based endpoint dedup |
 | Pipeline helper extraction | ✅ Ready | — | ~4,000+ lines saved across S365 |
 
@@ -114,6 +114,32 @@ All framework features required for S365 migration are implemented and tested:
 | Date | Service | Action | Result | Notes |
 |------|---------|--------|--------|-------|
 | — | — | — | — | Migration not yet started |
+
+## S365 Codemod Scan Results
+
+Full-solution scan of `Signature365.sln` (158 projects). All 13 BPMIG diagnostics detected:
+
+| ID | Category | Title | Severity |
+|----|----------|-------|----------|
+| BPMIG001 | Auto-fixable | Remove redundant `AddOpenApi()` | Info |
+| BPMIG002 | Auto-fixable | Remove redundant `AddHateoasLinks()` | Info |
+| BPMIG003 | Auto-fixable | Remove redundant `AddAuthorisation()` | Info |
+| BPMIG100 | Configuration required | Migrate configured `AddOpenApi(...)` | Warning |
+| BPMIG101 | Configuration required | Migrate configured `AddAuthentication(...)` | Warning |
+| BPMIG200 | Consumer-extension rewrite | Migrate `FromResource(...)` usage | Warning |
+| BPMIG201 | Consumer-extension rewrite | Migrate `{Auth:...}` placeholder | Warning |
+| BPMIG300 | Manual design review | Update legacy Blueprint namespace | Warning |
+| BPMIG301 | Manual design review | `IMiddlewareBuilder` → source-gen modules | Warning |
+| BPMIG302 | Manual design review | `BlueprintApiBuilder` → `AddBlueprintApi<T,E>` | Warning |
+| BPMIG303 | Manual design review | Remove obsolete Blueprint namespace | Warning |
+| BPMIG400 | Auto-fixable | Add `partial` to operation class | Warning |
+| BPMIG401 | Auto-fixable | Add `partial` to API resource class | Warning |
+
+**Category breakdown:**
+- **Auto-fixable** (5): BPMIG001-003, BPMIG400-401 — code fixes handle these automatically
+- **Configuration required** (2): BPMIG100-101 — startup migration, manual but mechanical
+- **Consumer-extension rewrite** (2): BPMIG200-201 — `[FromResource]` and `{Auth:...}` patterns
+- **Manual design review** (4): BPMIG300-303 — namespace changes, middleware/builder rewrites
 
 ## Known Blockers
 
