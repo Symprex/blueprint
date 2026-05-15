@@ -7,7 +7,7 @@
 
 | Area | Status | Notes |
 |------|--------|-------|
-| Compile-time proof | ✅ Done | `.scratch/s365-proof/` compiles 11 services, ~72 ops (Analytics, EventStore, Templates, Generation, Outlook, VCard, ETA, Billing, Subscriptions, Microsoft365, Import) |
+| Compile-time proof | ✅ Done | `.scratch/s365-proof/` compiles 13 services, ~114 ops (Analytics, EventStore, Templates, Generation, Outlook, VCard, ETA, Billing, Subscriptions, Microsoft365, Import, Partners, IdentityServer) |
 | Authorization model | ✅ Verified | 349 `[Resource]` usages and 158 `[FromResource]` usages map directly to source-gen Blueprint |
 | Scope-pair provider | ✅ Done | `ScopePairClaimAuthorizationProvider` now matches S365 (`"::"`, CRUD hierarchy, ignored scopes, `allowWhenNoScopeClaims`) |
 | Claims-based auth removal | ✅ Done | Legacy claims-only authorization layer was removed; resource-based auth is the only path |
