@@ -359,6 +359,8 @@
 | BPLG007 route collision diagnostic | ✅ Done | Compile-time diagnostic when different operations claim the same route+HTTP method. Fires on `[Link]`/`[SelfLink]` attributes with matching URL patterns. Commit `e06754bf`. |
 | BPMIG001/002/003 code fixes | ✅ Done | `LegacyActivationCodeFixProvider` auto-removes redundant `AddOpenApi()`, `AddHateoasLinks()`, `AddAuthorisation()` — both chain removal and standalone statement removal. Commit `fa052a31`. |
 | BPMIG400 missing partial | ✅ Done | `MissingPartialAnalyzer` + `MissingPartialCodeFixProvider` detects concrete `ICommand<T>`/`IQuery<T>` classes missing `partial` keyword and auto-fixes with "Fix all in solution". Highest-volume migration automation (~240+ S365 operations). Commit `2d524a4c`. |
+| BusMessage attribute routing | ✅ Done | `[BusMessage("queue", topicName: "topic")]` attribute in `Blueprint.Runtime.Model` enables S365's pattern of co-locating routing config with message contracts. `BusMessageAttributeRouter` (IRouter) + `BusMessageTopicNameConvention` (ITopicNameConvention) in `Blueprint.Rebus`. S365 keeps its custom `SimplifiedTypeTopicNameConvention` (namespace stripping). Commit `d969243a`. |
+| Testing-migration Bus mapping | ✅ Done | Fixed testing-migration.md: `fixture.Bus` returns `TestMessageCollector` (not `FakeBus`), `.Should().HavePublishedSingle<T>()` works unchanged. Added S365 test infrastructure scale table (5,950 usages across 711 files). Commit `b9e06487`. |
 
 ---
 
@@ -388,6 +390,11 @@
 - `ICurrentTenantAccessor.Current` is set by ASP.NET Core middleware before Blueprint pipeline
 - `IDocumentSession` is scoped: `store.IdentitySession(tenantId)` when tenant is present
 - Tenant ID comes from JWT claim `sig365_tenant_id`
+- **Blueprint parity confirmed**: `ITenantResolver` + `ITenantAccessor` + `AsyncLocalTenantAccessor` + `TenantModule` matches S365's `SetTenantMiddleware` + `AsyncLocalCurrentTenantAccessor` pattern exactly
+- **Compile-time property population**: Blueprint's `TenantModule` auto-populates `TenantId` properties on operations at compile-time (no runtime reflection), handling `string`, `IParsable<T>` (including S365's `ApiId`), and `TypeConverter` types
+- **Marten conjoined tenancy**: S365 uses `IHaveTenantId` to mark multi-tenant documents; Marten's `TenancyStyle.Conjoined` shares tables with tenant column — this is S365-specific config, not Blueprint responsibility
+- **Property populators eliminated**: S365's only property populator was `SetTenantMiddleware` auto-populating `TenantId`. Blueprint's compile-time `TenantModule` replaces this entirely — no `IPropertyPopulator` needed for S365
+- **Rebus tenant propagation**: S365 passes tenant via message body (not headers) — handlers extract `TenantId` from message properties and call `.ForTenant()` — no Blueprint change needed
 
 ### Messaging (Rebus)
 - `UseMartenOutbox()` stores outgoing messages in Marten outbox table

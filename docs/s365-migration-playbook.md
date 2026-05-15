@@ -1207,12 +1207,52 @@ services.AddBlueprintApi<MyApp, MyAppExecutor>(blueprint =>
 - `RebusHandleMessageOperationExecutorBuilderScanner` auto-discovers handlers
 - Portal has the most subscriptions (~17+ event types)
 
+### Message Routing
+
+S365 uses `[BusMessage("queueName", topicName: "topic")]` + `RebusTypeBasedAttributeRouter` for routing messages to the correct queue. Blueprint now has equivalent support:
+
+```csharp
+// In contract assembly (references Blueprint.Runtime.Model only, no Rebus dependency)
+[BusMessage("analytics-queue", TopicName = "campaign-edited")]
+public class CampaignEditedEvent { ... }
+
+// In service startup — registers router + topic convention in one call
+services.AddRebus(configure => configure
+    .Routing(r => r.UseBusMessageAttributeRouting())
+    // ...
+);
+```
+
+**Routing components:**
+- `[BusMessage]` attribute in `Blueprint.Runtime.Model.Messaging` — lightweight, no Rebus dependency
+- `BusMessageAttributeRouter` : `IRouter` — reads queue name from attribute
+- `BusMessageTopicNameConvention` : `ITopicNameConvention` — reads topic from attribute, falls back to Rebus default
+- `UseBusMessageAttributeRouting()` extension — one-liner registration for both router + convention
+
+**S365 custom topic convention:** S365's `SimplifiedTypeTopicNameConvention` (strips `Symprex.Signature365.` prefix, kebab-cases) is handled by subclassing `BusMessageTopicNameConvention` and overriding `GetDefaultTopicName()`:
+
+```csharp
+public class S365TopicNameConvention : BusMessageTopicNameConvention
+{
+    public S365TopicNameConvention(BusMessageRoutingResolver resolver) : base(resolver) { }
+
+    protected override string GetDefaultTopicName(Type messageType)
+        => messageType.FullName!.Replace("Symprex.Signature365.", "").Kebaberize();
+}
+
+// Registration
+services.AddRebus(configure => configure
+    .Routing(r => r.UseBusMessageAttributeRouting(new S365TopicNameConvention(new BusMessageRoutingResolver())))
+);
+```
+
 ### Action Items
 - [x] Create `Blueprint.Rebus` project — **Done**
 - [x] Implement `BlueprintRebusMessageHandler` — **Done** (auto-detecting module)
 - [x] Implement `AddRebus()` extension on `BlueprintServiceBuilder` — **Done**
 - [x] Add Rebus integration tests — **Done** (Blueprint.Rebus has test coverage)
 - [x] Auto-detect Rebus in default pipeline config — **Done** (no companion generator needed)
+- [x] Add `[BusMessage]` attribute-based routing — **Done** (31 tests, commit `d969243a`)
 - [ ] Test with Azure Service Bus transport (requires S365 infrastructure)
 
 ---
