@@ -41,7 +41,7 @@ public sealed class LegacyActivationCodeFixTests
             }
             """;
 
-        var fixedSource = await ApplyFirstCodeFixAsync(source);
+        var fixedSource = await ApplyCodeFixAsync(source, "BPMIG001");
 
         fixedSource.Should().NotContain("AddOpenApi()");
         fixedSource.Should().Contain("return builder");
@@ -73,23 +73,159 @@ public sealed class LegacyActivationCodeFixTests
             }
             """;
 
-        var fixedSource = await ApplyFirstCodeFixAsync(source);
+        var fixedSource = await ApplyCodeFixAsync(source, "BPMIG001");
 
         fixedSource.Should().NotContain("AddOpenApi()");
         fixedSource.Should().NotContain("builder;");
     }
 
-    private static async Task<string> ApplyFirstCodeFixAsync(string source)
+    [Xunit.Fact]
+    public async Task When_bpmig002_is_reported_then_code_fix_removes_parameterless_addhateoaslinks_call_from_the_chain()
+    {
+        const string source = """
+            namespace Legacy.Blueprint;
+
+            public sealed class BlueprintApiBuilder
+            {
+            }
+
+            public static class BlueprintApiBuilderExtensions
+            {
+                public static BlueprintApiBuilder AddOpenApi(this BlueprintApiBuilder pipelineBuilder)
+                    => pipelineBuilder;
+
+                public static BlueprintApiBuilder AddHateoasLinks(this BlueprintApiBuilder pipelineBuilder)
+                    => pipelineBuilder;
+            }
+
+            public static class ConsumerConfiguration
+            {
+                public static BlueprintApiBuilder Configure(BlueprintApiBuilder builder)
+                {
+                    return builder
+                        .AddOpenApi()
+                        .AddHateoasLinks();
+                }
+            }
+            """;
+
+        var fixedSource = await ApplyCodeFixAsync(source, "BPMIG002");
+
+        fixedSource.Should().NotContain("AddHateoasLinks()");
+        fixedSource.Should().Contain("return builder");
+        fixedSource.Should().Contain(".AddOpenApi()");
+    }
+
+    [Xunit.Fact]
+    public async Task When_bpmig002_is_reported_on_a_standalone_statement_then_code_fix_removes_the_statement()
+    {
+        const string source = """
+            namespace Legacy.Blueprint;
+
+            public sealed class BlueprintApiBuilder
+            {
+            }
+
+            public static class BlueprintApiBuilderExtensions
+            {
+                public static BlueprintApiBuilder AddHateoasLinks(this BlueprintApiBuilder pipelineBuilder)
+                    => pipelineBuilder;
+            }
+
+            public static class ConsumerConfiguration
+            {
+                public static void Configure(BlueprintApiBuilder builder)
+                {
+                    builder.AddHateoasLinks();
+                }
+            }
+            """;
+
+        var fixedSource = await ApplyCodeFixAsync(source, "BPMIG002");
+
+        fixedSource.Should().NotContain("AddHateoasLinks()");
+        fixedSource.Should().NotContain("builder;");
+    }
+
+    [Xunit.Fact]
+    public async Task When_bpmig003_is_reported_then_code_fix_removes_parameterless_addauthorisation_call_from_the_chain()
+    {
+        const string source = """
+            namespace Legacy.Blueprint;
+
+            public sealed class BlueprintApiBuilder
+            {
+            }
+
+            public static class BlueprintApiBuilderExtensions
+            {
+                public static BlueprintApiBuilder AddAuthorisation(this BlueprintApiBuilder pipelineBuilder)
+                    => pipelineBuilder;
+
+                public static BlueprintApiBuilder AddOpenApi(this BlueprintApiBuilder pipelineBuilder)
+                    => pipelineBuilder;
+            }
+
+            public static class ConsumerConfiguration
+            {
+                public static BlueprintApiBuilder Configure(BlueprintApiBuilder builder)
+                {
+                    return builder
+                        .AddAuthorisation()
+                        .AddOpenApi();
+                }
+            }
+            """;
+
+        var fixedSource = await ApplyCodeFixAsync(source, "BPMIG003");
+
+        fixedSource.Should().NotContain("AddAuthorisation()");
+        fixedSource.Should().Contain("return builder");
+        fixedSource.Should().Contain(".AddOpenApi()");
+    }
+
+    [Xunit.Fact]
+    public async Task When_bpmig003_is_reported_on_a_standalone_statement_then_code_fix_removes_the_statement()
+    {
+        const string source = """
+            namespace Legacy.Blueprint;
+
+            public sealed class BlueprintApiBuilder
+            {
+            }
+
+            public static class BlueprintApiBuilderExtensions
+            {
+                public static BlueprintApiBuilder AddAuthorisation(this BlueprintApiBuilder pipelineBuilder)
+                    => pipelineBuilder;
+            }
+
+            public static class ConsumerConfiguration
+            {
+                public static void Configure(BlueprintApiBuilder builder)
+                {
+                    builder.AddAuthorisation();
+                }
+            }
+            """;
+
+        var fixedSource = await ApplyCodeFixAsync(source, "BPMIG003");
+
+        fixedSource.Should().NotContain("AddAuthorisation()");
+        fixedSource.Should().NotContain("builder;");
+    }
+
+    private static async Task<string> ApplyCodeFixAsync(string source, string diagnosticId)
     {
         var document = CreateDocument(source);
         var diagnostics = await GetDiagnosticsAsync(document);
-        var diagnostic = diagnostics.Single(static candidate => candidate.Id == "BPMIG001");
+        var diagnostic = diagnostics.Single(candidate => candidate.Id == diagnosticId);
 
         var codeFixProvider = typeof(Blueprint.Migration.Analyzers.CodeFixes.LegacyActivationCodeFixProvider).Assembly
             .GetTypes()
             .Where(static type => !type.IsAbstract && typeof(CodeFixProvider).IsAssignableFrom(type))
             .Select(static type => (CodeFixProvider)Activator.CreateInstance(type)!)
-            .SingleOrDefault(static provider => provider.FixableDiagnosticIds.Contains("BPMIG001"));
+            .SingleOrDefault(provider => provider.FixableDiagnosticIds.Contains(diagnosticId));
 
         if (codeFixProvider is null)
         {

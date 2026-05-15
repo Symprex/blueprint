@@ -9,16 +9,26 @@ namespace Blueprint.Migration.Analyzers.CodeFixes;
 
 /// <summary>
 /// Removes redundant legacy activation calls once a matching migration diagnostic has already proven the invocation is safe to drop.
+/// Handles BPMIG001 (AddOpenApi), BPMIG002 (AddHateoasLinks), and BPMIG003 (AddAuthorisation).
 /// </summary>
 [ExportCodeFixProvider(LanguageNames.CSharp, Name = nameof(LegacyActivationCodeFixProvider))]
 [Shared]
 public sealed class LegacyActivationCodeFixProvider : CodeFixProvider
 {
-    private const string RemoveAddOpenApiTitle = "Remove redundant AddOpenApi()";
+    private static readonly ImmutableDictionary<string, string> DiagnosticToTitle = new Dictionary<string, string>
+    {
+        [MigrationDiagnosticDescriptors.RedundantAddOpenApiActivation.Id] = "Remove redundant AddOpenApi()",
+        [MigrationDiagnosticDescriptors.RedundantAddHateoasLinksActivation.Id] = "Remove redundant AddHateoasLinks()",
+        [MigrationDiagnosticDescriptors.RedundantAddAuthorisationActivation.Id] = "Remove redundant AddAuthorisation()",
+    }.ToImmutableDictionary();
 
     /// <inheritdoc />
     public override ImmutableArray<string> FixableDiagnosticIds =>
-        [Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.RedundantAddOpenApiActivation.Id];
+    [
+        MigrationDiagnosticDescriptors.RedundantAddOpenApiActivation.Id,
+        MigrationDiagnosticDescriptors.RedundantAddHateoasLinksActivation.Id,
+        MigrationDiagnosticDescriptors.RedundantAddAuthorisationActivation.Id,
+    ];
 
     /// <inheritdoc />
     public override FixAllProvider GetFixAllProvider()
@@ -41,12 +51,20 @@ public sealed class LegacyActivationCodeFixProvider : CodeFixProvider
             return;
         }
 
-        context.RegisterCodeFix(
-            CodeAction.Create(
-                title: RemoveAddOpenApiTitle,
-                createChangedDocument: cancellationToken => RemoveInvocationAsync(context.Document, root, invocation, cancellationToken),
-                equivalenceKey: RemoveAddOpenApiTitle),
-            context.Diagnostics);
+        foreach (var diagnostic in context.Diagnostics)
+        {
+            if (!DiagnosticToTitle.TryGetValue(diagnostic.Id, out var title))
+            {
+                continue;
+            }
+
+            context.RegisterCodeFix(
+                CodeAction.Create(
+                    title: title,
+                    createChangedDocument: cancellationToken => RemoveInvocationAsync(context.Document, root, invocation, cancellationToken),
+                    equivalenceKey: title),
+                diagnostic);
+        }
     }
 
     private static Task<Document> RemoveInvocationAsync(
