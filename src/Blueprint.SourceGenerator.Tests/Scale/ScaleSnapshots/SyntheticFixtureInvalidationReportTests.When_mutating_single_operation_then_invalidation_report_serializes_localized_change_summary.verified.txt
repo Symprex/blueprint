@@ -38,7 +38,7 @@
           "OperationExecutorPipelineSourceGenerator": {
             "changedOutputCount": 1,
             "changedOutputs": [
-              "SyntheticOperation050ExecutorPipeline.g.cs"
+              "Synthetic.Scale.SyntheticOperation050ExecutorPipeline.g.cs"
             ]
           }
         }

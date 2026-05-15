@@ -41,7 +41,7 @@ public class SyntheticFixtureInvalidationReportTests
         ((JObject)((JObject)payload["generators"]!)[nameof(OperationExecutorPipelineSourceGenerator)]!)["changedOutputs"]!
             .Values<string>()
             .Should()
-            .Equal("SyntheticOperation050ExecutorPipeline.g.cs");
+            .Equal("Synthetic.Scale.SyntheticOperation050ExecutorPipeline.g.cs");
 
         await Verify(report.ToJson())
             .UseDirectory(SnapshotsFolder);

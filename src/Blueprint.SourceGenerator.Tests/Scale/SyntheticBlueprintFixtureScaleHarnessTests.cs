@@ -74,7 +74,7 @@ public class SyntheticBlueprintFixtureScaleHarnessTests
             .BeEmpty();
         editResult.GetChangedGeneratedSourceHintNames(nameof(OperationExecutorPipelineSourceGenerator))
             .Should()
-            .Equal("SyntheticOperation050ExecutorPipeline.g.cs");
+            .Equal("Synthetic.Scale.SyntheticOperation050ExecutorPipeline.g.cs");
     }
 
     [Fact]
@@ -111,7 +111,7 @@ public class SyntheticBlueprintFixtureScaleHarnessTests
             .BeEmpty();
         editResult.GetChangedGeneratedSourceHintNames(nameof(OperationExecutorPipelineSourceGenerator))
             .Should()
-            .Equal(Enumerable.Range(1, 100).Select(static operationIndex => $"SyntheticOperation{operationIndex:000}ExecutorPipeline.g.cs"));
+            .Equal(Enumerable.Range(1, 100).Select(static operationIndex => $"Synthetic.Scale.SyntheticOperation{operationIndex:000}ExecutorPipeline.g.cs"));
     }
 
     [Fact]
@@ -135,7 +135,7 @@ public class SyntheticBlueprintFixtureScaleHarnessTests
 
         result.Diagnostics.Should().BeEmpty();
         result.GetGeneratedSources(nameof(OperationDescriptorSourceGenerator))
-            .Single(static source => source.HintName == "SyntheticOperation050_Descriptor.g.cs")
+            .Single(static source => source.HintName == "Synthetic.Scale.SyntheticOperation050_Descriptor.g.cs")
             .SourceText
             .ToString()
             .Should()
@@ -171,7 +171,7 @@ public class SyntheticBlueprintFixtureScaleHarnessTests
         editResult.Updated.Diagnostics.Should().BeEmpty();
         editResult.GetChangedGeneratedSourceHintNames(nameof(OperationDescriptorSourceGenerator))
             .Should()
-            .Equal("SyntheticOperation050_Descriptor.g.cs");
+            .Equal("Synthetic.Scale.SyntheticOperation050_Descriptor.g.cs");
         editResult.GetChangedGeneratedSourceHintNames(nameof(AppDataModelSourceGenerator))
             .Should()
             .BeEmpty();
@@ -249,6 +249,6 @@ public class SyntheticBlueprintFixtureScaleHarnessTests
             .BeEmpty();
         editResult.GetChangedGeneratedSourceHintNames(nameof(OperationExecutorPipelineSourceGenerator))
             .Should()
-            .Equal("SyntheticOperation250ExecutorPipeline.g.cs");
+            .Equal("Synthetic.Tier3.SyntheticOperation250ExecutorPipeline.g.cs");
     }
 }

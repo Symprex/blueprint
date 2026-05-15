@@ -1,4 +1,4 @@
-﻿Blueprint.SourceGenerator\Blueprint.SourceGenerator.Generators.ApiResources.ApiResourceSourceGenerator\UserMembershipApiResource_ObjectProperty.g.cs:
+﻿Blueprint.SourceGenerator\Blueprint.SourceGenerator.Generators.ApiResources.ApiResourceSourceGenerator\TestNamespace.UserMembershipApiResource_ObjectProperty.g.cs:
 
 namespace TestNamespace
 {
