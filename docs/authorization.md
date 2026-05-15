@@ -92,22 +92,16 @@ public partial class GetTemplateQuery : IQuery<OkResult<TemplateApiResource>>
 
 Generated pipeline code (compile-time):
 ```csharp
-// Static scope pair array (zero allocation per request)
-private static readonly ScopePair[] _scopePairs_GetTemplateQuery =
-    [new ScopePair("Template", "Read", "/Tenants/{Auth:AccountId}/Templates/{Id}")];
-
-// Expansion at runtime with direct property access (no reflection)
+// Inline expansion at runtime with direct property access (no reflection, no static field)
 var authorizationDenial = await PipelineHelpers.CheckResourceAuthorizationAsync(
     context,
     httpContext.User,
-    this.ResolvedResourceAuthorizationProvider,
     this.ResourceAuthorizationProvider,
     new ResolvedScopePair(
         "Template",
         "Read",
         "/Tenants/{Auth:AccountId}/Templates/{Id}",
         $"/Tenants/{context.UserAuthorisationContext?.AccountId}/Templates/{operation.Id}"),
-    _scopePairs_GetTemplateQuery,
     httpContext.RequestAborted);
 ```
 
@@ -115,29 +109,14 @@ All token expansion uses direct property access — no regex, no reflection, no 
 
 ---
 
-## Authorization Providers
+## Authorization Provider
 
 ### `IResourceAuthorizationProvider`
 
-The primary authorization provider interface. Receives raw `ScopePair` values and evaluates access.
+The single authorization interface. Receives pre-expanded `ResolvedScopePair` values — the generated pipeline resolves all template tokens before calling the provider.
 
 ```csharp
 public interface IResourceAuthorizationProvider
-{
-    Task<bool> IsAuthorizedAsync(
-        ApiOperationContext operationContext,
-        ClaimsPrincipal principal,
-        IReadOnlyList<ScopePair> requiredScopePairs,
-        CancellationToken cancellationToken);
-}
-```
-
-### `IResolvedResourceAuthorizationProvider`
-
-Enhanced interface that receives pre-expanded `ResolvedScopePair` values — the generated pipeline resolves all template tokens before calling this provider.
-
-```csharp
-public interface IResolvedResourceAuthorizationProvider
 {
     Task<bool> IsAuthorizedAsync(
         ApiOperationContext operationContext,
@@ -147,7 +126,7 @@ public interface IResolvedResourceAuthorizationProvider
 }
 ```
 
-When both interfaces are registered, the generated pipeline prefers `IResolvedResourceAuthorizationProvider` for template-bearing operations and falls back to `IResourceAuthorizationProvider` for operations without templates.
+Each `ResolvedScopePair` carries the raw template (`/Tenants/{Auth:AccountId}/Templates/{Id}`) alongside the expanded resource key (`/Tenants/abc123/Templates/42`), giving providers full context for both pattern-based and instance-level authorization decisions.
 
 ### `ScopePairClaimAuthorizationProvider`
 
@@ -213,7 +192,7 @@ The attribute constructors are identical — no code changes required for `[Reso
 S365:                                           Blueprint:
 ────────────────────────────────────────────    ────────────────────────────────────────────
 ScopeApiAuthoriser : IApiAuthoriser        →    ScopePairClaimAuthorizationProvider
-                                                (built-in, or custom IResolvedResourceAuthorizationProvider)
+                                                (built-in, or custom IResourceAuthorizationProvider)
 
 S365ClaimInspector                         →    Generated pipeline code + ScopePairClaimAuthorizationProvider
                                                 (template expansion is compile-time, not runtime)
@@ -221,7 +200,7 @@ S365ClaimInspector                         →    Generated pipeline code + Scop
 AuthResourceKeyTemplateExpander            →    ResourceKeyTemplateParser (compile-time)
 {Auth:AccountId} expansion                 →    Generated inline string interpolation
 
-IS365ResourceKeyExpander                   →    IResolvedResourceAuthorizationProvider.IsAuthorizedAsync
+IS365ResourceKeyExpander                   →    IResourceAuthorizationProvider.IsAuthorizedAsync
 (hierarchical key expansion)                    (consumer implements hierarchical matching)
 ```
 
