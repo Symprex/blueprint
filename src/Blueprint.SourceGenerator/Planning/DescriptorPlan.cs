@@ -129,13 +129,17 @@ public sealed class DescriptorPlan : IEquatable<DescriptorPlan>
             return false;
         }
 
+        // Cheap count checks before expensive SequenceEqual traversals
+        if (this.Diagnostics.Count != other.Diagnostics.Count
+            || this.Metadata.Count != other.Metadata.Count
+            || this._renderSteps.Count != other._renderSteps.Count)
+        {
+            return false;
+        }
+
         return EqualityComparer<OperationModel>.Default.Equals(this.Operation, other.Operation)
             && this.Diagnostics.SequenceEqual(other.Diagnostics)
-            && this.Metadata.SequenceEqual(other.Metadata)
-
-            // Descriptor render steps are delegates, so the metadata they capture must drive equality; the count still
-            // protects contributor activation changes that do not add metadata of their own.
-            && this._renderSteps.Count == other._renderSteps.Count;
+            && this.Metadata.SequenceEqual(other.Metadata);
     }
 
     /// <inheritdoc />

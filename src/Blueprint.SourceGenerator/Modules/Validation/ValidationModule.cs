@@ -78,12 +78,14 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
 
         foreach (var property in operationProperties)
         {
+            var attributes = property.GetAttributes();
+
             AddMissingPropertyDiagnostics(
                 context,
                 operationType.Name,
                 operationProperties,
                 property,
-                property.GetAttributes().Where(static attribute => ValidationSymbolHelpers.IsCompareAttribute(attribute.AttributeClass)),
+                attributes.Where(static attribute => ValidationSymbolHelpers.IsCompareAttribute(attribute.AttributeClass)),
                 ValidationDiagnosticDescriptors.MissingCompareProperty);
 
             AddMissingPropertyDiagnostics(
@@ -91,7 +93,7 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
                 operationType.Name,
                 operationProperties,
                 property,
-                property.GetAttributes().Where(static attribute => ValidationSymbolHelpers.IsGreaterThanPropertyAttribute(attribute.AttributeClass)),
+                attributes.Where(static attribute => ValidationSymbolHelpers.IsGreaterThanPropertyAttribute(attribute.AttributeClass)),
                 ValidationDiagnosticDescriptors.MissingGreaterThanProperty);
 
             AddMissingPropertyDiagnostics(
@@ -99,7 +101,7 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
                 operationType.Name,
                 operationProperties,
                 property,
-                property.GetAttributes().Where(static attribute => ValidationSymbolHelpers.IsLessThanPropertyAttribute(attribute.AttributeClass)),
+                attributes.Where(static attribute => ValidationSymbolHelpers.IsLessThanPropertyAttribute(attribute.AttributeClass)),
                 ValidationDiagnosticDescriptors.MissingLessThanProperty);
 
             AddMissingPropertyDiagnostics(
@@ -107,7 +109,7 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
                 operationType.Name,
                 operationProperties,
                 property,
-                property.GetAttributes().Where(static attribute => ValidationSymbolHelpers.IsMustBeGreaterThanOrEqualAttribute(attribute.AttributeClass)),
+                attributes.Where(static attribute => ValidationSymbolHelpers.IsMustBeGreaterThanOrEqualAttribute(attribute.AttributeClass)),
                 ValidationDiagnosticDescriptors.MissingMustBeGreaterThanOrEqualProperty);
 
             AddMissingPropertyDiagnostics(
@@ -115,7 +117,7 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
                 operationType.Name,
                 operationProperties,
                 property,
-                property.GetAttributes().Where(static attribute => ValidationSymbolHelpers.IsRequiredIfAttribute(attribute.AttributeClass)),
+                attributes.Where(static attribute => ValidationSymbolHelpers.IsRequiredIfAttribute(attribute.AttributeClass)),
                 ValidationDiagnosticDescriptors.MissingRequiredIfProperty);
 
             AddMissingPropertyDiagnostics(
@@ -123,7 +125,7 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
                 operationType.Name,
                 operationProperties,
                 property,
-                property.GetAttributes().Where(static attribute => ValidationSymbolHelpers.IsRequiredIfNotAttribute(attribute.AttributeClass)),
+                attributes.Where(static attribute => ValidationSymbolHelpers.IsRequiredIfNotAttribute(attribute.AttributeClass)),
                 ValidationDiagnosticDescriptors.MissingRequiredIfNotProperty);
 
             AddMissingPropertyDiagnostics(
@@ -131,7 +133,7 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
                 operationType.Name,
                 operationProperties,
                 property,
-                property.GetAttributes().Where(static attribute => ValidationSymbolHelpers.IsNotAllowedIfAttribute(attribute.AttributeClass)),
+                attributes.Where(static attribute => ValidationSymbolHelpers.IsNotAllowedIfAttribute(attribute.AttributeClass)),
                 ValidationDiagnosticDescriptors.MissingNotAllowedIfProperty);
 
             ValidateConflictingRanges(context, operationType.Name, property);

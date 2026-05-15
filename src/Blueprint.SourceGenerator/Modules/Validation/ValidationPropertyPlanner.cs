@@ -70,7 +70,8 @@ internal static class ValidationPropertyPlanner
         {
             var propertyAccess = $"operation.{ValidationSymbolHelpers.EscapeIdentifier(property.Name)}";
 
-            var validationAttributes = property.GetAttributes()
+            var allAttributes = property.GetAttributes();
+            var validationAttributes = allAttributes
                 .Where(static attribute => ValidationSymbolHelpers.IsValidationAttribute(attribute.AttributeClass))
                 .ToArray();
 
@@ -96,7 +97,7 @@ internal static class ValidationPropertyPlanner
                 continue;
             }
 
-            if (property.GetAttributes().Any(static attribute => ValidationSymbolHelpers.IsDisplayNameAffectingAttribute(attribute.AttributeClass)))
+            if (allAttributes.Any(static attribute => ValidationSymbolHelpers.IsDisplayNameAffectingAttribute(attribute.AttributeClass)))
             {
                 properties.Add(new RuntimeFallbackPropertyValidationPlan(property.Name, propertyAccess));
                 continue;
