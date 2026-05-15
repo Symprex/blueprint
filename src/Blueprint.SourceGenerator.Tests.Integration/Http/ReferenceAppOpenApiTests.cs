@@ -1194,7 +1194,7 @@ public class ReferenceAppOpenApiTests
 
         // CreateTemplateCommand (POST /templates) returns ResourceEventResult<TemplateApiResource>
         var createPath = doc.RootElement.GetProperty("paths").GetProperty("/templates");
-        var schema = createPath
+        var responseSchema = createPath
             .GetProperty("post")
             .GetProperty("responses")
             .GetProperty("201")
@@ -1202,12 +1202,20 @@ public class ReferenceAppOpenApiTests
             .GetProperty("application/json")
             .GetProperty("schema");
 
-        // Should be an inline envelope schema (not a bare $ref to the inner type)
-        schema.GetProperty("type").GetString().Should().Be("object",
-            "ResourceEventResult responses should produce an inline envelope schema");
+        // Should be a $ref to a named component schema (not inline)
+        responseSchema.GetProperty("$ref").GetString().Should().Be(
+            "#/components/schemas/ResourceEventOfTemplateApiResource",
+            "ResourceEventResult responses should reference a named component schema");
+
+        // Resolve the named component and verify its properties
+        var schemas = doc.RootElement.GetProperty("components").GetProperty("schemas");
+        schemas.TryGetProperty("ResourceEventOfTemplateApiResource", out var component).Should().BeTrue(
+            "the ResourceEventOfTemplateApiResource component should exist in components/schemas");
+
+        component.GetProperty("type").GetString().Should().Be("object");
 
         // Verify all envelope properties exist
-        var props = schema.GetProperty("properties");
+        var props = component.GetProperty("properties");
         props.TryGetProperty("$object", out _).Should().BeTrue("envelope must include $object");
         props.TryGetProperty("eventId", out _).Should().BeTrue("envelope must include eventId");
         props.TryGetProperty("changeType", out _).Should().BeTrue("envelope must include changeType");
@@ -1221,16 +1229,29 @@ public class ReferenceAppOpenApiTests
         dataRef.Should().Be("#/components/schemas/TemplateApiResource",
             "envelope data property should reference the inner resource type");
 
-        // Metadata properties should be nullable objects
+        // Metadata properties should be nullable objects with additionalProperties
         props.GetProperty("metadata").GetProperty("nullable").GetBoolean().Should().BeTrue();
         props.GetProperty("secureData").GetProperty("nullable").GetBoolean().Should().BeTrue();
         props.GetProperty("changedValues").GetProperty("nullable").GetBoolean().Should().BeTrue();
 
         // Required array should include key properties
-        var required = schema.GetProperty("required").EnumerateArray().Select(static e => e.GetString()).ToList();
+        var required = component.GetProperty("required").EnumerateArray().Select(static e => e.GetString()).ToList();
         required.Should().Contain("$object");
         required.Should().Contain("eventId");
         required.Should().Contain("data");
+
+        // changeType should reference the ResourceEventChangeType enum component
+        var changeTypeSchema = props.GetProperty("changeType");
+        var changeTypeRef = changeTypeSchema.GetProperty("oneOf").EnumerateArray().First()
+            .GetProperty("$ref").GetString();
+        changeTypeRef.Should().Be("#/components/schemas/ResourceEventChangeType",
+            "changeType should reference the ResourceEventChangeType enum component");
+
+        // ResourceEventChangeType enum should exist
+        schemas.TryGetProperty("ResourceEventChangeType", out var changeTypeEnum).Should().BeTrue(
+            "the ResourceEventChangeType enum should exist in components/schemas");
+        var enumValues = changeTypeEnum.GetProperty("enum").EnumerateArray().Select(static e => e.GetString()).ToList();
+        enumValues.Should().BeEquivalentTo(new[] { "Created", "Updated", "Deleted" });
     }
 
     [Fact]

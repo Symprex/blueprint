@@ -767,11 +767,17 @@ public sealed record OpenApiOutputRenderingContext(
             return;
         }
 
-        // ResourceEvent envelope: wrap inner type's $ref in the canonical envelope schema shape
-        // so TypeScript generators see the actual wire format (eventId, changeType, data, etc.).
+        // ResourceEvent envelope: reference the named component schema (e.g. ResourceEventOfTemplateApiResource)
+        // instead of inlining the envelope shape. The named component was created by
+        // OpenApiDocumentRenderingContext.CollectResourceEventEnvelopeComponents().
         if (content.IsResourceEventEnvelope && content.SchemaComponents.Length >= 1)
         {
-            WriteResourceEventEnvelopeSchema(writer, content.SchemaComponents, schemaNameFormatter);
+            var innerBodyTypeName = content.SchemaComponents[0].BodyTypeName;
+            var envelopeBodyTypeName = OpenApiDocumentRenderingContext.BuildResourceEventEnvelopeBodyTypeName(innerBodyTypeName);
+
+            writer.WriteStartObject();
+            writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(envelopeBodyTypeName, schemaNameFormatter)}");
+            writer.WriteEndObject();
             return;
         }
 
@@ -1370,6 +1376,29 @@ public sealed record OpenApiOutputRenderingContext(
         writer.WritePropertyName(property.Name);
         writer.WriteStartObject();
 
+        // Direct schema reference: property IS a $ref to another component (e.g. the "data" property
+        // on a ResourceEvent envelope referencing the inner resource type).
+        if (property.SchemaRef is not null)
+        {
+            if (property.IsNullable)
+            {
+                writer.WriteBoolean("nullable", true);
+                writer.WritePropertyName("oneOf");
+                writer.WriteStartArray();
+                writer.WriteStartObject();
+                writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(property.SchemaRef, schemaNameFormatter)}");
+                writer.WriteEndObject();
+                writer.WriteEndArray();
+            }
+            else
+            {
+                writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(property.SchemaRef, schemaNameFormatter)}");
+            }
+
+            writer.WriteEndObject();
+            return;
+        }
+
         // Enum-typed properties are rendered as oneOf: [{ $ref: ... }] pointing at the enum's
         // top-level component schema, matching the pattern established by NJsonSchema / S365 and
         // expected by TypeScript generators that resolve type names from $ref paths.
@@ -1482,6 +1511,14 @@ public sealed record OpenApiOutputRenderingContext(
                 }
             }
 
+            writer.WriteEndObject();
+        }
+        else if (property.AllowsAdditionalProperties)
+        {
+            // Nullable open-object properties (e.g. metadata, secureData, changedValues on ResourceEvent
+            // envelopes) emit additionalProperties: {} to indicate any additional members are accepted.
+            writer.WritePropertyName("additionalProperties");
+            writer.WriteStartObject();
             writer.WriteEndObject();
         }
 

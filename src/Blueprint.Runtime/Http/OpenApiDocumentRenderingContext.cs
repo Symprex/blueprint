@@ -52,6 +52,26 @@ public sealed record OpenApiDocumentRenderingContext(
                 .ToImmutableArray();
         }
 
+        // Promote ResourceEvent envelopes from inline response schemas to named component schemas so
+        // TypeScript generators (which resolve types from $ref paths) can produce typed envelope classes
+        // like ResourceEventOfTemplateApiResource instead of anonymous inline objects.
+        var (envelopeComponents, changeTypeEnum) = CollectResourceEventEnvelopeComponents(paths);
+
+        if (!envelopeComponents.IsEmpty)
+        {
+            schemaComponents = schemaComponents.AddRange(envelopeComponents);
+
+            if (changeTypeEnum is not null
+                && !schemaComponents.Any(c => string.Equals(c.BodyTypeName, changeTypeEnum.BodyTypeName, StringComparison.Ordinal)))
+            {
+                schemaComponents = schemaComponents.Add(changeTypeEnum);
+            }
+
+            schemaComponents = schemaComponents
+                .OrderBy(static component => component.BodyTypeName, StringComparer.Ordinal)
+                .ToImmutableArray();
+        }
+
         return new OpenApiDocumentRenderingContext(pathItemRendering, paths, schemaComponents);
     }
 
@@ -238,5 +258,161 @@ public sealed record OpenApiDocumentRenderingContext(
         }
 
         return builder.MoveToImmutable();
+    }
+
+    /// <summary>
+    /// Builds the synthetic CLR-style body type name for a ResourceEvent envelope wrapping the given inner type.
+    /// Both document assembly and response rendering must use this method to ensure the same schema key is produced
+    /// after <see cref="OpenApiOutputRenderingContext"/> applies <c>SanitiseSchemaKey</c>.
+    /// </summary>
+    /// <param name="innerBodyTypeName">The full CLR body type name of the inner resource type.</param>
+    /// <returns>A synthetic generic CLR name that <c>SimplifyClrTypeName</c> converts to the "Of" convention.</returns>
+    /// <remarks>
+    /// The synthetic name <c>Blueprint.Http.ResourceEvent&lt;Inner.Full.Name&gt;</c> is processed by
+    /// <c>SimplifyClrTypeName</c> into the "Of" convention (e.g. <c>ResourceEventOfTemplateApiResource</c>)
+    /// matching the NJsonSchema naming used by S365's legacy Blueprint OpenAPI output.
+    /// </remarks>
+    internal static string BuildResourceEventEnvelopeBodyTypeName(string innerBodyTypeName)
+    {
+        return $"Blueprint.Http.ResourceEvent<{innerBodyTypeName}>";
+    }
+
+    /// <summary>
+    /// Walks the assembled path items to find responses marked as ResourceEvent envelopes and promotes each into
+    /// a named component schema (e.g. <c>ResourceEventOfTemplateApiResource</c>) so the response can reference
+    /// it via <c>$ref</c> instead of inlining the envelope shape. Also creates the <c>ResourceEventChangeType</c>
+    /// enum component that the envelope's <c>changeType</c> property references via <c>$ref</c>.
+    /// </summary>
+    private static (ImmutableArray<OpenApiSchemaComponentModel> Envelopes, OpenApiSchemaComponentModel? ChangeTypeEnum)
+        CollectResourceEventEnvelopeComponents(ImmutableArray<OpenApiPathItemModel> paths)
+    {
+        // envelopeBodyTypeName → innerBodyTypeName (deduplicated by envelope key)
+        var envelopes = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        foreach (var path in paths)
+        {
+            foreach (var method in path.Methods)
+            {
+                foreach (var operation in method.Operations)
+                {
+                    foreach (var response in operation.Responses)
+                    {
+                        foreach (var content in response.Content)
+                        {
+                            if (!content.IsResourceEventEnvelope || content.SchemaComponents.IsEmpty)
+                            {
+                                continue;
+                            }
+
+                            // Single inner type: ResourceEventOf{InnerType}
+                            var innerBodyTypeName = content.SchemaComponents[0].BodyTypeName;
+                            var envelopeBodyTypeName = BuildResourceEventEnvelopeBodyTypeName(innerBodyTypeName);
+                            envelopes.TryAdd(envelopeBodyTypeName, innerBodyTypeName);
+                        }
+                    }
+                }
+            }
+        }
+
+        if (envelopes.Count == 0)
+        {
+            return (ImmutableArray<OpenApiSchemaComponentModel>.Empty, null);
+        }
+
+        var builder = ImmutableArray.CreateBuilder<OpenApiSchemaComponentModel>(envelopes.Count);
+
+        foreach (var (envelopeBodyTypeName, innerBodyTypeName) in envelopes)
+        {
+            builder.Add(CreateResourceEventEnvelopeComponent(envelopeBodyTypeName, innerBodyTypeName));
+        }
+
+        var changeTypeEnum = new OpenApiSchemaComponentModel(
+            "ResourceEventChangeType",
+            "string",
+            ImmutableArray<string>.Empty,
+            ImmutableArray<OpenApiSchemaComponentPropertyModel>.Empty,
+            ComponentEnumValues: ImmutableArray.Create("Created", "Updated", "Deleted"));
+
+        return (builder.MoveToImmutable(), changeTypeEnum);
+    }
+
+    /// <summary>
+    /// Creates a fully materialized <see cref="OpenApiSchemaComponentModel"/> for a ResourceEvent envelope.
+    /// The component contains real properties so schema processors can inspect and modify them.
+    /// </summary>
+    private static OpenApiSchemaComponentModel CreateResourceEventEnvelopeComponent(
+        string envelopeBodyTypeName, string innerBodyTypeName)
+    {
+        var properties = ImmutableArray.Create(
+            new OpenApiSchemaComponentPropertyModel(
+                "$object",
+                "string",
+                IsExtensionData: false,
+                IsNullable: false),
+            new OpenApiSchemaComponentPropertyModel(
+                "eventId",
+                "string",
+                IsExtensionData: false,
+                IsNullable: false),
+            new OpenApiSchemaComponentPropertyModel(
+                "changeType",
+                null,
+                IsExtensionData: false,
+                IsNullable: false,
+                EnumSchemaRef: "ResourceEventChangeType",
+                EnumValues: ImmutableArray.Create("Created", "Updated", "Deleted")),
+            new OpenApiSchemaComponentPropertyModel(
+                "created",
+                "string",
+                IsExtensionData: false,
+                IsNullable: false,
+                Format: "date-time"),
+            new OpenApiSchemaComponentPropertyModel(
+                "resourceObject",
+                "string",
+                IsExtensionData: false,
+                IsNullable: false),
+            new OpenApiSchemaComponentPropertyModel(
+                "href",
+                "string",
+                IsExtensionData: false,
+                IsNullable: true),
+            new OpenApiSchemaComponentPropertyModel(
+                "data",
+                null,
+                IsExtensionData: false,
+                IsNullable: false,
+                SchemaRef: innerBodyTypeName),
+            new OpenApiSchemaComponentPropertyModel(
+                "metadata",
+                "object",
+                IsExtensionData: false,
+                IsNullable: true,
+                AllowsAdditionalProperties: true),
+            new OpenApiSchemaComponentPropertyModel(
+                "secureData",
+                "object",
+                IsExtensionData: false,
+                IsNullable: true,
+                AllowsAdditionalProperties: true),
+            new OpenApiSchemaComponentPropertyModel(
+                "changedValues",
+                "object",
+                IsExtensionData: false,
+                IsNullable: true,
+                AllowsAdditionalProperties: true),
+            new OpenApiSchemaComponentPropertyModel(
+                "correlationId",
+                "string",
+                IsExtensionData: false,
+                IsNullable: true));
+
+        var required = ImmutableArray.Create("$object", "eventId", "changeType", "created", "resourceObject", "data");
+
+        return new OpenApiSchemaComponentModel(
+            envelopeBodyTypeName,
+            "object",
+            required,
+            properties);
     }
 }

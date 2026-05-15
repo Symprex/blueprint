@@ -193,6 +193,11 @@ public sealed record OpenApiSchemaLinkExtension(string Rel, string OperationId, 
 /// <param name="ExampleValue">A representative example value from <see cref="Blueprint.Model.Attributes.OpenApiExampleAttribute"/>, or null.</param>
 /// <param name="IsReadOnly">Whether this property is read-only (no public setter or <c>[ReadOnly(true)]</c>).</param>
 /// <param name="IsWriteOnly">Whether this property is write-only (<c>[OpenApiWriteOnly]</c>, e.g. a password field).</param>
+/// <param name="SchemaRef">The body type name of another schema component this property references directly.
+/// When set, the property renders as <c>$ref: #/components/schemas/{Name}</c> instead of an inline type definition.
+/// For nullable references, renders as <c>nullable: true, oneOf: [{ $ref }]</c>.</param>
+/// <param name="AllowsAdditionalProperties">When true, the property emits <c>additionalProperties: {}</c> to indicate
+/// the object accepts arbitrary additional members (e.g. metadata, changedValues bags on ResourceEvent envelopes).</param>
 public sealed record OpenApiSchemaComponentPropertyModel(
     string Name,
     string? Type,
@@ -223,4 +228,6 @@ public sealed record OpenApiSchemaComponentPropertyModel(
     object? DefaultValue = null,
     object? ExampleValue = null,
     bool IsReadOnly = false,
-    bool IsWriteOnly = false);
+    bool IsWriteOnly = false,
+    string? SchemaRef = null,
+    bool AllowsAdditionalProperties = false);
