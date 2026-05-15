@@ -569,37 +569,6 @@ public static class PipelineHelpers
     }
 
     /// <summary>
-    /// Executes the full post-handler success phase in a single call: unit-of-work save, message
-    /// outbox commit, general audit sink, and background task flush. Each step has its own
-    /// null-check fast path, so stages that are not registered are skipped with no overhead.
-    /// </summary>
-    /// <remarks>
-    /// This consolidation replaces 4 separate <c>await</c> lines in each generated pipeline with
-    /// a single call, reducing IL size by ~10 lines per pipeline (~5,400 lines for S365's ~540
-    /// operations). The individual helpers remain public for pipelines that use a subset.
-    /// </remarks>
-    /// <param name="serviceProvider">The scoped service provider for the current operation.</param>
-    /// <param name="cancellationToken">Cancellation token to observe during persistence operations.</param>
-    /// <param name="auditSink">The audit sink to invoke, or <c>null</c> if none is registered.</param>
-    /// <param name="context">The operation context for the current pipeline execution.</param>
-    /// <param name="handlerResult">The handler result to pass to the audit sink.</param>
-    /// <param name="operationTypeName">The operation type name for audit activity tags.</param>
-    /// <returns>A task that completes when all post-success steps have finished.</returns>
-    public static async Task RunPostSuccessAsync(
-        IServiceProvider serviceProvider,
-        CancellationToken cancellationToken,
-        IAuditSink? auditSink,
-        ApiOperationContext context,
-        OperationResult handlerResult,
-        string operationTypeName)
-    {
-        await SaveUnitOfWorkAsync(serviceProvider, cancellationToken).ConfigureAwait(false);
-        await CommitMessageOutboxAsync(serviceProvider, cancellationToken).ConfigureAwait(false);
-        await ExecuteAuditSinkAsync(auditSink, context, handlerResult, operationTypeName).ConfigureAwait(false);
-        await FlushBackgroundTasksAsync(serviceProvider).ConfigureAwait(false);
-    }
-
-    /// <summary>
     /// Extracted from per-pipeline inline code to reduce IL size across all HTTP-exposed
     /// operations that require authentication (~400+ in a typical S365-scale app).
     /// </summary>

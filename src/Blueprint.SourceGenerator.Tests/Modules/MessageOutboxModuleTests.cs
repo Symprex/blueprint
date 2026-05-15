@@ -47,9 +47,8 @@ public class MessageOutboxModuleTests
         var pipelineSources = result.GetGeneratedSources(nameof(OperationExecutorPipelineSourceGenerator));
         var pipelineSource = string.Join("\n", pipelineSources.Select(static s => s.SourceText));
 
-        // All standard post-success steps (UnitOfWork, MessageOutbox, Audit, BackgroundTaskFlush)
-        // are consolidated into a single RunPostSuccessAsync call to reduce IL size.
-        pipelineSource.Should().Contain("PipelineHelpers.RunPostSuccessAsync(");
+        // Each module contributes its own individual post-success call
+        pipelineSource.Should().Contain("PipelineHelpers.CommitMessageOutboxAsync(");
 
         // Only commits when handler result was successful
         pipelineSource.Should().Contain("handlerResult.WasSuccessful");

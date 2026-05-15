@@ -13,19 +13,6 @@ namespace Blueprint.SourceGenerator.Generators.Pipelines;
 internal static class PipelineCodeGenerator
 {
     /// <summary>
-    /// Contributor IDs whose individual post-success render steps can be consolidated into a
-    /// single <c>PipelineHelpers.RunPostSuccessAsync</c> call when all four are present.
-    /// The order matches the call order inside <c>RunPostSuccessAsync</c>: save → commit → audit → flush.
-    /// </summary>
-    private static readonly HashSet<string> _consolidatablePostSuccessIds =
-    [
-        "UnitOfWorkModule",
-        "MessageOutboxModule",
-        "AuditingModule",
-        "BackgroundTaskFlushModule",
-    ];
-
-    /// <summary>
     /// Generates the complete pipeline class for an operation handler.
     /// </summary>
     /// <param name="handler">The discovered handler model that drives generated type and method names.</param>
@@ -130,7 +117,8 @@ internal static class PipelineCodeGenerator
 
             // When we encounter the first success-guarded step, open a consolidated
             // if (handlerResult.WasSuccessful) block and render ALL success-guarded
-            // steps from every contribution inside it.
+            // steps from every contribution inside it. Each module contributes its
+            // own individual call — no cross-module consolidation.
             if (!inSuccessGuard && steps.Any(static s => s.RequiresSuccessGuard))
             {
                 inSuccessGuard = true;
@@ -144,26 +132,6 @@ internal static class PipelineCodeGenerator
                 // Collect ALL success-guarded steps across ALL remaining contributions
                 var guardedSteps = plan.RenderSteps.Where(static s => s.RequiresSuccessGuard).ToList();
 
-                // Check if all 4 standard post-success modules are present. Only consolidate when
-                // all 4 contributed — opt-outs ([DoNotSaveChanges], [DoNotPublishMessages], [DoNotAudit],
-                // query-only UoW/Outbox skip) must keep their individual rendering to preserve semantics.
-                var consolidatableIds = new HashSet<string>();
-                var nonConsolidatable = new List<PipelineRenderStep>();
-
-                foreach (var step in guardedSteps)
-                {
-                    if (_consolidatablePostSuccessIds.Contains(step.ContributorId))
-                    {
-                        consolidatableIds.Add(step.ContributorId);
-                    }
-                    else
-                    {
-                        nonConsolidatable.Add(step);
-                    }
-                }
-
-                var allFourPresent = consolidatableIds.Count == _consolidatablePostSuccessIds.Count;
-
                 writer.NewLine();
                 writer.If(
                     "handlerResult.WasSuccessful",
@@ -171,26 +139,9 @@ internal static class PipelineCodeGenerator
                     {
                         var guardContext = new PipelineRenderContext(guardWriter, handler, plan);
 
-                        if (allFourPresent)
+                        foreach (var step in guardedSteps)
                         {
-                            // Emit the consolidated call — RunPostSuccessAsync handles null-check
-                            // fast paths internally for each sub-step.
-                            guardWriter.NewLine();
-                            guardWriter.AppendLine($"await Blueprint.Runtime.Exec.PipelineHelpers.RunPostSuccessAsync(context.ServiceProvider, context.OperationCancelled, this.AuditSink, context, handlerResult, \"{handler.OperationTypeName}\").ConfigureAwait(false);");
-
-                            // Render any non-consolidatable steps individually (ResourceEventAudit, RebusTransaction, etc.)
-                            foreach (var step in nonConsolidatable)
-                            {
-                                step.Render(guardContext);
-                            }
-                        }
-                        else
-                        {
-                            // Not all 4 standard modules present (opt-out or query) — render all individually
-                            foreach (var step in guardedSteps)
-                            {
-                                step.Render(guardContext);
-                            }
+                            step.Render(guardContext);
                         }
                     });
 

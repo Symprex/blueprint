@@ -47,8 +47,8 @@ public class BackgroundTaskFlushModuleTests
         var pipelineSources = result.GetGeneratedSources(nameof(OperationExecutorPipelineSourceGenerator));
         var pipelineSource = string.Join("\n", pipelineSources.Select(static s => s.SourceText));
 
-        // All standard post-success steps are consolidated into RunPostSuccessAsync
-        pipelineSource.Should().Contain("PipelineHelpers.RunPostSuccessAsync(");
+        // Each module contributes its own individual post-success call
+        pipelineSource.Should().Contain("PipelineHelpers.FlushBackgroundTasksAsync(");
 
         // Only flushes when handler result was successful
         pipelineSource.Should().Contain("handlerResult.WasSuccessful");
@@ -90,8 +90,8 @@ public class BackgroundTaskFlushModuleTests
         var pipelineSources = result.GetGeneratedSources(nameof(OperationExecutorPipelineSourceGenerator));
         var pipelineSource = string.Join("\n", pipelineSources.Select(static s => s.SourceText));
 
-        // Null-guarding is handled inside PipelineHelpers.RunPostSuccessAsync (and its sub-helpers)
-        pipelineSource.Should().Contain("RunPostSuccessAsync");
+        // Null-guarding is handled inside PipelineHelpers.FlushBackgroundTasksAsync
+        pipelineSource.Should().Contain("FlushBackgroundTasksAsync");
     }
 
     [Fact]
@@ -130,8 +130,7 @@ public class BackgroundTaskFlushModuleTests
         var pipelineSources = result.GetGeneratedSources(nameof(OperationExecutorPipelineSourceGenerator));
         var pipelineSource = string.Join("\n", pipelineSources.Select(static s => s.SourceText));
 
-        // Background task flush applies to all operation types (queries use individual calls,
-        // commands use consolidated RunPostSuccessAsync)
+        // Background task flush applies to all operation types
         pipelineSource.Should().Contain("PipelineHelpers.FlushBackgroundTasksAsync");
     }
 }
