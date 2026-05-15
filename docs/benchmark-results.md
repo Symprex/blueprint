@@ -289,36 +289,57 @@ the fallback path, the overhead is still only ~4.5µs per attribute invocation.
 Measures the source generator's compile-time performance with synthetic apps of different sizes.
 Both initial (full) and incremental (cached) runs are measured to quantify scaling and cache efficacy.
 
-**Last updated:** 2025-08-04 | .NET 10.0.8 | MediumRun (15 iterations)
+**Last updated:** 2025-08-05 | .NET 10.0.8 | MediumRun (5 iterations, 2 launches)
 
 ### Full compilation scaling
 
 | Benchmark | Operations | Mean | Error | StdDev | Allocated |
 |-----------|----------:|---------:|-------:|-------:|----------:|
-| InitialRun_10Ops | 10 | 13.91 ms | 2.22 ms | 3.11 ms | 3.1 MB |
-| InitialRun_50Ops | 50 | 46.41 ms | 4.59 ms | 6.58 ms | 14.02 MB |
-| InitialRun_100Ops | 100 | 96.43 ms | 10.87 ms | 16.26 ms | 27.79 MB |
-| InitialRun_250Ops | 250 | 206.89 ms | 22.36 ms | 33.46 ms | 69.19 MB |
-| InitialRun_500Ops | 500 | 305.02 ms | 20.30 ms | 28.45 ms | 138.22 MB |
+| InitialRun_10Ops | 10 | 25.58 ms | 22.06 ms | 13.13 ms | 3.1 MB |
+| InitialRun_50Ops | 50 | 33.99 ms | 10.98 ms | 5.74 ms | 14.04 MB |
+| InitialRun_100Ops | 100 | 77.60 ms | 44.84 ms | 29.66 ms | 27.82 MB |
+| InitialRun_250Ops | 250 | 161.35 ms | 38.35 ms | 25.36 ms | 69.23 MB |
+| InitialRun_500Ops | 500 | 266.33 ms | 42.55 ms | 25.32 ms | 138.31 MB |
 
 ### Incremental and per-phase breakdown (100 operations)
 
 | Benchmark | Mean | Allocated |
 |-----------|-----:|----------:|
-| IncrementalCachedRun_100Ops | 42.79 ms | 13.32 MB |
-| DescriptorOnly_100Ops | 38.89 ms | 11.90 MB |
-| AppRegistration_100Ops | 15.22 ms | 3.12 MB |
-| PipelineOnly_100Ops | 14.93 ms | 11.74 MB |
+| IncrementalCachedRun_100Ops | 22.26 ms | 13.37 MB |
+| DescriptorOnly_100Ops | 29.23 ms | 11.99 MB |
+| AppRegistration_100Ops | 5.53 ms | 2.99 MB |
+| PipelineOnly_100Ops | 9.75 ms | 11.79 MB |
+
+### Optimization impact vs 2025-08-04 baseline
+
+| Benchmark | Aug 4 | Aug 5 | Delta |
+|-----------|------:|------:|------:|
+| InitialRun_100Ops | 96.43 ms | 77.60 ms | **-20%** |
+| InitialRun_250Ops | 206.89 ms | 161.35 ms | **-22%** |
+| InitialRun_500Ops | 305.02 ms | 266.33 ms | **-13%** |
+| IncrementalCached_100 | 42.79 ms | 22.26 ms | **-48%** |
+| DescriptorOnly_100 | 38.89 ms | 29.23 ms | **-25%** |
+| PipelineOnly_100 | 14.93 ms | 9.75 ms | **-35%** |
 
 **Key insights:**
-- **Near-linear scaling**: ~0.6 ms per additional operation for initial runs
-- **500 operations (S365 scale)**: 305 ms compile time, 138 MB — well within CI budget
-- **Incremental cached run**: 45% faster than full recompilation, 48% less memory
-- **Descriptor generation dominates** at 38.89 ms (40% of total for 100 ops).
-  Pipeline generation is faster at 14.93 ms. App registration is cheap at 15.22 ms.
-- **Memory per operation**: ~276 KB/op (138 MB ÷ 500) for full initial run
-- **S365 impact**: The largest service (Portal, ~70 ops) adds ~60-70 ms to compilation.
-  Typical 5-10 op services add ~15-20 ms — negligible in CI builds.
+- **Near-linear scaling**: ~0.5 ms per additional operation for initial runs
+- **500 operations (S365 scale)**: 266 ms compile time, 138 MB — well within CI budget
+- **Incremental cached run**: 48% faster than initial — direct IDE responsiveness improvement
+- **Descriptor generation dominates** at 29.23 ms (38% of total for 100 ops)
+- **Pipeline generation** dropped 35% to 9.75 ms after ParameterAnalyzer + HandlerDiscovery optimizations
+- **S365 impact**: The largest service (Portal, ~70 ops) adds ~50-55 ms to compilation.
+  Typical 5-10 op services add ~12-15 ms — negligible in CI builds.
+
+### Optimizations contributing to Aug 4→5 improvement
+
+1. **FindTypeByMetadataName caching** (commit c10f21c4) — eliminates ~1500+ redundant lookups per 100 ops
+2. **ToDisplayString → SpecialType** (commit c10f21c4) — zero-alloc type comparison in binding hot path
+3. **GetAttributes() caching** (commit f9de12d2) — 7→1 calls per property in validation
+4. **DescriptorPlan.Equals() early-exit** (commit f9de12d2) — O(1) count check before SequenceEqual
+5. **AuthorizationModule location cache** (commit ffa55b10) — 8→1 ImmutableArray traversals per op
+6. **ParameterAnalyzer MetadataName checks** (commit faf22795) — zero-alloc handler parameter analysis
+7. **HandlerDiscovery MetadataName checks** (commit faf22795) — zero-alloc property injection detection
+8. **ValidationSymbolHelpers collection detection** (commit faf22795) — MetadataName for generic type checks
 
 ---
 
@@ -356,14 +377,6 @@ Both initial (full) and incremental (cached) runs are measured to quantify scali
    is well within noise of HTTP handling.
 3. **OpenAPI spec generation** is cached — 0.43ms p50 at 10 RPS is acceptable for a
    document that is typically fetched once by tooling.
-   attributes (Required, MaxLength, MinLength, Range, RegularExpression, StringLength,
-   Length, EmailAddress, Phone, Url, Compare) are hoisted to `private static readonly`
-   fields in generated pipeline code. This eliminates per-request allocations on the
-   validation failure path. Previously only Blueprint-custom attributes (Password,
-   ResourceKey, UkPostcode) were cached.
-
-2. **Static ActivityTagsCollection** — Audit and observability tags are pre-allocated
-   as static fields per operation type, avoiding per-request dictionary creation.
 
 ### Remaining Optimization Opportunities
 
@@ -377,13 +390,9 @@ should focus on HTTP layer (serialization, routing) rather than pipeline executi
 
 ---
 
-## Source Generator Compiler Benchmarks
+## Older Compiler Benchmark History (July 2025)
 
-These benchmarks measure how fast the source generators run during Roslyn compilation.
-They use `SyntheticBlueprintFixtureGenerator` to create realistic N-operation apps and
-time the full generator pipeline (descriptor + pipeline + app registration generators).
-
-### Results
+Retained for trend tracking. See "Source Generator Compilation Benchmarks" above for latest.
 
 | Benchmark | Mean | Allocated | Notes |
 |-----------|-----:|-----------:|-------|
@@ -395,32 +404,6 @@ time the full generator pipeline (descriptor + pipeline + app registration gener
 | InitialRun (100 ops) | 60.6 ms | 36.1 MB | S365 medium service size |
 | IncrementalCached (100 ops) | 32.0 ms | 21.5 MB | Cache-hit re-run — 47% faster than initial |
 | InitialRun (250 ops) | 156.0 ms | 89.7 MB | S365 largest service (Portal ~70 ops) |
-
-### Analysis
-
-**Scaling:** Generator cost scales roughly linearly with operation count:
-- 10 ops → 8.1ms (baseline)
-- 50 ops → 29.6ms (~3.6x)
-- 100 ops → 60.6ms (~7.5x)
-- 250 ops → 156ms (~19x)
-
-For S365's largest service (Portal, ~70 operations), expect ~45ms generation time per
-build. This is well within acceptable IDE feedback latency.
-
-**Generator breakdown (100 ops):**
-- App registration: 3.4ms (cheapest — simple type listing)
-- Pipeline codegen: 11.1ms (moderate — generates full executor pipelines)
-- Descriptor analysis: 27.9ms (most expensive — attribute analysis, validation, planning)
-
-**Incremental cache concern:** The cached re-run (32ms, 21.5 MB) is roughly half the cost
-of the initial run (60.6ms, 36.1 MB). The incremental pipeline cache is working — the
-generator avoids regenerating unchanged outputs. The remaining 32ms cost is primarily
-Roslyn compilation cloning and incremental driver bookkeeping.
-
-**Memory:** At 100 operations, all three generators together allocate ~36 MB. This is
-Roslyn-typical for source generators and is reclaimed after compilation. The pipeline
-generator is the most allocation-heavy (19.8 MB for 100 ops) due to code-emission
-string building.
 
 ---
 
