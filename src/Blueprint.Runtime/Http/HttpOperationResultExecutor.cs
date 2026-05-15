@@ -31,6 +31,7 @@ public class HttpOperationResultExecutor
     {
         Status = StatusCodes.Status401Unauthorized,
         Title = "Unauthorized",
+        Type = "https://tools.ietf.org/html/rfc7235#section-3.1",
         Detail = "Authentication is required to access this resource.",
     };
 
@@ -38,6 +39,7 @@ public class HttpOperationResultExecutor
     {
         Status = StatusCodes.Status403Forbidden,
         Title = "Forbidden",
+        Type = "https://tools.ietf.org/html/rfc7231#section-6.5.3",
         Detail = "You do not have permission to access this resource.",
     };
 
@@ -45,6 +47,7 @@ public class HttpOperationResultExecutor
     {
         Status = StatusCodes.Status415UnsupportedMediaType,
         Title = "Unsupported Media Type",
+        Type = "https://tools.ietf.org/html/rfc7231#section-6.5.13",
         Detail = "The request content type is not supported. Expected 'application/json'.",
     };
 
@@ -85,6 +88,7 @@ public class HttpOperationResultExecutor
                 {
                     Status = StatusCodes.Status400BadRequest,
                     Title = "Bad Request",
+                    Type = "https://tools.ietf.org/html/rfc7231#section-6.5.1",
                     Detail = bindingFailureResult.Reason,
                 }).ConfigureAwait(false);
                 return true;
@@ -473,6 +477,8 @@ public class HttpOperationResultExecutor
         var problemDetails = new MvcValidationProblemDetails(validationErrors)
         {
             Status = StatusCodes.Status422UnprocessableEntity,
+            Title = "One or more validation errors occurred.",
+            Type = "https://tools.ietf.org/html/rfc4918#section-11.2",
         };
 
         httpContext.Response.StatusCode = StatusCodes.Status422UnprocessableEntity;
