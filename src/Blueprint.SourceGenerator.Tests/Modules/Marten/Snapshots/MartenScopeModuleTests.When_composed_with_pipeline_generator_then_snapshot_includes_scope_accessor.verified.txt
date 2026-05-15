@@ -71,13 +71,7 @@ namespace Blueprint.Generated
             if (handlerResult.WasSuccessful)
             {
 
-                await Blueprint.Runtime.Exec.PipelineHelpers.SaveUnitOfWorkAsync(context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);
-
-                await Blueprint.Runtime.Exec.PipelineHelpers.CommitMessageOutboxAsync(context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);
-
-                await Blueprint.Runtime.Exec.PipelineHelpers.ExecuteAuditSinkAsync(this.AuditSink, context, handlerResult, "UpdateDocCommand").ConfigureAwait(false);
-
-                await Blueprint.Runtime.Exec.PipelineHelpers.FlushBackgroundTasksAsync(context.ServiceProvider).ConfigureAwait(false);
+                await Blueprint.Runtime.Exec.PipelineHelpers.RunPostSuccessAsync(context.ServiceProvider, context.OperationCancelled, this.AuditSink, context, handlerResult, "UpdateDocCommand").ConfigureAwait(false);
 
                 await rebusTransactionScope.CompleteAsync().ConfigureAwait(false);
             }
