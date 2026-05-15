@@ -2107,11 +2107,11 @@ Revisit when pipeline count exceeds 1000+ or profiling shows state machine overh
 
 ---
 
-### #301 — OpenAPI ResourceEvent Envelope Schema: Fixed (Commit 9ec9b4a)
+### #301 — OpenAPI ResourceEvent Envelope Schema: Fixed → Named Components (Commits 9ec9b4a, 0cda8e98)
 
-**Date:** 2025-07-18
+**Date:** 2025-07-18 (initial inline fix), 2025-07-21 (promoted to named components)
 **Severity:** Critical — OpenAPI response schema didn't match HTTP wire format
-**Status:** ✅ Fixed
+**Status:** ✅ Fixed — named component schemas matching S365 pattern
 
 `ResourceEventResult<T>` operations produce HTTP responses wrapped in `ResourceEventEnvelope` (private class in `HttpOperationResultExecutor`), but OpenAPI was incorrectly describing the response body as just `T` (the inner resource type). This meant TypeScript clients expected a plain `TemplateApiResource` when the actual HTTP response was an envelope with `$object`, `eventId`, `changeType`, `created`, `data`, etc.
 
@@ -2122,34 +2122,39 @@ Revisit when pipeline count exceeds 1000+ or profiling shows state machine overh
 2. **`[JsonIgnore]` on Data**: `ResourceEvent<T>.Data` has `[JsonIgnore]` — STJ schema would show `object` not `T`
 3. **Discriminator breakage**: `TryCreateResourceEventDiscriminator` matches by inner body type name — changing to envelope names would break multi-variant handling
 
-**Fix applied:** Synthetic inline envelope schema at the output rendering layer:
-- Added `IsResourceEventEnvelope` flag to `OpenApiResponseContentModel`
-- When a response is a single-variant `ResourceEventResult` (no discriminator), the flag is set
-- `WriteResourceEventEnvelopeSchema` writes inline object schema with all envelope properties
-- The `data` property uses `$ref` to the inner type's existing schema component
-- Discriminator case (multi-variant `Results<ResourceEventResult<T>, ...>`) is unchanged
+**Fix applied (Phase 1):** Synthetic inline envelope schema at the output rendering layer.
+
+**Fix applied (Phase 2 — current):** Promoted to named component schemas matching S365's exact pattern:
+- Each ResourceEvent envelope is a fully materialized `OpenApiSchemaComponentModel` named `ResourceEventOf{InnerType}` (e.g. `ResourceEventOfTemplateApiResource`)
+- `ResourceEventChangeType` is a separate enum component schema with `Created`, `Updated`, `Deleted` values
+- Response schemas use `$ref: "#/components/schemas/ResourceEventOfTemplateApiResource"` instead of inline
+- `changeType` property uses `oneOf: [{ $ref: "#/components/schemas/ResourceEventChangeType" }]`
+- `data` property uses bare `$ref` to inner type's existing schema component
+- `$object` rendered as plain `type: string` (no inline enum — matches S365)
+- Nullable open-object properties use `additionalProperties: {}` (matches S365)
+- Added `SchemaRef` and `AllowsAdditionalProperties` to `OpenApiSchemaComponentPropertyModel` for proper rendering
 
 **Envelope properties emitted:**
 | Property | Type | Required | Notes |
 |----------|------|----------|-------|
-| `$object` | `string` enum `["event"]` | ✅ | Discriminator |
+| `$object` | `string` | ✅ | Fixed value "event" |
 | `eventId` | `string` | ✅ | Stable event identity |
-| `changeType` | `string` enum `["Created","Updated","Deleted"]` | ✅ | Change type |
+| `changeType` | `oneOf $ref ResourceEventChangeType` | ✅ | Enum: Created/Updated/Deleted |
 | `created` | `string` format `date-time` | ✅ | When event occurred |
 | `resourceObject` | `string` | ✅ | Resource type name |
-| `href` | `string` nullable | ✅ | Self-link URL |
+| `href` | `string` nullable | ❌ | Self-link URL |
 | `data` | `$ref` to inner type | ✅ | The actual resource |
-| `metadata` | `object` nullable | ✅ | Extra metadata dict |
-| `secureData` | `object` nullable | ✅ | Secure metadata dict |
-| `changedValues` | `object` nullable | ✅ | Changed properties dict |
-| `correlationId` | `string` nullable | ✅ | Correlation ID |
+| `metadata` | `object` nullable, `additionalProperties: {}` | ❌ | Extra metadata dict |
+| `secureData` | `object` nullable, `additionalProperties: {}` | ❌ | Secure metadata dict |
+| `changedValues` | `object` nullable, `additionalProperties: {}` | ❌ | Changed properties dict |
+| `correlationId` | `string` nullable | ❌ | Correlation ID |
 
-**Impact:** S365 TypeScript clients will now see the correct envelope shape for all `ResourceEventResult<T>` operations (~274 S365 operations affected). The `data` field correctly references the inner resource type for TypeScript type inference.
+**Impact:** S365 TypeScript clients will now see the correct envelope shape for all `ResourceEventResult<T>` operations (~274 S365 operations affected). The `data` field correctly references the inner resource type for TypeScript type inference. Named component schemas enable S365's TypeScript generator to resolve `ResourceEventOf*` types from `$ref` paths just like any other class — no special handling needed.
 
 **Tests:** 
-- Snapshot test updated with full envelope schema
-- Targeted test verifying all envelope properties and `data.$ref`
-- `UseStatus200ForSuccessResponses` test updated for raw schema comparison
+- Full OpenAPI snapshot updated with named component schemas
+- Targeted test verifying: named component exists, all properties present, `data.$ref`, `changeType` oneOf `$ref`, `ResourceEventChangeType` enum values, `required` array
+- 1176 integration tests pass, 769 generator tests pass
 
 ### #302 — ResourceEvent Envelope Serialization: Optimized (Utf8JsonWriter)
 
@@ -4123,3 +4128,59 @@ Updated `docs/authorization.md`:
 | Auth scope pair optimization | ✅ | Static readonly fields, SingleItemList for single-scope |
 
 **Action:** S365 migration can begin. No blocking Blueprint gaps remain.
+
+### Finding #343: TypeScript Generator Deep Compatibility Verification
+
+**Date:** 2025-07-21
+**Area:** OpenAPI / TypeScript Generation
+**Severity:** Confirmation — all compatible
+
+Deep analysis of S365's Handlebars-based TypeScript generator (`frontend/apps/portal/src/openapi/generator/index.mts`)
+confirms full compatibility with Blueprint's OpenAPI output. Key findings:
+
+#### requestBody `$ref` handling
+S365 legacy already uses `$ref` inside `requestBody.content.application/json.schema` — identical to Blueprint's
+pattern. The generator correctly resolves these via `determineDataType()` (line 118-128). The only case that
+throws is a top-level `$ref` on the `requestBody` object itself (line 325-326), which neither legacy nor new
+Blueprint produces.
+
+#### Response status code handling
+S365's generator only reads `responses["200"]` (line 265). Blueprint's `UseStatus200ForSuccessResponses` option
+(already implemented) normalizes 201→200 for body-bearing success responses. S365 should enable this option:
+```csharp
+app.MapBlueprintApi<App, AppExecutor>(configureOpenApi: o => {
+    o.UseStatus200ForSuccessResponses = true;
+    o.UseApplicationJsonForErrors = true; // legacy compat for error content type
+});
+```
+
+#### HTTP method coverage
+Generator handles: GET, POST, PUT, DELETE, HEAD, OPTIONS (lines 436-441). **Missing: PATCH.**
+S365 has no PATCH operations currently, so not blocking. If added, a one-line fix in the generator.
+
+#### operationId format
+Both use PascalCase (class name as operationId). ✅ Identical.
+
+#### `x-links` extension
+Blueprint generates `x-links` with `{ rel, operationId, method }` — same structure S365's `model.handlebars`
+consumes (lines 66-88). The `withOperation` helper resolves `operationId` to generate typed link methods.
+
+#### ResourceEventOf* component schemas
+Blueprint now generates named `ResourceEventOf{T}` component schemas (commit 0cda8e98). The TypeScript generator
+treats these as regular classes via `determineDataType()` → `$ref` resolution. No special handling needed.
+
+#### `ResourceEventChangeType` enum
+Generated as a separate enum component. The generator handles enums with `x-enumNames` correctly (lines 146-153).
+
+#### Type mapping verified
+| OpenAPI | TypeScript | Notes |
+|---------|-----------|-------|
+| `string` | `string` | Including format hints |
+| `integer` | `number` | int32/int64 → number |
+| `boolean` | `boolean` | Direct mapping |
+| `array` → items `$ref` | `Array<T>` | Recursive type resolution |
+| `object` + `additionalProperties` | `{ [key: string]: T }` | Map type |
+| `oneOf` with single `$ref` | Resolved type | Unwraps automatically |
+| `nullable: true` | Union with null | `type: ['string', 'null']` |
+
+**Conclusion:** Zero TypeScript generator compatibility issues when `UseStatus200ForSuccessResponses = true`.
