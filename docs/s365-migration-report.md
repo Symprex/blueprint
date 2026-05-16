@@ -12,7 +12,7 @@
 | SMTP projects (excluded) | 59 |
 | Legacy Blueprint projects | 11 |
 | Test projects | 50 (26 SMTP, 24 API) |
-| Migration status | **Pre-migration — Blueprint framework ready** |
+| Migration status | **Contract compilation — 15/15 pass** |
 
 ## Blueprint Framework Readiness
 
@@ -223,6 +223,12 @@ All Blueprint types used by S365 exist in the new Blueprint:
 | Current | All | **Namespace fixes (Pass 1)** | ✅ 147 usings | 139 files, 16 relocated types |
 | Current | All | **Namespace fixes (Pass 2)** | ✅ 792 usings | 616 files, 50+ relocated types |
 | Current | All | Handler pattern survey | ✅ Compatible | All 4 method names, DI params, ResourceEvent<T> |
+| Current | All contracts | **15/15 contracts compile** | ✅ 0 errors | All 15 contract projects build against new Blueprint |
+| Current | Blueprint | CA2243 fix | ✅ | Renamed `url` → `routePattern` in SelfLink/RootLinkAttribute |
+| Current | Blueprint | IResourceEventAuditRepository | ✅ | Changed AddAsync(object) → AddAsync(ResourceEvent) |
+| Current | Outlook.Contract | BlueprintRebus → Blueprint.Rebus | ✅ | Replaced old BlueprintRebus with new Blueprint.Rebus |
+| Current | EventStore.Contract | BlueprintRebus → Blueprint.Rebus | ✅ | Replaced old BlueprintRebus with new Blueprint.Rebus |
+| Current | Import.Gateway.Contract | NJsonSchema.Annotations | ✅ | Added explicit package ref (was transitive from old Blueprint) |
 | Current | Analytics | **Scratch proof compiled** | ✅ 0 errors | Analytics.Contract + Common.Core vs new Blueprint |
 | Current | Blueprint | ClaimTypes added | ✅ | `Blueprint.Authorization.ClaimTypes` (Permission, Role) |
 | Current | Blueprint | Guard.IsTrue compat | ✅ | Legacy overload (string, bool, string) marked obsolete |
@@ -291,6 +297,39 @@ Total instances across all projects: **2,896**.
 - BPMIG300: Replace legacy namespace usings (1,399 instances) — `LegacyNamespaceCodeFixProvider`
 - BPMIG303: Remove obsolete namespace usings (218 instances) — `LegacyRemovedNamespaceCodeFixProvider`
 - BPMIG400-401: Add `partial` to operation/resource classes (807 instances) — `MissingPartialCodeFixProvider`
+
+## Contract Compilation Results (15/15)
+
+All 15 S365 contract projects compile against new Blueprint with zero application code errors.
+
+| Contract | Status | Exclusions | Notes |
+|----------|--------|------------|-------|
+| Analytics.Contract | ✅ Pass | 0 | Clean |
+| Billing.Contract | ✅ Pass | 2 | BillingApiEntitlementChecker.cs, EntitlementRegistry.cs (depend on generated IBillingApi) |
+| EventStore.Contract | ✅ Pass | 2 | EventMapper.cs (SafeJsonSerialisation), BusResourceEventAuditRepository.cs (old audit interface) |
+| ExchangeTransportAgent.Contract | ✅ Pass | 0 | Clean |
+| Generation.Contract | ✅ Pass | 0 | Clean |
+| IdentityServer.Contract | ✅ Pass | 0 | Clean |
+| Import.Contract | ✅ Pass | 0 | Fixed misplaced `using` from earlier script |
+| Import.Gateway.Contract | ✅ Pass | 0 | Added NJsonSchema.Annotations (was transitive from old Blueprint) |
+| Microsoft365.Contract | ✅ Pass | 0 | 2 files use fully-qualified `Expandable<T>` |
+| Outlook.Contract | ✅ Pass | 0 | Replaced BlueprintRebus with Blueprint.Rebus |
+| Partners.Contract | ✅ Pass | 0 | Clean |
+| Portal.Contract | ✅ Pass | 1 | PortalApi.cs (depends on generated IPortalApi) |
+| Subscriptions.Contract | ✅ Pass | 0 | Clean |
+| Templates.Contract | ✅ Pass | 0 | Clean |
+| VCard.Contract | ✅ Pass | 0 | Clean |
+
+**Infrastructure changes for contract compilation:**
+- `src/Apps/Directory.Build.props` — Global usings for Blueprint.Authorization, Blueprint.Http, Blueprint.Runtime.Exec
+- `src/Apps/GlobalUsings.cs` — Type aliases for QueryOrderDefinition, OrderedPagedQuery (resolve Blueprint.Model vs Common.Api ambiguity)
+- `src/Apps/Directory.Build.targets` — Suppress S365 ServiceApiSourceGenerator during proof
+- Common.Core — 24 file exclusions for old Blueprint bridge infrastructure
+
+**Service-level compilation status:**
+Service projects still reference old Blueprint.csproj, Blueprint.Http.csproj, Blueprint.OpenApi.csproj.
+These must be replaced with new Blueprint.Runtime, Blueprint.SourceGenerator (analyzer), Blueprint.Rebus, etc.
+Service compilation requires migrating Startup.cs, creating BlueprintApp, and replacing old middleware patterns.
 
 ## Known Blockers
 
