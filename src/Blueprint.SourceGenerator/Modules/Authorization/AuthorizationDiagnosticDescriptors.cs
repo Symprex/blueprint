@@ -64,7 +64,7 @@ internal static class AuthorizationDiagnosticDescriptors
         title: "Resource key template token does not match a property",
         messageFormat: "Resource key template for operation '{0}' contains token '{{{1}}}' but no public property '{1}' exists on the operation type. Fix the template or add the property.",
         category: "Blueprint.Authorization",
-        defaultSeverity: DiagnosticSeverity.Error,
+        defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
 
     /// <summary>
