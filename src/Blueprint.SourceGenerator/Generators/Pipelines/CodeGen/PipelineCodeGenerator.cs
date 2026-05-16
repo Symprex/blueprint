@@ -109,8 +109,21 @@ internal static class PipelineCodeGenerator
 
         foreach (var contribution in plan.Contributions)
         {
-            var steps = plan.GetRenderSteps(contribution).ToList();
-            if (steps.Count == 0)
+            var hasAnySteps = false;
+            var hasSuccessGuardedStep = false;
+
+            foreach (var step in plan.GetRenderSteps(contribution))
+            {
+                hasAnySteps = true;
+
+                if (step.RequiresSuccessGuard)
+                {
+                    hasSuccessGuardedStep = true;
+                    break;
+                }
+            }
+
+            if (!hasAnySteps)
             {
                 continue;
             }
@@ -119,18 +132,18 @@ internal static class PipelineCodeGenerator
             // if (handlerResult.WasSuccessful) block and render ALL success-guarded
             // steps from every contribution inside it. Each module contributes its
             // own individual call — no cross-module consolidation.
-            if (!inSuccessGuard && steps.Any(static s => s.RequiresSuccessGuard))
+            if (!inSuccessGuard && hasSuccessGuardedStep)
             {
                 inSuccessGuard = true;
 
                 // Render any non-guarded steps in this contribution first
-                foreach (var step in steps.Where(static s => !s.RequiresSuccessGuard))
+                foreach (var step in plan.GetRenderSteps(contribution))
                 {
-                    step.Render(new PipelineRenderContext(writer, handler, plan));
+                    if (!step.RequiresSuccessGuard)
+                    {
+                        step.Render(new PipelineRenderContext(writer, handler, plan));
+                    }
                 }
-
-                // Collect ALL success-guarded steps across ALL remaining contributions
-                var guardedSteps = plan.RenderSteps.Where(static s => s.RequiresSuccessGuard).ToList();
 
                 writer.NewLine();
                 writer.If(
@@ -139,9 +152,12 @@ internal static class PipelineCodeGenerator
                     {
                         var guardContext = new PipelineRenderContext(guardWriter, handler, plan);
 
-                        foreach (var step in guardedSteps)
+                        foreach (var step in plan.RenderSteps)
                         {
-                            step.Render(guardContext);
+                            if (step.RequiresSuccessGuard)
+                            {
+                                step.Render(guardContext);
+                            }
                         }
                     });
 
@@ -151,15 +167,18 @@ internal static class PipelineCodeGenerator
             // Skip success-guarded steps from later contributions — already rendered above
             if (inSuccessGuard)
             {
-                foreach (var step in steps.Where(static s => !s.RequiresSuccessGuard))
+                foreach (var step in plan.GetRenderSteps(contribution))
                 {
-                    step.Render(new PipelineRenderContext(writer, handler, plan));
+                    if (!step.RequiresSuccessGuard)
+                    {
+                        step.Render(new PipelineRenderContext(writer, handler, plan));
+                    }
                 }
 
                 continue;
             }
 
-            foreach (var renderStep in steps)
+            foreach (var renderStep in plan.GetRenderSteps(contribution))
             {
                 renderStep.Render(new PipelineRenderContext(writer, handler, plan));
             }
