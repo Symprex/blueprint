@@ -11,12 +11,13 @@ namespace Blueprint.HttpClient;
 public abstract class BlueprintHttpClient
 {
     /// <summary>
-    /// Adapts a typed <see cref="BlueprintHttpClient{TApp}"/> to the legacy non-generic surface.
-    /// This keeps factory-based registrations or hand-written gateway constructors small during migration.
+    /// Adapts a typed <see cref="BlueprintHttpClient{TApp}"/> to the legacy non-generic surface
+    /// so that callers holding a <see cref="BlueprintHttpClient"/> reference can dispatch operations
+    /// without knowing the concrete app type.
     /// </summary>
-    /// <typeparam name="TApp">The <see cref="BlueprintApp"/> that owns the operation descriptors.</typeparam>
-    /// <param name="client">The typed client to expose through the compatibility surface.</param>
-    /// <returns>The same client instance, viewed through the non-generic compatibility type.</returns>
+    /// <typeparam name="TApp">The <see cref="BlueprintApp"/> subclass that the client targets.</typeparam>
+    /// <param name="client">The typed client instance to adapt.</param>
+    /// <returns>The same instance widened to the non-generic base type.</returns>
     public static BlueprintHttpClient From<TApp>(BlueprintHttpClient<TApp> client)
         where TApp : BlueprintApp
     {
@@ -28,10 +29,10 @@ public abstract class BlueprintHttpClient
     /// Dispatches an operation that returns a typed payload.
     /// </summary>
     /// <typeparam name="TResponse">The expected response type.</typeparam>
-    /// <param name="operation">The operation to send.</param>
+    /// <param name="operation">The operation to send (must implement <see cref="IReturn{TResponse}"/>).</param>
     /// <param name="options">Optional per-call request customization.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>The deserialized response payload, or <c>default</c> for no-content responses.</returns>
+    /// <returns>The deserialized response payload, which may be <c>null</c>.</returns>
     public async Task<TResponse?> CallAsync<TResponse>(
         IReturn<TResponse> operation,
         CallOptions? options,
@@ -49,7 +50,7 @@ public abstract class BlueprintHttpClient
     /// <typeparam name="TResponse">The expected response type.</typeparam>
     /// <param name="operation">The operation to send.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>The deserialized response payload, or <c>default</c> for no-content responses.</returns>
+    /// <returns>The deserialized response payload, which may be <c>null</c>.</returns>
     public Task<TResponse?> CallAsync<TResponse>(
         IReturn<TResponse> operation,
         CancellationToken cancellationToken = default)
@@ -59,18 +60,20 @@ public abstract class BlueprintHttpClient
 
     /// <summary>
     /// Dispatches an operation that completes without a typed payload.
+    /// Named <c>SendVoidAsync</c> instead of <c>CallAsync</c> to avoid overload ambiguity with the
+    /// generic variant when the operation implements both <see cref="IReturn{T}"/> and <see cref="IOperation"/>.
     /// </summary>
     /// <param name="operation">The operation to send.</param>
     /// <param name="options">Optional per-call request customization.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A task that completes when the remote call succeeds.</returns>
-    public Task CallAsync(
+    public Task SendVoidAsync(
         IOperation operation,
         CallOptions? options,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(operation);
-        return this.CallAsyncCore(operation, options, cancellationToken);
+        return this.SendVoidAsyncCore(operation, options, cancellationToken);
     }
 
     /// <summary>
@@ -79,34 +82,36 @@ public abstract class BlueprintHttpClient
     /// <param name="operation">The operation to send.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A task that completes when the remote call succeeds.</returns>
-    public Task CallAsync(
+    public Task SendVoidAsync(
         IOperation operation,
         CancellationToken cancellationToken = default)
     {
-        return this.CallAsync(operation, options: null, cancellationToken);
+        return this.SendVoidAsync(operation, options: null, cancellationToken);
     }
 
     /// <summary>
-    /// Implements the typed call path for the compatibility surface.
+    /// Implements the typed call path for the compatibility surface. Subclasses route this
+    /// through the concrete <see cref="BlueprintHttpClient{TApp}"/> send pipeline.
     /// </summary>
     /// <typeparam name="TResponse">The expected response type.</typeparam>
     /// <param name="operation">The operation to send.</param>
     /// <param name="options">Optional per-call request customization.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>The deserialized response payload, which may be <c>null</c>.</returns>
+    /// <returns>A task producing the deserialized response.</returns>
     protected abstract Task<TResponse> CallAsyncCore<TResponse>(
         IReturn<TResponse> operation,
         CallOptions? options,
         CancellationToken cancellationToken);
 
     /// <summary>
-    /// Implements the void call path for the compatibility surface.
+    /// Implements the void send path for the compatibility surface. Subclasses route this
+    /// through the concrete <see cref="BlueprintHttpClient{TApp}"/> send pipeline.
     /// </summary>
     /// <param name="operation">The operation to send.</param>
     /// <param name="options">Optional per-call request customization.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A task that completes when the remote call succeeds.</returns>
-    protected abstract Task CallAsyncCore(
+    protected abstract Task SendVoidAsyncCore(
         IOperation operation,
         CallOptions? options,
         CancellationToken cancellationToken);

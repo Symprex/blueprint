@@ -73,18 +73,18 @@ public sealed class BlueprintHttpClientCompatTests : IClassFixture<SampleAppFixt
     }
 
     [Fact]
-    public async Task CallAsync_void_without_options_dispatches_through_non_generic_client()
+    public async Task SendVoidAsync_without_options_dispatches_through_non_generic_client()
     {
         var handler = new FakeHttpHandler(static _ => new HttpResponseMessage(HttpStatusCode.NoContent));
         var client = BlueprintHttpClient.From(this._fixture.CreateClient(handler));
 
-        Func<Task> act = () => client.CallAsync((Blueprint.Model.IOperation)new ArchiveTemplateCommand { Id = "t-9" });
+        Func<Task> act = () => client.SendVoidAsync((Blueprint.Model.IOperation)new ArchiveTemplateCommand { Id = "t-9" });
 
         await act.Should().NotThrowAsync();
     }
 
     [Fact]
-    public async Task CallAsync_void_with_options_modifies_request_through_non_generic_client()
+    public async Task SendVoidAsync_with_options_modifies_request_through_non_generic_client()
     {
         HttpRequestMessage? captured = null;
         var handler = new FakeHttpHandler(req =>
@@ -95,7 +95,7 @@ public sealed class BlueprintHttpClientCompatTests : IClassFixture<SampleAppFixt
 
         var client = BlueprintHttpClient.From(this._fixture.CreateClient(handler));
 
-        await client.CallAsync(
+        await client.SendVoidAsync(
             (Blueprint.Model.IOperation)new ArchiveTemplateCommand { Id = "t-10" },
             new CallOptions
             {

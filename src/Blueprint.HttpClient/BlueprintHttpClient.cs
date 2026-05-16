@@ -477,13 +477,13 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
     }
 
     /// <summary>
-    /// Implements the legacy non-generic void <c>CallAsync</c> surface exposed by <see cref="BlueprintHttpClient"/>.
+    /// Implements the legacy non-generic void send surface exposed by <see cref="BlueprintHttpClient"/>.
     /// </summary>
     /// <param name="operation">The operation to send.</param>
     /// <param name="options">Optional call options to modify the outgoing request.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A task that completes when the request is processed.</returns>
-    protected override Task CallAsyncCore(
+    protected override Task SendVoidAsyncCore(
         IOperation operation,
         CallOptions? options,
         CancellationToken cancellationToken)
