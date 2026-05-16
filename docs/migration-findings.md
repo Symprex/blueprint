@@ -43,9 +43,7 @@
 | Total projects | ~158 |
 | Blueprint-consuming services | 16+ services; later full-service inventories counted 18 service hosts |
 | SMTP subsystem | 59 projects; excluded from Blueprint migration scope |
-| Operations | 632 repo-wide in early inventory; later HTTP-focused migration audits use ~540 |
-| Commands | 342 repo-wide; later HTTP-focused audits use 294 |
-| Queries | 290 repo-wide; later HTTP-focused audits use 246 |
+| Operations (HTTP-focused, authoritative) | ~540 (294 commands + 246 queries); repo-wide count including non-HTTP is 632 |
 | `[Resource(...)]` usages | 349 |
 | `[FromResource(...)]` usages | 158 |
 | Unique nouns in active use | 81; S365 also defines 96 noun constants |
@@ -160,19 +158,8 @@ The S365 property-population story is much narrower than the duplicated notes im
 ### Ambient tenancy and persistence
 S365’s `ICurrentTenantAccessor` pattern maps directly to Blueprint `ITenantAccessor`, and the wider tenant model stays consumer-owned. Marten conjoined tenancy (`TenancyStyle.Conjoined`, `IHaveTenantId`, `store.IdentitySession(tenantId)`), S365’s tenant-specific auth-resource expansion, and message-body tenant propagation all remain application concerns layered on top of Blueprint’s ambient tenant seam.
 
-| Tenancy fact | Consolidated finding |
-|---|---|
-| Services using `SetTenantMiddleware` | 9/18 in the full-service inventory; earlier narrower notes undercounted this |
-| `TenantId` auto-population | 281 migration-critical operations; broader scans found 354 total `TenantId` properties |
-| Non-tenant identity properties | `PartnerId` and `UserId` are ordinary route/body inputs, not tenant middleware responsibilities |
-| OpenAPI effect | Auto-populated `TenantId` disappears from params/body unless explicitly bound or route-owned |
-| Logging effect | Serilog `TenantId` enrichment still belongs in ASP.NET Core middleware |
-
-### `TenantId` property frequency snapshot
-The broad property audit is still useful because it shows why compile-time ownership matters. The most common operation properties were `TenantId`, `Id`, `PartnerId`, `Quantity`, `Name`, and `Country`, and only `TenantId` needed special ambient population logic. Everything else follows normal route, body, query, header, or cookie ownership.
-
 ### Practical migration note
-The tenancy migration is therefore small but important: register an `ITenantResolver`, keep any tenant-aware logging middleware, let `TenantModule` set the accessor and operation property, and remove legacy `SetTenantMiddleware` registrations from services that previously added it.
+The tenancy migration is small but important: register an `ITenantResolver`, keep any tenant-aware logging middleware, let `TenantModule` set the accessor and operation property, and remove legacy `SetTenantMiddleware` registrations from services that previously added it. Key facts: 9/18 services use `SetTenantMiddleware`, 281 operations have auto-populated `TenantId`, and `PartnerId`/`UserId` are ordinary route/body inputs not requiring middleware.
 
 ## Testing
 
@@ -205,31 +192,10 @@ The compatibility work intentionally kept the small ergonomic details that matte
 `Blueprint.Testing.Marten` now provides `WithDatabaseAsync` overloads, `LoadFromDatabaseAsync`, `AllAsync`, and `AllIncludingDeletedAsync`, which cover the common S365 per-tenant session patterns. The truly domain-specific helpers remain in S365: `AuthenticateAsTenantAdministrator`, partner/tenant user factories, signup/login flows, `ApiFixtureDbExtensions`, and any helpers that know S365 claim types, role groups, or tenancy key conventions.
 
 ### Testing scale and migration risk
-The repo still reports 42 S365 test projects, but the migration-relevant HTTP surface is much smaller than that raw number suggests because many projects are SMTP-specific or tied to the legacy Blueprint framework. The corrected deep dive found only a few dozen files using the executor-style API directly, which means test infrastructure is not a blocker; the remaining work is mostly factory/host wiring rather than mass assertion rewrites.
-
-| Earlier API-surface scan | Approximate count / note |
-|---|---|
-| `CommandAsync<T>` references | ~3,000 |
-| `QueryAsync<T>` references | ~2,200 |
-| `MessageAsync(...)` references | ~230 |
-| Bus assertion chains | ~750 |
-| `Authentication.As(...)` uses | ~1,500 |
-| Background-task assertions | ~100 |
-
-| Usage signal | Consolidated note |
-|---|---|
-| `ExecuteAsync(...)` | The corrected audit identified this as the primary S365 operation-test path |
-| `CommandAsync` / `QueryAsync` | Added in Blueprint.Testing as convenience APIs even though the real migration mostly uses executor-style calls |
-| Bus assertions | S365-style `HavePublished*` / `HaveSent*` patterns are fully covered |
-| Background tasks | `BackgroundTaskCollector` matches S365’s observable task model, including `All` |
-| Factory pattern | `BlueprintTestFixtureFactory` preserves the service-override / `IClassFixture` lifecycle pattern |
+The repo has 42 S365 test projects, but many are SMTP-specific or legacy. Approximate API-surface scan: ~3,000 `CommandAsync<T>`, ~2,200 `QueryAsync<T>`, ~230 `MessageAsync(...)`, ~750 bus assertions, ~1,500 `Authentication.As(...)`, ~100 background-task assertions. `ExecuteAsync(...)` is the primary test path; `CommandAsync`/`QueryAsync` are kept as convenience shims. Migration cost is in factory/host setup, not assertion rewrites.
 
 ### What remains S365-owned in tests
-This is the right place to be explicit about what not to port into Blueprint. Claim-building helpers such as `AuthenticateAsTenantAdministrator`, user-signup/login flows, tenant-aware Marten extensions, and any helpers that assume S365 role names or claim types stay in S365 test projects. Blueprint.Testing is deliberately assertion-library-agnostic and identity-model-agnostic.
-
-### Migration cost summary for tests
-Core test execution methods can stay conceptually unchanged, while the service bootstrapping objects change once per service. That is why the repeated “test churn” findings in the original file all reduced to the same message: the migration cost is in factory/host setup, not in thousands of assertion or method-signature edits.
-
+Claim-building helpers such as `AuthenticateAsTenantAdministrator`, user-signup/login flows, tenant-aware Marten extensions, and any helpers that assume S365 role names or claim types stay in S365 test projects. Blueprint.Testing is deliberately assertion-library-agnostic and identity-model-agnostic.
 ## OpenAPI / TypeScript
 
 ### OpenAPI shape: what must match
@@ -319,14 +285,8 @@ The TypeScript templates depend on both the `$links` payload property and the `x
 The new runtime serves the document at `/.well-known/openapi` and the API catalog at `/.well-known/api-catalog`, and it also supports the S365-friendly disk export workflow through `host.OutputOpenApi()`. That mirrors the committed-spec pattern already used in the S365 repo, where 21 `openapi.json` files are checked in under service `Spec/` folders and treated as generator inputs for the frontends.
 
 ### Known differences that are real but manageable
-A few differences are real and should stay visible in the migration notes because they affect consumers. The TypeScript generator only reads `responses["200"]`, which is why the synthetic success alias matters. Query-string generation in the new client path uses camelCase property names instead of the PascalCase query parameters used by legacy Blueprint, so any frontend code that hand-builds URLs needs to be updated. Property-title emission and empty-description omission may produce diffs, but the templates do not depend on those fields.
+A few differences are real and should stay visible in the migration notes because they affect consumers. The TypeScript generator only reads `responses["200"]`, which is why the synthetic success alias matters. Query-string generation in new Blueprint-generated HTTP client extensions uses camelCase property names instead of PascalCase (the change only affects code using the new generated client, not hand-built URLs that already use the correct casing), so any frontend code that hand-builds URLs needs to be updated. Property-title emission and empty-description omission may produce diffs, but the templates do not depend on those fields.
 
-| Legacy response-code shape | Confirmed distribution from older S365 output |
-|---|---|
-| Standard success document | `200, 500, 422` on ~140 operations |
-| Not-found variant | `404, 200, 500, 422` on ~30 operations |
-| Bad-request variant | `400, 200, 500, 422` on ~17 operations |
-| Body-bearing created/update commands | Still represented as `200` in legacy docs |
 
 ### Representative tag inventories
 The detailed tag inventories are worth preserving because tag changes rename generated API classes. AdminPortal’s 25-tag set included areas such as Accounts, Authorisation, BusQueues, Config, Import, Invoices, Microsoft365, PartnerUsers, Tenants, TenantUsers, and TransactionalEmail. Portal’s 42-tag set expanded that list with areas such as Analytics, Campaigns, Dashboard, ExchangeTransportAgent, Folders, Outlook, Roles, Rules, Search, Signatures, Surveys, Sync, Templates, Users, and VCard.
@@ -352,7 +312,7 @@ Blueprint’s `ConfigureJson()` and serializer-context flow now matches what mig
 
 ### Handler and ResourceEvent migration pattern
 
-**This is the highest-churn migration step**, affecting ~257 ICommand operations and all handler files.
+**This is the highest-churn migration step**, affecting ~254 ICommand operations and all handler files.
 
 **Operations**: S365 declares `ICommand<ResourceEvent<T>>` (from `Blueprint.Http`). New Blueprint requires `ICommand<ResourceEventResult<T>>` (from `Blueprint.Runtime.Exec`). This is a mechanical find-and-replace across all command operations.
 
@@ -832,17 +792,6 @@ A few items were intentionally left outside codemod automation. Service-specific
 | Rewrite startup registration | The largest non-mechanical service-level change |
 | Re-register auth / tenant / Marten / Rebus / Hangfire seams | Consumer-specific DI still matters |
 | Run OpenAPI + TypeScript diff | Final compatibility gate per service |
-
-### Migration posture after codemod consolidation
-The codemod findings support the same overall conclusion as the rest of this document: migration is mostly mechanical, but it still needs deliberate service-level review at the seams where S365 intentionally owns behavior—auth context loading, service startup composition, infrastructure registration, and frontend OpenAPI consumption.
-
-| Delivered codemod support | Status |
-|---|---|
-| Per-project SARIF output | Implemented |
-| Lenient build-failure handling when BPMIG diagnostics exist | Implemented |
-| Redundant activation cleanup | Implemented |
-| Missing `partial` code fixes | Implemented |
-| Abstract generic base false-positive removal (`BPMIG202`) | Resolved |
 
 ## Open Questions
 
