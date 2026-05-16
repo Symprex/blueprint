@@ -45,33 +45,39 @@ public sealed class BlueprintApiActivator : IContainerAdapter
         TMessage message,
         ITransactionContext transactionContext)
     {
-        return (Task<IEnumerable<IHandleMessages<TMessage>>>)this._typesToHandler.GetOrAdd(
-            typeof(TMessage),
-            static (messageType, state) =>
-            {
-                var (app, sp) = state;
+        if (this._app.TryFindOperation(typeof(TMessage), out var descriptor))
+        {
+            var desc = descriptor;
 
-                if (!app.TryFindOperation(messageType, out var descriptor))
+            // Blueprint operation — use cached pipeline handler
+            return (Task<IEnumerable<IHandleMessages<TMessage>>>)this._typesToHandler.GetOrAdd(
+                typeof(TMessage),
+                static (key, state) =>
                 {
-                    return Task.FromResult(Enumerable.Empty<IHandleMessages<TMessage>>());
-                }
+                    // Tag the descriptor as a Rebus message and hide from HTTP exposure
+                    if (!state.desc.TryGetFeatureData<RebusMessageFeature>(out _))
+                    {
+                        state.desc.SetFeatureData(new RebusMessageFeature());
+                        state.desc.IsExposed = false;
+                        state.desc.AnonymousAccessAllowed = true;
+                    }
 
-                // Tag the descriptor as a Rebus message and hide from HTTP exposure
-                if (!descriptor.TryGetFeatureData<RebusMessageFeature>(out _))
-                {
-                    descriptor.SetFeatureData(new RebusMessageFeature());
-                    descriptor.IsExposed = false;
-                    descriptor.AnonymousAccessAllowed = true;
-                }
+                    var singleHandler = (IHandleMessages<TMessage>)Activator
+                        .CreateInstance(
+                            typeof(BlueprintHandler<>).MakeGenericType(key),
+                            state.sp)!;
 
-                var singleHandler = (IHandleMessages<TMessage>)Activator
-                    .CreateInstance(
-                        typeof(BlueprintHandler<>).MakeGenericType(typeof(TMessage)),
-                        sp)!;
+                    return Task.FromResult<IEnumerable<IHandleMessages<TMessage>>>([singleHandler]);
+                },
+                (sp: this._serviceProvider, desc));
+        }
 
-                return Task.FromResult<IEnumerable<IHandleMessages<TMessage>>>([singleHandler]);
-            },
-            (app: this._app, sp: this._serviceProvider));
+        // Not a Blueprint operation — resolve IHandleMessages<T> from a fresh DI scope.
+        // Each Rebus message dispatch creates a new scope for handler lifetime management.
+        using var scope = this._serviceProvider.CreateScope();
+        var handlers = scope.ServiceProvider.GetServices<IHandleMessages<TMessage>>().ToList();
+
+        return Task.FromResult<IEnumerable<IHandleMessages<TMessage>>>(handlers);
     }
 
     /// <inheritdoc/>

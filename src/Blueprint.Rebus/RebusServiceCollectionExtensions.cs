@@ -12,8 +12,10 @@ namespace Microsoft.Extensions.DependencyInjection;
 public static class RebusServiceCollectionExtensions
 {
     /// <summary>
-    /// Configures the subscribed Rebus message types and applies Rebus-specific conventions to their
-    /// <see cref="ApiOperationDescriptor"/> entries (anonymous access, not exposed, no return value required).
+    /// Configures the subscribed Rebus message types, applies Rebus-specific conventions to their
+    /// <see cref="ApiOperationDescriptor"/> entries (anonymous access, not exposed, no return value required),
+    /// and auto-registers all <c>IHandleMessages&lt;T&gt;</c> implementations found in the calling assembly
+    /// as scoped services in DI.
     /// </summary>
     /// <param name="services">The services collection.</param>
     /// <param name="configure">A callback to subscribe message types via <see cref="BlueprintRebusConfiguration.Subscribe{T}"/>.</param>
@@ -30,7 +32,33 @@ public static class RebusServiceCollectionExtensions
 
         services.AddSingleton(config);
 
+        // Auto-register IHandleMessages<T> implementations from the calling assembly
+        // so that plain Rebus handlers (not Blueprint operations) are resolved from DI.
+        var callingAssembly = System.Reflection.Assembly.GetCallingAssembly();
+        RegisterRebusHandlers(services, callingAssembly);
+
         return services;
+    }
+
+    private static void RegisterRebusHandlers(IServiceCollection services, System.Reflection.Assembly assembly)
+    {
+        var handleMessagesOpenType = typeof(Rebus.Handlers.IHandleMessages<>);
+
+        foreach (var type in assembly.GetTypes())
+        {
+            if (type.IsAbstract || type.IsInterface)
+            {
+                continue;
+            }
+
+            var handlerInterfaces = type.GetInterfaces()
+                .Where(static i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(Rebus.Handlers.IHandleMessages<>));
+
+            foreach (var handlerInterface in handlerInterfaces)
+            {
+                services.AddScoped(handlerInterface, type);
+            }
+        }
     }
 
     /// <summary>
