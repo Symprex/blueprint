@@ -18,9 +18,16 @@ public abstract class ApiResource : ILinkableResource, IHaveResourceKey
     /// Override in derived classes to supply a static string for zero-allocation serialization;
     /// the default implementation derives the name at runtime from the concrete type via
     /// <see cref="GetTypeName"/>.
+    /// Derived classes may also assign this property in their constructor to override the default.
     /// </summary>
     [JsonPropertyName("$object")]
-    public virtual string Object => GetTypeName(this.GetType());
+    public virtual string Object
+    {
+        get => this._object ?? GetTypeName(this.GetType());
+        protected set => this._object = value;
+    }
+
+    private string? _object;
 
     /// <summary>
     /// The links for this resource, other endpoints that apply to this resource

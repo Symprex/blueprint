@@ -219,6 +219,25 @@ public static class Guard
     }
 
     /// <summary>
+    /// Legacy overload for migration compatibility with old Blueprint API where the parameter name
+    /// came first. Prefer the <see cref="IsTrue(bool, string, string?)"/> overload in new code.
+    /// </summary>
+    /// <param name="argumentName">The name of the argument being validated.</param>
+    /// <param name="condition">The condition to evaluate.</param>
+    /// <param name="message">The error message when the condition is not met.</param>
+    [Obsolete("Use IsTrue(bool condition, string message) instead. This overload exists for migration compatibility.")]
+    public static void IsTrue(
+        string argumentName,
+        bool condition,
+        string message)
+    {
+        if (!condition)
+        {
+            throw new ArgumentException(message, argumentName);
+        }
+    }
+
+    /// <summary>
     /// Throws <see cref="ArgumentException"/> when the condition is <c>true</c>.
     /// </summary>
     /// <param name="condition">The condition to evaluate.</param>
