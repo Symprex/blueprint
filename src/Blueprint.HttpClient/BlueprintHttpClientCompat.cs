@@ -32,8 +32,8 @@ public abstract class BlueprintHttpClient
     /// <param name="operation">The operation to send (must implement <see cref="IReturn{TResponse}"/>).</param>
     /// <param name="options">Optional per-call request customization.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>The deserialized response payload, which may be <c>null</c>.</returns>
-    public async Task<TResponse?> CallAsync<TResponse>(
+    /// <returns>The deserialized response payload.</returns>
+    public async Task<TResponse> CallAsync<TResponse>(
         IReturn<TResponse> operation,
         CallOptions? options,
         CancellationToken cancellationToken = default)
@@ -50,8 +50,8 @@ public abstract class BlueprintHttpClient
     /// <typeparam name="TResponse">The expected response type.</typeparam>
     /// <param name="operation">The operation to send.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>The deserialized response payload, which may be <c>null</c>.</returns>
-    public Task<TResponse?> CallAsync<TResponse>(
+    /// <returns>The deserialized response payload.</returns>
+    public Task<TResponse> CallAsync<TResponse>(
         IReturn<TResponse> operation,
         CancellationToken cancellationToken = default)
     {
