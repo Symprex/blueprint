@@ -18,6 +18,16 @@ namespace Blueprint.SourceGenerator.Generators.App;
 [Generator(LanguageNames.CSharp)]
 public sealed class TypedHttpClientExtensionsGenerator : IIncrementalGenerator, ITrackedSourceGenerator
 {
+    /// <summary>
+    /// Extension of <see cref="SymbolDisplayFormat.FullyQualifiedFormat"/> that also renders
+    /// nullable reference type annotations (e.g. <c>string?</c>) on generic type arguments,
+    /// avoiding nullability mismatches like <c>Dictionary&lt;string, string&gt;</c> vs
+    /// <c>Dictionary&lt;string, string?&gt;</c>.
+    /// </summary>
+    private static readonly SymbolDisplayFormat _fullyQualifiedWithNullable =
+        SymbolDisplayFormat.FullyQualifiedFormat.AddMiscellaneousOptions(
+            SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier);
+
     /// <inheritdoc />
     public string[] StageNames { get; } = StageHelpers.FindAll(typeof(Stages));
 
@@ -200,12 +210,13 @@ public sealed class TypedHttpClientExtensionsGenerator : IIncrementalGenerator, 
                 continue;
             }
 
-            var typeFqn = prop.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            var typeFqn = prop.Type.ToDisplayString(_fullyQualifiedWithNullable);
             var isNullable = prop.Type.NullableAnnotation == NullableAnnotation.Annotated;
             var isRequired = prop.IsRequired
                 || propAttributes.Any(static a => a.AttributeClass?.Name is "RequiredAttribute");
 
-            // FullyQualifiedFormat omits the `?` suffix for nullable reference types — add it
+            // The custom format already includes `?` for top-level nullable reference types,
+            // so only add it when the format didn't (e.g. unannotated compilation context).
             if (isNullable && !typeFqn.EndsWith("?", StringComparison.Ordinal))
             {
                 typeFqn += "?";

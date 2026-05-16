@@ -53,7 +53,8 @@ public interface IOperationLookup
 /// <param name="UrlTemplate">The URL template (e.g., "/templates/{Id}").</param>
 /// <param name="ResourceType">The resource type this self-link targets.</param>
 /// <param name="DeclaringOperationType">The operation type that declares the self-link.</param>
-public sealed record SelfLinkBindingInfo(string UrlTemplate, INamedTypeSymbol ResourceType, INamedTypeSymbol DeclaringOperationType);
+/// <param name="Rel">The link relation name (defaults to "self" when not overridden).</param>
+public sealed record SelfLinkBindingInfo(string UrlTemplate, INamedTypeSymbol ResourceType, INamedTypeSymbol DeclaringOperationType, string Rel = "self");
 
 /// <summary>
 /// Compilation-backed operation lookup used by the initial foundation seam.
@@ -164,7 +165,18 @@ public sealed class CompilationOperationLookup(Compilation compilation) : IOpera
                     this._selfLinkCache[targetResourceType] = list;
                 }
 
-                list.Add(new SelfLinkBindingInfo(url, targetResourceType, type));
+                // Extract Rel from named argument (defaults to "self" when not specified)
+                var rel = "self";
+                foreach (var namedArg in attribute.NamedArguments)
+                {
+                    if (namedArg.Key == "Rel" && namedArg.Value.Value is string relValue)
+                    {
+                        rel = relValue;
+                        break;
+                    }
+                }
+
+                list.Add(new SelfLinkBindingInfo(url, targetResourceType, type, rel));
             }
         }
     }

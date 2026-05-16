@@ -63,7 +63,10 @@ namespace Blueprint.Generated
                 return _bodyResult;
             }
 
-            operation.TenantId = (string)httpContext.Request.RouteValues["TenantId"];
+            if (httpContext.Request.RouteValues["TenantId"] is string routeStr_TenantId)
+            {
+                operation.TenantId = routeStr_TenantId;
+            }
 
             // Tenant resolution (compile-time, no reflection)
             if (this.TenantResolver != null && this.TenantAccessor != null)

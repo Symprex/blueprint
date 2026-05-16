@@ -117,19 +117,23 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
             return;
         }
 
-        // Warn when multiple distinct URL templates target the same resource type
-        var distinctUrlSet = new HashSet<string>(StringComparer.Ordinal);
+        // Warn when multiple distinct URL templates target the same resource type with Rel="self"
+        // (custom-Rel links like "updateFields" are action links and don't conflict)
+        var distinctSelfUrlSet = new HashSet<string>(StringComparer.Ordinal);
         foreach (var link in selfLinks)
         {
-            distinctUrlSet.Add(link.UrlTemplate);
+            if (string.Equals(link.Rel, "self", StringComparison.Ordinal))
+            {
+                distinctSelfUrlSet.Add(link.UrlTemplate);
+            }
         }
 
-        if (distinctUrlSet.Count > 1)
+        if (distinctSelfUrlSet.Count > 1)
         {
             context.AddDiagnostic(new DiagnosticInfo(
                 _ambiguousSelfLinkError,
                 context.Operation.TypeSymbol.Locations.FirstOrDefault(),
-                new EquatableList<string>([resourceBinding.ResourceType.Name, string.Join(", ", distinctUrlSet.Select(static u => $"'{u}'"))])));
+                new EquatableList<string>([resourceBinding.ResourceType.Name, string.Join(", ", distinctSelfUrlSet.Select(static u => $"'{u}'"))])));
         }
 
         // Require the handler result variable from Execution stage
