@@ -331,7 +331,7 @@ public class ScopePairClaimAuthorizationProviderTests
     private static ClaimsPrincipal CreatePrincipal(params string[] scopes)
     {
         var claims = scopes.Select(static s => new Claim("scope", s)).ToList();
-        claims.Add(new Claim(ClaimTypes.Name, "test-user"));
+        claims.Add(new Claim(System.Security.Claims.ClaimTypes.Name, "test-user"));
 
         return new ClaimsPrincipal(new ClaimsIdentity(claims, "TestAuth"));
     }
@@ -339,7 +339,7 @@ public class ScopePairClaimAuthorizationProviderTests
     private static ClaimsPrincipal CreatePrincipalWithoutScopes()
     {
         return new ClaimsPrincipal(new ClaimsIdentity(
-            [new Claim(ClaimTypes.Name, "test-user")],
+            [new Claim(System.Security.Claims.ClaimTypes.Name, "test-user")],
             "TestAuth"));
     }
 
