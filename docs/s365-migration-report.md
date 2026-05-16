@@ -12,7 +12,7 @@
 | SMTP projects (excluded) | 59 |
 | Legacy Blueprint projects | 11 |
 | Test projects | 50 (26 SMTP, 24 API) |
-| Migration status | **Contract compilation — 15/15 pass** |
+| Migration status | **Common + 1 service domain compiling** |
 
 ## Blueprint Framework Readiness
 
@@ -330,6 +330,57 @@ All 15 S365 contract projects compile against new Blueprint with zero applicatio
 Service projects still reference old Blueprint.csproj, Blueprint.Http.csproj, Blueprint.OpenApi.csproj.
 These must be replaced with new Blueprint.Runtime, Blueprint.SourceGenerator (analyzer), Blueprint.Rebus, etc.
 Service compilation requires migrating Startup.cs, creating BlueprintApp, and replacing old middleware patterns.
+
+## Service-Level Build Progress
+
+### Core Dependencies
+
+| Project | Status | Exclusions | Notes |
+|---------|--------|------------|-------|
+| Symprex.Signature365.Common | ✅ Compiles | 28 files | Marten 8, Npgsql 9, old Blueprint infrastructure |
+| Symprex.Signature365.Common.Core | ✅ Compiles | 24 files | Old Blueprint bridge infrastructure (from contract phase) |
+
+### Service Apps (domain code)
+
+| Service | Status | Exclusions | Notes |
+|---------|--------|------------|-------|
+| Templates | ✅ Domain compiles | 4 files | Startup, Registry, ApiOperations handler, Program excluded |
+| Analytics | 🔲 Not started | — | Deep dependency chain (Portal, Generation, SmtpServer.Bus) |
+| EventStore | 🔲 Not started | — | |
+| Others | 🔲 Not started | — | Blocked on full migration pattern proof |
+
+### Package Version Upgrades (Central Package Management)
+
+The Marten 6→8 upgrade required cascading version bumps across S365:
+
+| Package | Old Version | New Version | Reason |
+|---------|------------|-------------|--------|
+| Hangfire.Core | 1.8.14 | 1.8.17 | Blueprint.Tasks.Hangfire requires ≥1.8.17 |
+| Marten | 6.4.2 | 8.37.0 | Blueprint.Marten requires ≥8.37.0 |
+| Marten.NodaTime | 6.4.2 | 8.37.0 | Must match Marten version |
+| Microsoft.CodeAnalysis.CSharp | 4.7.0 | 5.0.0 | JasperFx.RuntimeCompiler (Marten 8 transitive) |
+| Microsoft.CodeAnalysis.Analyzers | 3.3.4 | 3.11.0 | CodeAnalysis 5.0 transitive |
+| Npgsql | 7.0.8 | 9.0.4 | Marten 8 → Npgsql.Json.NET 9.0.4 |
+| Npgsql.OpenTelemetry | 7.0.8 | 9.0.4 | Must match Npgsql |
+| Spectre.Console | 0.49.1 | 0.55.0 | JasperFx (Marten 8 transitive) |
+
+### Common Exclusion Categories (28 files)
+
+| Category | Count | Migration Action |
+|----------|-------|-----------------|
+| Old Blueprint framework types | 11 | Replaced by new Blueprint source-gen |
+| Marten 6→8 API breakage | 14 | Custom type handlers, patching, query extensions need rewrite |
+| Cascade dependencies | 3+ | Reference excluded types |
+
+### Known Issues from Service Builds
+
+| Issue | Severity | Workaround | Permanent Fix |
+|-------|----------|------------|---------------|
+| Guard.NotNull ambiguity (Blueprint vs JasperFx) | Medium | `ArgumentNullException.ThrowIfNull` | Rename Blueprint's Guard to avoid collision |
+| SA1648 on Marten IDocumentSessionListener | Low | Remove `/// <inheritdoc />` + CA1822 pragmas | Marten 8 default interface methods |
+| ApiOperations ambiguity (Common vs Blueprint.Runtime.Exec) | Medium | Qualified name or `using` alias | S365 Common should use new Blueprint's `ApiOperations` |
+| Old generated pipelines in Internal\Generated | Low | `<Compile Remove>` | Delete during full migration |
+| Npgsql 9 type handler API rewrite | High | Exclude files | Full rewrite of custom type handlers needed |
 
 ## Known Blockers
 
