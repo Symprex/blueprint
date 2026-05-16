@@ -37,7 +37,7 @@ public interface IUserAuthorisationContext
     /// <summary>
     /// Gets the identity provider's identifier for the user (e.g. Auth0 sub claim).
     /// </summary>
-    string IdentityId { get; }
+    string? IdentityId { get; }
 
     /// <summary>
     /// Gets the account or tenant identifier the user belongs to.
@@ -47,12 +47,12 @@ public interface IUserAuthorisationContext
     /// <summary>
     /// Gets the user's email address.
     /// </summary>
-    string Email { get; }
+    string? Email { get; }
 
     /// <summary>
     /// Gets the user's display name.
     /// </summary>
-    string Name { get; }
+    string? Name { get; }
 
     /// <summary>
     /// Populates metadata about this user onto an external store (e.g. activity tags, log scopes).

@@ -29,6 +29,16 @@ public static class Guard
     }
 
     /// <summary>
+    /// Legacy overload for migration compatibility where the parameter name was passed explicitly.
+    /// </summary>
+    /// <param name="paramName">The name of the argument being validated.</param>
+    /// <param name="value">The value to check.</param>
+    public static void NotNull(string paramName, [NoEnumeration] object? value)
+    {
+        ArgumentNullException.ThrowIfNull(value, paramName);
+    }
+
+    /// <summary>
     /// Throws <see cref="ArgumentException"/> when the string is <c>null</c> or empty.
     /// </summary>
     /// <param name="value">The string to check.</param>
@@ -225,7 +235,6 @@ public static class Guard
     /// <param name="argumentName">The name of the argument being validated.</param>
     /// <param name="condition">The condition to evaluate.</param>
     /// <param name="message">The error message when the condition is not met.</param>
-    [Obsolete("Use IsTrue(bool condition, string message) instead. This overload exists for migration compatibility.")]
     public static void IsTrue(
         string argumentName,
         bool condition,

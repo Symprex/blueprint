@@ -12,5 +12,4 @@ namespace Blueprint.Model;
 /// migration friction for Signature365 and other legacy Blueprint consumers.
 /// </remarks>
 [EditorBrowsable(EditorBrowsableState.Never)]
-[Obsolete("Use BlueprintApp instead. ApiDataModel is a legacy compatibility alias.", error: false)]
 public class ApiDataModel : BlueprintApp;

@@ -121,6 +121,13 @@ public class ApiOperationContext : IHttpOperationContext
     public ClaimsPrincipal? UserPrincipal { get; set; }
 
     /// <summary>
+    /// Gets the <see cref="System.Security.Claims.ClaimsIdentity"/> of the authenticated user, or
+    /// <see langword="null"/> when no authenticated identity is available. This is a convenience
+    /// shortcut equivalent to <c>UserPrincipal?.Identity as ClaimsIdentity</c>.
+    /// </summary>
+    public ClaimsIdentity? ClaimsIdentity => this.UserPrincipal?.Identity as ClaimsIdentity;
+
+    /// <summary>
     /// Gets or sets the application-specific authorization context for the current user. Populated
     /// by the generated pipeline when an <see cref="IUserAuthorisationContextFactory"/> is registered
     /// in DI. Authorizers (<see cref="IApiAuthoriser"/>) and operation handlers read this to inspect
