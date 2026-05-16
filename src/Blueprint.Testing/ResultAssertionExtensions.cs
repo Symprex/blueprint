@@ -29,12 +29,8 @@ public static class ResultAssertionExtensions
 
         if (result is ValidationFailedResult validationFailed)
         {
-            var errors = validationFailed.Errors is { Count: > 0 }
-                ? string.Join("; ", validationFailed.Errors.Select(static e => $"[{e.Key}] {string.Join(", ", e.Value)}"))
-                : "(no errors)";
-
             throw new BlueprintTestExecutionException(
-                $"Expected OkResult<{typeof(T).Name}> but got ValidationFailedResult. Errors: {errors}",
+                $"Expected OkResult<{typeof(T).Name}> but got ValidationFailedResult. Errors: {FormatValidationErrors(validationFailed)}",
                 result);
         }
 
@@ -62,27 +58,8 @@ public static class ResultAssertionExtensions
 
         if (result is ValidationFailedResult validationFailed)
         {
-            string errors;
-
-            if (validationFailed.Errors is { Count: > 0 })
-            {
-                errors = string.Join("; ", validationFailed.Errors.Select(static e => $"[{e.Key}] {string.Join(", ", e.Value)}"));
-            }
-            else if (validationFailed.ValidationResults is { Count: > 0 })
-            {
-                errors = string.Join("; ", validationFailed.ValidationResults.Select(static vr =>
-                {
-                    var members = vr.MemberNames.Any() ? string.Join(",", vr.MemberNames) : "(none)";
-                    return $"[{members}] {vr.ErrorMessage}";
-                }));
-            }
-            else
-            {
-                errors = "(no errors)";
-            }
-
             throw new BlueprintTestExecutionException(
-                $"Expected ResourceEvent<{typeof(TResource).Name}> but got ValidationFailedResult. Errors: {errors}",
+                $"Expected ResourceEvent<{typeof(TResource).Name}> but got ValidationFailedResult. Errors: {FormatValidationErrors(validationFailed)}",
                 result);
         }
 
@@ -104,6 +81,53 @@ public static class ResultAssertionExtensions
         return result as ResourceEvent
             ?? throw new BlueprintTestExecutionException(
                 $"Expected ResourceEvent but got {result.GetType().Name}.",
+                result);
+    }
+
+    /// <summary>
+    /// Asserts the result is a <see cref="ResourceEventResult{T}"/> and returns the typed content.
+    /// Use this for operations that return the newer host-neutral resource-event type.
+    /// </summary>
+    /// <typeparam name="T">The expected content type.</typeparam>
+    /// <param name="result">The operation result.</param>
+    /// <returns>The typed resource event result.</returns>
+    public static ResourceEventResult<T> ShouldBeResourceEventResult<T>(this OperationResult result)
+        where T : notnull
+    {
+        ArgumentNullException.ThrowIfNull(result);
+
+        if (result is ResourceEventResult<T> resourceEventResult)
+        {
+            return resourceEventResult;
+        }
+
+        if (result is ValidationFailedResult validationFailed)
+        {
+            var errors = FormatValidationErrors(validationFailed);
+
+            throw new BlueprintTestExecutionException(
+                $"Expected ResourceEventResult<{typeof(T).Name}> but got ValidationFailedResult. Errors: {errors}",
+                result);
+        }
+
+        throw new BlueprintTestExecutionException(
+            $"Expected ResourceEventResult<{typeof(T).Name}> but got {result.GetType().Name}.",
+            result);
+    }
+
+    /// <summary>
+    /// Asserts the result is a <see cref="ResourceEventResult"/> (non-generic) and returns it.
+    /// Use this for the newer host-neutral resource-event type when the content type doesn't matter.
+    /// </summary>
+    /// <param name="result">The operation result.</param>
+    /// <returns>The resource event result.</returns>
+    public static ResourceEventResult ShouldBeResourceEventResult(this OperationResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+
+        return result as ResourceEventResult
+            ?? throw new BlueprintTestExecutionException(
+                $"Expected ResourceEventResult but got {result.GetType().Name}.",
                 result);
     }
 
@@ -380,5 +404,24 @@ public static class ResultAssertionExtensions
             ?? throw new BlueprintTestExecutionException(
                 $"Expected UnhandledExceptionResult but got {result.GetType().Name}.",
                 result);
+    }
+
+    private static string FormatValidationErrors(ValidationFailedResult validationFailed)
+    {
+        if (validationFailed.Errors is { Count: > 0 })
+        {
+            return string.Join("; ", validationFailed.Errors.Select(static e => $"[{e.Key}] {string.Join(", ", e.Value)}"));
+        }
+
+        if (validationFailed.ValidationResults is { Count: > 0 })
+        {
+            return string.Join("; ", validationFailed.ValidationResults.Select(static vr =>
+            {
+                var members = vr.MemberNames.Any() ? string.Join(",", vr.MemberNames) : "(none)";
+                return $"[{members}] {vr.ErrorMessage}";
+            }));
+        }
+
+        return "(no errors)";
     }
 }
