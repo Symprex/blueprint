@@ -49,7 +49,7 @@ public abstract class OperationExecutorShell : IOperationExecutorPipeline
     /// <summary>
     /// Gets the pipeline-scoped logger created from the <see cref="ILoggerFactory"/> supplied at construction time.
     /// Generated pipelines use this when injecting <c>ILogger</c> into handler base-class properties
-    /// (e.g., the <c>ApiOperations.Logger</c> pattern used by Signature 365 handlers).
+    /// (e.g., the <c>BlueprintApiOperations.Logger</c> pattern used by Signature 365 handlers).
     /// </summary>
     protected ILogger Logger => this._logger;
 

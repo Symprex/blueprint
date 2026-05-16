@@ -324,8 +324,9 @@ public static class HandlerDiscovery
     /// <summary>
     /// Detects settable properties on an external handler class that match well-known pipeline types.
     /// These properties will be assigned from pipeline context after handler instantiation, supporting
-    /// the Signature 365 <c>ApiOperations</c> base class pattern where <c>Context</c>, <c>Identity</c>,
-    /// <c>Logger</c>, and <c>CancellationToken</c> are injected as properties.
+    /// the Signature 365 <c>ApiOperations</c> pattern where a consumer base class derives from
+    /// <c>BlueprintApiOperations</c> and exposes <c>Context</c>, <c>Identity</c>, <c>Logger</c>,
+    /// and <c>CancellationToken</c> as injected properties.
     /// </summary>
     private static EquatableList<HandlerPropertyInjection>? DetectPropertyInjections(INamedTypeSymbol handlerClass)
     {

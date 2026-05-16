@@ -25,7 +25,7 @@
 | Hangfire integration | ✅ Done | Schedule providers, recurring tasks, and queue selection are supported; S365 keeps custom partitioned storage/admin ops |
 | HTTP client / gateway support | ✅ Done | `CallAsync` shims, `CallOptions`, JWT forwarding, `StatusCodeResult`, `PlainTextResult`, `ProxyResult`, and timeout mapping are supported |
 | Handler discovery | ✅ Verified | Inline `Invoke`/`InvokeAsync`/`Handle`/`HandleAsync` plus external handler classes all work |
-| ApiOperations base class | ✅ Verified | `Context`, `Identity`, `Logger`, `CancellationToken`, `HttpContext`, `HttpRequest`, and `HttpResponse` map directly |
+| BlueprintApiOperations base class | ✅ Verified | `Context`, `Identity`, `Logger`, `CancellationToken`, `HttpContext`, `HttpRequest`, and `HttpResponse` map directly |
 | ResourceEvent contract | ✅ Verified | Both `ResourceEvent<T>` (legacy, 253 S365 operations) and `ResourceEventResult<T>` (new) are supported by the source generator — zero-churn on return types |
 | Compile-time diagnostics | ✅ Done | Auth, property ownership, HTTP, link, validation, result, and serializer diagnostics cover the migration surface |
 | ApiExceptionFactory resolution | ✅ Done | Field references (e.g. `CommonApiExceptions.NotFound`) resolved via semantic model; no BP010 warnings for S365 pattern |
@@ -604,8 +604,8 @@ S365 uses two HTTP handler shapes in meaningful numbers: inline operation method
 | Supported method names | `Invoke`, `InvokeAsync`, `Handle`, `HandleAsync` |
 | Handler constructor DI | Rich constructor injection is supported; multiple infra services are fine |
 
-### `ApiOperations` base class parity
-`ApiOperations` is a direct migration seam rather than a rewrite point. Blueprint injects `Context`, `Identity`, `Logger`, `CancellationToken`, `HttpContext`, `HttpRequest`, and `HttpResponse` in the same shape S365 expects, and it also auto-detects those property injections across the type hierarchy. That means handler logic that depends on the base class can usually move with only namespace updates.
+### `BlueprintApiOperations` base class parity
+`BlueprintApiOperations` is the Blueprint base class that preserves the S365 `ApiOperations` property-injection seam without colliding with consumer-defined `ApiOperations` types. Blueprint injects `Context`, `Identity`, `Logger`, `CancellationToken`, `HttpContext`, `HttpRequest`, and `HttpResponse` in the same shape S365 expects, and it also auto-detects those property injections across the type hierarchy. That means S365 can keep its own `ApiOperations` type name and have it inherit from `BlueprintApiOperations`.
 
 | Injected member | Migration note |
 |---|---|

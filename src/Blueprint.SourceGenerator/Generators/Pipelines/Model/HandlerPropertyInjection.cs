@@ -3,8 +3,9 @@ namespace Blueprint.SourceGenerator.Generators.Pipelines.Model;
 /// <summary>
 /// Describes a settable property on an external handler class that should be populated from
 /// a well-known pipeline expression after the handler is instantiated. This supports the
-/// Signature 365 <c>ApiOperations</c> pattern where handlers inherit <c>Context</c>,
-/// <c>Identity</c>, <c>Logger</c>, and <c>CancellationToken</c> as base-class properties.
+/// Signature 365 <c>ApiOperations</c> pattern where that consumer base class inherits
+/// <c>BlueprintApiOperations</c> and exposes <c>Context</c>, <c>Identity</c>,
+/// <c>Logger</c>, and <c>CancellationToken</c> as base-class properties.
 /// </summary>
 /// <param name="PropertyName">The name of the property on the handler class (e.g., <c>"Identity"</c>).</param>
 /// <param name="SourceExpression">

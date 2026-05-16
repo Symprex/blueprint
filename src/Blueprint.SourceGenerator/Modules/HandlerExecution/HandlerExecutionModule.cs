@@ -144,7 +144,7 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
                     });
             }
 
-            // Populate well-known base-class properties (e.g., S365 ApiOperations: Context, Identity, Logger, CancellationToken)
+            // Populate well-known base-class properties (e.g., S365 ApiOperations subclasses built on BlueprintApiOperations).
             var propertyInjections = context.GetPropertyInjections();
             if (propertyInjections is { Count: > 0 })
             {

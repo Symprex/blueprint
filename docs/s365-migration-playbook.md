@@ -195,7 +195,7 @@ A compile-time proof project (`.scratch/s365-proof/`) validated S365 patterns ag
 - **`ApiId` value-type route parameters** (handled via `[TypeConverter]` — no S365 changes needed)
 - **Validation attributes** (`[Required]`, `[MaxLength]`, `[StringLength]`, `[MinLength]`)
 - **`IValidatableObject`** cross-property validation (e.g. conditional required fields)
-- **`ApiOperations` external handler classes** with `InvokeAsync` methods
+- **`ApiOperations` external handler classes** with `InvokeAsync` methods, backed by Blueprint's `BlueprintApiOperations` base class when needed
 - **Paged resource returns** with `TenantPagedApiResource<T>` pattern
 
 **Result: builds successfully with 0 errors, 1 advisory warning** after applying these requirements:
@@ -209,7 +209,7 @@ A compile-time proof project (`.scratch/s365-proof/`) validated S365 patterns ag
 | **ProblemDetails in JsonSerializerContext** | The `JsonSerializerContext` must include `ProblemDetails` and `ValidationProblemDetails` for HTTP error responses (BP006 diagnostic). |
 | **Value-type link properties** | Fixed in source generator: custom struct types like `ApiId` in link URL placeholders now generate correct code without `?.` operator or `== null` checks. |
 | **ResourceEvent<T> works unchanged** | `ICommand<ResourceEvent<T>>` return types work as-is. No migration to `ResourceEventResult<T>` needed. JSON serialization includes `$object`, `data`, and enum string values matching legacy shape. |
-| **Handler migration** | Handlers using `ApiOperations` base class (property injection) continue to work — Blueprint discovers `InvokeAsync`, `HandleAsync`, `Handle`, and `Invoke` methods. External handler classes with constructor DI are also supported. **No method renaming required.** |
+| **Handler migration** | Handlers using the S365 `ApiOperations` base class continue to work when that base inherits `BlueprintApiOperations` for property injection. Blueprint discovers `InvokeAsync`, `HandleAsync`, `Handle`, and `Invoke` methods. External handler classes with constructor DI are also supported. **No method renaming required.** |
 
 ### S365 Pattern Compatibility (Gap Analysis)
 
@@ -268,7 +268,7 @@ Both toolchains emit `.g.cs` files with no name collisions. During migration, S3
 |-----|-------------|--------|
 | **Rebus integration package** | `Blueprint.Rebus` — message subscription, outbox pattern | ✅ Implemented in `Blueprint.Rebus` |
 | **Hangfire integration package** | `Blueprint.Tasks.Hangfire` — background task scheduling | ✅ Implemented in `Blueprint.Tasks.Hangfire` + `Blueprint.Hangfire` |
-| **`OperationsHandlerScanner`** | S365 convention: scan `ApiOperations` base classes for handler methods | ✅ Not needed — source gen discovers `InvokeAsync` inline handlers automatically |
+| **`OperationsHandlerScanner`** | S365 convention: scan `ApiOperations` base classes for handler methods | ✅ Not needed — source gen discovers `InvokeAsync` inline handlers and S365 can keep its own `ApiOperations` name by inheriting `BlueprintApiOperations` |
 | **NSwag → Built-in OpenAPI** | S365 uses NSwag server-side for OpenAPI. New Blueprint has built-in OpenAPI with pluggable security schemes. Custom Handlebars TS generator is unchanged. | ✅ Feature-complete, all required OpenAPI extensions emitted |
 | **`FromResourceAttribute` with path** | `[FromResource(typeof(X), "/Tenants/{Auth:AccountId}")]` — path override variant | ✅ Supported via `PropertyOwnershipModule` |
 | **`Link` attribute (non-self, non-root)** | `[Link(typeof(Resource), "/path", Rel = "name")]` — arbitrary HATEOAS links | ✅ Implemented |
@@ -443,10 +443,10 @@ public partial class LoadAnalyticsQuery : IQuery<ProxyResult>
 
 **Pattern B: Separate handler class** (used via `OperationsHandlerScanner`)
 ```csharp
-// The source generator discovers handlers from ApiOperations base classes
-// automatically. All four conventions are supported: Invoke, InvokeAsync,
-// Handle, HandleAsync — NO rename needed.
-public class AnalyticsOperations : ApiOperations
+// The source generator discovers handlers from BlueprintApiOperations-derived
+// base classes automatically. All four conventions are supported: Invoke,
+// InvokeAsync, Handle, HandleAsync — NO rename needed.
+public class AnalyticsOperations : BlueprintApiOperations
 {
     public async Task<Result> HandleAsync(FindSentEmailsQuery query, ...) { ... }
 }
@@ -1039,7 +1039,7 @@ services.AddBlueprintClient<IVCardApi, VCardApi>((s, c) =>
 
 **Handler Pattern (S365):**
 ```csharp
-public class VCardGatewayGenerateVCardQueryHandler : ApiOperations
+public class VCardGatewayGenerateVCardQueryHandler : BlueprintApiOperations
 {
     public async Task<HttpResult> HandleAsync(
         VCardGatewayGenerateVCardQuery operation,
@@ -2254,9 +2254,9 @@ app.UseEndpoints(endpoints =>
 **File: `Api/GetSentEmailQueryHandler.cs`** — NO changes needed:
 
 ```csharp
-// Already extends ApiOperations, uses InvokeAsync with DI params
+// Already extends BlueprintApiOperations (or an S365 ApiOperations base that inherits it), uses InvokeAsync with DI params
 // Blueprint handler discovery automatically finds this pattern
-public class GetSentEmailQueryHandler : ApiOperations
+public class GetSentEmailQueryHandler : BlueprintApiOperations
 {
     public async Task<SentEmailApiResource> InvokeAsync(
         GetSentEmailQuery operation,

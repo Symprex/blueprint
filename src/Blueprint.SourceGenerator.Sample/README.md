@@ -72,6 +72,7 @@ A background task (`SendTemplateSharedNotificationTask`) demonstrates non-HTTP e
 - **Resource events** — `ResourceEventResult<T>` and `KeyOnlyResourceEventResult` for event-sourced commands
 - **Resource event auditing** — `IResourceEventAuditSink` for post-execution audit recording
 - **Operation grouping** — `[ApiOperations("Templates")]` for explicit OpenAPI tag provenance
+- **Handler base classes** — consumer handler hierarchies can derive from `BlueprintApiOperations` to receive `Context`, `Identity`, `Logger`, and `CancellationToken` without colliding with app-local `ApiOperations` names
 - **Serializer context** — `[BlueprintAppSerializerContext]` with `System.Text.Json` source-generated serialization
 - **Generated executor** — `SampleBlueprintAppExecutor` is entirely source-generated
 - **Paged queries** — `OrderedPagedQuery<T>` on `GetPagedTemplatesQuery` with offset/limit/sort

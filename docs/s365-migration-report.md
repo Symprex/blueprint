@@ -378,7 +378,7 @@ The Marten 6→8 upgrade required cascading version bumps across S365:
 |-------|----------|------------|---------------|
 | Guard.NotNull ambiguity (Blueprint vs JasperFx) | Medium | `ArgumentNullException.ThrowIfNull` | Rename Blueprint's Guard to avoid collision |
 | SA1648 on Marten IDocumentSessionListener | Low | Remove `/// <inheritdoc />` + CA1822 pragmas | Marten 8 default interface methods |
-| ApiOperations ambiguity (Common vs Blueprint.Runtime.Exec) | Medium | Qualified name or `using` alias | S365 Common should use new Blueprint's `ApiOperations` |
+| ApiOperations ambiguity (Common vs Blueprint.Runtime.Exec) | Medium | Qualified name or `using` alias | S365 Common should inherit Blueprint's `BlueprintApiOperations` |
 | Old generated pipelines in Internal\Generated | Low | `<Compile Remove>` | Delete during full migration |
 | Npgsql 9 type handler API rewrite | High | Exclude files | Full rewrite of custom type handlers needed |
 
@@ -395,7 +395,7 @@ Deep audit of S365 handler patterns confirmed full compatibility with zero migra
 | `HandleAsync(op, service1, service2, ...)` | ✅ DI parameter injection | None |
 | `Handle(op, ...)` (sync) | ✅ All 4 method names | None |
 | `InvokeAsync(op, ...)` | ✅ All 4 method names | None |
-| `ApiOperations` base class (`Context`, `Identity`, `Logger`, `CancellationToken`) | ✅ Property injection | None |
+| `BlueprintApiOperations` base class (`Context`, `Identity`, `Logger`, `CancellationToken`) | ✅ Property injection | None |
 | `ICommand<ResourceEvent<T>>` (253 operations) | ✅ Legacy type supported | None |
 | `IQuery<T>` with plain resource return | ✅ Native support | None |
 | `ICommand<HttpResult>` (webhook handler) | ✅ HttpResult supported | None |

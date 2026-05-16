@@ -44,6 +44,30 @@ public sealed class RelocatedTypeAnalyzerTests
     }
 
     [Xunit.Fact]
+    public async Task When_file_uses_ApiOperations_with_only_root_using_then_no_bpmig402()
+    {
+        const string source = """
+            namespace Blueprint
+            {
+                public abstract class ApiOperations { }
+            }
+
+            namespace TestConsumer
+            {
+                using Blueprint;
+
+                public class MyHandler : ApiOperations
+                {
+                }
+            }
+            """;
+
+        var diagnostics = await GetDiagnosticsAsync(source);
+
+        diagnostics.Where(static d => d.Id == "BPMIG402").Should().BeEmpty();
+    }
+
+    [Xunit.Fact]
     public async Task When_file_uses_ApiOperationDescriptor_with_only_root_using_then_reports_bpmig402()
     {
         const string source = """

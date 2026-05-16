@@ -37,7 +37,9 @@ public sealed class RelocatedTypeAnalyzer : DiagnosticAnalyzer
             // Blueprint → Blueprint.Runtime.Exec
             new KeyValuePair<string, string>("ApiOperationContext", "Blueprint.Runtime.Exec"),
             new KeyValuePair<string, string>("IHttpOperationContext", "Blueprint.Runtime.Exec"),
-            new KeyValuePair<string, string>("ApiOperations", "Blueprint.Runtime.Exec"),
+
+            // ApiOperations is intentionally excluded because it was renamed to
+            // BlueprintApiOperations; BPMIG402 only adds using directives.
             new KeyValuePair<string, string>("OperationResult", "Blueprint.Runtime.Exec"),
             new KeyValuePair<string, string>("OkResult", "Blueprint.Runtime.Exec"),
             new KeyValuePair<string, string>("NoResultOperationResult", "Blueprint.Runtime.Exec"),

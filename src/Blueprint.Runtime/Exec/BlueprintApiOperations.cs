@@ -3,8 +3,9 @@ using Blueprint.Authorization;
 namespace Blueprint.Runtime.Exec;
 
 /// <summary>
-/// Base class for operation handlers that provides property-injected pipeline context,
-/// matching the Signature 365 <c>ApiOperations</c> base class pattern.
+/// Base class for operation handlers that provides property-injected pipeline context.
+/// Signature 365-style handler bases can inherit from this type to avoid colliding with
+/// their own <c>ApiOperations</c> class names.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -21,7 +22,7 @@ namespace Blueprint.Runtime.Exec;
 /// these properties.
 /// </para>
 /// </remarks>
-public abstract class ApiOperations
+public abstract class BlueprintApiOperations
 {
     /// <summary>
     /// Gets or sets the <see cref="ApiOperationContext"/> for the current operation.
