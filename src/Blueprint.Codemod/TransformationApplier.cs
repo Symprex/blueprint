@@ -12,9 +12,19 @@ namespace Blueprint.Codemod;
 /// Applies the currently supported activation codemod transformations by reusing the dry-run report to decide which
 /// diagnostics are safe to hand off to the existing migration analyzer code-fix implementations.
 /// </summary>
+/// <remarks>
+/// The apply strategy processes one project at a time, exhausting all fixable diagnostics within
+/// that project before moving on. This avoids re-scanning earlier projects after they are fully
+/// fixed, making the approach scale to solutions with thousands of diagnostics (e.g. S365 has
+/// 2,784 auto-fixable instances across 158 projects).
+/// </remarks>
 public sealed class TransformationApplier
 {
-    private const int MaxFixIterations = 512;
+    /// <summary>
+    /// Safety limit per project to guard against infinite loops where a code fix continuously
+    /// re-introduces the same diagnostic.
+    /// </summary>
+    private const int MaxFixesPerProject = 1_000;
 
     private static readonly ImmutableArray<string> SupportedDiagnosticIds =
     [
@@ -69,101 +79,129 @@ public sealed class TransformationApplier
         var solution = await workspace.OpenSolutionAsync(solutionPath, cancellationToken: cancellationToken);
         var analyzers = CreateAnalyzers();
         var codeFixProviders = CreateCodeFixProviders();
-        var updatedSolution = solution;
-        var iteration = 0;
+        var totalFixes = 0;
 
-        while (true)
+        // Process projects one at a time, exhausting all fixes within each project before
+        // moving on. This means each project's compilation is rebuilt only for its own fixes,
+        // not for unrelated fixes in other projects.
+        foreach (var projectId in solution.ProjectIds)
         {
-            if (iteration++ >= MaxFixIterations)
+            var projectFixes = 0;
+
+            while (projectFixes < MaxFixesPerProject)
             {
-                throw new InvalidOperationException(
-                    $"The codemod apply mode exceeded {MaxFixIterations} fix iterations while applying supported migration diagnostics.");
+                var project = solution.GetProject(projectId);
+                if (project is null)
+                {
+                    break;
+                }
+
+                var nextSolution = await ApplyNextFixForProjectAsync(
+                    solution,
+                    project,
+                    analyzers,
+                    codeFixProviders,
+                    options.DiagnosticFilter,
+                    cancellationToken);
+
+                if (nextSolution is null)
+                {
+                    break;
+                }
+
+                solution = nextSolution;
+                projectFixes++;
+                totalFixes++;
+
+                if (totalFixes % 100 == 0)
+                {
+                    Console.Error.WriteLine($"[codemod] Applied {totalFixes} fixes so far (current project: {project.Name})...");
+                }
             }
 
-            var nextSolution = await ApplyNextSupportedCodeFixAsync(
-                updatedSolution,
-                analyzers,
-                codeFixProviders,
-                options.DiagnosticFilter,
-                cancellationToken);
-            if (nextSolution is null)
+            if (projectFixes >= MaxFixesPerProject)
             {
-                break;
+                var projectName = solution.GetProject(projectId)?.Name ?? projectId.Id.ToString();
+                Console.Error.WriteLine(
+                    $"[codemod] WARNING: Project '{projectName}' hit the {MaxFixesPerProject}-fix safety limit. " +
+                    "Some diagnostics may remain unfixed.");
             }
-
-            updatedSolution = nextSolution;
         }
 
-        if (!workspace.TryApplyChanges(updatedSolution))
+        Console.Error.WriteLine($"[codemod] Total fixes applied: {totalFixes}");
+
+        if (totalFixes > 0 && !workspace.TryApplyChanges(solution))
         {
             throw new InvalidOperationException(
                 $"The codemod apply mode could not write the supported transformations back to '{solutionPath}'.");
         }
     }
 
-    private static async Task<Solution?> ApplyNextSupportedCodeFixAsync(
+    /// <summary>
+    /// Tries to apply the next supported code fix within a single project. Returns the updated
+    /// solution if a fix was applied, or <c>null</c> if no more fixable diagnostics remain.
+    /// </summary>
+    private static async Task<Solution?> ApplyNextFixForProjectAsync(
         Solution solution,
+        Project project,
         ImmutableArray<DiagnosticAnalyzer> analyzers,
         ImmutableArray<CodeFixProvider> codeFixProviders,
         string diagnosticFilter,
         CancellationToken cancellationToken)
     {
-        foreach (var project in solution.Projects)
+        var compilation = await project.GetCompilationAsync(cancellationToken);
+        if (compilation is null)
         {
-            var compilation = await project.GetCompilationAsync(cancellationToken);
-            if (compilation is null)
+            return null;
+        }
+
+        var diagnostics = await compilation
+            .WithAnalyzers(analyzers)
+            .GetAnalyzerDiagnosticsAsync(cancellationToken);
+        var candidates = diagnostics
+            .Where(static candidate => candidate.Location.IsInSource)
+            .Where(candidate => SolutionAnalysisRunner.MatchesDiagnosticFilter(candidate.Id, diagnosticFilter))
+            .Where(static candidate => SupportedDiagnosticIds.Contains(candidate.Id))
+            .OrderBy(static candidate => candidate.Location.SourceTree?.FilePath, StringComparer.Ordinal)
+            .ThenBy(static candidate => candidate.Location.SourceSpan.Start);
+
+        foreach (var diagnostic in candidates)
+        {
+            if (diagnostic.Location.SourceTree is null)
             {
                 continue;
             }
 
-            var diagnostics = await compilation
-                .WithAnalyzers(analyzers)
-                .GetAnalyzerDiagnosticsAsync(cancellationToken);
-            var candidates = diagnostics
-                .Where(static candidate => candidate.Location.IsInSource)
-                .Where(candidate => SolutionAnalysisRunner.MatchesDiagnosticFilter(candidate.Id, diagnosticFilter))
-                .Where(static candidate => SupportedDiagnosticIds.Contains(candidate.Id))
-                .OrderBy(static candidate => candidate.Location.SourceTree?.FilePath, StringComparer.Ordinal)
-                .ThenBy(static candidate => candidate.Location.SourceSpan.Start);
-
-            foreach (var diagnostic in candidates)
+            var document = solution.GetDocument(diagnostic.Location.SourceTree);
+            if (document is null)
             {
-                if (diagnostic.Location.SourceTree is null)
-                {
-                    continue;
-                }
-
-                var document = solution.GetDocument(diagnostic.Location.SourceTree);
-                if (document is null)
-                {
-                    continue;
-                }
-
-                var codeFixProvider = codeFixProviders.SingleOrDefault(
-                    provider => provider.FixableDiagnosticIds.Contains(diagnostic.Id));
-                if (codeFixProvider is null)
-                {
-                    throw new InvalidOperationException(
-                        $"The codemod apply mode does not have a code-fix provider for supported diagnostic '{diagnostic.Id}'.");
-                }
-
-                var actions = new List<CodeAction>();
-                var context = new CodeFixContext(document, diagnostic, (action, _) => actions.Add(action), cancellationToken);
-                await codeFixProvider.RegisterCodeFixesAsync(context);
-
-                if (actions.Count == 0)
-                {
-                    // The code fix provider may decline to register a fix when the diagnostic's
-                    // target has already been partially fixed by another provider (e.g. BPMIG201
-                    // stripped the template arg, so BPMIG200 no longer has a second arg to remove).
-                    continue;
-                }
-
-                var operations = await actions[0].GetOperationsAsync(cancellationToken);
-                var applyChangesOperation = operations.OfType<ApplyChangesOperation>().Single();
-                EnsureCodeFixMadeProgress(solution, applyChangesOperation.ChangedSolution, diagnostic.Id);
-                return applyChangesOperation.ChangedSolution;
+                continue;
             }
+
+            var codeFixProvider = codeFixProviders.SingleOrDefault(
+                provider => provider.FixableDiagnosticIds.Contains(diagnostic.Id));
+            if (codeFixProvider is null)
+            {
+                throw new InvalidOperationException(
+                    $"The codemod apply mode does not have a code-fix provider for supported diagnostic '{diagnostic.Id}'.");
+            }
+
+            var actions = new List<CodeAction>();
+            var context = new CodeFixContext(document, diagnostic, (action, _) => actions.Add(action), cancellationToken);
+            await codeFixProvider.RegisterCodeFixesAsync(context);
+
+            if (actions.Count == 0)
+            {
+                // The code fix provider may decline to register a fix when the diagnostic's
+                // target has already been partially fixed by another provider (e.g. BPMIG201
+                // stripped the template arg, so BPMIG200 no longer has a second arg to remove).
+                continue;
+            }
+
+            var operations = await actions[0].GetOperationsAsync(cancellationToken);
+            var applyChangesOperation = operations.OfType<ApplyChangesOperation>().Single();
+            EnsureCodeFixMadeProgress(solution, applyChangesOperation.ChangedSolution, diagnostic.Id);
+            return applyChangesOperation.ChangedSolution;
         }
 
         return null;
