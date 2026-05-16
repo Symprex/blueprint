@@ -66,4 +66,11 @@ public sealed class ResourceAttribute : Attribute
     /// When <see langword="null"/>, only scope-pair (noun+verb) authorization is applied.
     /// </summary>
     public string? ResourceKeyTemplate { get; }
+
+    /// <summary>
+    /// Optional free-text description explaining why this specific resource scope was chosen,
+    /// or any other authorization context that may be useful for auditing or documentation.
+    /// This value is not used at runtime and serves only as developer-facing metadata.
+    /// </summary>
+    public string? Details { get; set; }
 }
