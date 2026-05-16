@@ -12,7 +12,8 @@
 | SMTP projects (excluded) | 59 |
 | Legacy Blueprint projects | 11 |
 | Test projects | 50 (26 SMTP, 24 API) |
-| Migration status | **Common + 1 service domain compiling** |
+| **Services compiling** | **14/20** (agent fixing remaining 6) |
+| Migration status | **Full service builds in progress** |
 
 ## Blueprint Framework Readiness
 
@@ -41,24 +42,24 @@ All framework features required for S365 migration are implemented and tested:
 
 | Service | Cmds | Queries | Handlers | `[Resource]` | Tier | Status |
 |---------|------|---------|----------|-------------|------|--------|
-| Analytics | 1 | 1 | 6 | 2 | 1 | ✅ Proof compiled |
-| EventStore | 0 | 1 | 4 | 2 | 1 | ✅ Proof compiled |
-| Templates | 0 | 1 | 2 | 0 | 2 | ✅ Proof compiled |
-| Generation | 0 | 6 | 12 | 2 | 2 | ✅ Proof compiled |
-| ExchangeTransportAgent | 4 | 3 | 9 | 7 | 3 | ✅ Proof compiled |
-| Microsoft365 | 4 | 1 | 10 | 2 | 3 | ✅ Proof compiled |
-| Outlook | 6 | 7 | 28 | 7 | 3 | ✅ Proof compiled |
-| Import | 12 | 6 | 47 | 5 | 3 | ✅ Proof compiled (10 ops) |
-| VCard | 4 | 5 | 18 | 7 | 4 | ✅ Proof compiled |
-| Subscriptions | 16 | 10 | 64 | 24 | 5 | ✅ Proof compiled (26 ops) |
-| Partners | 24 | 18 | 92 | 10 | 5 | ✅ Proof compiled (19 ops) |
-| Billing | 23 | 14 | 95 | 35 | 6 | ✅ Proof compiled (8 representative ops) |
-| IdentityServer | 29 | 13 | 92 | 43 | 6 | ✅ Proof compiled (42 ops) |
-| AdminPortal | 41 | 63 | 230 | 39 | 6 | ✅ Proof compiled (28 ops) |
-| Portal | 130 | 99 | 529 | 161 | 7 | ✅ Proof compiled (78 ops) |
+| Analytics | 1 | 1 | 6 | 2 | 1 | 🔧 BPLG001 route case mismatch |
+| EventStore | 0 | 1 | 4 | 2 | 1 | ✅ Compiles |
+| Templates | 0 | 1 | 2 | 0 | 2 | ✅ Compiles |
+| Generation | 0 | 6 | 12 | 2 | 2 | ✅ Compiles |
+| ExchangeTransportAgent | 4 | 3 | 9 | 7 | 3 | ✅ Compiles |
+| Microsoft365 | 4 | 1 | 10 | 2 | 3 | 🔧 BP005 non-partial + CS0029 StatusCodeResult |
+| Outlook | 6 | 7 | 28 | 7 | 3 | ✅ Compiles |
+| Import | 12 | 6 | 47 | 5 | 3 | ✅ Compiles |
+| VCard | 4 | 5 | 18 | 7 | 4 | ✅ Compiles |
+| Subscriptions | 16 | 10 | 64 | 24 | 5 | 🔧 CS0311 (should fix with new overload) |
+| Partners | 24 | 18 | 92 | 10 | 5 | ✅ Compiles |
+| Billing | 23 | 14 | 95 | 35 | 6 | 🔧 CS0311 (should fix with new overload) |
+| IdentityServer | 29 | 13 | 92 | 43 | 6 | 🔧 ClaimTypes ambiguity + CS0311 |
+| AdminPortal | 41 | 63 | 230 | 39 | 6 | 🔧 CS1001 syntax error |
+| Portal | 130 | 99 | 529 | 161 | 7 | ✅ Compiles |
 | EntraId | 0 | 0 | 0 | 0 | — | 🔲 Evaluate if Blueprint-dependent |
 | GraphProxy | 0 | 0 | 0 | 0 | — | 🔲 Evaluate if Blueprint-dependent |
-| **Totals** | **294** | **248** | **1,238** | **346** | | |
+| **Totals** | **294** | **248** | **1,238** | **346** | | **14/20 compiling** |
 
 ### Gateway Projects
 
@@ -340,14 +341,45 @@ Service compilation requires migrating Startup.cs, creating BlueprintApp, and re
 | Symprex.Signature365.Common | ✅ Compiles | 28 files | Marten 8, Npgsql 9, old Blueprint infrastructure |
 | Symprex.Signature365.Common.Core | ✅ Compiles | 24 files | Old Blueprint bridge infrastructure (from contract phase) |
 
-### Service Apps (domain code)
+### Service Apps (Full Build Status)
 
-| Service | Status | Exclusions | Notes |
-|---------|--------|------------|-------|
-| Templates | ✅ Domain compiles | 4 files | Startup, Registry, ApiOperations handler, Program excluded |
-| Analytics | 🔲 Not started | — | Deep dependency chain (Portal, Generation, SmtpServer.Bus) |
-| EventStore | 🔲 Not started | — | |
-| Others | 🔲 Not started | — | Blocked on full migration pattern proof |
+All 20 service projects are being built against the new Blueprint source-gen.
+The `blueprint-codemod-test` branch has codemod changes plus manual fixes applied.
+
+| Service | Status | Remaining Errors | Fix Category |
+|---------|--------|------------------|--------------|
+| Partners | ✅ Compiles | 0 | — |
+| VCard | ✅ Compiles | 0 | — |
+| EventStore | ✅ Compiles | 0 | — |
+| Templates | ✅ Compiles | 0 | — |
+| ExchangeTransportAgent | ✅ Compiles | 0 | — |
+| Outlook | ✅ Compiles | 0 | — |
+| Import | ✅ Compiles | 0 | — |
+| Portal | ✅ Compiles | 0 | Was ~156 errors, all fixed |
+| Generation | ✅ Compiles | 0 | — |
+| Analytics | 🔧 In progress | 2 unique | BPLG001/BPPO012: route param `{type}` vs property `Type` |
+| AdminPortal | 🔧 In progress | 1 unique | CS1001 syntax error (codemod artifact) |
+| Microsoft365 | 🔧 In progress | 3 unique | BP005 non-partial, CS0029 StatusCodeResult→HttpResult |
+| Billing | 🔧 In progress | 4 unique | CS0311 ResourceEventDefinition.For (fix in Blueprint deployed) |
+| Subscriptions | 🔧 In progress | 1 unique | CS0311 ResourceEventDefinition.For (fix in Blueprint deployed) |
+| IdentityServer | 🔧 In progress | 14 unique | ClaimTypes ambiguity, CS0311, CS1503 ValidationException |
+
+**Manual fixes applied beyond codemod:**
+- `GlobalUsings.cs`: Added `ScopePair = Symprex.Signature365.Common.Authorisation.ScopePair` alias
+- `Directory.Build.props`: Added CS8600-CS8620, CS8714 to `WarningsNotAsErrors` (Marten 8 nullable)
+- 19 `.csproj` files: Re-included `AppDefinition.cs` (incorrectly excluded by codemod)
+- 4 files: Fully qualified `Hangfire.Cron.Daily()`/`Hangfire.Cron.Hourly()` (Cron type ambiguity)
+- Portal: ~20 fixes for Marten 8 API, ResourceEventHelpers, type ambiguities, namespace changes
+- Outlook: Fixed SendEmailTaskBuilder, GetAgentConfigurationQueryHandler, command updates
+
+**Blueprint changes needed to unblock S365 (all committed):**
+- `EmbeddedResourceExtensions.cs`: Ported from legacy Blueprint for embedded resource reading
+- `ValidationException`: Added `IDictionary<string, IEnumerable<string>>` and `IDictionary<string, string>` constructors
+- `ResourceEventDefinition.For`: Added `Func<TDomain, IQuery<TResource>>` overload (matches legacy API)
+- `DoNotAuditAttribute.cs`: Ported from legacy Blueprint
+- `ObjectToDictionaryHelper.cs`: Ported from legacy Blueprint  
+- `DictionaryKeyAttribute.cs`: Ported from legacy Blueprint
+- `BlueprintHttpClientCompat.cs`: Compat shims for legacy API surface
 
 ### Package Version Upgrades (Central Package Management)
 
