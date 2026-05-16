@@ -37,6 +37,12 @@ public sealed class RelocatedTypeAnalyzer : DiagnosticAnalyzer
             // Blueprint → Blueprint.Runtime.Exec
             new KeyValuePair<string, string>("ApiOperationContext", "Blueprint.Runtime.Exec"),
             new KeyValuePair<string, string>("IHttpOperationContext", "Blueprint.Runtime.Exec"),
+            new KeyValuePair<string, string>("ApiOperations", "Blueprint.Runtime.Exec"),
+            new KeyValuePair<string, string>("OperationResult", "Blueprint.Runtime.Exec"),
+            new KeyValuePair<string, string>("OkResult", "Blueprint.Runtime.Exec"),
+            new KeyValuePair<string, string>("NoResultOperationResult", "Blueprint.Runtime.Exec"),
+            new KeyValuePair<string, string>("ValidationFailedResult", "Blueprint.Runtime.Exec"),
+            new KeyValuePair<string, string>("ResourceEventResult", "Blueprint.Runtime.Exec"),
 
             // Blueprint → Blueprint.Model
             new KeyValuePair<string, string>("ApiOperationDescriptor", "Blueprint.Model"),
@@ -49,6 +55,8 @@ public sealed class RelocatedTypeAnalyzer : DiagnosticAnalyzer
             new KeyValuePair<string, string>("PagedApiResource", "Blueprint.Model"),
             new KeyValuePair<string, string>("OrderedPagedQuery", "Blueprint.Model"),
             new KeyValuePair<string, string>("PagedQuery", "Blueprint.Model"),
+            new KeyValuePair<string, string>("IApiResourceCollection", "Blueprint.Model"),
+            new KeyValuePair<string, string>("ResourceEventChangeType", "Blueprint.Model"),
 
             // Blueprint → Blueprint.Model.Attributes
             new KeyValuePair<string, string>("RootLinkAttribute", "Blueprint.Model.Attributes"),
@@ -97,9 +105,43 @@ public sealed class RelocatedTypeAnalyzer : DiagnosticAnalyzer
             new KeyValuePair<string, string>("IUserAuthorisationContextFactory", "Blueprint.Authorization"),
             new KeyValuePair<string, string>("IResourceAuthorizationProvider", "Blueprint.Authorization"),
             new KeyValuePair<string, string>("ScopePairClaimAuthorizationProvider", "Blueprint.Authorization"),
+            new KeyValuePair<string, string>("ClaimTypes", "Blueprint.Authorization"),
+            new KeyValuePair<string, string>("ScopePair", "Blueprint.Authorization"),
+            new KeyValuePair<string, string>("AnonymousUserAuthorisationContext", "Blueprint.Authorization"),
 
             // Blueprint → Blueprint.Http
             new KeyValuePair<string, string>("BlueprintJsonOptions", "Blueprint.Http"),
+            new KeyValuePair<string, string>("ResourceEvent", "Blueprint.Http"),
+            new KeyValuePair<string, string>("IResourceEventAuditRepository", "Blueprint.Http"),
+            new KeyValuePair<string, string>("ResourceEventDefinitionFactory", "Blueprint.Http"),
+            new KeyValuePair<string, string>("ResourceEventDefinitionFactoryWithMapper", "Blueprint.Http"),
+            new KeyValuePair<string, string>("ResourceEventDefinition", "Blueprint.Http"),
+            new KeyValuePair<string, string>("HttpResult", "Blueprint.Http"),
+            new KeyValuePair<string, string>("BlueprintHttpOptions", "Blueprint.Http"),
+
+            // Blueprint → Blueprint.Auditing
+            new KeyValuePair<string, string>("DoNotAuditAttribute", "Blueprint.Auditing"),
+            new KeyValuePair<string, string>("DoNotAudit", "Blueprint.Auditing"),
+            new KeyValuePair<string, string>("SensitiveAttribute", "Blueprint.Auditing"),
+            new KeyValuePair<string, string>("Sensitive", "Blueprint.Auditing"),
+            new KeyValuePair<string, string>("IAuditSink", "Blueprint.Auditing"),
+            new KeyValuePair<string, string>("IResourceEventAuditSink", "Blueprint.Auditing"),
+            new KeyValuePair<string, string>("DoNotRecordPerformanceMetricsAttribute", "Blueprint.Auditing"),
+            new KeyValuePair<string, string>("DoNotRecordPerformanceMetrics", "Blueprint.Auditing"),
+
+            // Blueprint → Blueprint.Diagnostics
+            new KeyValuePair<string, string>("BlueprintActivitySource", "Blueprint.Diagnostics"),
+
+            // Blueprint → Blueprint.Tasks
+            new KeyValuePair<string, string>("IBackgroundTask", "Blueprint.Tasks"),
+            new KeyValuePair<string, string>("IRecurringTask", "Blueprint.Tasks"),
+            new KeyValuePair<string, string>("BackgroundTaskMetadata", "Blueprint.Tasks"),
+
+            // Blueprint → Blueprint.Utilities
+            new KeyValuePair<string, string>("CommonRegularExpressions", "Blueprint.Utilities"),
+
+            // Blueprint → Blueprint.Validation
+            new KeyValuePair<string, string>("UrlAttribute", "Blueprint.Validation"),
         });
 
     /// <summary>
