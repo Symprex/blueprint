@@ -33,5 +33,5 @@ public interface IResourceEventAuditRepository
     /// </summary>
     /// <param name="resourceEvent">The resource event to persist.</param>
     /// <returns>A task that completes when the event has been durably stored.</returns>
-    Task AddAsync(object resourceEvent);
+    Task AddAsync(ResourceEvent resourceEvent);
 }

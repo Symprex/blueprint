@@ -11,12 +11,12 @@ public sealed class SelfLinkAttribute : LinkAttribute
     /// Initializes a new instance of the <see cref="SelfLinkAttribute"/> class.
     /// </summary>
     /// <param name="resourceType">The type of resource this self-link targets.</param>
-    /// <param name="url">
+    /// <param name="routePattern">
     /// The route pattern for this link, which may contain placeholders
     /// (e.g. <c>/users/{Id}</c> or <c>/tenants/{TenantId}/templates/{Id}</c>).
     /// </param>
-    public SelfLinkAttribute(Type resourceType, string url)
-        : base(resourceType, url, "self")
+    public SelfLinkAttribute(Type resourceType, string routePattern)
+        : base(resourceType, routePattern, "self")
     {
     }
 }

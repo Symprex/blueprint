@@ -11,12 +11,12 @@ public sealed class RootLinkAttribute : LinkAttribute
     /// <summary>
     /// Initializes a new instance of the <see cref="RootLinkAttribute"/> class.
     /// </summary>
-    /// <param name="url">
+    /// <param name="routePattern">
     /// The route pattern for this link, which may contain placeholders
     /// (e.g. <c>/tenants/{TenantId}/sent-emails</c>).
     /// </param>
-    public RootLinkAttribute(string url)
-        : base(null, url)
+    public RootLinkAttribute(string routePattern)
+        : base(null, routePattern)
     {
     }
 }
