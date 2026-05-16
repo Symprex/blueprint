@@ -220,7 +220,43 @@ All Blueprint types used by S365 exist in the new Blueprint:
 | Date | Service | Action | Result | Notes |
 |------|---------|--------|--------|-------|
 | Current | All | **Codemod applied** | ✅ 2,509 fixes | 1,148 files, committed to `blueprint-codemod-test` |
-| Current | All | Handler pattern survey | ✅ Compatible | All 4 method names, DI params, ApiOperations base class, ResourceEvent<T> return types |
+| Current | All | **Namespace fixes (Pass 1)** | ✅ 147 usings | 139 files, 16 relocated types |
+| Current | All | **Namespace fixes (Pass 2)** | ✅ 792 usings | 616 files, 50+ relocated types |
+| Current | All | Handler pattern survey | ✅ Compatible | All 4 method names, DI params, ResourceEvent<T> |
+| Current | Analytics | **Scratch proof compiled** | ✅ 0 errors | Analytics.Contract + Common.Core vs new Blueprint |
+| Current | Blueprint | ClaimTypes added | ✅ | `Blueprint.Authorization.ClaimTypes` (Permission, Role) |
+| Current | Blueprint | Guard.IsTrue compat | ✅ | Legacy overload (string, bool, string) marked obsolete |
+| Current | Blueprint | ApiResource.Object setter | ✅ | Protected setter for ContinuationListApiResource compat |
+| Current | Blueprint | IUserAuthorisationContextFactory DIM | ✅ | Legacy 1-param overload via DIM |
+
+### Scratch Proof Results (Analytics.Contract + Common.Core)
+
+**Status: ✅ BUILD SUCCEEDED — 0 errors, 8 warnings**
+
+The scratch proof project compiles S365's `Analytics.Contract` (2 operations) and `Common.Core` 
+(shared types, data models, authorization configuration) against new Blueprint with zero code changes to S365.
+
+**Warnings (expected, not blockers):**
+| Warning | Count | Action |
+|---------|-------|--------|
+| BP001 — missing `partial` | 4 | Add `partial` during migration (codemod handles this) |
+| BPV012 — `[Required]` on value type | 2 | Minor: `ApiId` is non-nullable, `[Required]` is no-op |
+| CS0618 — obsolete `Guard.IsTrue` | 2 | Migrate call sites (compat overload works meanwhile) |
+
+**Files excluded from proof (old Blueprint integration infrastructure — deleted during migration):**
+- `Authorisation\Blueprint\*` — old Blueprint integration layer (authorizers, expanders, claim inspectors)
+- `ResourceAttribute.cs`, `FromResourceAttribute.cs` — replaced by Blueprint built-ins
+- `ClaimHelpers.cs`, `ResourceHelpers.cs`, `ResourceKeyHelpers.cs` — old auth infrastructure
+- `AssignedRole.cs`, `AssignedScopePair.cs`, `RoleHelpers.cs` — role mapping infrastructure
+- `BlueprintHttpClient.cs`, `BlueprintHttpClientRegistration.cs` — old HTTP client setup
+- `SafeJsonSerialisation.cs` — references S365-internal `SensitiveProperties`
+- `Signature365UserAuthorisationContext.cs` — needs rewrite to use new Blueprint auth model
+
+**Blueprint changes made to achieve zero errors (all backward-compatible):**
+1. `ApiResource.Object` — added protected setter (S365 sets object name in constructor)
+2. `Guard.IsTrue` — added `[Obsolete]` compat overload with old parameter order
+3. `ClaimTypes` — added `Blueprint.Authorization.ClaimTypes` with `Permission`/`Role` constants
+4. `IUserAuthorisationContextFactory` — added DIM for legacy 1-param overload
 
 ## S365 Codemod Scan Results
 
