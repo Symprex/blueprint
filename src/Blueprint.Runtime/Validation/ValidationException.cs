@@ -94,6 +94,16 @@ public class ValidationException : Exception
     }
 
     /// <summary>
+    /// Initializes a new instance of the <see cref="ValidationException"/> class
+    /// from a dictionary of property names to single error messages (one error per property).
+    /// </summary>
+    /// <param name="errors">A dictionary of property names to their error message.</param>
+    public ValidationException(IDictionary<string, string> errors)
+        : this(errors.ToDictionary(static kvp => kvp.Key, static kvp => new[] { kvp.Value }) as IReadOnlyDictionary<string, string[]>)
+    {
+    }
+
+    /// <summary>
     /// Gets the DataAnnotations validation results, if this exception was created from
     /// <see cref="ValidationResult"/> instances. May be empty for dictionary-based construction.
     /// </summary>

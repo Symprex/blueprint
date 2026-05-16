@@ -284,6 +284,24 @@ public static class ResourceEventDefinition
     }
 
     /// <summary>
+    /// Creates a factory that produces domain-mapper definitions using a domain-to-query mapper
+    /// whose return type enables inference of <typeparamref name="TResource"/> from
+    /// <see cref="IQuery{TResult}"/>. This is the primary overload for S365-style
+    /// <c>ResourceEventDefinition.For((DomainEntity d) =&gt; new GetEntityQuery { ... })</c>
+    /// patterns where the query result type IS the resource type.
+    /// </summary>
+    /// <typeparam name="TResource">The API resource type, inferred from the query's result type.</typeparam>
+    /// <typeparam name="TDomain">The domain entity type.</typeparam>
+    /// <param name="queryMapper">A mapper that constructs a self-query from a domain object.</param>
+    /// <returns>A factory that produces domain-mapper definitions.</returns>
+    public static ResourceEventDefinitionFactoryWithMapper<TResource, TDomain> For<TResource, TDomain>(
+        Func<TDomain, IQuery<TResource>> queryMapper)
+        where TResource : ApiResource
+    {
+        return new ResourceEventDefinitionFactoryWithMapper<TResource, TDomain>(d => queryMapper(d));
+    }
+
+    /// <summary>
     /// Creates a factory that produces domain-mapper definitions using a domain-to-query mapper.
     /// The mapper is inherited by every definition the factory creates.
     /// </summary>
