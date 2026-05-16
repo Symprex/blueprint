@@ -72,7 +72,10 @@ namespace Blueprint.Generated
                 return _bodyResult;
             }
 
-            _SetInit_Id(operation, (string)httpContext.Request.RouteValues["Id"]);
+            if (httpContext.Request.RouteValues["Id"] is string routeStr_Id)
+            {
+                _SetInit_Id(operation, routeStr_Id);
+            }
 
             // Tenant resolution (compile-time, no reflection)
             if (this.TenantResolver != null && this.TenantAccessor != null)

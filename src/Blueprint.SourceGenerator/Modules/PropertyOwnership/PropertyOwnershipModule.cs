@@ -1367,7 +1367,12 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
 
         if (effectiveType.SpecialType == SpecialType.System_String)
         {
-            context.WriteStatement(FormatPropertyAssignment(operationExpr, entry, $"(string){routeValueExpr}"));
+            // Wrap in a null-guard so that when route values are absent (e.g. test-mode
+            // direct execution) the operation's already-set property value is preserved.
+            context.If($"{routeValueExpr} is string routeStr_{entry.PropertyName}", ifCtx =>
+            {
+                ifCtx.WriteStatement(FormatPropertyAssignment(operationExpr, entry, $"routeStr_{entry.PropertyName}"));
+            });
         }
         else if (IsTypeConverterOnlyType(entry.TypeSymbol))
         {

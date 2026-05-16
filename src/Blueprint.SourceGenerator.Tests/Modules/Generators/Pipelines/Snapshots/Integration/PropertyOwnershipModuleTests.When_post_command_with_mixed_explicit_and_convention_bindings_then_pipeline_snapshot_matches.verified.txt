@@ -63,7 +63,10 @@ namespace Blueprint.Generated
                 return _bodyResult;
             }
 
-            operation.OrgSlug = (string)httpContext.Request.RouteValues["OrgSlug"];
+            if (httpContext.Request.RouteValues["OrgSlug"] is string routeStr_OrgSlug)
+            {
+                operation.OrgSlug = routeStr_OrgSlug;
+            }
 
             var _qv_SearchFilter = httpContext.Request.Query["q"];
             if (_qv_SearchFilter.Count > 0)

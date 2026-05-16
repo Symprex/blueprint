@@ -58,7 +58,10 @@ namespace Blueprint.Generated
 
             var httpContext = ((Blueprint.Runtime.Http.IHttpOperationContext)context).HttpContext;
 
-            operation.OrgSlug = (string)httpContext.Request.RouteValues["OrgSlug"];
+            if (httpContext.Request.RouteValues["OrgSlug"] is string routeStr_OrgSlug)
+            {
+                operation.OrgSlug = routeStr_OrgSlug;
+            }
             var _routeErr_CategoryId = Blueprint.Runtime.Exec.PipelineHelpers.BindRouteValue(httpContext.Request.RouteValues, "CategoryId", out var _parsed_CategoryId, static (string _s, out int _v) => int.TryParse(_s, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out _v));
             if (_routeErr_CategoryId != null)
             {
@@ -254,7 +257,10 @@ namespace Blueprint.Generated
                 return _bodyResult;
             }
 
-            operation.OrgSlug = (string)httpContext.Request.RouteValues["OrgSlug"];
+            if (httpContext.Request.RouteValues["OrgSlug"] is string routeStr_OrgSlug)
+            {
+                operation.OrgSlug = routeStr_OrgSlug;
+            }
             var _routeErr_ProjectId = Blueprint.Runtime.Exec.PipelineHelpers.BindRouteValue(httpContext.Request.RouteValues, "ProjectId", out var _parsed_ProjectId, static (string _s, out int _v) => int.TryParse(_s, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out _v));
             if (_routeErr_ProjectId != null)
             {

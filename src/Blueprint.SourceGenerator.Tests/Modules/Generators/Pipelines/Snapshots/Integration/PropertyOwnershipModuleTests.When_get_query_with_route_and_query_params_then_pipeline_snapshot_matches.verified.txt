@@ -57,7 +57,10 @@ namespace Blueprint.Generated
 
             var httpContext = ((Blueprint.Runtime.Http.IHttpOperationContext)context).HttpContext;
 
-            operation.Id = (string)httpContext.Request.RouteValues["Id"];
+            if (httpContext.Request.RouteValues["Id"] is string routeStr_Id)
+            {
+                operation.Id = routeStr_Id;
+            }
 
             var _qv_Filter = httpContext.Request.Query["filter"];
             if (_qv_Filter.Count > 0)
