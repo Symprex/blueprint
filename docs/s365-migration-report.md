@@ -109,11 +109,63 @@ All framework features required for S365 migration are implemented and tested:
 | Symprex.Signature365.Common.Tests | Common | — | 🔲 Not started |
 | Symprex.Signature365.Common.ApiOperations.Tests | Common Ops | — | 🔲 Not started |
 
+## Codemod Apply Results
+
+The codemod was run in `apply` mode against S365's `blueprint-codemod-test` branch.
+
+| Metric | Value |
+|--------|-------|
+| Total fixes applied | **2,509** |
+| Files changed | **1,148** (app files, excluding legacy Blueprint source) |
+| Lines added | +2,906 |
+| Lines removed | -2,129 |
+| S365 commit | `bc17ad357f` on `blueprint-codemod-test` |
+
+### Changes by Service (app files only)
+
+| Service Folder | Files Changed |
+|----------------|---------------|
+| Portal (largest) | 387 |
+| AdminPortal | 142 |
+| IdentityServer | 89 |
+| Billing | 86 |
+| Partners | 81 |
+| Subscriptions | 57 |
+| Import | 44 |
+| Outlook | 30 |
+| VCard | 23 |
+| Common.Core | 23 |
+| Microsoft365 | 17 |
+| Generation | 16 |
+| ExchangeTransportAgent | 15 |
+| EventStore | 8 |
+| Analytics | 8 |
+| Common | 9 |
+| BlueprintRebus | 6 |
+| Test projects | ~37 |
+
+### Change Categories
+
+| Category | Instances |
+|----------|-----------|
+| Namespace migration (Blueprint.Runtime/Model) | ~1,700 |
+| Added `partial` keyword | 657 |
+| Other Blueprint `using` updates | ~450 |
+
+### Post-Codemod Status
+
+After codemod, S365 still requires:
+1. **Package reference swap** — replace legacy `src/Blueprint/` project references with new Blueprint NuGet/project refs
+2. **Startup migration** — `BlueprintApiBuilder` → `AddBlueprintApi<T,E>()` (BPMIG302, ~43 instances)
+3. **Middleware migration** — `IMiddlewareBuilder` → source-gen modules (BPMIG301, ~21 instances)
+4. **OpenAPI configuration** — `AddOpenApi(...)` → `MapBlueprintApi` options (BPMIG100, ~21 instances)
+5. **Auth configuration** — `AddAuthentication(...)` → pipeline module (BPMIG101, ~27 instances)
+
 ## Migration Progress Log
 
 | Date | Service | Action | Result | Notes |
 |------|---------|--------|--------|-------|
-| Current | All | Codemod apply running | 1000+ fixes applied | Portal (largest) hit per-project 1000-fix safety limit |
+| Current | All | **Codemod applied** | ✅ 2,509 fixes | 1,148 files, committed to `blueprint-codemod-test` |
 | Current | All | Handler pattern survey | ✅ Compatible | All 4 method names, DI params, ApiOperations base class, ResourceEvent<T> return types |
 
 ## S365 Codemod Scan Results
