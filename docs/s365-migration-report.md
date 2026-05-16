@@ -86,10 +86,11 @@ All framework features required for S365 migration are implemented and tested:
 
 | Test Project | Service | Test Files | Status |
 |-------------|---------|------------|--------|
-| Symprex.Signature365.Analytics.Tests | Analytics | — | 🔲 Not started |
-| Symprex.Signature365.EventStore.Tests | EventStore | — | 🔲 Not started |
-| Symprex.Signature365.Templates.Tests | Templates | — | 🔲 Not started |
-| Symprex.Signature365.Generation.Tests | Generation | — | 🔲 Not started |
+| Symprex.Signature365.Analytics.Tests | Analytics | 90 | ✅ **90/90 passing** |
+| Symprex.Signature365.EventStore.Tests | EventStore | 41 | ✅ **27/27 BP tests pass** (14 Azure Table flaky) |
+| Symprex.Signature365.Templates.Tests | Templates | 19 | ✅ **19/19 passing** |
+| Symprex.Signature365.Generation.Tests | Generation | — | 🔄 Migration in progress |
+| Symprex.Signature365.Outlook.Tests | Outlook | — | 🔄 Migration in progress |
 | Symprex.Signature365.ExchangeTransportAgent.Tests | ETA | — | 🔲 Not started |
 | Symprex.Signature365.ExchangeTransportAgent.Gateway.Tests | ETA GW | — | 🔲 Not started |
 | Symprex.Signature365.Microsoft365.Tests | M365 | — | 🔲 Not started |
