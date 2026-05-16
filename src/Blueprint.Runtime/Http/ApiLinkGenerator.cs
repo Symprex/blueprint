@@ -15,9 +15,11 @@ public sealed class ApiLinkGenerator : IApiLinkGenerator
 {
     /// <summary>
     /// Cached property accessors per query-string type, avoiding repeated reflection on hot paths.
-    /// Each entry is an array of (name, getter) pairs for non-null public instance properties.
+    /// Each entry is an array of (escapedName, getter) tuples. The escaped name is pre-computed
+    /// once via <see cref="Uri.EscapeDataString(string)"/> so the per-request query-string builder never
+    /// re-escapes the same property name.
     /// </summary>
-    private static readonly ConcurrentDictionary<Type, (string Name, Func<object, object?> Getter)[]> _queryStringAccessors = new();
+    private static readonly ConcurrentDictionary<Type, (string EscapedName, Func<object, object?> Getter)[]> _queryStringAccessors = new();
 
     private readonly BlueprintApp _app;
     private readonly string _baseUri;
@@ -202,11 +204,11 @@ public sealed class ApiLinkGenerator : IApiLinkGenerator
         if (!_queryStringAccessors.TryGetValue(queryStringType, out var accessors))
         {
             var props = queryStringType.GetProperties(BindingFlags.Instance | BindingFlags.Public);
-            var computedAccessors = new (string Name, Func<object, object?> Getter)[props.Length];
+            var computedAccessors = new (string EscapedName, Func<object, object?> Getter)[props.Length];
 
             for (var i = 0; i < props.Length; i++)
             {
-                computedAccessors[i] = (ToCamelCase(props[i].Name), CompiledPropertyAccessor.GetGetter(props[i]));
+                computedAccessors[i] = (Uri.EscapeDataString(ToCamelCase(props[i].Name)), CompiledPropertyAccessor.GetGetter(props[i]));
             }
 
             accessors = _queryStringAccessors.GetOrAdd(queryStringType, computedAccessors);
@@ -218,7 +220,7 @@ public sealed class ApiLinkGenerator : IApiLinkGenerator
 
         var first = true;
 
-        foreach (var (name, getter) in accessors)
+        foreach (var (escapedName, getter) in accessors)
         {
             var value = getter(queryString);
 
@@ -229,7 +231,7 @@ public sealed class ApiLinkGenerator : IApiLinkGenerator
 
             sb.Append(first ? '?' : '&');
             first = false;
-            sb.Append(Uri.EscapeDataString(name));
+            sb.Append(escapedName);
             sb.Append('=');
             sb.Append(Uri.EscapeDataString(value is string s ? s : value.ToString()!));
         }
