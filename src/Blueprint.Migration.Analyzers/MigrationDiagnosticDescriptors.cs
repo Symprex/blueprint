@@ -183,4 +183,18 @@ public static class MigrationDiagnosticDescriptors
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
         description: "Blueprint source generators emit a partial class extension with the Object property override for API resource types. Classes inheriting from ApiResource must be declared 'partial' for the generated code to compile.");
+
+    /// <summary>
+    /// Gets the diagnostic emitted when a file uses Blueprint types that have been relocated
+    /// from the root <c>Blueprint</c> namespace to a sub-namespace in the source-generated
+    /// Blueprint, and the required <c>using</c> directive is missing.
+    /// </summary>
+    public static DiagnosticDescriptor RelocatedTypeNeedUsing { get; } = new(
+        id: "BPMIG402",
+        title: "Add missing using for relocated Blueprint type",
+        messageFormat: "This file uses Blueprint types that moved to '{0}'. Add 'using {0};' to resolve them.",
+        category: "BlueprintMigration",
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "In source-generated Blueprint, several types moved from the root 'Blueprint' namespace to sub-namespaces (e.g. ApiOperationContext → Blueprint.Runtime.Exec, ApiOperationDescriptor → Blueprint.Model). Add the required using directive.");
 }

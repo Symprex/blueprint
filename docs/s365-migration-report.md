@@ -152,14 +152,68 @@ The codemod was run in `apply` mode against S365's `blueprint-codemod-test` bran
 | Added `partial` keyword | 657 |
 | Other Blueprint `using` updates | ~450 |
 
+### Old Compiled Pipeline Files (to DELETE)
+
+S365 contains **775 pre-compiled pipeline files** in `Internal/Generated` folders that were
+produced by the old Blueprint compiler at design time and checked into source control.
+The new Blueprint source generator replaces all of them at compile time, so they will be
+deleted during migration.
+
+| Service | Pipeline Files |
+|---------|---------------|
+| Portal | 290 |
+| AdminPortal | 127 |
+| IdentityServer | 60 |
+| Billing | 57 |
+| Partners | 56 |
+| Analytics | 36 |
+| Import | 32 |
+| Subscriptions | 29 |
+| Outlook | 18 |
+| Microsoft365 | 14 |
+| VCard | 13 |
+| ExchangeTransportAgent | 12 |
+| Generation | 9 |
+| EventStore | 5 |
+| Templates | 3 |
+
 ### Post-Codemod Status
 
 After codemod, S365 still requires:
 1. **Package reference swap** — replace legacy `src/Blueprint/` project references with new Blueprint NuGet/project refs
-2. **Startup migration** — `BlueprintApiBuilder` → `AddBlueprintApi<T,E>()` (BPMIG302, ~43 instances)
-3. **Middleware migration** — `IMiddlewareBuilder` → source-gen modules (BPMIG301, ~21 instances)
-4. **OpenAPI configuration** — `AddOpenApi(...)` → `MapBlueprintApi` options (BPMIG100, ~21 instances)
-5. **Auth configuration** — `AddAuthentication(...)` → pipeline module (BPMIG101, ~27 instances)
+2. **Delete 775 old pipeline files** — `Internal/Generated/*ExecutorPipeline.cs` (replaced by source generation)
+3. **Startup migration** — `BlueprintApiBuilder` → `AddBlueprintApi<T,E>()` (BPMIG302, ~43 instances)
+4. **Middleware migration** — `IMiddlewareBuilder` → source-gen modules (BPMIG301, ~21 instances)
+5. **OpenAPI configuration** — `AddOpenApi(...)` → `MapBlueprintApi` options (BPMIG100, ~21 instances)
+6. **Auth configuration** — `AddAuthentication(...)` → pipeline module (BPMIG101, ~27 instances)
+7. **Create `BlueprintApp` + `JsonSerializerContext`** per service app
+
+### Type Compatibility — Zero Gaps
+
+All Blueprint types used by S365 exist in the new Blueprint:
+
+| Type Category | S365 Usage | New Blueprint | Status |
+|--------------|-----------|--------------|--------|
+| ICommand/IQuery/IBackgroundTask | Core interfaces | Blueprint.Model | ✅ |
+| ApiResource/ListApiResource/PagedApiResource | Base classes | Blueprint.Model | ✅ |
+| ResourceEvent/ResourceEventResult | Result types | Blueprint.Http/Runtime.Exec | ✅ |
+| OperationResult/OkResult/NoResultOperationResult | Result base | Blueprint namespace | ✅ |
+| ApiOperationContext | Execution context | Blueprint.Runtime.Exec | ✅ |
+| ApiException/ApiExceptionFactory | Error handling | Blueprint namespace | ✅ |
+| HttpResult | HTTP responses | Blueprint.Http | ✅ |
+| IResourceAuthorizationProvider | Auth provider | Blueprint.Authorization | ✅ |
+| BlueprintApp/BlueprintAppExecutor | App root | Blueprint.Model/Blueprint | ✅ |
+| BlueprintTestHost/BlueprintHttpTestHost | Test fixtures | Blueprint.Testing | ✅ |
+| All Blueprint.Utilities types | Utility classes | Blueprint.Utilities | ✅ |
+
+**S365-owned types (not Blueprint):** IRegistry, IMigration, IAppDefinition, AddOnApiResource
+
+### Testing Infrastructure Compatibility
+
+- **S365 pattern**: `ApiFixture` wraps Blueprint executor with `CommandAsync`, `QueryAsync`, `BackgroundTaskAsync`, `MessageAsync`
+- **Blueprint.Testing**: Provides matching method signatures — zero test call-site changes needed
+- **Migration scope**: Only `ApiFixture.cs` needs updating (~1 file), not 4,000+ test call sites
+- **Auth helpers**: S365-owned extension methods that call `fixture.CommandAsync()` — work with updated ApiFixture
 
 ## Migration Progress Log
 

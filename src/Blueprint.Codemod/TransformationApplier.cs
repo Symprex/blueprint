@@ -37,6 +37,7 @@ public sealed class TransformationApplier
         "BPMIG303",
         "BPMIG400",
         "BPMIG401",
+        "BPMIG402",
     ];
 
     private static int _msbuildRegistered;
