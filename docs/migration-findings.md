@@ -26,7 +26,7 @@
 | HTTP client / gateway support | ✅ Done | `CallAsync` shims, `CallOptions`, JWT forwarding, `StatusCodeResult`, `PlainTextResult`, `ProxyResult`, and timeout mapping are supported |
 | Handler discovery | ✅ Verified | Inline `Invoke`/`InvokeAsync`/`Handle`/`HandleAsync` plus external handler classes all work |
 | ApiOperations base class | ✅ Verified | `Context`, `Identity`, `Logger`, `CancellationToken`, `HttpContext`, `HttpRequest`, and `HttpResponse` map directly |
-| ResourceEvent contract | ✅ Verified | `ResourceEventResult<T>` with `[ResourceEventFamily]`/`[ResourceEventReason]` source-generated records; handlers return event records that auto-convert |
+| ResourceEvent contract | ✅ Verified | Both `ResourceEvent<T>` (legacy, 253 S365 operations) and `ResourceEventResult<T>` (new) are supported by the source generator — zero-churn on return types |
 | Compile-time diagnostics | ✅ Done | Auth, property ownership, HTTP, link, validation, result, and serializer diagnostics cover the migration surface |
 | ApiExceptionFactory resolution | ✅ Done | Field references (e.g. `CommonApiExceptions.NotFound`) resolved via semantic model; no BP010 warnings for S365 pattern |
 | BP001 ApiResource partial | ✅ Done | Downgraded from Error to Warning; non-partial resources work with virtual `Object` fallback |

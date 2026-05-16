@@ -113,7 +113,8 @@ All framework features required for S365 migration are implemented and tested:
 
 | Date | Service | Action | Result | Notes |
 |------|---------|--------|--------|-------|
-| — | — | — | — | Migration not yet started |
+| Current | All | Codemod apply running | 1000+ fixes applied | Portal (largest) hit per-project 1000-fix safety limit |
+| Current | All | Handler pattern survey | ✅ Compatible | All 4 method names, DI params, ApiOperations base class, ResourceEvent<T> return types |
 
 ## S365 Codemod Scan Results
 
@@ -152,6 +153,23 @@ Total instances across all projects: **2,896**.
 ## Known Blockers
 
 None currently. All framework features are implemented.
+
+## Handler Compatibility (Zero-Churn Confirmed)
+
+Deep audit of S365 handler patterns confirmed full compatibility with zero migration churn:
+
+| S365 Pattern | Blueprint Support | Churn |
+|---|---|---|
+| `HandleAsync(op, service1, service2, ...)` | ✅ DI parameter injection | None |
+| `Handle(op, ...)` (sync) | ✅ All 4 method names | None |
+| `InvokeAsync(op, ...)` | ✅ All 4 method names | None |
+| `ApiOperations` base class (`Context`, `Identity`, `Logger`, `CancellationToken`) | ✅ Property injection | None |
+| `ICommand<ResourceEvent<T>>` (253 operations) | ✅ Legacy type supported | None |
+| `IQuery<T>` with plain resource return | ✅ Native support | None |
+| `ICommand<HttpResult>` (webhook handler) | ✅ HttpResult supported | None |
+| `TenantListApiResource<T>` (custom subclass) | ✅ S365-owned, extends `ListApiResource<T>` | None |
+| Convention-based handlers (no `IApiOperationHandler`) | ✅ Already convention-based | None |
+| `ResourceEventDefinitionFactory` pattern | ✅ Factory returns `ResourceEvent<T>` | None |
 
 ## Automated Migration Steps (per service)
 
