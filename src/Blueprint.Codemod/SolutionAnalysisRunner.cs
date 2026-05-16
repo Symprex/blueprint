@@ -41,6 +41,15 @@ public sealed class SolutionAnalysisRunner
 
             var buildResult = await this.BuildSolutionWithSarifAsync(solutionPath, sarifDir, cancellationToken);
 
+            var sarifFileCount = Directory.GetFiles(sarifDir, "*.sarif").Length;
+            if (sarifFileCount == 0)
+            {
+                throw new InvalidOperationException(
+                    $"The codemod dry run for '{solutionPath}' produced no SARIF output. " +
+                    $"The analyzer injection may have failed. Exit code: {buildResult.ExitCode}.{Environment.NewLine}" +
+                    $"{buildResult.StandardOutput}{Environment.NewLine}{buildResult.StandardError}");
+            }
+
             var allDiagnosticIds = await ReadDiagnosticIdsFromDirectoryAsync(sarifDir, cancellationToken);
             var allDiagnosticCounts = await ReadDiagnosticCountsFromDirectoryAsync(sarifDir, cancellationToken);
             var diagnosticIds = allDiagnosticIds
@@ -114,6 +123,14 @@ public sealed class SolutionAnalysisRunner
             CreateNoWindow = true,
             WorkingDirectory = Path.GetDirectoryName(solutionPath) ?? Environment.CurrentDirectory,
         };
+
+        // MSBuildLocator.RegisterDefaults() sets MSBUILD_EXE_PATH, MSBuildExtensionsPath, and
+        // MSBuildSDKsPath in the current process. If the apply-mode workflow registered MSBuild
+        // before this dry-run, those variables would poison the child dotnet build process and
+        // cause it to fail silently (0 errors, 0 warnings, exit code 1 in seconds).
+        processStartInfo.Environment.Remove("MSBUILD_EXE_PATH");
+        processStartInfo.Environment.Remove("MSBuildExtensionsPath");
+        processStartInfo.Environment.Remove("MSBuildSDKsPath");
 
         processStartInfo.ArgumentList.Add("build");
         processStartInfo.ArgumentList.Add(solutionPath);

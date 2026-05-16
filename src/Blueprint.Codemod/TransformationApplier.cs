@@ -44,8 +44,6 @@ public sealed class TransformationApplier
             throw new ArgumentNullException(nameof(options));
         }
 
-        EnsureMsBuildRegistered();
-
         var runner = new SolutionAnalysisRunner();
         var analysisResult = await runner.DryRunAsync(
             new SolutionAnalysisOptions(options.SolutionPath, options.DiagnosticFilter),
@@ -61,6 +59,10 @@ public sealed class TransformationApplier
         {
             return;
         }
+
+        // Register MSBuild only when we need the Roslyn workspace, after the dotnet-build dry run
+        // has completed. Earlier registration would poison the child process environment variables.
+        EnsureMsBuildRegistered();
 
         var solutionPath = Path.GetFullPath(options.SolutionPath);
         using var workspace = MSBuildWorkspace.Create();
