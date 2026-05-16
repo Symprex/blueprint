@@ -20,7 +20,7 @@ namespace Blueprint.HttpClient;
 /// </para>
 /// </summary>
 /// <typeparam name="TApp">The <see cref="BlueprintApp"/> that owns the operation descriptors.</typeparam>
-public sealed class BlueprintHttpClient<TApp>
+public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
     where TApp : BlueprintApp
 {
     /// <summary>
@@ -459,63 +459,34 @@ public sealed class BlueprintHttpClient<TApp>
     // ──────────────────────────────────────────────
 
     /// <summary>
-    /// S365 compatibility alias for <see cref="SendAsync{TResponse}(IOperation, CancellationToken)"/>. Gateways in Signature 365
-    /// use <c>CallAsync&lt;TResponse&gt;</c>; this method delegates directly so migration requires
-    /// no method-name changes in gateway code.
+    /// Implements the legacy non-generic <c>CallAsync</c> surface exposed by <see cref="BlueprintHttpClient"/>.
+    /// The public compatibility overloads live on the base type so legacy callers and the generic client
+    /// share the same signatures without duplicating gateway-facing behavior.
     /// </summary>
     /// <typeparam name="TResponse">The expected response type.</typeparam>
     /// <param name="operation">The operation to send.</param>
+    /// <param name="options">Optional call options to modify the outgoing request.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The deserialized response.</returns>
-    public Task<TResponse?> CallAsync<TResponse>(
-        IReturn<TResponse> operation,
-        CancellationToken cancellationToken = default)
-    {
-        return this.SendAsync<TResponse>((IOperation)operation, cancellationToken);
-    }
-
-    /// <summary>
-    /// S365 compatibility alias for <see cref="SendAsync{TResponse}(IOperation, CallOptions?, CancellationToken)"/>
-    /// with <see cref="CallOptions"/> support. This is the exact signature S365 generated typed clients produce.
-    /// </summary>
-    /// <typeparam name="TResponse">The expected response type.</typeparam>
-    /// <param name="operation">The operation to send.</param>
-    /// <param name="options">Optional call options to modify the outgoing request (e.g. add headers).</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>The deserialized response.</returns>
-    public Task<TResponse?> CallAsync<TResponse>(
+    protected override async Task<TResponse> CallAsyncCore<TResponse>(
         IReturn<TResponse> operation,
         CallOptions? options,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken)
     {
-        return this.SendAsync<TResponse>((IOperation)operation, options, cancellationToken);
+        return (await this.SendAsync<TResponse>((IOperation)operation, options, cancellationToken).ConfigureAwait(false))!;
     }
 
     /// <summary>
-    /// S365 compatibility alias for <see cref="SendAsync(IOperation, CancellationToken)"/>.
-    /// </summary>
-    /// <param name="operation">The operation to send.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>A task that completes when the request is processed.</returns>
-    public Task CallAsync(
-        IOperation operation,
-        CancellationToken cancellationToken = default)
-    {
-        return this.SendAsync(operation, cancellationToken);
-    }
-
-    /// <summary>
-    /// S365 compatibility alias for <see cref="SendAsync(IOperation, CallOptions?, CancellationToken)"/>
-    /// with <see cref="CallOptions"/> support.
+    /// Implements the legacy non-generic void <c>CallAsync</c> surface exposed by <see cref="BlueprintHttpClient"/>.
     /// </summary>
     /// <param name="operation">The operation to send.</param>
     /// <param name="options">Optional call options to modify the outgoing request.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A task that completes when the request is processed.</returns>
-    public Task CallAsync(
+    protected override Task CallAsyncCore(
         IOperation operation,
         CallOptions? options,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken)
     {
         return this.SendAsync(operation, options, cancellationToken);
     }
@@ -1043,3 +1014,4 @@ public sealed class BlueprintHttpClient<TApp>
         public Dictionary<string, string[]>? Errors { get; set; }
     }
 }
+

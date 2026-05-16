@@ -534,7 +534,7 @@ The consolidated performance story is simple: the generated pipelines are alread
 ## HTTP Client / Gateway
 
 ### `CallAsync`, `SendAsync`, and minimal migration churn
-S365 gateways use `BlueprintHttpClient.CallAsync<TResponse>(IReturn<TResponse>, CallOptions?, CancellationToken)`, so the new client keeps `CallAsync` shims that delegate directly to `SendAsync` rather than forcing a mass rename. `CallOptions` is intentionally the same simple shape—`Action<HttpRequestMessage>? ModifyRequest`—and generated typed client extensions also carry `CallOptions` overloads so existing gateway call sites can stay almost unchanged.
+S365 gateways use `BlueprintHttpClient.CallAsync<TResponse>(IReturn<TResponse>, CallOptions?, CancellationToken)`, so the new client keeps `CallAsync` shims that delegate directly to `SendAsync` rather than forcing a mass rename. The package now also exposes a non-generic `BlueprintHttpClient` compatibility base so older S365-generated partial classes can still hold a legacy `_blueprintHttpClient` field while newer code continues to construct `BlueprintHttpClient<TApp>`. `CallOptions` is intentionally the same simple shape—`Action<HttpRequestMessage>? ModifyRequest`—and generated typed client extensions also carry `CallOptions` overloads so existing gateway call sites can stay almost unchanged.
 
 ### Token forwarding and registration pattern
 The gateway auth story is also direct. `HttpClientTokenForwarding.ForwardAuthorizationHeader(sp, client)` now replaces S365’s older manual helper and forwards the inbound `Authorization` (and related request metadata) into downstream service calls. The new registration pattern is therefore concise and explicit:
