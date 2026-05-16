@@ -94,6 +94,28 @@ public class ValidationException : Exception
     /// </summary>
     public IReadOnlyDictionary<string, string[]> Errors { get; }
 
+    /// <summary>
+    /// Creates a new <see cref="ValidationException"/> with the property keys renamed
+    /// according to the supplied mapping. Keys not present in <paramref name="keyMappings"/>
+    /// are carried over unchanged.
+    /// </summary>
+    /// <param name="keyMappings">A mapping from old property key → new property key.</param>
+    /// <returns>A new <see cref="ValidationException"/> with the remapped keys.</returns>
+    public ValidationException Remap(IDictionary<string, string> keyMappings)
+    {
+        var newErrors = new Dictionary<string, string[]>(this.Errors);
+
+        foreach (var (oldKey, newKey) in keyMappings)
+        {
+            if (newErrors.Remove(oldKey, out var value))
+            {
+                newErrors[newKey] = value;
+            }
+        }
+
+        return new ValidationException(newErrors);
+    }
+
     private static Dictionary<string, string[]> BuildErrors(List<ValidationResult> results)
     {
         var errors = new Dictionary<string, string[]>();
