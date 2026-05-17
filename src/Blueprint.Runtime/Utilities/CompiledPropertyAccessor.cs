@@ -25,6 +25,7 @@ internal static class CompiledPropertyAccessor
         "Trimming",
         "IL2080",
         Justification = "Blueprint operation and resource types are preserved; property lookups are cached for performance.")]
+    [RequiresDynamicCode("Uses Expression.Compile() for property access delegation. Source-generated URL builders bypass this path.")]
     internal static Func<object, object?>? GetGetter(Type type, string propertyName)
     {
         return _cache.GetOrAdd((type, propertyName), static key =>
@@ -46,6 +47,7 @@ internal static class CompiledPropertyAccessor
     /// </summary>
     /// <param name="property">The property to compile a getter for.</param>
     /// <returns>A compiled getter delegate.</returns>
+    [RequiresDynamicCode("Uses Expression.Compile() for property access delegation. Source-generated URL builders bypass this path.")]
     internal static Func<object, object?> GetGetter(PropertyInfo property)
     {
         var key = (property.DeclaringType ?? property.ReflectedType!, property.Name);
@@ -53,6 +55,7 @@ internal static class CompiledPropertyAccessor
         return _cache.GetOrAdd(key, _ => CompileGetter(key.Item1, property))!;
     }
 
+    [RequiresDynamicCode("Expression.Compile() emits IL at runtime and is not compatible with Native AOT. Use source-generated property accessors instead.")]
     private static Func<object, object?> CompileGetter(Type declaringType, PropertyInfo property)
     {
         var instance = Expression.Parameter(typeof(object), "instance");

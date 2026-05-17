@@ -12,13 +12,13 @@ namespace Blueprint.SourceGenerator.Planning;
 /// <param name="VariableRegistry">The variable registry for the plan.</param>
 public sealed record PipelinePlan(OperationModel Operation, VariableRegistry VariableRegistry)
 {
-    private readonly List<DiagnosticInfo> _diagnostics = [];
+    private readonly List<DiagnosticInfo> _diagnostics = new(4);
     private readonly HashSet<PipelineContribution> _contributionSet = [];
-    private readonly List<PipelineContribution> _contributions = [];
-    private readonly List<PipelineRenderStep> _renderSteps = [];
-    private readonly List<Action<ClassBuilder>> _deferredClassMembers = [];
-    private readonly HashSet<string> _declaredSharedVariables = [];
-    private readonly Dictionary<string, CachedServiceRegistration> _cachedServices = new(StringComparer.Ordinal);
+    private readonly List<PipelineContribution> _contributions = new(8);
+    private readonly List<PipelineRenderStep> _renderSteps = new(8);
+    private readonly List<Action<ClassBuilder>> _deferredClassMembers = new(4);
+    private readonly HashSet<string> _declaredSharedVariables = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, CachedServiceRegistration> _cachedServices = new(8, StringComparer.Ordinal);
 
     /// <summary>
     /// Declares a shared pipeline variable so that multiple modules can emit the same variable

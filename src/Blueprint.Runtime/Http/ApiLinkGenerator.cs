@@ -193,6 +193,7 @@ public sealed class ApiLinkGenerator : IApiLinkGenerator
     }
 
     [UnconditionalSuppressMessage("Trimming", "IL2075", Justification = "Query-string objects are reflected over their public properties to serialize caller-supplied link parameters into the generated URL.")]
+    [UnconditionalSuppressMessage("AOT", "IL3050", Justification = "CompiledPropertyAccessor uses Expression.Compile() but this fallback path is only used for non-source-generated link construction. Source-generated CompiledUrlBuilder bypasses this for all known operation types.")]
     private string BuildUrl(string relativeUrl, object? queryString)
     {
         if (queryString is null)

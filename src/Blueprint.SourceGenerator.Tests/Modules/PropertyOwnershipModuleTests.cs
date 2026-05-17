@@ -1630,11 +1630,12 @@ public class PropertyOwnershipModuleTests
             [source],
             ["Input0.cs"]);
 
-        result.Diagnostics.Where(static d => d.Severity == DiagnosticSeverity.Error || d.Severity == DiagnosticSeverity.Warning)
-            .Should().BeEmpty("[TypeConverter] types should be accepted as route parameters without error");
+        result.Diagnostics.Where(static d => (d.Severity == DiagnosticSeverity.Error || d.Severity == DiagnosticSeverity.Warning) && d.Id != "BPPO011")
+            .Should().BeEmpty("[TypeConverter] types should be accepted as route parameters without error (BPPO011 is an expected AOT warning)");
 
         result.Diagnostics.Where(static d => d.Id == "BPPO011")
-            .Should().ContainSingle("should emit BPPO011 info diagnostic for slow TypeConverter path");
+            .Should().ContainSingle("should emit BPPO011 warning diagnostic for slow TypeConverter path")
+            .Which.Severity.Should().Be(DiagnosticSeverity.Warning);
 
         var pipelineSource = string.Join(
             Environment.NewLine,
@@ -1704,11 +1705,12 @@ public class PropertyOwnershipModuleTests
             [source],
             ["Input0.cs"]);
 
-        result.Diagnostics.Where(static d => d.Severity == DiagnosticSeverity.Error || d.Severity == DiagnosticSeverity.Warning)
-            .Should().BeEmpty("[TypeConverter] types should be accepted as query parameters without error");
+        result.Diagnostics.Where(static d => (d.Severity == DiagnosticSeverity.Error || d.Severity == DiagnosticSeverity.Warning) && d.Id != "BPPO011")
+            .Should().BeEmpty("[TypeConverter] types should be accepted as query parameters without error (BPPO011 is an expected AOT warning)");
 
         result.Diagnostics.Where(static d => d.Id == "BPPO011")
-            .Should().ContainSingle("should emit BPPO011 info diagnostic for slow TypeConverter path");
+            .Should().ContainSingle("should emit BPPO011 warning diagnostic for slow TypeConverter path")
+            .Which.Severity.Should().Be(DiagnosticSeverity.Warning);
 
         var pipelineSource = string.Join(
             Environment.NewLine,

@@ -1377,7 +1377,7 @@ public partial class GetTenantReportsPopulationQuery : TenantPagedOperation, IQu
 /// <c>TryParse</c>. Simulates S365's <c>ApiId</c> pattern.
 /// </summary>
 [System.ComponentModel.TypeConverter(typeof(TypeConverterIdConverter))]
-public readonly struct TypeConverterId : IEquatable<TypeConverterId>
+public readonly struct TypeConverterId : IEquatable<TypeConverterId>, IParsable<TypeConverterId>
 {
     private readonly Guid _value;
 
@@ -1394,6 +1394,23 @@ public readonly struct TypeConverterId : IEquatable<TypeConverterId>
     public static TypeConverterId Hydrate(string raw)
     {
         return new(Guid.Parse(raw));
+    }
+
+    public static TypeConverterId Parse(string s, IFormatProvider? provider)
+    {
+        return new(Guid.Parse(s));
+    }
+
+    public static bool TryParse(string? s, IFormatProvider? provider, out TypeConverterId result)
+    {
+        if (Guid.TryParse(s, out var guid))
+        {
+            result = new(guid);
+            return true;
+        }
+
+        result = default;
+        return false;
     }
 
     public bool Equals(TypeConverterId other)

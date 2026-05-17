@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 
 namespace Blueprint.Model;
@@ -147,6 +148,8 @@ public sealed class ApiOperationLink
         return this.CreateRelativeUrlViaReflection(values);
     }
 
+    [UnconditionalSuppressMessage("Trimming", "IL2075", Justification = "Reflection fallback only used for anonymous objects or when source-generated CompiledUrlBuilder is not available. Blueprint operation and resource types are preserved by the source generator.")]
+    [UnconditionalSuppressMessage("AOT", "IL3050", Justification = "CompiledPropertyAccessor uses Expression.Compile() but source-generated CompiledUrlBuilder is the primary path for all known types.")]
     private string? CreateRelativeUrlViaReflection(object values)
     {
         var result = this.UrlFormat;

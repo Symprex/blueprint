@@ -264,8 +264,8 @@ public class TenantModuleTests
         // Uses EqualityComparer<T>.Default for value-type default check
         pipelineSource.Should().Contain("EqualityComparer<global::TestNamespace.ApiId>.Default.Equals(operation.TenantId, default)");
 
-        // Uses TryParse with null IFormatProvider (IParsable pattern)
-        pipelineSource.Should().Contain("global::TestNamespace.ApiId.TryParse(this.TenantAccessor.Current, null, out var _parsedTenantId)");
+        // Uses TryParse with InvariantCulture IFormatProvider (IParsable pattern)
+        pipelineSource.Should().Contain("global::TestNamespace.ApiId.TryParse(this.TenantAccessor.Current, System.Globalization.CultureInfo.InvariantCulture, out var _parsedTenantId)");
 
         // Assigns parsed value
         pipelineSource.Should().Contain("operation.TenantId = _parsedTenantId;");
@@ -331,7 +331,7 @@ public class TenantModuleTests
         var pipelineSource = string.Join("\n", pipelineSources.Select(static s => s.SourceText));
 
         // Should detect inherited ApiId TenantId and use TryParse
-        pipelineSource.Should().Contain("ApiId.TryParse(this.TenantAccessor.Current, null, out var _parsedTenantId)");
+        pipelineSource.Should().Contain("ApiId.TryParse(this.TenantAccessor.Current, System.Globalization.CultureInfo.InvariantCulture, out var _parsedTenantId)");
         pipelineSource.Should().Contain("operation.TenantId = _parsedTenantId;");
     }
 
@@ -465,7 +465,7 @@ public class TenantModuleTests
         pipelineSource.Should().Contain("!operation.TenantId.HasValue");
 
         // Should TryParse the unwrapped type
-        pipelineSource.Should().Contain("ApiId.TryParse(this.TenantAccessor.Current, null, out var _parsedTenantId)");
+        pipelineSource.Should().Contain("ApiId.TryParse(this.TenantAccessor.Current, System.Globalization.CultureInfo.InvariantCulture, out var _parsedTenantId)");
         pipelineSource.Should().Contain("operation.TenantId = _parsedTenantId;");
     }
 

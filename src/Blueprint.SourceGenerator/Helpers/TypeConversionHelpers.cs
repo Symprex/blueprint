@@ -97,7 +97,7 @@ internal static class TypeConversionHelpers
             _ when typeSymbol.TypeKind == TypeKind.Enum =>
                 $"System.Enum.TryParse<{typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}>({stringExpression}, out var {outVariable})",
             _ when ImplementsIParsable(typeSymbol) =>
-                $"{typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}.TryParse({stringExpression}, null, out var {outVariable})",
+                $"{typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}.TryParse({stringExpression}, System.Globalization.CultureInfo.InvariantCulture, out var {outVariable})",
             _ when HasStaticTryParseMethod(typeSymbol) =>
                 $"{typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}.TryParse({stringExpression}, out var {outVariable})",
             _ => $"int.TryParse({stringExpression}, out var {outVariable})", // fallback — should not be reached for supported types
@@ -129,7 +129,7 @@ internal static class TypeConversionHelpers
             _ when typeSymbol.TypeKind == TypeKind.Enum =>
                 $"static (string _s, out {typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)} _v) => System.Enum.TryParse(_s, out _v)",
             _ when ImplementsIParsable(typeSymbol) =>
-                $"static (string _s, out {typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)} _v) => {typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}.TryParse(_s, null, out _v)",
+                $"static (string _s, out {typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)} _v) => {typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}.TryParse(_s, System.Globalization.CultureInfo.InvariantCulture, out _v)",
             _ when HasStaticTryParseMethod(typeSymbol) =>
                 $"static (string _s, out {typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)} _v) => {typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}.TryParse(_s, out _v)",
             _ => "static (string _s, out int _v) => int.TryParse(_s, out _v)", // fallback

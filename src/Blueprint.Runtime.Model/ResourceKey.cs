@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Blueprint;
 
@@ -28,6 +29,8 @@ public sealed class ResourceKey<T>
     /// <param name="resourceKey">The string to parse.</param>
     /// <returns>The parsed <see cref="ResourceKey{T}"/>.</returns>
     /// <exception cref="FormatException">When the string is not in a valid resource key format.</exception>
+    [RequiresUnreferencedCode("TypeDescriptor.GetConverter() requires unreferenced code for type conversion.")]
+    [RequiresDynamicCode("TypeDescriptor.GetConverter() may require dynamic code generation for type conversion.")]
     public static ResourceKey<T> Parse(string resourceKey)
     {
         if (TryParse(resourceKey, out var parsedResourceKey))
@@ -44,6 +47,8 @@ public sealed class ResourceKey<T>
     /// </summary>
     /// <param name="resourceKey">The string to parse.</param>
     /// <returns>The Id portion of the resource key.</returns>
+    [RequiresUnreferencedCode("TypeDescriptor.GetConverter() requires unreferenced code for type conversion.")]
+    [RequiresDynamicCode("TypeDescriptor.GetConverter() may require dynamic code generation for type conversion.")]
     public static T ParseId(string resourceKey)
     {
         return Parse(resourceKey).Id;
@@ -55,6 +60,8 @@ public sealed class ResourceKey<T>
     /// <param name="resourceKey">The string to parse.</param>
     /// <param name="parsedResourceKey">The parsed result, or <see langword="null"/> on failure.</param>
     /// <returns><see langword="true"/> if parsing succeeds; otherwise <see langword="false"/>.</returns>
+    [RequiresUnreferencedCode("TypeDescriptor.GetConverter() requires unreferenced code for type conversion.")]
+    [RequiresDynamicCode("TypeDescriptor.GetConverter() may require dynamic code generation for type conversion.")]
     public static bool TryParse(string? resourceKey, out ResourceKey<T>? parsedResourceKey)
     {
         if (string.IsNullOrEmpty(resourceKey))
