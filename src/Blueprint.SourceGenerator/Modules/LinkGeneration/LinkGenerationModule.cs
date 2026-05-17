@@ -982,21 +982,25 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
             $"handlerResult is {binding.GuardTypeName} and not global::Blueprint.Runtime.Exec.INotModifiedResult",
             branch =>
             {
+                // Content may be null (e.g. ResourceEvent.Data when SelfQuery resolution fails),
+                // so guard against NRE before accessing the resource's link surface.
                 branch.DeclareVariable("linkableResource", $"({resourceTypeName}){binding.ContentAccessExpression}");
-
-                // Deduplicate by (Rel, URL) pair: multiple operations may declare [SelfLink] for the
-                // same resource type with the same URL and rel, but we only emit AddLink once per unique pair.
-                var emittedLinks = new HashSet<(string Rel, string Url)>();
-                foreach (var selfLink in selfLinks)
+                branch.If("linkableResource is not null", innerBranch =>
                 {
-                    if (!emittedLinks.Add((selfLink.Rel, selfLink.UrlTemplate)))
+                    // Deduplicate by (Rel, URL) pair: multiple operations may declare [SelfLink] for the
+                    // same resource type with the same URL and rel, but we only emit AddLink once per unique pair.
+                    var emittedLinks = new HashSet<(string Rel, string Url)>();
+                    foreach (var selfLink in selfLinks)
                     {
-                        continue;
-                    }
+                        if (!emittedLinks.Add((selfLink.Rel, selfLink.UrlTemplate)))
+                        {
+                            continue;
+                        }
 
-                    var hrefExpression = BuildHrefInterpolation(selfLink.UrlTemplate);
-                    branch.WriteStatement($"linkableResource.AddLink(\"{selfLink.Rel}\", new global::Blueprint.Model.Link {{ Href = {hrefExpression} }});");
-                }
+                        var hrefExpression = BuildHrefInterpolation(selfLink.UrlTemplate);
+                        innerBranch.WriteStatement($"linkableResource.AddLink(\"{selfLink.Rel}\", new global::Blueprint.Model.Link {{ Href = {hrefExpression} }});");
+                    }
+                });
             });
     }
 

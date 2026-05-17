@@ -89,7 +89,10 @@ namespace Blueprint.Generated
             if (handlerResult is Blueprint.Runtime.Exec.OkResult and not global::Blueprint.Runtime.Exec.INotModifiedResult)
             {
                 var linkableResource = (global::TestNamespace.WidgetApiResource)((Blueprint.Runtime.Exec.OkResult)handlerResult).Content;
-                linkableResource.AddLink("self", new global::Blueprint.Model.Link { Href = $"/widgets/{linkableResource.Id}" });
+                if (linkableResource is not null)
+                {
+                    linkableResource.AddLink("self", new global::Blueprint.Model.Link { Href = $"/widgets/{linkableResource.Id}" });
+                }
             }
 
             // Populate full HATEOAS links (skip 304 Not Modified)
@@ -182,7 +185,10 @@ namespace Blueprint.Generated
             if (handlerResult is global::Blueprint.Runtime.Exec.ResourceEventResult<global::TestNamespace.WidgetApiResource> and not global::Blueprint.Runtime.Exec.INotModifiedResult)
             {
                 var linkableResource = (global::TestNamespace.WidgetApiResource)((global::Blueprint.Runtime.Exec.ResourceEventResult<global::TestNamespace.WidgetApiResource>)handlerResult).Content;
-                linkableResource.AddLink("self", new global::Blueprint.Model.Link { Href = $"/widgets/{linkableResource.Id}" });
+                if (linkableResource is not null)
+                {
+                    linkableResource.AddLink("self", new global::Blueprint.Model.Link { Href = $"/widgets/{linkableResource.Id}" });
+                }
             }
 
             // Populate full HATEOAS links (skip 304 Not Modified)

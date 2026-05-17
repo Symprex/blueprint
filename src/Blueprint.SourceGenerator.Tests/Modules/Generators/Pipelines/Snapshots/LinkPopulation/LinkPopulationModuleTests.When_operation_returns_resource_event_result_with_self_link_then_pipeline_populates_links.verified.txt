@@ -94,7 +94,10 @@ namespace Blueprint.Generated
             if (handlerResult is global::Blueprint.Runtime.Exec.ResourceEventResult<global::TestNamespace.TestApiResource> and not global::Blueprint.Runtime.Exec.INotModifiedResult)
             {
                 var linkableResource = (global::TestNamespace.TestApiResource)((global::Blueprint.Runtime.Exec.ResourceEventResult<global::TestNamespace.TestApiResource>)handlerResult).Content;
-                linkableResource.AddLink("self", new global::Blueprint.Model.Link { Href = $"/resources/{linkableResource.Id}" });
+                if (linkableResource is not null)
+                {
+                    linkableResource.AddLink("self", new global::Blueprint.Model.Link { Href = $"/resources/{linkableResource.Id}" });
+                }
             }
 
             // Populate full HATEOAS links (skip 304 Not Modified)
