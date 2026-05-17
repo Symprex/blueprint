@@ -57,33 +57,36 @@ namespace Blueprint.Generated
 
             var httpContext = ((Blueprint.Runtime.Http.IHttpOperationContext)context).HttpContext;
 
-            if (httpContext.Request.RouteValues["Id"] is string routeStr_Id)
+            if (!context.IsNested)
             {
-                operation.Id = routeStr_Id;
-            }
+                if (httpContext.Request.RouteValues["Id"] is string routeStr_Id)
+                {
+                    operation.Id = routeStr_Id;
+                }
 
-            var _qv_Filter = httpContext.Request.Query["filter"];
-            if (_qv_Filter.Count > 0)
-            {
-                operation.Filter = _qv_Filter[0];
-            }
-            var _qvErr_PageSize = Blueprint.Runtime.Exec.PipelineHelpers.BindQueryValue(httpContext.Request.Query, "pageSize", out var _parsed_PageSize, out var _qvFound_PageSize, static (string _s, out int _v) => int.TryParse(_s, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out _v));
-            if (_qvErr_PageSize != null)
-            {
-                return _qvErr_PageSize;
-            }
-            if (_qvFound_PageSize)
-            {
-                operation.PageSize = _parsed_PageSize;
-            }
-            var _qaErr_TagIds = Blueprint.Runtime.Exec.PipelineHelpers.BindQueryArray(httpContext.Request.Query, "tagIds", out var _arr_TagIds, static (string _s, out int _v) => int.TryParse(_s, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out _v));
-            if (_qaErr_TagIds != null)
-            {
-                return _qaErr_TagIds;
-            }
-            if (_arr_TagIds != null)
-            {
-                operation.TagIds = _arr_TagIds;
+                var _qv_Filter = httpContext.Request.Query["filter"];
+                if (_qv_Filter.Count > 0)
+                {
+                    operation.Filter = _qv_Filter[0];
+                }
+                var _qvErr_PageSize = Blueprint.Runtime.Exec.PipelineHelpers.BindQueryValue(httpContext.Request.Query, "pageSize", out var _parsed_PageSize, out var _qvFound_PageSize, static (string _s, out int _v) => int.TryParse(_s, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out _v));
+                if (_qvErr_PageSize != null)
+                {
+                    return _qvErr_PageSize;
+                }
+                if (_qvFound_PageSize)
+                {
+                    operation.PageSize = _parsed_PageSize;
+                }
+                var _qaErr_TagIds = Blueprint.Runtime.Exec.PipelineHelpers.BindQueryArray(httpContext.Request.Query, "tagIds", out var _arr_TagIds, static (string _s, out int _v) => int.TryParse(_s, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out _v));
+                if (_qaErr_TagIds != null)
+                {
+                    return _qaErr_TagIds;
+                }
+                if (_arr_TagIds != null)
+                {
+                    operation.TagIds = _arr_TagIds;
+                }
             }
 
             // Tenant resolution (compile-time, no reflection)

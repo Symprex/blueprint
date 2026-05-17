@@ -921,6 +921,12 @@ public static class PipelineHelpers
                 return;
             }
 
+            // The SelfQuery executes the target query through the full pipeline. If the parent
+            // command wrote data via IUnitOfWork/IDocumentSession, that data may not yet be
+            // committed (SaveUnitOfWork runs later in the success-guarded PostExecution phase).
+            // Flush pending persistence so the nested query can read the just-written data.
+            await SaveUnitOfWorkAsync(context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);
+
             // Create a nested context that inherits auth, tenant, and request state from the parent
             var nestedContext = context.CreateNested(selfQuery, skipAuthorisation: true);
 
@@ -937,6 +943,11 @@ public static class PipelineHelpers
             }
             else
             {
+                logger.LogWarning(
+                    "SelfQuery for {OperationType} with query {SelfQueryType} returned {ResultType} instead of OkResult with content",
+                    operationTypeName,
+                    selfQueryTypeName,
+                    result?.GetType().Name ?? "null");
                 _logSelfQueryFailed(logger, operationTypeName, selfQueryTypeName, null);
             }
         }

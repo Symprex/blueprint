@@ -58,125 +58,128 @@ namespace Blueprint.Generated
 
             var httpContext = ((Blueprint.Runtime.Http.IHttpOperationContext)context).HttpContext;
 
-            if (httpContext.Request.RouteValues["OrgSlug"] is string routeStr_OrgSlug)
+            if (!context.IsNested)
             {
-                operation.OrgSlug = routeStr_OrgSlug;
-            }
-            var _routeErr_CategoryId = Blueprint.Runtime.Exec.PipelineHelpers.BindRouteValue(httpContext.Request.RouteValues, "CategoryId", out var _parsed_CategoryId, static (string _s, out int _v) => int.TryParse(_s, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out _v));
-            if (_routeErr_CategoryId != null)
-            {
-                return _routeErr_CategoryId;
-            }
-            operation.CategoryId = _parsed_CategoryId;
+                if (httpContext.Request.RouteValues["OrgSlug"] is string routeStr_OrgSlug)
+                {
+                    operation.OrgSlug = routeStr_OrgSlug;
+                }
+                var _routeErr_CategoryId = Blueprint.Runtime.Exec.PipelineHelpers.BindRouteValue(httpContext.Request.RouteValues, "CategoryId", out var _parsed_CategoryId, static (string _s, out int _v) => int.TryParse(_s, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out _v));
+                if (_routeErr_CategoryId != null)
+                {
+                    return _routeErr_CategoryId;
+                }
+                operation.CategoryId = _parsed_CategoryId;
 
-            var _qv_Term = httpContext.Request.Query["term"];
-            if (_qv_Term.Count > 0)
-            {
-                operation.Term = _qv_Term[0];
-            }
-            var _qvErr_PageSize = Blueprint.Runtime.Exec.PipelineHelpers.BindQueryValue(httpContext.Request.Query, "pageSize", out var _parsed_PageSize, out var _qvFound_PageSize, static (string _s, out int _v) => int.TryParse(_s, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out _v));
-            if (_qvErr_PageSize != null)
-            {
-                return _qvErr_PageSize;
-            }
-            if (_qvFound_PageSize)
-            {
-                operation.PageSize = _parsed_PageSize;
-            }
-            var _qvErr_Offset = Blueprint.Runtime.Exec.PipelineHelpers.BindQueryValue(httpContext.Request.Query, "offset", out var _parsed_Offset, out var _qvFound_Offset, static (string _s, out long _v) => long.TryParse(_s, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out _v));
-            if (_qvErr_Offset != null)
-            {
-                return _qvErr_Offset;
-            }
-            if (_qvFound_Offset)
-            {
-                operation.Offset = _parsed_Offset;
-            }
-            var _qvErr_MinRating = Blueprint.Runtime.Exec.PipelineHelpers.BindQueryValue(httpContext.Request.Query, "minRating", out var _parsed_MinRating, out var _qvFound_MinRating, static (string _s, out double _v) => double.TryParse(_s, System.Globalization.NumberStyles.Float | System.Globalization.NumberStyles.AllowThousands, System.Globalization.CultureInfo.InvariantCulture, out _v));
-            if (_qvErr_MinRating != null)
-            {
-                return _qvErr_MinRating;
-            }
-            if (_qvFound_MinRating)
-            {
-                operation.MinRating = _parsed_MinRating;
-            }
-            var _qvErr_IncludeDeleted = Blueprint.Runtime.Exec.PipelineHelpers.BindQueryValue(httpContext.Request.Query, "includeDeleted", out var _parsed_IncludeDeleted, out var _qvFound_IncludeDeleted, static (string _s, out bool _v) => bool.TryParse(_s, out _v));
-            if (_qvErr_IncludeDeleted != null)
-            {
-                return _qvErr_IncludeDeleted;
-            }
-            if (_qvFound_IncludeDeleted)
-            {
-                operation.IncludeDeleted = _parsed_IncludeDeleted;
-            }
-            var _qvErr_MinPrice = Blueprint.Runtime.Exec.PipelineHelpers.BindQueryValue(httpContext.Request.Query, "minPrice", out var _parsed_MinPrice, out var _qvFound_MinPrice, static (string _s, out decimal _v) => decimal.TryParse(_s, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out _v));
-            if (_qvErr_MinPrice != null)
-            {
-                return _qvErr_MinPrice;
-            }
-            if (_qvFound_MinPrice)
-            {
-                operation.MinPrice = _parsed_MinPrice;
-            }
-            var _qvErr_FilterId = Blueprint.Runtime.Exec.PipelineHelpers.BindQueryValue(httpContext.Request.Query, "filterId", out var _parsed_FilterId, out var _qvFound_FilterId, static (string _s, out System.Guid _v) => System.Guid.TryParse(_s, out _v));
-            if (_qvErr_FilterId != null)
-            {
-                return _qvErr_FilterId;
-            }
-            if (_qvFound_FilterId)
-            {
-                operation.FilterId = _parsed_FilterId;
-            }
-            var _qvErr_Since = Blueprint.Runtime.Exec.PipelineHelpers.BindQueryValue(httpContext.Request.Query, "since", out var _parsed_Since, out var _qvFound_Since, static (string _s, out System.DateTime _v) => System.DateTime.TryParse(_s, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out _v));
-            if (_qvErr_Since != null)
-            {
-                return _qvErr_Since;
-            }
-            if (_qvFound_Since)
-            {
-                operation.Since = _parsed_Since;
-            }
-            var _qvErr_ModifiedAfter = Blueprint.Runtime.Exec.PipelineHelpers.BindQueryValue(httpContext.Request.Query, "modifiedAfter", out var _parsed_ModifiedAfter, out var _qvFound_ModifiedAfter, static (string _s, out System.DateTimeOffset _v) => System.DateTimeOffset.TryParse(_s, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out _v));
-            if (_qvErr_ModifiedAfter != null)
-            {
-                return _qvErr_ModifiedAfter;
-            }
-            if (_qvFound_ModifiedAfter)
-            {
-                operation.ModifiedAfter = _parsed_ModifiedAfter;
-            }
-            var _qvErr_MaxResults = Blueprint.Runtime.Exec.PipelineHelpers.BindQueryValue(httpContext.Request.Query, "maxResults", out var _parsed_MaxResults, out var _qvFound_MaxResults, static (string _s, out int _v) => int.TryParse(_s, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out _v));
-            if (_qvErr_MaxResults != null)
-            {
-                return _qvErr_MaxResults;
-            }
-            if (_qvFound_MaxResults)
-            {
-                operation.MaxResults = _parsed_MaxResults;
-            }
-            var _qvErr_MaxPrice = Blueprint.Runtime.Exec.PipelineHelpers.BindQueryValue(httpContext.Request.Query, "maxPrice", out var _parsed_MaxPrice, out var _qvFound_MaxPrice, static (string _s, out double _v) => double.TryParse(_s, System.Globalization.NumberStyles.Float | System.Globalization.NumberStyles.AllowThousands, System.Globalization.CultureInfo.InvariantCulture, out _v));
-            if (_qvErr_MaxPrice != null)
-            {
-                return _qvErr_MaxPrice;
-            }
-            if (_qvFound_MaxPrice)
-            {
-                operation.MaxPrice = _parsed_MaxPrice;
-            }
-            var _qv_Tags = httpContext.Request.Query["tags"];
-            if (_qv_Tags.Count > 0)
-            {
-                operation.Tags = _qv_Tags.ToArray();
-            }
-            var _qaErr_CategoryIds = Blueprint.Runtime.Exec.PipelineHelpers.BindQueryArray(httpContext.Request.Query, "categoryIds", out var _arr_CategoryIds, static (string _s, out int _v) => int.TryParse(_s, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out _v));
-            if (_qaErr_CategoryIds != null)
-            {
-                return _qaErr_CategoryIds;
-            }
-            if (_arr_CategoryIds != null)
-            {
-                operation.CategoryIds = _arr_CategoryIds;
+                var _qv_Term = httpContext.Request.Query["term"];
+                if (_qv_Term.Count > 0)
+                {
+                    operation.Term = _qv_Term[0];
+                }
+                var _qvErr_PageSize = Blueprint.Runtime.Exec.PipelineHelpers.BindQueryValue(httpContext.Request.Query, "pageSize", out var _parsed_PageSize, out var _qvFound_PageSize, static (string _s, out int _v) => int.TryParse(_s, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out _v));
+                if (_qvErr_PageSize != null)
+                {
+                    return _qvErr_PageSize;
+                }
+                if (_qvFound_PageSize)
+                {
+                    operation.PageSize = _parsed_PageSize;
+                }
+                var _qvErr_Offset = Blueprint.Runtime.Exec.PipelineHelpers.BindQueryValue(httpContext.Request.Query, "offset", out var _parsed_Offset, out var _qvFound_Offset, static (string _s, out long _v) => long.TryParse(_s, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out _v));
+                if (_qvErr_Offset != null)
+                {
+                    return _qvErr_Offset;
+                }
+                if (_qvFound_Offset)
+                {
+                    operation.Offset = _parsed_Offset;
+                }
+                var _qvErr_MinRating = Blueprint.Runtime.Exec.PipelineHelpers.BindQueryValue(httpContext.Request.Query, "minRating", out var _parsed_MinRating, out var _qvFound_MinRating, static (string _s, out double _v) => double.TryParse(_s, System.Globalization.NumberStyles.Float | System.Globalization.NumberStyles.AllowThousands, System.Globalization.CultureInfo.InvariantCulture, out _v));
+                if (_qvErr_MinRating != null)
+                {
+                    return _qvErr_MinRating;
+                }
+                if (_qvFound_MinRating)
+                {
+                    operation.MinRating = _parsed_MinRating;
+                }
+                var _qvErr_IncludeDeleted = Blueprint.Runtime.Exec.PipelineHelpers.BindQueryValue(httpContext.Request.Query, "includeDeleted", out var _parsed_IncludeDeleted, out var _qvFound_IncludeDeleted, static (string _s, out bool _v) => bool.TryParse(_s, out _v));
+                if (_qvErr_IncludeDeleted != null)
+                {
+                    return _qvErr_IncludeDeleted;
+                }
+                if (_qvFound_IncludeDeleted)
+                {
+                    operation.IncludeDeleted = _parsed_IncludeDeleted;
+                }
+                var _qvErr_MinPrice = Blueprint.Runtime.Exec.PipelineHelpers.BindQueryValue(httpContext.Request.Query, "minPrice", out var _parsed_MinPrice, out var _qvFound_MinPrice, static (string _s, out decimal _v) => decimal.TryParse(_s, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out _v));
+                if (_qvErr_MinPrice != null)
+                {
+                    return _qvErr_MinPrice;
+                }
+                if (_qvFound_MinPrice)
+                {
+                    operation.MinPrice = _parsed_MinPrice;
+                }
+                var _qvErr_FilterId = Blueprint.Runtime.Exec.PipelineHelpers.BindQueryValue(httpContext.Request.Query, "filterId", out var _parsed_FilterId, out var _qvFound_FilterId, static (string _s, out System.Guid _v) => System.Guid.TryParse(_s, out _v));
+                if (_qvErr_FilterId != null)
+                {
+                    return _qvErr_FilterId;
+                }
+                if (_qvFound_FilterId)
+                {
+                    operation.FilterId = _parsed_FilterId;
+                }
+                var _qvErr_Since = Blueprint.Runtime.Exec.PipelineHelpers.BindQueryValue(httpContext.Request.Query, "since", out var _parsed_Since, out var _qvFound_Since, static (string _s, out System.DateTime _v) => System.DateTime.TryParse(_s, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out _v));
+                if (_qvErr_Since != null)
+                {
+                    return _qvErr_Since;
+                }
+                if (_qvFound_Since)
+                {
+                    operation.Since = _parsed_Since;
+                }
+                var _qvErr_ModifiedAfter = Blueprint.Runtime.Exec.PipelineHelpers.BindQueryValue(httpContext.Request.Query, "modifiedAfter", out var _parsed_ModifiedAfter, out var _qvFound_ModifiedAfter, static (string _s, out System.DateTimeOffset _v) => System.DateTimeOffset.TryParse(_s, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out _v));
+                if (_qvErr_ModifiedAfter != null)
+                {
+                    return _qvErr_ModifiedAfter;
+                }
+                if (_qvFound_ModifiedAfter)
+                {
+                    operation.ModifiedAfter = _parsed_ModifiedAfter;
+                }
+                var _qvErr_MaxResults = Blueprint.Runtime.Exec.PipelineHelpers.BindQueryValue(httpContext.Request.Query, "maxResults", out var _parsed_MaxResults, out var _qvFound_MaxResults, static (string _s, out int _v) => int.TryParse(_s, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out _v));
+                if (_qvErr_MaxResults != null)
+                {
+                    return _qvErr_MaxResults;
+                }
+                if (_qvFound_MaxResults)
+                {
+                    operation.MaxResults = _parsed_MaxResults;
+                }
+                var _qvErr_MaxPrice = Blueprint.Runtime.Exec.PipelineHelpers.BindQueryValue(httpContext.Request.Query, "maxPrice", out var _parsed_MaxPrice, out var _qvFound_MaxPrice, static (string _s, out double _v) => double.TryParse(_s, System.Globalization.NumberStyles.Float | System.Globalization.NumberStyles.AllowThousands, System.Globalization.CultureInfo.InvariantCulture, out _v));
+                if (_qvErr_MaxPrice != null)
+                {
+                    return _qvErr_MaxPrice;
+                }
+                if (_qvFound_MaxPrice)
+                {
+                    operation.MaxPrice = _parsed_MaxPrice;
+                }
+                var _qv_Tags = httpContext.Request.Query["tags"];
+                if (_qv_Tags.Count > 0)
+                {
+                    operation.Tags = _qv_Tags.ToArray();
+                }
+                var _qaErr_CategoryIds = Blueprint.Runtime.Exec.PipelineHelpers.BindQueryArray(httpContext.Request.Query, "categoryIds", out var _arr_CategoryIds, static (string _s, out int _v) => int.TryParse(_s, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out _v));
+                if (_qaErr_CategoryIds != null)
+                {
+                    return _qaErr_CategoryIds;
+                }
+                if (_arr_CategoryIds != null)
+                {
+                    operation.CategoryIds = _arr_CategoryIds;
+                }
             }
 
             // Tenant resolution (compile-time, no reflection)
@@ -251,28 +254,31 @@ namespace Blueprint.Generated
 
             var httpContext = ((Blueprint.Runtime.Http.IHttpOperationContext)context).HttpContext;
 
-            var _bodyResult = await Blueprint.Runtime.Exec.PipelineHelpers.ReadJsonBodyAsync(httpContext, context.OperationCancelled, operation, PopulateFromJsonBody, this.BodyJsonOptions).ConfigureAwait(false);
-            if (_bodyResult != null)
+            if (!context.IsNested)
             {
-                return _bodyResult;
-            }
+                var _bodyResult = await Blueprint.Runtime.Exec.PipelineHelpers.ReadJsonBodyAsync(httpContext, context.OperationCancelled, operation, PopulateFromJsonBody, this.BodyJsonOptions).ConfigureAwait(false);
+                if (_bodyResult != null)
+                {
+                    return _bodyResult;
+                }
 
-            if (httpContext.Request.RouteValues["OrgSlug"] is string routeStr_OrgSlug)
-            {
-                operation.OrgSlug = routeStr_OrgSlug;
+                if (httpContext.Request.RouteValues["OrgSlug"] is string routeStr_OrgSlug)
+                {
+                    operation.OrgSlug = routeStr_OrgSlug;
+                }
+                var _routeErr_ProjectId = Blueprint.Runtime.Exec.PipelineHelpers.BindRouteValue(httpContext.Request.RouteValues, "ProjectId", out var _parsed_ProjectId, static (string _s, out int _v) => int.TryParse(_s, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out _v));
+                if (_routeErr_ProjectId != null)
+                {
+                    return _routeErr_ProjectId;
+                }
+                operation.ProjectId = _parsed_ProjectId;
+                var _routeErr_ItemGuid = Blueprint.Runtime.Exec.PipelineHelpers.BindRouteValue(httpContext.Request.RouteValues, "ItemGuid", out var _parsed_ItemGuid, static (string _s, out System.Guid _v) => System.Guid.TryParse(_s, out _v));
+                if (_routeErr_ItemGuid != null)
+                {
+                    return _routeErr_ItemGuid;
+                }
+                operation.ItemGuid = _parsed_ItemGuid;
             }
-            var _routeErr_ProjectId = Blueprint.Runtime.Exec.PipelineHelpers.BindRouteValue(httpContext.Request.RouteValues, "ProjectId", out var _parsed_ProjectId, static (string _s, out int _v) => int.TryParse(_s, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out _v));
-            if (_routeErr_ProjectId != null)
-            {
-                return _routeErr_ProjectId;
-            }
-            operation.ProjectId = _parsed_ProjectId;
-            var _routeErr_ItemGuid = Blueprint.Runtime.Exec.PipelineHelpers.BindRouteValue(httpContext.Request.RouteValues, "ItemGuid", out var _parsed_ItemGuid, static (string _s, out System.Guid _v) => System.Guid.TryParse(_s, out _v));
-            if (_routeErr_ItemGuid != null)
-            {
-                return _routeErr_ItemGuid;
-            }
-            operation.ItemGuid = _parsed_ItemGuid;
 
             // Tenant resolution (compile-time, no reflection)
             if (this.TenantResolver != null && this.TenantAccessor != null)

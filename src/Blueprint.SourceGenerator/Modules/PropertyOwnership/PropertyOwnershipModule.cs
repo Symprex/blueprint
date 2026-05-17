@@ -1175,61 +1175,67 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         context.GetHttpContextExpression();
         context.WriteBlankLine();
 
-        // Body binding: delegate stream buffering, content-type check, and exception handling
-        // to the shared PipelineHelpers.ReadJsonBodyAsync runtime method. The generated pipeline
-        // only provides the operation-specific PopulateFromJsonBody call as a static delegate.
-        if (bodyEntries is { Count: > 0 })
+        // Nested pipeline executions (e.g. SelfQuery resolution) provide a pre-populated
+        // operation object. Skip HTTP binding entirely to avoid overwriting with route/query
+        // values from the parent request context.
+        context.If("!context.IsNested", bindingBranch =>
         {
-            context.WriteStatement(
-                $"var _bodyResult = await Blueprint.Runtime.Exec.PipelineHelpers.ReadJsonBodyAsync(httpContext, context.OperationCancelled, {operationExpr}, PopulateFromJsonBody, this.BodyJsonOptions).ConfigureAwait(false);");
-            context.If("_bodyResult != null", earlyReturnCtx =>
+            // Body binding: delegate stream buffering, content-type check, and exception handling
+            // to the shared PipelineHelpers.ReadJsonBodyAsync runtime method. The generated pipeline
+            // only provides the operation-specific PopulateFromJsonBody call as a static delegate.
+            if (bodyEntries is { Count: > 0 })
             {
-                earlyReturnCtx.Return("_bodyResult");
-            });
+                bindingBranch.WriteStatement(
+                    $"var _bodyResult = await Blueprint.Runtime.Exec.PipelineHelpers.ReadJsonBodyAsync(httpContext, context.OperationCancelled, {operationExpr}, PopulateFromJsonBody, this.BodyJsonOptions).ConfigureAwait(false);");
+                bindingBranch.If("_bodyResult != null", earlyReturnCtx =>
+                {
+                    earlyReturnCtx.Return("_bodyResult");
+                });
 
-            context.WriteBlankLine();
-        }
-
-        // Route binding
-        if (routeEntries is not null)
-        {
-            foreach (var entry in routeEntries)
-            {
-                WriteRouteExtraction(context, operationExpr, entry);
+                bindingBranch.WriteBlankLine();
             }
-        }
 
-        if (routeEntries is { Count: > 0 } && (queryEntries is { Count: > 0 } || headerEntries is { Count: > 0 } || cookieEntries is { Count: > 0 }))
-        {
-            context.WriteBlankLine();
-        }
-
-        // Query binding
-        if (queryEntries is not null)
-        {
-            foreach (var entry in queryEntries)
+            // Route binding
+            if (routeEntries is not null)
             {
-                WriteQueryExtraction(context, operationExpr, entry);
+                foreach (var entry in routeEntries)
+                {
+                    WriteRouteExtraction(bindingBranch, operationExpr, entry);
+                }
             }
-        }
 
-        // Header binding
-        if (headerEntries is not null)
-        {
-            foreach (var entry in headerEntries)
+            if (routeEntries is { Count: > 0 } && (queryEntries is { Count: > 0 } || headerEntries is { Count: > 0 } || cookieEntries is { Count: > 0 }))
             {
-                WriteHeaderExtraction(context, operationExpr, entry);
+                bindingBranch.WriteBlankLine();
             }
-        }
 
-        // Cookie binding
-        if (cookieEntries is not null)
-        {
-            foreach (var entry in cookieEntries)
+            // Query binding
+            if (queryEntries is not null)
             {
-                WriteCookieExtraction(context, operationExpr, entry);
+                foreach (var entry in queryEntries)
+                {
+                    WriteQueryExtraction(bindingBranch, operationExpr, entry);
+                }
             }
-        }
+
+            // Header binding
+            if (headerEntries is not null)
+            {
+                foreach (var entry in headerEntries)
+                {
+                    WriteHeaderExtraction(bindingBranch, operationExpr, entry);
+                }
+            }
+
+            // Cookie binding
+            if (cookieEntries is not null)
+            {
+                foreach (var entry in cookieEntries)
+                {
+                    WriteCookieExtraction(bindingBranch, operationExpr, entry);
+                }
+            }
+        });
     }
 
     /// <summary>

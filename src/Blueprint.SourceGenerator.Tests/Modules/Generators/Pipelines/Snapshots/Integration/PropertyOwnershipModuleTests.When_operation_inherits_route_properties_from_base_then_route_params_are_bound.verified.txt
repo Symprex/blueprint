@@ -57,15 +57,18 @@ namespace Blueprint.Generated
 
             var httpContext = ((Blueprint.Runtime.Http.IHttpOperationContext)context).HttpContext;
 
-            var _bodyResult = await Blueprint.Runtime.Exec.PipelineHelpers.ReadJsonBodyAsync(httpContext, context.OperationCancelled, operation, PopulateFromJsonBody, this.BodyJsonOptions).ConfigureAwait(false);
-            if (_bodyResult != null)
+            if (!context.IsNested)
             {
-                return _bodyResult;
-            }
+                var _bodyResult = await Blueprint.Runtime.Exec.PipelineHelpers.ReadJsonBodyAsync(httpContext, context.OperationCancelled, operation, PopulateFromJsonBody, this.BodyJsonOptions).ConfigureAwait(false);
+                if (_bodyResult != null)
+                {
+                    return _bodyResult;
+                }
 
-            if (httpContext.Request.RouteValues["TenantId"] is string routeStr_TenantId)
-            {
-                operation.TenantId = routeStr_TenantId;
+                if (httpContext.Request.RouteValues["TenantId"] is string routeStr_TenantId)
+                {
+                    operation.TenantId = routeStr_TenantId;
+                }
             }
 
             // Tenant resolution (compile-time, no reflection)
