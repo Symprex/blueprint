@@ -78,7 +78,11 @@ internal sealed class RuntimeScanBlueprintApp : BlueprintApp
 
             var link = new ApiOperationLink(descriptor, routingUrl, routePattern, rel, resourceType);
             descriptor.AddLink(link);
-            descriptor.AddUrl(new ApiOperationUrl(routePattern));
+
+            if (!descriptor.Urls.Any(u => string.Equals(u.UrlFormat, routePattern, StringComparison.Ordinal)))
+            {
+                descriptor.AddUrl(new ApiOperationUrl(routePattern));
+            }
         }
 
         if (!hasLinks)
