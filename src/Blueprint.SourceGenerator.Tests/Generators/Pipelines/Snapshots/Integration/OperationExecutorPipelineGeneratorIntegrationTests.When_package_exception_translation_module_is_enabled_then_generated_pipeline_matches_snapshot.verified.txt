@@ -29,10 +29,7 @@ namespace Blueprint.Generated
 
 
             // Tenant resolution (compile-time, no reflection)
-            if (this.TenantResolver != null && this.TenantAccessor != null)
-            {
-                Blueprint.Runtime.Exec.PipelineHelpers.ResolveTenant(this.TenantResolver, this.TenantAccessor, context.UserPrincipal);
-            }
+            var _tenantAccessor = Blueprint.Runtime.Exec.PipelineHelpers.ResolveTenantScoped(context.ServiceProvider, context.UserPrincipal);
 
             await Blueprint.Runtime.Exec.PipelineHelpers.PopulatePropertiesAsync(this.PropertyPopulators, context).ConfigureAwait(false);
             var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<string>(await global::TestNamespace.IncludedOperation.HandleAsync(operation).ConfigureAwait(false));

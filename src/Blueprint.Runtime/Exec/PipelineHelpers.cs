@@ -529,6 +529,44 @@ public static class PipelineHelpers
     }
 
     /// <summary>
+    /// Resolves the tenant from the operation's scoped service provider, ensuring the
+    /// <see cref="Blueprint.Tenancy.ITenantAccessor"/> and <see cref="Blueprint.Tenancy.ITenantResolver"/>
+    /// come from the same DI scope as other scoped services (e.g. Marten's <c>IDocumentSession</c>).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This overload exists because test infrastructure (e.g. <c>WebApplicationFactory.WithWebHostBuilder</c>)
+    /// can create a child service provider that re-registers singleton services. The generated executor
+    /// may hold references to the root provider's tenant services, but the operation's scoped services
+    /// (like <c>IDocumentSession</c>) use the child provider's instances. Resolving from the scoped
+    /// provider ensures both sides use the same <c>ITenantAccessor</c> instance.
+    /// </para>
+    /// </remarks>
+    /// <param name="serviceProvider">The scoped service provider for the current operation.</param>
+    /// <param name="userPrincipal">The authenticated user's claims principal.</param>
+    /// <returns>
+    /// The resolved <see cref="Blueprint.Tenancy.ITenantAccessor"/> for use in subsequent property
+    /// assignment, or <see langword="null"/> if tenancy services are not registered.
+    /// </returns>
+    public static Blueprint.Tenancy.ITenantAccessor? ResolveTenantScoped(
+        IServiceProvider serviceProvider,
+        ClaimsPrincipal? userPrincipal)
+    {
+        var resolver = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions
+            .GetService<Blueprint.Tenancy.ITenantResolver>(serviceProvider);
+        var accessor = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions
+            .GetService<Blueprint.Tenancy.ITenantAccessor>(serviceProvider);
+
+        if (resolver is null || accessor is null)
+        {
+            return null;
+        }
+
+        ResolveTenant(resolver, accessor, userPrincipal);
+        return accessor;
+    }
+
+    /// <summary>
     /// Commits queued outbox messages when an <see cref="Blueprint.Messaging.IMessageOutbox"/> is registered.
     /// Extracted from per-pipeline inline code to reduce IL size across hundreds of generated pipelines.
     /// </summary>
