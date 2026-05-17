@@ -12,12 +12,12 @@
   "current": {
     "activeWorkstream": "s365-service-test-migration",
     "frameworkStatus": "production-ready",
-    "frameworkStatusDetail": "Full S365 feature parity confirmed. AOT/trim analyzer compliance achieved. Generated pipelines now skip HTTP binding in nested contexts (SelfQuery). SaveUnitOfWorkAsync flushes persistence before SelfQuery. 1975 Blueprint tests pass (796 generator + 1179 integration). S365 blueprint-codemod-test branch: all 20 services + 5 gateways compiling, Templates 19/19, Analytics 90/90, EventStore 41/41, Generation 24/24, AdminPortal 84/84, VCard 52/52, Partners 109/109 tests passing.",
-    "nextReadySlice": "s365-outlook-test-migration",
+    "frameworkStatusDetail": "Full S365 feature parity confirmed. AOT/trim analyzer compliance achieved. Tenant services now resolved from scoped provider (fixes test DI mismatch with WebApplicationFactory child providers). 1975 Blueprint tests pass (796 generator + 1179 integration). S365 blueprint-codemod-test branch: all 20 services + 5 gateways compiling, Templates 19/19, Analytics 90/90, EventStore 41/41, Generation 24/24, AdminPortal 84/84, VCard 52/52, Partners 109/109, Outlook 167/167 tests passing.",
+    "nextReadySlice": "s365-subscriptions-test-migration",
     "lastCompletedSlice": {
-      "id": "s365-partners-test-migration",
+      "id": "s365-outlook-test-migration",
       "workstream": "s365-service-test-migration",
-      "title": "Migrate Partners service tests — 109/109 passing"
+      "title": "Migrate Outlook service tests — 167/167 passing"
     },
     "openReviewGate": null,
     "openReviewGateRationale": null,
@@ -572,6 +572,19 @@
       "title": "Migrate Partners service tests — 109/109 passing",
       "commit": "ae6e71c55c",
       "s365Branch": "blueprint-codemod-test"
+    },
+    {
+      "id": "s365-outlook-test-migration",
+      "workstream": "s365-service-test-migration",
+      "title": "Migrate Outlook service tests — 167/167 passing",
+      "commit": "22d33181ec",
+      "s365Branch": "blueprint-codemod-test",
+      "blueprintFixes": [
+        {
+          "commit": "6058a5ca",
+          "description": "Resolve tenant services from scoped provider to fix test DI mismatch with WebApplicationFactory child providers"
+        }
+      ]
     }
   ],
   "decisions": [
