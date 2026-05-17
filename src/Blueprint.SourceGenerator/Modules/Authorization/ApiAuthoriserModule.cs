@@ -56,13 +56,7 @@ public sealed class ApiAuthoriserModule : IBlueprintSourceGeneratorModule, IPipe
     {
         var operationType = context.Operation.TypeSymbol;
 
-        // [AllowAnonymous] → skip authorization entirely
-        if (HasAllowAnonymous(operationType))
-        {
-            return;
-        }
-
-        // Non-HTTP operations don't get IApiAuthoriser checks
+        // Non-HTTP operations don't get user context loading or IApiAuthoriser checks
         if (!HttpHostExposureHelper.HasHttpHostExposure(operationType))
         {
             return;
@@ -70,10 +64,18 @@ public sealed class ApiAuthoriserModule : IBlueprintSourceGeneratorModule, IPipe
 
         context.RequireAsync();
 
-        // User context loading runs in Authentication stage (after identity check)
+        // User context loading runs in Authentication stage (after identity check).
+        // This runs even for [AllowAnonymous] operations so that handler base-class
+        // properties like Identity are populated when the caller IS authenticated.
         context.AddRenderStep(
             PipelineStage.Authentication,
             RenderUserContextLoading);
+
+        // [AllowAnonymous] → skip authoriser invocation but still load user context
+        if (HasAllowAnonymous(operationType))
+        {
+            return;
+        }
 
         // Authoriser invocation runs in Authorisation stage
         context.AddRenderStep(
