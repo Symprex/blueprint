@@ -10,14 +10,14 @@
     "workstreamPlan": "migration\\auditing-and-observability\\plan.md"
   },
   "current": {
-    "activeWorkstream": "authorization-and-parity-alignment",
+    "activeWorkstream": "aot-trim-and-s365-migration",
     "frameworkStatus": "production-ready",
-    "frameworkStatusDetail": "Full S365 feature parity confirmed including all consumer-facing utility types. Deep gap audit verified zero missing critical types. 9 utility types ported (TypeExtensions, FileSize, DictionaryExtensions, ReflectionUtilities, TaskExtensions, DateTimeExtensions, EnumUtilities, StreamExtensions, TemporalCheck) with 44 tests. All consumer seams (Hangfire, Rebus, Marten) implemented and demonstrated in sample app. Authorization pipeline, resource expansion, background tasks, OpenAPI, HATEOAS links all complete. Source-gen optimization audits done. 1400+ tests pass (593 generator + 807 integration).",
-    "nextReadySlice": null,
+    "frameworkStatusDetail": "Full S365 feature parity confirmed. AOT/trim analyzer compliance achieved — both Blueprint.Runtime.Model and Blueprint.Runtime pass EnableTrimAnalyzer=true and EnableAotAnalyzer=true with 0 warnings. IParsable TryParse uses CultureInfo.InvariantCulture for correctness. BPPO011 upgraded to Warning for TypeConverter-only types. 1975 tests pass (796 generator + 1179 integration). S365 blueprint-codemod-test branch has all 20 services + 5 gateways compiling, Templates 19/19 tests, Analytics 90/90 tests passing.",
+    "nextReadySlice": "s365-eventstore-test-migration",
     "lastCompletedSlice": {
-      "id": "utility-types-port",
-      "workstream": "authorization-and-parity-alignment",
-      "title": "Port 9 utility types from legacy Blueprint for S365 consumer parity"
+      "id": "aot-trim-compliance",
+      "workstream": "aot-trim-and-s365-migration",
+      "title": "Complete AOT/trim analyzer compliance for Runtime and Runtime.Model"
     },
     "openReviewGate": null,
     "openReviewGateRationale": null,

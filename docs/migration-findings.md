@@ -35,6 +35,9 @@
 | Runtime hot-path optimization | ✅ Done | Binding helpers, async fast-paths, pre-sized collections, cached API catalog, and auth structs reduce overhead |
 | Benchmarks and load tests | ✅ Done | 7 benchmark classes, 7 auth benchmark scenarios, and 9 NBomber scenarios documented |
 | Profiling guide | ✅ Done | `docs/performance-profiling.md` is the source of truth for deeper profiling workflow |
+| AOT/trim analyzer compliance | ✅ Done | Both `Blueprint.Runtime.Model` and `Blueprint.Runtime` pass `EnableTrimAnalyzer=true` and `EnableAotAnalyzer=true` with 0 warnings |
+| IParsable culture correctness | ✅ Done | Generated `TryParse` calls use `CultureInfo.InvariantCulture` (not `null`) matching `TypeDescriptor.ConvertFromInvariantString` semantics |
+| BPPO011 AOT migration warning | ✅ Done | Upgraded from Info to Warning; types with only `[TypeConverter]` (no `IParsable<T>`) now emit a build warning guiding migration |
 
 ## S365 Scale
 
@@ -823,3 +826,22 @@ The migration is ready, but a few items still deserve explicit verification duri
 
 ### Recommended migration order
 The most stable migration order is now clear from the consolidated findings: (1) make operations/resources `partial`; (2) add `BlueprintApp` and serializer context; (3) rewrite startup registration and tenant/auth DI; (4) verify OpenAPI output and TypeScript generation; (5) swap service-to-service clients and Rebus/Hangfire registrations; (6) only then trim any remaining S365-owned compatibility layers that are no longer useful.
+
+## AOT / Trim Safety
+
+### Current state (post-audit)
+Both `Blueprint.Runtime.Model` and `Blueprint.Runtime` pass `dotnet build /p:EnableTrimAnalyzer=true /p:EnableAotAnalyzer=true` with **zero warnings**. The source generator's generated code is also AOT-safe since it avoids reflection and uses compile-time patterns.
+
+### Remaining AOT architectural notes
+| Area | Status | Note |
+|------|--------|------|
+| `CompiledPropertyAccessor` | Annotated | Uses `Expression.Compile()` — annotated with `[RequiresDynamicCode]`. Source-generated `CompiledUrlBuilder` bypasses this for all known types. |
+| `ResourceKeyTemplateExpander` | Annotated | Uses `CompiledPropertyAccessor` — annotated with `[RequiresDynamicCode]`. Could be replaced with source-generated property accessor delegates in future. |
+| Cross-property validation | Suppressed | 6 validation attributes use `CrossPropertyAccessorCache` — suppressed since validation is inherently reflection-based. |
+| JSON serialization fallback | Suppressed | `HttpOperationResultExecutor` prefers app-owned `JsonSerializerContext` and falls back to `DefaultJsonTypeInfoResolver`. AOT consumers must ensure full type coverage. |
+| `JsonStringEnumConverter` | Suppressed | `BlueprintJsonOptions.CreateDefaultOptions()` uses untyped converter. AOT consumers should register typed `JsonStringEnumConverter<TEnum>` converters. |
+| `EnumUtilities` | Annotated | `GetDescriptions`/`GetDescriptionsWithKeys` use `Enum.GetValues(Type)` — annotated with `[RequiresDynamicCode]`. |
+| `TypeDescriptor.GetConverter` | Compile-time warning | BPPO011 (now Warning severity) fires for types with only `[TypeConverter]` and no `IParsable<T>`. Migration path: implement `IParsable<T>`. |
+
+### S365 migration path for AOT
+S365's `ApiId` already implements `IParsable<ApiId>`, so the primary binding type is AOT-safe. Any additional S365 value types that use only `[TypeConverter]` should add `IParsable<T>` to silence BPPO011 and enable AOT-safe binding.
