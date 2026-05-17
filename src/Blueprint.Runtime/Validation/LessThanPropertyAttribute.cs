@@ -38,6 +38,7 @@ public sealed class LessThanPropertyAttribute : ValidationAttribute
 
     /// <inheritdoc />
     [UnconditionalSuppressMessage("Trimming", "IL2075", Justification = "Blueprint validation attributes inspect preserved public operation properties during runtime fallback validation.")]
+    [UnconditionalSuppressMessage("AOT", "IL3050", Justification = "Cross-property validation uses compiled expression delegates for property access. Validation attributes are inherently reflection-based.")]
     protected override ValidationResult? IsValid(object? value, ValidationContext validationContext)
     {
         ArgumentNullException.ThrowIfNull(validationContext);

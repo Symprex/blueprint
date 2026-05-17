@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Security.Claims;
 using System.Text.RegularExpressions;
 using Blueprint.Runtime.Exec;
@@ -38,6 +39,7 @@ public static class ResourceKeyTemplateExpander
     /// <c>{Auth:IdentityId}</c> resolve from this context before falling back to claims.
     /// </param>
     /// <returns>The expanded resource key with all resolvable tokens substituted.</returns>
+    [RequiresDynamicCode("Uses CompiledPropertyAccessor.GetGetter which relies on Expression.Compile() for property access delegation.")]
     public static string Expand(
         string template,
         object operation,
@@ -104,6 +106,7 @@ public static class ResourceKeyTemplateExpander
     /// <param name="principal">The authenticated principal.</param>
     /// <param name="scopePairs">The scope pairs to expand.</param>
     /// <returns>A list of expanded resource keys for scope pairs that have templates.</returns>
+    [RequiresDynamicCode("Delegates to Expand which uses CompiledPropertyAccessor.GetGetter (Expression.Compile).")]
     public static IReadOnlyList<string> ExpandAll(
         ApiOperationContext context,
         ClaimsPrincipal principal,

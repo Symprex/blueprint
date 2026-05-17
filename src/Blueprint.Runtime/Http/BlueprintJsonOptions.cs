@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -32,6 +33,7 @@ public sealed class BlueprintJsonOptions
     /// relaxed JSON escaping, and string enum conversion.
     /// </summary>
     /// <returns>A new <see cref="JsonSerializerOptions"/> instance.</returns>
+    [UnconditionalSuppressMessage("AOT", "IL3050", Justification = "JsonStringEnumConverter without a type parameter requires dynamic code. Consumers targeting AOT should register typed JsonStringEnumConverter<TEnum> converters instead. Blueprint default options are a convenience baseline for non-AOT scenarios.")]
     public static JsonSerializerOptions CreateDefaultOptions()
     {
         var options = new JsonSerializerOptions

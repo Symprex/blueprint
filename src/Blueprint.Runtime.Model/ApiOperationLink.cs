@@ -149,6 +149,7 @@ public sealed class ApiOperationLink
     }
 
     [UnconditionalSuppressMessage("Trimming", "IL2075", Justification = "Reflection fallback only used for anonymous objects or when source-generated CompiledUrlBuilder is not available. Blueprint operation and resource types are preserved by the source generator.")]
+    [UnconditionalSuppressMessage("Trimming", "IL2080", Justification = "The Type in the property cache tuple comes from GetType() on values whose types are preserved by the source generator.")]
     [UnconditionalSuppressMessage("AOT", "IL3050", Justification = "CompiledPropertyAccessor uses Expression.Compile() but source-generated CompiledUrlBuilder is the primary path for all known types.")]
     private string? CreateRelativeUrlViaReflection(object values)
     {

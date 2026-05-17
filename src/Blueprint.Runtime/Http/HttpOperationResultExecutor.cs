@@ -246,6 +246,10 @@ public class HttpOperationResultExecutor
         "Trimming",
         "IL2026",
         Justification = "The HTTP executor prefers the app-owned serializer context when available and only falls back to runtime serialization for uncovered response bodies while the broader serializer-coverage migration remains in progress.")]
+    [UnconditionalSuppressMessage(
+        "AOT",
+        "IL3050",
+        Justification = "Fallback serialization path uses runtime JSON serialization when the app-owned serializer context does not cover the response type. AOT consumers must ensure their JsonSerializerContext covers all response types.")]
     private static async Task WriteJsonAsync(HttpContext httpContext, ApiOperationContext operationContext, object content)
     {
         var serializerContext = operationContext.App.AppOwnedSerializerContext;
@@ -293,6 +297,10 @@ public class HttpOperationResultExecutor
         "Trimming",
         "IL2026",
         Justification = "Dictionary<string,object> metadata bags require runtime serialization for heterogeneous values. The data payload prefers the app-owned serializer context and only falls back to reflection for uncovered types.")]
+    [UnconditionalSuppressMessage(
+        "AOT",
+        "IL3050",
+        Justification = "Fallback serialization for metadata/secureData/changedValues dictionaries uses runtime JSON when the app-owned context does not cover these types. AOT consumers must ensure full type coverage.")]
     private static async Task WriteResourceEventEnvelopeAsync(
         HttpContext httpContext,
         ApiOperationContext operationContext,
@@ -394,12 +402,20 @@ public class HttpOperationResultExecutor
         "Trimming",
         "IL2026",
         Justification = "The fallback serialization path already suppresses IL2026 for this code path. Sharing a single DefaultJsonTypeInfoResolver instance avoids unnecessary allocations.")]
+    [UnconditionalSuppressMessage(
+        "AOT",
+        "IL3050",
+        Justification = "DefaultJsonTypeInfoResolver requires dynamic code. This is only used as a fallback when the app-owned serializer context does not cover a type.")]
     private static readonly DefaultJsonTypeInfoResolver _sharedDefaultTypeInfoResolver = new();
 
     [UnconditionalSuppressMessage(
         "Trimming",
         "IL2026",
         Justification = "The HTTP executor already relies on runtime serialization for uncovered response roots while the serializer-coverage migration remains in progress. This fallback keeps app-owned source-generated metadata first and only adds reflection metadata for wrapper roots the app context does not declare.")]
+    [UnconditionalSuppressMessage(
+        "AOT",
+        "IL3050",
+        Justification = "Fallback options use DefaultJsonTypeInfoResolver which requires dynamic code. AOT consumers must ensure their JsonSerializerContext covers all serialized types.")]
     private static JsonSerializerOptions CreateFallbackSerializerOptions(JsonSerializerOptions serializerOptions)
     {
         return _fallbackOptionsCache.GetOrAdd(serializerOptions, static opts =>

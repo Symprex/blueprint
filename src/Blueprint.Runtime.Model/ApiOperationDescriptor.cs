@@ -227,7 +227,8 @@ public class ApiOperationDescriptor
         throw new InvalidOperationException($"Could not find property '{propertyName}' on operation type {this.OperationType}.");
     }
 
-    private static FrozenDictionary<string, IReadOnlyList<Attribute>> CreatePropertyAttributes(Type operationType)
+    private static FrozenDictionary<string, IReadOnlyList<Attribute>> CreatePropertyAttributes(
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] Type operationType)
     {
         return operationType.GetProperties()
             .ToFrozenDictionary(

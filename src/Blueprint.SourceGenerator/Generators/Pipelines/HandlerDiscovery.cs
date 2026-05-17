@@ -129,7 +129,7 @@ public static class HandlerDiscovery
         if (handlerMethods.Length > 1)
         {
             // Multiple handlers found - this is an error
-            var handlerNames = string.Join(", ", handlerMethods.Select(m => m.Name));
+            var handlerNames = string.Join(", ", handlerMethods.Select(static m => m.Name));
             var diagnostic = new DiagnosticInfo(
                 DiagnosticDescriptors.MultipleHandlersFound,
                 LocationInfo.CreateFrom(operationType.Locations.FirstOrDefault()!),

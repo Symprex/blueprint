@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Blueprint.Runtime.Utilities;
 
 namespace Blueprint.Validation;
@@ -16,6 +17,7 @@ internal static class CrossPropertyAccessorCache
     /// <param name="ownerType">The type to inspect.</param>
     /// <param name="propertyName">The property name to look up.</param>
     /// <returns>A compiled getter delegate, or <see langword="null"/> if the property does not exist.</returns>
+    [RequiresDynamicCode("Delegates to CompiledPropertyAccessor which uses Expression.Compile().")]
     internal static Func<object, object?>? GetGetter(Type ownerType, string propertyName)
     {
         return CompiledPropertyAccessor.GetGetter(ownerType, propertyName);

@@ -128,7 +128,7 @@ public record BlueprintSourceGenerationConfig(IReadOnlyList<IBlueprintSourceGene
                     [
                         duplicateGroup.Key,
                         capabilityName,
-                        string.Join(", ", duplicateGroup.Select(r => r.Module.ModuleId).OrderBy(id => id, StringComparer.Ordinal)),
+                        string.Join(", ", duplicateGroup.Select(static r => r.Module.ModuleId).OrderBy(static id => id, StringComparer.Ordinal)),
                     ]));
         }
 

@@ -58,6 +58,7 @@ public static class EnumUtilities
     /// </summary>
     /// <param name="enumType">The enum type.</param>
     /// <returns>Descriptions for all defined values.</returns>
+    [RequiresDynamicCode("Enum.GetValues(Type) cannot create arrays of arbitrary enum types at AOT compile time.")]
     public static IEnumerable<string> GetDescriptions(Type enumType)
     {
         return Enum.GetValues(enumType).Cast<Enum>().Select(static e => e.GetDescription());
@@ -69,6 +70,7 @@ public static class EnumUtilities
     /// </summary>
     /// <param name="enumType">The enum type.</param>
     /// <returns>A dictionary mapping enum names to descriptions.</returns>
+    [RequiresDynamicCode("Enum.GetValues(Type) cannot create arrays of arbitrary enum types at AOT compile time.")]
     public static Dictionary<string, string> GetDescriptionsWithKeys(Type enumType)
     {
         return Enum.GetValues(enumType)
