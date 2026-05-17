@@ -95,7 +95,17 @@ public sealed record OpenApiSchemaProjectionContext(
         {
             if (coveredTypesByName.TryGetValue(bodyTypeName, out var bodyType))
             {
-                schemaBuilder.Add(CreateSchema(bodyTypeName, bodyType, serializerContext, coveredTypesByName));
+                try
+                {
+                    schemaBuilder.Add(CreateSchema(bodyTypeName, bodyType, serializerContext, coveredTypesByName));
+                }
+                catch (NotSupportedException)
+                {
+                    // Types with custom JsonConverters that STJ source generation cannot handle
+                    // (SYSLIB1220) will throw when GetTypeInfo tries to configure their property
+                    // graph. Skip these types from OpenAPI schema projection — they still serialize
+                    // at runtime via the reflection fallback in HttpOperationResultExecutor.
+                }
             }
         }
 
