@@ -82,8 +82,9 @@ public static class ServiceCollectionExtensions
 
         // Authorization infrastructure — always registered so that link generation (which depends
         // on IApiAuthoriserAggregator for link-visibility filtering) works even when no explicit
-        // authorisers are configured.
-        services.TryAddSingleton<Blueprint.Authorization.IApiAuthoriserAggregator, Blueprint.Authorization.ApiAuthoriserAggregator>();
+        // authorisers are configured. Scoped because IApiAuthoriser implementations may have
+        // scoped dependencies (e.g. per-request claim inspectors).
+        services.TryAddScoped<Blueprint.Authorization.IApiAuthoriserAggregator, Blueprint.Authorization.ApiAuthoriserAggregator>();
 
         // Pre-rendered OpenAPI document holder — populated at endpoint mapping time
         services.TryAddSingleton<PreRenderedOpenApiDocumentHolder>();
@@ -307,10 +308,10 @@ public sealed class BlueprintServiceBuilder
     public BlueprintServiceBuilder AddApiAuthoriser<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] T>()
         where T : class, Blueprint.Authorization.IApiAuthoriser
     {
-        this.Services.AddSingleton<Blueprint.Authorization.IApiAuthoriser, T>();
+        this.Services.AddScoped<Blueprint.Authorization.IApiAuthoriser, T>();
 
         // Ensure the aggregator is registered (idempotent via TryAdd)
-        this.Services.TryAddSingleton<Blueprint.Authorization.IApiAuthoriserAggregator, Blueprint.Authorization.ApiAuthoriserAggregator>();
+        this.Services.TryAddScoped<Blueprint.Authorization.IApiAuthoriserAggregator, Blueprint.Authorization.ApiAuthoriserAggregator>();
 
         return this;
     }
@@ -324,7 +325,7 @@ public sealed class BlueprintServiceBuilder
     public BlueprintServiceBuilder AddOperationAuthoriser<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] T>()
         where T : class, Blueprint.Authorization.IOperationAuthoriser
     {
-        this.Services.AddSingleton<Blueprint.Authorization.IOperationAuthoriser, T>();
+        this.Services.AddScoped<Blueprint.Authorization.IOperationAuthoriser, T>();
 
         return this;
     }
@@ -339,10 +340,10 @@ public sealed class BlueprintServiceBuilder
     public BlueprintServiceBuilder AddLinkVisibilityAuthoriser<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] T>()
         where T : class, Blueprint.Authorization.ILinkVisibilityAuthoriser
     {
-        this.Services.AddSingleton<Blueprint.Authorization.ILinkVisibilityAuthoriser, T>();
+        this.Services.AddScoped<Blueprint.Authorization.ILinkVisibilityAuthoriser, T>();
 
         // Ensure the aggregator is registered (idempotent via TryAdd)
-        this.Services.TryAddSingleton<Blueprint.Authorization.IApiAuthoriserAggregator, Blueprint.Authorization.ApiAuthoriserAggregator>();
+        this.Services.TryAddScoped<Blueprint.Authorization.IApiAuthoriserAggregator, Blueprint.Authorization.ApiAuthoriserAggregator>();
 
         return this;
     }

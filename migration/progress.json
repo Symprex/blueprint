@@ -10,14 +10,14 @@
     "workstreamPlan": "migration\\auditing-and-observability\\plan.md"
   },
   "current": {
-    "activeWorkstream": "aot-trim-and-s365-migration",
+    "activeWorkstream": "s365-service-test-migration",
     "frameworkStatus": "production-ready",
-    "frameworkStatusDetail": "Full S365 feature parity confirmed. AOT/trim analyzer compliance achieved — both Blueprint.Runtime.Model and Blueprint.Runtime pass EnableTrimAnalyzer=true and EnableAotAnalyzer=true with 0 warnings. IParsable TryParse uses CultureInfo.InvariantCulture for correctness. BPPO011 upgraded to Warning for TypeConverter-only types. 1975 tests pass (796 generator + 1179 integration). S365 blueprint-codemod-test branch has all 20 services + 5 gateways compiling, Templates 19/19 tests, Analytics 90/90 tests passing.",
-    "nextReadySlice": "s365-eventstore-test-migration",
+    "frameworkStatusDetail": "Full S365 feature parity confirmed. AOT/trim analyzer compliance achieved. ResourceEvent now uses SystemTime.UtcNow for test time control. BlueprintTestHost populates route values from operation properties for generated pipeline binding. 2055+ tests pass (796 generator + 1179 integration + 80 testing). S365 blueprint-codemod-test branch: all 20 services + 5 gateways compiling, Templates 19/19, Analytics 90/90, EventStore 41/41 tests passing.",
+    "nextReadySlice": "s365-remaining-service-test-migration",
     "lastCompletedSlice": {
-      "id": "aot-trim-compliance",
-      "workstream": "aot-trim-and-s365-migration",
-      "title": "Complete AOT/trim analyzer compliance for Runtime and Runtime.Model"
+      "id": "s365-eventstore-test-migration",
+      "workstream": "s365-service-test-migration",
+      "title": "Migrate EventStore service tests — 41/41 passing"
     },
     "openReviewGate": null,
     "openReviewGateRationale": null,

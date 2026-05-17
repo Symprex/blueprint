@@ -20,9 +20,10 @@ internal sealed class ApiAuthoriserAggregator : IApiAuthoriserAggregator
     private readonly ILinkVisibilityAuthoriser[] _linkVisibilityAuthorisers;
     private readonly ILogger<ApiAuthoriserAggregator> _logger;
 
-    // Cache keyed by OperationType → applicable authorisers for that operation.
+    // Cache keyed by OperationType → applicable authoriser types for that operation.
     // AppliesTo is deterministic for a given descriptor, so caching is safe.
-    private readonly ConcurrentDictionary<Type, (IApiAuthoriser[] Api, ILinkVisibilityAuthoriser[] Link)> _applicableCache = new();
+    // Static because this is descriptor-level metadata that does not vary per scope.
+    private static readonly ConcurrentDictionary<Type, (Type[] ApiTypes, Type[] LinkTypes)> _applicableTypeCache = new();
 
     /// <summary>
     /// Initialises a new instance of the <see cref="ApiAuthoriserAggregator"/> class.
@@ -47,33 +48,39 @@ internal sealed class ApiAuthoriserAggregator : IApiAuthoriserAggregator
         ApiOperationDescriptor descriptor,
         object? resource)
     {
-        var (applicableApi, applicableLink) = this._applicableCache.GetOrAdd(
+        // Use a static type-based cache for AppliesTo results so scoped instances
+        // can still benefit from cross-request caching of the deterministic check.
+        var (applicableApiTypes, applicableLinkTypes) = _applicableTypeCache.GetOrAdd(
             descriptor.OperationType,
             static (_, state) =>
             {
                 var (desc, api, link) = state;
 
-                var apiList = new List<IApiAuthoriser>(api.Length);
+                var apiList = new List<Type>(api.Length);
                 foreach (var a in api)
                 {
                     if (a.AppliesTo(desc))
                     {
-                        apiList.Add(a);
+                        apiList.Add(a.GetType());
                     }
                 }
 
-                var linkList = new List<ILinkVisibilityAuthoriser>(link.Length);
+                var linkList = new List<Type>(link.Length);
                 foreach (var l in link)
                 {
                     if (l.AppliesTo(desc))
                     {
-                        linkList.Add(l);
+                        linkList.Add(l.GetType());
                     }
                 }
 
                 return (apiList.ToArray(), linkList.ToArray());
             },
             (descriptor, this._apiAuthorisers, this._linkVisibilityAuthorisers));
+
+        // Filter the per-scope instances to only those whose types are applicable.
+        var applicableApi = FilterByTypes(this._apiAuthorisers, applicableApiTypes);
+        var applicableLink = FilterByTypes(this._linkVisibilityAuthorisers, applicableLinkTypes);
 
         var traceLogEnabled = this._logger.IsEnabled(LogLevel.Trace);
 
@@ -126,5 +133,39 @@ internal sealed class ApiAuthoriserAggregator : IApiAuthoriserAggregator
         }
 
         return ExecutionAllowed.Yes;
+    }
+
+    /// <summary>
+    /// Filters an array of instances to only those whose runtime type appears in the
+    /// cached applicable-types array. Avoids allocations when all instances match.
+    /// </summary>
+    private static T[] FilterByTypes<T>(T[] instances, Type[] applicableTypes)
+    {
+        if (applicableTypes.Length == 0)
+        {
+            return [];
+        }
+
+        // Fast path: if counts match, all are applicable (common case).
+        if (instances.Length == applicableTypes.Length)
+        {
+            return instances;
+        }
+
+        var result = new List<T>(applicableTypes.Length);
+        foreach (var instance in instances)
+        {
+            var type = instance!.GetType();
+            foreach (var applicable in applicableTypes)
+            {
+                if (type == applicable)
+                {
+                    result.Add(instance);
+                    break;
+                }
+            }
+        }
+
+        return result.ToArray();
     }
 }
