@@ -723,9 +723,27 @@ public static class PipelineHelpers
         OperationResult handlerResult,
         string operationTypeName)
     {
+        // Always populate ResourceEvent.Href from the self-link, even when no audit sink is registered.
+        // This runs after the link generation stage has added self-links to the resource.
+        PopulateResourceEventHref(handlerResult);
+
         return auditSink != null
             ? ExecuteResourceEventAuditSinkCoreAsync(auditSink, context, handlerResult, operationTypeName)
             : Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Copies the self-link Href from the resource event's data object (when it implements
+    /// <see cref="ILinkableResource"/>) to <see cref="ResourceEvent.Href"/>. This ensures
+    /// the href is available on the in-memory result, not just during HTTP response writing.
+    /// </summary>
+    private static void PopulateResourceEventHref(OperationResult handlerResult)
+    {
+        if (handlerResult is ResourceEvent { Href: null, Data: ILinkableResource { Links: { } links } } resourceEvent
+            && links.TryGetValue("self", out var selfLink))
+        {
+            resourceEvent.Href = selfLink.Href;
+        }
     }
 
     /// <summary>
