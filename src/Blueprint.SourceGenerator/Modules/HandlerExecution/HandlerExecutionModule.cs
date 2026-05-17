@@ -114,6 +114,15 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
                 ? $"{context.GetOperationTypeFullName()}.{context.GetHandlerMethodName()}({string.Join(", ", parameterList)})"
                 : $"{context.GetOperationExpression()}.{context.GetHandlerMethodName()}({string.Join(", ", parameterList)})";
         }
+        else if (context.IsStaticHandler())
+        {
+            // External handler class with a static method — no instance needed, call via type name.
+            var handlerClassFullName = context.GetRequiredHandlerClassFullName();
+
+            var allParams = new List<string> { context.GetOperationExpression() };
+            allParams.AddRange(parameterList);
+            invocationExpression = $"{handlerClassFullName}.{context.GetHandlerMethodName()}({string.Join(", ", allParams)})";
+        }
         else
         {
             var handlerClassName = context.GetRequiredHandlerClassName();
