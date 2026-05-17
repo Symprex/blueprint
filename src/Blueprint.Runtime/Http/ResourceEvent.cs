@@ -30,7 +30,7 @@ public class ResourceEvent : OperationResult
         this.ResourceType = data.GetType();
         this.ResourceObject = GetResourceTypeName(this.ResourceType);
         this.Data = data;
-        this.Created = DateTimeOffset.UtcNow;
+        this.Created = new DateTimeOffset(SystemTime.UtcNow, TimeSpan.Zero);
     }
 
     /// <summary>
@@ -51,7 +51,7 @@ public class ResourceEvent : OperationResult
         this.ResourceType = resourceType;
         this.ResourceObject = GetResourceTypeName(resourceType);
         this.SelfQuery = selfQuery;
-        this.Created = DateTimeOffset.UtcNow;
+        this.Created = new DateTimeOffset(SystemTime.UtcNow, TimeSpan.Zero);
     }
 
     /// <summary>
