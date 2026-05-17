@@ -160,10 +160,11 @@ public class BlueprintApp
         {
             if (existingLink.Rel == link.Rel)
             {
-                throw new InvalidOperationException(
-                    $"Duplicate link found for resource type {link.ResourceType.Name} with rel {link.Rel}. Existing link is for the operation: \n\n" +
-                    $" {existingLink.OperationDescriptor.OperationType.FullName}: {existingLink.UrlFormat}\n\n" +
-                    "Every link must be a unique pairing of resource type (i.e. UserApiResource) and rel (i.e. \"self\" or \"activate\")");
+                // Duplicate rel for the same resource type — the compile-time BPLG004 diagnostic
+                // already warns about this. At runtime, silently skip the later registration so
+                // apps that aggregate operations from multiple services (e.g. admin portals that
+                // wrap operations from many Contract projects) do not crash on startup.
+                return;
             }
         }
 
