@@ -128,12 +128,18 @@ internal static class PropertyOwnershipDiagnosticDescriptors
     /// compatible with Native AOT or trimming. Adding <c>static bool TryParse(string?, out T)</c>
     /// unlocks the fast path and enables AOT-safe binding.
     /// </summary>
+    /// <remarks>
+    /// Severity is Info rather than Warning because third-party types (e.g. NodaTime.Instant) may
+    /// legitimately rely on TypeConverter and cannot easily implement IParsable. Consumers targeting
+    /// AOT can promote this to Warning via <c>.editorconfig</c>:
+    /// <c>dotnet_diagnostic.BPPO011.severity = warning</c>.
+    /// </remarks>
     public static readonly DiagnosticDescriptor TypeConverterFallbackBinding = new(
         id: "BPPO011",
         title: "Property uses slow TypeConverter binding path (not AOT-safe)",
         messageFormat: "Property '{0}' on operation '{1}' has type '{2}' which falls back to TypeConverter for string conversion. This path is not compatible with Native AOT or trimming. Add a static TryParse(string?, out {2}) method or implement IParsable<{2}> for AOT-safe binding.",
         category: "PropertyOwnership",
-        DiagnosticSeverity.Warning,
+        DiagnosticSeverity.Info,
         isEnabledByDefault: true);
 
     /// <summary>
