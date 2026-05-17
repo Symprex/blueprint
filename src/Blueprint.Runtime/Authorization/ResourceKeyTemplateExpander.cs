@@ -75,9 +75,28 @@ public static class ResourceKeyTemplateExpander
                 return claim?.Value ?? match.Value;
             }
 
-            // {PropertyName} pattern — resolve from operation instance via compiled delegate
-            var getter = CompiledPropertyAccessor.GetGetter(operation.GetType(), token);
-            return getter?.Invoke(operation)?.ToString() ?? match.Value;
+            // {PropertyName} or {PropertyName:SubProperty} pattern — resolve from operation instance via compiled delegate
+            // When token contains ':' (and doesn't start with Auth:), split to navigate nested properties
+            // e.g. {TenantId:Value} → operation.TenantId then .Value on the result
+            var colonIndex = token.IndexOf(':');
+            if (colonIndex >= 0)
+            {
+                var propertyName = token[..colonIndex];
+                var subPropertyName = token[(colonIndex + 1)..];
+
+                var getter = CompiledPropertyAccessor.GetGetter(operation.GetType(), propertyName);
+                var parentValue = getter?.Invoke(operation);
+                if (parentValue is not null)
+                {
+                    var subGetter = CompiledPropertyAccessor.GetGetter(parentValue.GetType(), subPropertyName);
+                    return subGetter?.Invoke(parentValue)?.ToString() ?? match.Value;
+                }
+
+                return match.Value;
+            }
+
+            var topGetter = CompiledPropertyAccessor.GetGetter(operation.GetType(), token);
+            return topGetter?.Invoke(operation)?.ToString() ?? match.Value;
         });
     }
 
