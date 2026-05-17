@@ -210,7 +210,7 @@ public class BlueprintAppTests
     }
 
     [Fact]
-    public void Register_Should_Throw_Exception_When_Duplicate_Link_To_Same_Resource_From_Different_Descriptors()
+    public void Register_Should_Skip_Duplicate_Link_To_Same_Resource_From_Different_Descriptors()
     {
         // Arrange
         var model = new BlueprintApp();
@@ -222,12 +222,12 @@ public class BlueprintAppTests
         descriptor2.AddLink(link2);
         model.Register(descriptor1);
 
-        // Act
-        var act = () => model.Register(descriptor2);
+        // Act — duplicate self-links are silently skipped at runtime (compile-time BPLG004 already warns)
+        model.Register(descriptor2);
 
-        // Assert
-        act.Should().Throw<InvalidOperationException>()
-            .WithMessage("Duplicate link found for resource type TestResource with rel self. Existing link is for the operation: \n\n Blueprint.SourceGenerator.Tests.Model.BlueprintAppTests+TestOperation: test\n\nEvery link must be a unique pairing of resource type (i.e. UserApiResource) and rel (i.e. \"self\" or \"activate\")");
+        // Assert — only the first link for a given rel+resource-type pair is retained
+        model.GetLinksForResource(typeof(TestResource)).Should().ContainSingle()
+            .Which.OperationDescriptor.Should().BeSameAs(descriptor1);
     }
 
     private class TestOperation;

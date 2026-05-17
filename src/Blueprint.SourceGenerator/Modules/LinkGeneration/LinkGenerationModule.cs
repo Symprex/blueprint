@@ -798,6 +798,15 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
             return declaredResultType.TypeArguments[0] as INamedTypeSymbol;
         }
 
+        // Legacy ResourceEvent<T> → T (Blueprint.Http.ResourceEvent<T> carries Data as the resource body)
+        var legacyResourceEventGeneric = context.FindTypeByMetadataName("Blueprint.Http.ResourceEvent`1");
+        if (legacyResourceEventGeneric is not null
+            && declaredResultType.IsGenericType
+            && SymbolEqualityComparer.Default.Equals(declaredResultType.OriginalDefinition, legacyResourceEventGeneric))
+        {
+            return declaredResultType.TypeArguments[0] as INamedTypeSymbol;
+        }
+
         // OkResult<T> → T
         var okResultGeneric = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.OkResult`1");
         if (okResultGeneric is not null
@@ -837,6 +846,14 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
             return member.TypeArguments[0] as INamedTypeSymbol;
         }
 
+        var legacyResourceEventGeneric = context.FindTypeByMetadataName("Blueprint.Http.ResourceEvent`1");
+        if (legacyResourceEventGeneric is not null
+            && member.IsGenericType
+            && SymbolEqualityComparer.Default.Equals(member.OriginalDefinition, legacyResourceEventGeneric))
+        {
+            return member.TypeArguments[0] as INamedTypeSymbol;
+        }
+
         var okResultGeneric = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.OkResult`1");
         if (okResultGeneric is not null
             && member.IsGenericType
@@ -863,6 +880,16 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
             var resourceTypeName = declaredResultType.TypeArguments[0].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             var fullResultTypeName = declaredResultType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             return ($"(({fullResultTypeName})handlerResult).Content", fullResultTypeName);
+        }
+
+        // Legacy ResourceEvent<T> — content is accessed via .Data, not .Content
+        var legacyResourceEventGeneric = context.FindTypeByMetadataName("Blueprint.Http.ResourceEvent`1");
+        if (legacyResourceEventGeneric is not null
+            && declaredResultType.IsGenericType
+            && SymbolEqualityComparer.Default.Equals(declaredResultType.OriginalDefinition, legacyResourceEventGeneric))
+        {
+            var fullResultTypeName = declaredResultType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            return ($"(({fullResultTypeName})handlerResult).Data", fullResultTypeName);
         }
 
         var okResultGeneric = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.OkResult`1");
@@ -892,6 +919,14 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
                     var resourceTypeName = namedMember.TypeArguments[0].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
                     var fullResultTypeName = namedMember.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
                     return ($"(({fullResultTypeName})handlerResult).Content", fullResultTypeName);
+                }
+
+                if (legacyResourceEventGeneric is not null
+                    && namedMember.IsGenericType
+                    && SymbolEqualityComparer.Default.Equals(namedMember.OriginalDefinition, legacyResourceEventGeneric))
+                {
+                    var fullResultTypeName = namedMember.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                    return ($"(({fullResultTypeName})handlerResult).Data", fullResultTypeName);
                 }
 
                 if (okResultGeneric is not null
