@@ -55,9 +55,23 @@ public sealed partial class AppDataModelSourceGenerator
         // Cache the model class type outside the attribute loop — metadata name is constant.
         var modelClassType = compilation.GetTypeByMetadataName(dataModelClass.MetadataName);
 
+        // Collect the distinct assemblies that [BlueprintAppScan] targets so the self-link
+        // cache only considers operations owned by this app, not transitively-referenced ones.
+        var scannedAssemblies = new HashSet<IAssemblySymbol>(SymbolEqualityComparer.Default);
+        foreach (var attribute in attributes)
+        {
+            var assembly = (attribute.AssemblyOfTypeName is null
+                ? modelClassType
+                : compilation.GetTypeByMetadataName(attribute.AssemblyOfTypeName))?.ContainingAssembly;
+            if (assembly is not null)
+            {
+                scannedAssemblies.Add(assembly);
+            }
+        }
+
         // Share a single CompilationOperationLookup across all operations so the self-link
         // cache is built once instead of N times (significant at S365 scale: ~540 operations).
-        var sharedOperationLookup = new CompilationOperationLookup(compilation);
+        var sharedOperationLookup = new CompilationOperationLookup(compilation, scannedAssemblies);
 
         foreach (var attribute in attributes)
         {

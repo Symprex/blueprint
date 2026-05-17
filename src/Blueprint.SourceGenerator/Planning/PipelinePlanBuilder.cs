@@ -18,12 +18,14 @@ internal static class PipelinePlanBuilder
     /// <param name="compilation">The Roslyn compilation that contains the operation and contributor metadata.</param>
     /// <param name="executionPlanResult">The configured contributor execution plan.</param>
     /// <param name="handler">An optional pre-resolved handler model to reuse when one is already known.</param>
+    /// <param name="operationLookup">An optional pre-scoped operation lookup to reuse when one is already known (e.g. scoped to app-scanned assemblies).</param>
     /// <returns>A successful pipeline plan or the diagnostics that prevented one from being built.</returns>
     public static Result<PipelinePlan> Build(
         string operationFullClassName,
         Compilation compilation,
         Result<BlueprintModuleExecutionPlan> executionPlanResult,
-        OperationHandlerModel? handler = null)
+        OperationHandlerModel? handler = null,
+        CompilationOperationLookup? operationLookup = null)
     {
         if (executionPlanResult.Value is null)
         {
@@ -33,7 +35,7 @@ internal static class PipelinePlanBuilder
         var operationImplementationType = compilation.GetTypeByMetadataName(NormalizeMetadataName(operationFullClassName));
         var operationModel = OperationModel.Create(operationImplementationType!);
         var pipelinePlan = new PipelinePlan(operationModel, new VariableRegistry());
-        var operationLookup = new CompilationOperationLookup(compilation);
+        operationLookup ??= new CompilationOperationLookup(compilation);
         var resolvedHandler = ResolveHandlerIfRequired(
             operationImplementationType!,
             compilation,

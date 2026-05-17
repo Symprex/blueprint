@@ -1,3 +1,4 @@
+using Blueprint.SourceGenerator.Generators.App.Model;
 using JetBrains.Annotations;
 using Microsoft.CodeAnalysis;
 
@@ -60,12 +61,62 @@ public sealed record SelfLinkBindingInfo(string UrlTemplate, INamedTypeSymbol Re
 /// Compilation-backed operation lookup used by the initial foundation seam.
 /// </summary>
 /// <param name="compilation">The current compilation.</param>
-public sealed class CompilationOperationLookup(Compilation compilation) : IOperationLookup
+/// <param name="scannedAssemblies">
+/// When provided, the self-link cache only considers operations from these assemblies
+/// (the set of assemblies the <c>[BlueprintAppScan]</c> attributes target).
+/// When <see langword="null"/>, all compilation assemblies are scanned (backward-compatible default).
+/// </param>
+public sealed class CompilationOperationLookup(Compilation compilation, IReadOnlyCollection<IAssemblySymbol>? scannedAssemblies = null) : IOperationLookup
 {
     private const string OperationMetadataName = "Blueprint.Model.IOperation";
+    private const string BlueprintAppScanAttributeMetadataName = "Blueprint.Model.BlueprintAppScanAttribute";
     private readonly INamedTypeSymbol? _operationInterface = compilation.GetTypeByMetadataName(OperationMetadataName);
     private Dictionary<INamedTypeSymbol, List<SelfLinkBindingInfo>>? _selfLinkCache;
     private Dictionary<string, INamedTypeSymbol?>? _typeByMetadataNameCache;
+
+    /// <summary>
+    /// Creates a <see cref="CompilationOperationLookup"/> scoped to the assemblies targeted by
+    /// <c>[BlueprintAppScan]</c> on the specified app type. Self-link diagnostics will only
+    /// consider operations from these assemblies, preventing false positives from transitively-referenced
+    /// contract assemblies.
+    /// </summary>
+    /// <param name="compilation">The current compilation.</param>
+    /// <param name="appTypeMetadataName">The fully-qualified metadata name of the <c>BlueprintApp</c> type.</param>
+    /// <returns>A scoped operation lookup, or an unscoped one if the app type cannot be resolved.</returns>
+    public static CompilationOperationLookup CreateForApp(Compilation compilation, string appTypeMetadataName)
+    {
+        var appType = compilation.GetTypeByMetadataName(appTypeMetadataName);
+        if (appType is null)
+        {
+            return new CompilationOperationLookup(compilation);
+        }
+
+        var scanAttributeType = compilation.GetTypeByMetadataName(BlueprintAppScanAttributeMetadataName);
+        if (scanAttributeType is null)
+        {
+            return new CompilationOperationLookup(compilation);
+        }
+
+        var assemblies = new HashSet<IAssemblySymbol>(SymbolEqualityComparer.Default);
+        foreach (var attribute in appType.GetAttributes())
+        {
+            if (!SymbolEqualityComparer.Default.Equals(attribute.AttributeClass, scanAttributeType))
+            {
+                continue;
+            }
+
+            var scanModel = ParseOnlyOperationScanAttributeModel.Create(attribute);
+            var assembly = (scanModel.AssemblyOfTypeName is null
+                ? appType
+                : compilation.GetTypeByMetadataName(scanModel.AssemblyOfTypeName))?.ContainingAssembly;
+            if (assembly is not null)
+            {
+                assemblies.Add(assembly);
+            }
+        }
+
+        return new CompilationOperationLookup(compilation, assemblies);
+    }
 
     /// <inheritdoc />
     public OperationModel? FindByMetadataName(string metadataName)
@@ -183,6 +234,15 @@ public sealed class CompilationOperationLookup(Compilation compilation) : IOpera
 
     private IEnumerable<INamedTypeSymbol> GetAllTypesFromCompilation()
     {
+        // When scannedAssemblies is provided (app-level planning), only scan the
+        // assemblies that [BlueprintAppScan] targets.  This prevents false BPLG004
+        // diagnostics when transitively-referenced contract assemblies (e.g. Portal)
+        // declare different self-link URLs for the same resource type used in this app.
+        if (scannedAssemblies is not null)
+        {
+            return scannedAssemblies.SelectMany(static a => GetTypesFromNamespace(a.GlobalNamespace));
+        }
+
         return GetTypesFromNamespace(compilation.Assembly.GlobalNamespace)
             .Concat(compilation.References
                 .Select(compilation.GetAssemblyOrModuleSymbol)

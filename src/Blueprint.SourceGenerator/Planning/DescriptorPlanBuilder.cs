@@ -88,7 +88,7 @@ internal static class DescriptorPlanBuilder
         HostExposureDiagnostics.AddUnsupportedHostDiagnostics(descriptorPlan, executionPlanResult.Value.HostContributors);
         HostExposureDiagnostics.AddConflictingHostDiagnostics(descriptorPlan, executionPlanResult.Value.HostContributors);
 
-        var pipelinePlanResult = PipelinePlanBuilder.Build(operationFullClassName, compilation, executionPlanResult);
+        var pipelinePlanResult = PipelinePlanBuilder.Build(operationFullClassName, compilation, executionPlanResult, operationLookup: operationLookup as CompilationOperationLookup);
 
         var descriptorDiags = descriptorPlan.Diagnostics;
         var pipelineDiags = pipelinePlanResult.Diagnostics;

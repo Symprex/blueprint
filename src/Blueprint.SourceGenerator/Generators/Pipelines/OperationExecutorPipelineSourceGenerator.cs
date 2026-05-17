@@ -97,6 +97,12 @@ public partial class OperationExecutorPipelineSourceGenerator : IIncrementalGene
 
                 var successfulHandlers = new List<OperationHandlerModel>();
 
+                // Create an operation lookup scoped to the app's scanned assemblies so self-link
+                // diagnostics only consider operations owned by this app, not transitively-referenced ones.
+                var sharedOperationLookup = CompilationOperationLookup.CreateForApp(
+                    compilation,
+                    $"{compilationModel.AppNamespace}.{compilationModel.AppTypeName}");
+
                 // Generate a pipeline for each handler
                 foreach (var handler in compilationModel.Handlers)
                 {
@@ -104,7 +110,8 @@ public partial class OperationExecutorPipelineSourceGenerator : IIncrementalGene
                         handler.OperationTypeFullName,
                         compilation,
                         executionPlanResult,
-                        handler);
+                        handler,
+                        sharedOperationLookup);
                     pipelinePlanResult.ReportDiagnostics(spc);
 
                     if (pipelinePlanResult.Value is null)

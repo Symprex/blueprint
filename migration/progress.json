@@ -12,12 +12,12 @@
   "current": {
     "activeWorkstream": "s365-service-test-migration",
     "frameworkStatus": "production-ready",
-    "frameworkStatusDetail": "Full S365 feature parity confirmed. AOT/trim analyzer compliance achieved. Tenant services now resolved from scoped provider. Static external handler support added. 1975 Blueprint tests pass (796 generator + 1179 integration). S365 blueprint-codemod-test branch: all 20 services + 5 gateways compiling, Templates 19/19, Analytics 90/90, EventStore 41/41, Generation 24/24, AdminPortal 84/84, VCard 52/52, Partners 109/109, Outlook 167/167, Subscriptions 250/250 (4 skip) tests passing.",
-    "nextReadySlice": "s365-import-test-migration",
+    "frameworkStatusDetail": "Full S365 feature parity confirmed. AOT/trim analyzer compliance achieved. Tenant services now resolved from scoped provider. Static external handler support added. AllowAnonymous operations now load user context. 1975 Blueprint tests pass (796 generator + 1179 integration). S365 blueprint-codemod-test branch: all 20 services + 5 gateways compiling, Templates 19/19, Analytics 90/90, EventStore 41/41, Generation 24/24, AdminPortal 84/84, VCard 52/52, Partners 109/109, Outlook 167/167, Subscriptions 250/250 (4 skip), Import 264/264 tests passing.",
+    "nextReadySlice": "s365-billing-test-migration",
     "lastCompletedSlice": {
-      "id": "s365-subscriptions-test-migration",
+      "id": "s365-import-test-migration",
       "workstream": "s365-service-test-migration",
-      "title": "Migrate Subscriptions service tests — 250/250 passing (4 skip)"
+      "title": "Migrate Import service tests — 264/264 passing"
     },
     "openReviewGate": null,
     "openReviewGateRationale": null,
@@ -596,6 +596,23 @@
         {
           "commit": "7428a403",
           "description": "Support external handler classes with static HandleAsync methods"
+        }
+      ]
+    },
+    {
+      "id": "s365-import-test-migration",
+      "workstream": "s365-service-test-migration",
+      "title": "Migrate Import service tests — 264/264 passing",
+      "commit": "26763050ee",
+      "s365Branch": "blueprint-codemod-test",
+      "blueprintFixes": [
+        {
+          "commit": "7cda3f75",
+          "description": "Emit enum member names instead of integer literals in validation fast-path"
+        },
+        {
+          "commit": "7c88ea2b",
+          "description": "Load user context for AllowAnonymous operations so Identity is populated"
         }
       ]
     }
