@@ -90,7 +90,7 @@ namespace Blueprint.Generated
 
             var handlerResult = await global::TestNamespace.CreateResourceCommand.HandleAsync(operation).ConfigureAwait(false);
 
-            // Populate $links.self on the returned resource (skip 304 Not Modified)
+            // Populate HATEOAS links (self + action rels) on the returned resource (skip 304 Not Modified)
             if (handlerResult is global::Blueprint.Runtime.Exec.ResourceEventResult<global::TestNamespace.TestApiResource> and not global::Blueprint.Runtime.Exec.INotModifiedResult)
             {
                 var linkableResource = (global::TestNamespace.TestApiResource)((global::Blueprint.Runtime.Exec.ResourceEventResult<global::TestNamespace.TestApiResource>)handlerResult).Content;

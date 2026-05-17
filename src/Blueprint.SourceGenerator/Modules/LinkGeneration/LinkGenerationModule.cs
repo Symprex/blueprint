@@ -977,25 +977,25 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
         var resourceTypeName = binding.ResourceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
         context.WriteBlankLine();
-        context.WriteStatement("// Populate $links.self on the returned resource (skip 304 Not Modified)");
+        context.WriteStatement("// Populate HATEOAS links (self + action rels) on the returned resource (skip 304 Not Modified)");
         context.If(
             $"handlerResult is {binding.GuardTypeName} and not global::Blueprint.Runtime.Exec.INotModifiedResult",
             branch =>
             {
                 branch.DeclareVariable("linkableResource", $"({resourceTypeName}){binding.ContentAccessExpression}");
 
-                // Deduplicate by URL template: multiple operations may declare [SelfLink] for the
-                // same resource type with the same URL, but we only emit AddLink("self", ...) once.
-                var emittedUrls = new HashSet<string>(StringComparer.Ordinal);
+                // Deduplicate by (Rel, URL) pair: multiple operations may declare [SelfLink] for the
+                // same resource type with the same URL and rel, but we only emit AddLink once per unique pair.
+                var emittedLinks = new HashSet<(string Rel, string Url)>();
                 foreach (var selfLink in selfLinks)
                 {
-                    if (!emittedUrls.Add(selfLink.UrlTemplate))
+                    if (!emittedLinks.Add((selfLink.Rel, selfLink.UrlTemplate)))
                     {
                         continue;
                     }
 
                     var hrefExpression = BuildHrefInterpolation(selfLink.UrlTemplate);
-                    branch.WriteStatement($"linkableResource.AddLink(\"self\", new global::Blueprint.Model.Link {{ Href = {hrefExpression} }});");
+                    branch.WriteStatement($"linkableResource.AddLink(\"{selfLink.Rel}\", new global::Blueprint.Model.Link {{ Href = {hrefExpression} }});");
                 }
             });
     }
