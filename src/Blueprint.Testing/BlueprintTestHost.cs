@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Text.RegularExpressions;
 using Blueprint.Model;
 using Blueprint.Runtime.Exec;
 
@@ -90,6 +91,11 @@ public sealed class BlueprintTestHost<TApp, TExec> : IDisposable, IAsyncDisposab
 
         using var scope = this._rootProvider.CreateScope();
         var httpContext = new DefaultHttpContext { RequestServices = scope.ServiceProvider };
+
+        // Pre-populate route values from the operation so the generated pipeline's
+        // BindRouteValue calls succeed without a real ASP.NET routing pass.
+        PopulateRouteValues(httpContext, descriptor, operation);
+
         var context = new ApiOperationContext(
             scope.ServiceProvider,
             this.App,
@@ -404,6 +410,55 @@ public sealed class BlueprintTestHost<TApp, TExec> : IDisposable, IAsyncDisposab
                 c.Add(claim);
             }
         }));
+    }
+
+    private static readonly Regex RouteParameterRegex = new(@"\{\*{0,2}([A-Za-z0-9_]+)(?::[^}]*)?\}", RegexOptions.Compiled);
+
+    /// <summary>
+    /// Extracts route parameter names from the descriptor's URL templates and populates
+    /// <see cref="Microsoft.AspNetCore.Http.HttpContext.Request"/> route values from the
+    /// operation's property values. This bridges the gap between test code (which sets
+    /// properties directly on the operation) and the generated pipeline (which reads
+    /// values from <c>httpContext.Request.RouteValues</c>).
+    /// </summary>
+    private static void PopulateRouteValues(
+        DefaultHttpContext httpContext,
+        ApiOperationDescriptor descriptor,
+        IOperation operation)
+    {
+        if (descriptor.Urls.Count == 0)
+        {
+            return;
+        }
+
+        var operationType = operation.GetType();
+        var routeValues = httpContext.Request.RouteValues;
+
+        foreach (var url in descriptor.Urls)
+        {
+            foreach (Match match in RouteParameterRegex.Matches(url.UrlFormat))
+            {
+                var paramName = match.Groups[1].Value;
+
+                // Only set the value once even if it appears in multiple URL templates.
+                if (routeValues.ContainsKey(paramName))
+                {
+                    continue;
+                }
+
+                var property = operationType.GetProperty(paramName);
+
+                if (property != null)
+                {
+                    var value = property.GetValue(operation);
+
+                    if (value != null)
+                    {
+                        routeValues[paramName] = value.ToString();
+                    }
+                }
+            }
+        }
     }
 
     private static string FormatValidationErrors(ValidationFailedResult validationFailed)
