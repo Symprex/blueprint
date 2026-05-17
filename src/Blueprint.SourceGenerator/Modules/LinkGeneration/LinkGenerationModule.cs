@@ -358,10 +358,35 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
         var operationType = context.GetOperationTypeSymbol();
         var selfLinkAttributes = SelfLinkAttributeDescriptor.Instance.ParseAll(operationType);
 
+        // We also need access to the raw AttributeData to read named arguments (e.g. Rel)
+        var rawSelfLinkAttributes = operationType.GetAttributes()
+            .Where(static a => a.AttributeClass?.Name == "SelfLinkAttribute")
+            .ToList();
+
+        var parsedIndex = 0;
+
         foreach (var selfLinkAttribute in selfLinkAttributes)
         {
             var (_, urlLocation, url) = selfLinkAttribute.GetConstructorArgument(SelfLinkAttributeDescriptor.UrlArgument);
             var (_, resourceLocation, resourceType) = selfLinkAttribute.GetConstructorArgument(SelfLinkAttributeDescriptor.ResourceTypeArgument);
+
+            // Resolve the effective rel: default is "self", but can be overridden via Rel = "..." on the attribute
+            var effectiveRel = "self";
+
+            if (parsedIndex < rawSelfLinkAttributes.Count)
+            {
+                var rawAttr = rawSelfLinkAttributes[parsedIndex];
+
+                foreach (var namedArg in rawAttr.NamedArguments)
+                {
+                    if (namedArg.Key == "Rel" && namedArg.Value.Value is string namedRel && !string.IsNullOrWhiteSpace(namedRel))
+                    {
+                        effectiveRel = namedRel;
+                    }
+                }
+            }
+
+            parsedIndex++;
 
             if (string.IsNullOrWhiteSpace(url))
             {
@@ -448,7 +473,7 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
             }
 
             var urlRegistration = new UrlRegistration(normalisedUrl, urlLocation);
-            var linkRegistration = new LinkRegistration(normalisedUrl, "self", resourceTypeSymbol, urlLocation, new EquatableList<LinkPlaceholderMapping>(placeholderMappings.ToArray()));
+            var linkRegistration = new LinkRegistration(normalisedUrl, effectiveRel, resourceTypeSymbol, urlLocation, new EquatableList<LinkPlaceholderMapping>(placeholderMappings.ToArray()));
 
             context.AddMetadata(urlRegistration);
             context.AddMetadata(linkRegistration);
