@@ -148,6 +148,24 @@ internal static class ConditionalRequiredValidationFastPathStrategyHelpers
 
     private static bool TryRenderLiteralExpression(TypedConstant value, [NotNullWhen(true)] out string? expression)
     {
+        // Enum values must be handled before the primitive switch because the underlying
+        // integer (int, byte, etc.) would match a primitive case, emitting a bare literal
+        // like "1" instead of the fully-qualified enum member name.
+        if (value.Type?.TypeKind == TypeKind.Enum)
+        {
+            var enumField = ((INamedTypeSymbol)value.Type).GetMembers()
+                .OfType<IFieldSymbol>()
+                .FirstOrDefault(candidate => candidate.HasConstantValue && Equals(candidate.ConstantValue, value.Value));
+            if (enumField is null)
+            {
+                expression = null;
+                return false;
+            }
+
+            expression = $"global::{enumField.ContainingType.ToDisplayString()}.{enumField.Name}";
+            return true;
+        }
+
         expression = value.Value switch
         {
             bool boolValue => boolValue ? "true" : "false",
@@ -167,26 +185,7 @@ internal static class ConditionalRequiredValidationFastPathStrategyHelpers
             _ => null,
         };
 
-        if (expression is not null)
-        {
-            return true;
-        }
-
-        if (value.Type?.TypeKind != TypeKind.Enum)
-        {
-            return false;
-        }
-
-        var enumField = ((INamedTypeSymbol)value.Type).GetMembers()
-            .OfType<IFieldSymbol>()
-            .FirstOrDefault(candidate => candidate.HasConstantValue && Equals(candidate.ConstantValue, value.Value));
-        if (enumField is null)
-        {
-            return false;
-        }
-
-        expression = $"global::{enumField.ContainingType.ToDisplayString()}.{enumField.Name}";
-        return true;
+        return expression is not null;
     }
 
     private static bool TryGetRequiredStateExpressions(
