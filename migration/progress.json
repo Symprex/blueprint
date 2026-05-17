@@ -12,12 +12,12 @@
   "current": {
     "activeWorkstream": "s365-service-test-migration",
     "frameworkStatus": "production-ready",
-    "frameworkStatusDetail": "Full S365 feature parity confirmed. AOT/trim analyzer compliance achieved. Tenant services now resolved from scoped provider (fixes test DI mismatch with WebApplicationFactory child providers). 1975 Blueprint tests pass (796 generator + 1179 integration). S365 blueprint-codemod-test branch: all 20 services + 5 gateways compiling, Templates 19/19, Analytics 90/90, EventStore 41/41, Generation 24/24, AdminPortal 84/84, VCard 52/52, Partners 109/109, Outlook 167/167 tests passing.",
-    "nextReadySlice": "s365-subscriptions-test-migration",
+    "frameworkStatusDetail": "Full S365 feature parity confirmed. AOT/trim analyzer compliance achieved. Tenant services now resolved from scoped provider. Static external handler support added. 1975 Blueprint tests pass (796 generator + 1179 integration). S365 blueprint-codemod-test branch: all 20 services + 5 gateways compiling, Templates 19/19, Analytics 90/90, EventStore 41/41, Generation 24/24, AdminPortal 84/84, VCard 52/52, Partners 109/109, Outlook 167/167, Subscriptions 250/250 (4 skip) tests passing.",
+    "nextReadySlice": "s365-import-test-migration",
     "lastCompletedSlice": {
-      "id": "s365-outlook-test-migration",
+      "id": "s365-subscriptions-test-migration",
       "workstream": "s365-service-test-migration",
-      "title": "Migrate Outlook service tests — 167/167 passing"
+      "title": "Migrate Subscriptions service tests — 250/250 passing (4 skip)"
     },
     "openReviewGate": null,
     "openReviewGateRationale": null,
@@ -585,9 +585,21 @@
           "description": "Resolve tenant services from scoped provider to fix test DI mismatch with WebApplicationFactory child providers"
         }
       ]
+    },
+    {
+      "id": "s365-subscriptions-test-migration",
+      "workstream": "s365-service-test-migration",
+      "title": "Migrate Subscriptions service tests — 250/250 passing (4 skip)",
+      "commit": "9554f90ae2",
+      "s365Branch": "blueprint-codemod-test",
+      "blueprintFixes": [
+        {
+          "commit": "7428a403",
+          "description": "Support external handler classes with static HandleAsync methods"
+        }
+      ]
     }
   ],
-  "decisions": [
     {
       "id": "001",
       "title": "No general nested operation execution",
