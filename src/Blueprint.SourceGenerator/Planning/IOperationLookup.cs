@@ -137,7 +137,27 @@ public sealed class CompilationOperationLookup(Compilation compilation, IReadOnl
 
         if (!this._typeByMetadataNameCache.TryGetValue(metadataName, out var cached))
         {
-            cached = compilation.GetTypeByMetadataName(NormalizeMetadataName(metadataName));
+            var normalized = NormalizeMetadataName(metadataName);
+            cached = compilation.GetTypeByMetadataName(normalized);
+
+            // Display-format names use '.' for nested types (e.g. "Ns.Outer.Inner") but
+            // GetTypeByMetadataName expects '+' (e.g. "Ns.Outer+Inner"). Walk from the right
+            // replacing '.' with '+' until we find a match.
+            if (cached is null)
+            {
+                var lastDot = normalized.Length;
+                while ((lastDot = normalized.LastIndexOf('.', lastDot - 1)) > 0)
+                {
+                    var candidate = normalized.Substring(0, lastDot) + "+" + normalized.Substring(lastDot + 1);
+                    cached = compilation.GetTypeByMetadataName(candidate);
+
+                    if (cached is not null)
+                    {
+                        break;
+                    }
+                }
+            }
+
             this._typeByMetadataNameCache[metadataName] = cached;
         }
 
