@@ -31,7 +31,7 @@ public static class RecursiveDataAnnotationValidator
     [RequiresUnreferencedCode("DataAnnotations validation uses reflection to read attributes.")]
     public static IEnumerable<ValidationResult> ValidateChildList<T>(
         string propertyName,
-        IReadOnlyList<T>? values,
+        IEnumerable<T>? values,
         ValidationContext validationContext,
         int maxDepth = 5)
     {
@@ -42,20 +42,19 @@ public static class RecursiveDataAnnotationValidator
 
         var visited = new HashSet<object>(ReferenceEqualityComparer.Instance);
         var propertyPath = ToCamelCase(propertyName);
+        var i = 0;
 
-        for (var i = 0; i < values.Count; i++)
+        foreach (var value in values)
         {
-            var value = values[i];
-
-            if (value == null)
+            if (value != null)
             {
-                continue;
+                foreach (var result in ValidateObject(value, $"{propertyPath}[{i}]", validationContext, maxDepth, visited))
+                {
+                    yield return result;
+                }
             }
 
-            foreach (var result in ValidateObject(value, $"{propertyPath}[{i}]", validationContext, maxDepth, visited))
-            {
-                yield return result;
-            }
+            i++;
         }
     }
 
@@ -134,7 +133,7 @@ public static class RecursiveDataAnnotationValidator
     [RequiresUnreferencedCode("DataAnnotations validation uses reflection to read attributes.")]
     public static List<ValidationResult>? AppendChildListErrors<T>(
         string propertyName,
-        IReadOnlyList<T>? values,
+        IEnumerable<T>? values,
         ValidationContext validationContext,
         List<ValidationResult>? results)
     {
