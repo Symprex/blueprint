@@ -10,7 +10,7 @@ namespace Blueprint.HttpClient;
 /// This is used by <see cref="BlueprintHttpClientServiceCollectionExtensions.AddBlueprintClient{TInterface,TImplementation}(Microsoft.Extensions.DependencyInjection.IServiceCollection,Action{IServiceProvider,System.Net.Http.HttpClient},Assembly?)"/>
 /// to bootstrap typed HTTP clients without requiring a source-generated <see cref="BlueprintApp"/>.
 /// </summary>
-internal sealed class RuntimeScanBlueprintApp : BlueprintApp
+public sealed class RuntimeScanBlueprintApp : BlueprintApp
 {
     private RuntimeScanBlueprintApp()
     {
@@ -23,7 +23,7 @@ internal sealed class RuntimeScanBlueprintApp : BlueprintApp
     /// </summary>
     /// <param name="assembly">The assembly to scan (typically the contract assembly).</param>
     /// <returns>A fully-populated, frozen <see cref="RuntimeScanBlueprintApp"/>.</returns>
-    internal static RuntimeScanBlueprintApp ScanAssembly(Assembly assembly)
+    public static RuntimeScanBlueprintApp ScanAssembly(Assembly assembly)
     {
         var app = new RuntimeScanBlueprintApp();
 
