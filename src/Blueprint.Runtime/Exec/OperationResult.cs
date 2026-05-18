@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 using Blueprint.Runtime.Exec;
 
 namespace Blueprint;
@@ -39,13 +41,60 @@ public abstract class OperationResult
     /// </summary>
     /// <typeparam name="T">The type to unwrap to.</typeparam>
     /// <returns>The unwrapped value.</returns>
+    [UnconditionalSuppressMessage("Trimming", "IL2087", Justification = "Results<> union types are referenced by operation contracts and will not be trimmed.")]
     public virtual T Unwrap<T>()
     {
         // Handle the case of wanting to "unwrap" to an actual result type (typical in HTTP clients or integration
         // tests). For example calling `Unwrap<PlainTextResult>()` on a `PlainTextResult` would return the result itself.
-        return this is T asType
-            ? asType
-            : throw new InvalidOperationException(
+        if (this is T asType)
+        {
+            return asType;
+        }
+
+        // Handle Results<T1, T2> union types: if the desired type is a Results<> struct and this result
+        // is one of the union members, use the implicit conversion operator to construct the union value.
+        // This reflection path is intentionally non-trimmed — it serves test fixtures and HTTP clients,
+        // not AOT-compiled hot paths.
+        var targetType = typeof(T);
+
+        if (targetType.IsValueType && targetType.IsGenericType)
+        {
+            var genDef = targetType.GetGenericTypeDefinition();
+
+            if (genDef.FullName?.StartsWith("Blueprint.Model.Results`", StringComparison.Ordinal) == true)
+            {
+                return this.TryUnwrapToResultsUnion<T>(targetType);
+            }
+        }
+
+        throw new InvalidOperationException(
+            $"Unable to unwrap operation result of type {this.GetType().Name} to {typeof(T).Name}.");
+    }
+
+    [UnconditionalSuppressMessage("Trimming", "IL2090", Justification = "Results<> union types are referenced by operation contracts and will not be trimmed.")]
+    private T TryUnwrapToResultsUnion<T>([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)] Type targetType)
+    {
+        var typeArgs = targetType.GetGenericArguments();
+
+        for (var i = 0; i < typeArgs.Length; i++)
+        {
+            if (typeArgs[i].IsAssignableFrom(this.GetType()))
+            {
+                var implicitOp = targetType.GetMethod(
+                    "op_Implicit",
+                    BindingFlags.Public | BindingFlags.Static,
+                    null,
+                    [typeArgs[i]],
+                    null);
+
+                if (implicitOp != null)
+                {
+                    return (T)implicitOp.Invoke(null, [this])!;
+                }
+            }
+        }
+
+        throw new InvalidOperationException(
             $"Unable to unwrap operation result of type {this.GetType().Name} to {typeof(T).Name}.");
     }
 }
