@@ -139,6 +139,11 @@ internal static class ResourceKeyTemplateParser
     /// Optional set of property names whose types are value types (structs). Value-type properties
     /// use <c>.ToString()</c> without null-conditional access, avoiding CS0023 errors.
     /// </param>
+    /// <param name="fallbackOnlyTokenNames">
+    /// Optional set of token names where the primary property path does not exist on the operation
+    /// but a valid auth fallback was provided. For these tokens, only the fallback expression is
+    /// emitted (the primary path is skipped entirely to avoid generating invalid property access).
+    /// </param>
     /// <returns>A C# expression string that evaluates to the expanded resource key.</returns>
     public static string GenerateExpansionExpression(
         string template,
@@ -146,7 +151,8 @@ internal static class ResourceKeyTemplateParser
         string operationExpression,
         string principalExpression,
         string? contextExpression = null,
-        HashSet<string>? valueTypePropertyNames = null)
+        HashSet<string>? valueTypePropertyNames = null,
+        HashSet<string>? fallbackOnlyTokenNames = null)
     {
         if (tokens.Count == 0)
         {
@@ -160,11 +166,23 @@ internal static class ResourceKeyTemplateParser
         {
             string replacement;
 
-            var primaryExpr = GeneratePathExpression(
-                token.Name, operationExpression, principalExpression, contextExpression, valueTypePropertyNames);
+            // When the primary property path doesn't exist on the operation but a valid
+            // auth fallback is available, skip the primary expression entirely and emit
+            // only the fallback to avoid generating invalid property access.
+            var isFallbackOnly = !token.IsAuthPath &&
+                fallbackOnlyTokenNames?.Contains(token.Name) == true;
 
-            if (token.FallbackPropertyPath != null)
+            if (isFallbackOnly && token.FallbackPropertyPath != null)
             {
+                var fallbackExpr = GeneratePathExpression(
+                    token.FallbackPropertyPath, operationExpression, principalExpression, contextExpression, valueTypePropertyNames);
+
+                replacement = $"{{{fallbackExpr} ?? \"\"}}";
+            }
+            else if (token.FallbackPropertyPath != null)
+            {
+                var primaryExpr = GeneratePathExpression(
+                    token.Name, operationExpression, principalExpression, contextExpression, valueTypePropertyNames);
                 var fallbackExpr = GeneratePathExpression(
                     token.FallbackPropertyPath, operationExpression, principalExpression, contextExpression, valueTypePropertyNames);
 
@@ -172,6 +190,9 @@ internal static class ResourceKeyTemplateParser
             }
             else
             {
+                var primaryExpr = GeneratePathExpression(
+                    token.Name, operationExpression, principalExpression, contextExpression, valueTypePropertyNames);
+
                 // Simple, dotted, or auth path — no fallback
                 var isSimpleValueType = !token.Name.Contains('.') &&
                     !token.IsAuthPath &&

@@ -1009,6 +1009,71 @@ public class AuthorizationModuleTests
             "Auth:ClaimType tokens should not be validated as operation properties");
     }
 
+    [Fact]
+    public void When_Resource_template_has_missing_primary_but_valid_auth_fallback_then_no_BPAU007()
+    {
+        var compilation = CreateCompilation(
+            """
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace;
+
+            [RootLink("/billing/reset")]
+            [Resource("billing", "update", "/Tenants/{TenantId:Auth.AccountId}")]
+            public partial class PortalResetCommand : ICommand<string>
+            {
+                public static Task<string> HandleAsync(PortalResetCommand operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        var config = new BlueprintSourceGenerationConfig([new AuthenticationModule(), new AuthorizationModule()]);
+        var result = config.BuildPipelinePlan("TestNamespace.PortalResetCommand", compilation);
+
+        result.Diagnostics.Should().NotContain(
+            static d => d.Descriptor.Id == "BPAU007",
+            "a missing primary path with a valid Auth fallback should not fire BPAU007");
+
+        // Verify the pipeline still generates authorization code (not skipped)
+        result.Value!.RenderSteps.Should().Contain(
+            static s => s.Stage == PipelineStage.Authorisation,
+            "authorization check should still be generated when fallback is valid");
+    }
+
+    [Fact]
+    public void When_Resource_template_has_missing_primary_and_no_fallback_then_still_reports_BPAU007()
+    {
+        var compilation = CreateCompilation(
+            """
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace;
+
+            [RootLink("/billing/reset")]
+            [Resource("billing", "update", "/Tenants/{TenantId}")]
+            public partial class PortalResetCommand : ICommand<string>
+            {
+                public static Task<string> HandleAsync(PortalResetCommand operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        var config = new BlueprintSourceGenerationConfig([new AuthenticationModule(), new AuthorizationModule()]);
+        var result = config.BuildPipelinePlan("TestNamespace.PortalResetCommand", compilation);
+
+        result.Diagnostics.Should().Contain(
+            static d => d.Descriptor.Id == "BPAU007",
+            "a missing primary path without fallback should still fire BPAU007");
+    }
+
     // ── Duplicate scope pair detection ─────────────────────────────
 
     [Fact]
