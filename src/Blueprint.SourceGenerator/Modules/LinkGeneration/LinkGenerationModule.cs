@@ -161,9 +161,14 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
         IEnumerable<UrlRegistration> urlRegistrations,
         IEnumerable<LinkRegistration> linkRegistrations)
     {
+        var seenUrls = new HashSet<string>(StringComparer.Ordinal);
+
         foreach (var r in urlRegistrations)
         {
-            codeWriter.AppendLine($"this.AddUrl(new global::Blueprint.Model.ApiOperationUrl(\"{r.Url}\"));");
+            if (seenUrls.Add(r.Url))
+            {
+                codeWriter.AppendLine($"this.AddUrl(new global::Blueprint.Model.ApiOperationUrl(\"{r.Url}\"));");
+            }
         }
 
         var linkIndex = 0;
