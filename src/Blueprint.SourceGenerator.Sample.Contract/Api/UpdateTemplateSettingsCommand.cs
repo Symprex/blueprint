@@ -13,7 +13,7 @@ namespace Blueprint.SourceGenerator.Sample.Contract.Api;
 [ApiOperations("Templates")]
 [RootLink("/tenants/{TenantId}/templates/{Id}/settings")]
 [HttpPut]
-[Resource("template", "write", "/Tenants/{Auth:AccountId}/Templates/{Id}")]
+[Resource("template", "write", "/Tenants/{Auth.AccountId}/Templates/{Id}")]
 [Description("Update template settings within a tenant-scoped resource key.")]
 public partial class UpdateTemplateSettingsCommand : ICommand<OkResult>
 {

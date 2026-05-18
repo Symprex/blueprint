@@ -8,18 +8,19 @@ namespace Blueprint.Authorization;
 
 /// <summary>
 /// Expands resource key templates by substituting <c>{PropertyName}</c> tokens from the operation
-/// instance and <c>{Auth:ClaimType}</c> tokens from the authenticated principal's claims.
+/// instance and <c>{Auth.ClaimType}</c> tokens from the authenticated principal's claims.
 /// </summary>
 /// <remarks>
 /// <para>
-/// This enables the <c>[Resource("noun", "verb", "/Tenants/{Auth:AccountId}/Items/{Id}")]</c> pattern
-/// from legacy Blueprint where hierarchical resource keys are built from operation + claim values.
+/// This enables the <c>[Resource("noun", "verb", "/Tenants/{Auth.AccountId}/Items/{Id}")]</c> pattern
+/// where hierarchical resource keys are built from operation + auth context values.
 /// </para>
 /// <para>
 /// Token resolution rules:
 /// <list type="bullet">
-///   <item><c>{Auth:ClaimType}</c> — resolved from the first matching claim on the principal</item>
-///   <item><c>{PropertyName}</c> — resolved from a public property on the operation instance via compiled delegates</item>
+///   <item><c>{Auth.PropertyName}</c> — resolved from user auth context or principal claims (dot = path)</item>
+///   <item><c>{PropertyName}</c> — resolved from a public property on the operation instance</item>
+///   <item><c>{Prop:Fallback}</c> — try primary, if null/empty try fallback (colon = fallback)</item>
 /// </list>
 /// Unresolvable tokens are left as-is (the authorization provider should reject the key).
 /// </para>
@@ -33,10 +34,10 @@ public static class ResourceKeyTemplateExpander
     /// </summary>
     /// <param name="template">The resource key template containing placeholder tokens.</param>
     /// <param name="operation">The operation instance whose properties supply <c>{PropertyName}</c> values.</param>
-    /// <param name="principal">The authenticated principal whose claims supply <c>{Auth:ClaimType}</c> values.</param>
+    /// <param name="principal">The authenticated principal whose claims supply <c>{Auth.ClaimType}</c> values.</param>
     /// <param name="userContext">
-    /// Optional user authorization context. When present, <c>{Auth:AccountId}</c>, <c>{Auth:Id}</c>, and
-    /// <c>{Auth:IdentityId}</c> resolve from this context before falling back to claims.
+    /// Optional user authorization context. When present, <c>{Auth.AccountId}</c>, <c>{Auth.Id}</c>, and
+    /// <c>{Auth.IdentityId}</c> resolve from this context before falling back to claims.
     /// </param>
     /// <returns>The expanded resource key with all resolvable tokens substituted.</returns>
     [RequiresDynamicCode("Uses CompiledPropertyAccessor.GetGetter which relies on Expression.Compile() for property access delegation.")]
@@ -54,50 +55,99 @@ public static class ResourceKeyTemplateExpander
         {
             var token = match.Groups[1].Value;
 
-            // {Auth:ClaimType} pattern — resolve from user context then claims
-            if (token.StartsWith("Auth:", StringComparison.OrdinalIgnoreCase))
-            {
-                var claimType = token[5..];
-
-                // Try well-known IUserAuthorisationContext properties first — these may be
-                // computed values (e.g. AccountId = TenantId ?? PartnerId ?? "Symprex")
-                // that don't correspond to a single JWT claim.
-                if (userContext is not null)
-                {
-                    var contextValue = ResolveFromUserContext(userContext, claimType);
-                    if (contextValue is not null)
-                    {
-                        return contextValue;
-                    }
-                }
-
-                var claim = principal.FindFirst(claimType);
-                return claim?.Value ?? match.Value;
-            }
-
-            // {PropertyName} or {PropertyName:SubProperty} pattern — resolve from operation instance via compiled delegate
-            // When token contains ':' (and doesn't start with Auth:), split to navigate nested properties
-            // e.g. {TenantId:Value} → operation.TenantId then .Value on the result
+            // Colon always means fallback: {Primary:Fallback}
+            // Dot always means property path: {Auth.AccountId}, {TenantId.Value}
+            // "Auth" as first segment routes to auth context resolution.
             var colonIndex = token.IndexOf(':');
             if (colonIndex >= 0)
             {
-                var propertyName = token[..colonIndex];
-                var subPropertyName = token[(colonIndex + 1)..];
+                var primaryPath = token[..colonIndex];
+                var fallbackPath = token[(colonIndex + 1)..];
 
-                var getter = CompiledPropertyAccessor.GetGetter(operation.GetType(), propertyName);
-                var parentValue = getter?.Invoke(operation);
-                if (parentValue is not null)
+                var primaryValue = ResolvePath(operation, principal, userContext, primaryPath);
+                if (!string.IsNullOrEmpty(primaryValue))
                 {
-                    var subGetter = CompiledPropertyAccessor.GetGetter(parentValue.GetType(), subPropertyName);
-                    return subGetter?.Invoke(parentValue)?.ToString() ?? match.Value;
+                    return primaryValue;
                 }
 
-                return match.Value;
+                var fallbackValue = ResolvePath(operation, principal, userContext, fallbackPath);
+                return !string.IsNullOrEmpty(fallbackValue) ? fallbackValue : match.Value;
             }
 
-            var topGetter = CompiledPropertyAccessor.GetGetter(operation.GetType(), token);
-            return topGetter?.Invoke(operation)?.ToString() ?? match.Value;
+            // Simple or dotted path (no fallback)
+            var resolved = ResolvePath(operation, principal, userContext, token);
+            return resolved ?? match.Value;
         });
+    }
+
+    /// <summary>
+    /// Routes a path to either auth context resolution (if first segment is "Auth") or
+    /// operation property resolution (everything else).
+    /// </summary>
+    [RequiresDynamicCode("Delegates to ResolvePropertyPath which uses CompiledPropertyAccessor.")]
+    private static string? ResolvePath(
+        object operation,
+        ClaimsPrincipal principal,
+        IUserAuthorisationContext? userContext,
+        string path)
+    {
+        if (path.StartsWith("Auth.", StringComparison.OrdinalIgnoreCase)
+            || path.Equals("Auth", StringComparison.OrdinalIgnoreCase))
+        {
+            var authPropName = path.IndexOf('.') is var idx and >= 0
+                ? path[(idx + 1)..]
+                : string.Empty;
+
+            // Try well-known IUserAuthorisationContext properties first
+            if (userContext is not null)
+            {
+                var contextValue = ResolveFromUserContext(userContext, authPropName);
+                if (contextValue is not null)
+                {
+                    return contextValue;
+                }
+            }
+
+            var claim = principal.FindFirst(authPropName);
+            return claim?.Value;
+        }
+
+        return ResolvePropertyPath(operation, path);
+    }
+
+    /// <summary>
+    /// Resolves a property path (simple name or dot-separated) from an operation instance.
+    /// Returns null if the property cannot be resolved.
+    /// </summary>
+    private static string? ResolvePropertyPath(object operation, string path)
+    {
+        var segments = path.Split('.');
+
+        if (segments.Length == 1)
+        {
+            var getter = CompiledPropertyAccessor.GetGetter(operation.GetType(), segments[0]);
+            return getter?.Invoke(operation)?.ToString();
+        }
+
+        // Navigate the dot-separated path
+        var current = (object?)operation;
+        for (var i = 0; i < segments.Length; i++)
+        {
+            if (current is null)
+            {
+                return null;
+            }
+
+            var getter = CompiledPropertyAccessor.GetGetter(current.GetType(), segments[i]);
+            if (getter is null)
+            {
+                return null;
+            }
+
+            current = getter.Invoke(current);
+        }
+
+        return current?.ToString();
     }
 
     /// <summary>

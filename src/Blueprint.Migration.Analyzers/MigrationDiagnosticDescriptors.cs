@@ -85,11 +85,11 @@ public static class MigrationDiagnosticDescriptors
     public static DiagnosticDescriptor LegacyAuthPlaceholderUsageRequiresMigration { get; } = new(
         id: "BPMIG201",
         title: "Migrate auth placeholder usage",
-        messageFormat: "Migrate '{Auth:...}' placeholder usage because auth-template expansion must move into Blueprint's source-generated metadata model.",
+        messageFormat: "Migrate '{Auth:...}' colon syntax to '{Auth....}' dot-notation for unified template semantics.",
         category: "BlueprintMigration",
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
-        description: "Legacy Blueprint migrations should treat raw {Auth:...} placeholder templates as consumer-extension rewrite work because the replacement auth/resource model needs explicit generated placeholder bindings instead of runtime string expansion.");
+        description: "Legacy '{Auth:X}' colon syntax is replaced by '{Auth.X}' dot-notation. Colon now exclusively means fallback, and dot means property path navigation. 'Auth' is treated as a well-known first segment that resolves from the authorization context.");
 
     /// <summary>
     /// Gets the diagnostic emitted when an abstract generic class directly implements <c>IQuery&lt;T&gt;</c> or

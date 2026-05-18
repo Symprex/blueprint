@@ -50,7 +50,7 @@ public sealed class FromResourceAttribute : Attribute
     /// Must declare at least one <c>[Resource]</c> attribute.
     /// </param>
     /// <param name="resourceKeyTemplate">
-    /// A resource key template (e.g. <c>"/Tenants/{Auth:AccountId}/Items/{Id}"</c>) that overrides
+    /// A resource key template (e.g. <c>"/Tenants/{Auth.AccountId}/Items/{Id}"</c>) that overrides
     /// any templates declared on the source operation's <c>[Resource]</c> attributes. This allows
     /// the inheriting operation to participate in the same noun/verb scope pairs but with a different
     /// resource hierarchy path.

@@ -12,10 +12,10 @@ namespace Blueprint.Model.Attributes;
 /// </para>
 /// <para>
 /// The optional <see cref="ResourceKeyTemplate"/> property carries a hierarchical resource key
-/// template (e.g. <c>"/Tenants/{Auth:AccountId}/Campaigns/{Id}"</c>) used by
+/// template (e.g. <c>"/Tenants/{Auth.AccountId}/Campaigns/{Id}"</c>) used by
 /// <c>IResourceAuthorizationProvider</c> to evaluate instance-level permission claims.
 /// Placeholder tokens of the form <c>{PropertyName}</c> are bound from the operation's
-/// properties at runtime, while <c>{Auth:ClaimType}</c> tokens are bound from the
+/// properties at runtime, while <c>{Auth.ClaimType}</c> tokens are bound from the
 /// authenticated principal's claims.
 /// </para>
 /// </remarks>
@@ -40,7 +40,7 @@ public sealed class ResourceAttribute : Attribute
     /// <param name="noun">The resource noun (e.g. "account", "tenant").</param>
     /// <param name="verb">The action verb (e.g. "read", "write", "manage").</param>
     /// <param name="resourceKeyTemplate">
-    /// A hierarchical resource key template (e.g. <c>"/Tenants/{Auth:AccountId}/Campaigns/{Id}"</c>).
+    /// A hierarchical resource key template (e.g. <c>"/Tenants/{Auth.AccountId}/Campaigns/{Id}"</c>).
     /// </param>
     public ResourceAttribute(string noun, string verb, string resourceKeyTemplate)
     {
@@ -62,7 +62,7 @@ public sealed class ResourceAttribute : Attribute
     /// <summary>
     /// An optional hierarchical resource key template for instance-level authorization.
     /// Tokens of the form <c>{PropertyName}</c> are resolved from the operation's properties,
-    /// and <c>{Auth:ClaimType}</c> tokens are resolved from the authenticated principal's claims.
+    /// and <c>{Auth.ClaimType}</c> tokens are resolved from the authenticated principal's claims.
     /// When <see langword="null"/>, only scope-pair (noun+verb) authorization is applied.
     /// </summary>
     public string? ResourceKeyTemplate { get; }

@@ -49,7 +49,7 @@ public class ResolvedResourceAuthorizationIntegrationTests
         var pair = provider.CapturedScopePairs![0];
         pair.Noun.Should().Be("resource");
         pair.Verb.Should().Be("read");
-        pair.ResourceKeyTemplate.Should().Be("/tenants/{Auth:AccountId}/resources/{Id}");
+        pair.ResourceKeyTemplate.Should().Be("/tenants/{Auth.AccountId}/resources/{Id}");
         pair.ExpandedResourceKey.Should().Be("/tenants/acct-42/resources/R200",
             "Auth:AccountId should resolve from claims, Id from operation property");
     }
@@ -109,7 +109,7 @@ public class ResolvedResourceAuthorizationIntegrationTests
         provider.CapturedScopePairs.Should().HaveCount(1);
         provider.CapturedScopePairs![0].Noun.Should().Be("resource");
         provider.CapturedScopePairs![0].Verb.Should().Be("read");
-        provider.CapturedScopePairs![0].ResourceKeyTemplate.Should().Be("/tenants/{Auth:AccountId}/resources/{Id}");
+        provider.CapturedScopePairs![0].ResourceKeyTemplate.Should().Be("/tenants/{Auth.AccountId}/resources/{Id}");
     }
 
     // ─── Helpers ──────────────────────────────────────────────────────
@@ -214,7 +214,7 @@ public class ResolvedResourceAuthorizationIntegrationTests
 /// and claim-based token expansion in the generated pipeline.
 /// </summary>
 [RootLink("/tenants/{TenantId}/resources/{Id}")]
-[Resource("resource", "read", "/tenants/{Auth:AccountId}/resources/{Id}")]
+[Resource("resource", "read", "/tenants/{Auth.AccountId}/resources/{Id}")]
 public partial class E2EResourceKeyQuery : IQuery<string>
 {
     public string TenantId { get; set; } = string.Empty;

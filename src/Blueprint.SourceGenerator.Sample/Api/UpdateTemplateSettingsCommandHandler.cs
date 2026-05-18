@@ -6,7 +6,7 @@ namespace Blueprint.SourceGenerator.Sample.Api;
 /// <summary>
 /// Handles the <see cref="UpdateTemplateSettingsCommand"/> demonstrating an operation that uses
 /// a hierarchical resource key template for instance-level authorization. The
-/// <c>[Resource("template", "write", "/Tenants/{Auth:AccountId}/Templates/{Id}")]</c>
+/// <c>[Resource("template", "write", "/Tenants/{Auth.AccountId}/Templates/{Id}")]</c>
 /// attribute on the command means the authorization provider receives the expanded resource key
 /// with the caller's AccountId claim and the template's Id property substituted.
 /// </summary>

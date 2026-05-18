@@ -85,7 +85,7 @@ public class AuthorizationModuleIntegrationTests
         var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
         var pipeline = executor.GetPipeline(typeof(GetMyAccountAuthorizationQuery));
 
-        // The {Auth:AccountId} token resolves from IUserAuthorisationContext.AccountId
+        // The {Auth.AccountId} token resolves from IUserAuthorisationContext.AccountId
         // (which is "account-1" in TestUserContext), falling back to claims if no context.
         var context = CreateHttpContext(
             app,
@@ -294,9 +294,9 @@ public partial class AllowAnonymousAuthorizationQuery : IQuery<string>
 
 /// <summary>
 /// Tests resource authorization with Auth: claim token in the resource key template.
-/// The {Auth:AccountId} token is expanded from the principal's claims, not from operation properties.
+/// The {Auth.AccountId} token is expanded from the principal's claims, not from operation properties.
 /// </summary>
-[Resource("account", "read", "/accounts/{Auth:AccountId}")]
+[Resource("account", "read", "/accounts/{Auth.AccountId}")]
 [RootLink("/authorization/accounts/me")]
 public partial class GetMyAccountAuthorizationQuery : IQuery<string>
 {
@@ -315,10 +315,10 @@ public partial class GetMyAccountAuthorizationQuery : IQuery<string>
 }
 
 /// <summary>
-/// Tests resource authorization with a property path token ({TenantId:Id})
+/// Tests resource authorization with a dot-notation property path token ({TenantId.Id})
 /// where TenantId is a complex type and .Id accesses its sub-property.
 /// </summary>
-[Resource("billing", "read", "/tenants/{TenantId:Id}")]
+[Resource("billing", "read", "/tenants/{TenantId.Id}")]
 [RootLink("/authorization/billing/{TenantId}")]
 public partial class GetBillingAuthorizationQuery : IQuery<string>
 {

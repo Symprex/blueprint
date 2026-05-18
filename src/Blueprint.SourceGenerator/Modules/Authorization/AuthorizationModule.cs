@@ -300,29 +300,43 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
 
             foreach (var token in tokens)
             {
-                if (token.IsClaimToken)
+                // Auth paths don't reference operation properties — skip validation
+                if (token.IsAuthPath)
                 {
+                    // But validate fallback if it's a non-auth path
+                    if (token.FallbackPropertyPath is not null && !ResourceKeyToken.IsAuthPropertyPath(token.FallbackPropertyPath))
+                    {
+                        ValidatePropertyPath(
+                            token.FallbackPropertyPath,
+                            operationType,
+                            operationLocation,
+                            context,
+                            ref hasTemplateValidationErrors,
+                            valueTypePropertyNames);
+                    }
+
                     continue;
                 }
 
-                // Property tokens must exist on the operation type
-                var matchingProperty = operationType.GetAllMembers()
-                    .OfType<IPropertySymbol>()
-                    .FirstOrDefault(p => p.Name == token.Name);
+                // Validate the primary property path (first segment must exist on operation)
+                ValidatePropertyPath(
+                    token.Name,
+                    operationType,
+                    operationLocation,
+                    context,
+                    ref hasTemplateValidationErrors,
+                    valueTypePropertyNames);
 
-                if (matchingProperty is null)
+                // Validate fallback path if present and not an auth path
+                if (token.FallbackPropertyPath is not null && !ResourceKeyToken.IsAuthPropertyPath(token.FallbackPropertyPath))
                 {
-                    context.AddDiagnostic(
-                        new DiagnosticInfo(
-                            AuthorizationDiagnosticDescriptors.ResourceKeyTemplatePropertyNotFound,
-                            operationLocation,
-                            [operationType.Name, token.Name]));
-
-                    hasTemplateValidationErrors = true;
-                }
-                else if (matchingProperty.Type.IsValueType)
-                {
-                    valueTypePropertyNames.Add(token.Name);
+                    ValidatePropertyPath(
+                        token.FallbackPropertyPath,
+                        operationType,
+                        operationLocation,
+                        context,
+                        ref hasTemplateValidationErrors,
+                        valueTypePropertyNames);
                 }
             }
         }
@@ -521,5 +535,40 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
             return attrClass.Name == attributeName
                    && attrClass.IsInNamespace("Blueprint", "Model", "Attributes");
         });
+    }
+
+    /// <summary>
+    /// Validates that the first segment of a dot-separated property path exists on the operation type.
+    /// Tracks value-type first segments for code-generation null-safety.
+    /// </summary>
+    private static void ValidatePropertyPath(
+        string propertyPath,
+        INamedTypeSymbol operationType,
+        Location? operationLocation,
+        PipelineContributorContext context,
+        ref bool hasTemplateValidationErrors,
+        HashSet<string> valueTypePropertyNames)
+    {
+        // Only validate the first segment — deeper segments can't be checked without type flow
+        var firstSegment = propertyPath.Split('.')[0];
+
+        var matchingProperty = operationType.GetAllMembers()
+            .OfType<IPropertySymbol>()
+            .FirstOrDefault(p => p.Name == firstSegment);
+
+        if (matchingProperty is null)
+        {
+            context.AddDiagnostic(
+                new DiagnosticInfo(
+                    AuthorizationDiagnosticDescriptors.ResourceKeyTemplatePropertyNotFound,
+                    operationLocation,
+                    [operationType.Name, firstSegment]));
+
+            hasTemplateValidationErrors = true;
+        }
+        else if (matchingProperty.Type.IsValueType)
+        {
+            valueTypePropertyNames.Add(firstSegment);
+        }
     }
 }

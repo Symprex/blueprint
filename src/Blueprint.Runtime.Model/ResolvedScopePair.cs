@@ -13,7 +13,7 @@ namespace Blueprint.Model;
 /// Retained so that authorization providers can log or inspect the template pattern.
 /// </param>
 /// <param name="ExpandedResourceKey">
-/// The fully-expanded resource key with all <c>{PropertyName}</c> and <c>{Auth:ClaimType}</c>
+/// The fully-expanded resource key with all <c>{PropertyName}</c> and <c>{Auth.ClaimType}</c>
 /// tokens substituted, or <see langword="null"/> when no template was declared.
 /// </param>
 public readonly record struct ResolvedScopePair(

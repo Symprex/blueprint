@@ -3,28 +3,69 @@ using System.Text.RegularExpressions;
 namespace Blueprint.SourceGenerator.Modules.Authorization;
 
 /// <summary>
-/// Represents a parsed token from a resource key template, distinguishing between
-/// property tokens (<c>{PropertyName}</c>) and claim tokens (<c>{Auth:ClaimType}</c>).
+/// Represents a parsed token from a resource key template. All tokens use a unified syntax:
+/// dot for property path navigation, colon for fallback. <c>Auth</c> is simply a well-known
+/// first segment that routes resolution to the authorization context instead of the operation.
 /// </summary>
+/// <remarks>
+/// <para>Token syntax (no special cases — two operators, one rule each):</para>
+/// <list type="bullet">
+///   <item><c>{Prop}</c> — simple property lookup on the operation</item>
+///   <item><c>{Prop.Sub}</c> — dot-notation nested property path on the operation</item>
+///   <item><c>{Prop:Fallback}</c> — try Prop, if null/empty try Fallback (colon = fallback)</item>
+///   <item><c>{Auth.AccountId}</c> — resolve from auth context (Auth = virtual root)</item>
+///   <item><c>{Auth.AccountId:TenantId}</c> — try auth AccountId, fallback to operation TenantId</item>
+///   <item><c>{TenantId:Auth.AccountId}</c> — try operation TenantId, fallback to auth AccountId</item>
+/// </list>
+/// </remarks>
 internal sealed record ResourceKeyToken
 {
-    /// <summary>The raw token text including braces (e.g., "{TenantId}" or "{Auth:AccountId}").</summary>
+    /// <summary>The raw token text including braces (e.g., "{TenantId}" or "{Auth.AccountId}").</summary>
     public required string RawToken { get; init; }
 
-    /// <summary>Whether this is a claim token (<c>{Auth:...}</c>).</summary>
-    public required bool IsClaimToken { get; init; }
-
     /// <summary>
-    /// For property tokens: the property name (e.g., "TenantId").
-    /// For claim tokens: the claim type (e.g., "AccountId").
+    /// The primary property path (e.g., "TenantId", "TenantId.Value", or "Auth.AccountId").
+    /// Dot-separated segments indicate nested property navigation. When the first segment is
+    /// "Auth" (case-insensitive), the remaining path resolves from the authorization context.
     /// </summary>
     public required string Name { get; init; }
 
     /// <summary>
-    /// For property path tokens like <c>{TenantId:Id}</c>, the sub-property name (e.g., "Id").
-    /// Null for simple property tokens and claim tokens.
+    /// For fallback tokens like <c>{Prop:Fallback}</c>, the fallback property path.
+    /// May contain dots for nested access (e.g., "PartnerId.Value" or "Auth.AccountId").
+    /// Null when no fallback is specified.
     /// </summary>
-    public string? SubPropertyName { get; init; }
+    public string? FallbackPropertyPath { get; init; }
+
+    /// <summary>
+    /// Returns <see langword="true"/> if the primary path resolves from the auth context
+    /// (first segment is "Auth").
+    /// </summary>
+    public bool IsAuthPath => IsAuthPropertyPath(this.Name);
+
+    /// <summary>
+    /// Returns <see langword="true"/> if a property path starts with the "Auth." prefix,
+    /// indicating it resolves from the authorization context.
+    /// </summary>
+    /// <param name="path">The property path to check.</param>
+    /// <returns><see langword="true"/> when the first segment is "Auth".</returns>
+    internal static bool IsAuthPropertyPath(string path)
+    {
+        return path.StartsWith("Auth.", StringComparison.OrdinalIgnoreCase)
+            || path.Equals("Auth", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Extracts the claim/property name from an auth path (everything after "Auth.").
+    /// </summary>
+    /// <param name="authPath">A path whose first segment is "Auth".</param>
+    /// <returns>The portion after "Auth.", or empty if no dot is found.</returns>
+    internal static string GetAuthPropertyName(string authPath)
+    {
+        return authPath.IndexOf('.') is var idx and >= 0
+            ? authPath[(idx + 1)..]
+            : string.Empty;
+    }
 }
 
 /// <summary>
@@ -38,7 +79,7 @@ internal static class ResourceKeyTemplateParser
     /// <summary>
     /// Parses a resource key template and returns all tokens found.
     /// </summary>
-    /// <param name="template">The resource key template string containing <c>{PropertyName}</c> and/or <c>{Auth:ClaimType}</c> tokens.</param>
+    /// <param name="template">The resource key template string containing <c>{PropertyName}</c> and/or <c>{Auth.ClaimType}</c> tokens.</param>
     /// <returns>A list of parsed tokens extracted from the template.</returns>
     public static List<ResourceKeyToken> ParseTokens(string template)
     {
@@ -47,39 +88,29 @@ internal static class ResourceKeyTemplateParser
         foreach (Match match in TokenRegex.Matches(template))
         {
             var tokenContent = match.Groups[1].Value;
-            bool isClaimToken;
-            string name;
-            string? subPropertyName = null;
 
-            if (tokenContent.StartsWith("Auth:", StringComparison.OrdinalIgnoreCase))
+            // Colon always means fallback: {Prop:Fallback} → try Prop, if null/empty try Fallback.
+            // Dot always means property path navigation: {Auth.AccountId}, {TenantId.Value}
+            // No special cases — "Auth" is just a well-known first path segment.
+            var colonIndex = tokenContent.IndexOf(':');
+            string name;
+            string? fallbackPropertyPath = null;
+
+            if (colonIndex >= 0)
             {
-                isClaimToken = true;
-                name = tokenContent[5..];
+                name = tokenContent[..colonIndex];
+                fallbackPropertyPath = tokenContent[(colonIndex + 1)..];
             }
             else
             {
-                isClaimToken = false;
-
-                // Handle property path syntax: {PropertyName:SubProperty}
-                var colonIndex = tokenContent.IndexOf(':');
-
-                if (colonIndex >= 0)
-                {
-                    name = tokenContent[..colonIndex];
-                    subPropertyName = tokenContent[(colonIndex + 1)..];
-                }
-                else
-                {
-                    name = tokenContent;
-                }
+                name = tokenContent;
             }
 
             tokens.Add(new ResourceKeyToken
             {
                 RawToken = match.Value,
-                IsClaimToken = isClaimToken,
                 Name = name,
-                SubPropertyName = subPropertyName,
+                FallbackPropertyPath = fallbackPropertyPath,
             });
         }
 
@@ -88,10 +119,8 @@ internal static class ResourceKeyTemplateParser
 
     /// <summary>
     /// Generates a C# string interpolation expression that expands the resource key template
-    /// inline, using direct property access for operation properties and <c>FindFirst</c> for claims.
-    /// Well-known <c>{Auth:...}</c> tokens (<c>AccountId</c>, <c>Id</c>, <c>IdentityId</c>,
-    /// <c>Email</c>, <c>Name</c>) resolve from <c>context.UserAuthorisationContext</c> first,
-    /// falling back to claims for unknown token names.
+    /// inline. Property paths starting with "Auth." resolve from the authorization context;
+    /// all other paths resolve from the operation instance.
     /// </summary>
     /// <param name="template">The resource key template string.</param>
     /// <param name="tokens">The parsed tokens from <see cref="ParseTokens"/>.</param>
@@ -104,7 +133,7 @@ internal static class ResourceKeyTemplateParser
     /// </param>
     /// <param name="contextExpression">
     /// Optional expression that accesses the <c>ApiOperationContext</c> (e.g., <c>"context"</c>).
-    /// When provided, well-known claim tokens resolve from the user authorization context first.
+    /// When provided, well-known auth properties resolve from the user authorization context first.
     /// </param>
     /// <param name="valueTypePropertyNames">
     /// Optional set of property names whose types are value types (structs). Value-type properties
@@ -131,42 +160,26 @@ internal static class ResourceKeyTemplateParser
         {
             string replacement;
 
-            if (token.IsClaimToken)
+            var primaryExpr = GeneratePathExpression(
+                token.Name, operationExpression, principalExpression, contextExpression, valueTypePropertyNames);
+
+            if (token.FallbackPropertyPath != null)
             {
-                // Well-known IUserAuthorisationContext properties resolve from the context
-                // first (e.g., AccountId is TenantId ?? PartnerId ?? "Symprex" — a computed
-                // value that doesn't correspond to any single JWT claim).
-                if (contextExpression is not null && IsWellKnownContextProperty(token.Name))
-                {
-                    replacement = $"{{{contextExpression}.UserAuthorisationContext?.{token.Name} ?? {principalExpression}.FindFirst(\"{token.Name}\")?.Value ?? \"\"}}";
-                }
-                else
-                {
-                    replacement = $"{{{principalExpression}.FindFirst(\"{token.Name}\")?.Value ?? \"\"}}";
-                }
+                var fallbackExpr = GeneratePathExpression(
+                    token.FallbackPropertyPath, operationExpression, principalExpression, contextExpression, valueTypePropertyNames);
+
+                replacement = $"{{{primaryExpr} ?? {fallbackExpr} ?? \"\"}}";
             }
             else
             {
-                var isValueType = valueTypePropertyNames?.Contains(token.Name) == true;
+                // Simple, dotted, or auth path — no fallback
+                var isSimpleValueType = !token.Name.Contains('.') &&
+                    !token.IsAuthPath &&
+                    valueTypePropertyNames?.Contains(token.Name) == true;
 
-                if (token.SubPropertyName != null)
-                {
-                    // Property path: {TenantId:Id}
-                    // Value type parent: operation.TenantId.Id?.ToString() ?? ""
-                    // Ref type parent: operation.TenantId?.Id?.ToString() ?? ""
-                    replacement = isValueType
-                        ? $"{{{operationExpression}.{token.Name}.{token.SubPropertyName}?.ToString() ?? \"\"}}"
-                        : $"{{{operationExpression}.{token.Name}?.{token.SubPropertyName}?.ToString() ?? \"\"}}";
-                }
-                else
-                {
-                    // Simple property: {TenantId}
-                    // Value type: operation.TenantId.ToString()
-                    // Ref type: operation.TenantId?.ToString() ?? ""
-                    replacement = isValueType
-                        ? $"{{{operationExpression}.{token.Name}.ToString()}}"
-                        : $"{{{operationExpression}.{token.Name}?.ToString() ?? \"\"}}";
-                }
+                replacement = isSimpleValueType
+                    ? $"{{{primaryExpr}}}"
+                    : $"{{{primaryExpr} ?? \"\"}}";
             }
 
             result = result.Replace(token.RawToken, replacement);
@@ -176,7 +189,98 @@ internal static class ResourceKeyTemplateParser
     }
 
     /// <summary>
-    /// Returns <see langword="true"/> if the token name matches a property defined on
+    /// Generates a C# expression for a path that may be either an operation property path
+    /// or an auth context path. Auth paths (first segment = "Auth") resolve from the
+    /// authorization context / claims; all others resolve from the operation.
+    /// Returns an expression that evaluates to <c>string?</c>.
+    /// </summary>
+    private static string GeneratePathExpression(
+        string path,
+        string operationExpression,
+        string principalExpression,
+        string? contextExpression,
+        HashSet<string>? valueTypePropertyNames)
+    {
+        if (ResourceKeyToken.IsAuthPropertyPath(path))
+        {
+            var authPropName = ResourceKeyToken.GetAuthPropertyName(path);
+            return GenerateAuthExpression(authPropName, principalExpression, contextExpression);
+        }
+
+        return GenerateOperationPropertyPathExpression(path, operationExpression, valueTypePropertyNames);
+    }
+
+    /// <summary>
+    /// Generates a C# expression for an auth context / claims resolution.
+    /// Well-known properties resolve from <c>IUserAuthorisationContext</c> first.
+    /// </summary>
+    private static string GenerateAuthExpression(
+        string authPropertyName,
+        string principalExpression,
+        string? contextExpression)
+    {
+        if (contextExpression is not null && IsWellKnownContextProperty(authPropertyName))
+        {
+            return $"{contextExpression}.UserAuthorisationContext?.{authPropertyName} ?? {principalExpression}.FindFirst(\"{authPropertyName}\")?.Value";
+        }
+
+        return $"{principalExpression}.FindFirst(\"{authPropertyName}\")?.Value";
+    }
+
+    /// <summary>
+    /// Generates a C# expression for a property path (simple or dot-separated) on the operation.
+    /// Returns an expression that evaluates to <c>string?</c>.
+    /// </summary>
+    private static string GenerateOperationPropertyPathExpression(
+        string propertyPath,
+        string operationExpression,
+        HashSet<string>? valueTypePropertyNames)
+    {
+        var segments = propertyPath.Split('.');
+
+        if (segments.Length == 1)
+        {
+            // Simple property: operation.Prop?.ToString()
+            var propName = segments[0];
+            var isValueType = valueTypePropertyNames?.Contains(propName) == true;
+
+            return isValueType
+                ? $"{operationExpression}.{propName}.ToString()"
+                : $"{operationExpression}.{propName}?.ToString()";
+        }
+
+        // Dotted path: operation.Prop?.Sub?.ToString()
+        var firstSegment = segments[0];
+        var firstIsValueType = valueTypePropertyNames?.Contains(firstSegment) == true;
+
+        var sb = new System.Text.StringBuilder();
+        sb.Append(operationExpression);
+        sb.Append('.');
+        sb.Append(firstSegment);
+
+        if (!firstIsValueType)
+        {
+            sb.Append('?');
+        }
+
+        for (var i = 1; i < segments.Length; i++)
+        {
+            sb.Append('.');
+            sb.Append(segments[i]);
+
+            // All intermediate and final segments use null-conditional
+            if (i < segments.Length - 1)
+            {
+                sb.Append('?');
+            }
+        }
+
+        sb.Append("?.ToString()");
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Returns <see langword="true"/> if the property name matches a property defined on
     /// <c>IUserAuthorisationContext</c> that should be resolved from the context rather than
     /// from JWT claims. This covers computed properties like <c>AccountId</c> which may not
     /// correspond to any single claim.

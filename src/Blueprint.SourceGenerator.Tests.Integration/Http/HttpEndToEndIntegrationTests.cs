@@ -1724,7 +1724,7 @@ internal sealed class OwnershipAwareAuthorizationProvider : Blueprint.Authorizat
 /// the route. Used to prove that <see cref="Blueprint.Authorization.IResourceAuthorizationProvider"/>
 /// can inspect operation properties via <see cref="Blueprint.Runtime.Exec.ApiOperationContext"/>
 /// for ownership-based authorization (analogous to legacy Blueprint's resource key template
-/// pattern: <c>[Resource("noun", "verb", "/Tenants/{Auth:AccountId}")]</c>).
+/// pattern: <c>[Resource("noun", "verb", "/Tenants/{Auth.AccountId}")]</c>).
 /// </summary>
 [Blueprint.Model.Attributes.Resource("tenant", "read")]
 [Blueprint.Model.Attributes.RootLink("/e2e/tenant-resource/{TenantId}")]

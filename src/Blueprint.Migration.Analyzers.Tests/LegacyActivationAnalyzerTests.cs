@@ -343,6 +343,7 @@ public sealed class LegacyActivationAnalyzerTests
 
         var diagnostic = diagnostics.Single(static candidate => candidate.Id == "BPMIG201");
         diagnostic.GetMessage().Should().Contain("{Auth:");
+        diagnostic.GetMessage().Should().Contain("dot-notation");
         diagnostic.Location.GetLineSpan().StartLinePosition.Line.Should().Be(16);
     }
 

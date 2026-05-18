@@ -15,7 +15,7 @@ namespace Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines;
 /// Proves the S365-style tenant isolation flow works end-to-end through generated pipelines:
 /// resource authorization via <see cref="IResourceAuthorizationProvider"/> combined with
 /// business-level tenant isolation via <see cref="IOperationAuthoriser"/>, including
-/// <c>{Auth:AccountId}</c> template expansion.
+/// <c>{Auth.AccountId}</c> template expansion.
 /// </summary>
 public class TenantIsolationIntegrationTests
 {
@@ -112,7 +112,7 @@ public class TenantIsolationIntegrationTests
         var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
         var pipeline = executor.GetPipeline(typeof(TenantAccountQuery));
 
-        // {Auth:AccountId} should expand to "acct-77" from the principal's AccountId claim
+        // {Auth.AccountId} should expand to "acct-77" from the principal's AccountId claim
         var context = CreateHttpContext(
             app,
             TenantAccountQuery.Configure(),
@@ -413,11 +413,11 @@ public partial class TenantScopedCommand : ICommand<string>
 }
 
 /// <summary>
-/// S365-style account-scoped query using <c>{Auth:AccountId}</c> token expansion.
+/// S365-style account-scoped query using <c>{Auth.AccountId}</c> token expansion.
 /// The token is resolved from the authenticated principal's claims, not from operation properties.
 /// </summary>
 [MustBeAuthenticated]
-[Resource("account", "read", "/accounts/{Auth:AccountId}")]
+[Resource("account", "read", "/accounts/{Auth.AccountId}")]
 [RootLink("/accounts/me")]
 public partial class TenantAccountQuery : IQuery<string>
 {

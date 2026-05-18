@@ -319,7 +319,7 @@ public sealed class LegacyActivationCodeFixTests
     }
 
     [Xunit.Fact]
-    public async Task When_bpmig201_is_reported_on_resource_attribute_then_code_fix_removes_the_auth_template_argument()
+    public async Task When_bpmig201_is_reported_on_resource_attribute_then_code_fix_migrates_auth_colon_to_dot()
     {
         const string source = """
             namespace Legacy.Blueprint;
@@ -336,13 +336,12 @@ public sealed class LegacyActivationCodeFixTests
 
         var fixedSource = await ApplyCodeFixAsync(source, "BPMIG201");
 
-        fixedSource.Should().Contain("[Resource(\"Account\", \"Read\")]");
+        fixedSource.Should().Contain("/Tenants/{Auth.AccountId}/Accounts");
         fixedSource.Should().NotContain("{Auth:AccountId}");
-        fixedSource.Should().NotContain("/Tenants/");
     }
 
     [Xunit.Fact]
-    public async Task When_bpmig201_is_reported_on_fromresource_attribute_then_code_fix_removes_the_auth_template_argument()
+    public async Task When_bpmig201_is_reported_on_fromresource_attribute_then_code_fix_migrates_auth_colon_to_dot()
     {
         const string source = """
             namespace Legacy.Blueprint;
@@ -361,7 +360,7 @@ public sealed class LegacyActivationCodeFixTests
 
         var fixedSource = await ApplyCodeFixAsync(source, "BPMIG201");
 
-        fixedSource.Should().Contain("[FromResource(typeof(AccountLookupQuery))]");
+        fixedSource.Should().Contain("/Tenants/{Auth.AccountId}/Accounts");
         fixedSource.Should().NotContain("{Auth:AccountId}");
     }
 

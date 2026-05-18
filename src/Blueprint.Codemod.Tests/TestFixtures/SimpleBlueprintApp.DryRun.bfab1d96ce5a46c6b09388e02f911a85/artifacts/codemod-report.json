@@ -43,7 +43,7 @@
       "Title": "Migrate auth placeholder usage",
       "Severity": "Warning",
       "Message": "Migrate \u0027{Auth:...}\u0027 placeholder usage because auth-template expansion must move into Blueprint\u0027s source-generated metadata model.",
-      "Description": "Legacy Blueprint migrations should treat raw {Auth:...} placeholder templates as consumer-extension rewrite work because the replacement auth/resource model needs explicit generated placeholder bindings instead of runtime string expansion.",
+      "Description": "Legacy '\{Auth:X}' colon syntax is replaced by '\{Auth.X}' dot-notation. Colon now exclusively means fallback, and dot means property path navigation. 'Auth' is treated as a well-known first segment that resolves from the authorization context.",
       "Category": "consumer-extension rewrite required",
       "DocumentationPath": "migration\\authentication-and-authorisation\\plan.md"
     }

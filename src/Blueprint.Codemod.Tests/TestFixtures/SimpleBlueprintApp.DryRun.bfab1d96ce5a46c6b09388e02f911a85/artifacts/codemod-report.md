@@ -45,4 +45,4 @@
 - Category: consumer-extension rewrite required
 - Severity: Warning
 - Documentation: migration\authentication-and-authorisation\plan.md
-- Message: Migrate '{Auth:...}' placeholder usage because auth-template expansion must move into Blueprint's source-generated metadata model.
+- Message: Migrate '{Auth:...}' colon syntax to '{Auth....}' dot-notation for unified template semantics.

@@ -86,7 +86,7 @@ public class AuthorizationModuleTests
         var result = CompileDescriptor(
             """
             [RootLink("/tenants/{TenantId}/templates/{Id}")]
-            [Resource("template", "write", "/Tenants/{Auth:AccountId}/Templates/{Id}")]
+            [Resource("template", "write", "/Tenants/{Auth.AccountId}/Templates/{Id}")]
             public partial class UpdateTemplateCommand : ICommand<string>
             {
                 public string TenantId { get; set; }
@@ -108,7 +108,7 @@ public class AuthorizationModuleTests
         descriptorSource.Should().NotBeNull();
         descriptorSource!.Should().Contain("\"template\"");
         descriptorSource.Should().Contain("\"write\"");
-        descriptorSource.Should().Contain("/Tenants/{Auth:AccountId}/Templates/{Id}");
+        descriptorSource.Should().Contain("/Tenants/{Auth.AccountId}/Templates/{Id}");
     }
 
     [Fact]
@@ -989,7 +989,7 @@ public class AuthorizationModuleTests
             namespace TestNamespace;
 
             [RootLink("/accounts/{Id}")]
-            [Resource("account", "read", "/tenants/{Auth:AccountId}/accounts/{Id}")]
+            [Resource("account", "read", "/tenants/{Auth.AccountId}/accounts/{Id}")]
             public partial class GetAccountQuery : IQuery<string>
             {
                 public string Id { get; set; }
@@ -1076,7 +1076,7 @@ public class AuthorizationModuleTests
                 public partial class TestApp : BlueprintApp { }
 
                 [RootLink("/tenants/{TenantId}/accounts/{Id}")]
-                [Resource("account", "read", "/tenants/{Auth:AccountId}/accounts/{Id}")]
+                [Resource("account", "read", "/tenants/{Auth.AccountId}/accounts/{Id}")]
                 public partial class GetAccountQuery : IQuery<string>
                 {
                     public string TenantId { get; set; }
