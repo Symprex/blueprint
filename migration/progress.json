@@ -12,12 +12,12 @@
   "current": {
     "activeWorkstream": "s365-service-test-migration",
     "frameworkStatus": "production-ready",
-    "frameworkStatusDetail": "Full S365 feature parity confirmed. AOT/trim analyzer compliance achieved. Tenant services now resolved from scoped provider. Static external handler support added. AllowAnonymous operations now load user context. 1975 Blueprint tests pass (796 generator + 1179 integration). S365 blueprint-codemod-test branch: all 20 services + 5 gateways compiling, Templates 19/19, Analytics 90/90, EventStore 41/41, Generation 24/24, AdminPortal 84/84, VCard 52/52, Partners 109/109, Outlook 167/167, Subscriptions 250/250 (4 skip), Import 264/264 tests passing.",
-    "nextReadySlice": "s365-billing-test-migration",
+    "frameworkStatusDetail": "Full S365 feature parity confirmed. AOT/trim analyzer compliance achieved. 1977 Blueprint tests pass (798 generator + 1179 integration). S365 blueprint-codemod-test branch: all 20 services + 5 gateways compiling, Templates 19/19, Analytics 90/90, EventStore 41/41, Generation 24/24, AdminPortal 84/84, VCard 52/52, Partners 109/109, Outlook 167/167, Subscriptions 250/250 (4 skip), Import 264/264, Billing 571/576 (5 Stripe API) tests passing.",
+    "nextReadySlice": "s365-identityserver-test-migration",
     "lastCompletedSlice": {
-      "id": "s365-import-test-migration",
+      "id": "s365-billing-test-migration",
       "workstream": "s365-service-test-migration",
-      "title": "Migrate Import service tests — 264/264 passing"
+      "title": "Migrate Billing service tests — 571/576 passing (5 Stripe API failures)"
     },
     "openReviewGate": null,
     "openReviewGateRationale": null,
@@ -615,8 +615,26 @@
           "description": "Load user context for AllowAnonymous operations so Identity is populated"
         }
       ]
+    },
+    {
+      "id": "s365-billing-test-migration",
+      "workstream": "s365-service-test-migration",
+      "title": "Migrate Billing service tests — 571/576 passing (5 Stripe API failures)",
+      "commit": "faf5045b90",
+      "s365Branch": "blueprint-codemod-test",
+      "blueprintFixes": [
+        {
+          "commit": "196361ca",
+          "description": "Scope self-link cache to app-scanned assemblies to prevent false BPLG004"
+        },
+        {
+          "commit": "8a8b1ed8",
+          "description": "Preserve nullable guard when RequiredIf success condition does not imply property non-null"
+        }
+      ]
     }
   ],
+  "decisions": [
     {
       "id": "001",
       "title": "No general nested operation execution",
