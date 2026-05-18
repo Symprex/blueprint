@@ -41,7 +41,7 @@ namespace Blueprint.Generated
             {
                 Blueprint.Runtime.Exec.PipelineHelpers.AppendValidationError(ref validationResults, _va_Name.FormatErrorMessage("Name"), "Name");
             }
-            if (!global::System.String.IsNullOrWhiteSpace(operation.Name) && operation.Name.Length > 3)
+            if (!global::System.String.IsNullOrWhiteSpace(operation.Name) && operation.Name is not null && operation.Name.Length > 3)
             {
                 Blueprint.Runtime.Exec.PipelineHelpers.AppendValidationError(ref validationResults, _va_Name_1.FormatErrorMessage("Name"), "Name");
             }

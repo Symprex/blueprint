@@ -1974,6 +1974,115 @@ public class ValidationModuleTests
     }
 
     [Fact]
+    public void RequiredIf_with_range_on_nullable_guards_Value_access_with_property_null_check()
+    {
+        // Regression: RequiredIf success condition "AmountOff is not null || PercentOff is not null"
+        // does not guarantee PercentOff is non-null, so Range's .Value access must be guarded
+        // by the property's own null check, not just the RequiredIf success condition.
+        var source = """
+                     using Blueprint;
+                     using Blueprint.Model;
+                     using Blueprint.Validation;
+                     using System.ComponentModel.DataAnnotations;
+                     using System.Threading.Tasks;
+
+                     namespace TestNamespace;
+
+                     [BlueprintAppScan]
+                     public partial class TestApp : BlueprintApp
+                     {
+                         public TestApp()
+                         {
+                             this.Register(ApplyCouponCommand.Configure());
+                         }
+                     }
+
+                     public class ApplyCouponCommand : ICommand<string>
+                     {
+                         public static ApiOperationDescriptor Configure()
+                         {
+                             return new ApiOperationDescriptor(typeof(ApplyCouponCommand), nameof(ApplyCouponCommand), "Tests");
+                         }
+
+                         [RequiredIf(nameof(PercentOff), null)]
+                         public long? AmountOff { get; set; }
+
+                         [RequiredIf(nameof(AmountOff), null)]
+                         [Range(1, 100)]
+                         public long? PercentOff { get; set; }
+
+                         public static Task<string> HandleAsync(ApplyCouponCommand command)
+                         {
+                             return Task.FromResult("ok");
+                         }
+                     }
+                     """;
+
+        var result = CompilePipeline(source);
+
+        result.Diagnostics.Should().BeEmpty();
+        var pipelineSource = result.Output
+            .Single(static tree => tree.FilePath.EndsWith("ApplyCouponCommandExecutorPipeline.g.cs", StringComparison.Ordinal))
+            .ToString();
+
+        // The Range check for PercentOff must include "operation.PercentOff is not null" as a guard
+        // to prevent NullReferenceException when PercentOff is null but AmountOff is not null.
+        pipelineSource.Should().Contain("operation.PercentOff is not null");
+        pipelineSource.Should().Contain("operation.PercentOff.Value < 1 || operation.PercentOff.Value > 100");
+
+        // The full condition must AND together the RequiredIf success and the nullable guard
+        var rangeCheckIndex = pipelineSource.IndexOf("operation.PercentOff.Value < 1", StringComparison.Ordinal);
+        var nullGuardIndex = pipelineSource.IndexOf("operation.PercentOff is not null", StringComparison.Ordinal);
+        nullGuardIndex.Should().BeLessThan(rangeCheckIndex, "nullable guard must precede .Value access");
+    }
+
+    [Fact]
+    public async Task RequiredIf_with_range_on_nullable_generates_correctly()
+    {
+        var source = """
+                     using Blueprint;
+                     using Blueprint.Model;
+                     using Blueprint.Validation;
+                     using System.ComponentModel.DataAnnotations;
+                     using System.Threading.Tasks;
+
+                     namespace TestNamespace;
+
+                     [BlueprintAppScan]
+                     public partial class TestApp : BlueprintApp
+                     {
+                         public TestApp()
+                         {
+                             this.Register(ApplyCouponCommand.Configure());
+                         }
+                     }
+
+                     public class ApplyCouponCommand : ICommand<string>
+                     {
+                         public static ApiOperationDescriptor Configure()
+                         {
+                             return new ApiOperationDescriptor(typeof(ApplyCouponCommand), nameof(ApplyCouponCommand), "Tests");
+                         }
+
+                         [RequiredIf(nameof(PercentOff), null)]
+                         public long? AmountOff { get; set; }
+
+                         [RequiredIf(nameof(AmountOff), null)]
+                         [Range(1, 100)]
+                         public long? PercentOff { get; set; }
+
+                         public static Task<string> HandleAsync(ApplyCouponCommand command)
+                         {
+                             return Task.FromResult("ok");
+                         }
+                     }
+                     """;
+
+        await CompilePipeline(source)
+            .VerifySuccessAsync(PipelineSnapshotsFolder);
+    }
+
+    [Fact]
     public void Inline_handler_with_regex_validation_attribute_generates_regex_check_before_handler_invocation()
     {
         var source = """

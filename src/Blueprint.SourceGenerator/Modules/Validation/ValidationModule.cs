@@ -549,11 +549,11 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
         foreach (var rule in property.OtherRules)
         {
             var failureOperand = WrapConditionOperand(ResolveFailureCondition(rule, cachedFields));
-            var failureCondition = property.RequiredRule?.SuccessCondition is string successCondition
-                ? $"{WrapConditionOperand(successCondition)} && {failureOperand}"
-                : rule.GuardCondition is string guardCondition
-                    ? $"{WrapConditionOperand(guardCondition)} && {failureOperand}"
-                    : ResolveFailureCondition(rule, cachedFields);
+            var failureCondition = BuildGuardedFailureCondition(
+                property.RequiredRule?.SuccessCondition,
+                rule.GuardCondition,
+                failureOperand,
+                ResolveFailureCondition(rule, cachedFields));
             RenderValidationFailure(context, failureCondition, rule, property, cachedFields);
         }
 
@@ -566,6 +566,37 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
             }
 
             return $"({condition})";
+        }
+
+        // Combines the required-rule success condition (which gates "this property passed its required
+        // check") with the rule's own guard condition (typically a nullable null-check). Both are needed
+        // because RequiredIf success conditions like "A is not null || B is not null" do NOT guarantee
+        // that the specific property is non-null, so the rule's nullable guard must still apply.
+        static string BuildGuardedFailureCondition(
+            string? successCondition,
+            string? guardCondition,
+            string wrappedFailureOperand,
+            string rawFailureCondition)
+        {
+            var hasSuccess = successCondition is not null;
+            var hasGuard = guardCondition is not null;
+
+            if (hasSuccess && hasGuard)
+            {
+                return $"{WrapConditionOperand(successCondition!)} && {WrapConditionOperand(guardCondition!)} && {wrappedFailureOperand}";
+            }
+
+            if (hasSuccess)
+            {
+                return $"{WrapConditionOperand(successCondition!)} && {wrappedFailureOperand}";
+            }
+
+            if (hasGuard)
+            {
+                return $"{WrapConditionOperand(guardCondition!)} && {wrappedFailureOperand}";
+            }
+
+            return rawFailureCondition;
         }
     }
 
