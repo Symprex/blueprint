@@ -42,12 +42,12 @@ using Blueprint;
 namespace Blueprint.Generated
 {
 #pragma warning disable CS0618
-    public sealed partial class CreateDisclaimerCommandExecutorPipeline : Blueprint.OperationExecutorShell
+    internal sealed partial class CreateDisclaimerCommandExecutorPipeline : Blueprint.OperationExecutorShell
     {
         static readonly string[] _appliedModuleIds =
             ["PropertyOwnershipModule", "TenantModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "HandlerExecutionModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule"];
 
-        public CreateDisclaimerCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, Blueprint.Runtime.Exec.PipelineServices pipelineServices)
+        internal CreateDisclaimerCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, Blueprint.Runtime.Exec.PipelineServices pipelineServices)
             : base(loggerFactory, "CreateDisclaimerCommand", pipelineServices)
         {
         }

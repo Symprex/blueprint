@@ -14,12 +14,12 @@ using Blueprint;
 namespace Blueprint.Generated
 {
 #pragma warning disable CS0618
-    public sealed partial class TestCommandExecutorPipeline : Blueprint.OperationExecutorShell
+    internal sealed partial class TestCommandExecutorPipeline : Blueprint.OperationExecutorShell
     {
         static readonly string[] _appliedModuleIds =
             ["TenantModule", "PropertyPopulationModule", "HandlerExecutionModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule"];
 
-        public TestCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, Blueprint.Runtime.Exec.PipelineServices pipelineServices)
+        internal TestCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, Blueprint.Runtime.Exec.PipelineServices pipelineServices)
             : base(loggerFactory, "TestCommand", pipelineServices)
         {
         }

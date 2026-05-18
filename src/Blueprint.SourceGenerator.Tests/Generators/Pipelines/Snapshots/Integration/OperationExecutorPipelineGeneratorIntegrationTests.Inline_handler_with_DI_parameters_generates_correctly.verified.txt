@@ -14,13 +14,13 @@ using Blueprint;
 namespace Blueprint.Generated
 {
 #pragma warning disable CS0618
-    public sealed partial class TestQueryExecutorPipeline : Blueprint.OperationExecutorShell
+    internal sealed partial class TestQueryExecutorPipeline : Blueprint.OperationExecutorShell
     {
         static readonly string[] _appliedModuleIds =
             ["TenantModule", "PropertyPopulationModule", "HandlerExecutionModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule"];
         readonly global::Microsoft.Extensions.Logging.ILogger<global::TestNamespace.TestQuery> _cached_ILogger_TestNamespace_TestQuery;
 
-        public TestQueryExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, Blueprint.Runtime.Exec.PipelineServices pipelineServices)
+        internal TestQueryExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, Blueprint.Runtime.Exec.PipelineServices pipelineServices)
             : base(loggerFactory, "TestQuery", pipelineServices)
         {
             var serviceProvider = pipelineServices.ServiceProvider;

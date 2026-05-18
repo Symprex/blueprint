@@ -23,7 +23,7 @@ internal static class PipelineCodeGenerator
         var codeBuilder = CodeBuilder.Create("Blueprint.Generated");
 
         var pipelineClass = codeBuilder.AddClass(handler.PipelineClassName)
-            .MakePublicClass()
+            .MakeInternalClass()
             .Sealed()
             .SetBaseClass("Blueprint.OperationExecutorShell")
             .DisableWarning("CS0618");

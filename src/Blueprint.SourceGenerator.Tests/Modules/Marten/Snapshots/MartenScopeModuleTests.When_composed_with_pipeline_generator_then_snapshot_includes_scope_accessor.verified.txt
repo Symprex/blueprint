@@ -42,12 +42,12 @@ using Blueprint;
 namespace Blueprint.Generated
 {
 #pragma warning disable CS0618
-    public sealed partial class UpdateDocCommandExecutorPipeline : Blueprint.OperationExecutorShell
+    internal sealed partial class UpdateDocCommandExecutorPipeline : Blueprint.OperationExecutorShell
     {
         static readonly string[] _appliedModuleIds =
             ["MartenScopeModule", "RebusTransactionModule", "TenantModule", "PropertyPopulationModule", "HandlerExecutionModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule"];
 
-        public UpdateDocCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, Blueprint.Runtime.Exec.PipelineServices pipelineServices)
+        internal UpdateDocCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, Blueprint.Runtime.Exec.PipelineServices pipelineServices)
             : base(loggerFactory, "UpdateDocCommand", pipelineServices)
         {
         }

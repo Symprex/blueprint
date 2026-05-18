@@ -14,7 +14,7 @@ using Blueprint;
 namespace Blueprint.Generated
 {
 #pragma warning disable CS0618
-    public sealed partial class CreateUserCommandExecutorPipeline : Blueprint.OperationExecutorShell
+    internal sealed partial class CreateUserCommandExecutorPipeline : Blueprint.OperationExecutorShell
     {
         static readonly string[] _appliedModuleIds =
             ["TenantModule", "PropertyPopulationModule", "ValidationModule", "HandlerExecutionModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule"];
@@ -25,7 +25,7 @@ namespace Blueprint.Generated
         private static readonly Blueprint.Validation.ResourceKeyAttribute _va_ResourceKey =
             new global::Blueprint.Validation.ResourceKeyAttribute("Bad resource key.");
 
-        public CreateUserCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, Blueprint.Runtime.Exec.PipelineServices pipelineServices)
+        internal CreateUserCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, Blueprint.Runtime.Exec.PipelineServices pipelineServices)
             : base(loggerFactory, "CreateUserCommand", pipelineServices)
         {
         }

@@ -42,12 +42,12 @@ using Blueprint;
 namespace Blueprint.Generated
 {
 #pragma warning disable CS0618
-    public sealed partial class GetTopQueryExecutorPipeline : Blueprint.OperationExecutorShell
+    internal sealed partial class GetTopQueryExecutorPipeline : Blueprint.OperationExecutorShell
     {
         static readonly string[] _appliedModuleIds =
             ["TenantModule", "PropertyPopulationModule", "HandlerExecutionModule", "AuditingModule", "ResourceExpansionModule", "BackgroundTaskFlushModule", "PipelineReturnModule"];
 
-        public GetTopQueryExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, Blueprint.Runtime.Exec.PipelineServices pipelineServices)
+        internal GetTopQueryExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, Blueprint.Runtime.Exec.PipelineServices pipelineServices)
             : base(loggerFactory, "GetTopQuery", pipelineServices)
         {
         }

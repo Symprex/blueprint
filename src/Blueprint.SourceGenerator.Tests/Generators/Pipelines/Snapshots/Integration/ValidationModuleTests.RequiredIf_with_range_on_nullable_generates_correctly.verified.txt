@@ -14,14 +14,14 @@ using Blueprint;
 namespace Blueprint.Generated
 {
 #pragma warning disable CS0618
-    public sealed partial class ApplyCouponCommandExecutorPipeline : Blueprint.OperationExecutorShell
+    internal sealed partial class ApplyCouponCommandExecutorPipeline : Blueprint.OperationExecutorShell
     {
         static readonly string[] _appliedModuleIds =
             ["TenantModule", "PropertyPopulationModule", "ValidationModule", "HandlerExecutionModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule"];
         private static readonly System.ComponentModel.DataAnnotations.RangeAttribute _va_PercentOff =
             new global::System.ComponentModel.DataAnnotations.RangeAttribute(1, 100);
 
-        public ApplyCouponCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, Blueprint.Runtime.Exec.PipelineServices pipelineServices)
+        internal ApplyCouponCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, Blueprint.Runtime.Exec.PipelineServices pipelineServices)
             : base(loggerFactory, "ApplyCouponCommand", pipelineServices)
         {
         }

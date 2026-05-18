@@ -14,7 +14,7 @@ using Blueprint;
 namespace Blueprint.Generated
 {
 #pragma warning disable CS0618
-    public sealed partial class CreateUserCommandExecutorPipeline : Blueprint.OperationExecutorShell
+    internal sealed partial class CreateUserCommandExecutorPipeline : Blueprint.OperationExecutorShell
     {
         static readonly string[] _appliedModuleIds =
             ["TenantModule", "PropertyPopulationModule", "ValidationModule", "HandlerExecutionModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule"];
@@ -23,7 +23,7 @@ namespace Blueprint.Generated
         private static readonly System.ComponentModel.DataAnnotations.MaxLengthAttribute _va_Name_1 =
             new global::System.ComponentModel.DataAnnotations.MaxLengthAttribute(3);
 
-        public CreateUserCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, Blueprint.Runtime.Exec.PipelineServices pipelineServices)
+        internal CreateUserCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, Blueprint.Runtime.Exec.PipelineServices pipelineServices)
             : base(loggerFactory, "CreateUserCommand", pipelineServices)
         {
         }
