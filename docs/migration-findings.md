@@ -78,7 +78,7 @@ S365 uses resource-based authorization almost exclusively. The migration surface
 | Unique nouns in active use | 81 |
 | S365 noun constants defined | 96 |
 | Most common template | `/Tenants/{TenantId}` (~115 usages) |
-| Auth-context template | `/Tenants/{Auth:AccountId}` (~70 usages) |
+| Auth-context template | `/Tenants/{Auth.AccountId}` (~70 usages, migrated from `{Auth:AccountId}`) |
 | Multi-resource operations | ~20 OR-logic authorization cases |
 | Anonymous HTTP operations | 57+ |
 
@@ -105,7 +105,19 @@ blueprint.AddResourceAuthorizationProvider(
 The auth hot path was de-duplicated and optimized for S365 scale. `ScopePair` and `ResolvedScopePair` are now `readonly record struct`s, single-scope operations use a zero-allocation `SingleItemList<T>` enumerator, `MatchesScopePair` uses span-based comparison, and cached `Task<bool>` results remove repeated `Task.FromResult` allocations. Separate auth benchmarks now cover exact match, hierarchy match, multi-scope scans, failure, and the S365-specific `allowWhenNoScopeClaims` fast path.
 
 ### Template expansion and compile-time validation
-Blueprint’s `ResourceKeyTemplateParser` now covers the S365 token surface without reflection or regex. `{Auth:AccountId}`, `{Auth:Id}`, `{Auth:IdentityId}`, `{Auth:Email}`, and `{Auth:Name}` all resolve correctly, including S365’s `AccountId = TenantId ?? PartnerId ?? "Symprex"` rule. Property tokens such as `{Id}` are rendered as inline interpolation, value types use `.ToString()`, and invalid property references fail at compile time via `BPAU004` instead of surfacing as runtime auth bugs.
+Blueprint's `ResourceKeyTemplateParser` now covers the S365 token surface without reflection or regex. The template syntax is unified:
+- **Dot (.) = property path navigation** — `{Auth.AccountId}`, `{TenantId.Value}`, `{Auth.Id}`
+- **Colon (:) = fallback** — `{TenantId:PartnerId}`, `{Id:IdentityId}`, `{Auth.AccountId:TenantId}`
+
+The old `{Auth:X}` special-case syntax has been replaced by `{Auth.X}` dot-notation. "Auth" is simply a well-known first segment that routes resolution to the authorization context. This means:
+- `{Auth.AccountId}`, `{Auth.Id}`, `{Auth.IdentityId}`, `{Auth.Email}`, `{Auth.Name}` resolve from the user auth context
+- S365's `AccountId = TenantId ?? PartnerId ?? "Symprex"` rule is preserved via `IUserAuthorisationContext`
+- Cross-domain fallback works naturally: `{Auth.AccountId:TenantId}` (try auth, fallback to operation property)
+- Property tokens such as `{Id}` are rendered as inline interpolation, value types use `.ToString()`
+- Invalid property references fail at compile time via `BPAU004`/`BPAU007`
+- Link templates support fallback too: `{UserTenantId:TenantId}` tries primary, then alternate on resource
+
+S365's custom runtime expanders (`AuthResourceKeyTemplateExpander`, `PropertyResourceKeyTemplateExpander`) have been replaced by Blueprint's built-in `ResourceKeyTemplateExpander` which handles all syntax uniformly with compiled property accessor caching.
 
 ### Context loading and S365-owned auth concerns
 Blueprint’s `IUserAuthorisationContext` is a 1:1 fit for S365’s context shape: `IsActive`, `IsAnonymous`, `Id`, `IdentityId`, `AccountId`, `Email`, `Name`, and `PopulateMetadata` all carry over directly. S365-specific JWT parsing stays consumer-owned: `Signature365UserAuthorisationContextFactory`, `IS365ResourceKeyExpander`, `IRoleToApiOperationMapper`, legacy scope remapping, role-group expansion, and wildcard resource-key behavior remain S365 concerns because they encode domain rules rather than Blueprint framework behavior.
@@ -120,7 +132,7 @@ The migration only needs the framework to pass through the claims S365 already u
 | `Sig365IdentityId` | Internal identity tracking | `IUserAuthorisationContext.IdentityId` |
 | `Sig365RoleGroup` / `Sig365AssignedRole` | S365 role-group expansion | Consumer-owned auth-context factory / helpers |
 | `Sig365AssignedScopePair` | Direct scope grants | Parsed into scope-pair authorization |
-| AccountId fallback | `TenantId ?? PartnerId ?? "Symprex"` | `{Auth:AccountId}` template expansion |
+| AccountId fallback | `TenantId ?? PartnerId ?? "Symprex"` | `{Auth.AccountId}` template expansion (dot-notation) |
 
 ### What stays S365-owned in authorization
 Some auth pieces should remain explicitly outside Blueprint so the migration does not overreach. `Signature365UserAuthorisationContextFactory` keeps parsing S365-specific claims, `IS365ResourceKeyExpander` keeps handling hierarchical resource expansion, and `IRoleToApiOperationMapper` continues to power role-to-operation UI/reporting because it is a presentation concern that already reads `[Resource]` metadata directly.
@@ -840,8 +852,79 @@ Both `Blueprint.Runtime.Model` and `Blueprint.Runtime` pass `dotnet build /p:Ena
 | Cross-property validation | Suppressed | 6 validation attributes use `CrossPropertyAccessorCache` — suppressed since validation is inherently reflection-based. |
 | JSON serialization fallback | Suppressed | `HttpOperationResultExecutor` prefers app-owned `JsonSerializerContext` and falls back to `DefaultJsonTypeInfoResolver`. AOT consumers must ensure full type coverage. |
 | `JsonStringEnumConverter` | Suppressed | `BlueprintJsonOptions.CreateDefaultOptions()` uses untyped converter. AOT consumers should register typed `JsonStringEnumConverter<TEnum>` converters. |
-| `EnumUtilities` | Annotated | `GetDescriptions`/`GetDescriptionsWithKeys` use `Enum.GetValues(Type)` — annotated with `[RequiresDynamicCode]`. |
+| `EnumUtilities` | ✅ Fixed | Generic overloads `GetDescriptions<T>()`/`GetDescriptionsWithKeys<T>()` added; `Type`-based overloads marked `[Obsolete]`. |
 | `TypeDescriptor.GetConverter` | Compile-time warning | BPPO011 (now Warning severity) fires for types with only `[TypeConverter]` and no `IParsable<T>`. Migration path: implement `IParsable<T>`. |
 
 ### S365 migration path for AOT
 S365's `ApiId` already implements `IParsable<ApiId>`, so the primary binding type is AOT-safe. Any additional S365 value types that use only `[TypeConverter]` should add `IParsable<T>` to silence BPPO011 and enable AOT-safe binding.
+
+## Resource Events — Source-Generation Feasibility
+
+### Current state
+Resource events are already partially source-generated via `ResourceEventFamilySourceGenerator`. The compile-time infrastructure exists:
+- `@ResourceEventFamily` marks static partial classes as event families
+- `@ResourceEventReason(ChangeType, reason)` marks nested event records
+- Source gen emits stable `EventId` constants and implicit conversion operators
+- `ResourceEventMetadataModule` (Order=56) extracts compile-time metadata for OpenAPI/discrimination
+- `ResourceEventAuditModule` (Order=960) injects post-execution auditing
+- `ResourceEventSelfQueryModule` (Order=-5) resolves `SelfQuery` before link generation
+
+### S365 resource event usage
+Only **3 operations** currently produce resource events in S365 (all DELETE):
+- `AdminPortalDeletePartnerUserCommand` → `ResourceDeleted<PartnerUserApiResource>`
+- `PortalDeleteTenantUserCommand` → `ResourceDeleted<TenantUserApiResource>`
+- `PartnersGatewayDeletePartnerUserCommand` → `ResourceDeleted<PartnerUserApiResource>`
+
+The publication path: Handler → `ResourceEventAuditModule` → `IResourceEventAuditRepository` → `BusResourceEventAuditRepository` → Rebus → EventStore service.
+
+### Feasibility assessment
+| Aspect | Assessment |
+|--------|-----------|
+| Dual-path concern | **Minimal** — only 3 operations use resource events |
+| Existing source-gen | **Already done** — `ResourceEventFamilySourceGenerator` handles event family codegen |
+| Runtime handler | **Complete** — `HttpOperationResultExecutor` handles `ResourceEventResult<T>`, `KeyOnlyResourceEventResult`, and legacy `ResourceEvent<T>` |
+| Migration effort | **Low** — S365's 3 operations already return the correct types |
+| Full source-gen (eliminating dual-path) | **Not urgent** — the infrastructure gap is in the Rebus publishing layer (hand-written `BusResourceEventAuditRepository`), not in Blueprint |
+
+### Recommendation
+No immediate action needed. The dual-path exists only because legacy `ResourceEvent<T>` is still supported alongside `ResourceEventResult<T>`. With only 3 S365 operations affected, the migration cost is trivial when ready. The next step would be declarative Rebus subscription registration (already handled by `RebusTransactionModule`).
+
+## Link Generation — Compile-Time Optimization Analysis
+
+### Current hot path (per request)
+For a response with N resources, each with L links and A applicable authorizers:
+```
+Total async auth calls = N × L × A
+```
+For S365's typical paginated list (20 items, 3 links, 2 authorizers): **120 async authorization checks**.
+
+### Already-optimized areas
+| Optimization | Status |
+|--------------|--------|
+| Compiled URL builders | ✅ Source-generated, zero-allocation string interpolation |
+| `AppliesTo()` caching | ✅ Static per-operation-type, evaluated once at startup |
+| Self-link inline generation | ✅ Compile-time, bypasses full HATEOAS check |
+| PropertyInfo caching | ✅ Static reflection cache for fallback paths |
+| Guid URL formatting | ✅ `ISpanFormattable.TryFormat` directly into buffer |
+| Fallback semantics | ✅ `{Primary:Fallback}` emits null-coalescing at compile time |
+
+### Resource descriptor concept (future opportunity)
+A compile-time "resource descriptor" could centralize per-resource metadata:
+- All links targeting the resource, keyed by rel
+- Resource-level authorizer applicability (skip all links if resource-level auth denies)
+- Resource capabilities (partial response, event publishing, caching policies)
+- Compile-time verification that all links reference valid resource types
+
+The main win would be **resource-level early-out authorization**: if a resource-level check denies access, skip all link evaluations for that resource entirely. This could reduce the 120-call worst case to 20 (one per resource).
+
+### Static authorizer determination
+Authorizer `AppliesTo()` is already cached statically. For further optimization:
+- **Attribute-based authorizers** (95% of S365 cases): deterministic, could be pre-computed by source gen
+- **Interface-based authorizers**: fully deterministic, compile-time inferrable
+- **Configuration-based authorizers** (rare): cannot be determined statically
+
+### Recommendation
+The current performance is acceptable for S365 scale. The "resource descriptor" concept is a good future enhancement but not a migration blocker. The highest-value next step would be:
+1. Pre-compute per-resource link sets at startup (already done via `GetLinksForResource()`)
+2. Resource-level early-out authorization (new: skip all links if resource access denied)
+3. Batch authorization checks for same-authorizer across links (optimization only)
