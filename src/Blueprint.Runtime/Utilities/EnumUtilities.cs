@@ -56,8 +56,33 @@ public static class EnumUtilities
     /// <summary>
     /// Gets descriptions for all values of the specified enum type.
     /// </summary>
+    /// <typeparam name="T">The enum type.</typeparam>
+    /// <returns>Descriptions for all defined values.</returns>
+    public static IEnumerable<string> GetDescriptions<T>()
+        where T : struct, Enum
+    {
+        return Enum.GetValues<T>().Select(static e => ((Enum)(object)e).GetDescription());
+    }
+
+    /// <summary>
+    /// Gets descriptions for all values of the specified enum type as a dictionary,
+    /// keyed by the <see cref="Enum.ToString()"/> representation.
+    /// </summary>
+    /// <typeparam name="T">The enum type.</typeparam>
+    /// <returns>A dictionary mapping enum names to descriptions.</returns>
+    public static Dictionary<string, string> GetDescriptionsWithKeys<T>()
+        where T : struct, Enum
+    {
+        return Enum.GetValues<T>()
+            .ToDictionary(static e => e.ToString()!, static e => ((Enum)(object)e).GetDescription());
+    }
+
+    /// <summary>
+    /// Gets descriptions for all values of the specified enum type.
+    /// </summary>
     /// <param name="enumType">The enum type.</param>
     /// <returns>Descriptions for all defined values.</returns>
+    [Obsolete("Use the generic overload GetDescriptions<T>() for AOT compatibility.")]
     [RequiresDynamicCode("Enum.GetValues(Type) cannot create arrays of arbitrary enum types at AOT compile time.")]
     public static IEnumerable<string> GetDescriptions(Type enumType)
     {
@@ -70,6 +95,7 @@ public static class EnumUtilities
     /// </summary>
     /// <param name="enumType">The enum type.</param>
     /// <returns>A dictionary mapping enum names to descriptions.</returns>
+    [Obsolete("Use the generic overload GetDescriptionsWithKeys<T>() for AOT compatibility.")]
     [RequiresDynamicCode("Enum.GetValues(Type) cannot create arrays of arbitrary enum types at AOT compile time.")]
     public static Dictionary<string, string> GetDescriptionsWithKeys(Type enumType)
     {
