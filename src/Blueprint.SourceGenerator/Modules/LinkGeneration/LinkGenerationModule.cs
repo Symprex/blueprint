@@ -237,10 +237,28 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
                     return match.Value;
                 }
 
-                // Value types always have a value and cannot use ?. operator
-                var propertyValueExpression = mapping.IsValueType
-                    ? $"r.{mapping.ResourcePropertyName}.ToString()"
-                    : $"r.{mapping.ResourcePropertyName}?.ToString() ?? \"\"";
+                string propertyValueExpression;
+
+                if (mapping.FallbackPropertyName is not null)
+                {
+                    // Fallback: try primary, if null try fallback
+                    var primaryExpr = mapping.IsValueType
+                        ? $"r.{mapping.ResourcePropertyName}.ToString()"
+                        : $"r.{mapping.ResourcePropertyName}?.ToString()";
+
+                    var fallbackExpr = mapping.IsFallbackValueType
+                        ? $"r.{mapping.FallbackPropertyName}.ToString()"
+                        : $"r.{mapping.FallbackPropertyName}?.ToString()";
+
+                    propertyValueExpression = $"{primaryExpr} ?? {fallbackExpr} ?? \"\"";
+                }
+                else
+                {
+                    // Simple: single property
+                    propertyValueExpression = mapping.IsValueType
+                        ? $"r.{mapping.ResourcePropertyName}.ToString()"
+                        : $"r.{mapping.ResourcePropertyName}?.ToString() ?? \"\"";
+                }
 
                 var isCatchAll = match.Groups["catchAll"].Length > 0;
 
@@ -256,13 +274,25 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
 
         // Build null-guard conditions: return null if any required reference-type property is null.
         // Value type properties always have a value and are excluded from null checks.
-        // Build inline without materializing a filtered list.
+        // When a fallback is present, only null-guard if BOTH primary and fallback are null.
         string? nullChecks = null;
         for (var i = 0; i < mappings.Count; i++)
         {
-            if (!mappings[i].IsValueType)
+            var m = mappings[i];
+            if (m.FallbackPropertyName is not null)
             {
-                var check = $"r.{mappings[i].ResourcePropertyName} == null";
+                // With fallback: only null if both are null (and both are ref types)
+                if (!m.IsValueType && !m.IsFallbackValueType)
+                {
+                    var check = $"(r.{m.ResourcePropertyName} == null && r.{m.FallbackPropertyName} == null)";
+                    nullChecks = nullChecks is null ? check : $"{nullChecks} || {check}";
+                }
+
+                // If either side is a value type, we always have a value — no null guard needed
+            }
+            else if (!m.IsValueType)
+            {
+                var check = $"r.{m.ResourcePropertyName} == null";
                 nullChecks = nullChecks is null ? check : $"{nullChecks} || {check}";
             }
         }
@@ -418,8 +448,8 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
             var normalisedUrl = url;
             var placeholderMappings = new List<LinkPlaceholderMapping>();
 
-            // We have a placeholder. We need to find all of these placeholders and ensure that they point to a
-            // property of the operation. If they do not, we must register a diagnostic error.
+            // Validate placeholders: route param name must exist on operation, and at least one
+            // of (primary, fallback) must exist on resource for link URL generation.
             if (normalisedUrl.Contains("{"))
             {
                 normalisedUrl = _mappedPlaceholderRegex.Replace(
@@ -427,24 +457,22 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
                     match =>
                     {
                         var routePropertyName = match.Groups["routeName"].Value;
-                        var resourcePropertyName = match.Groups["resourcePropName"]?.Value;
+                        var fallbackPropertyName = match.Groups["resourcePropName"]?.Value;
 
                         var argumentLocationInfo = urlLocation.WithSubRange(
                             match.Index + 2,
                             match.Length - 2);
 
-                        // First, make sure the route property exists
+                        // Route param must exist on the operation (for incoming request binding)
                         if (TryFindMember(
                                 operationType,
                                 routePropertyName,
                                 argumentLocationInfo,
                                 context))
                         {
-                            // Now, make sure the resource has the route name OR the alternate name. We will only do this
-                            // check if the operation check passes
-                            if (string.IsNullOrEmpty(resourcePropertyName))
+                            if (string.IsNullOrEmpty(fallbackPropertyName))
                             {
-                                // No resource property name given, make sure the route param also exists on the resource
+                                // Simple {Prop}: must exist on resource
                                 TryFindMember(
                                     resourceTypeSymbol,
                                     routePropertyName,
@@ -456,15 +484,28 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
                             }
                             else
                             {
-                                // An alternative name was given, make sure that exists on the resource
-                                TryFindMember(
-                                    resourceTypeSymbol,
-                                    resourcePropertyName!,
-                                    argumentLocationInfo,
-                                    context);
+                                // Fallback {Prop:Alt}: try primary on resource, then fallback
+                                var primaryExists = HasMember(resourceTypeSymbol, routePropertyName);
+                                var fallbackExists = HasMember(resourceTypeSymbol, fallbackPropertyName!);
 
-                                var isValueType = IsResourcePropertyValueType(resourceTypeSymbol, resourcePropertyName!);
-                                placeholderMappings.Add(new LinkPlaceholderMapping(routePropertyName, resourcePropertyName!, isValueType));
+                                if (!primaryExists && !fallbackExists)
+                                {
+                                    // Neither exists — error on both
+                                    context.AddDiagnostic(CreatePlaceholderMissingDiagnostic(
+                                        resourceTypeSymbol, routePropertyName, argumentLocationInfo));
+                                }
+                                else
+                                {
+                                    // At least one exists. Use the first that exists as primary.
+                                    var effectivePrimary = primaryExists ? routePropertyName : fallbackPropertyName!;
+                                    var effectiveFallback = primaryExists && fallbackExists ? fallbackPropertyName : null;
+
+                                    var primaryIsValue = IsResourcePropertyValueType(resourceTypeSymbol, effectivePrimary);
+                                    var fallbackIsValue = effectiveFallback != null && IsResourcePropertyValueType(resourceTypeSymbol, effectiveFallback);
+
+                                    placeholderMappings.Add(new LinkPlaceholderMapping(
+                                        routePropertyName, effectivePrimary, primaryIsValue, effectiveFallback, fallbackIsValue));
+                                }
                             }
                         }
 
@@ -646,7 +687,7 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
                     match =>
                     {
                         var routePropertyName = match.Groups["routeName"].Value;
-                        var resourcePropertyName = match.Groups["resourcePropName"]?.Value;
+                        var fallbackPropertyName = match.Groups["resourcePropName"]?.Value;
 
                         var argumentLocationInfo = locationInfo?.WithSubRange(
                             match.Index + 2,
@@ -654,7 +695,7 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
 
                         if (TryFindMember(operationType, routePropertyName, opMemberNames, argumentLocationInfo, context))
                         {
-                            if (string.IsNullOrEmpty(resourcePropertyName))
+                            if (string.IsNullOrEmpty(fallbackPropertyName))
                             {
                                 TryFindMember(resourceTypeSymbol, routePropertyName, resMemberNames, argumentLocationInfo, context);
 
@@ -663,10 +704,26 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
                             }
                             else
                             {
-                                TryFindMember(resourceTypeSymbol, resourcePropertyName!, resMemberNames, argumentLocationInfo, context);
+                                // Fallback semantics: try primary (route name) on resource, then fallback
+                                var primaryExists = resMemberNames.Contains(routePropertyName);
+                                var fallbackExists = resMemberNames.Contains(fallbackPropertyName!);
 
-                                var isValueType = IsResourcePropertyValueType(resMemberCache, resourcePropertyName!);
-                                placeholderMappings.Add(new LinkPlaceholderMapping(routePropertyName, resourcePropertyName!, isValueType));
+                                if (!primaryExists && !fallbackExists)
+                                {
+                                    context.AddDiagnostic(CreatePlaceholderMissingDiagnostic(
+                                        resourceTypeSymbol, routePropertyName, argumentLocationInfo));
+                                }
+                                else
+                                {
+                                    var effectivePrimary = primaryExists ? routePropertyName : fallbackPropertyName!;
+                                    var effectiveFallback = primaryExists && fallbackExists ? fallbackPropertyName : null;
+
+                                    var primaryIsValue = IsResourcePropertyValueType(resMemberCache, effectivePrimary);
+                                    var fallbackIsValue = effectiveFallback != null && IsResourcePropertyValueType(resMemberCache, effectiveFallback);
+
+                                    placeholderMappings.Add(new LinkPlaceholderMapping(
+                                        routePropertyName, effectivePrimary, primaryIsValue, effectiveFallback, fallbackIsValue));
+                                }
                             }
                         }
 
@@ -702,6 +759,15 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
         }
 
         return memberExists;
+    }
+
+    /// <summary>
+    /// Checks whether a member with the given name exists on a type without reporting diagnostics.
+    /// Used for fallback validation where at least one of multiple candidates must exist.
+    /// </summary>
+    private static bool HasMember(INamedTypeSymbol typeSymbol, string memberName)
+    {
+        return typeSymbol.GetAllMembers().Any(m => m.Name == memberName);
     }
 
     /// <summary>
