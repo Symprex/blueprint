@@ -1,11 +1,14 @@
 using System.Collections.Concurrent;
 using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 using System.Security.Claims;
 using Blueprint.Auditing;
 using Blueprint.Http;
 using Blueprint.Model;
 using Blueprint.Runtime.Middleware;
+using Blueprint.Runtime.Utilities;
 
 namespace Blueprint.Runtime.Exec;
 
@@ -763,7 +766,7 @@ public static class PipelineHelpers
     {
         // Always populate ResourceEvent.Href from the self-link, even when no audit sink is registered.
         // This runs after the link generation stage has added self-links to the resource.
-        PopulateResourceEventHref(handlerResult);
+        PopulateResourceEventHref(context, handlerResult);
 
         return auditSink != null
             ? ExecuteResourceEventAuditSinkCoreAsync(auditSink, context, handlerResult, operationTypeName)
@@ -772,16 +775,100 @@ public static class PipelineHelpers
 
     /// <summary>
     /// Copies the self-link Href from the resource event's data object (when it implements
-    /// <see cref="ILinkableResource"/>) to <see cref="ResourceEvent.Href"/>. This ensures
-    /// the href is available on the in-memory result, not just during HTTP response writing.
+    /// <see cref="ILinkableResource"/>) to <see cref="ResourceEvent.Href"/>. Falls back to
+    /// the operation descriptor's first URL when the resource has no data (e.g. after a DELETE
+    /// where the SelfQuery can no longer find the entity).
     /// </summary>
-    private static void PopulateResourceEventHref(OperationResult handlerResult)
+    private static void PopulateResourceEventHref(ApiOperationContext context, OperationResult handlerResult)
     {
-        if (handlerResult is ResourceEvent { Href: null, Data: ILinkableResource { Links: { } links } } resourceEvent
+        if (handlerResult is not ResourceEvent { Href: null } resourceEvent)
+        {
+            return;
+        }
+
+        // Primary path: extract from the data's self-link (populated by LinkGenerationModule)
+        if (resourceEvent.Data is ILinkableResource { Links: { } links }
             && links.TryGetValue("self", out var selfLink))
         {
             resourceEvent.Href = selfLink.Href;
+            return;
         }
+
+        // Fallback: build a relative URL from the operation's first registered URL template,
+        // filling placeholders from the operation properties. This covers DELETE operations
+        // where the SelfQuery resolves to null Data because the entity was already removed.
+        if (context.Descriptor.Urls.Count > 0)
+        {
+            resourceEvent.Href = FillUrlTemplate(context.Descriptor.Urls[0].UrlFormat, context.Operation);
+        }
+    }
+
+    private static readonly ConcurrentDictionary<Type, Dictionary<string, Func<object, object?>>> _propertyAccessorCache = new();
+
+    /// <summary>
+    /// Fills an ASP.NET-style route URL template (e.g. <c>/tenants/{TenantId}/users/{Id}</c>)
+    /// by reflecting the named properties from the given <paramref name="source"/> object. Used
+    /// as a fallback for <see cref="PopulateResourceEventHref"/> when the resource Data is null.
+    /// </summary>
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2075",
+        Justification = "Operation types are always preserved because the source generator emits direct references to them in pipeline code.")]
+    private static string FillUrlTemplate(string urlTemplate, object source)
+    {
+        var sourceType = source.GetType();
+
+        if (!_propertyAccessorCache.TryGetValue(sourceType, out var accessors))
+        {
+            var props = sourceType.GetProperties(BindingFlags.Instance | BindingFlags.Public);
+            accessors = new Dictionary<string, Func<object, object?>>(props.Length, StringComparer.OrdinalIgnoreCase);
+
+            foreach (var p in props)
+            {
+                accessors[p.Name] = CompiledPropertyAccessor.GetGetter(p);
+            }
+
+            accessors = _propertyAccessorCache.GetOrAdd(sourceType, accessors);
+        }
+
+        var result = urlTemplate;
+        var startIdx = 0;
+
+        while (startIdx < result.Length)
+        {
+            var openBrace = result.IndexOf('{', startIdx);
+
+            if (openBrace < 0)
+            {
+                break;
+            }
+
+            var closeBrace = result.IndexOf('}', openBrace + 1);
+
+            if (closeBrace < 0)
+            {
+                break;
+            }
+
+            var placeholder = result.AsSpan(openBrace + 1, closeBrace - openBrace - 1);
+
+            // Strip route constraints (e.g. {Id:int} → Id) and mapping suffixes
+            var colonIdx = placeholder.IndexOf(':');
+            var propName = colonIdx >= 0 ? placeholder[..colonIdx].ToString() : placeholder.ToString();
+
+            if (accessors.TryGetValue(propName, out var getter))
+            {
+                var value = getter(source)?.ToString() ?? string.Empty;
+                result = string.Concat(result.AsSpan(0, openBrace), value, result.AsSpan(closeBrace + 1));
+                startIdx = openBrace + value.Length;
+            }
+            else
+            {
+                startIdx = closeBrace + 1;
+            }
+        }
+
+        return result;
     }
 
     /// <summary>

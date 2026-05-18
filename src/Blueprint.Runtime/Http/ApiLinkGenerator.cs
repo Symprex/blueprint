@@ -151,7 +151,7 @@ public sealed class ApiLinkGenerator : IApiLinkGenerator
     {
         if (!link.HasPlaceholders())
         {
-            return this._baseUri + link.UrlFormat;
+            return this._baseUri + link.UrlFormat.TrimStart('/');
         }
 
         var relativeUrl = link.CreateRelativeUrl(result);
@@ -161,7 +161,7 @@ public sealed class ApiLinkGenerator : IApiLinkGenerator
             return null;
         }
 
-        return this._baseUri + relativeUrl;
+        return this._baseUri + relativeUrl.TrimStart('/');
     }
 
     /// <inheritdoc />
@@ -189,16 +189,18 @@ public sealed class ApiLinkGenerator : IApiLinkGenerator
                 $"Cannot construct URL for operation '{operationType.Name}' — required placeholder values are missing.");
         }
 
-        return this._baseUri + relativeUrl;
+        return this._baseUri + relativeUrl.TrimStart('/');
     }
 
     [UnconditionalSuppressMessage("Trimming", "IL2075", Justification = "Query-string objects are reflected over their public properties to serialize caller-supplied link parameters into the generated URL.")]
     [UnconditionalSuppressMessage("AOT", "IL3050", Justification = "CompiledPropertyAccessor uses Expression.Compile() but this fallback path is only used for non-source-generated link construction. Source-generated CompiledUrlBuilder bypasses this for all known operation types.")]
     private string BuildUrl(string relativeUrl, object? queryString)
     {
+        var trimmedUrl = relativeUrl.TrimStart('/');
+
         if (queryString is null)
         {
-            return this._baseUri + relativeUrl;
+            return this._baseUri + trimmedUrl;
         }
 
         var queryStringType = queryString.GetType();
@@ -215,9 +217,9 @@ public sealed class ApiLinkGenerator : IApiLinkGenerator
             accessors = _queryStringAccessors.GetOrAdd(queryStringType, computedAccessors);
         }
 
-        var sb = new StringBuilder(this._baseUri.Length + relativeUrl.Length + 64);
+        var sb = new StringBuilder(this._baseUri.Length + trimmedUrl.Length + 64);
         sb.Append(this._baseUri);
-        sb.Append(relativeUrl);
+        sb.Append(trimmedUrl);
 
         var first = true;
 
