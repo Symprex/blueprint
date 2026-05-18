@@ -186,7 +186,11 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
         var wrapperClass = codeBuilder.AddClass(plan.Operation.TypeName)
             .WithAccessModifier(Accessibility.Public);
 
-        wrapperClass.AddMethod("Configure")
+        // When the operation inherits from a concrete base that also implements IOperation,
+        // the base type will have its own generated Configure(). Use 'new' to avoid CS0108.
+        var baseHasConfigure = BaseTypeHasConfigureMethod(plan.Operation.TypeSymbol);
+
+        var configureMethod = wrapperClass.AddMethod("Configure")
             .WithAccessModifier(Accessibility.Public)
             .MakeStaticMethod()
             .WithReturnType("ApiOperationDescriptor")
@@ -194,6 +198,11 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
                 {
                     c.AppendLine($"return new {descriptorClassName}();");
                 });
+
+        if (baseHasConfigure)
+        {
+            configureMethod.MakeNewMethod();
+        }
 
         // Note that we have to hack around Blueprint.SourceGenerator.CodeWriter a little to get a base call without constructor arguments. We
         // pass in an empty dictionary (as it *immediately* uses that to configure the parameters), and THEN after we
@@ -287,6 +296,43 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
                 {
                     return true;
                 }
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Checks whether any base type of the operation already declares — or will have generated —
+    /// a static parameterless <c>Configure()</c> method. This covers both cross-assembly bases
+    /// (where <c>Configure()</c> is already compiled into the referenced assembly) and same-assembly
+    /// bases (where the generator will emit <c>Configure()</c> in the same pass, but the symbol
+    /// is not yet visible). When true, the derived descriptor must emit <c>new static</c> to avoid CS0108.
+    /// </summary>
+    private static bool BaseTypeHasConfigureMethod(INamedTypeSymbol operationType)
+    {
+        const string operationInterface = "Blueprint.Model.IOperation";
+
+        for (var current = operationType.BaseType; current is not null; current = current.BaseType)
+        {
+            // Cross-assembly case: the base type already has a compiled Configure() from a previous generation.
+            foreach (var member in current.GetMembers("Configure"))
+            {
+                if (member is IMethodSymbol { IsStatic: true, Parameters.Length: 0 })
+                {
+                    return true;
+                }
+            }
+
+            // Same-assembly case: the base is a concrete IOperation declared in the current compilation,
+            // so this generator will produce Configure() for it in the same pass even though the symbol
+            // doesn't exist yet. Only applies to source-declared types (not metadata references from
+            // assemblies that may not have the generator active).
+            if (!current.IsAbstract
+                && current.DeclaringSyntaxReferences.Length > 0
+                && current.ImplementsInterface(operationInterface))
+            {
+                return true;
             }
         }
 

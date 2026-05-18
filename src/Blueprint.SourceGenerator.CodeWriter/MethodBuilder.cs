@@ -19,6 +19,7 @@ namespace Blueprint.SourceGenerator.CodeWriter
         private readonly List<ParameterBuilder<MethodBuilder>> _parameters = new List<ParameterBuilder<MethodBuilder>>();
         private bool _override;
         private bool _virtual;
+        private bool _new;
 
         private Action<ICodeWriter>? _methodBodyWriter;
 
@@ -349,6 +350,16 @@ namespace Blueprint.SourceGenerator.CodeWriter
         }
 
         /// <summary>
+        /// Marks the generated method with the <c>new</c> modifier to explicitly shadow an inherited member.
+        /// </summary>
+        /// <returns>The same builder so fluent configuration can continue.</returns>
+        public MethodBuilder MakeNewMethod()
+        {
+            this._new = true;
+            return this;
+        }
+
+        /// <summary>
         /// Marks the generated method as extern (no body, semicolon-terminated signature).
         /// </summary>
         /// <returns>The same builder so fluent configuration can continue.</returns>
@@ -430,6 +441,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
             else if (this.IsStatic && this.IsExtern)
             {
                 output = $"static extern {output}";
+            }
+            else if (this._new && this.IsStatic)
+            {
+                output = $"new static {output}";
             }
             else if (this.IsStatic)
             {

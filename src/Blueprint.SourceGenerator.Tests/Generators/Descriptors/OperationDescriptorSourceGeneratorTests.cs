@@ -189,6 +189,44 @@ public class OperationDescriptorSourceGeneratorTests
         return TestHelpers.Compile<OperationDescriptorSourceGenerator>("using Blueprint.Model;\nusing Blueprint.Model.Attributes;\n\nnamespace TestNamespace;\n\n" + source);
     }
 
+    [Fact]
+    public void When_derived_operation_inherits_from_concrete_base_then_generated_Configure_uses_new_modifier()
+    {
+        var source = """
+                     public partial class BaseOperation : IOperation {}
+
+                     public partial class DerivedOperation : BaseOperation {}
+                     """;
+
+        var result = Compile(source);
+
+        result.Diagnostics.Where(static d => d.Severity == DiagnosticSeverity.Error).Should().BeEmpty();
+
+        var derivedSource = result.Output
+            .FirstOrDefault(static t => t.ToString().Contains("class DerivedOperation"));
+
+        derivedSource.Should().NotBeNull("a descriptor partial should be generated for DerivedOperation");
+        derivedSource!.ToString().Should().Contain("new static ApiOperationDescriptor Configure()");
+    }
+
+    [Fact]
+    public void When_operation_has_no_base_Configure_then_generated_Configure_does_not_use_new_modifier()
+    {
+        var source = """
+                     public partial class StandaloneOperation : IOperation {}
+                     """;
+
+        var result = Compile(source);
+
+        result.Diagnostics.Where(static d => d.Severity == DiagnosticSeverity.Error).Should().BeEmpty();
+
+        var standaloneSource = result.Output
+            .FirstOrDefault(static t => t.ToString().Contains("class StandaloneOperation"));
+
+        standaloneSource.Should().NotBeNull();
+        standaloneSource!.ToString().Should().NotContain("new static");
+    }
+
     private static CSharpCompilation CreateCompilation(string source = """
                                                            using Blueprint.Model;
 
