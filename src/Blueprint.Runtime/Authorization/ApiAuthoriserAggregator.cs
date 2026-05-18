@@ -25,6 +25,11 @@ internal sealed class ApiAuthoriserAggregator : IApiAuthoriserAggregator
     // Static because this is descriptor-level metadata that does not vary per scope.
     private static readonly ConcurrentDictionary<Type, (Type[] ApiTypes, Type[] LinkTypes)> _applicableTypeCache = new();
 
+    // Per-request cache for link auth decisions where no state-based (resource-dependent)
+    // checkers apply. Keyed by operation type — safe because permission-based auth depends
+    // only on the user principal, not the resource instance.
+    private Dictionary<Type, ExecutionAllowed>? _resourceIndependentLinkAuthCache;
+
     /// <summary>
     /// Initialises a new instance of the <see cref="ApiAuthoriserAggregator"/> class.
     /// </summary>
@@ -78,17 +83,40 @@ internal sealed class ApiAuthoriserAggregator : IApiAuthoriserAggregator
             },
             (descriptor, this._apiAuthorisers, this._linkVisibilityAuthorisers));
 
+        // When no state-based (resource-dependent) link checkers apply, the auth result
+        // depends only on the user principal + operation descriptor. Cache per-request to
+        // avoid redundant permission evaluations when populating collections of the same type.
+        if (applicableLinkTypes.Length == 0)
+        {
+            this._resourceIndependentLinkAuthCache ??= new Dictionary<Type, ExecutionAllowed>();
+
+            if (this._resourceIndependentLinkAuthCache.TryGetValue(descriptor.OperationType, out var cached))
+            {
+                return cached;
+            }
+
+            var result = await this.EvaluateApiAuthorisersAsync(operationContext, descriptor, resource, applicableApiTypes).ConfigureAwait(false);
+            this._resourceIndependentLinkAuthCache[descriptor.OperationType] = result;
+            return result;
+        }
+
+        // State-based checkers exist — must evaluate per-resource-instance.
+        var apiResult = await this.EvaluateApiAuthorisersAsync(operationContext, descriptor, resource, applicableApiTypes).ConfigureAwait(false);
+        if (!apiResult.IsAllowed)
+        {
+            return apiResult;
+        }
+
         // Filter the per-scope instances to only those whose types are applicable.
-        var applicableApi = FilterByTypes(this._apiAuthorisers, applicableApiTypes);
         var applicableLink = FilterByTypes(this._linkVisibilityAuthorisers, applicableLinkTypes);
 
         var traceLogEnabled = this._logger.IsEnabled(LogLevel.Trace);
 
-        foreach (var checker in applicableApi)
+        foreach (var checker in applicableLink)
         {
-            var result = await checker.CanShowLinkAsync(operationContext, descriptor, resource!).ConfigureAwait(false);
+            var linkResult = await checker.CanShowLinkAsync(operationContext, descriptor, resource!).ConfigureAwait(false);
 
-            if (!result.IsAllowed)
+            if (!linkResult.IsAllowed)
             {
                 if (traceLogEnabled)
                 {
@@ -96,15 +124,44 @@ internal sealed class ApiAuthoriserAggregator : IApiAuthoriserAggregator
                         "Link check failed. type={OperationType} resource_type={ResourceType} reason={Reason} authoriser={AuthoriserType}",
                         descriptor.OperationType.Name,
                         resource?.GetType().Name,
-                        result.Reason,
+                        linkResult.Reason,
                         checker.GetType().Name);
                 }
 
-                return result;
+                return linkResult;
             }
         }
 
-        foreach (var checker in applicableLink)
+        if (traceLogEnabled)
+        {
+            this._logger.LogTrace(
+                "Link check succeeded. type={OperationType} resource_type={ResourceType}",
+                descriptor.OperationType.Name,
+                resource?.GetType().Name);
+        }
+
+        return ExecutionAllowed.Yes;
+    }
+
+    /// <summary>
+    /// Evaluates only the <see cref="IApiAuthoriser"/> portion of link auth. Separated so
+    /// that results can be cached independently of resource-dependent state-based checkers.
+    /// </summary>
+    private async ValueTask<ExecutionAllowed> EvaluateApiAuthorisersAsync(
+        ApiOperationContext operationContext,
+        ApiOperationDescriptor descriptor,
+        object? resource,
+        Type[] applicableApiTypes)
+    {
+        if (applicableApiTypes.Length == 0)
+        {
+            return ExecutionAllowed.Yes;
+        }
+
+        var applicableApi = FilterByTypes(this._apiAuthorisers, applicableApiTypes);
+        var traceLogEnabled = this._logger.IsEnabled(LogLevel.Trace);
+
+        foreach (var checker in applicableApi)
         {
             var result = await checker.CanShowLinkAsync(operationContext, descriptor, resource!).ConfigureAwait(false);
 
