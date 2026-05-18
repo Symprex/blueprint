@@ -42,6 +42,7 @@ using Blueprint;
 
 namespace Blueprint.Generated
 {
+#pragma warning disable CS0618
     public sealed partial class GetWidgetQueryExecutorPipeline : Blueprint.OperationExecutorShell
     {
         static readonly string[] _appliedModuleIds =
@@ -114,6 +115,7 @@ namespace Blueprint.Generated
             return _appliedModuleIds;
         }
     }
+#pragma warning restore CS0618
 }
 
 
@@ -132,6 +134,7 @@ using Blueprint;
 
 namespace Blueprint.Generated
 {
+#pragma warning disable CS0618
     public sealed partial class UpdateWidgetCommandExecutorPipeline : Blueprint.OperationExecutorShell
     {
         static readonly string[] _appliedModuleIds =
@@ -238,6 +241,7 @@ namespace Blueprint.Generated
             }
         }
     }
+#pragma warning restore CS0618
 }
 
 

@@ -41,6 +41,7 @@ using Blueprint;
 
 namespace Blueprint.Generated
 {
+#pragma warning disable CS0618
     public sealed partial class PlaceOrderCommandExecutorPipeline : Blueprint.OperationExecutorShell
     {
         static readonly string[] _appliedModuleIds =
@@ -87,6 +88,7 @@ namespace Blueprint.Generated
             return _appliedModuleIds;
         }
     }
+#pragma warning restore CS0618
 }
 
 

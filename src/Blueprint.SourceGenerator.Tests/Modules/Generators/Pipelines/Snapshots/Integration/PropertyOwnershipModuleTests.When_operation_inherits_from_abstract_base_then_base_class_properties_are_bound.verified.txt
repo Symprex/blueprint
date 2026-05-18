@@ -41,6 +41,7 @@ using Blueprint;
 
 namespace Blueprint.Generated
 {
+#pragma warning disable CS0618
     public sealed partial class CreateDisclaimerCommandExecutorPipeline : Blueprint.OperationExecutorShell
     {
         static readonly string[] _appliedModuleIds =
@@ -138,6 +139,7 @@ namespace Blueprint.Generated
             }
         }
     }
+#pragma warning restore CS0618
 }
 
 

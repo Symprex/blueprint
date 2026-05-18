@@ -25,7 +25,8 @@ internal static class PipelineCodeGenerator
         var pipelineClass = codeBuilder.AddClass(handler.PipelineClassName)
             .MakePublicClass()
             .Sealed()
-            .SetBaseClass("Blueprint.OperationExecutorShell");
+            .SetBaseClass("Blueprint.OperationExecutorShell")
+            .DisableWarning("CS0618");
 
         AddConstructor(pipelineClass, handler, plan);
         AddExecuteCoreAsyncMethod(pipelineClass, handler, plan);
