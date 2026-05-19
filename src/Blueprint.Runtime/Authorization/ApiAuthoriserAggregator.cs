@@ -100,8 +100,21 @@ internal sealed class ApiAuthoriserAggregator : IApiAuthoriserAggregator
             return result;
         }
 
-        // State-based checkers exist — must evaluate per-resource-instance.
-        var apiResult = await this.EvaluateApiAuthorisersAsync(operationContext, descriptor, resource, applicableApiTypes).ConfigureAwait(false);
+        // State-based checkers exist — permission check is still principal-only so cache it,
+        // then evaluate resource-dependent state checkers per instance.
+        this._resourceIndependentLinkAuthCache ??= new Dictionary<Type, ExecutionAllowed>();
+
+        ExecutionAllowed apiResult;
+        if (this._resourceIndependentLinkAuthCache.TryGetValue(descriptor.OperationType, out var cachedApiResult))
+        {
+            apiResult = cachedApiResult;
+        }
+        else
+        {
+            apiResult = await this.EvaluateApiAuthorisersAsync(operationContext, descriptor, resource, applicableApiTypes).ConfigureAwait(false);
+            this._resourceIndependentLinkAuthCache[descriptor.OperationType] = apiResult;
+        }
+
         if (!apiResult.IsAllowed)
         {
             return apiResult;

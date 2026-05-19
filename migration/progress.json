@@ -12,12 +12,12 @@
   "current": {
     "activeWorkstream": "polish-and-aot-hardening",
     "frameworkStatus": "production-ready",
-    "frameworkStatusDetail": "Blueprint migration functionally complete. 1987 Blueprint tests pass (808 generator + 1179 integration). S365 blueprint-codemod-test: all BPAU007 warnings eliminated via auth fallback codemod (af4563ab + 524839a699). FillUrlTemplate StringBuilder perf fix shipped (845f788d). IdentityServer 575/580, Import 264/264, Templates 19/19, Analytics 90/90, EventStore 41/41, Generation 24/24 verified post-codemod.",
-    "nextReadySlice": "resource-events-source-gen-feasibility",
+    "frameworkStatusDetail": "Blueprint migration functionally complete. 2000 Blueprint tests pass (820 generator + 1179 integration + 1 pre-existing SyntheticBuild skip). S365 blueprint-codemod-test: 2538 tests passing across 23 suites with 0 failures. Key fixes: auth fallback codemod correction (194 files reverted), ApiResourceDescriptor (compile-time resource metadata), [ResourceObjectName]/[JsonSchema] support for Object property override. Commits: 030bbbd5 (resource descriptors), 6aec1f14 (ResourceObjectName), S365 4f8e54ed (auth fix), S365 52055078 (gateway resource fix).",
+    "nextReadySlice": "link-generation-perf-and-state-checkers",
     "lastCompletedSlice": {
-      "id": "auth-fallback-codemod-and-perf",
+      "id": "resource-descriptors-and-object-name-override",
       "workstream": "polish-and-aot-hardening",
-      "title": "Auth fallback in resource key templates (af4563ab) + S365 codemod (204 files, 0 BPAU007) + FillUrlTemplate perf (845f788d)"
+      "title": "ApiResourceDescriptor + [ResourceObjectName]/[JsonSchema] Object property override support + auth fallback correction (194 files)"
     },
     "openReviewGate": null,
     "openReviewGateRationale": null,
