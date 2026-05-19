@@ -151,7 +151,7 @@ internal static class ValidationDiagnosticDescriptors
         title: "[Required] is redundant on non-nullable value type",
         messageFormat: "Property '{0}' on operation '{1}' is a non-nullable value type ({2}) where [Required] has no effect — consider removing it or using '{2}?' if the property should be optional",
         category: Category,
-        defaultSeverity: DiagnosticSeverity.Warning,
+        defaultSeverity: DiagnosticSeverity.Info,
         isEnabledByDefault: true,
         description: "Applying [Required] to a non-nullable value type (int, bool, Guid, etc.) has no effect because the property can never be null. Use a nullable type (e.g. int?) if the property should be optional, or remove the attribute to reduce noise.");
 
