@@ -168,9 +168,9 @@ public abstract class OperationExecutorShell : IOperationExecutorPipeline
         ArgumentNullException.ThrowIfNull(loggerFactory);
         ArgumentException.ThrowIfNullOrWhiteSpace(operationTypeName);
 
-        this._logger = loggerFactory.CreateLogger(operationTypeName + "ExecutorPipeline");
+        this._logger = loggerFactory.CreateLogger(string.Concat(operationTypeName, "ExecutorPipeline"));
         this._operationTypeName = operationTypeName;
-        this._activityName = operationTypeName + "Pipeline";
+        this._activityName = string.Concat(operationTypeName, "Pipeline");
         this._suppressActivity = suppressActivity;
         this.PropertyPopulators = [];
         this.ApiAuthorisers = [];

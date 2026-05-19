@@ -831,44 +831,56 @@ public static class PipelineHelpers
             accessors = _propertyAccessorCache.GetOrAdd(sourceType, accessors);
         }
 
-        var result = urlTemplate;
-        var startIdx = 0;
+        // Use a single StringBuilder pass to avoid repeated string allocations per placeholder.
+        var sb = new System.Text.StringBuilder(urlTemplate.Length);
+        var lastEnd = 0;
 
-        while (startIdx < result.Length)
+        while (lastEnd < urlTemplate.Length)
         {
-            var openBrace = result.IndexOf('{', startIdx);
+            var openBrace = urlTemplate.IndexOf('{', lastEnd);
 
             if (openBrace < 0)
             {
                 break;
             }
 
-            var closeBrace = result.IndexOf('}', openBrace + 1);
+            var closeBrace = urlTemplate.IndexOf('}', openBrace + 1);
 
             if (closeBrace < 0)
             {
                 break;
             }
 
-            var placeholder = result.AsSpan(openBrace + 1, closeBrace - openBrace - 1);
+            sb.Append(urlTemplate, lastEnd, openBrace - lastEnd);
 
-            // Strip route constraints (e.g. {Id:int} → Id) and mapping suffixes
+            var placeholder = urlTemplate.AsSpan(openBrace + 1, closeBrace - openBrace - 1);
+
+            // Strip route constraints (e.g. {Id:int} → Id) and fallback suffixes ({Prop:Fallback} → Prop)
             var colonIdx = placeholder.IndexOf(':');
             var propName = colonIdx >= 0 ? placeholder[..colonIdx].ToString() : placeholder.ToString();
 
             if (accessors.TryGetValue(propName, out var getter))
             {
-                var value = getter(source)?.ToString() ?? string.Empty;
-                result = string.Concat(result.AsSpan(0, openBrace), value, result.AsSpan(closeBrace + 1));
-                startIdx = openBrace + value.Length;
+                sb.Append(getter(source)?.ToString() ?? string.Empty);
             }
             else
             {
-                startIdx = closeBrace + 1;
+                // Preserve unresolved placeholders as-is
+                sb.Append('{');
+                sb.Append(placeholder);
+                sb.Append('}');
             }
+
+            lastEnd = closeBrace + 1;
         }
 
-        return result;
+        // Append trailing segment after last placeholder
+        if (lastEnd < urlTemplate.Length)
+        {
+            sb.Append(urlTemplate, lastEnd, urlTemplate.Length - lastEnd);
+        }
+
+        return sb.ToString();
     }
 
     /// <summary>
