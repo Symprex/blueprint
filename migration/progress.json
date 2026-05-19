@@ -10,14 +10,14 @@
     "workstreamPlan": "migration\\auditing-and-observability\\plan.md"
   },
   "current": {
-    "activeWorkstream": "s365-migration-complete-pending-marten",
+    "activeWorkstream": "polish-and-aot-hardening",
     "frameworkStatus": "production-ready",
-    "frameworkStatusDetail": "Blueprint migration functionally complete. 1985 Blueprint tests pass (806 generator + 1179 integration). S365 blueprint-codemod-test: 30/35 test projects build, 19 suites 100% green (1748 tests), all remaining failures are Marten/Npgsql 8.x EnableDynamicJson (resolved by separate Marten v8 branch). Per-request link auth cache optimization shipped (3ab7edb7). Generated pipelines confirmed executing correctly across all services.",
-    "nextReadySlice": "marten-v8-merge-then-final-validation",
+    "frameworkStatusDetail": "Blueprint migration functionally complete. 1987 Blueprint tests pass (808 generator + 1179 integration). S365 blueprint-codemod-test: all BPAU007 warnings eliminated via auth fallback codemod (af4563ab + 524839a699). FillUrlTemplate StringBuilder perf fix shipped (845f788d). IdentityServer 575/580, Import 264/264, Templates 19/19, Analytics 90/90, EventStore 41/41, Generation 24/24 verified post-codemod.",
+    "nextReadySlice": "resource-events-source-gen-feasibility",
     "lastCompletedSlice": {
-      "id": "s365-full-migration-validation",
-      "workstream": "s365-service-test-migration",
-      "title": "Full S365 migration validation: 19 suites green (1748 tests), all failures confirmed as Marten/Npgsql not Blueprint"
+      "id": "auth-fallback-codemod-and-perf",
+      "workstream": "polish-and-aot-hardening",
+      "title": "Auth fallback in resource key templates (af4563ab) + S365 codemod (204 files, 0 BPAU007) + FillUrlTemplate perf (845f788d)"
     },
     "openReviewGate": null,
     "openReviewGateRationale": null,

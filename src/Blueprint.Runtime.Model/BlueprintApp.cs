@@ -25,11 +25,15 @@ public class BlueprintApp
     private readonly Dictionary<Type, List<ApiOperationLink>> _operationTypeToLinks = new();
     private readonly Dictionary<Type, List<ApiOperationLink>> _resourceTypeToLinks = new();
 
+    // Resource descriptors keyed by resource CLR type
+    private readonly Dictionary<Type, ApiResourceDescriptor> _resourceDescriptors = new();
+
     // Frozen read-optimized versions, populated by Freeze()
     private FrozenDictionary<Type, ApiOperationDescriptor>? _frozenOperations;
     private FrozenDictionary<Type, IReadOnlyList<ApiOperationLink>>? _frozenOperationTypeToLinks;
     private FrozenDictionary<Type, IReadOnlyList<ApiOperationLink>>? _frozenResourceTypeToLinks;
     private FrozenDictionary<string, IReadOnlyList<ApiOperationDescriptor>>? _frozenHostToOperations;
+    private FrozenDictionary<Type, ApiResourceDescriptor>? _frozenResourceDescriptors;
 
     /// <summary>
     /// Gets all registered links for this model, with a link representing the association between a resource and a different
@@ -44,6 +48,14 @@ public class BlueprintApp
         this._frozenOperations is not null
             ? this._frozenOperations.Values
             : this._allOperations.Values;
+
+    /// <summary>
+    /// Gets all registered resource descriptors.
+    /// </summary>
+    public IEnumerable<ApiResourceDescriptor> Resources =>
+        this._frozenResourceDescriptors is not null
+            ? this._frozenResourceDescriptors.Values
+            : this._resourceDescriptors.Values;
 
     /// <summary>
     /// Gets the number of registered operations without materializing the enumerable.
@@ -283,6 +295,60 @@ public class BlueprintApp
     }
 
     /// <summary>
+    /// Registers a resource descriptor. If a descriptor for the same resource type already exists,
+    /// the existing one is returned (first-registration-wins semantics).
+    /// </summary>
+    /// <param name="descriptor">The resource descriptor to register.</param>
+    /// <returns>The registered descriptor (may differ from input if already registered).</returns>
+    public ApiResourceDescriptor RegisterResource(ApiResourceDescriptor descriptor)
+    {
+        if (this._resourceDescriptors.TryGetValue(descriptor.ResourceType, out var existing))
+        {
+            return existing;
+        }
+
+        this._resourceDescriptors[descriptor.ResourceType] = descriptor;
+        return descriptor;
+    }
+
+    /// <summary>
+    /// Gets the <see cref="ApiResourceDescriptor"/> for the specified resource type.
+    /// </summary>
+    /// <param name="resourceType">The CLR type of the resource.</param>
+    /// <returns>The resource descriptor.</returns>
+    /// <exception cref="InvalidOperationException">If no resource descriptor has been registered for the type.</exception>
+    public ApiResourceDescriptor GetResourceDescriptor(Type resourceType)
+    {
+        return !this.TryGetResourceDescriptor(resourceType, out var descriptor)
+            ? throw new InvalidOperationException(
+                $"No resource descriptor has been registered for type '{resourceType.FullName}'. " +
+                $"Ensure the resource type is referenced via [SelfLink], [Link], or [RootLink] attributes on at least one operation.")
+            : descriptor;
+    }
+
+    /// <summary>
+    /// Tries to get the <see cref="ApiResourceDescriptor"/> for the specified resource type.
+    /// </summary>
+    /// <param name="resourceType">The CLR type of the resource.</param>
+    /// <param name="descriptor">The resource descriptor, or <see langword="null"/> if not found.</param>
+    /// <returns><see langword="true"/> if a resource descriptor was found; otherwise <see langword="false"/>.</returns>
+    public bool TryGetResourceDescriptor(Type resourceType, [NotNullWhen(true)] out ApiResourceDescriptor? descriptor)
+    {
+        if (this._frozenResourceDescriptors is not null)
+        {
+            return this._frozenResourceDescriptors.TryGetValue(resourceType, out descriptor);
+        }
+
+        return this._resourceDescriptors.TryGetValue(resourceType, out descriptor);
+    }
+
+    /// <summary>
+    /// Gets the number of registered resource descriptors.
+    /// </summary>
+    public int ResourceCount =>
+        this._frozenResourceDescriptors?.Count ?? this._resourceDescriptors.Count;
+
+    /// <summary>
     /// Finds the <see cref="ApiOperationDescriptor" /> for an operation of the given type, which may be a concrete
     /// implementation of a registered interface-based operation.
     /// </summary>
@@ -342,10 +408,81 @@ Operations will be found polymorphically, meaning an operation could be register
                 static kvp => (IReadOnlyList<ApiOperationDescriptor>)kvp.Value,
                 StringComparer.Ordinal);
 
+        this.DeriveResourceDescriptors();
+
+        this._frozenResourceDescriptors = this._resourceDescriptors.ToFrozenDictionary();
+
         foreach (var descriptor in this._allOperations.Values)
         {
             descriptor.FreezeFeatureData();
         }
+    }
+
+    /// <summary>
+    /// Auto-derives resource descriptors from registered links and operations. For each distinct
+    /// resource type referenced in links, creates (or enriches) an <see cref="ApiResourceDescriptor"/>
+    /// with the self-link, all targeting links, and producing operations.
+    /// </summary>
+    private void DeriveResourceDescriptors()
+    {
+        foreach (var (resourceType, links) in this._resourceTypeToLinks)
+        {
+            var descriptor = this.GetOrCreateResourceDescriptor(resourceType);
+
+            foreach (var link in links)
+            {
+                descriptor.AddLink(link);
+
+                if (string.Equals(link.Rel, "self", StringComparison.Ordinal))
+                {
+                    descriptor.SetSelfLink(link);
+                    descriptor.AddProducer(link.OperationDescriptor);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets an existing resource descriptor or creates and registers a new one for the specified type.
+    /// </summary>
+    private ApiResourceDescriptor GetOrCreateResourceDescriptor(Type resourceType)
+    {
+        if (this._resourceDescriptors.TryGetValue(resourceType, out var existing))
+        {
+            return existing;
+        }
+
+        var name = DeriveResourceName(resourceType);
+        var descriptor = new ApiResourceDescriptor(resourceType, name);
+        this._resourceDescriptors[resourceType] = descriptor;
+        return descriptor;
+    }
+
+    /// <summary>
+    /// Derives a stable camelCase resource name from the type name by stripping common suffixes.
+    /// </summary>
+    private static string DeriveResourceName(Type resourceType)
+    {
+        var typeName = resourceType.Name;
+
+        // Strip common suffixes
+        ReadOnlySpan<string> suffixes = ["ApiResource", "Resource", "Model", "Dto"];
+        foreach (var suffix in suffixes)
+        {
+            if (typeName.EndsWith(suffix, StringComparison.Ordinal) && typeName.Length > suffix.Length)
+            {
+                typeName = typeName[..^suffix.Length];
+                break;
+            }
+        }
+
+        // Convert to camelCase
+        if (typeName.Length > 0 && char.IsUpper(typeName[0]))
+        {
+            return string.Concat(char.ToLowerInvariant(typeName[0]).ToString(), typeName.AsSpan(1));
+        }
+
+        return typeName;
     }
 
     /// <summary>
