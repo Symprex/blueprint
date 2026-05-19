@@ -25,9 +25,10 @@ namespace Blueprint.Authorization;
 /// Unresolvable tokens are left as-is (the authorization provider should reject the key).
 /// </para>
 /// </remarks>
-public static class ResourceKeyTemplateExpander
+public static partial class ResourceKeyTemplateExpander
 {
-    private static readonly Regex TokenRegex = new(@"\{([^}]+)\}", RegexOptions.Compiled);
+    [GeneratedRegex(@"\{([^}]+)\}")]
+    private static partial Regex TokenRegex();
 
     /// <summary>
     /// Expands a resource key template by substituting tokens from the operation and principal.
@@ -51,7 +52,7 @@ public static class ResourceKeyTemplateExpander
         ArgumentNullException.ThrowIfNull(operation);
         ArgumentNullException.ThrowIfNull(principal);
 
-        return TokenRegex.Replace(template, match =>
+        return TokenRegex().Replace(template, match =>
         {
             var token = match.Groups[1].Value;
 
