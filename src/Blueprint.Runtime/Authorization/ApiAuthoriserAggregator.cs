@@ -120,13 +120,16 @@ internal sealed class ApiAuthoriserAggregator : IApiAuthoriserAggregator
             return apiResult;
         }
 
-        // Filter the per-scope instances to only those whose types are applicable.
-        var applicableLink = FilterByTypes(this._linkVisibilityAuthorisers, applicableLinkTypes);
-
+        // Evaluate resource-dependent state checkers inline (avoids FilterByTypes allocation)
         var traceLogEnabled = this._logger.IsEnabled(LogLevel.Trace);
 
-        foreach (var checker in applicableLink)
+        foreach (var checker in this._linkVisibilityAuthorisers)
         {
+            if (!IsApplicableType(checker, applicableLinkTypes))
+            {
+                continue;
+            }
+
             var linkResult = await checker.CanShowLinkAsync(operationContext, descriptor, resource!).ConfigureAwait(false);
 
             if (!linkResult.IsAllowed)
@@ -171,11 +174,15 @@ internal sealed class ApiAuthoriserAggregator : IApiAuthoriserAggregator
             return ExecutionAllowed.Yes;
         }
 
-        var applicableApi = FilterByTypes(this._apiAuthorisers, applicableApiTypes);
         var traceLogEnabled = this._logger.IsEnabled(LogLevel.Trace);
 
-        foreach (var checker in applicableApi)
+        foreach (var checker in this._apiAuthorisers)
         {
+            if (!IsApplicableType(checker, applicableApiTypes))
+            {
+                continue;
+            }
+
             var result = await checker.CanShowLinkAsync(operationContext, descriptor, resource!).ConfigureAwait(false);
 
             if (!result.IsAllowed)
@@ -206,36 +213,20 @@ internal sealed class ApiAuthoriserAggregator : IApiAuthoriserAggregator
     }
 
     /// <summary>
-    /// Filters an array of instances to only those whose runtime type appears in the
-    /// cached applicable-types array. Avoids allocations when all instances match.
+    /// Checks whether an authoriser instance's type is in the applicable types array.
+    /// Uses a simple linear scan because applicable arrays are typically 1-3 entries.
     /// </summary>
-    private static T[] FilterByTypes<T>(T[] instances, Type[] applicableTypes)
+    private static bool IsApplicableType<T>(T instance, Type[] applicableTypes)
     {
-        if (applicableTypes.Length == 0)
+        var type = instance!.GetType();
+        foreach (var applicable in applicableTypes)
         {
-            return [];
-        }
-
-        // Fast path: if counts match, all are applicable (common case).
-        if (instances.Length == applicableTypes.Length)
-        {
-            return instances;
-        }
-
-        var result = new List<T>(applicableTypes.Length);
-        foreach (var instance in instances)
-        {
-            var type = instance!.GetType();
-            foreach (var applicable in applicableTypes)
+            if (type == applicable)
             {
-                if (type == applicable)
-                {
-                    result.Add(instance);
-                    break;
-                }
+                return true;
             }
         }
 
-        return result.ToArray();
+        return false;
     }
 }
