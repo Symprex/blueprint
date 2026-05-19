@@ -286,6 +286,30 @@ public sealed partial class AppDataModelSourceGenerator : IIncrementalGenerator,
                 .WithBody(_ => { });
         }
 
+        // Generate RegisterResourceExpanders for IResourceExpander auto-discovery
+        if (compilationModel.ResourceExpanderTypes.Count > 0)
+        {
+            classBuilder.AddMethod("RegisterResourceExpanders", Accessibility.Public)
+                .MakeStaticMethod()
+                .WithReturnType("void")
+                .AddParameter("global::Microsoft.Extensions.DependencyInjection.BlueprintServiceBuilder", "builder")
+                .WithBody(c =>
+                {
+                    foreach (var expanderType in compilationModel.ResourceExpanderTypes)
+                    {
+                        c.AppendLine($"builder.AddResourceExpander<global::{expanderType}>();");
+                    }
+                });
+        }
+        else if (compilationModel.HasServiceBuilder)
+        {
+            classBuilder.AddMethod("RegisterResourceExpanders", Accessibility.Public)
+                .MakeStaticMethod()
+                .WithReturnType("void")
+                .AddParameter("global::Microsoft.Extensions.DependencyInjection.BlueprintServiceBuilder", "builder")
+                .WithBody(_ => { });
+        }
+
         return codeBuilder.Build();
     }
 

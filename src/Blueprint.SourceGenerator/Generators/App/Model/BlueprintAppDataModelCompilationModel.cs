@@ -11,6 +11,7 @@ namespace Blueprint.SourceGenerator.Generators.App.Model;
 /// <param name="Operations">All "registrations", representing BlueprintAppScan attribute definitions.</param>
 /// <param name="LinkCheckerTypes">Discovered StateBasedLinkChecker subclasses with their checker and resource type names.</param>
 /// <param name="ApiAuthoriserTypes">Discovered IApiAuthoriser implementations (fully-qualified type names).</param>
+/// <param name="ResourceExpanderTypes">Discovered IResourceExpander implementations (fully-qualified type names).</param>
 /// <param name="HasServiceBuilder">Whether the compilation references BlueprintServiceBuilder (i.e., Blueprint.Runtime).</param>
 /// <param name="Diagnostics">App-level diagnostics discovered while validating the declared serializer context against the scanned operations.</param>
 internal record BlueprintAppDataModelCompilationModel(
@@ -18,6 +19,7 @@ internal record BlueprintAppDataModelCompilationModel(
     EquatableList<string> Operations,
     EquatableList<LinkCheckerRegistrationInfo> LinkCheckerTypes,
     EquatableList<string> ApiAuthoriserTypes,
+    EquatableList<string> ResourceExpanderTypes,
     bool HasServiceBuilder,
     EquatableList<DiagnosticInfo> Diagnostics);
 

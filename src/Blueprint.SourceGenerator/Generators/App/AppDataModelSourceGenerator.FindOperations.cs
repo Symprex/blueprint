@@ -221,7 +221,7 @@ public sealed partial class AppDataModelSourceGenerator
             }
         }
 
-        // Only scan for link checkers and api authorisers when the compilation references Blueprint.Runtime (has BlueprintServiceBuilder)
+        // Only scan for link checkers, api authorisers, and resource expanders when the compilation references Blueprint.Runtime (has BlueprintServiceBuilder)
         var hasServiceBuilder = compilation.GetTypeByMetadataName("Microsoft.Extensions.DependencyInjection.BlueprintServiceBuilder") is not null;
         var linkCheckerTypes = hasServiceBuilder
             ? ScanForLinkCheckerTypes(compilation, scannedAssemblies)
@@ -229,12 +229,16 @@ public sealed partial class AppDataModelSourceGenerator
         var apiAuthoriserTypes = hasServiceBuilder
             ? ScanForApiAuthoriserTypes(compilation, scannedAssemblies)
             : new EquatableList<string>([]);
+        var resourceExpanderTypes = hasServiceBuilder
+            ? ScanForResourceExpanderTypes(compilation, scannedAssemblies)
+            : new EquatableList<string>([]);
 
         return Result.Success(new BlueprintAppDataModelCompilationModel(
             dataModelClass,
             registrations,
             linkCheckerTypes,
             apiAuthoriserTypes,
+            resourceExpanderTypes,
             hasServiceBuilder,
             diagnostics));
     }
@@ -313,6 +317,74 @@ public sealed partial class AppDataModelSourceGenerator
 
         // Scan BlueprintAppScan assemblies + compilation assembly + all referenced assemblies
         // because authorisers are cross-cutting and may live in shared infrastructure assemblies.
+        var allAssemblies = new HashSet<IAssemblySymbol>(scannedAssemblies, SymbolEqualityComparer.Default)
+        {
+            compilation.Assembly,
+        };
+
+        foreach (var reference in compilation.References)
+        {
+            if (compilation.GetAssemblyOrModuleSymbol(reference) is IAssemblySymbol refAssembly)
+            {
+                allAssemblies.Add(refAssembly);
+            }
+        }
+
+        foreach (var assembly in allAssemblies)
+        {
+            // Skip framework/BCL assemblies for performance
+            var name = assembly.Name;
+            if (name.StartsWith("System", StringComparison.Ordinal) ||
+                name.StartsWith("Microsoft", StringComparison.Ordinal) ||
+                name.StartsWith("netstandard", StringComparison.Ordinal) ||
+                name.StartsWith("mscorlib", StringComparison.Ordinal) ||
+                name.StartsWith("Blueprint.", StringComparison.Ordinal) ||
+                name == "Blueprint")
+            {
+                continue;
+            }
+
+            foreach (var type in GetTypesFromAssembly(assembly))
+            {
+                if (type.IsAbstract || type.IsStatic || !type.CanBeReferencedByName || type.TypeKind != TypeKind.Class || type.IsGenericType)
+                {
+                    continue;
+                }
+
+                if (!IsExternallyAccessible(type))
+                {
+                    continue;
+                }
+
+                if (type.IsAssignableTo(interfaceType))
+                {
+                    results.Add(type.ToFullMetadataName());
+                }
+            }
+        }
+
+        results.Sort(StringComparer.Ordinal);
+        return new EquatableList<string>([.. results]);
+    }
+
+    /// <summary>
+    /// Scans all referenced assemblies (not just <c>[BlueprintAppScan]</c> targets) for concrete classes
+    /// that implement <c>IResourceExpander</c>. This is broader than operation scanning because resource
+    /// expanders are cross-cutting infrastructure that may live in shared assemblies.
+    /// </summary>
+    private static EquatableList<string> ScanForResourceExpanderTypes(
+        Compilation compilation,
+        HashSet<IAssemblySymbol> scannedAssemblies)
+    {
+        var interfaceType = compilation.GetTypeByMetadataName("Blueprint.Runtime.Expansion.IResourceExpander");
+
+        if (interfaceType is null)
+        {
+            return new EquatableList<string>([]);
+        }
+
+        var results = new List<string>();
+
         var allAssemblies = new HashSet<IAssemblySymbol>(scannedAssemblies, SymbolEqualityComparer.Default)
         {
             compilation.Assembly,

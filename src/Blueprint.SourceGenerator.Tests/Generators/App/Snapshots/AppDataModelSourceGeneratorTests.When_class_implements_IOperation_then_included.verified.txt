@@ -27,6 +27,10 @@ namespace TestNamespace
         public static void RegisterLinkCheckers(global::Microsoft.Extensions.DependencyInjection.BlueprintServiceBuilder builder)
         {
         }
+
+        public static void RegisterResourceExpanders(global::Microsoft.Extensions.DependencyInjection.BlueprintServiceBuilder builder)
+        {
+        }
     }
 }
 

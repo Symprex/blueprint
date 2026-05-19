@@ -38,6 +38,10 @@ namespace TestNamespace
         {
             builder.AddLinkVisibilityAuthoriser<global::TestNamespace.TestDeactivateChecker>();
         }
+
+        public static void RegisterResourceExpanders(global::Microsoft.Extensions.DependencyInjection.BlueprintServiceBuilder builder)
+        {
+        }
     }
 }
 
