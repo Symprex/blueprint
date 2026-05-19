@@ -132,9 +132,16 @@ public sealed class ApiExceptionFactoryModule : IBlueprintSourceGeneratorModule,
         httpStatus = 0;
 
         // Guard against circular references or deep chains.
-        if (depth > 2 || field.DeclaringSyntaxReferences.Length == 0)
+        if (depth > 2)
         {
             return false;
+        }
+
+        // Cross-assembly fields have no syntax to inspect. Fall back to matching the field name
+        // against well-known HttpStatusCode enum members (e.g. CommonApiExceptions.NotFound → 404).
+        if (field.DeclaringSyntaxReferences.Length == 0)
+        {
+            return WellKnownHttpStatusCodes.TryGetValue(field.Name, out httpStatus);
         }
 
         var syntax = field.DeclaringSyntaxReferences[0].GetSyntax();

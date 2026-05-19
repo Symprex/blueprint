@@ -1,5 +1,7 @@
 using Blueprint.SourceGenerator.Generators.Descriptors;
 using FluentAssertions;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 
 namespace Blueprint.SourceGenerator.Tests.Modules;
 
@@ -364,6 +366,107 @@ public class ApiExceptionFactoryModuleTests
 
         // The 404 status code from the referenced CommonApiExceptions.NotFound should appear
         descriptorSource.Should().Contain("404");
+        descriptorSource.Should().Contain("OperationHttpResponseMetadata");
+    }
+
+    [Fact]
+    public void When_factory_field_references_cross_assembly_field_named_after_HttpStatusCode_then_resolved()
+    {
+        // Compile CommonApiExceptions into a separate assembly (simulates cross-project reference)
+        const string sharedSource = """
+            using System.Net;
+            using Blueprint;
+
+            namespace SharedExceptions
+            {
+                public static class CommonApiExceptions
+                {
+                    public static readonly ApiExceptionFactory NotFound = new(
+                        "Not found",
+                        "not_found",
+                        HttpStatusCode.NotFound);
+
+                    public static readonly ApiExceptionFactory Forbidden = new(
+                        "Forbidden",
+                        "forbidden",
+                        HttpStatusCode.Forbidden);
+                }
+            }
+            """;
+
+        var parseOptions = new CSharpParseOptions(LanguageVersion.Preview);
+        var sharedTree = CSharpSyntaxTree.ParseText(sharedSource, parseOptions, "Shared.cs");
+
+        var references = AppDomain.CurrentDomain.GetAssemblies()
+            .Where(static a => !a.IsDynamic && !string.IsNullOrWhiteSpace(a.Location))
+            .Select(static a => (MetadataReference)MetadataReference.CreateFromFile(a.Location))
+            .ToList();
+        references.Add(MetadataReference.CreateFromFile(typeof(Blueprint.ApiExceptionFactory).Assembly.Location));
+
+        var sharedCompilation = CSharpCompilation.Create(
+            "SharedLib",
+            [sharedTree],
+            references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        // Ensure the shared library compiles cleanly
+        var sharedDiagnostics = sharedCompilation.GetDiagnostics()
+            .Where(static d => d.Severity == DiagnosticSeverity.Error);
+        sharedDiagnostics.Should().BeEmpty("shared library must compile");
+
+        // Create an in-memory metadata reference from the shared compilation
+        using var sharedStream = new MemoryStream();
+        sharedCompilation.Emit(sharedStream);
+        sharedStream.Position = 0;
+        var sharedRef = MetadataReference.CreateFromStream(sharedStream);
+
+        // Now compile the operation that references SharedExceptions.CommonApiExceptions.NotFound
+        const string operationSource = """
+            using System.Net;
+            using System.Threading.Tasks;
+            using Blueprint;
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using Blueprint.Runtime.Exec;
+            using SharedExceptions;
+
+            namespace TestNamespace
+            {
+                [BlueprintAppScan]
+                public partial class TestApp : BlueprintApp { }
+
+                [RootLink("/things/{Id}")]
+                [HttpGet]
+                public partial class GetThingQuery : IQuery<OkResult<string>>
+                {
+                    public static readonly ApiExceptionFactory ThingNotFound = CommonApiExceptions.NotFound;
+                    public static readonly ApiExceptionFactory AccessDenied = CommonApiExceptions.Forbidden;
+
+                    public string Id { get; set; }
+
+                    public static Task<OkResult<string>> HandleAsync(GetThingQuery operation) =>
+                        Task.FromResult(new OkResult<string>("ok"));
+                }
+            }
+            """;
+
+        var generators = new[]
+        {
+            TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>(),
+        };
+
+        var result = TestHelpers.CompileWithTrackedGenerators(
+            generators, [operationSource], ["Input0.cs"], [sharedRef]);
+
+        result.Diagnostics.Should().BeEmpty(
+            "cross-assembly field names matching HttpStatusCode members should resolve without BP010");
+
+        var descriptorSources = result.GetGeneratedSources(nameof(OperationDescriptorSourceGenerator));
+        var descriptorSource = string.Join("\n", descriptorSources.Select(static s => s.SourceText));
+
+        // Both 404 and 403 should be resolved from the cross-assembly field names
+        descriptorSource.Should().Contain("404");
+        descriptorSource.Should().Contain("403");
         descriptorSource.Should().Contain("OperationHttpResponseMetadata");
     }
 }
