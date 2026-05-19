@@ -211,9 +211,36 @@ public sealed partial class AppDataModelSourceGenerator : IIncrementalGenerator,
                 .AddParameter("global::Microsoft.Extensions.DependencyInjection.BlueprintServiceBuilder", "builder")
                 .WithBody(c =>
                 {
-                    foreach (var checkerType in compilationModel.LinkCheckerTypes)
+                    foreach (var checker in compilationModel.LinkCheckerTypes)
                     {
-                        c.AppendLine($"builder.AddLinkVisibilityAuthoriser<global::{checkerType}>();");
+                        c.AppendLine($"builder.AddLinkVisibilityAuthoriser<global::{checker.CheckerTypeName}>();");
+                    }
+                });
+
+            // Generate PopulateResourceCheckers to wire state-based checkers into ApiResourceDescriptor instances
+            classBuilder.AddMethod("PopulateResourceCheckers", Accessibility.Public)
+                .MakeStaticMethod()
+                .WithReturnType("void")
+                .AddParameter("global::Blueprint.Model.BlueprintApp", "app")
+                .WithBody(c =>
+                {
+                    // Group checkers by resource type to reduce lookups
+                    var grouped = compilationModel.LinkCheckerTypes
+                        .GroupBy(static x => x.ResourceTypeName)
+                        .OrderBy(static g => g.Key, StringComparer.Ordinal);
+
+                    foreach (var resourceGroup in grouped)
+                    {
+                        c.AppendLine($"if (app.TryGetResourceDescriptor(typeof(global::{resourceGroup.Key}), out var rd_{resourceGroup.Key.Replace(".", "_", StringComparison.Ordinal)}))");
+                        c.AppendLine("{");
+
+                        foreach (var checker in resourceGroup)
+                        {
+                            c.AppendLine($"    rd_{resourceGroup.Key.Replace(".", "_", StringComparison.Ordinal)}.AddStateBasedChecker(typeof(global::{checker.CheckerTypeName}));");
+                        }
+
+                        c.AppendLine("}");
+                        c.AppendLine(string.Empty);
                     }
                 });
         }

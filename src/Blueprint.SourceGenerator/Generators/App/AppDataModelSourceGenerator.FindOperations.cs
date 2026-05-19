@@ -225,7 +225,7 @@ public sealed partial class AppDataModelSourceGenerator
         var hasServiceBuilder = compilation.GetTypeByMetadataName("Microsoft.Extensions.DependencyInjection.BlueprintServiceBuilder") is not null;
         var linkCheckerTypes = hasServiceBuilder
             ? ScanForLinkCheckerTypes(compilation, scannedAssemblies)
-            : new EquatableList<string>([]);
+            : new EquatableList<LinkCheckerRegistrationInfo>([]);
 
         return Result.Success(new BlueprintAppDataModelCompilationModel(
             dataModelClass,
@@ -236,10 +236,10 @@ public sealed partial class AppDataModelSourceGenerator
 
     /// <summary>
     /// Scans all assemblies targeted by <c>[BlueprintAppScan]</c> plus the declaring assembly for concrete classes
-    /// that inherit from <c>StateBasedLinkChecker&lt;TOperation, TResource&gt;</c>. Returns their fully-qualified
-    /// names for source-generated DI registration (eliminating the need for Scrutor assembly scanning).
+    /// that inherit from <c>StateBasedLinkChecker&lt;TOperation, TResource&gt;</c>. Returns registration info
+    /// including both the checker type name and the resource type it targets.
     /// </summary>
-    private static EquatableList<string> ScanForLinkCheckerTypes(
+    private static EquatableList<LinkCheckerRegistrationInfo> ScanForLinkCheckerTypes(
         Compilation compilation,
         HashSet<IAssemblySymbol> scannedAssemblies)
     {
@@ -247,10 +247,10 @@ public sealed partial class AppDataModelSourceGenerator
 
         if (baseType is null)
         {
-            return new EquatableList<string>([]);
+            return new EquatableList<LinkCheckerRegistrationInfo>([]);
         }
 
-        var results = new List<string>();
+        var results = new List<LinkCheckerRegistrationInfo>();
 
         // Include the compilation's own assembly in addition to the [BlueprintAppScan]-targeted assemblies,
         // since link checkers typically live in the host project alongside the app class.
@@ -274,34 +274,40 @@ public sealed partial class AppDataModelSourceGenerator
                     continue;
                 }
 
-                if (InheritsFromGenericBase(type, baseType))
+                var resourceType = GetGenericBaseResourceType(type, baseType);
+                if (resourceType is not null)
                 {
-                    results.Add(type.ToFullMetadataName());
+                    results.Add(new LinkCheckerRegistrationInfo(
+                        type.ToFullMetadataName(),
+                        resourceType.ToFullMetadataName()));
                 }
             }
         }
 
-        results.Sort(StringComparer.Ordinal);
-        return new EquatableList<string>([.. results]);
+        results.Sort(static (a, b) => string.Compare(a.CheckerTypeName, b.CheckerTypeName, StringComparison.Ordinal));
+        return new EquatableList<LinkCheckerRegistrationInfo>([.. results]);
     }
 
     /// <summary>
-    /// Checks whether a type inherits (directly or indirectly) from the specified open generic base type.
+    /// Extracts the TResource type argument (second type parameter) from the
+    /// <c>StateBasedLinkChecker&lt;TOperation, TResource&gt;</c> base class of the given type.
+    /// Returns null if the type does not inherit from the base.
     /// </summary>
-    private static bool InheritsFromGenericBase(INamedTypeSymbol type, INamedTypeSymbol openGenericBase)
+    private static INamedTypeSymbol? GetGenericBaseResourceType(INamedTypeSymbol type, INamedTypeSymbol openGenericBase)
     {
         var current = type.BaseType;
         while (current is not null)
         {
             if (current.IsGenericType && SymbolEqualityComparer.Default.Equals(current.OriginalDefinition, openGenericBase))
             {
-                return true;
+                // TResource is the second type argument of StateBasedLinkChecker<TOperation, TResource>
+                return current.TypeArguments.Length >= 2 ? current.TypeArguments[1] as INamedTypeSymbol : null;
             }
 
             current = current.BaseType;
         }
 
-        return false;
+        return null;
     }
 
     /// <summary>

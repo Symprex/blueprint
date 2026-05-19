@@ -9,10 +9,18 @@ namespace Blueprint.SourceGenerator.Generators.App.Model;
 /// </summary>
 /// <param name="Class">Details of the class itself.</param>
 /// <param name="Operations">All "registrations", representing BlueprintAppScan attribute definitions.</param>
-/// <param name="LinkCheckerTypes">Fully-qualified names of discovered StateBasedLinkChecker subclasses for auto-registration.</param>
+/// <param name="LinkCheckerTypes">Discovered StateBasedLinkChecker subclasses with their checker and resource type names.</param>
 /// <param name="Diagnostics">App-level diagnostics discovered while validating the declared serializer context against the scanned operations.</param>
 internal record BlueprintAppDataModelCompilationModel(
     ParseOnlyBlueprintAppClassModel Class,
     EquatableList<string> Operations,
-    EquatableList<string> LinkCheckerTypes,
+    EquatableList<LinkCheckerRegistrationInfo> LinkCheckerTypes,
     EquatableList<DiagnosticInfo> Diagnostics);
+
+/// <summary>
+/// Captures a discovered <c>StateBasedLinkChecker&lt;TOperation, TResource&gt;</c> implementation
+/// with the fully-qualified names needed for DI registration and resource descriptor wiring.
+/// </summary>
+/// <param name="CheckerTypeName">Fully-qualified name of the checker class.</param>
+/// <param name="ResourceTypeName">Fully-qualified name of TResource (second type argument).</param>
+internal record LinkCheckerRegistrationInfo(string CheckerTypeName, string ResourceTypeName);

@@ -20,6 +20,15 @@ namespace TestNamespace
             this.Freeze();
         }
 
+        public static void PopulateResourceCheckers(global::Blueprint.Model.BlueprintApp app)
+        {
+            if (app.TryGetResourceDescriptor(typeof(global::TestNamespace.TestResource), out var rd_TestNamespace_TestResource))
+            {
+                rd_TestNamespace_TestResource.AddStateBasedChecker(typeof(global::TestNamespace.TestDeactivateChecker));
+            }
+            
+        }
+
         public static void RegisterLinkCheckers(global::Microsoft.Extensions.DependencyInjection.BlueprintServiceBuilder builder)
         {
             builder.AddLinkVisibilityAuthoriser<global::TestNamespace.TestDeactivateChecker>();
