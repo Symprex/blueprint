@@ -197,6 +197,6 @@ public static partial class StringExtensions
         return Inflector.Pluralize(word);
     }
 
-    [GeneratedRegex("(?:^|_)(.)", RegexOptions.Compiled)]
+    [GeneratedRegex("(?:^|_)(.)")]
     private static partial Regex PascalizeRegex();
 }
