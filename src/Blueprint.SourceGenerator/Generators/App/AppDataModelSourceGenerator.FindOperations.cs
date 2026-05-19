@@ -221,16 +221,20 @@ public sealed partial class AppDataModelSourceGenerator
             }
         }
 
-        // Only scan for link checkers when the compilation references Blueprint.Runtime (has BlueprintServiceBuilder)
+        // Only scan for link checkers and api authorisers when the compilation references Blueprint.Runtime (has BlueprintServiceBuilder)
         var hasServiceBuilder = compilation.GetTypeByMetadataName("Microsoft.Extensions.DependencyInjection.BlueprintServiceBuilder") is not null;
         var linkCheckerTypes = hasServiceBuilder
             ? ScanForLinkCheckerTypes(compilation, scannedAssemblies)
             : new EquatableList<LinkCheckerRegistrationInfo>([]);
+        var apiAuthoriserTypes = hasServiceBuilder
+            ? ScanForApiAuthoriserTypes(compilation, scannedAssemblies)
+            : new EquatableList<string>([]);
 
         return Result.Success(new BlueprintAppDataModelCompilationModel(
             dataModelClass,
             registrations,
             linkCheckerTypes,
+            apiAuthoriserTypes,
             hasServiceBuilder,
             diagnostics));
     }
@@ -287,6 +291,53 @@ public sealed partial class AppDataModelSourceGenerator
 
         results.Sort(static (a, b) => string.Compare(a.CheckerTypeName, b.CheckerTypeName, StringComparison.Ordinal));
         return new EquatableList<LinkCheckerRegistrationInfo>([.. results]);
+    }
+
+    /// <summary>
+    /// Scans all assemblies targeted by <c>[BlueprintAppScan]</c> plus the declaring assembly for concrete classes
+    /// that implement <c>IApiAuthoriser</c>. Returns the fully-qualified type names for DI registration.
+    /// </summary>
+    private static EquatableList<string> ScanForApiAuthoriserTypes(
+        Compilation compilation,
+        HashSet<IAssemblySymbol> scannedAssemblies)
+    {
+        var interfaceType = compilation.GetTypeByMetadataName("Blueprint.Authorization.IApiAuthoriser");
+
+        if (interfaceType is null)
+        {
+            return new EquatableList<string>([]);
+        }
+
+        var results = new List<string>();
+
+        var allAssemblies = new HashSet<IAssemblySymbol>(scannedAssemblies, SymbolEqualityComparer.Default)
+        {
+            compilation.Assembly,
+        };
+
+        foreach (var assembly in allAssemblies)
+        {
+            foreach (var type in GetTypesFromAssembly(assembly))
+            {
+                if (type.IsAbstract || type.IsStatic || !type.CanBeReferencedByName || type.TypeKind != TypeKind.Class || type.IsGenericType)
+                {
+                    continue;
+                }
+
+                if (!IsExternallyAccessible(type))
+                {
+                    continue;
+                }
+
+                if (type.IsAssignableTo(interfaceType))
+                {
+                    results.Add(type.ToFullMetadataName());
+                }
+            }
+        }
+
+        results.Sort(StringComparer.Ordinal);
+        return new EquatableList<string>([.. results]);
     }
 
     /// <summary>

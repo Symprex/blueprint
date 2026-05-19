@@ -262,6 +262,30 @@ public sealed partial class AppDataModelSourceGenerator : IIncrementalGenerator,
                 .WithBody(_ => { });
         }
 
+        // Generate RegisterApiAuthorisers for IApiAuthoriser auto-discovery
+        if (compilationModel.ApiAuthoriserTypes.Count > 0)
+        {
+            classBuilder.AddMethod("RegisterApiAuthorisers", Accessibility.Public)
+                .MakeStaticMethod()
+                .WithReturnType("void")
+                .AddParameter("global::Microsoft.Extensions.DependencyInjection.BlueprintServiceBuilder", "builder")
+                .WithBody(c =>
+                {
+                    foreach (var authoriserType in compilationModel.ApiAuthoriserTypes)
+                    {
+                        c.AppendLine($"builder.AddApiAuthoriser<global::{authoriserType}>();");
+                    }
+                });
+        }
+        else if (compilationModel.HasServiceBuilder)
+        {
+            classBuilder.AddMethod("RegisterApiAuthorisers", Accessibility.Public)
+                .MakeStaticMethod()
+                .WithReturnType("void")
+                .AddParameter("global::Microsoft.Extensions.DependencyInjection.BlueprintServiceBuilder", "builder")
+                .WithBody(_ => { });
+        }
+
         return codeBuilder.Build();
     }
 

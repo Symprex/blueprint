@@ -31,7 +31,7 @@
         "generators": {
           "AppDataModelSourceGenerator": {
             "generatedOutputCount": 1,
-            "generatedOutputLineCount": 125,
+            "generatedOutputLineCount": 129,
             "trackedStages": {
               "CombineWithCompilation": 1,
               "ExceptionTranslationPolicy": 1,
