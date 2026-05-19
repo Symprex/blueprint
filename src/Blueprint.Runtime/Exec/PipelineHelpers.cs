@@ -855,13 +855,25 @@ public static class PipelineHelpers
 
             var placeholder = urlTemplate.AsSpan(openBrace + 1, closeBrace - openBrace - 1);
 
-            // Strip route constraints (e.g. {Id:int} → Id) and fallback suffixes ({Prop:Fallback} → Prop)
+            // Colon means fallback: {Primary:Fallback} — try Primary, if null/missing try Fallback
             var colonIdx = placeholder.IndexOf(':');
             var propName = colonIdx >= 0 ? placeholder[..colonIdx].ToString() : placeholder.ToString();
+            var fallbackName = colonIdx >= 0 ? placeholder[(colonIdx + 1)..].ToString() : null;
 
             if (accessors.TryGetValue(propName, out var getter))
             {
-                sb.Append(getter(source)?.ToString() ?? string.Empty);
+                var value = getter(source)?.ToString();
+
+                if (value is null && fallbackName is not null && accessors.TryGetValue(fallbackName, out var fallbackGetter))
+                {
+                    value = fallbackGetter(source)?.ToString();
+                }
+
+                sb.Append(value ?? string.Empty);
+            }
+            else if (fallbackName is not null && accessors.TryGetValue(fallbackName, out var fallbackGetter2))
+            {
+                sb.Append(fallbackGetter2(source)?.ToString() ?? string.Empty);
             }
             else
             {

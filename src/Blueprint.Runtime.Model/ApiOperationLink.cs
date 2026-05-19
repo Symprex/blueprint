@@ -175,9 +175,10 @@ public sealed class ApiOperationLink
 
             var placeholder = result.Substring(openBrace + 1, closeBrace - openBrace - 1);
 
-            // Strip any format specifier (e.g. {Id:UserId} → just use "Id")
+            // Colon means fallback: {Primary:Fallback} — try Primary property, if null try Fallback
             var colonIndex = placeholder.IndexOf(':');
             var propertyName = colonIndex >= 0 ? placeholder[..colonIndex] : placeholder;
+            var fallbackName = colonIndex >= 0 ? placeholder[(colonIndex + 1)..] : null;
             var isCatchAll = propertyName.StartsWith('*');
             propertyName = propertyName.TrimStart('*');
 
@@ -187,12 +188,19 @@ public sealed class ApiOperationLink
                     key.Item2,
                     BindingFlags.IgnoreCase | BindingFlags.Instance | BindingFlags.Public));
 
-            if (property is null)
-            {
-                return null;
-            }
+            var value = property?.GetValue(values);
 
-            var value = property.GetValue(values);
+            // Try fallback property when primary is missing or null
+            if (value is null && fallbackName is not null)
+            {
+                var fallbackProperty = _propertyCache.GetOrAdd(
+                    (valueType, fallbackName),
+                    static key => key.Item1.GetProperty(
+                        key.Item2,
+                        BindingFlags.IgnoreCase | BindingFlags.Instance | BindingFlags.Public));
+
+                value = fallbackProperty?.GetValue(values);
+            }
 
             if (value is null)
             {
