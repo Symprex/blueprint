@@ -12,7 +12,7 @@
   "current": {
     "activeWorkstream": "polish-and-aot-hardening",
     "frameworkStatus": "production-ready",
-    "frameworkStatusDetail": "Blueprint source-gen fully operational and performance-validated. 2,324 Blueprint tests pass (829 generator + 1179 integration + 47 CodeWriter + 52 HttpClient + 80 Testing + 14 Codemod + 110 Migration + 13 CodeFixes). Benchmarks validated: 2.1µs minimal pipeline, 10-14ns dispatch (zero alloc), 57-83ns link gen, sub-200ns auth. S365 migration: entire solution builds with ZERO Blueprint warnings. 2,748 S365 tests passing across 18+ non-DB test suites. Only Portal tests have known failures (1743 — Marten v8/Npgsql, separate branch). Architecture: FrozenDictionary dispatch, source-generated validation/links/auth/serializer, comprehensive AOT annotations, 90+ compile-time diagnostics.",
+    "frameworkStatusDetail": "Blueprint source-gen fully operational and performance-validated. 2,325 Blueprint tests pass (830 generator + 1179 integration + 47 CodeWriter + 52 HttpClient + 80 Testing + 14 Codemod + 110 Migration + 13 CodeFixes). Benchmarks validated: 2.1µs minimal pipeline, 10-14ns dispatch (zero alloc), 57-83ns link gen, sub-200ns auth. S365 migration: entire solution builds with ZERO Blueprint warnings. 2,748 S365 tests passing across 18+ non-DB test suites. Only Portal tests have known failures (1743 — Marten v8/Npgsql, separate branch). Architecture: FrozenDictionary dispatch, source-generated validation/links/auth/serializer, comprehensive AOT annotations, 90+ compile-time diagnostics.",
     "nextReadySlice": null,
     "lastCompletedSlice": {
       "id": "runtime-performance-profiling-and-aot-audit",
