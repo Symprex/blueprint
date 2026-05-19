@@ -294,8 +294,9 @@ public sealed partial class AppDataModelSourceGenerator
     }
 
     /// <summary>
-    /// Scans all assemblies targeted by <c>[BlueprintAppScan]</c> plus the declaring assembly for concrete classes
-    /// that implement <c>IApiAuthoriser</c>. Returns the fully-qualified type names for DI registration.
+    /// Scans all referenced assemblies (not just <c>[BlueprintAppScan]</c> targets) for concrete classes
+    /// that implement <c>IApiAuthoriser</c>. This is broader than operation scanning because authorisers
+    /// are cross-cutting infrastructure that often lives in shared assemblies (e.g. CommonCoreAssembly).
     /// </summary>
     private static EquatableList<string> ScanForApiAuthoriserTypes(
         Compilation compilation,
@@ -310,13 +311,35 @@ public sealed partial class AppDataModelSourceGenerator
 
         var results = new List<string>();
 
+        // Scan BlueprintAppScan assemblies + compilation assembly + all referenced assemblies
+        // because authorisers are cross-cutting and may live in shared infrastructure assemblies.
         var allAssemblies = new HashSet<IAssemblySymbol>(scannedAssemblies, SymbolEqualityComparer.Default)
         {
             compilation.Assembly,
         };
 
+        foreach (var reference in compilation.References)
+        {
+            if (compilation.GetAssemblyOrModuleSymbol(reference) is IAssemblySymbol refAssembly)
+            {
+                allAssemblies.Add(refAssembly);
+            }
+        }
+
         foreach (var assembly in allAssemblies)
         {
+            // Skip framework/BCL assemblies for performance
+            var name = assembly.Name;
+            if (name.StartsWith("System", StringComparison.Ordinal) ||
+                name.StartsWith("Microsoft", StringComparison.Ordinal) ||
+                name.StartsWith("netstandard", StringComparison.Ordinal) ||
+                name.StartsWith("mscorlib", StringComparison.Ordinal) ||
+                name.StartsWith("Blueprint.", StringComparison.Ordinal) ||
+                name == "Blueprint")
+            {
+                continue;
+            }
+
             foreach (var type in GetTypesFromAssembly(assembly))
             {
                 if (type.IsAbstract || type.IsStatic || !type.CanBeReferencedByName || type.TypeKind != TypeKind.Class || type.IsGenericType)
