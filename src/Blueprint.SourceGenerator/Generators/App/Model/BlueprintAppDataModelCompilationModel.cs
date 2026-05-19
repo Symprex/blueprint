@@ -9,8 +9,10 @@ namespace Blueprint.SourceGenerator.Generators.App.Model;
 /// </summary>
 /// <param name="Class">Details of the class itself.</param>
 /// <param name="Operations">All "registrations", representing BlueprintAppScan attribute definitions.</param>
+/// <param name="LinkCheckerTypes">Fully-qualified names of discovered StateBasedLinkChecker subclasses for auto-registration.</param>
 /// <param name="Diagnostics">App-level diagnostics discovered while validating the declared serializer context against the scanned operations.</param>
 internal record BlueprintAppDataModelCompilationModel(
     ParseOnlyBlueprintAppClassModel Class,
     EquatableList<string> Operations,
+    EquatableList<string> LinkCheckerTypes,
     EquatableList<DiagnosticInfo> Diagnostics);

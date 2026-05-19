@@ -221,7 +221,107 @@ public sealed partial class AppDataModelSourceGenerator
             }
         }
 
-        return Result.Success(new BlueprintAppDataModelCompilationModel(dataModelClass, registrations, diagnostics));
+        // Only scan for link checkers when the compilation references Blueprint.Runtime (has BlueprintServiceBuilder)
+        var hasServiceBuilder = compilation.GetTypeByMetadataName("Microsoft.Extensions.DependencyInjection.BlueprintServiceBuilder") is not null;
+        var linkCheckerTypes = hasServiceBuilder
+            ? ScanForLinkCheckerTypes(compilation, scannedAssemblies)
+            : new EquatableList<string>([]);
+
+        return Result.Success(new BlueprintAppDataModelCompilationModel(
+            dataModelClass,
+            registrations,
+            linkCheckerTypes,
+            diagnostics));
+    }
+
+    /// <summary>
+    /// Scans all assemblies targeted by <c>[BlueprintAppScan]</c> plus the declaring assembly for concrete classes
+    /// that inherit from <c>StateBasedLinkChecker&lt;TOperation, TResource&gt;</c>. Returns their fully-qualified
+    /// names for source-generated DI registration (eliminating the need for Scrutor assembly scanning).
+    /// </summary>
+    private static EquatableList<string> ScanForLinkCheckerTypes(
+        Compilation compilation,
+        HashSet<IAssemblySymbol> scannedAssemblies)
+    {
+        var baseType = compilation.GetTypeByMetadataName("Blueprint.Authorization.StateBasedLinkChecker`2");
+
+        if (baseType is null)
+        {
+            return new EquatableList<string>([]);
+        }
+
+        var results = new List<string>();
+
+        // Include the compilation's own assembly in addition to the [BlueprintAppScan]-targeted assemblies,
+        // since link checkers typically live in the host project alongside the app class.
+        var allAssemblies = new HashSet<IAssemblySymbol>(scannedAssemblies, SymbolEqualityComparer.Default)
+        {
+            compilation.Assembly,
+        };
+
+        foreach (var assembly in allAssemblies)
+        {
+            foreach (var type in GetTypesFromAssembly(assembly))
+            {
+                if (type.IsAbstract || type.IsStatic || !type.CanBeReferencedByName || type.TypeKind != TypeKind.Class || type.IsGenericType)
+                {
+                    continue;
+                }
+
+                // Skip types that are not externally accessible (nested private, internal nested in private, etc.)
+                if (!IsExternallyAccessible(type))
+                {
+                    continue;
+                }
+
+                if (InheritsFromGenericBase(type, baseType))
+                {
+                    results.Add(type.ToFullMetadataName());
+                }
+            }
+        }
+
+        results.Sort(StringComparer.Ordinal);
+        return new EquatableList<string>([.. results]);
+    }
+
+    /// <summary>
+    /// Checks whether a type inherits (directly or indirectly) from the specified open generic base type.
+    /// </summary>
+    private static bool InheritsFromGenericBase(INamedTypeSymbol type, INamedTypeSymbol openGenericBase)
+    {
+        var current = type.BaseType;
+        while (current is not null)
+        {
+            if (current.IsGenericType && SymbolEqualityComparer.Default.Equals(current.OriginalDefinition, openGenericBase))
+            {
+                return true;
+            }
+
+            current = current.BaseType;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Determines whether a type is externally accessible — i.e. it and all containing types
+    /// have public or internal accessibility (not private or protected).
+    /// </summary>
+    private static bool IsExternallyAccessible(INamedTypeSymbol type)
+    {
+        var current = type;
+        while (current is not null)
+        {
+            if (current.DeclaredAccessibility is Accessibility.Private or Accessibility.Protected or Accessibility.ProtectedAndInternal)
+            {
+                return false;
+            }
+
+            current = current.ContainingType;
+        }
+
+        return true;
     }
 
     /// <summary>

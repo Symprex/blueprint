@@ -2,7 +2,7 @@ using Blueprint.SourceGenerator.Generators.App;
 
 namespace Blueprint.SourceGenerator.Tests.Generators.AppDataModel;
 
-public class AppDataModelSourceGeneratorTests
+public partial class AppDataModelSourceGeneratorTests
 {
     public const string SnapshotsFolder = "Generators/App/Snapshots/";
 

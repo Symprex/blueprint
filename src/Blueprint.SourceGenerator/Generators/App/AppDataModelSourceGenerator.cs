@@ -202,6 +202,22 @@ public sealed partial class AppDataModelSourceGenerator : IIncrementalGenerator,
                 c.AppendLine("this.Freeze();");
             });
 
+        // Generate RegisterLinkCheckers method if any StateBasedLinkChecker subclasses were discovered
+        if (compilationModel.LinkCheckerTypes.Count > 0)
+        {
+            classBuilder.AddMethod("RegisterLinkCheckers", Accessibility.Public)
+                .MakeStaticMethod()
+                .WithReturnType("void")
+                .AddParameter("global::Microsoft.Extensions.DependencyInjection.BlueprintServiceBuilder", "builder")
+                .WithBody(c =>
+                {
+                    foreach (var checkerType in compilationModel.LinkCheckerTypes)
+                    {
+                        c.AppendLine($"builder.AddLinkVisibilityAuthoriser<global::{checkerType}>();");
+                    }
+                });
+        }
+
         return codeBuilder.Build();
     }
 
