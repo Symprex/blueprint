@@ -102,6 +102,13 @@ public sealed class ResourceEventAuditModule : IBlueprintSourceGeneratorModule, 
                 {
                     return "Blueprint.Runtime.Exec.KeyOnlyResourceEventResult";
                 }
+
+                // DeferredResourceEventResult<T> is mutated in-place (ResolvedContent populated),
+                // so the audit module still needs to activate and extract event info from it
+                if (current.Name == "DeferredResourceEventResult")
+                {
+                    return "Blueprint.Runtime.Exec.IDeferredResourceEventResult";
+                }
             }
 
             if (current.IsInNamespace("Blueprint", "Http")

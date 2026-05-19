@@ -211,11 +211,23 @@ public sealed class ResourceEventFamilySourceGenerator : IIncrementalGenerator, 
 
             var eventId = $"{resourceObject}.{reason}";
 
-            // When an explicit key is present, always use it for the resource ID
-            var hasExplicitKey = eventShape.Value.KeyParameterName is not null;
-            var resourceIdExpression = eventShape.Value.IsBodyBearing && !hasExplicitKey
-                ? $"this.{eventShape.Value.BodyParameterName}.{resourceIdProperty?.Name ?? "Id"}.ToString()"
-                : $"this.{eventShape.Value.KeyParameterName}.ToString()";
+            // Determine resource ID expression based on event shape
+            string resourceIdExpression;
+            if (eventShape.Value.IsSelfQuery)
+            {
+                // SelfQuery events: resource ID comes from explicit key if present, otherwise deferred
+                resourceIdExpression = eventShape.Value.KeyParameterName is not null
+                    ? $"this.{eventShape.Value.KeyParameterName}.ToString()"
+                    : string.Empty;
+            }
+            else
+            {
+                // When an explicit key is present, always use it for the resource ID
+                var hasExplicitKey = eventShape.Value.KeyParameterName is not null;
+                resourceIdExpression = eventShape.Value.IsBodyBearing && !hasExplicitKey
+                    ? $"this.{eventShape.Value.BodyParameterName}.{resourceIdProperty?.Name ?? "Id"}.ToString()"
+                    : $"this.{eventShape.Value.KeyParameterName}.ToString()";
+            }
 
             // The content type for ResourceEventResult<T> is the body type when explicitly specified,
             // otherwise it falls back to the family resource type.
@@ -226,8 +238,11 @@ public sealed class ResourceEventFamilySourceGenerator : IIncrementalGenerator, 
                 EventId: eventId,
                 ChangeTypeValue: changeTypeValue.Value,
                 IsBodyBearing: eventShape.Value.IsBodyBearing,
+                IsSelfQuery: eventShape.Value.IsSelfQuery,
                 BodyParameterName: eventShape.Value.BodyParameterName,
                 KeyParameterName: eventShape.Value.KeyParameterName,
+                SelfQueryParameterName: eventShape.Value.SelfQueryParameterName,
+                SelfQueryTypeFullName: eventShape.Value.SelfQueryTypeFullName,
                 ResourceTypeFullName: resourceTypeFullName,
                 ContentTypeFullName: contentTypeFullName,
                 KeyTypeFullName: keyTypeFullName,
@@ -280,10 +295,12 @@ public sealed class ResourceEventFamilySourceGenerator : IIncrementalGenerator, 
             return null;
         }
 
-        // Check for explicit [ResourceEventKey] and [ResourceEventBody] attributes
+        // Check for explicit [ResourceEventKey], [ResourceEventBody], and [ResourceEventSelfQuery] attributes
         string? explicitKeyParam = null;
         string? explicitBodyParam = null;
         string? explicitBodyTypeFullName = null;
+        string? explicitSelfQueryParam = null;
+        string? explicitSelfQueryTypeFullName = null;
 
         foreach (var param in primaryCtor.Parameters)
         {
@@ -298,7 +315,25 @@ public sealed class ResourceEventFamilySourceGenerator : IIncrementalGenerator, 
                     explicitBodyParam = param.Name;
                     explicitBodyTypeFullName = param.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
                 }
+                else if (attr.AttributeClass is { Name: "ResourceEventSelfQueryAttribute" } sqAc && sqAc.IsInNamespace("Blueprint", "Model", "Attributes"))
+                {
+                    explicitSelfQueryParam = param.Name;
+                    explicitSelfQueryTypeFullName = param.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                }
             }
+        }
+
+        // SelfQuery shape: record carries a query, not a body
+        if (explicitSelfQueryParam is not null)
+        {
+            return new EventShapeResult(
+                IsBodyBearing: false,
+                IsSelfQuery: true,
+                BodyParameterName: null,
+                KeyParameterName: explicitKeyParam,
+                BodyTypeFullName: null,
+                SelfQueryParameterName: explicitSelfQueryParam,
+                SelfQueryTypeFullName: explicitSelfQueryTypeFullName);
         }
 
         // If explicit attributes are used, trust them
@@ -306,9 +341,12 @@ public sealed class ResourceEventFamilySourceGenerator : IIncrementalGenerator, 
         {
             return new EventShapeResult(
                 IsBodyBearing: explicitBodyParam is not null,
+                IsSelfQuery: false,
                 BodyParameterName: explicitBodyParam,
                 KeyParameterName: explicitKeyParam,
-                BodyTypeFullName: explicitBodyTypeFullName);
+                BodyTypeFullName: explicitBodyTypeFullName,
+                SelfQueryParameterName: null,
+                SelfQueryTypeFullName: null);
         }
 
         // Infer from constructor parameters
@@ -322,17 +360,23 @@ public sealed class ResourceEventFamilySourceGenerator : IIncrementalGenerator, 
             {
                 return new EventShapeResult(
                     IsBodyBearing: true,
+                    IsSelfQuery: false,
                     BodyParameterName: singleParam.Name,
                     KeyParameterName: null,
-                    BodyTypeFullName: null);
+                    BodyTypeFullName: null,
+                    SelfQueryParameterName: null,
+                    SelfQueryTypeFullName: null);
             }
 
             // Otherwise, treat as key-only (the single param is the key)
             return new EventShapeResult(
                 IsBodyBearing: false,
+                IsSelfQuery: false,
                 BodyParameterName: null,
                 KeyParameterName: singleParam.Name,
-                BodyTypeFullName: null);
+                BodyTypeFullName: null,
+                SelfQueryParameterName: null,
+                SelfQueryTypeFullName: null);
         }
 
         // Multiple parameters without explicit attributes — ambiguous
@@ -374,7 +418,44 @@ public sealed class ResourceEventFamilySourceGenerator : IIncrementalGenerator, 
             sb.AppendLine($"            public const string EventId = \"{evt.EventId}\";");
             sb.AppendLine();
 
-            if (evt.IsBodyBearing)
+            if (evt.IsSelfQuery)
+            {
+                // SelfQuery shape: generates DeferredResourceEventResult<T>
+                var hasResourceId = !string.IsNullOrEmpty(evt.ResourceIdExpression);
+                sb.AppendLine($"            /// <summary>");
+                sb.AppendLine($"            /// Converts this event record to a <see cref=\"global::Blueprint.Runtime.Exec.DeferredResourceEventResult{{T}}\"/> that the pipeline will resolve via self-query execution.");
+                sb.AppendLine($"            /// </summary>");
+                sb.AppendLine($"            /// <returns>A <see cref=\"global::Blueprint.Runtime.Exec.DeferredResourceEventResult{{T}}\"/> that wraps this event's self-query.</returns>");
+                sb.AppendLine($"            public global::Blueprint.Runtime.Exec.DeferredResourceEventResult<{evt.ResourceTypeFullName}> ToOperationResult()");
+                sb.AppendLine("            {");
+                if (hasResourceId)
+                {
+                    sb.AppendLine($"                return new global::Blueprint.Runtime.Exec.DeferredResourceEventResult<{evt.ResourceTypeFullName}>((global::Blueprint.Model.ChangeType){evt.ChangeTypeValue}, EventId, {evt.ResourceIdExpression}, this.{evt.SelfQueryParameterName});");
+                }
+                else
+                {
+                    sb.AppendLine($"                return new global::Blueprint.Runtime.Exec.DeferredResourceEventResult<{evt.ResourceTypeFullName}>((global::Blueprint.Model.ChangeType){evt.ChangeTypeValue}, EventId, this.{evt.SelfQueryParameterName});");
+                }
+
+                sb.AppendLine("            }");
+                sb.AppendLine();
+                sb.AppendLine($"            /// <summary>");
+                sb.AppendLine($"            /// Enables implicit conversion to <see cref=\"global::Blueprint.Runtime.Exec.DeferredResourceEventResult{{T}}\"/> so handlers can return event records directly.");
+                sb.AppendLine($"            /// </summary>");
+                sb.AppendLine($"            public static implicit operator global::Blueprint.Runtime.Exec.DeferredResourceEventResult<{evt.ResourceTypeFullName}>({evt.RecordName} value)");
+                sb.AppendLine("            {");
+                sb.AppendLine("                return value.ToOperationResult();");
+                sb.AppendLine("            }");
+                sb.AppendLine();
+                sb.AppendLine($"            /// <summary>");
+                sb.AppendLine($"            /// Enables implicit conversion to <see cref=\"global::Blueprint.OperationResult\"/> for pipeline result normalization.");
+                sb.AppendLine($"            /// </summary>");
+                sb.AppendLine($"            public static implicit operator global::Blueprint.OperationResult({evt.RecordName} value)");
+                sb.AppendLine("            {");
+                sb.AppendLine("                return value.ToOperationResult();");
+                sb.AppendLine("            }");
+            }
+            else if (evt.IsBodyBearing)
             {
                 sb.AppendLine($"            /// <summary>");
                 sb.AppendLine($"            /// Converts this event record to the canonical <see cref=\"global::Blueprint.Runtime.Exec.ResourceEventResult{{T}}\"/> for pipeline processing.");
@@ -441,7 +522,7 @@ public sealed class ResourceEventFamilySourceGenerator : IIncrementalGenerator, 
             SourceText.From(sb.ToString(), Encoding.UTF8));
     }
 
-    private record struct EventShapeResult(bool IsBodyBearing, string? BodyParameterName, string? KeyParameterName, string? BodyTypeFullName);
+    private record struct EventShapeResult(bool IsBodyBearing, bool IsSelfQuery, string? BodyParameterName, string? KeyParameterName, string? BodyTypeFullName, string? SelfQueryParameterName, string? SelfQueryTypeFullName);
 
     private sealed record FamilyResult(FamilyToGenerate? Family, EquatableList<DiagnosticInfo> Diagnostics);
 
@@ -485,8 +566,11 @@ public sealed class ResourceEventFamilySourceGenerator : IIncrementalGenerator, 
         string EventId,
         int ChangeTypeValue,
         bool IsBodyBearing,
+        bool IsSelfQuery,
         string? BodyParameterName,
         string? KeyParameterName,
+        string? SelfQueryParameterName,
+        string? SelfQueryTypeFullName,
         string ResourceTypeFullName,
         string ContentTypeFullName,
         string KeyTypeFullName,

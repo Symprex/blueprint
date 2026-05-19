@@ -1,5 +1,6 @@
 using Blueprint.Http;
 using Blueprint.Model;
+using Blueprint.Model.Attributes;
 using Blueprint.Runtime.Exec;
 using Blueprint.SourceGenerator.Tests.Integration.Generators.OperationDescriptors;
 using FluentAssertions;
@@ -94,6 +95,52 @@ public class ResourceEventSelfQueryModuleIntegrationTests
         result.Should().BeOfType<ResourceDeleted<SelfQueryTestApiResource>>();
         var resourceEvent = (ResourceDeleted<SelfQueryTestApiResource>)result;
         resourceEvent.Data.Should().BeNull("SelfQuery cannot be resolved when no executor is registered");
+    }
+
+    [Fact]
+    public async Task When_handler_returns_DeferredResourceEventResult_then_ResolvedContent_is_populated()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var serviceProvider = new SelfQueryTestServiceProvider(app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
+        serviceProvider.Executor = executor;
+
+        var pipeline = executor.GetPipeline(typeof(DeferredSelfQueryCommand));
+        var context = new ApiOperationContext(serviceProvider, app, DeferredSelfQueryCommand.Configure(), CancellationToken.None);
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeAssignableTo<IDeferredResourceEventResult>();
+        var deferred = (IDeferredResourceEventResult)result;
+        deferred.ResolvedContent.Should().NotBeNull("SelfQuery should have been resolved and stored on the deferred instance");
+        deferred.ResourceId.Should().Be("test-42", "ResourceId should be derived from the resolved content");
+
+        var resource = deferred.ResolvedContent.Should().BeOfType<SelfQueryTestApiResource>().Subject;
+        resource.Name.Should().Be("Resolved from SelfQuery");
+    }
+
+    [Fact]
+    public async Task When_handler_returns_DeferredResourceEventResult_then_CorrelationId_is_stamped()
+    {
+        using var activity = new System.Diagnostics.Activity("deferred-correlation-test");
+        activity.Start();
+
+        var app = new IntegrationTestBlueprintApp();
+        var serviceProvider = new SelfQueryTestServiceProvider(app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
+        serviceProvider.Executor = executor;
+
+        var pipeline = executor.GetPipeline(typeof(DeferredSelfQueryCommand));
+        var context = new ApiOperationContext(serviceProvider, app, DeferredSelfQueryCommand.Configure(), CancellationToken.None)
+        {
+            Activity = activity,
+        };
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        var deferred = (IDeferredResourceEventResult)result;
+        deferred.CorrelationId.Should().NotBeNullOrEmpty("CorrelationId should be stamped from the active Activity");
+        deferred.CorrelationId.Should().Be(activity.Id);
     }
 
     /// <summary>
@@ -209,5 +256,34 @@ public partial class SelfQueryCreateWithDataCommand : ICommand<ResourceCreated<S
         };
 
         return new ResourceCreated<SelfQueryTestApiResource>(resource);
+    }
+}
+
+/// <summary>
+/// Resource event family for the deferred SelfQuery integration test.
+/// Declares a Created event that uses <c>[ResourceEventSelfQuery]</c> to defer content resolution.
+/// </summary>
+[ResourceEventFamily(typeof(SelfQueryTestApiResource), ResourceObject = "selfquery-test-resource")]
+public static partial class SelfQueryTestResourceEvents
+{
+    /// <summary>
+    /// A deferred "created" event that resolves its content via a nested SelfQuery execution.
+    /// </summary>
+    [ResourceEventReason(ChangeType.Created, "created")]
+    public sealed partial record Created([ResourceEventSelfQuery] GetSelfQueryTestResourceQuery SelfQuery);
+}
+
+/// <summary>
+/// A command that returns a <see cref="DeferredResourceEventResult{T}"/> via the generated
+/// <c>[ResourceEventFamily]</c> pattern with <c>[ResourceEventSelfQuery]</c>.
+/// </summary>
+public partial class DeferredSelfQueryCommand : ICommand<DeferredResourceEventResult<SelfQueryTestApiResource>>
+{
+    /// <summary>Handles the command by returning a deferred resource event with a SelfQuery.</summary>
+    /// <param name="operation">The command instance.</param>
+    /// <returns>A DeferredResourceEventResult that the pipeline module will resolve.</returns>
+    public static DeferredResourceEventResult<SelfQueryTestApiResource> Handle(DeferredSelfQueryCommand operation)
+    {
+        return new SelfQueryTestResourceEvents.Created(new GetSelfQueryTestResourceQuery { Id = "test-42" });
     }
 }

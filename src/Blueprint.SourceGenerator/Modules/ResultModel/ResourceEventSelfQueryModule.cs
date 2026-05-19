@@ -7,7 +7,8 @@ namespace Blueprint.SourceGenerator.Modules;
 /// <summary>
 /// Contributes a PostExecution render step that resolves <c>ResourceEvent.SelfQuery</c> by
 /// executing the query through the generated pipeline when the handler returns a
-/// <c>ResourceEvent</c> with <c>Data == null</c> and <c>SelfQuery != null</c>.
+/// <c>ResourceEvent</c> with <c>Data == null</c> and <c>SelfQuery != null</c>, or a
+/// <c>DeferredResourceEventResult&lt;T&gt;</c> that carries a self-query for lazy resolution.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -50,7 +51,7 @@ public sealed class ResourceEventSelfQueryModule : IBlueprintSourceGeneratorModu
     /// <inheritdoc />
     public void ContributeToPipeline(PipelineContributorContext context)
     {
-        if (!HasLegacyResourceEventResult(context.Operation.TypeSymbol))
+        if (!HasSelfQueryResult(context.Operation.TypeSymbol))
         {
             return;
         }
@@ -73,11 +74,11 @@ public sealed class ResourceEventSelfQueryModule : IBlueprintSourceGeneratorModu
     }
 
     /// <summary>
-    /// Determines whether the operation's declared result type is a legacy <c>ResourceEvent</c>
-    /// (from <c>Blueprint.Http</c> namespace), which is the only hierarchy that supports the
-    /// <c>SelfQuery</c> pattern. New-style <c>ResourceEventResult</c> does not carry SelfQuery.
+    /// Determines whether the operation's declared result type includes a self-query-bearing result.
+    /// Both legacy <c>ResourceEvent</c> (from <c>Blueprint.Http</c>) and new-style
+    /// <c>DeferredResourceEventResult&lt;T&gt;</c> are detected.
     /// </summary>
-    private static bool HasLegacyResourceEventResult(INamedTypeSymbol operationType)
+    private static bool HasSelfQueryResult(INamedTypeSymbol operationType)
     {
         var declaredResultType = OperationResultContractHelper.GetDeclaredOperationResultType(operationType);
         if (declaredResultType is null)
@@ -87,8 +88,14 @@ public sealed class ResourceEventSelfQueryModule : IBlueprintSourceGeneratorModu
 
         for (var current = declaredResultType; current is not null; current = current.BaseType)
         {
-            if (current.IsInNamespace("Blueprint", "Http")
-                && current.Name == "ResourceEvent")
+            // Legacy ResourceEvent from Blueprint.Http
+            if (current.IsInNamespace("Blueprint", "Http") && current.Name == "ResourceEvent")
+            {
+                return true;
+            }
+
+            // New-style DeferredResourceEventResult<T> from Blueprint.Runtime.Exec
+            if (current.IsInNamespace("Blueprint", "Runtime", "Exec") && current.Name == "DeferredResourceEventResult")
             {
                 return true;
             }

@@ -261,6 +261,40 @@ public class ResourceEventFamilySourceGeneratorTests
         result.Diagnostics.Should().ContainSingle(d => d.Id == "BPRE006");
     }
 
+    [Fact]
+    public async Task When_self_query_event_then_generates_deferred_result_conversion()
+    {
+        var result = Compile("""
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+
+            namespace TestNamespace;
+
+            public class TestApiResource : ApiResource
+            {
+                public override string Object => "test";
+                public string Id { get; set; } = "";
+            }
+
+            public partial class GetTestQuery : IQuery<TestApiResource>
+            {
+                public string Id { get; set; } = "";
+            }
+
+            [ResourceEventFamily(typeof(TestApiResource), ResourceObject = "test")]
+            public static partial class TestResourceEvents
+            {
+                [ResourceEventReason(ChangeType.Created, "created")]
+                public sealed partial record Created([ResourceEventSelfQuery] GetTestQuery SelfQuery);
+
+                [ResourceEventReason(ChangeType.Updated, "fields.updated")]
+                public sealed partial record FieldsUpdated([ResourceEventSelfQuery] GetTestQuery SelfQuery, [ResourceEventKey] string Key);
+            }
+            """);
+
+        await result.VerifySuccessAsync(SnapshotsFolder);
+    }
+
     private static GenerationResult Compile(string source)
     {
         return TestHelpers.Compile<ResourceEventFamilySourceGenerator>(source, assertCacheability: false);

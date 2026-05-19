@@ -175,6 +175,16 @@ public class HttpOperationResultExecutor
             case KeyOnlyResourceEventResult keyOnlyEvent:
                 httpContext.Response.StatusCode = MapChangeTypeToStatusCode(keyOnlyEvent.ChangeType);
                 return true;
+            case IDeferredResourceEventResult deferredEvent:
+                httpContext.Response.StatusCode = MapChangeTypeToStatusCode(deferredEvent.ChangeType);
+                httpContext.Response.ContentType = JsonContentType;
+                if (deferredEvent.ChangeType == ChangeType.Created && deferredEvent.ResolvedContent is not null)
+                {
+                    TrySetLocationHeader(httpContext, deferredEvent.ResolvedContent);
+                }
+
+                await WriteDeferredResourceEventEnvelopeAsync(httpContext, operationContext, deferredEvent).ConfigureAwait(false);
+                return true;
             case ResourceEventResult resourceEventResult:
                 httpContext.Response.StatusCode = MapChangeTypeToStatusCode(resourceEventResult.ChangeType);
                 httpContext.Response.ContentType = JsonContentType;
@@ -381,6 +391,114 @@ public class HttpOperationResultExecutor
         {
             writer.WritePropertyName(_propChangedValues);
             JsonSerializer.Serialize(writer, result.ChangedValues, CreateFallbackSerializerOptions(serializerOptions));
+        }
+
+        if (result.CorrelationId is not null)
+        {
+            writer.WriteString(_propCorrelationId, result.CorrelationId);
+        }
+
+        writer.WriteEndObject();
+        writer.Flush();
+
+        httpContext.Response.ContentLength = buffer.WrittenCount;
+        await httpContext.Response.Body.WriteAsync(buffer.WrittenMemory, httpContext.RequestAborted).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Writes an <see cref="IDeferredResourceEventResult"/> as a wire-compatible event envelope
+    /// that matches the shape produced by <see cref="WriteResourceEventEnvelopeAsync"/>.
+    /// Called after the pipeline has resolved the deferred self-query and populated <see cref="IDeferredResourceEventResult.ResolvedContent"/>.
+    /// </summary>
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2026",
+        Justification = "Dictionary<string,object> metadata bags require runtime serialization for heterogeneous values. The data payload prefers the app-owned serializer context and only falls back to reflection for uncovered types.")]
+    [UnconditionalSuppressMessage(
+        "AOT",
+        "IL3050",
+        Justification = "Fallback serialization for metadata/secureData dictionaries uses runtime JSON when the app-owned context does not cover these types. AOT consumers must ensure full type coverage.")]
+    private static async Task WriteDeferredResourceEventEnvelopeAsync(
+        HttpContext httpContext,
+        ApiOperationContext operationContext,
+        IDeferredResourceEventResult result)
+    {
+        var serializerContext = operationContext.App.AppOwnedSerializerContext;
+        var serializerOptions = serializerContext?.Options ?? _emptyFallbackOptions;
+
+        var buffer = _threadLocalBuffer ??= new System.Buffers.ArrayBufferWriter<byte>(512);
+        buffer.Clear();
+
+        var writer = _threadLocalWriter;
+        if (writer is null)
+        {
+            writer = new Utf8JsonWriter(buffer);
+            _threadLocalWriter = writer;
+        }
+        else
+        {
+            writer.Reset(buffer);
+        }
+
+        writer.WriteStartObject();
+
+        writer.WriteString(_propObject, _valEvent);
+        writer.WriteString(_propEventId, result.EventId);
+        writer.WriteString(_propChangeType, _changeTypeStrings[(int)result.ChangeType]);
+        writer.WriteString(_propCreated, DateTimeOffset.UtcNow);
+
+        if (result.ResolvedContent is not null)
+        {
+            writer.WriteString(_propResourceObject, ApiResource.GetTypeName(result.ResolvedContent.GetType()));
+        }
+
+        // href: extract from self-link when the resolved resource is linkable
+        string? href = null;
+        if (result.ResolvedContent is ILinkableResource { Links: { } links } &&
+            links.TryGetValue("self", out var selfLink))
+        {
+            href = selfLink.Href;
+        }
+
+        if (href is not null)
+        {
+            writer.WriteString(_propHref, href);
+        }
+
+        // data: serialize the resolved content (may be null if SelfQuery resolution failed)
+        if (result.ResolvedContent is not null)
+        {
+            writer.WritePropertyName(_propData);
+
+            var dataType = result.ResolvedContent.GetType();
+            var dataTypeInfo = _typeInfoCache.GetOrAdd(
+                new TypeInfoCacheKey(serializerContext, dataType),
+                static key => key.Context?.GetTypeInfo(key.ContentType));
+
+            if (dataTypeInfo is not null)
+            {
+                JsonSerializer.Serialize(writer, result.ResolvedContent, dataTypeInfo);
+            }
+            else
+            {
+                JsonSerializer.Serialize(writer, result.ResolvedContent, dataType, CreateFallbackSerializerOptions(serializerOptions));
+            }
+        }
+        else
+        {
+            writer.WriteNull(_propData);
+        }
+
+        if (result.Metadata is not null)
+        {
+            writer.WritePropertyName(_propMetadata);
+            JsonSerializer.Serialize(writer, result.Metadata, CreateFallbackSerializerOptions(serializerOptions));
+        }
+
+        if (result.SecureData is not null)
+        {
+            writer.WritePropertyName(_propSecureData);
+            JsonSerializer.Serialize(writer, result.SecureData, CreateFallbackSerializerOptions(serializerOptions));
         }
 
         if (result.CorrelationId is not null)

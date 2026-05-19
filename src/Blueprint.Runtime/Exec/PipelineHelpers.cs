@@ -919,6 +919,11 @@ public static class PipelineHelpers
             eventId = koResult.EventId;
             resourceId = koResult.ResourceId;
         }
+        else if (handlerResult is IDeferredResourceEventResult deferredResult)
+        {
+            eventId = deferredResult.EventId;
+            resourceId = deferredResult.ResourceId ?? string.Empty;
+        }
         else if (handlerResult is ResourceEvent legacyResult)
         {
             eventId = legacyResult.EventId;
@@ -979,9 +984,10 @@ public static class PipelineHelpers
 
     /// <summary>
     /// If the handler result is a <see cref="ResourceEvent"/> with a <see cref="ResourceEvent.SelfQuery"/>
-    /// and null <see cref="ResourceEvent.Data"/>, executes the query through the <paramref name="executor"/>
-    /// using a nested context that preserves the parent's authentication, tenant, and request state.
-    /// Also stamps <see cref="ResourceEvent.CorrelationId"/> from the current <see cref="Activity"/>.
+    /// and null <see cref="ResourceEvent.Data"/>, or a <see cref="DeferredResourceEventResult{T}"/>,
+    /// executes the query through the <paramref name="executor"/> using a nested context that preserves
+    /// the parent's authentication, tenant, and request state. Also stamps
+    /// <see cref="ResourceEvent.CorrelationId"/> from the current <see cref="Activity"/>.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -999,6 +1005,11 @@ public static class PipelineHelpers
     /// A recursion guard prevents runaway loops when a SelfQuery inadvertently triggers another
     /// ResourceEvent with its own SelfQuery.
     /// </para>
+    /// <para>
+    /// Both legacy <c>ResourceEvent</c> (mutates <c>Data</c> in-place) and new-style
+    /// <c>DeferredResourceEventResult</c> (populates <see cref="IDeferredResourceEventResult.ResolvedContent"/>)
+    /// are handled by in-place mutation so the pipeline's <c>handlerResult</c> variable type is preserved.
+    /// </para>
     /// </remarks>
     /// <param name="executor">The app executor for dispatching the nested query. May be null if DI did not register one.</param>
     /// <param name="context">The current pipeline execution context.</param>
@@ -1013,17 +1024,24 @@ public static class PipelineHelpers
         ILogger logger,
         string operationTypeName)
     {
-        if (handlerResult is not ResourceEvent { SelfQuery: not null, Data: null } resourceEvent)
-        {
-            return Task.CompletedTask;
-        }
-
         if (executor is null)
         {
             return Task.CompletedTask;
         }
 
-        return ResolveResourceEventSelfQueryCoreAsync(executor, context, resourceEvent, logger, operationTypeName);
+        // Legacy ResourceEvent path: mutates Data in-place
+        if (handlerResult is ResourceEvent { SelfQuery: not null, Data: null } resourceEvent)
+        {
+            return ResolveResourceEventSelfQueryCoreAsync(executor, context, resourceEvent, logger, operationTypeName);
+        }
+
+        // New DeferredResourceEventResult<T> path: populates ResolvedContent in-place
+        if (handlerResult is IDeferredResourceEventResult deferred)
+        {
+            return ResolveDeferredResourceEventCoreAsync(executor, context, deferred, logger, operationTypeName);
+        }
+
+        return Task.CompletedTask;
     }
 
     /// <summary>
@@ -1089,6 +1107,85 @@ public static class PipelineHelpers
                 resourceEvent.Data = okResult.Content;
 
                 _logSelfQueryResolved(logger, operationTypeName, selfQueryTypeName, null);
+            }
+            else
+            {
+                logger.LogWarning(
+                    "SelfQuery for {OperationType} with query {SelfQueryType} returned {ResultType} instead of OkResult with content",
+                    operationTypeName,
+                    selfQueryTypeName,
+                    result?.GetType().Name ?? "null");
+                _logSelfQueryFailed(logger, operationTypeName, selfQueryTypeName, null);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logSelfQueryFailed(logger, operationTypeName, selfQueryTypeName, ex);
+
+            context.Activity?.AddEvent(new ActivityEvent(
+                "blueprint.resource_event.self_query_failed",
+                default,
+                new ActivityTagsCollection
+                {
+                    { "blueprint.operation.type", operationTypeName },
+                    { "blueprint.self_query.type", selfQueryTypeName },
+                    { "exception.message", ex.Message },
+                }));
+        }
+    }
+
+    /// <summary>
+    /// Resolves a <see cref="DeferredResourceEventResult{T}"/> by executing its self-query through the pipeline
+    /// and storing the resolved content on the instance via <see cref="IDeferredResourceEventResult.SetResolvedContent"/>.
+    /// </summary>
+    private static async Task ResolveDeferredResourceEventCoreAsync(
+        BlueprintAppExecutor executor,
+        ApiOperationContext context,
+        IDeferredResourceEventResult deferred,
+        ILogger logger,
+        string operationTypeName)
+    {
+        // Recursion guard
+        var depth = 0;
+        if (context.HasData && context.Data.TryGetValue(SelfQueryDepthKey, out var depthObj) && depthObj is int d)
+        {
+            depth = d;
+        }
+
+        if (depth >= MaxSelfQueryDepth)
+        {
+            _logSelfQueryFailed(logger, operationTypeName, deferred.SelfQuery.GetType().Name, null);
+            return;
+        }
+
+        // Stamp correlation ID from current activity before resolution
+        deferred.CorrelationId ??= context.Activity?.Id;
+
+        var selfQuery = deferred.SelfQuery;
+        var selfQueryTypeName = selfQuery.GetType().Name;
+
+        try
+        {
+            if (!executor.App.TryFindOperation(selfQuery.GetType(), out _))
+            {
+                _logSelfQueryFailed(logger, operationTypeName, selfQueryTypeName, null);
+                return;
+            }
+
+            // Flush pending persistence so the nested query can read just-written data
+            await SaveUnitOfWorkAsync(context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);
+
+            var nestedContext = context.CreateNested((IOperation)selfQuery, skipAuthorisation: true);
+            nestedContext.Data[SelfQueryDepthKey] = depth + 1;
+
+            var result = await executor.ExecuteAsync(nestedContext).ConfigureAwait(false);
+
+            if (result is OkResult okResult && okResult.Content is not null)
+            {
+                _logSelfQueryResolved(logger, operationTypeName, selfQueryTypeName, null);
+
+                // Populate the deferred instance in-place so downstream modules can consume it
+                deferred.SetResolvedContent(okResult.Content);
             }
             else
             {
