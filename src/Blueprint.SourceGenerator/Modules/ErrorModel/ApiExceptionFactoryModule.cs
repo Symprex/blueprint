@@ -137,10 +137,15 @@ public sealed class ApiExceptionFactoryModule : IBlueprintSourceGeneratorModule,
             return false;
         }
 
-        // Cross-assembly fields have no syntax to inspect. Fall back to matching the field name
-        // against well-known HttpStatusCode enum members (e.g. CommonApiExceptions.NotFound → 404).
+        // Cross-assembly fields have no syntax to inspect. Try assembly-attribute index first,
+        // then fall back to matching the field name against well-known HttpStatusCode enum members.
         if (field.DeclaringSyntaxReferences.Length == 0)
         {
+            if (TryResolveFromAssemblyAttributes(field, out httpStatus))
+            {
+                return true;
+            }
+
             return WellKnownHttpStatusCodes.TryGetValue(field.Name, out httpStatus);
         }
 
@@ -252,6 +257,46 @@ public sealed class ApiExceptionFactoryModule : IBlueprintSourceGeneratorModule,
                 && enumField.ConstantValue is int enumIntValue)
             {
                 httpStatus = enumIntValue;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Resolves the HTTP status code from <c>[assembly: BlueprintApiExceptionStatus(...)]</c> attributes
+    /// on the assembly containing the referenced field. These attributes are emitted by the
+    /// <c>ApiExceptionStatusIndexGenerator</c> in the referenced assembly's compilation.
+    /// </summary>
+    private static bool TryResolveFromAssemblyAttributes(IFieldSymbol field, out int httpStatus)
+    {
+        httpStatus = 0;
+
+        var assembly = field.ContainingAssembly;
+        if (assembly is null)
+        {
+            return false;
+        }
+
+        var containingTypeMetadataName = field.ContainingType.ToFullMetadataName();
+
+        foreach (var attr in assembly.GetAttributes())
+        {
+            if (attr.AttributeClass?.Name != "BlueprintApiExceptionStatusAttribute"
+                || attr.ConstructorArguments.Length != 3)
+            {
+                continue;
+            }
+
+            var typeArg = attr.ConstructorArguments[0].Value as string;
+            var fieldArg = attr.ConstructorArguments[1].Value as string;
+
+            if (string.Equals(typeArg, containingTypeMetadataName, StringComparison.Ordinal)
+                && string.Equals(fieldArg, field.Name, StringComparison.Ordinal)
+                && attr.ConstructorArguments[2].Value is int statusCode)
+            {
+                httpStatus = statusCode;
                 return true;
             }
         }
