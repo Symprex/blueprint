@@ -1,0 +1,13 @@
+﻿Blueprint.SourceGenerator\Blueprint.SourceGenerator.Generators.ApiResources.ApiResourceSourceGenerator\TestNamespace.GatewayImportRunApiResource_ObjectProperty.g.cs:
+
+namespace TestNamespace
+{
+    /// <remarks>
+    /// The object type of this resource is "importRun".
+    /// </remarks>
+    public partial class GatewayImportRunApiResource
+    {
+        public override string Object => "importRun";
+    }
+}
+

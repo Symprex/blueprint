@@ -58,6 +58,8 @@ public sealed class ApiResourceSourceGenerator : IIncrementalGenerator, ITracked
     {
         const string apiResourceSymbol = "Blueprint.Model.ApiResource";
         const string apiResourceCollectionSymbol = "Blueprint.Model.IApiResourceCollection";
+        const string resourceObjectNameAttribute = "Blueprint.Model.Attributes.ResourceObjectNameAttribute";
+        const string jsonSchemaAttribute = "NJsonSchema.Annotations.JsonSchemaAttribute";
 
         var classNode = (ClassDeclarationSyntax)ctx.Node;
         var model = ctx.SemanticModel.GetDeclaredSymbol(classNode);
@@ -75,15 +77,60 @@ public sealed class ApiResourceSourceGenerator : IIncrementalGenerator, ITracked
 
         var isPartial = classNode.Modifiers.Any(SyntaxKind.PartialKeyword);
 
-        return !isPartial
-            ? Result<ClassToGenerate>.Failure(
-                    new DiagnosticInfo(_missingPartialModifierRule, classNode.Identifier.GetLocation(), [model.Name]))
-            : Result.Success(
+        if (!isPartial)
+        {
+            return Result<ClassToGenerate>.Failure(
+                new DiagnosticInfo(_missingPartialModifierRule, classNode.Identifier.GetLocation(), [model.Name]));
+        }
+
+        // Check for explicit [ResourceObjectName("name")] or [JsonSchema("Name")] overrides
+        var explicitName = GetExplicitObjectName(model, resourceObjectNameAttribute, jsonSchemaAttribute);
+
+        return Result.Success(
             new ClassToGenerate(
                 model.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
                 model.ContainingNamespace.ToDisplayString(),
                 model.Name,
-                model.ImplementsInterface(apiResourceCollectionSymbol)));
+                model.ImplementsInterface(apiResourceCollectionSymbol),
+                explicitName));
+    }
+
+    /// <summary>
+    /// Checks for <c>[ResourceObjectName]</c> or <c>[JsonSchema]</c> attributes and extracts
+    /// the explicit object name if present. <c>[ResourceObjectName]</c> takes priority.
+    /// </summary>
+    private static string? GetExplicitObjectName(INamedTypeSymbol model, string resourceObjectNameAttr, string jsonSchemaAttr)
+    {
+        foreach (var attr in model.GetAttributes())
+        {
+            var attrClass = attr.AttributeClass?.ToDisplayString();
+
+            if (attrClass == resourceObjectNameAttr && attr.ConstructorArguments.Length >= 1)
+            {
+                var name = attr.ConstructorArguments[0].Value as string;
+                if (!string.IsNullOrEmpty(name))
+                {
+                    return name;
+                }
+            }
+        }
+
+        // Fallback to [JsonSchema("Name")] for backward compatibility
+        foreach (var attr in model.GetAttributes())
+        {
+            var attrClass = attr.AttributeClass?.ToDisplayString();
+
+            if (attrClass == jsonSchemaAttr && attr.ConstructorArguments.Length >= 1)
+            {
+                var name = attr.ConstructorArguments[0].Value as string;
+                if (!string.IsNullOrEmpty(name))
+                {
+                    return name!.Camelize();
+                }
+            }
+        }
+
+        return null;
     }
 
     private static string GenerateObjectProperty(ClassToGenerate classToGenerate)
@@ -91,7 +138,7 @@ public sealed class ApiResourceSourceGenerator : IIncrementalGenerator, ITracked
         var namespaceName = classToGenerate.Namespace;
         var classNameWithGenerics = classToGenerate.FullClassName;
 
-        var objectType = classToGenerate.ClassName
+        var objectType = classToGenerate.ExplicitName ?? classToGenerate.ClassName
             .Replace("ApiResource", string.Empty)
             .Replace("Resource", string.Empty)
             .Replace("DTO", string.Empty)
@@ -123,7 +170,8 @@ public sealed class ApiResourceSourceGenerator : IIncrementalGenerator, ITracked
     /// <param name="Namespace">The containing namespace for the generated partial type.</param>
     /// <param name="ClassName">The simple class name used to derive the resource object name.</param>
     /// <param name="IsEnumerable">Indicates whether the resource represents a collection payload.</param>
-    private record ClassToGenerate(string FullClassName, string Namespace, string ClassName, bool IsEnumerable);
+    /// <param name="ExplicitName">An explicit object name from <c>[ResourceObjectName]</c> or <c>[JsonSchema]</c>, or null for type-name derivation.</param>
+    private record ClassToGenerate(string FullClassName, string Namespace, string ClassName, bool IsEnumerable, string? ExplicitName);
 
     /// <summary>
     /// The names of the <see cref="ApiResourceSourceGenerator"/> stages, used in particular to test for the

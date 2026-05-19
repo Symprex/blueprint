@@ -139,6 +139,48 @@ namespace Blueprint.SourceGenerator.Tests.Generators.ApiResource
                 "no Object override should be generated when the base chain already provides one");
         }
 
+        [Fact]
+        public async Task When_has_ResourceObjectName_attribute_then_uses_explicit_name()
+        {
+            var source = """
+                         [Blueprint.Model.Attributes.ResourceObjectName("importRun")]
+                         public partial class GatewayImportRunApiResource : ApiResource
+                         {
+                         }
+                         """;
+
+            await Compile(source)
+                .VerifySuccessAsync(SnapshotsFolder);
+        }
+
+        [Fact]
+        public async Task When_has_JsonSchema_attribute_then_uses_camelize_name()
+        {
+            // Define a mock NJsonSchema.Annotations.JsonSchemaAttribute for test compilation
+            var source = """
+                         namespace NJsonSchema.Annotations
+                         {
+                             [System.AttributeUsage(System.AttributeTargets.Class)]
+                             public class JsonSchemaAttribute : System.Attribute
+                             {
+                                 public JsonSchemaAttribute(string name) { Name = name; }
+                                 public string Name { get; }
+                             }
+                         }
+
+                         namespace TestNamespace
+                         {
+                             [NJsonSchema.Annotations.JsonSchema("ImportRun")]
+                             public partial class GatewayImportRunApiResource : Blueprint.Model.ApiResource
+                             {
+                             }
+                         }
+                         """;
+
+            await TestHelpers.Compile<ApiResourceSourceGenerator>("using Blueprint.Model;\n\n" + source)
+                .VerifySuccessAsync(SnapshotsFolder);
+        }
+
         private static GenerationResult Compile(string source, bool assertCacheability = true)
         {
             return TestHelpers.Compile<ApiResourceSourceGenerator>("using Blueprint.Model;\n\nnamespace TestNamespace;\n\n" + source, assertCacheability);
