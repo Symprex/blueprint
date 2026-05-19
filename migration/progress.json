@@ -12,12 +12,12 @@
   "current": {
     "activeWorkstream": "polish-and-aot-hardening",
     "frameworkStatus": "production-ready",
-    "frameworkStatusDetail": "Blueprint source-gen fully operational. 2002+ Blueprint tests pass (807+ generator + 1179 integration). S365 migration: entire solution builds (4 pre-existing non-Blueprint test errors). 1072 tests confirmed passing across all non-DB test suites (907 service + 165 gateway). Source-generated auto-registration eliminates all Blueprint-type Scrutor scans: RegisterLinkCheckers, RegisterApiAuthorisers, RegisterResourceExpanders. Recent commits: auto-register authorisers (cd12b787), broad assembly scan (e9cad2f6), auto-register resource expanders (67ff710b).",
+    "frameworkStatusDetail": "Blueprint source-gen fully operational. 2008+ Blueprint tests pass (829 generator + 1179 integration). S365 migration: entire solution builds, zero BP010 warnings. 2,373 S365 tests confirmed passing across 18 non-DB test suites. Only Portal tests have known failures (1743 — Marten v8/Npgsql JSON issue, handled on separate branch). 5 Billing test failures are pre-existing Stripe price calculation bugs. Recent commits: ApiExceptionStatusIndexGenerator for cross-assembly factory resolution (8205e804), GraphProxy DI fix (eab73d8681).",
     "nextReadySlice": "aot-hardening-and-remaining-reflection",
     "lastCompletedSlice": {
-      "id": "scrutor-elimination-and-auto-registration",
+      "id": "cross-assembly-exception-factory-resolution",
       "workstream": "polish-and-aot-hardening",
-      "title": "Source-generated RegisterLinkCheckers + RegisterApiAuthorisers + RegisterResourceExpanders eliminating all Blueprint-type Scrutor assembly scanning (AOT-safe)"
+      "title": "ApiExceptionStatusIndexGenerator emits assembly-level attributes for cross-assembly ApiExceptionFactory resolution — eliminates all 445 BP010 warnings in S365"
     },
     "openReviewGate": null,
     "openReviewGateRationale": null,
