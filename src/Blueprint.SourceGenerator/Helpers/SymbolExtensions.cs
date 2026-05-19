@@ -90,6 +90,12 @@ namespace Blueprint.SourceGenerator.Helpers
         /// <returns>The fully qualified metadata name for the symbol.</returns>
         public static string ToFullMetadataName(this ISymbol symbol)
         {
+            // For nested types, walk up the containment chain to include enclosing types.
+            if (symbol is INamedTypeSymbol namedType && namedType.ContainingType is not null)
+            {
+                return $"{namedType.ContainingType.ToFullMetadataName()}.{namedType.MetadataName}";
+            }
+
             return symbol.ContainingNamespace.IsGlobalNamespace
                 ? symbol.MetadataName
                 : $"{symbol.ContainingNamespace.ToDisplayString()}.{symbol.MetadataName}";
