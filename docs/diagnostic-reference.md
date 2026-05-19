@@ -83,7 +83,7 @@ For detailed explanations, see [compile-time-validation.md](compile-time-validat
 | BPV009 | Error | Range minimum exceeds maximum |
 | BPV010 | Error | StringLength minimum exceeds maximum |
 | BPV011 | Error | RegularExpression has empty pattern |
-| BPV012 | Warning | `[Required]` is redundant on non-nullable value type |
+| BPV012 | Info | `[Required]` is redundant on non-nullable value type |
 | BPV013 | Info | IValidatableObject prevents compile-time validation |
 | BPV014 | Warning | `[Required]` conflicts with `[DefaultValue]` |
 

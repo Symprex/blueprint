@@ -25,7 +25,7 @@ All framework features required for S365 migration are implemented, tested, and 
 
 | Feature | Status | Tests | Notes |
 |---------|--------|-------|-------|
-| Source generator (44 modules) | ✅ Ready | 829 | Incremental, fully cached |
+| Source generator (50 modules) | ✅ Ready | 829 | Incremental, fully cached |
 | Integration tests | ✅ Ready | 1,179 | Pipeline execution proofs |
 | CodeWriter | ✅ Ready | 47 | Vendored emission library |
 | Blueprint.Marten | ✅ Ready | — | UoW, outbox, multi-tenancy |

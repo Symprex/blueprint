@@ -45,8 +45,8 @@ Do not add runtime reflection, runtime scanning, or lazy "we will figure it out 
 Serialization should follow the same philosophy as routing and handler discovery.
 
 This repository now has an explicit app-owned `JsonSerializerContext` declaration seam through
-`[BlueprintAppSerializerContext(JsonSerializerContextType = typeof(...))]` on `BlueprintApp` roots, even though the
-current HTTP runtime still serializes through `Newtonsoft.Json`:
+`[BlueprintAppSerializerContext(JsonSerializerContextType = typeof(...))]` on `BlueprintApp` roots, enforced by
+`BP006` (missing coverage) and `BP007` (missing declaration) compile-time errors:
 
 - Prefer `System.Text.Json` source generation over runtime metadata discovery.
 - Where an API surface requires JSON serialization, prefer enforcing the presence and completeness of the right
