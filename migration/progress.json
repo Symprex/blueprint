@@ -12,12 +12,12 @@
   "current": {
     "activeWorkstream": "polish-and-aot-hardening",
     "frameworkStatus": "production-ready",
-    "frameworkStatusDetail": "Blueprint migration functionally complete. 2000 Blueprint tests pass (820 generator + 1179 integration + 1 pre-existing SyntheticBuild skip). S365 blueprint-codemod-test: 2538 tests passing across 23 suites with 0 failures. Key fixes: auth fallback codemod correction (194 files reverted), ApiResourceDescriptor (compile-time resource metadata), [ResourceObjectName]/[JsonSchema] support for Object property override. Commits: 030bbbd5 (resource descriptors), 6aec1f14 (ResourceObjectName), S365 4f8e54ed (auth fix), S365 52055078 (gateway resource fix).",
-    "nextReadySlice": "link-generation-perf-and-state-checkers",
+    "frameworkStatusDetail": "Blueprint source-gen fully operational. 2002 Blueprint tests pass (823 generator + 1179 integration). S365 migration: entire solution builds (2 pre-existing non-Blueprint test errors). 1185 tests confirmed passing across non-DB-dependent suites. Key recent commits: link checker auto-discovery (4d8ebfbb), nested type fix (2d50d686), resource descriptor checker wiring (45ad7cca), URL template fallback fix (ef9c9342), link auth perf (02f81eaa, 52fc510b).",
+    "nextReadySlice": "runtime-integration-of-resource-descriptors",
     "lastCompletedSlice": {
-      "id": "resource-descriptors-and-object-name-override",
+      "id": "link-generation-perf-and-state-checkers",
       "workstream": "polish-and-aot-hardening",
-      "title": "ApiResourceDescriptor + [ResourceObjectName]/[JsonSchema] Object property override support + auth fallback correction (194 files)"
+      "title": "StateBasedLinkChecker auto-discovery + RegisterLinkCheckers + PopulateResourceCheckers code generation + nested type fix + URL fallback semantics"
     },
     "openReviewGate": null,
     "openReviewGateRationale": null,

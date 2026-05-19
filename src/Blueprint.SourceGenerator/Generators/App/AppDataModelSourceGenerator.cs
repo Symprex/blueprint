@@ -200,6 +200,12 @@ public sealed partial class AppDataModelSourceGenerator : IIncrementalGenerator,
 
                 c.AppendLine(string.Empty);
                 c.AppendLine("this.Freeze();");
+
+                // Wire state-based checkers to resource descriptors after Freeze (which derives them)
+                if (compilationModel.LinkCheckerTypes.Count > 0)
+                {
+                    c.AppendLine("PopulateResourceCheckers(this);");
+                }
             });
 
         // Generate RegisterLinkCheckers method if any StateBasedLinkChecker subclasses were discovered

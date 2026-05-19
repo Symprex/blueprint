@@ -18,6 +18,7 @@ namespace TestNamespace
             this.Register(TestNamespace.DeactivateCommand.Configure());
             
             this.Freeze();
+            PopulateResourceCheckers(this);
         }
 
         public static void PopulateResourceCheckers(global::Blueprint.Model.BlueprintApp app)
