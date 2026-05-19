@@ -80,25 +80,27 @@ This replaces the runtime DI scan for `ILinkVisibilityAuthoriser` implementation
 
 ## Migration Strategy
 
-For S365, this is **purely additive** — no breaking changes:
+For S365, this was **purely additive** — no breaking changes were required:
 
-1. Add `ApiResourceDescriptor` to `Blueprint.Runtime.Model`
-2. Add `RegisterResource()` to `BlueprintApp`
-3. Update `LinkGenerationModule` to emit resource registrations
-4. Optionally: emit diagnostic when resource has links but no self-link
+1. ✅ `ApiResourceDescriptor` added to `Blueprint.Runtime.Model`
+2. ✅ `RegisterResource()` added to `BlueprintApp`
+3. ✅ `LinkGenerationModule` emits resource descriptor registrations
+4. ✅ `PopulateResourceCheckers()` wires state-based checkers at compile time
+5. ✅ `RegisterLinkCheckers()` always generated (even if empty) so consumer call sites compile
 
-S365 doesn't need a codemod — the generator automatically discovers resource relationships from existing `[SelfLink]` and `[Link]` attributes.
+S365 didn't need a codemod — the generator automatically discovers resource relationships from existing `[SelfLink]` and `[Link]` attributes. State-based checkers are discovered by scanning scanned assemblies for `ILinkVisibilityAuthoriser` implementations.
 
-## Scope for This Session
+## Implementation Status
 
-**Phase 1** (implement now):
-- Add `ApiResourceDescriptor` class to Blueprint.Runtime.Model
-- Add `RegisterResource()` and lookup methods to `BlueprintApp`
-- Update `LinkGenerationModule` to emit resource descriptor registrations
-- Add test coverage
+**Phase 1** — ✅ COMPLETE:
+- `ApiResourceDescriptor` class in `Blueprint.Runtime.Model` (`src/Blueprint.Runtime.Model/ApiResourceDescriptor.cs`)
+- `RegisterResource()` / `TryGetResourceDescriptor()` / `GetLinksForResource()` on `BlueprintApp`
+- `LinkGenerationModule` emits resource descriptor registrations at compile time
+- `PopulateResourceCheckers()` generated method wires state-based checkers into resource descriptors
+- Test coverage in `Blueprint.SourceGenerator.Tests/Model/ApiResourceDescriptorTests.cs`
 
-**Phase 2** (future):
-- State-based checker discovery in generator
-- Compile-time diagnostics for resource consistency
-- Resource graph API endpoint
-- Per-request link population optimization using resource descriptors
+**Phase 2** — ✅ LARGELY COMPLETE:
+- State-based checker discovery in generator → ✅ Implemented via `PopulateResourceCheckers()` scan of `ILinkVisibilityAuthoriser` implementations
+- Compile-time diagnostics for resource consistency → BPLG003 (non-linkable resource), BPLG004 (ambiguous self-link)
+- Resource graph API endpoint → Not yet implemented (optional runtime enrichment)
+- Per-request link population optimization → ✅ Per-request link auth cache (commit `3ab7edb7`)
