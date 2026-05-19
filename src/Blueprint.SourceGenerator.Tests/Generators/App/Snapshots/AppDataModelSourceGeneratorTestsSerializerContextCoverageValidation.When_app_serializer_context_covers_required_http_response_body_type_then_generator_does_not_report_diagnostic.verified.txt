@@ -23,6 +23,10 @@ namespace TestNamespace
             
             this.Freeze();
         }
+
+        public static void RegisterLinkCheckers(global::Microsoft.Extensions.DependencyInjection.BlueprintServiceBuilder builder)
+        {
+        }
     }
 }
 

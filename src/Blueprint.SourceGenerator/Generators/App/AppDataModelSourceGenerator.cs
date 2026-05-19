@@ -208,7 +208,9 @@ public sealed partial class AppDataModelSourceGenerator : IIncrementalGenerator,
                 }
             });
 
-        // Generate RegisterLinkCheckers method if any StateBasedLinkChecker subclasses were discovered
+        // Always generate RegisterLinkCheckers so consumer call sites compile regardless of
+        // whether link checkers currently exist in the scanned assemblies. This also ensures
+        // the method is available for codemod-generated call sites that reference it.
         if (compilationModel.LinkCheckerTypes.Count > 0)
         {
             classBuilder.AddMethod("RegisterLinkCheckers", Accessibility.Public)
@@ -249,6 +251,15 @@ public sealed partial class AppDataModelSourceGenerator : IIncrementalGenerator,
                         c.AppendLine(string.Empty);
                     }
                 });
+        }
+        else if (compilationModel.HasServiceBuilder)
+        {
+            // Emit empty stub so consumer call sites always compile
+            classBuilder.AddMethod("RegisterLinkCheckers", Accessibility.Public)
+                .MakeStaticMethod()
+                .WithReturnType("void")
+                .AddParameter("global::Microsoft.Extensions.DependencyInjection.BlueprintServiceBuilder", "builder")
+                .WithBody(_ => { });
         }
 
         return codeBuilder.Build();

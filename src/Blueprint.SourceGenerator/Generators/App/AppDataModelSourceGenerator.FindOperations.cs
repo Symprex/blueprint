@@ -231,6 +231,7 @@ public sealed partial class AppDataModelSourceGenerator
             dataModelClass,
             registrations,
             linkCheckerTypes,
+            hasServiceBuilder,
             diagnostics));
     }
 
