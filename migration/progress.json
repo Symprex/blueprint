@@ -12,26 +12,26 @@
   "current": {
     "activeWorkstream": "polish-and-aot-hardening",
     "frameworkStatus": "production-ready",
-    "frameworkStatusDetail": "Blueprint source-gen fully operational. 2002 Blueprint tests pass (823 generator + 1179 integration). S365 migration: entire solution builds (2 pre-existing non-Blueprint test errors). 1185 tests confirmed passing across non-DB-dependent suites. Key recent commits: link checker auto-discovery (4d8ebfbb), nested type fix (2d50d686), resource descriptor checker wiring (45ad7cca), URL template fallback fix (ef9c9342), link auth perf (02f81eaa, 52fc510b).",
-    "nextReadySlice": "runtime-integration-of-resource-descriptors",
+    "frameworkStatusDetail": "Blueprint source-gen fully operational. 2002+ Blueprint tests pass (807+ generator + 1179 integration). S365 migration: entire solution builds (4 pre-existing non-Blueprint test errors). 1072 tests confirmed passing across all non-DB test suites (907 service + 165 gateway). Source-generated auto-registration eliminates all Blueprint-type Scrutor scans: RegisterLinkCheckers, RegisterApiAuthorisers, RegisterResourceExpanders. Recent commits: auto-register authorisers (cd12b787), broad assembly scan (e9cad2f6), auto-register resource expanders (67ff710b).",
+    "nextReadySlice": "aot-hardening-and-remaining-reflection",
     "lastCompletedSlice": {
-      "id": "link-generation-perf-and-state-checkers",
+      "id": "scrutor-elimination-and-auto-registration",
       "workstream": "polish-and-aot-hardening",
-      "title": "StateBasedLinkChecker auto-discovery + RegisterLinkCheckers + PopulateResourceCheckers code generation + nested type fix + URL fallback semantics"
+      "title": "Source-generated RegisterLinkCheckers + RegisterApiAuthorisers + RegisterResourceExpanders eliminating all Blueprint-type Scrutor assembly scanning (AOT-safe)"
     },
     "openReviewGate": null,
     "openReviewGateRationale": null,
     "phase2Criteria": {
-      "resourceAndLinks": "SATISFIED \u00e2\u20ac\u201d LinkGenerationModule, ResourceEventAuditModule, 5 resource events, SelfLink/RootLink proven in 10-operation reference app",
-      "openApi": "SATISFIED \u00e2\u20ac\u201d OpenAPI rendered from source-generated descriptors, snapshot-tested in ReferenceAppOpenApiTests",
-      "referenceApp": "SATISFIED \u00e2\u20ac\u201d 10 HTTP operations + 1 background task demonstrating all Phase 2 capabilities end to end",
-      "reviewArtifact": "SATISFIED \u00e2\u20ac\u201d phase2-resource-api-shape-review.html at ~/.agent/diagrams/"
+      "resourceAndLinks": "SATISFIED â€” LinkGenerationModule, ResourceEventAuditModule, 5 resource events, SelfLink/RootLink proven in 10-operation reference app",
+      "openApi": "SATISFIED â€” OpenAPI rendered from source-generated descriptors, snapshot-tested in ReferenceAppOpenApiTests",
+      "referenceApp": "SATISFIED â€” 10 HTTP operations + 1 background task demonstrating all Phase 2 capabilities end to end",
+      "reviewArtifact": "SATISFIED â€” phase2-resource-api-shape-review.html at ~/.agent/diagrams/"
     },
     "phase3Criteria": {
-      "nonHttpHost": "SATISFIED \u00e2\u20ac\u201d BackgroundTaskHostDispatchIntegrationTests prove task pipeline dispatch, validation, and host partitioning (commit 8931b64)",
-      "consumerIntegrationSeam": "SATISFIED \u00e2\u20ac\u201d SendTemplateSharedNotificationTask in Sample.Contract with handler in Sample app, manifest updated (commit d627e8d)",
-      "migrationTooling": "SATISFIED \u00e2\u20ac\u201d Blueprint.Codemod (14 tests) + Blueprint.Migration.Analyzers (24 tests) with BPMIG100-201 diagnostics, SARIF output, dry-run mode",
-      "reviewArtifact": "SATISFIED \u00e2\u20ac\u201d phase3-non-http-host-review.html at ~/.agent/diagrams/"
+      "nonHttpHost": "SATISFIED â€” BackgroundTaskHostDispatchIntegrationTests prove task pipeline dispatch, validation, and host partitioning (commit 8931b64)",
+      "consumerIntegrationSeam": "SATISFIED â€” SendTemplateSharedNotificationTask in Sample.Contract with handler in Sample app, manifest updated (commit d627e8d)",
+      "migrationTooling": "SATISFIED â€” Blueprint.Codemod (14 tests) + Blueprint.Migration.Analyzers (24 tests) with BPMIG100-201 diagnostics, SARIF output, dry-run mode",
+      "reviewArtifact": "SATISFIED â€” phase3-non-http-host-review.html at ~/.agent/diagrams/"
     }
   },
   "completedSlices": [
@@ -278,7 +278,7 @@
     {
       "id": "runtime/changetype-status-codes",
       "workstream": "documentation-and-final-alignment",
-      "title": "Map ResourceEvent ChangeType to correct HTTP status codes (Created\u00e2\u2020\u2019201, Updated\u00e2\u2020\u2019200, Deleted\u00e2\u2020\u2019204)",
+      "title": "Map ResourceEvent ChangeType to correct HTTP status codes (Createdâ†’201, Updatedâ†’200, Deletedâ†’204)",
       "commit": "1e87bfe"
     },
     {
@@ -308,7 +308,7 @@
     {
       "id": "openapi/validation-format-projection",
       "workstream": "documentation-and-final-alignment",
-      "title": "Project OpenAPI format hints from validation attributes (EmailAddress\u00e2\u2020\u2019email, Url\u00e2\u2020\u2019uri, Phone\u00e2\u2020\u2019phone)",
+      "title": "Project OpenAPI format hints from validation attributes (EmailAddressâ†’email, Urlâ†’uri, Phoneâ†’phone)",
       "commit": "eb8543e"
     },
     {
