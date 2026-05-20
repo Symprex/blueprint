@@ -25,9 +25,14 @@ public class FullPipelineBenchmarks
     private readonly ValidationBenchmarksApp _app = new();
     private readonly ValidationBenchmarksAppExecutor _executor;
     private readonly System.IServiceProvider _serviceProvider;
+    private readonly ApiOperationDescriptor _minimalDescriptor;
+    private readonly ApiOperationDescriptor _validatedDescriptor;
+    private readonly ApiOperationDescriptor _fullStackDescriptor;
 
     /// <summary>
     /// Initializes the benchmark fixture with a service provider and pre-warmed executor.
+    /// Descriptors are cached to avoid per-iteration allocation (mirrors production where
+    /// descriptors are created once at app startup).
     /// </summary>
     public FullPipelineBenchmarks()
     {
@@ -37,6 +42,10 @@ public class FullPipelineBenchmarks
             NullLoggerFactory.Instance,
             this._app,
             this._serviceProvider);
+
+        this._minimalDescriptor = FpMinimalBenchmarkQuery.Configure();
+        this._validatedDescriptor = FpValidatedBenchmarkQuery.Configure();
+        this._fullStackDescriptor = FpFullStackBenchmarkCommand.Configure();
     }
 
     /// <summary>
@@ -50,7 +59,7 @@ public class FullPipelineBenchmarks
         var context = new ApiOperationContext(
             this._serviceProvider,
             this._app,
-            FpMinimalBenchmarkQuery.Configure(),
+            this._minimalDescriptor,
             CancellationToken.None);
 
         return this._executor.GetPipeline(typeof(FpMinimalBenchmarkQuery)).ExecuteAsync(context);
@@ -67,7 +76,7 @@ public class FullPipelineBenchmarks
         var context = new ApiOperationContext(
             this._serviceProvider,
             this._app,
-            FpValidatedBenchmarkQuery.Configure(),
+            this._validatedDescriptor,
             CancellationToken.None)
         {
             Operation = new FpValidatedBenchmarkQuery { Name = "Alice", Email = "alice@example.com" },
@@ -87,7 +96,7 @@ public class FullPipelineBenchmarks
         var context = new ApiOperationContext(
             this._serviceProvider,
             this._app,
-            FpValidatedBenchmarkQuery.Configure(),
+            this._validatedDescriptor,
             CancellationToken.None)
         {
             Operation = new FpValidatedBenchmarkQuery { Name = null!, Email = null! },
@@ -107,7 +116,7 @@ public class FullPipelineBenchmarks
         var context = new ApiOperationContext(
             this._serviceProvider,
             this._app,
-            FpFullStackBenchmarkCommand.Configure(),
+            this._fullStackDescriptor,
             CancellationToken.None)
         {
             Operation = new FpFullStackBenchmarkCommand
@@ -132,7 +141,7 @@ public class FullPipelineBenchmarks
         var context = new ApiOperationContext(
             this._serviceProvider,
             this._app,
-            FpFullStackBenchmarkCommand.Configure(),
+            this._fullStackDescriptor,
             CancellationToken.None)
         {
             Operation = new FpFullStackBenchmarkCommand
