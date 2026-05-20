@@ -72,6 +72,16 @@ public sealed class RebusTransactionModule : IBlueprintSourceGeneratorModule, IP
             return;
         }
 
+        // Cache a boolean field set at pipeline construction time. When no Rebus IBus is
+        // registered (e.g. integration tests without messaging, or apps that reference
+        // Blueprint.Rebus but only use it in a subset of hosts), the generated pipeline
+        // skips the RebusTransactionScope entirely — avoiding per-request AsyncLocal writes
+        // and TransactionContext allocation.
+        context.CacheService(
+            "_hasRebus",
+            "bool",
+            "Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<global::Rebus.Bus.IBus>(serviceProvider) != null");
+
         context.RequireVariable(
             new VariableKey(HandlerExecutionModule.HandlerResultTypeName, HandlerExecutionModule.HandlerResultPurpose),
             requiredBy: PipelineStage.PostExecution);
@@ -88,13 +98,13 @@ public sealed class RebusTransactionModule : IBlueprintSourceGeneratorModule, IP
     private static void RenderTransactionScopeStart(PipelineRenderContext context)
     {
         context.WriteBlankLine();
-        context.WriteStatement($"using var rebusTransactionScope = new global::{RebusTransactionScopeType}();");
+        context.WriteStatement($"using var rebusTransactionScope = this._hasRebus ? new global::{RebusTransactionScopeType}() : null;");
     }
 
     private static void RenderTransactionScopeComplete(PipelineRenderContext context)
     {
         context.WriteBlankLine();
-        context.WriteStatement("await rebusTransactionScope.CompleteAsync().ConfigureAwait(false);");
+        context.WriteStatement("if (rebusTransactionScope != null) await rebusTransactionScope.CompleteAsync().ConfigureAwait(false);");
     }
 
     private static bool HasNoRebusTransactionAttribute(INamedTypeSymbol operationType)

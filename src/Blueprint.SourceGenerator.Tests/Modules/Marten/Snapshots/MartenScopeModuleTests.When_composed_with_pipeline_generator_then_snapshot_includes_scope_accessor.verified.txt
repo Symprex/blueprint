@@ -46,10 +46,13 @@ namespace Blueprint.Generated
     {
         static readonly string[] _appliedModuleIds =
             ["MartenScopeModule", "RebusTransactionModule", "TenantModule", "PropertyPopulationModule", "HandlerExecutionModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule"];
+        readonly bool _hasRebus;
 
         internal UpdateDocCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, Blueprint.Runtime.Exec.PipelineServices pipelineServices)
             : base(loggerFactory, "UpdateDocCommand", pipelineServices)
         {
+            var serviceProvider = pipelineServices.ServiceProvider;
+            this._hasRebus = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<global::Rebus.Bus.IBus>(serviceProvider) != null;
         }
 
         protected override async System.Threading.Tasks.Task<Blueprint.OperationResult> ExecuteCoreAsync(Blueprint.Runtime.Exec.ApiOperationContext context)
@@ -58,7 +61,7 @@ namespace Blueprint.Generated
 
             global::Blueprint.Marten.MartenScopeAccessor.Current = context.ServiceProvider;
 
-            using var rebusTransactionScope = new global::Rebus.Transport.RebusTransactionScope();
+            using var rebusTransactionScope = this._hasRebus ? new global::Rebus.Transport.RebusTransactionScope() : null;
 
             // Tenant resolution (compile-time, no reflection)
             var _tenantAccessor = Blueprint.Runtime.Exec.PipelineHelpers.ResolveTenantScoped(context.ServiceProvider, context.UserPrincipal);
@@ -77,7 +80,7 @@ namespace Blueprint.Generated
 
                 await Blueprint.Runtime.Exec.PipelineHelpers.FlushBackgroundTasksAsync(context.ServiceProvider).ConfigureAwait(false);
 
-                await rebusTransactionScope.CompleteAsync().ConfigureAwait(false);
+                if (rebusTransactionScope != null) await rebusTransactionScope.CompleteAsync().ConfigureAwait(false);
             }
 
             return handlerResult;
