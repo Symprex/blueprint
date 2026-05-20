@@ -113,6 +113,7 @@ public static class OperationResultContractHelper
     /// <param name="noResultType">The resolved <c>Blueprint.Runtime.Exec.NoResultOperationResult</c> type.</param>
     /// <param name="keyOnlyResourceEventResultType">The resolved <c>Blueprint.Runtime.Exec.KeyOnlyResourceEventResult</c> type when available.</param>
     /// <param name="resourceEventResultType">The resolved <c>Blueprint.Runtime.Exec.ResourceEventResult</c> type when available.</param>
+    /// <param name="deferredResourceEventResultType">The resolved <c>Blueprint.Runtime.Exec.IDeferredResourceEventResult</c> interface when available.</param>
     /// <param name="httpNoContentResultType">The resolved <c>Blueprint.Runtime.Http.HttpNoContentResult</c> type when available.</param>
     /// <param name="httpAcceptedResultType">The resolved <c>Blueprint.Runtime.Http.HttpAcceptedResult</c> type when available.</param>
     /// <param name="plainTextResultType">The resolved <c>Blueprint.Runtime.Exec.PlainTextResult</c> type when available.</param>
@@ -133,6 +134,7 @@ public static class OperationResultContractHelper
         INamedTypeSymbol noResultType,
         INamedTypeSymbol? keyOnlyResourceEventResultType,
         INamedTypeSymbol? resourceEventResultType,
+        INamedTypeSymbol? deferredResourceEventResultType,
         INamedTypeSymbol? httpNoContentResultType,
         INamedTypeSymbol? httpAcceptedResultType = null,
         INamedTypeSymbol? plainTextResultType = null,
@@ -151,6 +153,7 @@ public static class OperationResultContractHelper
             || SymbolEqualityComparer.Default.Equals(resultType, noResultType)
             || SymbolEqualityComparer.Default.Equals(resultType, keyOnlyResourceEventResultType)
             || IsTypeOrDerivedFromOptional(resultType, resourceEventResultType)
+            || ImplementsInterfaceOptional(resultType, deferredResourceEventResultType)
             || SymbolEqualityComparer.Default.Equals(resultType, httpNoContentResultType)
             || SymbolEqualityComparer.Default.Equals(resultType, httpAcceptedResultType)
             || SymbolEqualityComparer.Default.Equals(resultType, plainTextResultType)
@@ -359,6 +362,16 @@ public static class OperationResultContractHelper
     private static bool IsTypeOrDerivedFromOptional(ITypeSymbol candidateType, INamedTypeSymbol? baseType)
     {
         return baseType is not null && IsTypeOrDerivedFrom(candidateType, baseType);
+    }
+
+    private static bool ImplementsInterfaceOptional(ITypeSymbol candidateType, INamedTypeSymbol? interfaceType)
+    {
+        if (interfaceType is null)
+        {
+            return false;
+        }
+
+        return candidateType.AllInterfaces.Any(i => SymbolEqualityComparer.Default.Equals(i, interfaceType));
     }
 
     private static bool IsInternalOnlyUnhandledExceptionResultType(ITypeSymbol candidateType)
