@@ -30,16 +30,32 @@ if (args.Length > 0 && args[0] == "profile")
     var iterations = 0L;
     var deadline = DateTime.UtcNow.AddSeconds(15);
 
+    // Verify pipeline completes successfully before starting the loop.
+    var testCtx = new ApiOperationContext(serviceProvider, app, minimalDescriptor, CancellationToken.None)
+    {
+        HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext(),
+    };
+    var testResult = await pipeline.ExecuteAsync(testCtx);
+    if (!testResult.WasSuccessful)
+    {
+        Console.WriteLine($"ERROR: Pipeline failed — {testResult.GetType().Name}");
+        return;
+    }
+
     while (DateTime.UtcNow < deadline)
     {
         // Alternate between minimal and full-stack to capture both paths.
         for (var i = 0; i < 1000; i++)
         {
-            var ctx1 = new ApiOperationContext(serviceProvider, app, minimalDescriptor, CancellationToken.None);
+            var ctx1 = new ApiOperationContext(serviceProvider, app, minimalDescriptor, CancellationToken.None)
+            {
+                HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext(),
+            };
             await pipeline.ExecuteAsync(ctx1);
 
             var ctx2 = new ApiOperationContext(serviceProvider, app, fullStackDescriptor, CancellationToken.None)
             {
+                HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext(),
                 Operation = new FpFullStackBenchmarkCommand
                 {
                     TenantId = "tenant-42",

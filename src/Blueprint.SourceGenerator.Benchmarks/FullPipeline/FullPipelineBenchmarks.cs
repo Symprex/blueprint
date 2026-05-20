@@ -7,6 +7,7 @@ using Blueprint.Model;
 using Blueprint.Model.Attributes;
 using Blueprint.Runtime.Exec;
 using Blueprint.SourceGenerator.Benchmarks.Validation;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -60,7 +61,10 @@ public class FullPipelineBenchmarks
             this._serviceProvider,
             this._app,
             this._minimalDescriptor,
-            CancellationToken.None);
+            CancellationToken.None)
+        {
+            HttpContext = new DefaultHttpContext(),
+        };
 
         return this._executor.GetPipeline(typeof(FpMinimalBenchmarkQuery)).ExecuteAsync(context);
     }
@@ -79,6 +83,7 @@ public class FullPipelineBenchmarks
             this._validatedDescriptor,
             CancellationToken.None)
         {
+            HttpContext = new DefaultHttpContext(),
             Operation = new FpValidatedBenchmarkQuery { Name = "Alice", Email = "alice@example.com" },
         };
 
@@ -99,6 +104,7 @@ public class FullPipelineBenchmarks
             this._validatedDescriptor,
             CancellationToken.None)
         {
+            HttpContext = new DefaultHttpContext(),
             Operation = new FpValidatedBenchmarkQuery { Name = null!, Email = null! },
         };
 
@@ -119,6 +125,7 @@ public class FullPipelineBenchmarks
             this._fullStackDescriptor,
             CancellationToken.None)
         {
+            HttpContext = new DefaultHttpContext(),
             Operation = new FpFullStackBenchmarkCommand
             {
                 TenantId = "tenant-42",
@@ -144,6 +151,7 @@ public class FullPipelineBenchmarks
             this._fullStackDescriptor,
             CancellationToken.None)
         {
+            HttpContext = new DefaultHttpContext(),
             Operation = new FpFullStackBenchmarkCommand
             {
                 TenantId = null!,

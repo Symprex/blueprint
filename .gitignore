@@ -13,3 +13,6 @@ riderModule.iml
 # Test results
 TestResults/
 artifacts/
+
+profile-output/
+BenchmarkDotNet.Artifacts/
