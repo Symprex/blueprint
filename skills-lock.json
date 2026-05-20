@@ -41,6 +41,12 @@
       "sourceType": "github",
       "computedHash": "57a53430e60aee843c04edafbf8d97123e7102566126f68d3ab8716bae1c89bd"
     },
+    "profile": {
+      "source": "asynkron/asynkron-skills",
+      "sourceType": "github",
+      "skillPath": "skills/profile/SKILL.md",
+      "computedHash": "17f8bf916e1dc542a412daebb7916d0ff42a71bea3733d3abde8fceb613964a5"
+    },
     "systematic-debugging": {
       "source": "obra/superpowers",
       "sourceType": "github",
