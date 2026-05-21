@@ -52,7 +52,7 @@ namespace Blueprint.Generated
         {
         }
 
-        protected override async System.Threading.Tasks.Task<Blueprint.OperationResult> ExecuteCoreAsync(Blueprint.Runtime.Exec.ApiOperationContext context)
+        protected override async System.Threading.Tasks.ValueTask<Blueprint.OperationResult> ExecuteCoreAsync(Blueprint.Runtime.Exec.ApiOperationContext context)
         {
             var operation = (global::TestNamespace.GetTopQuery)context.Operation;
 

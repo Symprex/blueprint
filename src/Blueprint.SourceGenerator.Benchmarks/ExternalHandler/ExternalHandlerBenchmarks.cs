@@ -49,7 +49,7 @@ public class ExternalHandlerBenchmarks
     /// </summary>
     /// <returns>The result from the inline handler pipeline.</returns>
     [Benchmark(Baseline = true)]
-    public Task<OperationResult> InlineHandlerQueryAsync()
+    public ValueTask<OperationResult> InlineHandlerQueryAsync()
     {
         var context = new ApiOperationContext(
             this._serviceProvider,
@@ -66,7 +66,7 @@ public class ExternalHandlerBenchmarks
     /// </summary>
     /// <returns>The result from the external handler pipeline.</returns>
     [Benchmark]
-    public Task<OperationResult> ExternalHandlerMinimalQueryAsync()
+    public ValueTask<OperationResult> ExternalHandlerMinimalQueryAsync()
     {
         var context = new ApiOperationContext(
             this._serviceProvider,
@@ -82,7 +82,7 @@ public class ExternalHandlerBenchmarks
     /// </summary>
     /// <returns>The result from the validated external handler pipeline.</returns>
     [Benchmark]
-    public Task<OperationResult> ExternalHandlerValidatedCommandAsync()
+    public ValueTask<OperationResult> ExternalHandlerValidatedCommandAsync()
     {
         var context = new ApiOperationContext(
             this._serviceProvider,
@@ -106,7 +106,7 @@ public class ExternalHandlerBenchmarks
     /// </summary>
     /// <returns>The result from the DI-dependent external handler pipeline.</returns>
     [Benchmark]
-    public Task<OperationResult> ExternalHandlerWithDiDependencyAsync()
+    public ValueTask<OperationResult> ExternalHandlerWithDiDependencyAsync()
     {
         var context = new ApiOperationContext(
             this._serviceProvider,

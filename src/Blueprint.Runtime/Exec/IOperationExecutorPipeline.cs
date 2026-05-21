@@ -13,9 +13,11 @@ namespace Blueprint;
 public interface IOperationExecutorPipeline
 {
     /// <summary>
-    /// Executes the operation, returning the result.
+    /// Executes the operation, returning the result. Returns <see cref="ValueTask{TResult}"/> to enable
+    /// zero-allocation synchronous completion on the hot path — generated pipelines that complete without
+    /// truly async work avoid both state machine and Task object allocation.
     /// </summary>
     /// <param name="context">The context for this single execution of the operation.</param>
     /// <returns>The result of executing the operation.</returns>
-    Task<OperationResult> ExecuteAsync(ApiOperationContext context);
+    ValueTask<OperationResult> ExecuteAsync(ApiOperationContext context);
 }

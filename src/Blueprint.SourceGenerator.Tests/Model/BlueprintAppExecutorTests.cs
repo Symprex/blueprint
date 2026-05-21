@@ -33,10 +33,10 @@ public class BlueprintAppExecutorTests
 
         public ApiOperationContext? ExecutedContext { get; private set; }
 
-        public Task<OperationResult> ExecuteAsync(ApiOperationContext context)
+        public ValueTask<OperationResult> ExecuteAsync(ApiOperationContext context)
         {
             this.ExecutedContext = context;
-            return Task.FromResult(this.Result);
+            return new ValueTask<OperationResult>(this.Result);
         }
     }
 

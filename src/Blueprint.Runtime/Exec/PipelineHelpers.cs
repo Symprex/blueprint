@@ -456,20 +456,34 @@ public static class PipelineHelpers
     /// <param name="httpContext">The HTTP context for the current request.</param>
     /// <param name="userContextFactory">The cached user authorization context factory, or <c>null</c> if not registered.</param>
     /// <returns>A task that completes when the user context has been loaded (or skipped).</returns>
-    public static async Task LoadUserContextAsync(
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+    public static Task LoadUserContextAsync(
         ApiOperationContext context,
         HttpContext httpContext,
         Authorization.IUserAuthorisationContextFactory? userContextFactory)
     {
-        if (userContextFactory != null)
+        // Fast path: no factory registered — avoid async state machine allocation entirely.
+        if (userContextFactory == null)
         {
-            if (httpContext.User.Identity is System.Security.Claims.ClaimsIdentity { IsAuthenticated: true } userIdentity)
-            {
-                context.UserAuthorisationContext = await userContextFactory
-                    .CreateContextAsync(userIdentity, context.OperationCancelled)
-                    .ConfigureAwait(false);
-            }
+            return Task.CompletedTask;
         }
+
+        if (httpContext.User.Identity is not System.Security.Claims.ClaimsIdentity { IsAuthenticated: true } userIdentity)
+        {
+            return Task.CompletedTask;
+        }
+
+        return LoadUserContextCoreAsync(context, userIdentity, userContextFactory);
+    }
+
+    private static async Task LoadUserContextCoreAsync(
+        ApiOperationContext context,
+        System.Security.Claims.ClaimsIdentity userIdentity,
+        Authorization.IUserAuthorisationContextFactory userContextFactory)
+    {
+        context.UserAuthorisationContext = await userContextFactory
+            .CreateContextAsync(userIdentity, context.OperationCancelled)
+            .ConfigureAwait(false);
 
         if (context.UserAuthorisationContext != null && context.Activity != null)
         {

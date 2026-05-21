@@ -27,7 +27,7 @@ namespace Blueprint.Generated
             this._cached_ILogger_TestNamespace_TestQuery = Microsoft.Extensions.Logging.LoggerFactoryExtensions.CreateLogger<global::TestNamespace.TestQuery>(loggerFactory);
         }
 
-        protected override async System.Threading.Tasks.Task<Blueprint.OperationResult> ExecuteCoreAsync(Blueprint.Runtime.Exec.ApiOperationContext context)
+        protected override async System.Threading.Tasks.ValueTask<Blueprint.OperationResult> ExecuteCoreAsync(Blueprint.Runtime.Exec.ApiOperationContext context)
         {
             var operation = (global::TestNamespace.TestQuery)context.Operation;
 

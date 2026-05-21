@@ -89,7 +89,7 @@ public class BlueprintAppExecutor
     /// </summary>
     /// <param name="context">The execution context whose descriptor identifies the operation to dispatch.</param>
     /// <returns>The result produced by the resolved pipeline.</returns>
-    public Task<OperationResult> ExecuteAsync(ApiOperationContext context)
+    public ValueTask<OperationResult> ExecuteAsync(ApiOperationContext context)
     {
         return this.GetPipeline(context.Descriptor.OperationType).ExecuteAsync(context);
     }

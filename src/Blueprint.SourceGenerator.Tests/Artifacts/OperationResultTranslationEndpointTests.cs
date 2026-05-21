@@ -443,49 +443,49 @@ public partial class OperationResultTranslationEndpointTests
 
     private sealed class SuccessfulResultPipeline : IOperationExecutorPipeline
     {
-        public Task<OperationResult> ExecuteAsync(ApiOperationContext context)
+        public ValueTask<OperationResult> ExecuteAsync(ApiOperationContext context)
         {
-            return Task.FromResult<OperationResult>(new OkResult<string>("Blueprint"));
+            return new ValueTask<OperationResult>(new OkResult<string>("Blueprint"));
         }
     }
 
     private sealed class CreatedResultPipeline : IOperationExecutorPipeline
     {
-        public Task<OperationResult> ExecuteAsync(ApiOperationContext context)
+        public ValueTask<OperationResult> ExecuteAsync(ApiOperationContext context)
         {
-            return Task.FromResult<OperationResult>(new CreatedResult<string>("Blueprint"));
+            return new ValueTask<OperationResult>(new CreatedResult<string>("Blueprint"));
         }
     }
 
     private sealed class AcceptedResultPipeline : IOperationExecutorPipeline
     {
-        public Task<OperationResult> ExecuteAsync(ApiOperationContext context)
+        public ValueTask<OperationResult> ExecuteAsync(ApiOperationContext context)
         {
-            return Task.FromResult<OperationResult>(new AcceptedResult<string>("Blueprint"));
+            return new ValueTask<OperationResult>(new AcceptedResult<string>("Blueprint"));
         }
     }
 
     private sealed class ConflictResultPipeline : IOperationExecutorPipeline
     {
-        public Task<OperationResult> ExecuteAsync(ApiOperationContext context)
+        public ValueTask<OperationResult> ExecuteAsync(ApiOperationContext context)
         {
-            return Task.FromResult<OperationResult>(new ConflictResult<string>("Blueprint"));
+            return new ValueTask<OperationResult>(new ConflictResult<string>("Blueprint"));
         }
     }
 
     private sealed class NoResultPipeline : IOperationExecutorPipeline
     {
-        public Task<OperationResult> ExecuteAsync(ApiOperationContext context)
+        public ValueTask<OperationResult> ExecuteAsync(ApiOperationContext context)
         {
-            return Task.FromResult<OperationResult>(new NoResultOperationResult());
+            return new ValueTask<OperationResult>(new NoResultOperationResult());
         }
     }
 
     private sealed class ObjectResultPipeline : IOperationExecutorPipeline
     {
-        public Task<OperationResult> ExecuteAsync(ApiOperationContext context)
+        public ValueTask<OperationResult> ExecuteAsync(ApiOperationContext context)
         {
-            return Task.FromResult<OperationResult>(new OkResult<ResultTranslationResponseDto>(new ResultTranslationResponseDto
+            return new ValueTask<OperationResult>(new OkResult<ResultTranslationResponseDto>(new ResultTranslationResponseDto
             {
                 DisplayName = "Blueprint",
                 TotalCount = 3,
@@ -495,25 +495,25 @@ public partial class OperationResultTranslationEndpointTests
 
     private sealed class HttpNoContentPipeline : IOperationExecutorPipeline
     {
-        public Task<OperationResult> ExecuteAsync(ApiOperationContext context)
+        public ValueTask<OperationResult> ExecuteAsync(ApiOperationContext context)
         {
-            return Task.FromResult<OperationResult>(new HttpNoContentResult());
+            return new ValueTask<OperationResult>(new HttpNoContentResult());
         }
     }
 
     private sealed class KeyOnlyResourceEventPipeline : IOperationExecutorPipeline
     {
-        public Task<OperationResult> ExecuteAsync(ApiOperationContext context)
+        public ValueTask<OperationResult> ExecuteAsync(ApiOperationContext context)
         {
-            return Task.FromResult<OperationResult>(new KeyOnlyResourceEventResult(ChangeType.Deleted, "events.deleted", "resource-123"));
+            return new ValueTask<OperationResult>(new KeyOnlyResourceEventResult(ChangeType.Deleted, "events.deleted", "resource-123"));
         }
     }
 
     private sealed class BodyResourceEventPipeline : IOperationExecutorPipeline
     {
-        public Task<OperationResult> ExecuteAsync(ApiOperationContext context)
+        public ValueTask<OperationResult> ExecuteAsync(ApiOperationContext context)
         {
-            return Task.FromResult<OperationResult>(new ResourceEventResult<ResultTranslationResponseDto>(
+            return new ValueTask<OperationResult>(new ResourceEventResult<ResultTranslationResponseDto>(
                 ChangeType.Created,
                 "events.created",
                 "resource-123",
@@ -527,25 +527,25 @@ public partial class OperationResultTranslationEndpointTests
 
     private sealed class NotFoundResultPipeline : IOperationExecutorPipeline
     {
-        public Task<OperationResult> ExecuteAsync(ApiOperationContext context)
+        public ValueTask<OperationResult> ExecuteAsync(ApiOperationContext context)
         {
-            return Task.FromResult<OperationResult>(new NotFoundResult<string>("Blueprint"));
+            return new ValueTask<OperationResult>(new NotFoundResult<string>("Blueprint"));
         }
     }
 
     private sealed class LegacyFallbackPipeline : IOperationExecutorPipeline
     {
-        public Task<OperationResult> ExecuteAsync(ApiOperationContext context)
+        public ValueTask<OperationResult> ExecuteAsync(ApiOperationContext context)
         {
-            return Task.FromResult<OperationResult>(new LegacySelfExecutingResult());
+            return new ValueTask<OperationResult>(new LegacySelfExecutingResult());
         }
     }
 
     private sealed class ValidationFailedResultPipeline : IOperationExecutorPipeline
     {
-        public Task<OperationResult> ExecuteAsync(ApiOperationContext context)
+        public ValueTask<OperationResult> ExecuteAsync(ApiOperationContext context)
         {
-            return Task.FromResult<OperationResult>(new ValidationFailedResult(
+            return new ValueTask<OperationResult>(new ValidationFailedResult(
             [
                 new ValidationResult("Name is required", ["Name"]),
             ]));
@@ -554,9 +554,9 @@ public partial class OperationResultTranslationEndpointTests
 
     private sealed class ValidationFailedWithoutMetadataPipeline : IOperationExecutorPipeline
     {
-        public Task<OperationResult> ExecuteAsync(ApiOperationContext context)
+        public ValueTask<OperationResult> ExecuteAsync(ApiOperationContext context)
         {
-            return Task.FromResult<OperationResult>(new ValidationFailedResult(
+            return new ValueTask<OperationResult>(new ValidationFailedResult(
             [
                 new ValidationResult("Name is required", ["Name"]),
             ]));
@@ -565,17 +565,17 @@ public partial class OperationResultTranslationEndpointTests
 
     private sealed class UnhandledExceptionResultPipeline : IOperationExecutorPipeline
     {
-        public Task<OperationResult> ExecuteAsync(ApiOperationContext context)
+        public ValueTask<OperationResult> ExecuteAsync(ApiOperationContext context)
         {
-            return Task.FromResult<OperationResult>(new UnhandledExceptionResult(new InvalidOperationException("Unhandled failure")));
+            return new ValueTask<OperationResult>(new UnhandledExceptionResult(new InvalidOperationException("Unhandled failure")));
         }
     }
 
     private sealed class NullOkResultPipeline : IOperationExecutorPipeline
     {
-        public Task<OperationResult> ExecuteAsync(ApiOperationContext context)
+        public ValueTask<OperationResult> ExecuteAsync(ApiOperationContext context)
         {
-            return Task.FromResult<OperationResult>(new OkResult(null!));
+            return new ValueTask<OperationResult>(new OkResult(null!));
         }
     }
 

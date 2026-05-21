@@ -20,7 +20,7 @@ public class DelegatePipeline : IOperationExecutorPipeline
     }
 
     /// <inheritdoc />
-    public async Task<OperationResult> ExecuteAsync(ApiOperationContext context)
+    public async ValueTask<OperationResult> ExecuteAsync(ApiOperationContext context)
     {
         return await this._execute(context);
     }

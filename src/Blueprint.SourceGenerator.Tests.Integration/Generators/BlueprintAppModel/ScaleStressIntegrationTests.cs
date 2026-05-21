@@ -235,10 +235,10 @@ internal sealed class StressBenchmarkExecutor : BlueprintAppExecutor
 /// </summary>
 internal sealed class StressNoOpPipeline : IOperationExecutorPipeline
 {
-    private static readonly Task<OperationResult> CompletedTask =
-        Task.FromResult<OperationResult>(StressCompletedResult.Instance);
+    private static readonly ValueTask<OperationResult> CompletedTask =
+        new(StressCompletedResult.Instance);
 
-    public Task<OperationResult> ExecuteAsync(ApiOperationContext context)
+    public ValueTask<OperationResult> ExecuteAsync(ApiOperationContext context)
     {
         return CompletedTask;
     }

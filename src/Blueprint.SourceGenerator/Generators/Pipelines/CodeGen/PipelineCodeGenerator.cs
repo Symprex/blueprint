@@ -87,7 +87,7 @@ internal static class PipelineCodeGenerator
         var executeMethod = pipelineClass.AddMethod("ExecuteCoreAsync")
             .MakeProtectedMethod()
             .Override()
-            .WithReturnType("System.Threading.Tasks.Task<Blueprint.OperationResult>")
+            .WithReturnType("System.Threading.Tasks.ValueTask<Blueprint.OperationResult>")
             .AddParameter("Blueprint.Runtime.Exec.ApiOperationContext", "context");
 
         if (handler.IsHandlerAsync || plan.RequiresAsync)
@@ -187,7 +187,7 @@ internal static class PipelineCodeGenerator
     }
 
     /// <summary>
-    /// Wraps a generated result expression so the surrounding execute method still returns a task when the pipeline is not async.
+    /// Wraps a generated result expression so the surrounding execute method still returns a ValueTask when the pipeline is not async.
     /// </summary>
     /// <param name="operationResultExpression">The generated operation-result expression.</param>
     /// <param name="isPipelineAsync">Whether the generated pipeline method is async.</param>
@@ -196,7 +196,7 @@ internal static class PipelineCodeGenerator
     {
         return isPipelineAsync
             ? operationResultExpression
-            : $"System.Threading.Tasks.Task.FromResult<Blueprint.OperationResult>({operationResultExpression})";
+            : $"new System.Threading.Tasks.ValueTask<Blueprint.OperationResult>({operationResultExpression})";
     }
 
     /// <summary>

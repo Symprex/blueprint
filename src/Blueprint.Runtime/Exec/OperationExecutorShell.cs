@@ -259,7 +259,7 @@ public abstract class OperationExecutorShell : IOperationExecutorPipeline
     }
 
     /// <inheritdoc />
-    public Task<OperationResult> ExecuteAsync(ApiOperationContext context)
+    public ValueTask<OperationResult> ExecuteAsync(ApiOperationContext context)
     {
         var activity = this._suppressActivity
             ? null
@@ -267,7 +267,7 @@ public abstract class OperationExecutorShell : IOperationExecutorPipeline
                 this._activityName,
                 ActivityKind.Internal);
 
-        Task<OperationResult> coreTask;
+        ValueTask<OperationResult> coreTask;
 
         try
         {
@@ -277,7 +277,7 @@ public abstract class OperationExecutorShell : IOperationExecutorPipeline
         catch (Exception e)
         {
             activity?.Dispose();
-            return Task.FromResult(this.HandleException(context, e));
+            return new ValueTask<OperationResult>(this.HandleException(context, e));
         }
 
         // Fast path: if the pipeline completed synchronously, avoid async state machine allocation.
@@ -287,11 +287,11 @@ public abstract class OperationExecutorShell : IOperationExecutorPipeline
             return coreTask;
         }
 
-        return this.AwaitAndHandleExceptions(coreTask, context, activity);
+        return new ValueTask<OperationResult>(this.AwaitAndHandleExceptions(coreTask, context, activity));
     }
 
     private async Task<OperationResult> AwaitAndHandleExceptions(
-        Task<OperationResult> coreTask,
+        ValueTask<OperationResult> coreTask,
         ApiOperationContext context,
         Activity? activity)
     {
@@ -342,8 +342,10 @@ public abstract class OperationExecutorShell : IOperationExecutorPipeline
     /// <summary>
     /// Executes the operation-specific pipeline stages (population, authentication, validation, handler invocation).
     /// Generated pipelines override this method with the tailored per-operation pipeline body.
+    /// Returns <see cref="ValueTask{TResult}"/> to leverage pooled async state machines on .NET 10+,
+    /// eliminating per-call state machine allocation when the pipeline completes synchronously.
     /// </summary>
     /// <param name="context">The operation execution context.</param>
     /// <returns>The operation result produced by the pipeline.</returns>
-    protected abstract Task<OperationResult> ExecuteCoreAsync(ApiOperationContext context);
+    protected abstract ValueTask<OperationResult> ExecuteCoreAsync(ApiOperationContext context);
 }

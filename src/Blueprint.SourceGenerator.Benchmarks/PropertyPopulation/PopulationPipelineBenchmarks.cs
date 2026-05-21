@@ -51,7 +51,7 @@ public class PopulationPipelineBenchmarks
     /// </summary>
     /// <returns>The operation result produced by executing the measured population pipeline.</returns>
     [Benchmark(Baseline = true)]
-    public Task<OperationResult> RouteOnlyGetAsync()
+    public ValueTask<OperationResult> RouteOnlyGetAsync()
     {
         var context = CreateContext<RouteOnlyGetBenchmarkQuery>(this._app, RouteOnlyGetBenchmarkQuery.Configure());
         SetupHttpContext(context, routeValues: new() { ["Id"] = "user-123" });
@@ -63,7 +63,7 @@ public class PopulationPipelineBenchmarks
     /// </summary>
     /// <returns>The operation result produced by executing the measured population pipeline.</returns>
     [Benchmark]
-    public Task<OperationResult> BodyOnly3StringsPostAsync()
+    public ValueTask<OperationResult> BodyOnly3StringsPostAsync()
     {
         var context = CreateContext<BodyOnly3StringsBenchmarkCommand>(this._app, BodyOnly3StringsBenchmarkCommand.Configure());
         SetupHttpContext(context, bodyBytes: ThreeStringBodyBytes);
@@ -75,7 +75,7 @@ public class PopulationPipelineBenchmarks
     /// </summary>
     /// <returns>The operation result produced by executing the measured population pipeline.</returns>
     [Benchmark]
-    public Task<OperationResult> MixedRouteAndBodyPostAsync()
+    public ValueTask<OperationResult> MixedRouteAndBodyPostAsync()
     {
         var context = CreateContext<MixedRouteBodyBenchmarkCommand>(this._app, MixedRouteBodyBenchmarkCommand.Configure());
         SetupHttpContext(
@@ -90,7 +90,7 @@ public class PopulationPipelineBenchmarks
     /// </summary>
     /// <returns>The operation result produced by executing the measured population pipeline.</returns>
     [Benchmark]
-    public Task<OperationResult> TypedBodyPostAsync()
+    public ValueTask<OperationResult> TypedBodyPostAsync()
     {
         var context = CreateContext<TypedBodyBenchmarkCommand>(this._app, TypedBodyBenchmarkCommand.Configure());
         SetupHttpContext(
@@ -105,7 +105,7 @@ public class PopulationPipelineBenchmarks
     /// </summary>
     /// <returns>The operation result produced by executing the measured population pipeline.</returns>
     [Benchmark]
-    public Task<OperationResult> LargeBody10PropsPostAsync()
+    public ValueTask<OperationResult> LargeBody10PropsPostAsync()
     {
         var context = CreateContext<LargeBodyBenchmarkCommand>(this._app, LargeBodyBenchmarkCommand.Configure());
         SetupHttpContext(context, bodyBytes: LargeBodyBytes);

@@ -43,7 +43,7 @@ public class ValidationPipelineBenchmarks
     /// </summary>
     /// <returns>The operation result produced by executing the measured validation pipeline.</returns>
     [Benchmark(Baseline = true)]
-    public Task<OperationResult> RequiredFallbackInvalidAsync()
+    public ValueTask<OperationResult> RequiredFallbackInvalidAsync()
     {
         var pipeline = this._executor.GetPipeline(typeof(RequiredFallbackValidationOperation));
         var context = CreateContext<RequiredFallbackValidationOperation>(this._app, RequiredFallbackValidationOperation.Configure());
@@ -55,7 +55,7 @@ public class ValidationPipelineBenchmarks
     /// </summary>
     /// <returns>The operation result produced by executing the measured validation pipeline.</returns>
     [Benchmark]
-    public Task<OperationResult> RequiredRuntimeFallbackInvalidAsync()
+    public ValueTask<OperationResult> RequiredRuntimeFallbackInvalidAsync()
     {
         var pipeline = this._executor.GetPipeline(typeof(RequiredRuntimeFallbackValidationOperation));
         var context = CreateContext<RequiredRuntimeFallbackValidationOperation>(this._app, RequiredRuntimeFallbackValidationOperation.Configure());
@@ -67,7 +67,7 @@ public class ValidationPipelineBenchmarks
     /// </summary>
     /// <returns>The operation result produced by executing the measured validation pipeline.</returns>
     [Benchmark]
-    public Task<OperationResult> RequiredOnlyInvalidAsync()
+    public ValueTask<OperationResult> RequiredOnlyInvalidAsync()
     {
         var pipeline = this._executor.GetPipeline(typeof(RequiredOnlyValidationOperation));
         var context = CreateContext<RequiredOnlyValidationOperation>(this._app, RequiredOnlyValidationOperation.Configure());
@@ -79,7 +79,7 @@ public class ValidationPipelineBenchmarks
     /// </summary>
     /// <returns>The operation result produced by executing the measured validation pipeline.</returns>
     [Benchmark]
-    public Task<OperationResult> RequiredOnlyWhitespaceAsync()
+    public ValueTask<OperationResult> RequiredOnlyWhitespaceAsync()
     {
         var pipeline = this._executor.GetPipeline(typeof(RequiredOnlyValidationOperation));
         var context = CreateContext<RequiredOnlyValidationOperation>(
@@ -97,7 +97,7 @@ public class ValidationPipelineBenchmarks
     /// </summary>
     /// <returns>The operation result produced by executing the measured validation pipeline.</returns>
     [Benchmark]
-    public Task<OperationResult> RequiredOnlyValidAsync()
+    public ValueTask<OperationResult> RequiredOnlyValidAsync()
     {
         var pipeline = this._executor.GetPipeline(typeof(RequiredOnlyValidationOperation));
         var context = CreateContext<RequiredOnlyValidationOperation>(
@@ -116,7 +116,7 @@ public class ValidationPipelineBenchmarks
     /// </summary>
     /// <returns>The operation result produced by executing the measured validation pipeline.</returns>
     [Benchmark]
-    public Task<OperationResult> RequiredMaxLengthWhitespaceAsync()
+    public ValueTask<OperationResult> RequiredMaxLengthWhitespaceAsync()
     {
         var pipeline = this._executor.GetPipeline(typeof(RequiredMaxLengthValidationOperation));
         var context = CreateContext<RequiredMaxLengthValidationOperation>(
@@ -134,7 +134,7 @@ public class ValidationPipelineBenchmarks
     /// </summary>
     /// <returns>The operation result produced by executing the measured validation pipeline.</returns>
     [Benchmark]
-    public Task<OperationResult> RequiredMaxLengthTooLongAsync()
+    public ValueTask<OperationResult> RequiredMaxLengthTooLongAsync()
     {
         var pipeline = this._executor.GetPipeline(typeof(RequiredMaxLengthValidationOperation));
         var context = CreateContext<RequiredMaxLengthValidationOperation>(
@@ -152,7 +152,7 @@ public class ValidationPipelineBenchmarks
     /// </summary>
     /// <returns>The operation result produced by executing the measured validation pipeline.</returns>
     [Benchmark]
-    public Task<OperationResult> RequiredMaxLengthValidAsync()
+    public ValueTask<OperationResult> RequiredMaxLengthValidAsync()
     {
         var pipeline = this._executor.GetPipeline(typeof(RequiredMaxLengthValidationOperation));
         var context = CreateContext<RequiredMaxLengthValidationOperation>(
@@ -170,7 +170,7 @@ public class ValidationPipelineBenchmarks
     /// </summary>
     /// <returns>The operation result produced by executing the measured validation pipeline.</returns>
     [Benchmark]
-    public Task<OperationResult> MaxLengthTooLongAsync()
+    public ValueTask<OperationResult> MaxLengthTooLongAsync()
     {
         var pipeline = this._executor.GetPipeline(typeof(MaxLengthValidationOperation));
         var context = CreateContext<MaxLengthValidationOperation>(
@@ -188,7 +188,7 @@ public class ValidationPipelineBenchmarks
     /// </summary>
     /// <returns>The operation result produced by executing the measured validation pipeline.</returns>
     [Benchmark]
-    public Task<OperationResult> MaxLengthRuntimeFallbackTooLongAsync()
+    public ValueTask<OperationResult> MaxLengthRuntimeFallbackTooLongAsync()
     {
         var pipeline = this._executor.GetPipeline(typeof(MaxLengthRuntimeFallbackValidationOperation));
         var context = CreateContext<MaxLengthRuntimeFallbackValidationOperation>(
@@ -206,7 +206,7 @@ public class ValidationPipelineBenchmarks
     /// </summary>
     /// <returns>The operation result produced by executing the measured validation pipeline.</returns>
     [Benchmark]
-    public Task<OperationResult> MinLengthTooShortAsync()
+    public ValueTask<OperationResult> MinLengthTooShortAsync()
     {
         var pipeline = this._executor.GetPipeline(typeof(MixedValidationOperation));
         var context = CreateContext<MixedValidationOperation>(
@@ -224,7 +224,7 @@ public class ValidationPipelineBenchmarks
     /// </summary>
     /// <returns>The operation result produced by executing the measured validation pipeline.</returns>
     [Benchmark]
-    public Task<OperationResult> MinLengthRuntimeFallbackTooShortAsync()
+    public ValueTask<OperationResult> MinLengthRuntimeFallbackTooShortAsync()
     {
         var pipeline = this._executor.GetPipeline(typeof(MinLengthRuntimeFallbackValidationOperation));
         var context = CreateContext<MinLengthRuntimeFallbackValidationOperation>(
@@ -242,7 +242,7 @@ public class ValidationPipelineBenchmarks
     /// </summary>
     /// <returns>The operation result produced by executing the measured validation pipeline.</returns>
     [Benchmark]
-    public Task<OperationResult> StringLengthTooShortAsync()
+    public ValueTask<OperationResult> StringLengthTooShortAsync()
     {
         var pipeline = this._executor.GetPipeline(typeof(StringLengthValidationOperation));
         var context = CreateContext<StringLengthValidationOperation>(
@@ -260,7 +260,7 @@ public class ValidationPipelineBenchmarks
     /// </summary>
     /// <returns>The operation result produced by executing the measured validation pipeline.</returns>
     [Benchmark]
-    public Task<OperationResult> StringLengthRuntimeFallbackTooShortAsync()
+    public ValueTask<OperationResult> StringLengthRuntimeFallbackTooShortAsync()
     {
         var pipeline = this._executor.GetPipeline(typeof(StringLengthRuntimeFallbackValidationOperation));
         var context = CreateContext<StringLengthRuntimeFallbackValidationOperation>(
@@ -278,7 +278,7 @@ public class ValidationPipelineBenchmarks
     /// </summary>
     /// <returns>The operation result produced by executing the measured validation pipeline.</returns>
     [Benchmark]
-    public Task<OperationResult> EmailAddressInvalidAsync()
+    public ValueTask<OperationResult> EmailAddressInvalidAsync()
     {
         var pipeline = this._executor.GetPipeline(typeof(EmailAddressValidationOperation));
         var context = CreateContext<EmailAddressValidationOperation>(
@@ -296,7 +296,7 @@ public class ValidationPipelineBenchmarks
     /// </summary>
     /// <returns>The operation result produced by executing the measured validation pipeline.</returns>
     [Benchmark]
-    public Task<OperationResult> EmailAddressRuntimeFallbackInvalidAsync()
+    public ValueTask<OperationResult> EmailAddressRuntimeFallbackInvalidAsync()
     {
         var pipeline = this._executor.GetPipeline(typeof(EmailAddressRuntimeFallbackValidationOperation));
         var context = CreateContext<EmailAddressRuntimeFallbackValidationOperation>(
@@ -314,7 +314,7 @@ public class ValidationPipelineBenchmarks
     /// </summary>
     /// <returns>The operation result produced by executing the measured validation pipeline.</returns>
     [Benchmark]
-    public Task<OperationResult> GreaterThanPropertyInvalidAsync()
+    public ValueTask<OperationResult> GreaterThanPropertyInvalidAsync()
     {
         var pipeline = this._executor.GetPipeline(typeof(GreaterThanPropertyValidationOperation));
         var context = CreateContext<GreaterThanPropertyValidationOperation>(
@@ -333,7 +333,7 @@ public class ValidationPipelineBenchmarks
     /// </summary>
     /// <returns>The operation result produced by executing the measured validation pipeline.</returns>
     [Benchmark]
-    public Task<OperationResult> GreaterThanPropertyRuntimeFallbackInvalidAsync()
+    public ValueTask<OperationResult> GreaterThanPropertyRuntimeFallbackInvalidAsync()
     {
         var pipeline = this._executor.GetPipeline(typeof(GreaterThanPropertyRuntimeFallbackValidationOperation));
         var context = CreateContext<GreaterThanPropertyRuntimeFallbackValidationOperation>(
@@ -352,7 +352,7 @@ public class ValidationPipelineBenchmarks
     /// </summary>
     /// <returns>The operation result produced by executing the measured validation pipeline.</returns>
     [Benchmark]
-    public Task<OperationResult> GreaterThanInvalidAsync()
+    public ValueTask<OperationResult> GreaterThanInvalidAsync()
     {
         var pipeline = this._executor.GetPipeline(typeof(GreaterThanValidationOperation));
         var context = CreateContext<GreaterThanValidationOperation>(
@@ -370,7 +370,7 @@ public class ValidationPipelineBenchmarks
     /// </summary>
     /// <returns>The operation result produced by executing the measured validation pipeline.</returns>
     [Benchmark]
-    public Task<OperationResult> GreaterThanRuntimeFallbackInvalidAsync()
+    public ValueTask<OperationResult> GreaterThanRuntimeFallbackInvalidAsync()
     {
         var pipeline = this._executor.GetPipeline(typeof(GreaterThanRuntimeFallbackValidationOperation));
         var context = CreateContext<GreaterThanRuntimeFallbackValidationOperation>(
@@ -388,7 +388,7 @@ public class ValidationPipelineBenchmarks
     /// </summary>
     /// <returns>The operation result produced by executing the measured validation pipeline.</returns>
     [Benchmark]
-    public Task<OperationResult> RequiredIfInvalidAsync()
+    public ValueTask<OperationResult> RequiredIfInvalidAsync()
     {
         var pipeline = this._executor.GetPipeline(typeof(RequiredIfValidationOperation));
         var context = CreateContext<RequiredIfValidationOperation>(
@@ -406,7 +406,7 @@ public class ValidationPipelineBenchmarks
     /// </summary>
     /// <returns>The operation result produced by executing the measured validation pipeline.</returns>
     [Benchmark]
-    public Task<OperationResult> RequiredIfValidAsync()
+    public ValueTask<OperationResult> RequiredIfValidAsync()
     {
         var pipeline = this._executor.GetPipeline(typeof(RequiredIfValidationOperation));
         var context = CreateContext<RequiredIfValidationOperation>(
@@ -425,7 +425,7 @@ public class ValidationPipelineBenchmarks
     /// </summary>
     /// <returns>The operation result produced by executing the measured validation pipeline.</returns>
     [Benchmark]
-    public Task<OperationResult> RequiredIfRuntimeFallbackInvalidAsync()
+    public ValueTask<OperationResult> RequiredIfRuntimeFallbackInvalidAsync()
     {
         var pipeline = this._executor.GetPipeline(typeof(RequiredIfRuntimeFallbackValidationOperation));
         var context = CreateContext<RequiredIfRuntimeFallbackValidationOperation>(
@@ -443,7 +443,7 @@ public class ValidationPipelineBenchmarks
     /// </summary>
     /// <returns>The operation result produced by executing the measured validation pipeline.</returns>
     [Benchmark]
-    public Task<OperationResult> RequiredIfNotInvalidAsync()
+    public ValueTask<OperationResult> RequiredIfNotInvalidAsync()
     {
         var pipeline = this._executor.GetPipeline(typeof(RequiredIfNotValidationOperation));
         var context = CreateContext<RequiredIfNotValidationOperation>(
@@ -461,7 +461,7 @@ public class ValidationPipelineBenchmarks
     /// </summary>
     /// <returns>The operation result produced by executing the measured validation pipeline.</returns>
     [Benchmark]
-    public Task<OperationResult> RequiredIfNotValidAsync()
+    public ValueTask<OperationResult> RequiredIfNotValidAsync()
     {
         var pipeline = this._executor.GetPipeline(typeof(RequiredIfNotValidationOperation));
         var context = CreateContext<RequiredIfNotValidationOperation>(this._app, RequiredIfNotValidationOperation.Configure());
@@ -473,7 +473,7 @@ public class ValidationPipelineBenchmarks
     /// </summary>
     /// <returns>The operation result produced by executing the measured validation pipeline.</returns>
     [Benchmark]
-    public Task<OperationResult> RequiredIfNotRuntimeFallbackInvalidAsync()
+    public ValueTask<OperationResult> RequiredIfNotRuntimeFallbackInvalidAsync()
     {
         var pipeline = this._executor.GetPipeline(typeof(RequiredIfNotRuntimeFallbackValidationOperation));
         var context = CreateContext<RequiredIfNotRuntimeFallbackValidationOperation>(
@@ -491,7 +491,7 @@ public class ValidationPipelineBenchmarks
     /// </summary>
     /// <returns>The operation result produced by executing the measured validation pipeline.</returns>
     [Benchmark]
-    public Task<OperationResult> NotAllowedIfInvalidAsync()
+    public ValueTask<OperationResult> NotAllowedIfInvalidAsync()
     {
         var pipeline = this._executor.GetPipeline(typeof(NotAllowedIfValidationOperation));
         var context = CreateContext<NotAllowedIfValidationOperation>(
@@ -510,7 +510,7 @@ public class ValidationPipelineBenchmarks
     /// </summary>
     /// <returns>The operation result produced by executing the measured validation pipeline.</returns>
     [Benchmark]
-    public Task<OperationResult> NotAllowedIfValidAsync()
+    public ValueTask<OperationResult> NotAllowedIfValidAsync()
     {
         var pipeline = this._executor.GetPipeline(typeof(NotAllowedIfValidationOperation));
         var context = CreateContext<NotAllowedIfValidationOperation>(
@@ -528,7 +528,7 @@ public class ValidationPipelineBenchmarks
     /// </summary>
     /// <returns>The operation result produced by executing the measured validation pipeline.</returns>
     [Benchmark]
-    public Task<OperationResult> NotAllowedIfRuntimeFallbackInvalidAsync()
+    public ValueTask<OperationResult> NotAllowedIfRuntimeFallbackInvalidAsync()
     {
         var pipeline = this._executor.GetPipeline(typeof(NotAllowedIfRuntimeFallbackValidationOperation));
         var context = CreateContext<NotAllowedIfRuntimeFallbackValidationOperation>(
@@ -547,7 +547,7 @@ public class ValidationPipelineBenchmarks
     /// </summary>
     /// <returns>The operation result produced by executing the measured validation pipeline.</returns>
     [Benchmark]
-    public Task<OperationResult> ValidatableObjectFallbackInvalidAsync()
+    public ValueTask<OperationResult> ValidatableObjectFallbackInvalidAsync()
     {
         var pipeline = this._executor.GetPipeline(typeof(ValidatableBenchmarkOperation));
         var context = CreateContext<ValidatableBenchmarkOperation>(this._app, ValidatableBenchmarkOperation.Configure());

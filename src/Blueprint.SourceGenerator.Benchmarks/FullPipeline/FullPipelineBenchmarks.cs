@@ -55,7 +55,7 @@ public class FullPipelineBenchmarks
     /// </summary>
     /// <returns>The operation result from the minimal pipeline.</returns>
     [Benchmark(Baseline = true)]
-    public Task<OperationResult> MinimalQueryAsync()
+    public ValueTask<OperationResult> MinimalQueryAsync()
     {
         var context = new ApiOperationContext(
             this._serviceProvider,
@@ -75,7 +75,7 @@ public class FullPipelineBenchmarks
     /// </summary>
     /// <returns>The operation result after successful validation.</returns>
     [Benchmark]
-    public Task<OperationResult> ValidatedQueryValidInputAsync()
+    public ValueTask<OperationResult> ValidatedQueryValidInputAsync()
     {
         var context = new ApiOperationContext(
             this._serviceProvider,
@@ -96,7 +96,7 @@ public class FullPipelineBenchmarks
     /// </summary>
     /// <returns>The validation failure result.</returns>
     [Benchmark]
-    public Task<OperationResult> ValidatedQueryInvalidInputAsync()
+    public ValueTask<OperationResult> ValidatedQueryInvalidInputAsync()
     {
         var context = new ApiOperationContext(
             this._serviceProvider,
@@ -117,7 +117,7 @@ public class FullPipelineBenchmarks
     /// </summary>
     /// <returns>The operation result from the full-stack pipeline.</returns>
     [Benchmark]
-    public Task<OperationResult> FullStackCommandValidAsync()
+    public ValueTask<OperationResult> FullStackCommandValidAsync()
     {
         var context = new ApiOperationContext(
             this._serviceProvider,
@@ -143,7 +143,7 @@ public class FullPipelineBenchmarks
     /// </summary>
     /// <returns>The validation failure result from the full-stack pipeline.</returns>
     [Benchmark]
-    public Task<OperationResult> FullStackCommandValidationFailureAsync()
+    public ValueTask<OperationResult> FullStackCommandValidationFailureAsync()
     {
         var context = new ApiOperationContext(
             this._serviceProvider,

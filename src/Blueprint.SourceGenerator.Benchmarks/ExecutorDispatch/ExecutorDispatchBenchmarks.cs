@@ -59,7 +59,7 @@ public class ExecutorDispatchBenchmarks
     /// </summary>
     /// <returns>The result produced by executing the representative pipeline directly.</returns>
     [Benchmark(Baseline = true)]
-    public Task<OperationResult> ExecutePipelineDirectAsync()
+    public ValueTask<OperationResult> ExecutePipelineDirectAsync()
     {
         return this._pipeline.ExecuteAsync(CreateContext(this._app, this._descriptor));
     }
@@ -69,7 +69,7 @@ public class ExecutorDispatchBenchmarks
     /// </summary>
     /// <returns>The result produced by dispatching through <see cref="BlueprintAppExecutor"/>.</returns>
     [Benchmark]
-    public Task<OperationResult> ExecuteThroughExecutorShellAsync()
+    public ValueTask<OperationResult> ExecuteThroughExecutorShellAsync()
     {
         return this._executor.ExecuteAsync(CreateContext(this._app, this._descriptor));
     }
@@ -117,10 +117,10 @@ internal sealed class BenchmarkBlueprintAppExecutor : BlueprintAppExecutor
 /// </summary>
 internal sealed class NoOpBenchmarkPipeline : IOperationExecutorPipeline
 {
-    private static readonly Task<OperationResult> CompletedResultTask = Task.FromResult<OperationResult>(BenchmarkCompletedResult.Instance);
+    private static readonly ValueTask<OperationResult> CompletedResultTask = new(BenchmarkCompletedResult.Instance);
 
     /// <inheritdoc />
-    public Task<OperationResult> ExecuteAsync(ApiOperationContext context)
+    public ValueTask<OperationResult> ExecuteAsync(ApiOperationContext context)
     {
         return CompletedResultTask;
     }
