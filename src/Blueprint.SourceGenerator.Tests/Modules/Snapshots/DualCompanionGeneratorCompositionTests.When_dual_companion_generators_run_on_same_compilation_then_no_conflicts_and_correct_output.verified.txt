@@ -135,8 +135,11 @@ namespace Blueprint.Generated
             var operation = (global::TestNamespace.GetOrderStatus)context.Operation;
 
 
-            // Tenant resolution (compile-time, no reflection)
-            var _tenantAccessor = Blueprint.Runtime.Exec.PipelineHelpers.ResolveTenantScoped(context.ServiceProvider, context.UserPrincipal);
+            // Tenant resolution (compile-time, no reflection, cached services)
+            if (this.TenantResolver != null && this.TenantAccessor != null)
+            {
+                Blueprint.Runtime.Exec.PipelineHelpers.ResolveTenant(this.TenantResolver, this.TenantAccessor, context.UserPrincipal);
+            }
 
             await Blueprint.Runtime.Exec.PipelineHelpers.PopulatePropertiesAsync(this.PropertyPopulators, context).ConfigureAwait(false);
             var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<string>(await global::TestNamespace.GetOrderStatus.HandleAsync(operation).ConfigureAwait(false));
@@ -194,8 +197,11 @@ namespace Blueprint.Generated
             // [MessagingPipeline] Deserialize message envelope
             context.Activity?.AddTag("messaging.deserialized", true);
 
-            // Tenant resolution (compile-time, no reflection)
-            var _tenantAccessor = Blueprint.Runtime.Exec.PipelineHelpers.ResolveTenantScoped(context.ServiceProvider, context.UserPrincipal);
+            // Tenant resolution (compile-time, no reflection, cached services)
+            if (this.TenantResolver != null && this.TenantAccessor != null)
+            {
+                Blueprint.Runtime.Exec.PipelineHelpers.ResolveTenant(this.TenantResolver, this.TenantAccessor, context.UserPrincipal);
+            }
 
             await Blueprint.Runtime.Exec.PipelineHelpers.PopulatePropertiesAsync(this.PropertyPopulators, context).ConfigureAwait(false);
             var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<string>(await global::TestNamespace.ProcessOrderMessage.HandleAsync(operation).ConfigureAwait(false));

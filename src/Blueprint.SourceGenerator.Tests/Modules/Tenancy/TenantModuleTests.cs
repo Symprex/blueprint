@@ -52,11 +52,11 @@ public class TenantModuleTests
 
         var pipelineSource = string.Join("\n", pipelineSources.Select(static s => s.SourceText));
 
-        // Uses scope-based shared helper to resolve and set tenant
-        pipelineSource.Should().Contain("PipelineHelpers.ResolveTenantScoped(context.ServiceProvider, context.UserPrincipal)");
+        // Uses cached services from base class (no per-request DI lookup)
+        pipelineSource.Should().Contain("PipelineHelpers.ResolveTenant(this.TenantResolver, this.TenantAccessor, context.UserPrincipal)");
 
-        // Direct property assignment from scope-resolved accessor (no reflection)
-        pipelineSource.Should().Contain("operation.TenantId = _tenantAccessor.Current");
+        // Direct property assignment from cached accessor (no reflection)
+        pipelineSource.Should().Contain("operation.TenantId = this.TenantAccessor.Current");
     }
 
     [Fact]
@@ -100,7 +100,7 @@ public class TenantModuleTests
         var pipelineSource = string.Join("\n", pipelineSources.Select(static s => s.SourceText));
 
         // Still resolves and sets accessor (all operations get tenant context)
-        pipelineSource.Should().Contain("PipelineHelpers.ResolveTenantScoped(");
+        pipelineSource.Should().Contain("PipelineHelpers.ResolveTenant(");
 
         // Should NOT attempt direct property assignment
         pipelineSource.Should().NotContain("operation.TenantId");
@@ -150,7 +150,7 @@ public class TenantModuleTests
         var pipelineSource = string.Join("\n", pipelineSources.Select(static s => s.SourceText));
 
         // Should detect TenantId from the base class and assign directly
-        pipelineSource.Should().Contain("operation.TenantId = _tenantAccessor.Current");
+        pipelineSource.Should().Contain("operation.TenantId = this.TenantAccessor.Current");
     }
 
     [Fact]
@@ -192,7 +192,7 @@ public class TenantModuleTests
         var pipelineSource = string.Join("\n", pipelineSources.Select(static s => s.SourceText));
 
         // Still resolves and sets accessor
-        pipelineSource.Should().Contain("PipelineHelpers.ResolveTenantScoped(");
+        pipelineSource.Should().Contain("PipelineHelpers.ResolveTenant(");
 
         // Should NOT assign to readonly property
         pipelineSource.Should().NotContain("operation.TenantId");
@@ -261,7 +261,7 @@ public class TenantModuleTests
         pipelineSource.Should().Contain("EqualityComparer<global::TestNamespace.ApiId>.Default.Equals(operation.TenantId, default)");
 
         // Uses TryParse with InvariantCulture IFormatProvider (IParsable pattern)
-        pipelineSource.Should().Contain("global::TestNamespace.ApiId.TryParse(_tenantAccessor.Current, System.Globalization.CultureInfo.InvariantCulture, out var _parsedTenantId)");
+        pipelineSource.Should().Contain("global::TestNamespace.ApiId.TryParse(this.TenantAccessor.Current, System.Globalization.CultureInfo.InvariantCulture, out var _parsedTenantId)");
 
         // Assigns parsed value
         pipelineSource.Should().Contain("operation.TenantId = _parsedTenantId;");
@@ -327,7 +327,7 @@ public class TenantModuleTests
         var pipelineSource = string.Join("\n", pipelineSources.Select(static s => s.SourceText));
 
         // Should detect inherited ApiId TenantId and use TryParse
-        pipelineSource.Should().Contain("ApiId.TryParse(_tenantAccessor.Current, System.Globalization.CultureInfo.InvariantCulture, out var _parsedTenantId)");
+        pipelineSource.Should().Contain("ApiId.TryParse(this.TenantAccessor.Current, System.Globalization.CultureInfo.InvariantCulture, out var _parsedTenantId)");
         pipelineSource.Should().Contain("operation.TenantId = _parsedTenantId;");
     }
 
@@ -393,11 +393,11 @@ public class TenantModuleTests
         var pipelineSource = string.Join("\n", pipelineSources.Select(static s => s.SourceText));
 
         // Still resolves tenant accessor (all operations get tenant context)
-        pipelineSource.Should().Contain("PipelineHelpers.ResolveTenantScoped(");
+        pipelineSource.Should().Contain("PipelineHelpers.ResolveTenant(");
 
         // Should NOT auto-populate TenantId from accessor — route binding handles it
         pipelineSource.Should().NotContain("_parsedTenantId");
-        pipelineSource.Should().NotContain("operation.TenantId = _tenantAccessor.Current");
+        pipelineSource.Should().NotContain("operation.TenantId = this.TenantAccessor.Current");
     }
 
     [Fact]
@@ -461,7 +461,7 @@ public class TenantModuleTests
         pipelineSource.Should().Contain("!operation.TenantId.HasValue");
 
         // Should TryParse the unwrapped type
-        pipelineSource.Should().Contain("ApiId.TryParse(_tenantAccessor.Current, System.Globalization.CultureInfo.InvariantCulture, out var _parsedTenantId)");
+        pipelineSource.Should().Contain("ApiId.TryParse(this.TenantAccessor.Current, System.Globalization.CultureInfo.InvariantCulture, out var _parsedTenantId)");
         pipelineSource.Should().Contain("operation.TenantId = _parsedTenantId;");
     }
 
@@ -651,9 +651,9 @@ public class TenantModuleTests
         var pipelineSource = string.Join("\n", pipelineSources.Select(static s => s.SourceText));
 
         // Tenant resolution should still happen (sets accessor)
-        pipelineSource.Should().Contain("PipelineHelpers.ResolveTenantScoped(");
+        pipelineSource.Should().Contain("PipelineHelpers.ResolveTenant(");
 
         // But should NOT auto-assign to operation.TenantId (explicit binding handles that)
-        pipelineSource.Should().NotContain("operation.TenantId = _tenantAccessor.Current");
+        pipelineSource.Should().NotContain("operation.TenantId = this.TenantAccessor.Current");
     }
 }

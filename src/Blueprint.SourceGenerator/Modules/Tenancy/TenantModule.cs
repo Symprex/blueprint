@@ -81,20 +81,23 @@ public sealed class TenantModule : IBlueprintSourceGeneratorModule, IPipelineCon
     private static void RenderTenantResolution(PipelineRenderContext context, TenantIdPropertyInfo? tenantIdInfo)
     {
         context.WriteBlankLine();
-        context.WriteStatement("// Tenant resolution (compile-time, no reflection)");
+        context.WriteStatement("// Tenant resolution (compile-time, no reflection, cached services)");
 
-        // Resolve tenant services from the operation's scoped provider so the ITenantAccessor
-        // instance matches what other scoped services (e.g. IDocumentSession) see.
-        // The result is stored in a local to avoid repeated service resolution.
+        // Use pre-cached TenantResolver/TenantAccessor from OperationExecutorShell base class
+        // instead of per-request DI resolution — eliminates 2 service lookups per request.
         context.WriteStatement(
-            "var _tenantAccessor = Blueprint.Runtime.Exec.PipelineHelpers.ResolveTenantScoped(context.ServiceProvider, context.UserPrincipal);");
+            "if (this.TenantResolver != null && this.TenantAccessor != null)");
+        context.WriteStatement("{");
+        context.WriteStatement(
+            "    Blueprint.Runtime.Exec.PipelineHelpers.ResolveTenant(this.TenantResolver, this.TenantAccessor, context.UserPrincipal);");
+        context.WriteStatement("}");
 
         // If the operation has a TenantId property, assign directly (no reflection).
         if (tenantIdInfo is not null)
         {
             context.WriteBlankLine();
             context.If(
-                "_tenantAccessor != null",
+                "this.TenantAccessor != null",
                 ctx =>
                 {
                     RenderTenantIdAssignment(ctx, tenantIdInfo);
@@ -109,7 +112,7 @@ public sealed class TenantModule : IBlueprintSourceGeneratorModule, IPipelineCon
     /// </summary>
     private static void RenderTenantIdAssignment(PipelineRenderContext ctx, TenantIdPropertyInfo info)
     {
-        var accessorCurrent = "_tenantAccessor.Current";
+        var accessorCurrent = "this.TenantAccessor.Current";
 
         switch (info.Kind)
         {
