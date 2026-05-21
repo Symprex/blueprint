@@ -423,6 +423,10 @@ Operations will be found polymorphically, meaning an operation could be register
     /// resource type referenced in links, creates (or enriches) an <see cref="ApiResourceDescriptor"/>
     /// with the self-link, all targeting links, and producing operations.
     /// </summary>
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2067",
+        Justification = "Resource types in _resourceTypeToLinks are registered by generated code that preserves the type.")]
     private void DeriveResourceDescriptors()
     {
         foreach (var (resourceType, links) in this._resourceTypeToLinks)
@@ -445,7 +449,8 @@ Operations will be found polymorphically, meaning an operation could be register
     /// <summary>
     /// Gets an existing resource descriptor or creates and registers a new one for the specified type.
     /// </summary>
-    private ApiResourceDescriptor GetOrCreateResourceDescriptor(Type resourceType)
+    private ApiResourceDescriptor GetOrCreateResourceDescriptor(
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] Type resourceType)
     {
         if (this._resourceDescriptors.TryGetValue(resourceType, out var existing))
         {

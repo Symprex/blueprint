@@ -120,6 +120,10 @@ public static partial class ResourceKeyTemplateExpander
     /// Resolves a property path (simple name or dot-separated) from an operation instance.
     /// Returns null if the property cannot be resolved.
     /// </summary>
+    [UnconditionalSuppressMessage(
+        "AOT",
+        "IL3050",
+        Justification = "Fallback path for operations without source-generated URL builders. Generated code bypasses this.")]
     private static string? ResolvePropertyPath(object operation, string path)
     {
         var segments = path.Split('.');

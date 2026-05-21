@@ -828,6 +828,10 @@ public static class PipelineHelpers
         "Trimming",
         "IL2075",
         Justification = "Operation types are always preserved because the source generator emits direct references to them in pipeline code.")]
+    [UnconditionalSuppressMessage(
+        "AOT",
+        "IL3050",
+        Justification = "Fallback path for resource event href population. Generated pipelines bypass this via compile-time link builders.")]
     private static string FillUrlTemplate(string urlTemplate, object source)
     {
         var sourceType = source.GetType();
