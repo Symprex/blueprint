@@ -37,6 +37,14 @@ public static class PipelineHelpers
     private static readonly ConcurrentDictionary<string, ActivityTagsCollection> _auditTagsCache = new();
 
     /// <summary>
+    /// Cached <c>Task.FromResult&lt;OperationResult?&gt;(null)</c> to avoid allocating a new Task on every
+    /// successful authorization fast-path return. Since <c>Task.FromResult(default(T))</c> where T is a
+    /// reference type is NOT cached by the runtime (unlike <c>Task.FromResult(true/false)</c>), a shared
+    /// static instance eliminates ~48 bytes per request on all authorization-enabled pipelines.
+    /// </summary>
+    internal static readonly Task<OperationResult?> NullOperationResultTask = Task.FromResult<OperationResult?>(null);
+
+    /// <summary>
     /// Resolves a collection of services from the DI container and materialises them into an
     /// array. Returns <see cref="Array.Empty{T}"/> when no services of the requested type are
     /// registered. Generated pipelines call this at construction time to cache singleton or
@@ -653,16 +661,29 @@ public static class PipelineHelpers
     /// <param name="apiAuthorisers">Pre-cached array of <see cref="Authorization.IApiAuthoriser"/> instances (combined execution and link-visibility).</param>
     /// <param name="operationAuthorisers">Pre-cached array of <see cref="Authorization.IOperationAuthoriser"/> instances (execution-only).</param>
     /// <returns><c>null</c> when all authorisers pass; otherwise an <see cref="UnauthenticatedResult"/> or <see cref="ForbiddenResult"/>.</returns>
-    public static async Task<OperationResult?> RunAuthorisersAsync(
+    public static Task<OperationResult?> RunAuthorisersAsync(
         ApiOperationContext context,
         Authorization.IApiAuthoriser[] apiAuthorisers,
         Authorization.IOperationAuthoriser[] operationAuthorisers)
     {
         if (context.SkipAuthorisation)
         {
-            return null;
+            return NullOperationResultTask;
         }
 
+        if (apiAuthorisers.Length == 0 && operationAuthorisers.Length == 0)
+        {
+            return NullOperationResultTask;
+        }
+
+        return RunAuthorisersCoreAsync(context, apiAuthorisers, operationAuthorisers);
+    }
+
+    private static async Task<OperationResult?> RunAuthorisersCoreAsync(
+        ApiOperationContext context,
+        Authorization.IApiAuthoriser[] apiAuthorisers,
+        Authorization.IOperationAuthoriser[] operationAuthorisers)
+    {
         for (var i = 0; i < apiAuthorisers.Length; i++)
         {
             var authoriser = apiAuthorisers[i];
@@ -713,7 +734,7 @@ public static class PipelineHelpers
     /// <param name="resolvedScopes">The compile-time expanded scope pairs for this operation.</param>
     /// <param name="cancellationToken">Cancellation token for the authorization evaluation.</param>
     /// <returns><c>null</c> when authorized; <see cref="ForbiddenResult.Instance"/> when denied.</returns>
-    public static async Task<OperationResult?> CheckResourceAuthorizationAsync(
+    public static Task<OperationResult?> CheckResourceAuthorizationAsync(
         ApiOperationContext context,
         ClaimsPrincipal principal,
         Authorization.IResourceAuthorizationProvider? provider,
@@ -722,9 +743,19 @@ public static class PipelineHelpers
     {
         if (provider == null)
         {
-            return null;
+            return NullOperationResultTask;
         }
 
+        return CheckResourceAuthorizationCoreAsync(context, principal, provider, resolvedScopes, cancellationToken);
+    }
+
+    private static async Task<OperationResult?> CheckResourceAuthorizationCoreAsync(
+        ApiOperationContext context,
+        ClaimsPrincipal principal,
+        Authorization.IResourceAuthorizationProvider provider,
+        IReadOnlyList<ResolvedScopePair> resolvedScopes,
+        CancellationToken cancellationToken)
+    {
         var isAuthorized = await provider.IsAuthorizedAsync(context, principal, resolvedScopes, cancellationToken).ConfigureAwait(false);
 
         return isAuthorized ? null : ForbiddenResult.Instance;
