@@ -11,7 +11,7 @@ namespace Blueprint.Runtime.Exec;
 /// to allow sharing of state, for example the operation being executed, or an authentication context that
 /// gets created.
 /// </summary>
-public class ApiOperationContext : IHttpOperationContext
+public sealed class ApiOperationContext : IHttpOperationContext
 {
     /// <summary>
     /// Initialises a new instance of the <see cref="ApiOperationContext" /> class, using
