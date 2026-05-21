@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using Blueprint;
 using Blueprint.Http;
@@ -56,7 +57,10 @@ public static class ServiceCollectionExtensions
         // which is set by BlueprintApiRouter before pipeline execution.
         // IHttpContextAccessor bridges the gap: the scoped factory reads the current
         // request's scheme/host/pathBase to construct the base URI dynamically.
+        // The base URI is cached per scheme+host+pathBase combination since it is
+        // almost always identical across requests in a given deployment.
         services.TryAddSingleton<Microsoft.AspNetCore.Http.IHttpContextAccessor, Microsoft.AspNetCore.Http.HttpContextAccessor>();
+        var baseUriCache = new ConcurrentDictionary<string, string>(StringComparer.Ordinal);
         services.TryAddScoped<Blueprint.Http.IApiLinkGenerator>(sp =>
         {
             var app = sp.GetRequiredService<BlueprintApp>();
@@ -67,9 +71,10 @@ public static class ServiceCollectionExtensions
             if (httpContext is not null)
             {
                 var request = httpContext.Request;
-                var host = request.Host.Value;
-                var pathBase = request.PathBase.HasValue ? request.PathBase.Value : string.Empty;
-                baseUri = $"{request.Scheme}://{host}{pathBase}/";
+                var host = request.Host.Value ?? string.Empty;
+                var pathBase = request.PathBase.HasValue ? request.PathBase.Value! : string.Empty;
+                var cacheKey = string.Concat(request.Scheme, "://", host, pathBase, "/");
+                baseUri = baseUriCache.GetOrAdd(cacheKey, static k => k);
             }
             else
             {

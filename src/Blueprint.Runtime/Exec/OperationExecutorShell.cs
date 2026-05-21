@@ -259,47 +259,84 @@ public abstract class OperationExecutorShell : IOperationExecutorPipeline
     }
 
     /// <inheritdoc />
-    public async Task<OperationResult> ExecuteAsync(ApiOperationContext context)
+    public Task<OperationResult> ExecuteAsync(ApiOperationContext context)
     {
-        using var activity = this._suppressActivity
+        var activity = this._suppressActivity
             ? null
             : BlueprintActivitySource.ActivitySource.StartActivity(
                 this._activityName,
                 ActivityKind.Internal);
 
+        Task<OperationResult> coreTask;
+
         try
         {
             _logApiOperationExecuting(this._logger, this._operationTypeName, null);
-
-            return await this.ExecuteCoreAsync(context).ConfigureAwait(false);
-        }
-        catch (Validation.ValidationException e)
-        {
-            context.Activity?.SetTag("otel.status_code", "OK");
-            return new ValidationFailedResult(e);
-        }
-        catch (System.ComponentModel.DataAnnotations.ValidationException e)
-        {
-            context.Activity?.SetTag("otel.status_code", "OK");
-            return ValidationMiddlewareBuilder.ToValidationFailedResult(e);
+            coreTask = this.ExecuteCoreAsync(context);
         }
         catch (Exception e)
         {
-            if (e is ApiException apiException && apiException.HttpStatus < 500)
-            {
-                _logNonFatalException(this._logger, e.Message, e);
-                context.Activity?.SetTag("otel.status_code", "OK");
-            }
-            else
-            {
-                BlueprintActivitySource.RecordException(context.Activity, e, false);
-                _logUnhandledException(this._logger, e.Message, e);
-                context.Activity?.SetTag("otel.status_code", "ERROR");
-                context.Activity?.SetTag("otel.status_description", e.Message);
-            }
-
-            return new UnhandledExceptionResult(e);
+            activity?.Dispose();
+            return Task.FromResult(this.HandleException(context, e));
         }
+
+        // Fast path: if the pipeline completed synchronously, avoid async state machine allocation.
+        if (coreTask.IsCompletedSuccessfully)
+        {
+            activity?.Dispose();
+            return coreTask;
+        }
+
+        return this.AwaitAndHandleExceptions(coreTask, context, activity);
+    }
+
+    private async Task<OperationResult> AwaitAndHandleExceptions(
+        Task<OperationResult> coreTask,
+        ApiOperationContext context,
+        Activity? activity)
+    {
+        try
+        {
+            return await coreTask.ConfigureAwait(false);
+        }
+        catch (Exception e)
+        {
+            return this.HandleException(context, e);
+        }
+        finally
+        {
+            activity?.Dispose();
+        }
+    }
+
+    private OperationResult HandleException(ApiOperationContext context, Exception e)
+    {
+        if (e is Validation.ValidationException ve)
+        {
+            context.Activity?.SetTag("otel.status_code", "OK");
+            return new ValidationFailedResult(ve);
+        }
+
+        if (e is System.ComponentModel.DataAnnotations.ValidationException dve)
+        {
+            context.Activity?.SetTag("otel.status_code", "OK");
+            return ValidationMiddlewareBuilder.ToValidationFailedResult(dve);
+        }
+
+        if (e is ApiException apiException && apiException.HttpStatus < 500)
+        {
+            _logNonFatalException(this._logger, e.Message, e);
+            context.Activity?.SetTag("otel.status_code", "OK");
+        }
+        else
+        {
+            BlueprintActivitySource.RecordException(context.Activity, e, false);
+            _logUnhandledException(this._logger, e.Message, e);
+            context.Activity?.SetTag("otel.status_code", "ERROR");
+            context.Activity?.SetTag("otel.status_description", e.Message);
+        }
+
+        return new UnhandledExceptionResult(e);
     }
 
     /// <summary>
