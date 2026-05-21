@@ -225,13 +225,13 @@ public sealed partial class AppDataModelSourceGenerator
         var hasServiceBuilder = compilation.GetTypeByMetadataName("Microsoft.Extensions.DependencyInjection.BlueprintServiceBuilder") is not null;
         var linkCheckerTypes = hasServiceBuilder
             ? ScanForLinkCheckerTypes(compilation, scannedAssemblies)
-            : new EquatableList<LinkCheckerRegistrationInfo>([]);
+            : EquatableList<LinkCheckerRegistrationInfo>.Empty;
         var apiAuthoriserTypes = hasServiceBuilder
             ? ScanForApiAuthoriserTypes(compilation, scannedAssemblies)
-            : new EquatableList<string>([]);
+            : EquatableList<string>.Empty;
         var resourceExpanderTypes = hasServiceBuilder
             ? ScanForResourceExpanderTypes(compilation, scannedAssemblies)
-            : new EquatableList<string>([]);
+            : EquatableList<string>.Empty;
 
         return Result.Success(new BlueprintAppDataModelCompilationModel(
             dataModelClass,
@@ -256,7 +256,7 @@ public sealed partial class AppDataModelSourceGenerator
 
         if (baseType is null)
         {
-            return new EquatableList<LinkCheckerRegistrationInfo>([]);
+            return EquatableList<LinkCheckerRegistrationInfo>.Empty;
         }
 
         var results = new List<LinkCheckerRegistrationInfo>();
@@ -310,7 +310,7 @@ public sealed partial class AppDataModelSourceGenerator
 
         if (interfaceType is null)
         {
-            return new EquatableList<string>([]);
+            return EquatableList<string>.Empty;
         }
 
         var results = new List<string>();
@@ -380,7 +380,7 @@ public sealed partial class AppDataModelSourceGenerator
 
         if (interfaceType is null)
         {
-            return new EquatableList<string>([]);
+            return EquatableList<string>.Empty;
         }
 
         var results = new List<string>();

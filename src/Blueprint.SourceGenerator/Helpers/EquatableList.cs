@@ -11,6 +11,11 @@ public readonly struct EquatableList<T> : IEquatable<EquatableList<T>>, IEnumera
     where T : IEquatable<T>
 {
     /// <summary>
+    /// Gets an empty <see cref="EquatableList{T}"/> that shares a single static list instance.
+    /// </summary>
+    public static EquatableList<T> Empty { get; } = new([], owned: true);
+
+    /// <summary>
     /// The underlying <typeparamref name="T"/> list.
     /// </summary>
     private readonly List<T> _list;
@@ -144,6 +149,15 @@ public readonly struct EquatableList<T> : IEquatable<EquatableList<T>>, IEnumera
     public T[] AsArray()
     {
         return this._list.ToArray();
+    }
+
+    /// <summary>
+    /// Returns a struct enumerator that avoids heap allocation in <c>foreach</c> loops.
+    /// </summary>
+    /// <returns>A <see cref="List{T}.Enumerator"/> struct over the underlying items.</returns>
+    public List<T>.Enumerator GetEnumerator()
+    {
+        return this._list.GetEnumerator();
     }
 
     /// <inheritdoc/>

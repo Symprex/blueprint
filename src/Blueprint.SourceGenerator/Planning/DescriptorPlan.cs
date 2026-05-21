@@ -64,24 +64,27 @@ public sealed class DescriptorPlan : IEquatable<DescriptorPlan>
     /// <returns>Whether a metadata instance was found.</returns>
     public bool TryGetMetadata<T>([NotNullWhen(true)] out T? metadata)
     {
-        using var metadataEnumerator = this.Metadata.OfType<T>().GetEnumerator();
+        T? candidate = default;
+        var found = false;
 
-        if (!metadataEnumerator.MoveNext())
+        foreach (var item in this._metadata)
         {
-            metadata = default;
-            return false;
-        }
+            if (item is T typed)
+            {
+                if (found)
+                {
+                    // More than one match — ambiguous, return false.
+                    metadata = default;
+                    return false;
+                }
 
-        var candidate = metadataEnumerator.Current;
-
-        if (metadataEnumerator.MoveNext())
-        {
-            metadata = default;
-            return false;
+                candidate = typed;
+                found = true;
+            }
         }
 
         metadata = candidate!;
-        return true;
+        return found;
     }
 
     /// <summary>

@@ -80,7 +80,7 @@ public sealed partial class AppDataModelSourceGenerator
             }
         }
 
-        return new SerializerContextDeclaration(null, null, new EquatableList<string>(), new EquatableList<string>());
+        return new SerializerContextDeclaration(null, null, EquatableList<string>.Empty, EquatableList<string>.Empty);
     }
 
     private static EquatableList<string> GetSerializerContextBodyTypeNames(INamedTypeSymbol serializerContextType)

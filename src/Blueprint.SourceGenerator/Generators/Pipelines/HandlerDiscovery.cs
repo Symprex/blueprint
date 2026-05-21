@@ -299,7 +299,7 @@ public static class HandlerDiscovery
         if (publicCtors.Length == 0)
         {
             // Only implicit default constructor exists
-            return new EquatableList<ConstructorParameterInfo>([]);
+            return EquatableList<ConstructorParameterInfo>.Empty;
         }
 
         if (publicCtors.Length != 1)
