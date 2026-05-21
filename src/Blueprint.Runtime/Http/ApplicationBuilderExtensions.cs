@@ -356,10 +356,11 @@ public static class EndpointRouteBuilderExtensions
 
             // Method enforcement is handled by ASP.NET Core routing via HttpMethodMetadata on mapped endpoints.
 
-            using var nestedContainer = this._rootServiceProvider.CreateScope();
-
+            // Use the ASP.NET Core request scope directly — creating a nested scope wastes ~80 bytes
+            // per request and provides no additional isolation since scoped services are already
+            // per-request via the framework's scope management.
             var apiContext = new ApiOperationContext(
-                nestedContainer.ServiceProvider,
+                httpContext.RequestServices,
                 this._app,
                 operation,
                 httpContext.RequestAborted)
