@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using Blueprint.Auditing;
 using Blueprint.Authorization;
@@ -20,6 +21,10 @@ namespace Blueprint;
 /// </remarks>
 public abstract class OperationExecutorShell : IOperationExecutorPipeline
 {
+    // Caches derived name strings so 540+ pipelines sharing the same operation type name
+    // reuse a single interned instance instead of allocating per-pipeline.
+    private static readonly ConcurrentDictionary<string, (string LoggerCategory, string ActivityName)> _nameCache = new(StringComparer.Ordinal);
+
     private static readonly Action<ILogger, string, Exception?> _logApiOperationExecuting =
         LoggerMessage.Define<string>(
             LogLevel.Debug,
@@ -168,9 +173,13 @@ public abstract class OperationExecutorShell : IOperationExecutorPipeline
         ArgumentNullException.ThrowIfNull(loggerFactory);
         ArgumentException.ThrowIfNullOrWhiteSpace(operationTypeName);
 
-        this._logger = loggerFactory.CreateLogger(string.Concat(operationTypeName, "ExecutorPipeline"));
+        var (loggerCategory, activityName) = _nameCache.GetOrAdd(
+            operationTypeName,
+            static name => (string.Concat(name, "ExecutorPipeline"), string.Concat(name, "Pipeline")));
+
+        this._logger = loggerFactory.CreateLogger(loggerCategory);
         this._operationTypeName = operationTypeName;
-        this._activityName = string.Concat(operationTypeName, "Pipeline");
+        this._activityName = activityName;
         this._suppressActivity = suppressActivity;
         this.PropertyPopulators = [];
         this.ApiAuthorisers = [];

@@ -166,16 +166,25 @@ public record BlueprintSourceGenerationConfig(IReadOnlyList<IBlueprintSourceGene
         }
 
         var ordered = new List<ContributorRegistration<TContributor>>(registrations.Count);
+        var comparer = ContributorRegistrationComparer<TContributor>.Instance;
+
+        // Use a sorted list maintained via binary-search insertion instead of re-sorting
+        // the entire collection on every enqueue. RemoveAt(Count - 1) is O(1) vs RemoveAt(0)
+        // which is O(n), so we sort in reverse order and pop from the end to get the
+        // lowest-priority item first (matching the original ascending-order-first behavior).
+        var reverseComparer = Comparer<ContributorRegistration<TContributor>>.Create(
+            (x, y) => comparer.Compare(y, x));
+
         var ready = dependencyCounts
             .Where(kvp => kvp.Value == 0)
             .Select(kvp => kvp.Key)
-            .OrderBy(r => r, ContributorRegistrationComparer<TContributor>.Instance)
+            .OrderByDescending(r => r, comparer)
             .ToList();
 
         while (ready.Count > 0)
         {
-            var next = ready[0];
-            ready.RemoveAt(0);
+            var next = ready[^1];
+            ready.RemoveAt(ready.Count - 1);
             ordered.Add(next);
 
             foreach (var dependent in reverseDependencies[next])
@@ -184,8 +193,8 @@ public record BlueprintSourceGenerationConfig(IReadOnlyList<IBlueprintSourceGene
 
                 if (dependencyCounts[dependent] == 0)
                 {
-                    ready.Add(dependent);
-                    ready.Sort(ContributorRegistrationComparer<TContributor>.Instance);
+                    var insertionIndex = ready.BinarySearch(dependent, reverseComparer);
+                    ready.Insert(insertionIndex < 0 ? ~insertionIndex : insertionIndex, dependent);
                 }
             }
         }
