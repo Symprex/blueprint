@@ -19,6 +19,7 @@ public sealed record PipelinePlan(OperationModel Operation, VariableRegistry Var
     private readonly List<Action<ClassBuilder>> _deferredClassMembers = new(4);
     private readonly HashSet<string> _declaredSharedVariables = new(StringComparer.Ordinal);
     private readonly Dictionary<string, CachedServiceRegistration> _cachedServices = new(8, StringComparer.Ordinal);
+    private Dictionary<PipelineContribution, List<PipelineRenderStep>>? _renderStepIndex;
 
     /// <summary>
     /// Declares a shared pipeline variable so that multiple modules can emit the same variable
@@ -156,16 +157,38 @@ public sealed record PipelinePlan(OperationModel Operation, VariableRegistry Var
     {
         this.EnsureContribution(renderStep.Stage, renderStep.ContributorId);
         this._renderSteps.Add(renderStep);
+        this._renderStepIndex = null;
     }
 
     /// <summary>
-    /// Gets the render steps associated with a contribution.
+    /// Gets the render steps associated with a contribution. Uses a pre-built index
+    /// for O(1) lookup instead of repeated LINQ enumeration over the full step list.
     /// </summary>
     /// <param name="contribution">The contribution to look up.</param>
     /// <returns>The matching render steps in insertion order.</returns>
-    public IEnumerable<PipelineRenderStep> GetRenderSteps(PipelineContribution contribution)
+    public IReadOnlyList<PipelineRenderStep> GetRenderSteps(PipelineContribution contribution)
     {
-        return this._renderSteps.Where(step => step.Stage == contribution.Stage && step.ContributorId == contribution.ContributorId);
+        if (this._renderStepIndex is null)
+        {
+            this._renderStepIndex = new Dictionary<PipelineContribution, List<PipelineRenderStep>>(this._contributions.Count);
+
+            foreach (var step in this._renderSteps)
+            {
+                var key = new PipelineContribution(step.Stage, step.ContributorId);
+
+                if (!this._renderStepIndex.TryGetValue(key, out var list))
+                {
+                    list = new List<PipelineRenderStep>(4);
+                    this._renderStepIndex[key] = list;
+                }
+
+                list.Add(step);
+            }
+        }
+
+        return this._renderStepIndex.TryGetValue(contribution, out var steps)
+            ? steps
+            : [];
     }
 
     /// <summary>
