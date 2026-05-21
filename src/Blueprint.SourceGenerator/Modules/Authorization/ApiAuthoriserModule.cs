@@ -102,8 +102,13 @@ public sealed class ApiAuthoriserModule : IBlueprintSourceGeneratorModule, IPipe
     {
         var httpContextExpr = context.GetHttpContextExpression();
 
+        // Inline null check avoids method call overhead when no factory is registered.
         context.WriteStatement(
-            $"await Blueprint.Runtime.Exec.PipelineHelpers.LoadUserContextAsync(context, {httpContextExpr}, this.UserAuthorisationContextFactory).ConfigureAwait(false);");
+            "if (this.UserAuthorisationContextFactory != null)");
+        context.WriteStatement("{");
+        context.WriteStatement(
+            $"    await Blueprint.Runtime.Exec.PipelineHelpers.LoadUserContextAsync(context, {httpContextExpr}, this.UserAuthorisationContextFactory).ConfigureAwait(false);");
+        context.WriteStatement("}");
 
         context.WriteBlankLine();
     }

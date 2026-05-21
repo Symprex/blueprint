@@ -48,9 +48,15 @@ public sealed class PropertyPopulationModule : IBlueprintSourceGeneratorModule, 
     {
         context.WriteBlankLine();
 
-        // Delegate to shared helper using base class property — avoids duplicating the if/else/foreach across every pipeline.
+        // Inline length check avoids the method call overhead when no populators are registered.
+        // PopulatePropertiesAsync already returns Task.CompletedTask for empty arrays, but
+        // skipping the call entirely saves the stack frame setup on high-throughput paths.
         context.WriteStatement(
-            "await Blueprint.Runtime.Exec.PipelineHelpers.PopulatePropertiesAsync(this.PropertyPopulators, context).ConfigureAwait(false);");
+            "if (this.PropertyPopulators.Length > 0)");
+        context.WriteStatement("{");
+        context.WriteStatement(
+            "    await Blueprint.Runtime.Exec.PipelineHelpers.PopulatePropertiesAsync(this.PropertyPopulators, context).ConfigureAwait(false);");
+        context.WriteStatement("}");
     }
 }
 

@@ -76,13 +76,19 @@ namespace Blueprint.Generated
                 Blueprint.Runtime.Exec.PipelineHelpers.ResolveTenant(this.TenantResolver, this.TenantAccessor, context.UserPrincipal);
             }
 
-            await Blueprint.Runtime.Exec.PipelineHelpers.PopulatePropertiesAsync(this.PropertyPopulators, context).ConfigureAwait(false);
+            if (this.PropertyPopulators.Length > 0)
+            {
+                await Blueprint.Runtime.Exec.PipelineHelpers.PopulatePropertiesAsync(this.PropertyPopulators, context).ConfigureAwait(false);
+            }
             if (Blueprint.Runtime.Exec.PipelineHelpers.CheckHttpAuthenticated(httpContext) is { } _authCheckResult)
             {
                 return _authCheckResult;
             }
 
-            await Blueprint.Runtime.Exec.PipelineHelpers.LoadUserContextAsync(context, httpContext, this.UserAuthorisationContextFactory).ConfigureAwait(false);
+            if (this.UserAuthorisationContextFactory != null)
+            {
+                await Blueprint.Runtime.Exec.PipelineHelpers.LoadUserContextAsync(context, httpContext, this.UserAuthorisationContextFactory).ConfigureAwait(false);
+            }
 
             var authorizationDenial = await Blueprint.Runtime.Exec.PipelineHelpers.CheckResourceAuthorizationAsync(context, httpContext.User, this.ResourceAuthorizationProvider, new Blueprint.Model.ResolvedScopePair("account", "read", "/tenants/{Auth.AccountId}/accounts/{Id}", $"/tenants/{context.UserAuthorisationContext?.AccountId ?? httpContext.User.FindFirst("AccountId")?.Value ?? ""}/accounts/{operation.Id?.ToString() ?? ""}"), httpContext.RequestAborted).ConfigureAwait(false);
             if (authorizationDenial != null)
@@ -101,7 +107,10 @@ namespace Blueprint.Generated
             if (handlerResult.WasSuccessful)
             {
 
-                await Blueprint.Runtime.Exec.PipelineHelpers.ExecuteAuditSinkAsync(this.AuditSink, context, handlerResult, "GetAccountQuery").ConfigureAwait(false);
+                if (this.AuditSink != null)
+                {
+                    await Blueprint.Runtime.Exec.PipelineHelpers.ExecuteAuditSinkAsync(this.AuditSink, context, handlerResult, "GetAccountQuery").ConfigureAwait(false);
+                }
 
                 await Blueprint.Runtime.Exec.PipelineHelpers.FlushBackgroundTasksAsync(context.ServiceProvider).ConfigureAwait(false);
             }

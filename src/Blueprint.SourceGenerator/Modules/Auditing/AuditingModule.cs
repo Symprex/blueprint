@@ -76,10 +76,12 @@ public sealed class AuditingModule : IBlueprintSourceGeneratorModule, IPipelineC
     {
         context.WriteBlankLine();
 
-        // Delegate to shared helper using base class property — avoids duplicating the null-check, try/catch,
-        // and activity event recording across every auditable pipeline. Audit tags are cached by PipelineHelpers.
+        // Inline null check avoids method call + try/catch setup when no audit sink is registered.
+        context.WriteStatement("if (this.AuditSink != null)");
+        context.WriteStatement("{");
         context.WriteStatement(
-            $"await Blueprint.Runtime.Exec.PipelineHelpers.ExecuteAuditSinkAsync(this.AuditSink, context, handlerResult, \"{operationTypeName}\").ConfigureAwait(false);");
+            $"    await Blueprint.Runtime.Exec.PipelineHelpers.ExecuteAuditSinkAsync(this.AuditSink, context, handlerResult, \"{operationTypeName}\").ConfigureAwait(false);");
+        context.WriteStatement("}");
     }
 
     private static bool HasDoNotAuditAttribute(INamedTypeSymbol operationType)
