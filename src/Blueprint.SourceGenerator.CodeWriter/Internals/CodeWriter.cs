@@ -121,7 +121,9 @@ namespace Blueprint.SourceGenerator.CodeWriter
         {
             if (this._blocks.LastOrDefault().StringBuilder is not { } sb)
             {
-                sb = new StringBuilder();
+                // Typical generated code block is 512-2048 chars; start at 256 to avoid
+                // early resize cycles while keeping allocation small for trivial blocks.
+                sb = new StringBuilder(256);
                 this._blocks.Add((sb, null));
             }
 
@@ -217,7 +219,17 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <returns>The rendered source accumulated by the writer.</returns>
         public string Render()
         {
-            var result = new StringBuilder();
+            // Pre-compute total length to avoid StringBuilder resize+copy cycles.
+            var totalLength = 0;
+            foreach (var block in this._blocks)
+            {
+                if (block.StringBuilder is { })
+                {
+                    totalLength += block.StringBuilder.Length;
+                }
+            }
+
+            var result = new StringBuilder(totalLength);
 
             foreach (var block in this._blocks)
             {
