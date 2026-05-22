@@ -136,7 +136,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <param name="value">The text fragment to append.</param>
         public void Append(string value)
         {
-            this.EnsureStringBuilder().Append(this.GetIndentedValue(value.TrimEnd()));
+            var sb = this.EnsureStringBuilder();
+            var trimmed = value.TrimEnd();
+            this.AppendIndentTo(sb);
+            sb.Append(trimmed);
         }
 
         /// <summary>
@@ -162,7 +165,11 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <param name="value">The line content to emit.</param>
         public void AppendLine(string value)
         {
-            this.EnsureStringBuilder().AppendLine(this.GetIndentedValue(value.TrimEnd()));
+            var sb = this.EnsureStringBuilder();
+            var trimmed = value.TrimEnd();
+            this.AppendIndentTo(sb);
+            sb.Append(trimmed);
+            sb.AppendLine();
         }
 
         /// <summary>
@@ -171,34 +178,31 @@ namespace Blueprint.SourceGenerator.CodeWriter
         /// <param name="value">The line content to emit exactly as provided.</param>
         public void AppendUnindentedLine(string value)
         {
-            this.EnsureStringBuilder().AppendLine(value.TrimEnd());
+            var sb = this.EnsureStringBuilder();
+            sb.Append(value.TrimEnd());
+            sb.AppendLine();
         }
 
-        private string GetIndentedValue(string value)
+        private void AppendIndentTo(StringBuilder sb)
         {
             var depth = this._indentLevel + this._extraIndent;
             if (depth == 0)
             {
-                return value;
+                return;
             }
 
-            string indent;
             if (depth < this._indentCache.Length)
             {
-                indent = this._indentCache[depth];
+                sb.Append(this._indentCache[depth]);
             }
             else
             {
                 // Beyond cache depth — build on demand (extremely rare).
-                var sb = new StringBuilder(this._indentUnit.Length * depth);
                 for (var i = 0; i < depth; i++)
                 {
                     sb.Append(this._indentUnit);
                 }
-                indent = sb.ToString();
             }
-
-            return indent + value;
         }
 
         /// <summary>
@@ -209,7 +213,10 @@ namespace Blueprint.SourceGenerator.CodeWriter
             if (this._indentLevel > 0)
             {
                 this._indentLevel--;
-                this.EnsureStringBuilder().AppendLine(this.GetIndentedValue("}"));
+                var sb = this.EnsureStringBuilder();
+                this.AppendIndentTo(sb);
+                sb.Append('}');
+                sb.AppendLine();
             }
         }
 
@@ -220,6 +227,38 @@ namespace Blueprint.SourceGenerator.CodeWriter
         public string Render()
         {
             // Pre-compute total length to avoid StringBuilder resize+copy cycles.
+            var totalLength = this.ComputeTotalLength();
+            var result = new StringBuilder(totalLength);
+            this.RenderTo(result);
+            return result.ToString();
+        }
+
+        /// <summary>
+        /// Renders all accumulated output directly into the target <see cref="StringBuilder"/>,
+        /// avoiding intermediate string allocations for nested writers.
+        /// </summary>
+        /// <param name="target">The StringBuilder to append all content into.</param>
+        private void RenderTo(StringBuilder target)
+        {
+            foreach (var block in this._blocks)
+            {
+                if (block.StringBuilder is { })
+                {
+                    target.Append(block.StringBuilder);
+                }
+
+                if (block.Writer is { })
+                {
+                    block.Writer.Dispose();
+                    block.Writer.RenderTo(target);
+                }
+            }
+
+            this.Dispose();
+        }
+
+        private int ComputeTotalLength()
+        {
             var totalLength = 0;
             foreach (var block in this._blocks)
             {
@@ -227,27 +266,14 @@ namespace Blueprint.SourceGenerator.CodeWriter
                 {
                     totalLength += block.StringBuilder.Length;
                 }
-            }
-
-            var result = new StringBuilder(totalLength);
-
-            foreach (var block in this._blocks)
-            {
-                if (block.StringBuilder is { })
-                {
-                    result.Append(block.StringBuilder);
-                }
 
                 if (block.Writer is { })
                 {
-                    block.Writer.Dispose();
-                    result.Append(block.Writer.Render());
+                    totalLength += block.Writer.ComputeTotalLength();
                 }
             }
 
-            this.Dispose();
-
-            return result.ToString();
+            return totalLength;
         }
     }
 }
