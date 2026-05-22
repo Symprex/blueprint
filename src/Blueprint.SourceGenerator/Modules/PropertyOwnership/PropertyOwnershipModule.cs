@@ -245,10 +245,14 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         IEnumerable<RouteTemplateInfo> routeTemplates,
         DescriptorContributorContext context)
     {
-        var propertyNames = operationType.GetAllMembers()
-            .OfType<IPropertySymbol>()
-            .Select(static property => property.Name)
-            .ToHashSet(StringComparer.Ordinal);
+        var propertyNames = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var member in operationType.GetAllMembers())
+        {
+            if (member is IPropertySymbol prop)
+            {
+                propertyNames.Add(prop.Name);
+            }
+        }
 
         foreach (var routeTemplate in routeTemplates)
         {
@@ -369,7 +373,18 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
 
         if (explicitMethods.Count > 0)
         {
-            return explicitMethods.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+            // Deduplicate without LINQ Distinct() iterator allocation
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var deduped = new List<string>(explicitMethods.Count);
+            foreach (var m in explicitMethods)
+            {
+                if (seen.Add(m))
+                {
+                    deduped.Add(m);
+                }
+            }
+
+            return [.. deduped];
         }
 
         return IsCommand(operationType) ? ["POST"] : ["GET"];

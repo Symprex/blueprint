@@ -80,61 +80,45 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
         {
             var attributes = property.GetAttributes();
 
-            AddMissingPropertyDiagnostics(
-                context,
-                operationType.Name,
-                operationProperties,
-                property,
-                attributes.Where(static attribute => ValidationSymbolHelpers.IsCompareAttribute(attribute.AttributeClass)),
-                ValidationDiagnosticDescriptors.MissingCompareProperty);
+            // Single pass over attributes, dispatching to relevant checks without creating
+            // 7 separate LINQ iterator objects per property (saves ~4,000 allocations for 500 ops).
+            foreach (var attribute in attributes)
+            {
+                var attributeClass = attribute.AttributeClass;
+                if (attributeClass is null)
+                {
+                    continue;
+                }
 
-            AddMissingPropertyDiagnostics(
-                context,
-                operationType.Name,
-                operationProperties,
-                property,
-                attributes.Where(static attribute => ValidationSymbolHelpers.IsGreaterThanPropertyAttribute(attribute.AttributeClass)),
-                ValidationDiagnosticDescriptors.MissingGreaterThanProperty);
-
-            AddMissingPropertyDiagnostics(
-                context,
-                operationType.Name,
-                operationProperties,
-                property,
-                attributes.Where(static attribute => ValidationSymbolHelpers.IsLessThanPropertyAttribute(attribute.AttributeClass)),
-                ValidationDiagnosticDescriptors.MissingLessThanProperty);
-
-            AddMissingPropertyDiagnostics(
-                context,
-                operationType.Name,
-                operationProperties,
-                property,
-                attributes.Where(static attribute => ValidationSymbolHelpers.IsMustBeGreaterThanOrEqualAttribute(attribute.AttributeClass)),
-                ValidationDiagnosticDescriptors.MissingMustBeGreaterThanOrEqualProperty);
-
-            AddMissingPropertyDiagnostics(
-                context,
-                operationType.Name,
-                operationProperties,
-                property,
-                attributes.Where(static attribute => ValidationSymbolHelpers.IsRequiredIfAttribute(attribute.AttributeClass)),
-                ValidationDiagnosticDescriptors.MissingRequiredIfProperty);
-
-            AddMissingPropertyDiagnostics(
-                context,
-                operationType.Name,
-                operationProperties,
-                property,
-                attributes.Where(static attribute => ValidationSymbolHelpers.IsRequiredIfNotAttribute(attribute.AttributeClass)),
-                ValidationDiagnosticDescriptors.MissingRequiredIfNotProperty);
-
-            AddMissingPropertyDiagnostics(
-                context,
-                operationType.Name,
-                operationProperties,
-                property,
-                attributes.Where(static attribute => ValidationSymbolHelpers.IsNotAllowedIfAttribute(attribute.AttributeClass)),
-                ValidationDiagnosticDescriptors.MissingNotAllowedIfProperty);
+                if (ValidationSymbolHelpers.IsCompareAttribute(attributeClass))
+                {
+                    CheckMissingPropertyDiagnostic(context, operationType.Name, operationProperties, property, attribute, ValidationDiagnosticDescriptors.MissingCompareProperty);
+                }
+                else if (ValidationSymbolHelpers.IsGreaterThanPropertyAttribute(attributeClass))
+                {
+                    CheckMissingPropertyDiagnostic(context, operationType.Name, operationProperties, property, attribute, ValidationDiagnosticDescriptors.MissingGreaterThanProperty);
+                }
+                else if (ValidationSymbolHelpers.IsLessThanPropertyAttribute(attributeClass))
+                {
+                    CheckMissingPropertyDiagnostic(context, operationType.Name, operationProperties, property, attribute, ValidationDiagnosticDescriptors.MissingLessThanProperty);
+                }
+                else if (ValidationSymbolHelpers.IsMustBeGreaterThanOrEqualAttribute(attributeClass))
+                {
+                    CheckMissingPropertyDiagnostic(context, operationType.Name, operationProperties, property, attribute, ValidationDiagnosticDescriptors.MissingMustBeGreaterThanOrEqualProperty);
+                }
+                else if (ValidationSymbolHelpers.IsRequiredIfAttribute(attributeClass))
+                {
+                    CheckMissingPropertyDiagnostic(context, operationType.Name, operationProperties, property, attribute, ValidationDiagnosticDescriptors.MissingRequiredIfProperty);
+                }
+                else if (ValidationSymbolHelpers.IsRequiredIfNotAttribute(attributeClass))
+                {
+                    CheckMissingPropertyDiagnostic(context, operationType.Name, operationProperties, property, attribute, ValidationDiagnosticDescriptors.MissingRequiredIfNotProperty);
+                }
+                else if (ValidationSymbolHelpers.IsNotAllowedIfAttribute(attributeClass))
+                {
+                    CheckMissingPropertyDiagnostic(context, operationType.Name, operationProperties, property, attribute, ValidationDiagnosticDescriptors.MissingNotAllowedIfProperty);
+                }
+            }
 
             ValidateConflictingRanges(context, operationType.Name, property);
             ValidateEmptyRegexPattern(context, operationType.Name, property);
@@ -143,37 +127,41 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
         }
     }
 
-    private static void AddMissingPropertyDiagnostics(
+    /// <summary>
+    /// Checks a single attribute for a missing referenced property. Replaces per-attribute
+    /// LINQ iterator allocation with a direct single-dispatch check.
+    /// </summary>
+    private static void CheckMissingPropertyDiagnostic(
         DescriptorContributorContext context,
         string operationTypeName,
         IReadOnlyList<IPropertySymbol> operationProperties,
         IPropertySymbol property,
-        IEnumerable<AttributeData> attributes,
+        AttributeData attribute,
         DiagnosticDescriptor diagnosticDescriptor)
     {
-        foreach (var attribute in attributes)
+        var referencedPropertyName = ValidationSymbolHelpers.GetReferencedPropertyName(attribute);
+        if (string.IsNullOrWhiteSpace(referencedPropertyName))
         {
-            var referencedPropertyName = ValidationSymbolHelpers.GetReferencedPropertyName(attribute);
-            if (string.IsNullOrWhiteSpace(referencedPropertyName))
-            {
-                continue;
-            }
-
-            if (operationProperties.Any(candidate => candidate.Name == referencedPropertyName))
-            {
-                continue;
-            }
-
-            context.AddDiagnostic(
-                new DiagnosticInfo(
-                    diagnosticDescriptor,
-                    ValidationSymbolHelpers.GetReferencedPropertyLocation(attribute, property),
-                    [
-                        referencedPropertyName!,
-                        property.Name,
-                        operationTypeName,
-                    ]));
+            return;
         }
+
+        for (var i = 0; i < operationProperties.Count; i++)
+        {
+            if (operationProperties[i].Name == referencedPropertyName)
+            {
+                return;
+            }
+        }
+
+        context.AddDiagnostic(
+            new DiagnosticInfo(
+                diagnosticDescriptor,
+                ValidationSymbolHelpers.GetReferencedPropertyLocation(attribute, property),
+                [
+                    referencedPropertyName!,
+                    property.Name,
+                    operationTypeName,
+                ]));
     }
 
     /// <summary>

@@ -71,11 +71,19 @@ internal static class ValidationPropertyPlanner
             var propertyAccess = $"operation.{ValidationSymbolHelpers.EscapeIdentifier(property.Name)}";
 
             var allAttributes = property.GetAttributes();
-            var validationAttributes = allAttributes
-                .Where(static attribute => ValidationSymbolHelpers.IsValidationAttribute(attribute.AttributeClass))
-                .ToArray();
 
-            if (validationAttributes.Length == 0)
+            // Filter validation attributes without LINQ to avoid iterator + array allocation per property
+            List<AttributeData>? validationAttributeList = null;
+            foreach (var attribute in allAttributes)
+            {
+                if (ValidationSymbolHelpers.IsValidationAttribute(attribute.AttributeClass))
+                {
+                    validationAttributeList ??= new List<AttributeData>(4);
+                    validationAttributeList.Add(attribute);
+                }
+            }
+
+            if (validationAttributeList is null)
             {
                 // Even without direct attributes, check if the property is a complex child type
                 // whose own properties have validation attributes
@@ -103,7 +111,7 @@ internal static class ValidationPropertyPlanner
                 continue;
             }
 
-            if (TryCreateFastPathPlan(property, propertyAccess, validationAttributes, out var fastPathPlan))
+            if (TryCreateFastPathPlan(property, propertyAccess, validationAttributeList, out var fastPathPlan))
             {
                 properties.Add(fastPathPlan);
                 continue;

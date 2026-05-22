@@ -205,17 +205,29 @@ internal static class PipelineCodeGenerator
     /// </summary>
     private static void AddGetAppliedModulesMethod(ClassBuilder pipelineClass, PipelinePlan plan)
     {
-        var contributorIds = plan.Contributions
-            .Select(static c => c.ContributorId)
-            .Distinct()
-            .ToArray();
+        var seenIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var contribution in plan.Contributions)
+        {
+            seenIds.Add(contribution.ContributorId);
+        }
 
-        var arrayElements = string.Join(", ", contributorIds.Select(static id => $"\"{id}\""));
+        var arrayBuilder = new System.Text.StringBuilder();
+        var first = true;
+        foreach (var id in seenIds)
+        {
+            if (!first)
+            {
+                arrayBuilder.Append(", ");
+            }
+
+            arrayBuilder.Append('"').Append(id).Append('"');
+            first = false;
+        }
 
         pipelineClass.AddProperty("_appliedModuleIds")
             .SetType("string[]")
             .MakeStatic()
-            .WithReadonlyValue($"[{arrayElements}]");
+            .WithReadonlyValue($"[{arrayBuilder}]");
 
         pipelineClass.AddMethod("GetAppliedModules")
             .MakePublicMethod()
