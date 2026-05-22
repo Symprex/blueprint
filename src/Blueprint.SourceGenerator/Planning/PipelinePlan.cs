@@ -589,7 +589,8 @@ public sealed record PipelineContribution(
     string ContributorId);
 
 /// <summary>
-/// A single ordered pipeline render step.
+/// A single ordered pipeline render step. Stored inline in lists to avoid per-step
+/// heap allocation (8-15 steps per pipeline × 500 operations = thousands of allocations saved).
 /// </summary>
 /// <param name="stage">The target stage.</param>
 /// <param name="contributorId">The contributing contributor identifier.</param>
@@ -600,7 +601,7 @@ public sealed record PipelineContribution(
 /// emitting its own guard. This eliminates repeated virtual-dispatch checks in the generated
 /// pipeline and produces a single consolidated PostExecution success block.
 /// </param>
-public sealed class PipelineRenderStep(
+public readonly struct PipelineRenderStep(
     PipelineStage stage,
     string contributorId,
     Action<PipelineRenderContext> render,

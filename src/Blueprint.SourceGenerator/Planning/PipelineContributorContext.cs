@@ -5,9 +5,11 @@ using Microsoft.CodeAnalysis;
 namespace Blueprint.SourceGenerator.Planning;
 
 /// <summary>
-/// Context passed to pipeline contributors.
+/// Context passed to pipeline contributors. Passed by value to avoid heap allocations
+/// during pipeline plan building (21 modules × 500 operations = 10,500 instances per generation).
+/// All reference fields point to shared mutable state owned by the plan builder.
 /// </summary>
-public sealed class PipelineContributorContext
+public readonly struct PipelineContributorContext
 {
     private readonly string _contributorId;
     private readonly OperationModel _operation;
