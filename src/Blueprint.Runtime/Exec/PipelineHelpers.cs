@@ -3,6 +3,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Security.Claims;
 using Blueprint.Auditing;
 using Blueprint.Http;
@@ -173,6 +174,7 @@ public static class PipelineHelpers
     /// <param name="populators">The pre-resolved array of property populators (empty when none are registered).</param>
     /// <param name="context">The operation context that the populators will enrich.</param>
     /// <returns>A task that completes when all populators have run.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Task PopulatePropertiesAsync(
         IPropertyPopulator[] populators,
         ApiOperationContext context)
@@ -216,6 +218,7 @@ public static class PipelineHelpers
     /// <param name="handlerResult">The handler result to pass to the audit sink.</param>
     /// <param name="operationTypeName">The operation type name for activity tags and failure events.</param>
     /// <returns>A task that completes when the audit sink has finished (or been skipped).</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Task ExecuteAuditSinkAsync(
         IAuditSink? auditSink,
         ApiOperationContext context,
@@ -661,6 +664,7 @@ public static class PipelineHelpers
     /// <param name="apiAuthorisers">Pre-cached array of <see cref="Authorization.IApiAuthoriser"/> instances (combined execution and link-visibility).</param>
     /// <param name="operationAuthorisers">Pre-cached array of <see cref="Authorization.IOperationAuthoriser"/> instances (execution-only).</param>
     /// <returns><c>null</c> when all authorisers pass; otherwise an <see cref="UnauthenticatedResult"/> or <see cref="ForbiddenResult"/>.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Task<OperationResult?> RunAuthorisersAsync(
         ApiOperationContext context,
         Authorization.IApiAuthoriser[] apiAuthorisers,
@@ -739,6 +743,7 @@ public static class PipelineHelpers
     /// <param name="apiAuthorisers">Pre-filtered <see cref="Authorization.IApiAuthoriser"/> instances that apply to this operation.</param>
     /// <param name="operationAuthorisers">Pre-filtered <see cref="Authorization.IOperationAuthoriser"/> instances that apply to this operation.</param>
     /// <returns><c>null</c> when all authorisers pass; otherwise an <see cref="UnauthenticatedResult"/> or <see cref="ForbiddenResult"/>.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Task<OperationResult?> RunPreFilteredAuthorisersAsync(
         ApiOperationContext context,
         Authorization.IApiAuthoriser[] apiAuthorisers,
@@ -803,6 +808,7 @@ public static class PipelineHelpers
     /// <param name="resolvedScopes">The compile-time expanded scope pairs for this operation.</param>
     /// <param name="cancellationToken">Cancellation token for the authorization evaluation.</param>
     /// <returns><c>null</c> when authorized; <see cref="ForbiddenResult.Instance"/> when denied.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Task<OperationResult?> CheckResourceAuthorizationAsync(
         ApiOperationContext context,
         ClaimsPrincipal principal,
