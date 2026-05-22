@@ -129,6 +129,12 @@ public static class PipelineHelpers
         return new ValidationFailedResult(validationResults);
     }
 
+    // Thread-local Items dictionary reused across ValidationContext instances to avoid the
+    // internal Dictionary<object,object?> allocation (~96B) that the ValidationContext ctor
+    // creates when items is null.
+    [ThreadStatic]
+    private static Dictionary<object, object?>? _validationItems;
+
     /// <summary>
     /// Runs the <see cref="System.ComponentModel.DataAnnotations.IValidatableObject.Validate"/> tail call
     /// for operations that implement <c>IValidatableObject</c>. Extracted from per-pipeline inline code
@@ -151,7 +157,9 @@ public static class PipelineHelpers
         TOperation operation)
         where TOperation : System.ComponentModel.DataAnnotations.IValidatableObject
     {
-        var ivoContext = new System.ComponentModel.DataAnnotations.ValidationContext(operation);
+        var items = _validationItems ??= new Dictionary<object, object?>();
+        items.Clear();
+        var ivoContext = new System.ComponentModel.DataAnnotations.ValidationContext(operation, null, items);
         var ivoResults = operation.Validate(ivoContext);
         List<ValidationResult>? ivoFailures = null;
 
