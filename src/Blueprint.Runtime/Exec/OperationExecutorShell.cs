@@ -4,6 +4,7 @@ using Blueprint.Auditing;
 using Blueprint.Authorization;
 using Blueprint.Diagnostics;
 using Blueprint.Middleware;
+using Blueprint.Model;
 using Blueprint.Runtime.Exec;
 using Blueprint.Runtime.Middleware;
 using Blueprint.Tenancy;
@@ -106,6 +107,78 @@ public abstract class OperationExecutorShell : IOperationExecutorPipeline
     /// iterates this alongside <see cref="ApiAuthorisers"/> during the Authorisation stage.
     /// </summary>
     protected IOperationAuthoriser[] OperationAuthorisers { get; }
+
+    // Lazily-filtered authoriser arrays. Populated on first request when the descriptor is available.
+    // Thread-safe via benign race: deterministic result + immutable array = safe to double-compute.
+    private IApiAuthoriser[]? _applicableApiAuthorisers;
+    private IOperationAuthoriser[]? _applicableOperationAuthorisers;
+
+    /// <summary>
+    /// Returns the subset of <see cref="ApiAuthorisers"/> that apply to the given operation descriptor.
+    /// Lazily computed on first request and cached for the lifetime of the pipeline. Since
+    /// <see cref="IApiAuthoriser.AppliesTo"/> is deterministic per descriptor, this eliminates
+    /// N virtual calls per request (where N = total authorisers that DON'T apply to this operation).
+    /// </summary>
+    /// <param name="descriptor">The operation descriptor used to filter authorisers via <see cref="IOperationAuthoriser.AppliesTo"/>.</param>
+    /// <returns>A cached array containing only the authorisers that apply to this pipeline's operation.</returns>
+    protected IApiAuthoriser[] GetApplicableApiAuthorisers(ApiOperationDescriptor descriptor)
+    {
+        return this._applicableApiAuthorisers ??= FilterApplicable(this.ApiAuthorisers, descriptor);
+    }
+
+    /// <summary>
+    /// Returns the subset of <see cref="OperationAuthorisers"/> that apply to the given operation descriptor.
+    /// Lazily computed on first request and cached for the lifetime of the pipeline.
+    /// </summary>
+    /// <param name="descriptor">The operation descriptor used to filter operation authorisers via <see cref="IOperationAuthoriser.AppliesTo"/>.</param>
+    /// <returns>A cached array containing only the operation authorisers that apply to this pipeline's operation.</returns>
+    protected IOperationAuthoriser[] GetApplicableOperationAuthorisers(ApiOperationDescriptor descriptor)
+    {
+        return this._applicableOperationAuthorisers ??= FilterApplicable(this.OperationAuthorisers, descriptor);
+    }
+
+    private static T[] FilterApplicable<T>(T[] all, ApiOperationDescriptor descriptor)
+        where T : IOperationAuthoriser
+    {
+        if (all.Length == 0)
+        {
+            return all;
+        }
+
+        // Count applicable first to avoid intermediate list allocation
+        var count = 0;
+        for (var i = 0; i < all.Length; i++)
+        {
+            if (all[i].AppliesTo(descriptor))
+            {
+                count++;
+            }
+        }
+
+        // Fast path: all apply — return original array (no allocation)
+        if (count == all.Length)
+        {
+            return all;
+        }
+
+        // Fast path: none apply — return empty array
+        if (count == 0)
+        {
+            return [];
+        }
+
+        var result = new T[count];
+        var idx = 0;
+        for (var i = 0; i < all.Length; i++)
+        {
+            if (all[i].AppliesTo(descriptor))
+            {
+                result[idx++] = all[i];
+            }
+        }
+
+        return result;
+    }
 
     /// <summary>
     /// Gets the user authorisation context factory cached at pipeline construction time, or

@@ -117,7 +117,7 @@ public sealed class ApiAuthoriserModule : IBlueprintSourceGeneratorModule, IPipe
     {
         context.DeclareVariable(
             "authoriserDenial",
-            "await Blueprint.Runtime.Exec.PipelineHelpers.RunAuthorisersAsync(context, this.ApiAuthorisers, this.OperationAuthorisers).ConfigureAwait(false)");
+            "await Blueprint.Runtime.Exec.PipelineHelpers.RunPreFilteredAuthorisersAsync(context, this.GetApplicableApiAuthorisers(context.Descriptor), this.GetApplicableOperationAuthorisers(context.Descriptor)).ConfigureAwait(false)");
 
         context.If(
             "authoriserDenial != null",

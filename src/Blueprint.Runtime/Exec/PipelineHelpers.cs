@@ -724,6 +724,75 @@ public static class PipelineHelpers
     }
 
     /// <summary>
+    /// Invokes pre-filtered authoriser arrays that have already been narrowed to only those
+    /// applicable to this pipeline's operation descriptor. Eliminates per-request
+    /// <see cref="Authorization.IApiAuthoriser.AppliesTo"/> virtual calls since filtering was
+    /// performed once at pipeline first-use and cached.
+    /// </summary>
+    /// <remarks>
+    /// Use this overload when the pipeline has called
+    /// <see cref="OperationExecutorShell.GetApplicableApiAuthorisers"/> and
+    /// <see cref="OperationExecutorShell.GetApplicableOperationAuthorisers"/> to obtain
+    /// pre-filtered arrays. The first denial short-circuits with an appropriate 401/403 result.
+    /// </remarks>
+    /// <param name="context">The current operation execution context.</param>
+    /// <param name="apiAuthorisers">Pre-filtered <see cref="Authorization.IApiAuthoriser"/> instances that apply to this operation.</param>
+    /// <param name="operationAuthorisers">Pre-filtered <see cref="Authorization.IOperationAuthoriser"/> instances that apply to this operation.</param>
+    /// <returns><c>null</c> when all authorisers pass; otherwise an <see cref="UnauthenticatedResult"/> or <see cref="ForbiddenResult"/>.</returns>
+    public static Task<OperationResult?> RunPreFilteredAuthorisersAsync(
+        ApiOperationContext context,
+        Authorization.IApiAuthoriser[] apiAuthorisers,
+        Authorization.IOperationAuthoriser[] operationAuthorisers)
+    {
+        if (context.SkipAuthorisation)
+        {
+            return NullOperationResultTask;
+        }
+
+        if (apiAuthorisers.Length == 0 && operationAuthorisers.Length == 0)
+        {
+            return NullOperationResultTask;
+        }
+
+        return RunPreFilteredAuthorisersCoreAsync(context, apiAuthorisers, operationAuthorisers);
+    }
+
+    private static async Task<OperationResult?> RunPreFilteredAuthorisersCoreAsync(
+        ApiOperationContext context,
+        Authorization.IApiAuthoriser[] apiAuthorisers,
+        Authorization.IOperationAuthoriser[] operationAuthorisers)
+    {
+        // No AppliesTo() check — arrays are pre-filtered to only those that apply to this pipeline's operation.
+        for (var i = 0; i < apiAuthorisers.Length; i++)
+        {
+            var result = await apiAuthorisers[i].CanExecuteOperationAsync(context, context.Descriptor, context.Operation)
+                .ConfigureAwait(false);
+
+            if (!result.IsAllowed)
+            {
+                return result.FailureType == Authorization.ExecutionAllowedFailureType.Authentication
+                    ? UnauthenticatedResult.Instance
+                    : ForbiddenResult.Instance;
+            }
+        }
+
+        for (var i = 0; i < operationAuthorisers.Length; i++)
+        {
+            var result = await operationAuthorisers[i].CanExecuteOperationAsync(context, context.Descriptor, context.Operation)
+                .ConfigureAwait(false);
+
+            if (!result.IsAllowed)
+            {
+                return result.FailureType == Authorization.ExecutionAllowedFailureType.Authentication
+                    ? UnauthenticatedResult.Instance
+                    : ForbiddenResult.Instance;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// Checks resource authorization using the <see cref="Authorization.IResourceAuthorizationProvider"/>.
     /// Returns <see cref="ForbiddenResult.Instance"/> when the provider denies access, or <c>null</c>
     /// when the caller is authorized or the provider is not registered (permissive default).
