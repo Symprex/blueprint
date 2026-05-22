@@ -210,16 +210,19 @@ public sealed record PipelinePlan(OperationModel Operation, VariableRegistry Var
 }
 
 /// <summary>
-/// Rendering context for a single pipeline render step.
+/// Rendering context for a single pipeline render step. Implemented as a readonly struct
+/// to eliminate ~7,500+ heap allocations per 500-operation generation (one per render step
+/// invocation). The struct holds three reference-type fields and is safe to pass by value
+/// since all methods operate through references to the underlying writer and plan objects.
 /// </summary>
-public sealed class PipelineRenderContext
+public readonly struct PipelineRenderContext
 {
     private readonly ICodeWriter _writer;
     private readonly OperationHandlerModel _handler;
     private readonly PipelinePlan _plan;
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="PipelineRenderContext"/> class.
+    /// Initializes a new instance of the <see cref="PipelineRenderContext"/> struct.
     /// </summary>
     /// <param name="writer">The writer receiving generated source.</param>
     /// <param name="handler">The resolved handler metadata for the operation.</param>
@@ -526,7 +529,9 @@ public sealed class PipelineRenderContext
     /// <param name="render">The nested render callback.</param>
     public void If(string condition, Action<PipelineRenderContext> render)
     {
-        this._writer.If(condition, branchWriter => render(new PipelineRenderContext(branchWriter, this._handler, this._plan)));
+        var handler = this._handler;
+        var plan = this._plan;
+        this._writer.If(condition, branchWriter => render(new PipelineRenderContext(branchWriter, handler, plan)));
     }
 
     /// <summary>
@@ -535,7 +540,9 @@ public sealed class PipelineRenderContext
     /// <param name="render">The nested render callback for the try body.</param>
     public void Try(Action<PipelineRenderContext> render)
     {
-        this._writer.Try(tryWriter => render(new PipelineRenderContext(tryWriter, this._handler, this._plan)));
+        var handler = this._handler;
+        var plan = this._plan;
+        this._writer.Try(tryWriter => render(new PipelineRenderContext(tryWriter, handler, plan)));
     }
 
     /// <summary>
@@ -545,7 +552,9 @@ public sealed class PipelineRenderContext
     /// <param name="render">The nested render callback for the catch body.</param>
     public void Catch(string exceptionDeclaration, Action<PipelineRenderContext> render)
     {
-        this._writer.Catch(exceptionDeclaration, catchWriter => render(new PipelineRenderContext(catchWriter, this._handler, this._plan)));
+        var handler = this._handler;
+        var plan = this._plan;
+        this._writer.Catch(exceptionDeclaration, catchWriter => render(new PipelineRenderContext(catchWriter, handler, plan)));
     }
 
     /// <summary>
@@ -556,7 +565,9 @@ public sealed class PipelineRenderContext
     /// <param name="render">The nested render callback for the loop body.</param>
     public void ForEach(string variableDeclaration, string collection, Action<PipelineRenderContext> render)
     {
-        this._writer.Block($"foreach ({variableDeclaration} in {collection})", bodyWriter => render(new PipelineRenderContext(bodyWriter, this._handler, this._plan)));
+        var handler = this._handler;
+        var plan = this._plan;
+        this._writer.Block($"foreach ({variableDeclaration} in {collection})", bodyWriter => render(new PipelineRenderContext(bodyWriter, handler, plan)));
     }
 
     /// <summary>
@@ -565,7 +576,9 @@ public sealed class PipelineRenderContext
     /// <param name="render">The nested render callback for the else body.</param>
     public void Else(Action<PipelineRenderContext> render)
     {
-        this._writer.Else(elseWriter => render(new PipelineRenderContext(elseWriter, this._handler, this._plan)));
+        var handler = this._handler;
+        var plan = this._plan;
+        this._writer.Else(elseWriter => render(new PipelineRenderContext(elseWriter, handler, plan)));
     }
 
     /// <summary>
@@ -575,7 +588,9 @@ public sealed class PipelineRenderContext
     /// <param name="render">The nested render callback for the block body.</param>
     public void Block(string expression, Action<PipelineRenderContext> render)
     {
-        this._writer.Block(expression, bodyWriter => render(new PipelineRenderContext(bodyWriter, this._handler, this._plan)));
+        var handler = this._handler;
+        var plan = this._plan;
+        this._writer.Block(expression, bodyWriter => render(new PipelineRenderContext(bodyWriter, handler, plan)));
     }
 }
 
