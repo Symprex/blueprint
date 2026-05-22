@@ -73,9 +73,10 @@ namespace Blueprint.Generated
                 Blueprint.Runtime.Exec.PipelineHelpers.ResolveTenant(this.TenantResolver, this.TenantAccessor, context.UserPrincipal);
             }
 
-            if (this.PropertyPopulators.Length > 0)
+            var applicablePopulators = this.GetApplicablePropertyPopulators(context.Descriptor);
+            if (applicablePopulators.Length > 0)
             {
-                await Blueprint.Runtime.Exec.PipelineHelpers.PopulatePropertiesAsync(this.PropertyPopulators, context).ConfigureAwait(false);
+                await Blueprint.Runtime.Exec.PipelineHelpers.PopulatePropertiesAsync(applicablePopulators, context).ConfigureAwait(false);
             }
             if (Blueprint.Runtime.Exec.PipelineHelpers.CheckHttpAuthenticated(httpContext) is { } _authCheckResult)
             {
@@ -183,9 +184,10 @@ namespace Blueprint.Generated
                 Blueprint.Runtime.Exec.PipelineHelpers.ResolveTenant(this.TenantResolver, this.TenantAccessor, context.UserPrincipal);
             }
 
-            if (this.PropertyPopulators.Length > 0)
+            var applicablePopulators = this.GetApplicablePropertyPopulators(context.Descriptor);
+            if (applicablePopulators.Length > 0)
             {
-                await Blueprint.Runtime.Exec.PipelineHelpers.PopulatePropertiesAsync(this.PropertyPopulators, context).ConfigureAwait(false);
+                await Blueprint.Runtime.Exec.PipelineHelpers.PopulatePropertiesAsync(applicablePopulators, context).ConfigureAwait(false);
             }
             if (Blueprint.Runtime.Exec.PipelineHelpers.CheckHttpAuthenticated(httpContext) is { } _authCheckResult)
             {

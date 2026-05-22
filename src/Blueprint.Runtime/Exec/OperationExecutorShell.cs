@@ -80,6 +80,93 @@ public abstract class OperationExecutorShell : IOperationExecutorPipeline
     /// </summary>
     protected IPropertyPopulator[] PropertyPopulators { get; }
 
+    // Lazily-filtered populator array. Populated on first request when the descriptor is available.
+    private IPropertyPopulator[]? _applicablePropertyPopulators;
+
+    /// <summary>
+    /// Returns the subset of <see cref="PropertyPopulators"/> that apply to the given operation descriptor.
+    /// Populators implementing <see cref="ITargetedPropertyPopulator"/> are filtered by their
+    /// <see cref="ITargetedPropertyPopulator.AppliesTo"/> method; those implementing only
+    /// <see cref="IPropertyPopulator"/> always apply. The result is cached for the pipeline lifetime.
+    /// </summary>
+    /// <param name="descriptor">The operation descriptor used to filter targeted populators.</param>
+    /// <returns>A cached array containing only the populators that apply to this pipeline's operation.</returns>
+    protected IPropertyPopulator[] GetApplicablePropertyPopulators(ApiOperationDescriptor descriptor)
+    {
+        return this._applicablePropertyPopulators ??= FilterApplicablePopulators(this.PropertyPopulators, descriptor);
+    }
+
+    private static IPropertyPopulator[] FilterApplicablePopulators(IPropertyPopulator[] all, ApiOperationDescriptor descriptor)
+    {
+        if (all.Length == 0)
+        {
+            return all;
+        }
+
+        // Check if any populator implements ITargetedPropertyPopulator — if none do, return original array
+        var hasTargeted = false;
+        for (var i = 0; i < all.Length; i++)
+        {
+            if (all[i] is ITargetedPropertyPopulator)
+            {
+                hasTargeted = true;
+                break;
+            }
+        }
+
+        if (!hasTargeted)
+        {
+            return all;
+        }
+
+        // Count applicable populators
+        var count = 0;
+        for (var i = 0; i < all.Length; i++)
+        {
+            if (all[i] is ITargetedPropertyPopulator targeted)
+            {
+                if (targeted.AppliesTo(descriptor))
+                {
+                    count++;
+                }
+            }
+            else
+            {
+                // Non-targeted populators always apply
+                count++;
+            }
+        }
+
+        if (count == all.Length)
+        {
+            return all;
+        }
+
+        if (count == 0)
+        {
+            return [];
+        }
+
+        var result = new IPropertyPopulator[count];
+        var idx = 0;
+        for (var i = 0; i < all.Length; i++)
+        {
+            if (all[i] is ITargetedPropertyPopulator targeted)
+            {
+                if (targeted.AppliesTo(descriptor))
+                {
+                    result[idx++] = all[i];
+                }
+            }
+            else
+            {
+                result[idx++] = all[i];
+            }
+        }
+
+        return result;
+    }
+
     /// <summary>
     /// Gets the audit sink cached at pipeline construction time, or <see langword="null"/> when
     /// auditing is not configured. Generated auditing module code reads this in the PostExecution

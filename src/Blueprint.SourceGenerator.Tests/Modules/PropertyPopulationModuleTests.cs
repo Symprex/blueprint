@@ -132,8 +132,8 @@ public class PropertyPopulationModuleTests
         var pipelineSources = result.GetGeneratedSources(nameof(OperationExecutorPipelineSourceGenerator));
         var pipelineSource = string.Join("\n", pipelineSources.Select(static s => s.SourceText));
 
-        // Pipelines delegate to the shared PipelineHelpers using base class property
-        pipelineSource.Should().Contain("PipelineHelpers.PopulatePropertiesAsync(this.PropertyPopulators, context)");
+        // Pipelines delegate to the shared PipelineHelpers using pre-filtered populator array
+        pipelineSource.Should().Contain("PipelineHelpers.PopulatePropertiesAsync(applicablePopulators, context)");
 
         // The inline Length == 1 / Length > 1 pattern should no longer appear in generated code
         pipelineSource.Should().NotContain("PropertyPopulators.Length == 1");

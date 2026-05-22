@@ -48,14 +48,16 @@ public sealed class PropertyPopulationModule : IBlueprintSourceGeneratorModule, 
     {
         context.WriteBlankLine();
 
-        // Inline length check avoids the method call overhead when no populators are registered.
-        // PopulatePropertiesAsync already returns Task.CompletedTask for empty arrays, but
-        // skipping the call entirely saves the stack frame setup on high-throughput paths.
+        // Use pre-filtered populator array that caches AppliesTo() results on first use.
+        // Populators implementing ITargetedPropertyPopulator are excluded when they don't
+        // apply to this operation, eliminating unnecessary virtual dispatch per request.
         context.WriteStatement(
-            "if (this.PropertyPopulators.Length > 0)");
+            "var applicablePopulators = this.GetApplicablePropertyPopulators(context.Descriptor);");
+        context.WriteStatement(
+            "if (applicablePopulators.Length > 0)");
         context.WriteStatement("{");
         context.WriteStatement(
-            "    await Blueprint.Runtime.Exec.PipelineHelpers.PopulatePropertiesAsync(this.PropertyPopulators, context).ConfigureAwait(false);");
+            "    await Blueprint.Runtime.Exec.PipelineHelpers.PopulatePropertiesAsync(applicablePopulators, context).ConfigureAwait(false);");
         context.WriteStatement("}");
     }
 }
