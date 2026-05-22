@@ -167,7 +167,7 @@ public class OperationExecutorPipelineGeneratorIntegrationTests
         renderStep.Render(new PipelineRenderContext(writer, handlerResult.Value!, plan));
 
         writer.Rendered.Should().Contain("await global::TestNamespace.TestCommand.HandleAsync().ConfigureAwait(false);");
-        writer.Rendered.Should().Contain("var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.NoResultOperationResult();");
+        writer.Rendered.Should().Contain("var handlerResult = (Blueprint.OperationResult)Blueprint.Runtime.Exec.NoResultOperationResult.Instance;");
     }
 
     [Fact]

@@ -477,7 +477,7 @@ public partial class OperationResultTranslationEndpointTests
     {
         public ValueTask<OperationResult> ExecuteAsync(ApiOperationContext context)
         {
-            return new ValueTask<OperationResult>(new NoResultOperationResult());
+            return new ValueTask<OperationResult>(NoResultOperationResult.Instance);
         }
     }
 

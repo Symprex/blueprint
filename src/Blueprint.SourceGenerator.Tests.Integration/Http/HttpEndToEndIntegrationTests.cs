@@ -1822,7 +1822,7 @@ public partial class E2EVoidCommand : ICommand<NoResultOperationResult>
     /// <returns>NoResultOperationResult to signal void success.</returns>
     public static Task<NoResultOperationResult> HandleAsync()
     {
-        return Task.FromResult(new NoResultOperationResult());
+        return Task.FromResult(NoResultOperationResult.Instance);
     }
 }
 

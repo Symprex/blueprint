@@ -20,6 +20,6 @@ public class ChangePasswordCommandHandler
     {
         // In production: verify command.CurrentPassword against the stored hash,
         // then persist the new password hash derived from command.NewPassword.
-        return new NoResultOperationResult();
+        return NoResultOperationResult.Instance;
     }
 }

@@ -35,6 +35,6 @@ public class ValidateTemplateCommandHandler
             throw new BadRequestException("The template data is malformed");
         }
 
-        return Task.FromResult<OperationResult>(new NoResultOperationResult());
+        return Task.FromResult<OperationResult>(NoResultOperationResult.Instance);
     }
 }

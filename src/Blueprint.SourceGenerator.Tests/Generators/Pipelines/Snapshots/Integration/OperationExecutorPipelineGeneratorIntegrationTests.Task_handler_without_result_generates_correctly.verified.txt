@@ -40,7 +40,7 @@ namespace Blueprint.Generated
                 await Blueprint.Runtime.Exec.PipelineHelpers.PopulatePropertiesAsync(this.PropertyPopulators, context).ConfigureAwait(false);
             }
             await global::TestNamespace.TestCommand.HandleAsync().ConfigureAwait(false);
-            var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.NoResultOperationResult();
+            var handlerResult = (Blueprint.OperationResult)Blueprint.Runtime.Exec.NoResultOperationResult.Instance;
 
             if (handlerResult.WasSuccessful)
             {

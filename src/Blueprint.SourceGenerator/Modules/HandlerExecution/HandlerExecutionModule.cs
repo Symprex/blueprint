@@ -179,7 +179,7 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
         {
             case HandlerReturnNormalizationKind.NoResult:
                 context.WriteStatement($"{configuredAwait};");
-                context.DeclareVariable("handlerResult", "(Blueprint.OperationResult)new Blueprint.Runtime.Exec.NoResultOperationResult()");
+                context.DeclareVariable("handlerResult", "(Blueprint.OperationResult)Blueprint.Runtime.Exec.NoResultOperationResult.Instance");
                 break;
             case HandlerReturnNormalizationKind.OperationResult:
                 context.DeclareVariable("handlerResult", configuredAwait);
