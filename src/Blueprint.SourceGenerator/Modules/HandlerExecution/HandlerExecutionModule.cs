@@ -56,6 +56,14 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
 
         CacheKnownSingletonServices(context, handler);
 
+        // PlainValue and NoResult handlers are guaranteed to produce a successful OperationResult:
+        // PlainValue wraps in OkResult<T> (always successful), NoResult uses a static singleton (always successful).
+        // Failures manifest as exceptions caught by OperationExecutorShell, never as non-successful results.
+        if (normalization.Kind is HandlerReturnNormalizationKind.PlainValue or HandlerReturnNormalizationKind.NoResult)
+        {
+            context.DeclareHandlerResultAlwaysSuccessful();
+        }
+
         var isParameterlessHandler = handler.ConstructorParameters is { Count: 0 };
         context.AddRenderStep(PipelineStage.Execution, renderContext => RenderHandlerInvocation(renderContext, normalization, isParameterlessHandler));
         context.RegisterVariable(

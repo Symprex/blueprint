@@ -109,16 +109,13 @@ namespace Blueprint.Generated
             // Populate full HATEOAS links (skip 304 Not Modified)
             await Blueprint.Runtime.Exec.PipelineHelpers.PopulateHateoasLinksAsync(context.ServiceProvider, context, handlerResult).ConfigureAwait(false);
 
-            if (handlerResult.WasSuccessful)
+
+            if (this.AuditSink != null)
             {
-
-                if (this.AuditSink != null)
-                {
-                    await Blueprint.Runtime.Exec.PipelineHelpers.ExecuteAuditSinkAsync(this.AuditSink, context, handlerResult, "GetWidgetQuery").ConfigureAwait(false);
-                }
-
-                await Blueprint.Runtime.Exec.PipelineHelpers.FlushBackgroundTasksAsync(context.ServiceProvider).ConfigureAwait(false);
+                await Blueprint.Runtime.Exec.PipelineHelpers.ExecuteAuditSinkAsync(this.AuditSink, context, handlerResult, "GetWidgetQuery").ConfigureAwait(false);
             }
+
+            await Blueprint.Runtime.Exec.PipelineHelpers.FlushBackgroundTasksAsync(context.ServiceProvider).ConfigureAwait(false);
 
             return handlerResult;
         }

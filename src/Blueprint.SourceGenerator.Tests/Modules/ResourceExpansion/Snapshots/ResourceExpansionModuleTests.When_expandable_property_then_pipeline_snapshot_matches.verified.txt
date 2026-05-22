@@ -70,16 +70,13 @@ namespace Blueprint.Generated
             }
             var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<global::TestNamespace.ParentResource>(await global::TestNamespace.GetParentQuery.HandleAsync(operation).ConfigureAwait(false));
 
-            if (handlerResult.WasSuccessful)
+
+            if (this.AuditSink != null)
             {
-
-                if (this.AuditSink != null)
-                {
-                    await Blueprint.Runtime.Exec.PipelineHelpers.ExecuteAuditSinkAsync(this.AuditSink, context, handlerResult, "GetParentQuery").ConfigureAwait(false);
-                }
-
-                await Blueprint.Runtime.Exec.PipelineHelpers.FlushBackgroundTasksAsync(context.ServiceProvider).ConfigureAwait(false);
+                await Blueprint.Runtime.Exec.PipelineHelpers.ExecuteAuditSinkAsync(this.AuditSink, context, handlerResult, "GetParentQuery").ConfigureAwait(false);
             }
+
+            await Blueprint.Runtime.Exec.PipelineHelpers.FlushBackgroundTasksAsync(context.ServiceProvider).ConfigureAwait(false);
 
             if (handlerResult is global::Blueprint.Runtime.Exec.OkResult<global::TestNamespace.ParentResource> okResult_F32BB3DD)
             {

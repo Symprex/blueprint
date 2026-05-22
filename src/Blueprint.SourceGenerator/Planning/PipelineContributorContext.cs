@@ -92,6 +92,18 @@ public readonly struct PipelineContributorContext
     }
 
     /// <summary>
+    /// Declares that the handler result variable is guaranteed to be a successful
+    /// <c>OperationResult</c> at compile time (e.g. <c>OkResult&lt;T&gt;</c>
+    /// or <c>NoResultOperationResult</c>). When set, the code generator omits the
+    /// <c>if (handlerResult.WasSuccessful)</c> guard around PostExecution steps,
+    /// eliminating a virtual dispatch and branch per request.
+    /// </summary>
+    public void DeclareHandlerResultAlwaysSuccessful()
+    {
+        this._plan.HandlerResultAlwaysSuccessful = true;
+    }
+
+    /// <summary>
     /// Registers a variable produced by the active contributor.
     /// </summary>
     /// <param name="key">The variable key.</param>

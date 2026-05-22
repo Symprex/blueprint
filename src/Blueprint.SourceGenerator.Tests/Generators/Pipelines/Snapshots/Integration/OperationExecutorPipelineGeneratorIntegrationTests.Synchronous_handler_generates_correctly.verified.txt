@@ -42,16 +42,13 @@ namespace Blueprint.Generated
             }
             var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<int>(global::TestNamespace.TestQuery.Invoke());
 
-            if (handlerResult.WasSuccessful)
+
+            if (this.AuditSink != null)
             {
-
-                if (this.AuditSink != null)
-                {
-                    await Blueprint.Runtime.Exec.PipelineHelpers.ExecuteAuditSinkAsync(this.AuditSink, context, handlerResult, "TestQuery").ConfigureAwait(false);
-                }
-
-                await Blueprint.Runtime.Exec.PipelineHelpers.FlushBackgroundTasksAsync(context.ServiceProvider).ConfigureAwait(false);
+                await Blueprint.Runtime.Exec.PipelineHelpers.ExecuteAuditSinkAsync(this.AuditSink, context, handlerResult, "TestQuery").ConfigureAwait(false);
             }
+
+            await Blueprint.Runtime.Exec.PipelineHelpers.FlushBackgroundTasksAsync(context.ServiceProvider).ConfigureAwait(false);
 
             return handlerResult;
         }

@@ -70,16 +70,13 @@ namespace Blueprint.Generated
             }
             var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<global::TestNamespace.TopResource>(await global::TestNamespace.GetTopQuery.HandleAsync(operation).ConfigureAwait(false));
 
-            if (handlerResult.WasSuccessful)
+
+            if (this.AuditSink != null)
             {
-
-                if (this.AuditSink != null)
-                {
-                    await Blueprint.Runtime.Exec.PipelineHelpers.ExecuteAuditSinkAsync(this.AuditSink, context, handlerResult, "GetTopQuery").ConfigureAwait(false);
-                }
-
-                await Blueprint.Runtime.Exec.PipelineHelpers.FlushBackgroundTasksAsync(context.ServiceProvider).ConfigureAwait(false);
+                await Blueprint.Runtime.Exec.PipelineHelpers.ExecuteAuditSinkAsync(this.AuditSink, context, handlerResult, "GetTopQuery").ConfigureAwait(false);
             }
+
+            await Blueprint.Runtime.Exec.PipelineHelpers.FlushBackgroundTasksAsync(context.ServiceProvider).ConfigureAwait(false);
 
             if (handlerResult is global::Blueprint.Runtime.Exec.OkResult<global::TestNamespace.TopResource> okResult_A2EBCF80)
             {

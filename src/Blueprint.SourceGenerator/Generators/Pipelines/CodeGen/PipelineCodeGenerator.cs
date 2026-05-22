@@ -129,10 +129,9 @@ internal static class PipelineCodeGenerator
                 continue;
             }
 
-            // When we encounter the first success-guarded step, open a consolidated
-            // if (handlerResult.WasSuccessful) block and render ALL success-guarded
-            // steps from every contribution inside it. Each module contributes its
-            // own individual call — no cross-module consolidation.
+            // When the handler result is guaranteed successful at compile time (PlainValue/NoResult),
+            // success-guarded steps are rendered directly without the if wrapper — the guard is
+            // proven unnecessary because failures manifest as exceptions, not non-successful results.
             if (!inSuccessGuard && hasSuccessGuardedStep)
             {
                 inSuccessGuard = true;
@@ -146,21 +145,38 @@ internal static class PipelineCodeGenerator
                     }
                 }
 
-                writer.NewLine();
-                writer.If(
-                    "handlerResult.WasSuccessful",
-                    guardWriter =>
-                    {
-                        var guardContext = new PipelineRenderContext(guardWriter, handler, plan);
+                if (plan.HandlerResultAlwaysSuccessful)
+                {
+                    // No if guard needed — render success-guarded steps directly
+                    writer.NewLine();
+                    var directContext = new PipelineRenderContext(writer, handler, plan);
 
-                        foreach (var step in plan.RenderSteps)
+                    foreach (var step in plan.RenderSteps)
+                    {
+                        if (step.RequiresSuccessGuard)
                         {
-                            if (step.RequiresSuccessGuard)
-                            {
-                                step.Render(guardContext);
-                            }
+                            step.Render(directContext);
                         }
-                    });
+                    }
+                }
+                else
+                {
+                    writer.NewLine();
+                    writer.If(
+                        "handlerResult.WasSuccessful",
+                        guardWriter =>
+                        {
+                            var guardContext = new PipelineRenderContext(guardWriter, handler, plan);
+
+                            foreach (var step in plan.RenderSteps)
+                            {
+                                if (step.RequiresSuccessGuard)
+                                {
+                                    step.Render(guardContext);
+                                }
+                            }
+                        });
+                }
 
                 continue;
             }

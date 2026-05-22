@@ -42,6 +42,15 @@ public sealed record PipelinePlan(OperationModel Operation, VariableRegistry Var
     public bool RequiresAsync { get; set; }
 
     /// <summary>
+    /// Gets or sets a value indicating whether the handler result is guaranteed to be successful
+    /// at compile time. When <c>true</c>, the code generator omits the <c>if (handlerResult.WasSuccessful)</c>
+    /// guard around PostExecution steps, eliminating a virtual dispatch and branch per request.
+    /// This is set for handlers that return plain values (wrapped in <c>OkResult&lt;T&gt;</c>)
+    /// or <c>NoResult</c> — both of which are always successful (failures are exceptions caught by the shell).
+    /// </summary>
+    public bool HandlerResultAlwaysSuccessful { get; set; }
+
+    /// <summary>
     /// Gets or sets a value indicating whether the generated pipeline should suppress Activity
     /// creation in <c>OperationExecutorShell</c>. When <c>true</c>, the operation will not
     /// produce a trace span — useful for noisy or high-frequency operations where per-invocation

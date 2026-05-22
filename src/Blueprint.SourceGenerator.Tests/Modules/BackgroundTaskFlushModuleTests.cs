@@ -50,8 +50,8 @@ public class BackgroundTaskFlushModuleTests
         // Each module contributes its own individual post-success call
         pipelineSource.Should().Contain("PipelineHelpers.FlushBackgroundTasksAsync(");
 
-        // Only flushes when handler result was successful
-        pipelineSource.Should().Contain("handlerResult.WasSuccessful");
+        // NoResult handler: guard is elided because the result is always successful
+        pipelineSource.Should().NotContain("handlerResult.WasSuccessful");
     }
 
     [Fact]
