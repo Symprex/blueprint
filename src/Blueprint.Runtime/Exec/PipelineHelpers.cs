@@ -42,6 +42,7 @@ public static class PipelineHelpers
     /// successful authorization fast-path return. Since <c>Task.FromResult(default(T))</c> where T is a
     /// reference type is NOT cached by the runtime (unlike <c>Task.FromResult(true/false)</c>), a shared
     /// static instance eliminates ~48 bytes per request on all authorization-enabled pipelines.
+    /// Retained for companion generators that may still return this from older overloads.
     /// </summary>
     internal static readonly Task<OperationResult?> NullOperationResultTask = Task.FromResult<OperationResult?>(null);
 
@@ -673,22 +674,22 @@ public static class PipelineHelpers
     /// <param name="operationAuthorisers">Pre-cached array of <see cref="Authorization.IOperationAuthoriser"/> instances (execution-only).</param>
     /// <returns><c>null</c> when all authorisers pass; otherwise an <see cref="UnauthenticatedResult"/> or <see cref="ForbiddenResult"/>.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static Task<OperationResult?> RunAuthorisersAsync(
+    public static ValueTask<OperationResult?> RunAuthorisersAsync(
         ApiOperationContext context,
         Authorization.IApiAuthoriser[] apiAuthorisers,
         Authorization.IOperationAuthoriser[] operationAuthorisers)
     {
         if (context.SkipAuthorisation)
         {
-            return NullOperationResultTask;
+            return default;
         }
 
         if (apiAuthorisers.Length == 0 && operationAuthorisers.Length == 0)
         {
-            return NullOperationResultTask;
+            return default;
         }
 
-        return RunAuthorisersCoreAsync(context, apiAuthorisers, operationAuthorisers);
+        return new ValueTask<OperationResult?>(RunAuthorisersCoreAsync(context, apiAuthorisers, operationAuthorisers));
     }
 
     private static async Task<OperationResult?> RunAuthorisersCoreAsync(
@@ -742,63 +743,148 @@ public static class PipelineHelpers
     /// performed once at pipeline first-use and cached.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Use this overload when the pipeline has called
     /// <see cref="OperationExecutorShell.GetApplicableApiAuthorisers"/> and
     /// <see cref="OperationExecutorShell.GetApplicableOperationAuthorisers"/> to obtain
     /// pre-filtered arrays. The first denial short-circuits with an appropriate 401/403 result.
+    /// </para>
+    /// <para>
+    /// This method uses a synchronous-first fast path: when all authorisers return completed tasks
+    /// (e.g. <see cref="Authorization.ExecutionAllowed.YesTask"/>), no async state machine is allocated.
+    /// Only falls back to async when an authoriser genuinely suspends for I/O.
+    /// </para>
     /// </remarks>
     /// <param name="context">The current operation execution context.</param>
     /// <param name="apiAuthorisers">Pre-filtered <see cref="Authorization.IApiAuthoriser"/> instances that apply to this operation.</param>
     /// <param name="operationAuthorisers">Pre-filtered <see cref="Authorization.IOperationAuthoriser"/> instances that apply to this operation.</param>
     /// <returns><c>null</c> when all authorisers pass; otherwise an <see cref="UnauthenticatedResult"/> or <see cref="ForbiddenResult"/>.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static Task<OperationResult?> RunPreFilteredAuthorisersAsync(
+    public static ValueTask<OperationResult?> RunPreFilteredAuthorisersAsync(
         ApiOperationContext context,
         Authorization.IApiAuthoriser[] apiAuthorisers,
         Authorization.IOperationAuthoriser[] operationAuthorisers)
     {
         if (context.SkipAuthorisation)
         {
-            return NullOperationResultTask;
+            return default;
         }
 
         if (apiAuthorisers.Length == 0 && operationAuthorisers.Length == 0)
         {
-            return NullOperationResultTask;
+            return default;
         }
 
-        return RunPreFilteredAuthorisersCoreAsync(context, apiAuthorisers, operationAuthorisers);
-    }
-
-    private static async Task<OperationResult?> RunPreFilteredAuthorisersCoreAsync(
-        ApiOperationContext context,
-        Authorization.IApiAuthoriser[] apiAuthorisers,
-        Authorization.IOperationAuthoriser[] operationAuthorisers)
-    {
-        // No AppliesTo() check — arrays are pre-filtered to only those that apply to this pipeline's operation.
+        // Synchronous fast path: most authorisers just check claims and return ExecutionAllowed.YesTask.
+        // Avoid async state machine allocation when all authorisers complete synchronously.
         for (var i = 0; i < apiAuthorisers.Length; i++)
         {
-            var result = await apiAuthorisers[i].CanExecuteOperationAsync(context, context.Descriptor, context.Operation)
-                .ConfigureAwait(false);
+            var task = apiAuthorisers[i].CanExecuteOperationAsync(context, context.Descriptor, context.Operation);
 
+            if (!task.IsCompletedSuccessfully)
+            {
+                return new ValueTask<OperationResult?>(
+                    RunPreFilteredAuthorisersSlowAsync(context, apiAuthorisers, operationAuthorisers, task, i, isApiPhase: true));
+            }
+
+            var result = task.GetAwaiter().GetResult();
             if (!result.IsAllowed)
             {
-                return result.FailureType == Authorization.ExecutionAllowedFailureType.Authentication
-                    ? UnauthenticatedResult.Instance
-                    : ForbiddenResult.Instance;
+                return new ValueTask<OperationResult?>(
+                    result.FailureType == Authorization.ExecutionAllowedFailureType.Authentication
+                        ? UnauthenticatedResult.Instance
+                        : ForbiddenResult.Instance);
             }
         }
 
         for (var i = 0; i < operationAuthorisers.Length; i++)
         {
-            var result = await operationAuthorisers[i].CanExecuteOperationAsync(context, context.Descriptor, context.Operation)
-                .ConfigureAwait(false);
+            var task = operationAuthorisers[i].CanExecuteOperationAsync(context, context.Descriptor, context.Operation);
 
+            if (!task.IsCompletedSuccessfully)
+            {
+                return new ValueTask<OperationResult?>(
+                    RunPreFilteredAuthorisersSlowAsync(context, apiAuthorisers, operationAuthorisers, task, i, isApiPhase: false));
+            }
+
+            var result = task.GetAwaiter().GetResult();
             if (!result.IsAllowed)
             {
-                return result.FailureType == Authorization.ExecutionAllowedFailureType.Authentication
-                    ? UnauthenticatedResult.Instance
-                    : ForbiddenResult.Instance;
+                return new ValueTask<OperationResult?>(
+                    result.FailureType == Authorization.ExecutionAllowedFailureType.Authentication
+                        ? UnauthenticatedResult.Instance
+                        : ForbiddenResult.Instance);
+            }
+        }
+
+        return default;
+    }
+
+    /// <summary>
+    /// Async fallback when an authoriser did not complete synchronously. Continues from
+    /// the point where the synchronous loop encountered a pending task.
+    /// </summary>
+    private static async Task<OperationResult?> RunPreFilteredAuthorisersSlowAsync(
+        ApiOperationContext context,
+        Authorization.IApiAuthoriser[] apiAuthorisers,
+        Authorization.IOperationAuthoriser[] operationAuthorisers,
+        Task<Authorization.ExecutionAllowed> pendingTask,
+        int startIndex,
+        bool isApiPhase)
+    {
+        // Complete the pending task
+        var pendingResult = await pendingTask.ConfigureAwait(false);
+        if (!pendingResult.IsAllowed)
+        {
+            return pendingResult.FailureType == Authorization.ExecutionAllowedFailureType.Authentication
+                ? UnauthenticatedResult.Instance
+                : ForbiddenResult.Instance;
+        }
+
+        if (isApiPhase)
+        {
+            // Continue remaining api authorisers
+            for (var i = startIndex + 1; i < apiAuthorisers.Length; i++)
+            {
+                var result = await apiAuthorisers[i].CanExecuteOperationAsync(context, context.Descriptor, context.Operation)
+                    .ConfigureAwait(false);
+
+                if (!result.IsAllowed)
+                {
+                    return result.FailureType == Authorization.ExecutionAllowedFailureType.Authentication
+                        ? UnauthenticatedResult.Instance
+                        : ForbiddenResult.Instance;
+                }
+            }
+
+            // Then all operation authorisers
+            for (var i = 0; i < operationAuthorisers.Length; i++)
+            {
+                var result = await operationAuthorisers[i].CanExecuteOperationAsync(context, context.Descriptor, context.Operation)
+                    .ConfigureAwait(false);
+
+                if (!result.IsAllowed)
+                {
+                    return result.FailureType == Authorization.ExecutionAllowedFailureType.Authentication
+                        ? UnauthenticatedResult.Instance
+                        : ForbiddenResult.Instance;
+                }
+            }
+        }
+        else
+        {
+            // Continue remaining operation authorisers
+            for (var i = startIndex + 1; i < operationAuthorisers.Length; i++)
+            {
+                var result = await operationAuthorisers[i].CanExecuteOperationAsync(context, context.Descriptor, context.Operation)
+                    .ConfigureAwait(false);
+
+                if (!result.IsAllowed)
+                {
+                    return result.FailureType == Authorization.ExecutionAllowedFailureType.Authentication
+                        ? UnauthenticatedResult.Instance
+                        : ForbiddenResult.Instance;
+                }
             }
         }
 
@@ -817,7 +903,7 @@ public static class PipelineHelpers
     /// <param name="cancellationToken">Cancellation token for the authorization evaluation.</param>
     /// <returns><c>null</c> when authorized; <see cref="ForbiddenResult.Instance"/> when denied.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static Task<OperationResult?> CheckResourceAuthorizationAsync(
+    public static ValueTask<OperationResult?> CheckResourceAuthorizationAsync(
         ApiOperationContext context,
         ClaimsPrincipal principal,
         Authorization.IResourceAuthorizationProvider? provider,
@@ -826,20 +912,23 @@ public static class PipelineHelpers
     {
         if (provider == null)
         {
-            return NullOperationResultTask;
+            return default;
         }
 
-        return CheckResourceAuthorizationCoreAsync(context, principal, provider, resolvedScopes, cancellationToken);
+        var task = provider.IsAuthorizedAsync(context, principal, resolvedScopes, cancellationToken);
+
+        if (task.IsCompletedSuccessfully)
+        {
+            return new ValueTask<OperationResult?>(task.GetAwaiter().GetResult() ? null : ForbiddenResult.Instance);
+        }
+
+        return new ValueTask<OperationResult?>(CheckResourceAuthorizationCoreAsync(task));
     }
 
     private static async Task<OperationResult?> CheckResourceAuthorizationCoreAsync(
-        ApiOperationContext context,
-        ClaimsPrincipal principal,
-        Authorization.IResourceAuthorizationProvider provider,
-        IReadOnlyList<ResolvedScopePair> resolvedScopes,
-        CancellationToken cancellationToken)
+        Task<bool> pendingTask)
     {
-        var isAuthorized = await provider.IsAuthorizedAsync(context, principal, resolvedScopes, cancellationToken).ConfigureAwait(false);
+        var isAuthorized = await pendingTask.ConfigureAwait(false);
 
         return isAuthorized ? null : ForbiddenResult.Instance;
     }
@@ -856,7 +945,7 @@ public static class PipelineHelpers
     /// <param name="singleScope">The single compile-time expanded scope pair for this operation.</param>
     /// <param name="cancellationToken">Cancellation token for the authorization evaluation.</param>
     /// <returns><c>null</c> when authorized; <see cref="ForbiddenResult.Instance"/> when denied.</returns>
-    public static async Task<OperationResult?> CheckResourceAuthorizationAsync(
+    public static ValueTask<OperationResult?> CheckResourceAuthorizationAsync(
         ApiOperationContext context,
         ClaimsPrincipal principal,
         Authorization.IResourceAuthorizationProvider? provider,
@@ -865,13 +954,18 @@ public static class PipelineHelpers
     {
         if (provider == null)
         {
-            return null;
+            return default;
         }
 
         var scopeList = new SingleItemList<ResolvedScopePair>(singleScope);
-        var isAuthorized = await provider.IsAuthorizedAsync(context, principal, scopeList, cancellationToken).ConfigureAwait(false);
+        var task = provider.IsAuthorizedAsync(context, principal, scopeList, cancellationToken);
 
-        return isAuthorized ? null : ForbiddenResult.Instance;
+        if (task.IsCompletedSuccessfully)
+        {
+            return new ValueTask<OperationResult?>(task.GetAwaiter().GetResult() ? null : ForbiddenResult.Instance);
+        }
+
+        return new ValueTask<OperationResult?>(CheckResourceAuthorizationCoreAsync(task));
     }
 
     /// <summary>
