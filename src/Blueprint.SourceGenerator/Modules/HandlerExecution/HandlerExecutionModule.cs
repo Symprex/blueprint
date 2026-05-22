@@ -129,28 +129,23 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
             var handlerClassFullName = context.GetRequiredHandlerClassFullName();
             var handlerVarName = char.ToLowerInvariant(handlerClassName[0]) + handlerClassName.Substring(1);
 
-            // Parameterless handlers use the extracted helper to avoid the GetService + null
-            // check + new() boilerplate in every pipeline. Handlers with constructor DI keep
-            // the inline compiled-constructor pattern for zero-reflection instantiation.
+            // Parameterless handlers are constructed directly. The previous pattern
+            // (ResolveOrCreateHandler) did a wasteful DI GetService call that always returned null
+            // for S365-style handlers. Direct construction saves one virtual dispatch + hash lookup per request.
             if (isParameterlessHandler)
             {
                 context.DeclareVariable(
                     handlerVarName,
-                    $"Blueprint.Runtime.Exec.PipelineHelpers.ResolveOrCreateHandler<{handlerClassFullName}>({context.GetServiceProviderExpression()})");
+                    $"new {handlerClassFullName}()");
             }
             else
             {
+                // Direct compiled-constructor instantiation. Handler types are not DI-registered in
+                // practice (they use constructor parameters resolved via GetRequiredService). Skipping
+                // the GetService<T> fallback eliminates one virtual dispatch + null branch per request.
                 context.DeclareVariable(
                     handlerVarName,
-                    context.GetOptionalServiceExpression(handlerClassFullName));
-                context.If(
-                    $"{handlerVarName} == null",
-                    branch =>
-                    {
-                        branch.Assign(
-                            handlerVarName,
-                            branch.GetCompiledHandlerConstructorExpression(handlerClassFullName));
-                    });
+                    context.GetCompiledHandlerConstructorExpression(handlerClassFullName));
             }
 
             // Populate well-known base-class properties (e.g., S365 ApiOperations subclasses built on BlueprintApiOperations).

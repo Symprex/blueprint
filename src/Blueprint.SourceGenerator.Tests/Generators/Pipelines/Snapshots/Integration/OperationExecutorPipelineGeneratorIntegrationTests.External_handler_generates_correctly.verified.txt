@@ -40,7 +40,7 @@ namespace Blueprint.Generated
             {
                 await Blueprint.Runtime.Exec.PipelineHelpers.PopulatePropertiesAsync(applicablePopulators, context).ConfigureAwait(false);
             }
-            var testCommandHandler = Blueprint.Runtime.Exec.PipelineHelpers.ResolveOrCreateHandler<global::TestNamespace.TestCommandHandler>(context.ServiceProvider);
+            var testCommandHandler = new global::TestNamespace.TestCommandHandler();
 
             var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<string>(await testCommandHandler.HandleAsync(operation).ConfigureAwait(false));
 

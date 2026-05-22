@@ -42,7 +42,7 @@ namespace Blueprint.Generated
             }
             var repository = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::TestNamespace.IRepository>(context.ServiceProvider);
 
-            var testCommandHandler = Blueprint.Runtime.Exec.PipelineHelpers.ResolveOrCreateHandler<global::TestNamespace.TestCommandHandler>(context.ServiceProvider);
+            var testCommandHandler = new global::TestNamespace.TestCommandHandler();
 
             var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<bool>(await testCommandHandler.HandleAsync(operation, repository).ConfigureAwait(false));
 

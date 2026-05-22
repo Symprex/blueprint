@@ -40,11 +40,7 @@ namespace Blueprint.Generated
             {
                 await Blueprint.Runtime.Exec.PipelineHelpers.PopulatePropertiesAsync(applicablePopulators, context).ConfigureAwait(false);
             }
-            var testCommandHandler = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<global::TestNamespace.TestCommandHandler>(context.ServiceProvider);
-            if (testCommandHandler == null)
-            {
-                testCommandHandler = new global::TestNamespace.TestCommandHandler(Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::TestNamespace.IRepository>(context.ServiceProvider), Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::TestNamespace.ILogger>(context.ServiceProvider));
-            }
+            var testCommandHandler = new global::TestNamespace.TestCommandHandler(Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::TestNamespace.IRepository>(context.ServiceProvider), Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::TestNamespace.ILogger>(context.ServiceProvider));
 
             var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<bool>(await testCommandHandler.HandleAsync(operation).ConfigureAwait(false));
 

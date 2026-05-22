@@ -40,7 +40,7 @@ namespace Blueprint.Generated
             {
                 await Blueprint.Runtime.Exec.PipelineHelpers.PopulatePropertiesAsync(applicablePopulators, context).ConfigureAwait(false);
             }
-            var testQueryHandler = Blueprint.Runtime.Exec.PipelineHelpers.ResolveOrCreateHandler<global::TestNamespace.TestQueryHandler>(context.ServiceProvider);
+            var testQueryHandler = new global::TestNamespace.TestQueryHandler();
 
             testQueryHandler.Context = context;
             testQueryHandler.Identity = context.UserAuthorisationContext ?? Blueprint.Authorization.AnonymousUserAuthorisationContext.Instance;
