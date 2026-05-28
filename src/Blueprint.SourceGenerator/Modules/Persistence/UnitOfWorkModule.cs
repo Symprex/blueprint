@@ -6,8 +6,8 @@ namespace Blueprint.SourceGenerator.Modules;
 
 /// <summary>
 /// Contributes a PostExecution render step that calls <c>IUnitOfWork.SaveChangesAsync</c> after
-/// successful command handler execution. Only participates for operations implementing
-/// <c>ICommand</c> (not queries or background tasks), and skips gracefully at runtime if no
+/// successful handler execution. Participates for operations implementing <c>ICommand</c> or
+/// <c>IBackgroundTask</c> (not queries), and skips gracefully at runtime if no
 /// <c>IUnitOfWork</c> is registered in DI.
 /// </summary>
 /// <remarks>
@@ -46,9 +46,10 @@ public sealed class UnitOfWorkModule : IBlueprintSourceGeneratorModule, IPipelin
     {
         var operationType = context.Operation.TypeSymbol;
         var isCommand = IsCommand(operationType);
+        var isBackgroundTask = IsBackgroundTask(operationType);
 
         // Emit BPP001 when [DoNotSaveChanges] is applied to a non-command where it has no effect
-        if (!isCommand && HasDoNotSaveChangesAttribute(operationType))
+        if (!isCommand && !isBackgroundTask && HasDoNotSaveChangesAttribute(operationType))
         {
             context.AddDiagnostic(
                 new DiagnosticInfo(
@@ -59,8 +60,8 @@ public sealed class UnitOfWorkModule : IBlueprintSourceGeneratorModule, IPipelin
             return;
         }
 
-        // Only participate for command operations — queries should not trigger persistence saves
-        if (!isCommand)
+        // Only participate for commands and background tasks — queries should not trigger persistence saves
+        if (!isCommand && !isBackgroundTask)
         {
             return;
         }
@@ -90,6 +91,13 @@ public sealed class UnitOfWorkModule : IBlueprintSourceGeneratorModule, IPipelin
         return operationType.AllInterfaces.Any(static candidate =>
             candidate.Name is "ICommand"
             && candidate.IsInNamespace("Blueprint", "Model"));
+    }
+
+    private static bool IsBackgroundTask(INamedTypeSymbol operationType)
+    {
+        return operationType.AllInterfaces.Any(static candidate =>
+            candidate.Name is "IBackgroundTask"
+            && candidate.IsInNamespace("Blueprint", "Tasks"));
     }
 
     private static bool HasDoNotSaveChangesAttribute(INamedTypeSymbol operationType)

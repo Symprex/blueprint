@@ -11,7 +11,7 @@ namespace Blueprint.SourceGenerator.Tests.Modules.Persistence;
 
 /// <summary>
 /// Tests that <see cref="UnitOfWorkModule"/> correctly generates persistence coordination
-/// code for command pipelines and does not contribute to query or background-task pipelines.
+/// code for command and background-task pipelines and does not contribute to query pipelines.
 /// </summary>
 public class UnitOfWorkModuleTests
 {
@@ -84,11 +84,12 @@ public class UnitOfWorkModuleTests
     }
 
     [Fact]
-    public void When_background_task_then_pipeline_has_no_unit_of_work_contribution()
+    public void When_background_task_then_pipeline_has_unit_of_work_contribution()
     {
         var compilation = CreateCompilation(
             """
             using Blueprint.Model;
+            using Blueprint.Tasks;
             using System.Threading.Tasks;
 
             namespace TestNamespace;
@@ -112,8 +113,8 @@ public class UnitOfWorkModuleTests
 
         result.Diagnostics.Should().BeEmpty();
         result.Value.Should().NotBeNull();
-        result.Value!.Contributions.Should().NotContain(
-            static c => c.ContributorId == nameof(UnitOfWorkModule));
+        result.Value!.Contributions.Should().Contain(
+            new PipelineContribution(PipelineStage.PostExecution, nameof(UnitOfWorkModule)));
     }
 
     [Fact]
@@ -185,12 +186,13 @@ public class UnitOfWorkModuleTests
     }
 
     [Fact]
-    public void When_background_task_has_DoNotSaveChanges_then_reports_BPP001_diagnostic()
+    public void When_background_task_has_DoNotSaveChanges_then_pipeline_has_no_unit_of_work_contribution()
     {
         var compilation = CreateCompilation(
             """
             using Blueprint.Model;
             using Blueprint.Persistence;
+            using Blueprint.Tasks;
             using System.Threading.Tasks;
 
             namespace TestNamespace;
@@ -213,8 +215,10 @@ public class UnitOfWorkModuleTests
         ]);
         var result = config.BuildPipelinePlan("TestNamespace.ProcessOrderTask", compilation);
 
-        result.Diagnostics.Should().ContainSingle()
-            .Which.Descriptor.Id.Should().Be("BPP001");
+        result.Diagnostics.Should().BeEmpty();
+        result.Value.Should().NotBeNull();
+        result.Value!.Contributions.Should().NotContain(
+            static c => c.ContributorId == nameof(UnitOfWorkModule));
     }
 
     // ── Pipeline snapshot test ────────────────────────────────────────
