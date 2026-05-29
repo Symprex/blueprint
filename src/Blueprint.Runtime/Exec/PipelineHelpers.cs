@@ -393,7 +393,7 @@ public static class PipelineHelpers
     /// or an <see cref="OperationResult"/> representing the failure (unsupported media type,
     /// invalid JSON, etc.).
     /// </returns>
-    public static async Task<OperationResult?> ReadJsonBodyAsync<TOperation>(
+    public static Task<OperationResult?> ReadJsonBodyAsync<TOperation>(
         HttpContext httpContext,
         CancellationToken cancellationToken,
         TOperation operation,
@@ -403,60 +403,178 @@ public static class PipelineHelpers
         // No body to read — skip silently
         if (httpContext.Request.ContentLength is null or 0 && httpContext.Request.ContentType is null)
         {
-            return null;
+            return Task.FromResult<OperationResult?>(null);
         }
 
         // Content-type guard: reject non-JSON bodies early
         if (httpContext.Request.ContentType is not null &&
             !httpContext.Request.ContentType.Contains("json", StringComparison.OrdinalIgnoreCase))
         {
-            return UnsupportedMediaTypeResult.Instance;
+            return Task.FromResult<OperationResult?>(UnsupportedMediaTypeResult.Instance);
         }
 
-        // Fast path: Content-Length is known — rent a pooled buffer and read directly
+        // Fast path: Content-Length is known — rent a pooled buffer and read directly.
+        // Most requests in production have the body already buffered by Kestrel, so
+        // ReadAsync completes synchronously. Avoid async state machine allocation by
+        // checking IsCompletedSuccessfully on the first read.
         if (httpContext.Request.ContentLength.HasValue && httpContext.Request.ContentLength.Value > 0)
         {
             var bodyLength = (int)httpContext.Request.ContentLength.Value;
             var rentedBuffer = System.Buffers.ArrayPool<byte>.Shared.Rent(bodyLength);
 
-            try
+            var firstRead = httpContext.Request.Body.ReadAsync(
+                new Memory<byte>(rentedBuffer, 0, bodyLength),
+                cancellationToken);
+
+            if (firstRead.IsCompletedSuccessfully)
             {
-                var totalRead = 0;
+                var bytesRead = firstRead.GetAwaiter().GetResult();
 
-                while (totalRead < bodyLength)
-                {
-                    var bytesRead = await httpContext.Request.Body.ReadAsync(
-                        new Memory<byte>(rentedBuffer, totalRead, bodyLength - totalRead),
-                        cancellationToken).ConfigureAwait(false);
-                    if (bytesRead == 0)
-                    {
-                        break;
-                    }
-
-                    totalRead += bytesRead;
-                }
-
-                if (totalRead > 0)
+                // For small payloads, a single read returns the full body
+                if (bytesRead >= bodyLength || bytesRead == 0)
                 {
                     try
                     {
-                        populate(new ReadOnlySpan<byte>(rentedBuffer, 0, totalRead), operation, jsonOptions);
+                        if (bytesRead > 0)
+                        {
+                            try
+                            {
+                                populate(new ReadOnlySpan<byte>(rentedBuffer, 0, bytesRead), operation, jsonOptions);
+                            }
+                            catch (Exception ex) when (ex is System.Text.Json.JsonException or InvalidOperationException or NotSupportedException)
+                            {
+                                return Task.FromResult<OperationResult?>(ToBodyBindingFailure(ex));
+                            }
+                        }
+
+                        return Task.FromResult<OperationResult?>(null);
                     }
-                    catch (Exception ex) when (ex is System.Text.Json.JsonException or InvalidOperationException or NotSupportedException)
+                    finally
                     {
-                        return ToBodyBindingFailure(ex);
+                        System.Buffers.ArrayPool<byte>.Shared.Return(rentedBuffer);
                     }
                 }
 
-                return null;
+                // Partial read completed synchronously — continue with async fallback
+                return ReadJsonBodyContinueAsync(httpContext, cancellationToken, operation, populate, jsonOptions, rentedBuffer, bodyLength, bytesRead);
             }
-            finally
-            {
-                System.Buffers.ArrayPool<byte>.Shared.Return(rentedBuffer);
-            }
+
+            // First read is async — fall through to full async path
+            return ReadJsonBodyAsyncCore(httpContext, cancellationToken, operation, populate, jsonOptions, rentedBuffer, bodyLength, firstRead);
         }
 
         // Slow path: chunked transfer or unknown Content-Length — use MemoryStream
+        return ReadJsonBodyChunkedAsync(httpContext, cancellationToken, operation, populate, jsonOptions);
+    }
+
+    /// <summary>
+    /// Async continuation for when the first read completed synchronously but returned a partial result.
+    /// </summary>
+    private static async Task<OperationResult?> ReadJsonBodyContinueAsync<TOperation>(
+        HttpContext httpContext,
+        CancellationToken cancellationToken,
+        TOperation operation,
+        PopulateFromBodyDelegate<TOperation> populate,
+        System.Text.Json.JsonSerializerOptions? jsonOptions,
+        byte[] rentedBuffer,
+        int bodyLength,
+        int totalRead)
+    {
+        try
+        {
+            while (totalRead < bodyLength)
+            {
+                var bytesRead = await httpContext.Request.Body.ReadAsync(
+                    new Memory<byte>(rentedBuffer, totalRead, bodyLength - totalRead),
+                    cancellationToken).ConfigureAwait(false);
+                if (bytesRead == 0)
+                {
+                    break;
+                }
+
+                totalRead += bytesRead;
+            }
+
+            if (totalRead > 0)
+            {
+                try
+                {
+                    populate(new ReadOnlySpan<byte>(rentedBuffer, 0, totalRead), operation, jsonOptions);
+                }
+                catch (Exception ex) when (ex is System.Text.Json.JsonException or InvalidOperationException or NotSupportedException)
+                {
+                    return ToBodyBindingFailure(ex);
+                }
+            }
+
+            return null;
+        }
+        finally
+        {
+            System.Buffers.ArrayPool<byte>.Shared.Return(rentedBuffer);
+        }
+    }
+
+    /// <summary>
+    /// Async path for when the first ReadAsync did not complete synchronously.
+    /// </summary>
+    private static async Task<OperationResult?> ReadJsonBodyAsyncCore<TOperation>(
+        HttpContext httpContext,
+        CancellationToken cancellationToken,
+        TOperation operation,
+        PopulateFromBodyDelegate<TOperation> populate,
+        System.Text.Json.JsonSerializerOptions? jsonOptions,
+        byte[] rentedBuffer,
+        int bodyLength,
+        ValueTask<int> firstRead)
+    {
+        try
+        {
+            var totalRead = await firstRead.ConfigureAwait(false);
+
+            while (totalRead < bodyLength)
+            {
+                var bytesRead = await httpContext.Request.Body.ReadAsync(
+                    new Memory<byte>(rentedBuffer, totalRead, bodyLength - totalRead),
+                    cancellationToken).ConfigureAwait(false);
+                if (bytesRead == 0)
+                {
+                    break;
+                }
+
+                totalRead += bytesRead;
+            }
+
+            if (totalRead > 0)
+            {
+                try
+                {
+                    populate(new ReadOnlySpan<byte>(rentedBuffer, 0, totalRead), operation, jsonOptions);
+                }
+                catch (Exception ex) when (ex is System.Text.Json.JsonException or InvalidOperationException or NotSupportedException)
+                {
+                    return ToBodyBindingFailure(ex);
+                }
+            }
+
+            return null;
+        }
+        finally
+        {
+            System.Buffers.ArrayPool<byte>.Shared.Return(rentedBuffer);
+        }
+    }
+
+    /// <summary>
+    /// Slow path for chunked transfer encoding or unknown Content-Length bodies.
+    /// </summary>
+    private static async Task<OperationResult?> ReadJsonBodyChunkedAsync<TOperation>(
+        HttpContext httpContext,
+        CancellationToken cancellationToken,
+        TOperation operation,
+        PopulateFromBodyDelegate<TOperation> populate,
+        System.Text.Json.JsonSerializerOptions? jsonOptions)
+    {
         using var bodyStream = new MemoryStream();
         await httpContext.Request.Body.CopyToAsync(bodyStream, cancellationToken).ConfigureAwait(false);
 
