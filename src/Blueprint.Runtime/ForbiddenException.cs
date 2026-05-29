@@ -10,9 +10,9 @@ public class ForbiddenException : ApiException
     /// <summary>
     /// Initializes a new instance of the <see cref="ForbiddenException"/> class.
     /// </summary>
-    /// <param name="message">A description of why access was denied.</param>
+    /// <param name="message">A description of why access was denied (used as the problem detail).</param>
     public ForbiddenException(string message)
-        : base(message, 403)
+        : base("Forbidden", "unauthorized", message, 403)
     {
     }
 
@@ -30,10 +30,10 @@ public class ForbiddenException : ApiException
     /// <summary>
     /// Initializes a new instance of the <see cref="ForbiddenException"/> class.
     /// </summary>
-    /// <param name="message">A description of why access was denied.</param>
+    /// <param name="message">A description of why access was denied (used as the problem detail).</param>
     /// <param name="innerException">The inner exception.</param>
     public ForbiddenException(string message, Exception innerException)
-        : base(message, innerException, 403)
+        : base("Forbidden", "unauthorized", message, 403, innerException)
     {
     }
 
