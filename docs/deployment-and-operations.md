@@ -158,6 +158,66 @@ builder.Logging.AddFilter("Blueprint", LogLevel.Information);
 
 Add a health check endpoint for load balancer probes. The sample app demonstrates this with a `PlainTextResult("healthy")` handler at `/system/health`.
 
+## Performance tuning
+
+### GC configuration
+
+Blueprint's per-request allocation is ~264 bytes (context + result + operation instance). At
+10K req/s this triggers Gen0 GC every ~2–6 seconds with <1ms pause under Server GC. For
+maximum throughput:
+
+```xml
+<!-- In .csproj or runtimeconfig.json -->
+<PropertyGroup>
+  <ServerGarbageCollection>true</ServerGarbageCollection>
+  <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+</PropertyGroup>
+```
+
+For latency-sensitive workloads (p99 targets <5ms), consider DATAS (Dynamic Adaptation To
+Application Sizes) which is the default in .NET 9+:
+
+```json
+{
+  "configProperties": {
+    "System.GC.DynamicAdaptationMode": 1
+  }
+}
+```
+
+### Kestrel configuration
+
+Blueprint serializes responses to a buffer and writes with `Content-Length`, enabling
+Kestrel's non-chunked fast path. For maximum throughput:
+
+```csharp
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Limits.MaxConcurrentConnections = null; // unlimited
+    options.Limits.MaxRequestBodySize = 10_485_760; // 10MB
+    options.AddServerHeader = false; // saves ~20 bytes per response
+});
+```
+
+### Thread pool
+
+Blueprint pipelines are fully async with sync-completion fast paths. The default thread
+pool settings work well. For high-concurrency bursts (>1000 concurrent):
+
+```csharp
+ThreadPool.SetMinThreads(workerThreads: Environment.ProcessorCount * 2, completionPortThreads: Environment.ProcessorCount);
+```
+
+### Response characteristics
+
+| Metric | Value | Notes |
+|--------|-------|-------|
+| Per-request allocation | ~264 B | Context + result + operation |
+| Pipeline execution | 231–493 ns | Depends on module count |
+| JSON serialization | Buffer + sync write | No chunked encoding overhead |
+| Framework overhead vs raw | −32% to −37% | Blueprint is faster than minimal API |
+| p99 @ 200 concurrent | <1 ms | No lock contention |
+
 ## Containerization
 
 ### Docker
