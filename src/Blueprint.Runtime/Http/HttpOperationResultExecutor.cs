@@ -65,6 +65,9 @@ public class HttpOperationResultExecutor
 
     private static readonly BlueprintHttpOptions _defaultHttpOptions = new();
 
+    private static readonly Task<bool> _trueTask = Task.FromResult(true);
+    private static readonly Task<bool> _falseTask = Task.FromResult(false);
+
     // Thread-local ArrayBufferWriter to avoid per-request allocation for resource event envelope
     // serialization. Cleared after each use so the buffer is reusable within the same thread.
     [ThreadStatic]
@@ -77,13 +80,16 @@ public class HttpOperationResultExecutor
 
     /// <summary>
     /// Attempts to execute the supplied semantic result against the HTTP response.
+    /// Non-async entry point to avoid state machine allocation on the OkResult hot path
+    /// (~80% of requests). Falls through to an async implementation for branches that
+    /// genuinely need to await (validation, file streams, etc.).
     /// </summary>
     /// <param name="httpContext">The current HTTP context.</param>
     /// <param name="operationContext">The Blueprint operation context for the current execution.</param>
     /// <param name="result">The semantic result to translate.</param>
     /// <param name="httpOptions">The active HTTP host options for the current mapping.</param>
     /// <returns><see langword="true"/> when the result was translated by this executor; otherwise <see langword="false"/>.</returns>
-    public async Task<bool> TryExecuteAsync(HttpContext httpContext, ApiOperationContext operationContext, OperationResult result, BlueprintHttpOptions? httpOptions = null)
+    public Task<bool> TryExecuteAsync(HttpContext httpContext, ApiOperationContext operationContext, OperationResult result, BlueprintHttpOptions? httpOptions = null)
     {
         ArgumentNullException.ThrowIfNull(httpContext);
         ArgumentNullException.ThrowIfNull(operationContext);
@@ -94,54 +100,131 @@ public class HttpOperationResultExecutor
         switch (result)
         {
             // OkResult first — the most common path (~80%+ of requests succeed).
-            // Checking it first saves ~9 type comparisons per successful request.
             case OkResult okResult:
-                if (okResult is INotModifiedResult notModifiedResult)
-                {
-                    httpContext.Response.StatusCode = StatusCodes.Status304NotModified;
-                    if (okResult.HasHeaders)
-                    {
-                        foreach (var header in okResult.Headers)
-                        {
-                            httpContext.Response.Headers[header.Key] = header.Value;
-                        }
-                    }
+                return this.HandleOkResult(httpContext, operationContext, okResult);
 
-                    return true;
-                }
-
-                if (okResult.Content is null)
-                {
-                    throw new InvalidOperationException("OkResult must not carry null content when translated by the HTTP executor.");
-                }
-
-                httpContext.Response.StatusCode = StatusCodes.Status200OK;
-                httpContext.Response.ContentType = JsonContentType;
-                if (okResult.HasHeaders)
-                {
-                    foreach (var header in okResult.Headers)
-                    {
-                        httpContext.Response.Headers[header.Key] = header.Value;
-                    }
-                }
-
-                await WriteJsonAsync(httpContext, operationContext, okResult.Content).ConfigureAwait(false);
-                return true;
+            // Status-only results that require no I/O (zero allocation path).
             case HttpPipelineShortCircuitResult:
-                // Response was already written by the generated pipeline (e.g. binding failure).
-                return true;
+            case NoResultOperationResult:
+                return _trueTask;
+
+            case HttpNoContentResult:
+                httpContext.Response.StatusCode = StatusCodes.Status204NoContent;
+                return _trueTask;
+
+            case HttpAcceptedResult:
+                httpContext.Response.StatusCode = StatusCodes.Status202Accepted;
+                return _trueTask;
+
+            case KeyOnlyResourceEventResult keyOnlyEvent:
+                httpContext.Response.StatusCode = MapChangeTypeToStatusCode(keyOnlyEvent.ChangeType);
+                return _trueTask;
+
+            case StatusCodeResult statusCodeResult:
+                httpContext.Response.StatusCode = statusCodeResult.StatusCode;
+                return _trueTask;
+
+            case RedirectResult redirectResult:
+                httpContext.Response.StatusCode = redirectResult.StatusCode;
+                httpContext.Response.Headers["Location"] = redirectResult.Url;
+                return _trueTask;
+
+            // Pre-serialized static error responses — Body.WriteAsync often completes synchronously.
             case UnauthenticatedResult:
                 httpContext.Response.StatusCode = StatusCodes.Status401Unauthorized;
                 httpContext.Response.ContentType = ProblemJsonContentType;
                 httpContext.Response.ContentLength = _unauthorizedProblemBytes.Length;
-                await httpContext.Response.Body.WriteAsync(_unauthorizedProblemBytes, httpContext.RequestAborted).ConfigureAwait(false);
-                return true;
+                return WritePreserializedAndReturnTrue(httpContext, _unauthorizedProblemBytes);
+
             case ForbiddenResult:
                 httpContext.Response.StatusCode = StatusCodes.Status403Forbidden;
                 httpContext.Response.ContentType = ProblemJsonContentType;
                 httpContext.Response.ContentLength = _forbiddenProblemBytes.Length;
-                await httpContext.Response.Body.WriteAsync(_forbiddenProblemBytes, httpContext.RequestAborted).ConfigureAwait(false);
-                return true;
+                return WritePreserializedAndReturnTrue(httpContext, _forbiddenProblemBytes);
+
+            case UnsupportedMediaTypeResult:
+                httpContext.Response.StatusCode = StatusCodes.Status415UnsupportedMediaType;
+                httpContext.Response.ContentType = ProblemJsonContentType;
+                httpContext.Response.ContentLength = _unsupportedMediaTypeProblemBytes.Length;
+                return WritePreserializedAndReturnTrue(httpContext, _unsupportedMediaTypeProblemBytes);
+
+            // Everything else uses the async slow path.
+            default:
+                return this.TryExecuteSlowPathAsync(httpContext, operationContext, result, httpOptions);
+        }
+    }
+
+    private Task<bool> HandleOkResult(HttpContext httpContext, ApiOperationContext operationContext, OkResult okResult)
+    {
+        if (okResult is INotModifiedResult)
+        {
+            httpContext.Response.StatusCode = StatusCodes.Status304NotModified;
+            if (okResult.HasHeaders)
+            {
+                foreach (var header in okResult.Headers)
+                {
+                    httpContext.Response.Headers[header.Key] = header.Value;
+                }
+            }
+
+            return _trueTask;
+        }
+
+        if (okResult.Content is null)
+        {
+            throw new InvalidOperationException("OkResult must not carry null content when translated by the HTTP executor.");
+        }
+
+        httpContext.Response.StatusCode = StatusCodes.Status200OK;
+        httpContext.Response.ContentType = JsonContentType;
+        if (okResult.HasHeaders)
+        {
+            foreach (var header in okResult.Headers)
+            {
+                httpContext.Response.Headers[header.Key] = header.Value;
+            }
+        }
+
+        var writeTask = WriteJsonAsync(httpContext, operationContext, okResult.Content);
+        if (writeTask.IsCompleted)
+        {
+            return _trueTask;
+        }
+
+        return AwaitWriteAndReturnTrue(writeTask);
+    }
+
+    private static async Task<bool> AwaitWriteAndReturnTrue(Task writeTask)
+    {
+        await writeTask.ConfigureAwait(false);
+        return true;
+    }
+
+    private static Task<bool> WritePreserializedAndReturnTrue(HttpContext httpContext, byte[] bytes)
+    {
+        var writeTask = httpContext.Response.Body.WriteAsync(bytes, httpContext.RequestAborted);
+        if (writeTask.IsCompletedSuccessfully)
+        {
+            return _trueTask;
+        }
+
+        return AwaitPreserializedWrite(writeTask);
+    }
+
+    private static async Task<bool> AwaitPreserializedWrite(ValueTask writeTask)
+    {
+        await writeTask.ConfigureAwait(false);
+        return true;
+    }
+
+    /// <summary>
+    /// Async slow path for less common result types that always require I/O (validation failures,
+    /// file streams, resource events, etc.).
+    /// </summary>
+    private async Task<bool> TryExecuteSlowPathAsync(HttpContext httpContext, ApiOperationContext operationContext, OperationResult result, BlueprintHttpOptions httpOptions)
+    {
+        switch (result)
+        {
             case ValidationFailedResult validationFailedResult when DescriptorSupportsFailureResult(operationContext.Descriptor, validationFailedResult):
                 await WriteValidationFailureAsync(httpContext, operationContext, validationFailedResult).ConfigureAwait(false);
                 return true;
@@ -155,12 +238,6 @@ public class HttpOperationResultExecutor
                     Type = "https://tools.ietf.org/html/rfc7231#section-6.5.1",
                     Detail = bindingFailureResult.Reason,
                 }).ConfigureAwait(false);
-                return true;
-            case UnsupportedMediaTypeResult:
-                httpContext.Response.StatusCode = StatusCodes.Status415UnsupportedMediaType;
-                httpContext.Response.ContentType = ProblemJsonContentType;
-                httpContext.Response.ContentLength = _unsupportedMediaTypeProblemBytes.Length;
-                await httpContext.Response.Body.WriteAsync(_unsupportedMediaTypeProblemBytes, httpContext.RequestAborted).ConfigureAwait(false);
                 return true;
             case CreatedResult createdResult:
                 httpContext.Response.StatusCode = StatusCodes.Status201Created;
@@ -186,12 +263,6 @@ public class HttpOperationResultExecutor
             case UnhandledExceptionResult unhandledExceptionResult when DescriptorSupportsFailureResult(operationContext.Descriptor, unhandledExceptionResult):
                 await WriteUnhandledExceptionAsync(httpContext, operationContext, unhandledExceptionResult, httpOptions).ConfigureAwait(false);
                 return true;
-            case NoResultOperationResult:
-                httpContext.Response.StatusCode = StatusCodes.Status200OK;
-                return true;
-            case KeyOnlyResourceEventResult keyOnlyEvent:
-                httpContext.Response.StatusCode = MapChangeTypeToStatusCode(keyOnlyEvent.ChangeType);
-                return true;
             case IDeferredResourceEventResult deferredEvent:
                 httpContext.Response.StatusCode = MapChangeTypeToStatusCode(deferredEvent.ChangeType);
                 httpContext.Response.ContentType = JsonContentType;
@@ -212,22 +283,12 @@ public class HttpOperationResultExecutor
 
                 await WriteResourceEventEnvelopeAsync(httpContext, operationContext, resourceEventResult).ConfigureAwait(false);
                 return true;
-            case HttpNoContentResult:
-                httpContext.Response.StatusCode = StatusCodes.Status204NoContent;
-                return true;
-            case HttpAcceptedResult:
-                httpContext.Response.StatusCode = StatusCodes.Status202Accepted;
-                return true;
             case PlainTextResult plainTextResult:
                 httpContext.Response.StatusCode = (int)plainTextResult.StatusCode;
                 httpContext.Response.ContentType = string.Equals(plainTextResult.ContentType, "text/plain", StringComparison.Ordinal)
                     ? PlainTextContentType
                     : $"{plainTextResult.ContentType}; charset=utf-8";
                 await httpContext.Response.WriteAsync(plainTextResult.Content, httpContext.RequestAborted).ConfigureAwait(false);
-                return true;
-            case RedirectResult redirectResult:
-                httpContext.Response.StatusCode = redirectResult.StatusCode;
-                httpContext.Response.Headers["Location"] = redirectResult.Url;
                 return true;
             case FileStreamResult fileStreamResult:
                 httpContext.Response.StatusCode = StatusCodes.Status200OK;
@@ -238,9 +299,6 @@ public class HttpOperationResultExecutor
                 }
 
                 await fileStreamResult.Stream.CopyToAsync(httpContext.Response.Body, httpContext.RequestAborted).ConfigureAwait(false);
-                return true;
-            case StatusCodeResult statusCodeResult:
-                httpContext.Response.StatusCode = statusCodeResult.StatusCode;
                 return true;
             case ResourceEvent resourceEvent:
                 httpContext.Response.StatusCode = MapResourceEventChangeTypeToStatusCode(resourceEvent.ChangeType);
