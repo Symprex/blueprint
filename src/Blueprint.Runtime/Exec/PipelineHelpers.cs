@@ -658,6 +658,27 @@ public static class PipelineHelpers
     }
 
     /// <summary>
+    /// Context-aware variant of <see cref="CheckHttpAuthenticated(Microsoft.AspNetCore.Http.HttpContext)"/>
+    /// that skips the authentication check when the context has <see cref="ApiOperationContext.SkipAuthorisation"/>
+    /// set (e.g. nested SelfQuery execution from anonymous parent operations).
+    /// </summary>
+    /// <param name="httpContext">The HTTP context for the current request.</param>
+    /// <param name="context">The operation context whose <c>SkipAuthorisation</c> flag is checked.</param>
+    /// <returns><c>null</c> when auth is skipped or the user is authenticated; <see cref="UnauthenticatedResult.Instance"/> otherwise.</returns>
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+    public static OperationResult? CheckHttpAuthenticated(Microsoft.AspNetCore.Http.HttpContext httpContext, ApiOperationContext context)
+    {
+        if (context.SkipAuthorisation)
+        {
+            return null;
+        }
+
+        return httpContext.User.Identity?.IsAuthenticated != true
+            ? UnauthenticatedResult.Instance
+            : null;
+    }
+
+    /// <summary>
     /// Runs the pre-cached <see cref="Authorization.IApiAuthoriser"/> and
     /// <see cref="Authorization.IOperationAuthoriser"/> arrays against the current operation.
     /// Returns <c>null</c> when all authorisers pass, or an <see cref="UnauthenticatedResult"/>
