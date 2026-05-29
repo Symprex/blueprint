@@ -260,7 +260,7 @@ public class HttpOperationResultExecutor
         "AOT",
         "IL3050",
         Justification = "Fallback serialization path uses runtime JSON serialization when the app-owned serializer context does not cover the response type. AOT consumers must ensure their JsonSerializerContext covers all response types.")]
-    private static async Task WriteJsonAsync(HttpContext httpContext, ApiOperationContext operationContext, object content)
+    private static Task WriteJsonAsync(HttpContext httpContext, ApiOperationContext operationContext, object content)
     {
         var serializerContext = operationContext.App.AppOwnedSerializerContext;
         var contentType = content.GetType();
@@ -271,12 +271,38 @@ public class HttpOperationResultExecutor
 
         if (jsonTypeInfo is not null)
         {
-            await JsonSerializer.SerializeAsync(httpContext.Response.Body, content, jsonTypeInfo, httpContext.RequestAborted).ConfigureAwait(false);
+            // Serialize to thread-local buffer to enable Content-Length (avoids chunked encoding)
+            // and eliminate the internal buffer allocation within SerializeAsync.
+            var buffer = _threadLocalBuffer ??= new System.Buffers.ArrayBufferWriter<byte>(512);
+            buffer.Clear();
+
+            var writer = _threadLocalWriter;
+            if (writer is null)
+            {
+                writer = new Utf8JsonWriter(buffer);
+                _threadLocalWriter = writer;
+            }
+            else
+            {
+                writer.Reset(buffer);
+            }
+
+            JsonSerializer.Serialize(writer, content, jsonTypeInfo);
+            writer.Flush();
+
+            httpContext.Response.ContentLength = buffer.WrittenCount;
+
+            // WriteAsync on response body completes synchronously for small payloads in Kestrel.
+            // Avoid async state machine allocation by checking IsCompletedSuccessfully.
+            var writeTask = httpContext.Response.Body.WriteAsync(buffer.WrittenMemory, httpContext.RequestAborted);
+            return writeTask.IsCompletedSuccessfully
+                ? Task.CompletedTask
+                : writeTask.AsTask();
         }
         else
         {
             var serializerOptions = serializerContext?.Options ?? _emptyFallbackOptions;
-            await JsonSerializer.SerializeAsync(httpContext.Response.Body, content, contentType, CreateFallbackSerializerOptions(serializerOptions), httpContext.RequestAborted).ConfigureAwait(false);
+            return JsonSerializer.SerializeAsync(httpContext.Response.Body, content, contentType, CreateFallbackSerializerOptions(serializerOptions), httpContext.RequestAborted);
         }
     }
 
