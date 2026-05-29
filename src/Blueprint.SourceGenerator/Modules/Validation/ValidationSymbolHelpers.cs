@@ -620,6 +620,18 @@ internal static class ValidationSymbolHelpers
     {
         elementType = null;
 
+        // Handle arrays (T[]) which are IArrayTypeSymbol, not INamedTypeSymbol
+        if (propertyType is IArrayTypeSymbol arrayType)
+        {
+            if (arrayType.ElementType is INamedTypeSymbol arrayElement && IsValidatableComplexType(arrayElement))
+            {
+                elementType = arrayElement;
+                return true;
+            }
+
+            return false;
+        }
+
         if (propertyType is not INamedTypeSymbol namedType)
         {
             return false;

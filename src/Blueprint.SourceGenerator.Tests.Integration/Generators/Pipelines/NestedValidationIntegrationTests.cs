@@ -120,6 +120,52 @@ public class NestedValidationIntegrationTests
         NestedChildListValidationOperation.HandlerCallCount.Should().Be(1);
     }
 
+    [Fact]
+    public async Task When_array_property_has_invalid_items_then_pipeline_returns_validation_failure()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
+        var pipeline = executor.GetPipeline(typeof(NestedChildArrayValidationOperation));
+        var context = CreateContext(app, NestedChildArrayValidationOperation.Configure());
+
+        ((NestedChildArrayValidationOperation)context.Operation).Name = "Valid";
+        ((NestedChildArrayValidationOperation)context.Operation).Items =
+        [
+            new ChildAddress { Street = "Valid", City = "Valid" },
+            new ChildAddress { Street = null!, City = null! },
+        ];
+
+        NestedChildArrayValidationOperation.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<ValidationFailedResult>();
+        NestedChildArrayValidationOperation.HandlerCallCount.Should().Be(0);
+        var validationResults = ((ValidationFailedResult)result).ValidationResults;
+        var memberNames = validationResults.SelectMany(static r => r.MemberNames).ToList();
+        memberNames.Should().Contain("items[1].street");
+        memberNames.Should().Contain("items[1].city");
+    }
+
+    [Fact]
+    public async Task When_required_array_property_is_null_then_pipeline_returns_required_validation_failure()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
+        var pipeline = executor.GetPipeline(typeof(NestedChildArrayValidationOperation));
+        var context = CreateContext(app, NestedChildArrayValidationOperation.Configure());
+
+        ((NestedChildArrayValidationOperation)context.Operation).Name = "Valid";
+        ((NestedChildArrayValidationOperation)context.Operation).Items = null!;
+
+        NestedChildArrayValidationOperation.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<ValidationFailedResult>();
+        NestedChildArrayValidationOperation.HandlerCallCount.Should().Be(0);
+    }
+
     private static ApiOperationContext CreateContext(BlueprintApp app, ApiOperationDescriptor descriptor)
     {
         return new ApiOperationContext(new EmptyServiceProvider(), app, descriptor, CancellationToken.None);
@@ -182,6 +228,32 @@ public partial class NestedChildListValidationOperation : ICommand<string>
     }
 
     public static Task<string> HandleAsync(NestedChildListValidationOperation operation)
+    {
+        HandlerCallCount++;
+        return Task.FromResult(operation.Name ?? string.Empty);
+    }
+}
+
+/// <summary>
+/// Proves that array properties (T[]) with validatable element types are recursively validated,
+/// and that [Required] on the array itself coexists with child element validation.
+/// </summary>
+public partial class NestedChildArrayValidationOperation : ICommand<string>
+{
+    public static int HandlerCallCount { get; private set; }
+
+    [Required]
+    public string? Name { get; set; }
+
+    [Required]
+    public ChildAddress[] Items { get; set; } = default!;
+
+    public static void Reset()
+    {
+        HandlerCallCount = 0;
+    }
+
+    public static Task<string> HandleAsync(NestedChildArrayValidationOperation operation)
     {
         HandlerCallCount++;
         return Task.FromResult(operation.Name ?? string.Empty);

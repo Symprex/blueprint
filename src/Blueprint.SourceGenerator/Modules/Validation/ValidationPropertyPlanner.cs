@@ -108,19 +108,49 @@ internal static class ValidationPropertyPlanner
             if (allAttributes.Any(static attribute => ValidationSymbolHelpers.IsDisplayNameAffectingAttribute(attribute.AttributeClass)))
             {
                 properties.Add(new RuntimeFallbackPropertyValidationPlan(property.Name, propertyAccess));
+                AppendChildValidationIfApplicable(properties, property, propertyAccess);
                 continue;
             }
 
             if (TryCreateFastPathPlan(property, propertyAccess, validationAttributeList, out var fastPathPlan))
             {
                 properties.Add(fastPathPlan);
+                AppendChildValidationIfApplicable(properties, property, propertyAccess);
                 continue;
             }
 
             properties.Add(new RuntimeFallbackPropertyValidationPlan(property.Name, propertyAccess));
+            AppendChildValidationIfApplicable(properties, property, propertyAccess);
         }
 
         return new ValidationPipelinePlan(RequiresWholeObjectFallback: false, ImplementsIValidatableObject: implementsIValidatableObject, Properties: properties);
+    }
+
+    /// <summary>
+    /// When a property has its own validation attributes (e.g. [Required]) AND is also a validatable
+    /// collection or complex child type, we need to emit both the property-level validation and the
+    /// recursive child validation. This appends the child validation plan entry after the property's
+    /// own plan entry.
+    /// </summary>
+    private static void AppendChildValidationIfApplicable(
+        List<PropertyValidationPlan> properties,
+        IPropertySymbol property,
+        string propertyAccess)
+    {
+        if (ValidationSymbolHelpers.TryGetValidatableListElementType(property.Type, out var elementType))
+        {
+            properties.Add(new ChildListValidationPlan(
+                property.Name,
+                propertyAccess,
+                elementType!.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)));
+        }
+        else if (ValidationSymbolHelpers.IsValidatableComplexType(property.Type))
+        {
+            properties.Add(new ChildObjectValidationPlan(
+                property.Name,
+                propertyAccess,
+                property.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)));
+        }
     }
 
     private static bool TryCreateFastPathPlan(
