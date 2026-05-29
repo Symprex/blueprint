@@ -93,59 +93,8 @@ public class HttpOperationResultExecutor
 
         switch (result)
         {
-            case UnauthenticatedResult:
-                httpContext.Response.StatusCode = StatusCodes.Status401Unauthorized;
-                httpContext.Response.ContentType = ProblemJsonContentType;
-                httpContext.Response.ContentLength = _unauthorizedProblemBytes.Length;
-                await httpContext.Response.Body.WriteAsync(_unauthorizedProblemBytes, httpContext.RequestAborted).ConfigureAwait(false);
-                return true;
-            case ForbiddenResult:
-                httpContext.Response.StatusCode = StatusCodes.Status403Forbidden;
-                httpContext.Response.ContentType = ProblemJsonContentType;
-                httpContext.Response.ContentLength = _forbiddenProblemBytes.Length;
-                await httpContext.Response.Body.WriteAsync(_forbiddenProblemBytes, httpContext.RequestAborted).ConfigureAwait(false);
-                return true;
-            case BindingFailureResult bindingFailureResult:
-                httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
-                httpContext.Response.ContentType = ProblemJsonContentType;
-                await WriteJsonAsync(httpContext, operationContext, new MvcProblemDetails
-                {
-                    Status = StatusCodes.Status400BadRequest,
-                    Title = "Bad Request",
-                    Type = "https://tools.ietf.org/html/rfc7231#section-6.5.1",
-                    Detail = bindingFailureResult.Reason,
-                }).ConfigureAwait(false);
-                return true;
-            case UnsupportedMediaTypeResult:
-                httpContext.Response.StatusCode = StatusCodes.Status415UnsupportedMediaType;
-                httpContext.Response.ContentType = ProblemJsonContentType;
-                httpContext.Response.ContentLength = _unsupportedMediaTypeProblemBytes.Length;
-                await httpContext.Response.Body.WriteAsync(_unsupportedMediaTypeProblemBytes, httpContext.RequestAborted).ConfigureAwait(false);
-                return true;
-            case HttpPipelineShortCircuitResult:
-                // Response was already written by the generated pipeline (e.g. binding failure).
-                return true;
-            case CreatedResult createdResult:
-                httpContext.Response.StatusCode = StatusCodes.Status201Created;
-                httpContext.Response.ContentType = JsonContentType;
-                TrySetLocationHeader(httpContext, createdResult.Content);
-                await WriteJsonAsync(httpContext, operationContext, createdResult.Content).ConfigureAwait(false);
-                return true;
-            case AcceptedResult acceptedResult:
-                httpContext.Response.StatusCode = StatusCodes.Status202Accepted;
-                httpContext.Response.ContentType = JsonContentType;
-                await WriteJsonAsync(httpContext, operationContext, acceptedResult.Content).ConfigureAwait(false);
-                return true;
-            case ConflictResult conflictResult:
-                httpContext.Response.StatusCode = StatusCodes.Status409Conflict;
-                httpContext.Response.ContentType = JsonContentType;
-                await WriteJsonAsync(httpContext, operationContext, conflictResult.Content).ConfigureAwait(false);
-                return true;
-            case NotFoundResult notFoundResult:
-                httpContext.Response.StatusCode = StatusCodes.Status404NotFound;
-                httpContext.Response.ContentType = JsonContentType;
-                await WriteJsonAsync(httpContext, operationContext, notFoundResult.Content).ConfigureAwait(false);
-                return true;
+            // OkResult first — the most common path (~80%+ of requests succeed).
+            // Checking it first saves ~9 type comparisons per successful request.
             case OkResult okResult:
                 if (okResult is INotModifiedResult notModifiedResult)
                 {
@@ -178,8 +127,61 @@ public class HttpOperationResultExecutor
 
                 await WriteJsonAsync(httpContext, operationContext, okResult.Content).ConfigureAwait(false);
                 return true;
+            case HttpPipelineShortCircuitResult:
+                // Response was already written by the generated pipeline (e.g. binding failure).
+                return true;
+            case UnauthenticatedResult:
+                httpContext.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                httpContext.Response.ContentType = ProblemJsonContentType;
+                httpContext.Response.ContentLength = _unauthorizedProblemBytes.Length;
+                await httpContext.Response.Body.WriteAsync(_unauthorizedProblemBytes, httpContext.RequestAborted).ConfigureAwait(false);
+                return true;
+            case ForbiddenResult:
+                httpContext.Response.StatusCode = StatusCodes.Status403Forbidden;
+                httpContext.Response.ContentType = ProblemJsonContentType;
+                httpContext.Response.ContentLength = _forbiddenProblemBytes.Length;
+                await httpContext.Response.Body.WriteAsync(_forbiddenProblemBytes, httpContext.RequestAborted).ConfigureAwait(false);
+                return true;
             case ValidationFailedResult validationFailedResult when DescriptorSupportsFailureResult(operationContext.Descriptor, validationFailedResult):
                 await WriteValidationFailureAsync(httpContext, operationContext, validationFailedResult).ConfigureAwait(false);
+                return true;
+            case BindingFailureResult bindingFailureResult:
+                httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
+                httpContext.Response.ContentType = ProblemJsonContentType;
+                await WriteJsonAsync(httpContext, operationContext, new MvcProblemDetails
+                {
+                    Status = StatusCodes.Status400BadRequest,
+                    Title = "Bad Request",
+                    Type = "https://tools.ietf.org/html/rfc7231#section-6.5.1",
+                    Detail = bindingFailureResult.Reason,
+                }).ConfigureAwait(false);
+                return true;
+            case UnsupportedMediaTypeResult:
+                httpContext.Response.StatusCode = StatusCodes.Status415UnsupportedMediaType;
+                httpContext.Response.ContentType = ProblemJsonContentType;
+                httpContext.Response.ContentLength = _unsupportedMediaTypeProblemBytes.Length;
+                await httpContext.Response.Body.WriteAsync(_unsupportedMediaTypeProblemBytes, httpContext.RequestAborted).ConfigureAwait(false);
+                return true;
+            case CreatedResult createdResult:
+                httpContext.Response.StatusCode = StatusCodes.Status201Created;
+                httpContext.Response.ContentType = JsonContentType;
+                TrySetLocationHeader(httpContext, createdResult.Content);
+                await WriteJsonAsync(httpContext, operationContext, createdResult.Content).ConfigureAwait(false);
+                return true;
+            case AcceptedResult acceptedResult:
+                httpContext.Response.StatusCode = StatusCodes.Status202Accepted;
+                httpContext.Response.ContentType = JsonContentType;
+                await WriteJsonAsync(httpContext, operationContext, acceptedResult.Content).ConfigureAwait(false);
+                return true;
+            case ConflictResult conflictResult:
+                httpContext.Response.StatusCode = StatusCodes.Status409Conflict;
+                httpContext.Response.ContentType = JsonContentType;
+                await WriteJsonAsync(httpContext, operationContext, conflictResult.Content).ConfigureAwait(false);
+                return true;
+            case NotFoundResult notFoundResult:
+                httpContext.Response.StatusCode = StatusCodes.Status404NotFound;
+                httpContext.Response.ContentType = JsonContentType;
+                await WriteJsonAsync(httpContext, operationContext, notFoundResult.Content).ConfigureAwait(false);
                 return true;
             case UnhandledExceptionResult unhandledExceptionResult when DescriptorSupportsFailureResult(operationContext.Descriptor, unhandledExceptionResult):
                 await WriteUnhandledExceptionAsync(httpContext, operationContext, unhandledExceptionResult, httpOptions).ConfigureAwait(false);
