@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Concurrent;
 
+using Blueprint.Model;
 using Blueprint.Runtime.Exec;
 
 using Microsoft.Extensions.Primitives;
@@ -151,7 +152,7 @@ public static class ResourceExpansionRuntime
 
         var enumerable = isEnumerable
             ? (IEnumerable)propertyValue
-            : new[] { propertyValue };
+            : CreateSingleItemArray(propertyValue, expandableResourceType);
 
         await matchingExpander.ExpandAsync(
             context,
@@ -215,5 +216,19 @@ public static class ResourceExpansionRuntime
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Creates a single-element array typed as <c>Expandable&lt;T&gt;[]</c> so that expanders can safely cast
+    /// the <see cref="IEnumerable"/> parameter to <c>IEnumerable&lt;Expandable&lt;T&gt;&gt;</c>.
+    /// </summary>
+    private static IEnumerable CreateSingleItemArray(object value, Type expandableResourceType)
+    {
+#pragma warning disable IL3050 // Blueprint does not target Native AOT
+        var expandableType = typeof(Expandable<>).MakeGenericType(expandableResourceType);
+        var array = Array.CreateInstance(expandableType, 1);
+#pragma warning restore IL3050
+        array.SetValue(value, 0);
+        return array;
     }
 }
