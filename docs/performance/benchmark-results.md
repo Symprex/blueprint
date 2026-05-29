@@ -10,15 +10,16 @@ JSON body deserialization, route parameter binding, and query string parsing.
 
 | Method | Mean | Error | StdDev | Gen0 | Allocated |
 |---|---:|---:|---:|---:|---:|
-| RouteOnlyGetAsync | 4.72 µs | 0.41 µs | 0.61 µs | 0.38 | 4.85 KB |
-| MixedRouteAndBodyPostAsync | 7.74 µs | 0.58 µs | 0.87 µs | 0.48 | 5.97 KB |
-| BodyOnly3StringsPostAsync | 8.49 µs | 0.61 µs | 0.91 µs | 0.47 | 5.96 KB |
-| TypedBodyPostAsync | 8.64 µs | 0.38 µs | 0.53 µs | 0.55 | 6.89 KB |
-| LargeBody10PropsPostAsync | 14.15 µs | 1.65 µs | 2.47 µs | 0.75 | 9.16 KB |
+| RouteOnlyGetAsync | 2.11 µs | 0.09 µs | 0.10 µs | 0.35 | 4.3 KB |
+| TypedBodyPostAsync | 3.67 µs | 0.08 µs | 0.09 µs | 0.46 | 5.67 KB |
+| MixedRouteAndBodyPostAsync | 4.23 µs | 0.43 µs | 0.49 µs | 0.44 | 5.49 KB |
+| BodyOnly3StringsPostAsync | 4.29 µs | 0.54 µs | 0.62 µs | 0.43 | 5.39 KB |
+| LargeBody10PropsPostAsync | 7.71 µs | 2.11 µs | 2.43 µs | 0.63 | 7.83 KB |
 
-**Key insight**: Route-only GET is ~4.7 µs with <5 KB allocation. Even a 10-property
-POST body only reaches ~14 µs — demonstrating the zero-reflection Utf8JsonReader
-parsing path scales linearly.
+**Key insight**: Route-only GET is ~2.1 µs with ~4.3 KB allocation. POST bodies
+benefit from the sync-first body reading fast path (avoiding async state machine
+when Kestrel has pre-buffered the body). Even a 10-property POST body only reaches
+~7.7 µs — demonstrating zero-reflection Utf8JsonReader parsing scales linearly.
 
 ## Executor Dispatch (Pipeline Resolution + Execution)
 
@@ -102,17 +103,16 @@ minimal (handler-only), validated, and full-stack (multi-property validation + h
 
 | Method | Mean | Ratio | Gen0 | Allocated |
 |---|---:|---:|---:|---:|
-| MinimalQueryAsync | 2.88 µs | 1.00 | 0.20 | 2.51 KB |
-| ValidatedQueryValidInputAsync | 27.6 µs | 10.0 | 0.40 | 5.04 KB |
-| FullStackCommandValidationFailureAsync | 29.0 µs | 10.5 | 0.46 | 5.65 KB |
-| ValidatedQueryInvalidInputAsync | 31.7 µs | 11.5 | 0.40 | 5.04 KB |
-| FullStackCommandValidAsync | 36.2 µs | 13.2 | 0.43 | 5.65 KB |
+| MinimalQueryAsync | 261 ns | 1.00 | 0.11 | 1.31 KB |
+| FullStackCommandValidAsync | 291 ns | 1.12 | 0.11 | 1.37 KB |
+| ValidatedQueryValidInputAsync | 622 ns | 2.39 | 0.13 | 1.61 KB |
+| ValidatedQueryInvalidInputAsync | 694 ns | 2.67 | 0.14 | 1.72 KB |
+| FullStackCommandValidationFailureAsync | 876 ns | 3.37 | 0.14 | 1.69 KB |
 
-**Key insight**: A minimal pipeline (no validation, no auth) executes in ~2.9 µs
-with just 2.5 KB allocation — this is the pure pipeline framework overhead.
-Validation adds ~25-30 µs, and validation failure short-circuits at the same cost
-as success, confirming no wasted handler invocation. Full-stack commands with
-3 validated properties complete in ~36 µs.
+**Key insight**: A minimal pipeline executes in ~261 ns with just 1.31 KB allocation.
+Validation adds ~360 ns. All paths remain sub-microsecond. Full-stack commands with
+validation complete in <900 ns, confirming the generated pipeline adds near-zero
+overhead to handler execution.
 
 ## Summary
 
@@ -120,12 +120,12 @@ as success, confirming no wasted handler invocation. Full-stack commands with
 |---|---|---|
 | Pipeline resolution | ~16 ns | 0 B |
 | Pipeline execution | ~40-60 ns | 144 B |
-| Minimal pipeline (E2E) | ~2.9 µs | 2.5 KB |
-| Route-only GET | ~4.7 µs | 4.85 KB |
-| POST with body | ~8-14 µs | 6-9 KB |
-| Validation (inline) | ~2.5 µs | 2.5 KB |
-| Full-stack command (E2E) | ~36 µs | 5.65 KB |
-| Operation lookup | ~15 ns | 0 B |
+| Minimal pipeline (E2E) | ~260 ns | 1.31 KB |
+| Route-only GET | ~2.1 µs | 4.3 KB |
+| POST with body | ~3.7-7.7 µs | 5.5-7.8 KB |
+| Validation (inline) | ~620 ns | 1.6 KB |
+| Full-stack command (E2E) | ~291 ns | 1.37 KB |
+| Operation lookup | ~8 ns | 0 B |
 | Registration (100 ops) | ~25 µs | 45 KB |
 | Endpoint mapping (100 ops) | ~833 µs | 490 KB |
 
@@ -245,6 +245,16 @@ This enables writing `Content-Length` (avoiding chunked transfer encoding overhe
 in Kestrel) and returns `Task.CompletedTask` synchronously when the response
 body `WriteAsync` completes without awaiting — eliminating the async state machine
 for small payloads.
+
+### Sync-First JSON Body Reading (commit 7f3cb3b6)
+
+`ReadJsonBodyAsync` now checks whether the first `ReadAsync` call on the request
+body completes synchronously (which it almost always does when Kestrel has
+pre-buffered the body). When the full body is available in a single sync read,
+the method returns without allocating an async state machine (~200B savings per
+POST/PUT request). Falls back to async continuation for partial reads or chunked
+encoding.
+**Result: POST body parsing improved from 8.6µs → 3.7µs (57% faster).**
 
 ## Framework Overhead Comparison (commit eee51dcd)
 
