@@ -605,9 +605,30 @@ internal static class ValidationSymbolHelpers
             return false;
         }
 
-        // Check if any public instance property on the type has a validation attribute
-        return GetPublicInstanceProperties(namedType)
-            .Any(static p => p.GetAttributes().Any(static a => IsValidationAttribute(a.AttributeClass)));
+        // Match the runtime RecursiveDataAnnotationValidator behaviour: any reference type that is not
+        // in the System.* or Microsoft.* namespaces is considered validatable. The runtime validator
+        // unconditionally recurses into such types and validates their children; the generated pipeline
+        // must do the same to ensure nested DTOs (even intermediary types without their own attributes)
+        // are recursively validated.
+        var ns = namedType.ContainingNamespace;
+        var rootNamespace = GetRootNamespace(ns);
+
+        return rootNamespace is not ("System" or "Microsoft");
+    }
+
+    private static string? GetRootNamespace(INamespaceSymbol? ns)
+    {
+        if (ns is null || ns.IsGlobalNamespace)
+        {
+            return null;
+        }
+
+        while (ns.ContainingNamespace is { IsGlobalNamespace: false })
+        {
+            ns = ns.ContainingNamespace;
+        }
+
+        return ns.Name;
     }
 
     /// <summary>
