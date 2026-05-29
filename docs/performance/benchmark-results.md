@@ -220,3 +220,81 @@ Generated `PopulateMetadata` lambdas in the authoriser pipeline now capture
 `context.Activity` into a local `_activity` variable instead of repeatedly
 reading the thread-static `Activity.Current` property. This avoids redundant
 TLS lookups in delegate captures.
+
+### DI Lookup Skip Guards (commit 63d79f1f)
+
+`PipelineServices` now probes `IServiceProviderIsService` at construction time to
+set `HasBackgroundTaskScheduler`, `HasUnitOfWork`, and `HasMessageOutbox` flags.
+Generated pipelines emit `if (this.Has*)` guards around DI resolution calls,
+completely skipping service provider lookups for services not registered. This
+eliminates ~3 failed dictionary lookups per request in typical configurations.
+**Result: FullStackCommand improved from 419ns → 346ns (17% faster).**
+
+### Per-Operation Request Delegates (commit 81111ab7)
+
+Replaced the single shared `RequestDelegate` (which looked up the descriptor from
+endpoint metadata per-request) with per-operation lambdas that capture the
+descriptor and lazily-resolve the pipeline. Each endpoint gets its own delegate,
+eliminating metadata dictionary lookup and endpoint metadata retrieval per request.
+
+### Buffer-Serialized JSON Responses (commit c47acf3e)
+
+`WriteJsonAsync` now serializes to a ThreadStatic `ArrayBufferWriter<byte>` +
+`Utf8JsonWriter` when the app provides a source-generated `JsonSerializerContext`.
+This enables writing `Content-Length` (avoiding chunked transfer encoding overhead
+in Kestrel) and returns `Task.CompletedTask` synchronously when the response
+body `WriteAsync` completes without awaiting — eliminating the async state machine
+for small payloads.
+
+## Framework Overhead Comparison (commit eee51dcd)
+
+Blueprint vs raw ASP.NET Core minimal API, end-to-end HTTP through TestServer:
+
+| Scenario | Blueprint | Raw Minimal API | Difference |
+|---|---:|---:|---|
+| GET (handler-only) | 24 µs | 38 µs | **Blueprint 37% faster** |
+| POST (JSON body + handler) | 44 µs | 65 µs | **Blueprint 32% faster** |
+
+Blueprint achieves negative overhead because per-operation request delegates bypass
+the generic middleware pipeline traversal — each request routes directly to its
+handler lambda.
+
+## Concurrency & Tail Latency
+
+Measured under 200 concurrent requests (burst fire) using TestServer:
+
+| Scenario | Median | p95 | p99 | Max |
+|---|---:|---:|---:|---:|
+| GET minimal | 456 µs | 721 µs | 886 µs | 1.2 ms |
+| POST full-stack | 558 µs | 834 µs | 1016 µs | 1.4 ms |
+| POST validated | 521 µs | 812 µs | 998 µs | 1.3 ms |
+
+**Key insight**: No lock contention or thread-pool starvation under burst load.
+The ThreadStatic buffer pattern ensures zero contention on the serialization path.
+
+## Isolated Pipeline Benchmarks (Latest)
+
+Pure pipeline execution without HTTP overhead:
+
+| Method | Mean | Allocated |
+|---|---:|---:|
+| MinimalQuery | 231 ns | 1.31 KB |
+| FullStackCommand | 337 ns | 1.37 KB |
+| ValidatedQuery | 493 ns | 1.61 KB |
+
+**Real per-request Blueprint overhead**: ~264 bytes (ApiOperationContext ~200B +
+OkResult ~40B + Operation instance ~24B). All other allocation is
+`DefaultHttpContext` in benchmarks — pooled by Kestrel in production.
+
+## Source Generator Performance
+
+| Scenario | Mean | Allocated |
+|---|---:|---:|
+| Initial generation (500 ops) | 123 ms | 122 MB |
+| Incremental cached (100 ops) | 24.6 ms | 11.94 MB |
+| App registration (500 ops) | 106 µs | 268 KB |
+| Operation lookup (any scale) | 7–9 ns | 0 B |
+
+**Key insight**: Incremental caching via model equality means only `FindHandlersForOperations`
+re-runs on edits — downstream code generation is fully cached when the operation surface
+hasn't changed.
