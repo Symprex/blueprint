@@ -655,7 +655,7 @@ public class ValidationModuleIntegrationTests
         RequiredIfValidationOperation.HandlerCallCount.Should().Be(0);
         var validationResult = ((ValidationFailedResult)result).ValidationResults.Should().ContainSingle().Subject;
         validationResult.MemberNames.Should().Contain(nameof(RequiredIfValidationOperation.Name));
-        validationResult.ErrorMessage.Should().Be("The Name field is required.");
+        validationResult.ErrorMessage.Should().Be("The Name field is required if Enabled field is True.");
     }
 
     [Fact]
@@ -696,7 +696,7 @@ public class ValidationModuleIntegrationTests
         RequiredIfNotValidationOperation.HandlerCallCount.Should().Be(0);
         var validationResult = ((ValidationFailedResult)result).ValidationResults.Should().ContainSingle().Subject;
         validationResult.MemberNames.Should().Contain(nameof(RequiredIfNotValidationOperation.PaymentIntentId));
-        validationResult.ErrorMessage.Should().Be("The PaymentIntentId field is required.");
+        validationResult.ErrorMessage.Should().Be("The PaymentIntentId field is required if TokenId field is not null.");
     }
 
     [Fact]

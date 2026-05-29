@@ -10,7 +10,7 @@ namespace Blueprint.Validation;
 [AttributeUsage(AttributeTargets.Property, AllowMultiple = true)]
 public sealed class RequiredIfAttribute : ValidationAttribute
 {
-    private const string RequiredFieldMessage = "The {0} field is required.";
+    private const string RequiredFieldMessage = "The {0} field is required if {1} field is {2}.";
     private readonly HashSet<string?> _dependentValueTexts;
 
     /// <summary>
@@ -50,7 +50,8 @@ public sealed class RequiredIfAttribute : ValidationAttribute
     /// <inheritdoc />
     public override string FormatErrorMessage(string name)
     {
-        return string.Format(CultureInfo.CurrentCulture, this.ErrorMessageString, name);
+        var dependentValueDisplay = string.Join(" or ", this._dependentValueTexts.Select(static v => v ?? "null"));
+        return string.Format(CultureInfo.CurrentCulture, this.ErrorMessageString, name, this.DependentProperty, dependentValueDisplay);
     }
 
     /// <inheritdoc />
