@@ -51,6 +51,18 @@ public class HttpOperationResultExecutor
         Detail = "The request content type is not supported. Expected 'application/json'.",
     };
 
+    // Pre-serialized byte representations of the static error responses above.
+    // Writing pre-serialized bytes eliminates per-request JSON serialization, buffer rental,
+    // and Content-Length computation for the three most common error types.
+    private static readonly byte[] _unauthorizedProblemBytes = System.Text.Encoding.UTF8.GetBytes(
+        """{"type":"https://tools.ietf.org/html/rfc7235#section-3.1","title":"Unauthorized","status":401,"detail":"Authentication is required to access this resource."}""");
+
+    private static readonly byte[] _forbiddenProblemBytes = System.Text.Encoding.UTF8.GetBytes(
+        """{"type":"https://tools.ietf.org/html/rfc7231#section-6.5.3","title":"Forbidden","status":403,"detail":"You do not have permission to access this resource."}""");
+
+    private static readonly byte[] _unsupportedMediaTypeProblemBytes = System.Text.Encoding.UTF8.GetBytes(
+        """{"type":"https://tools.ietf.org/html/rfc7231#section-6.5.13","title":"Unsupported Media Type","status":415,"detail":"The request content type is not supported. Expected 'application/json'."}""");
+
     private static readonly BlueprintHttpOptions _defaultHttpOptions = new();
 
     // Thread-local ArrayBufferWriter to avoid per-request allocation for resource event envelope
@@ -84,12 +96,14 @@ public class HttpOperationResultExecutor
             case UnauthenticatedResult:
                 httpContext.Response.StatusCode = StatusCodes.Status401Unauthorized;
                 httpContext.Response.ContentType = ProblemJsonContentType;
-                await WriteJsonAsync(httpContext, operationContext, _unauthorizedProblem).ConfigureAwait(false);
+                httpContext.Response.ContentLength = _unauthorizedProblemBytes.Length;
+                await httpContext.Response.Body.WriteAsync(_unauthorizedProblemBytes, httpContext.RequestAborted).ConfigureAwait(false);
                 return true;
             case ForbiddenResult:
                 httpContext.Response.StatusCode = StatusCodes.Status403Forbidden;
                 httpContext.Response.ContentType = ProblemJsonContentType;
-                await WriteJsonAsync(httpContext, operationContext, _forbiddenProblem).ConfigureAwait(false);
+                httpContext.Response.ContentLength = _forbiddenProblemBytes.Length;
+                await httpContext.Response.Body.WriteAsync(_forbiddenProblemBytes, httpContext.RequestAborted).ConfigureAwait(false);
                 return true;
             case BindingFailureResult bindingFailureResult:
                 httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
@@ -105,7 +119,8 @@ public class HttpOperationResultExecutor
             case UnsupportedMediaTypeResult:
                 httpContext.Response.StatusCode = StatusCodes.Status415UnsupportedMediaType;
                 httpContext.Response.ContentType = ProblemJsonContentType;
-                await WriteJsonAsync(httpContext, operationContext, _unsupportedMediaTypeProblem).ConfigureAwait(false);
+                httpContext.Response.ContentLength = _unsupportedMediaTypeProblemBytes.Length;
+                await httpContext.Response.Body.WriteAsync(_unsupportedMediaTypeProblemBytes, httpContext.RequestAborted).ConfigureAwait(false);
                 return true;
             case HttpPipelineShortCircuitResult:
                 // Response was already written by the generated pipeline (e.g. binding failure).
