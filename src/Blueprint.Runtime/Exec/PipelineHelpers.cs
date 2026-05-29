@@ -177,6 +177,41 @@ public static class PipelineHelpers
     }
 
     /// <summary>
+    /// Accumulates <see cref="System.ComponentModel.DataAnnotations.IValidatableObject.Validate"/> results
+    /// into an existing validation-results list. Used when both property-level generated checks AND
+    /// <c>IValidatableObject</c> are present — mirrors the .NET <c>Validator.TryValidateObject</c> behavior
+    /// of collecting all errors (property + object-level) before returning a single failure.
+    /// </summary>
+    /// <typeparam name="TOperation">The concrete operation type (constrained to <c>IValidatableObject</c>).</typeparam>
+    /// <param name="validationResults">The existing list (may be null if no property errors yet).</param>
+    /// <param name="operation">The operation instance to validate.</param>
+    /// <returns>The (potentially newly-allocated) list with any <c>IValidatableObject</c> failures appended.</returns>
+    [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2026:Members annotated with 'RequiresUnreferencedCodeAttribute' require dynamic access otherwise can break functionality when trimming application code",
+        Justification = "The operation type is always preserved — it is instantiated by source-generated pipeline code.")]
+    public static List<ValidationResult>? AccumulateIValidatableObject<TOperation>(
+        List<ValidationResult>? validationResults,
+        TOperation operation)
+        where TOperation : System.ComponentModel.DataAnnotations.IValidatableObject
+    {
+        var items = _validationItems ??= new Dictionary<object, object?>();
+        items.Clear();
+        var ivoContext = new System.ComponentModel.DataAnnotations.ValidationContext(operation, null, items);
+
+        foreach (var ivoResult in operation.Validate(ivoContext))
+        {
+            if (ivoResult != ValidationResult.Success)
+            {
+                validationResults ??= new List<ValidationResult>();
+                validationResults.Add(ivoResult);
+            }
+        }
+
+        return validationResults;
+    }
+
+    /// <summary>
     /// Invokes registered <see cref="IPropertyPopulator"/> instances in order, using an optimised
     /// single-populator fast path to avoid enumerator allocation when only one is registered.
     /// </summary>

@@ -58,12 +58,22 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
 
         context.AddRenderStep(PipelineStage.Validation, renderContext =>
         {
-            if (validationPlan.Properties.Count > 0)
+            if (validationPlan.Properties.Count > 0 && validationPlan.ImplementsIValidatableObject)
+            {
+                // When both property-level and IValidatableObject validation are present, accumulate
+                // all errors into a single list before returning — mirrors Validator.TryValidateObject behavior.
+                RenderPropertyValidation(renderContext, validationPlan.Properties, cachedFields, emitShortCircuitReturn: false);
+                RenderAccumulateIValidatableObject(renderContext);
+                renderContext.If(
+                    "validationResults is not null",
+                    static branch => ReturnValidationFailure(branch, "validationResults"));
+                renderContext.WriteBlankLine();
+            }
+            else if (validationPlan.Properties.Count > 0)
             {
                 RenderPropertyValidation(renderContext, validationPlan.Properties, cachedFields);
             }
-
-            if (validationPlan.ImplementsIValidatableObject)
+            else if (validationPlan.ImplementsIValidatableObject)
             {
                 RenderIValidatableObjectTailCall(renderContext);
             }
@@ -496,7 +506,7 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
         Dictionary<string, string> AttributeFields,
         Dictionary<string, string> RegexFields);
 
-    private static void RenderPropertyValidation(PipelineRenderContext context, IReadOnlyList<PropertyValidationPlan> properties, CachedFieldMaps cachedFields)
+    private static void RenderPropertyValidation(PipelineRenderContext context, IReadOnlyList<PropertyValidationPlan> properties, CachedFieldMaps cachedFields, bool emitShortCircuitReturn = true)
     {
         context.DeclareVariable(
             "validationResults",
@@ -521,10 +531,13 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
             }
         }
 
-        context.If(
-            "validationResults is not null",
-            static branch => ReturnValidationFailure(branch, "validationResults"));
-        context.WriteBlankLine();
+        if (emitShortCircuitReturn)
+        {
+            context.If(
+                "validationResults is not null",
+                static branch => ReturnValidationFailure(branch, "validationResults"));
+            context.WriteBlankLine();
+        }
     }
 
     private static void RenderFastPathValidation(PipelineRenderContext context, FastPathPropertyValidationPlan property, CachedFieldMaps cachedFields)
@@ -687,6 +700,21 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
             branch.Return("_ivoResult");
         });
         context.WriteBlankLine();
+    }
+
+    /// <summary>
+    /// Emits a call to <c>PipelineHelpers.AccumulateIValidatableObject</c> that appends
+    /// <c>IValidatableObject.Validate()</c> results to the existing <c>validationResults</c> list.
+    /// Used when both property-level and object-level validation are present so that all errors are
+    /// reported in a single response — matching .NET's <c>Validator.TryValidateObject</c> semantics.
+    /// </summary>
+    private static void RenderAccumulateIValidatableObject(PipelineRenderContext context)
+    {
+        var operation = context.GetOperationExpression();
+
+        context.Assign(
+            "validationResults",
+            $"Blueprint.Runtime.Exec.PipelineHelpers.AccumulateIValidatableObject(validationResults, {operation})");
     }
 
     private static void RenderGenericValidation(PipelineRenderContext context)

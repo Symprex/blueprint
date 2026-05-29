@@ -238,8 +238,10 @@ public class ResourceEvent<TResource> : ResourceEvent
 
     /// <summary>
     /// Gets or sets the strongly-typed resource payload.
+    /// Shadows <see cref="ResourceEvent.Data"/> so that STJ can bind the <see cref="JsonConstructorAttribute"/>
+    /// parameter during deserialization while still serializing as the concrete <typeparamref name="TResource"/>.
     /// </summary>
-    [JsonIgnore]
+    [JsonInclude]
     public new TResource? Data
     {
         get => (TResource?)base.Data;

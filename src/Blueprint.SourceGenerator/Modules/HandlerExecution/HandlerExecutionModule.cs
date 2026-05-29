@@ -599,12 +599,10 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
             return true;
         }
 
-        // IOptions<T> is always a singleton (OptionsManager<T> is registered as singleton by AddOptions)
-        if (fullyQualifiedTypeName.StartsWith("global::Microsoft.Extensions.Options.IOptions<", StringComparison.Ordinal)
-            || fullyQualifiedTypeName.StartsWith("Microsoft.Extensions.Options.IOptions<", StringComparison.Ordinal))
-        {
-            return true;
-        }
+        // IOptions<T> is intentionally NOT cached: although it is a singleton at runtime,
+        // caching it in the pipeline constructor prevents test factories that override options
+        // from being seen (the pipeline is shared across child factory scopes). The per-request
+        // GetRequiredService<IOptions<T>> lookup is an O(1) slot access and negligible overhead.
 
         // IMemoryCache is always a singleton (registered by AddMemoryCache)
         if (fullyQualifiedTypeName is "global::Microsoft.Extensions.Caching.Memory.IMemoryCache"
