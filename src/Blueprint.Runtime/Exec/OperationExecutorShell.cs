@@ -315,6 +315,25 @@ public abstract class OperationExecutorShell : IOperationExecutorPipeline
     protected System.Text.Json.JsonSerializerOptions? BodyJsonOptions { get; }
 
     /// <summary>
+    /// Indicates whether <c>IBackgroundTaskScheduler</c> is registered in the DI container.
+    /// When <c>false</c>, generated pipelines skip the flush call entirely, avoiding a per-request
+    /// scoped service activation for operations that never schedule background tasks.
+    /// </summary>
+    protected bool HasBackgroundTaskScheduler { get; }
+
+    /// <summary>
+    /// Indicates whether <c>IUnitOfWork</c> is registered in the DI container.
+    /// When <c>false</c>, generated command pipelines skip the save-changes call.
+    /// </summary>
+    protected bool HasUnitOfWork { get; }
+
+    /// <summary>
+    /// Indicates whether <c>IMessageOutbox</c> is registered in the DI container.
+    /// When <c>false</c>, generated command pipelines skip the outbox commit call.
+    /// </summary>
+    protected bool HasMessageOutbox { get; }
+
+    /// <summary>
     /// Initialises a new instance of <see cref="OperationExecutorShell"/> with the supplied logger factory and
     /// operation type name used for activity tracing and structured log entries.
     /// </summary>
@@ -413,6 +432,9 @@ public abstract class OperationExecutorShell : IOperationExecutorPipeline
         this.UserAuthorisationContextFactory = services.UserAuthorisationContextFactory;
         this.ResourceEventAuditSink = services.ResourceEventAuditSink;
         this.BodyJsonOptions = services.BodyJsonOptions;
+        this.HasBackgroundTaskScheduler = services.HasBackgroundTaskScheduler;
+        this.HasUnitOfWork = services.HasUnitOfWork;
+        this.HasMessageOutbox = services.HasMessageOutbox;
 
         // Store the root service provider for lazy Executor resolution — see Executor property.
         this._rootServiceProvider = services.ServiceProvider;

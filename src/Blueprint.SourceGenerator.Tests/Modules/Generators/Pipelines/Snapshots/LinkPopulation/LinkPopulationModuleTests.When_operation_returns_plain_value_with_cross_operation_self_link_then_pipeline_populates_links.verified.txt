@@ -78,7 +78,7 @@ namespace Blueprint.Generated
             {
                 await Blueprint.Runtime.Exec.PipelineHelpers.PopulatePropertiesAsync(applicablePopulators, context).ConfigureAwait(false);
             }
-            if (Blueprint.Runtime.Exec.PipelineHelpers.CheckHttpAuthenticated(httpContext) is { } _authCheckResult)
+            if (Blueprint.Runtime.Exec.PipelineHelpers.CheckHttpAuthenticated(httpContext, context) is { } _authCheckResult)
             {
                 return _authCheckResult;
             }
@@ -115,7 +115,10 @@ namespace Blueprint.Generated
                 await Blueprint.Runtime.Exec.PipelineHelpers.ExecuteAuditSinkAsync(this.AuditSink, context, handlerResult, "GetWidgetQuery").ConfigureAwait(false);
             }
 
-            await Blueprint.Runtime.Exec.PipelineHelpers.FlushBackgroundTasksAsync(context.ServiceProvider).ConfigureAwait(false);
+            if (this.HasBackgroundTaskScheduler)
+            {
+                await Blueprint.Runtime.Exec.PipelineHelpers.FlushBackgroundTasksAsync(context.ServiceProvider).ConfigureAwait(false);
+            }
 
             return handlerResult;
         }
@@ -186,7 +189,7 @@ namespace Blueprint.Generated
             {
                 await Blueprint.Runtime.Exec.PipelineHelpers.PopulatePropertiesAsync(applicablePopulators, context).ConfigureAwait(false);
             }
-            if (Blueprint.Runtime.Exec.PipelineHelpers.CheckHttpAuthenticated(httpContext) is { } _authCheckResult)
+            if (Blueprint.Runtime.Exec.PipelineHelpers.CheckHttpAuthenticated(httpContext, context) is { } _authCheckResult)
             {
                 return _authCheckResult;
             }
@@ -220,9 +223,15 @@ namespace Blueprint.Generated
             if (handlerResult.WasSuccessful)
             {
 
-                await Blueprint.Runtime.Exec.PipelineHelpers.SaveUnitOfWorkAsync(context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);
+                if (this.HasUnitOfWork)
+                {
+                    await Blueprint.Runtime.Exec.PipelineHelpers.SaveUnitOfWorkAsync(context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);
+                }
 
-                await Blueprint.Runtime.Exec.PipelineHelpers.CommitMessageOutboxAsync(context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);
+                if (this.HasMessageOutbox)
+                {
+                    await Blueprint.Runtime.Exec.PipelineHelpers.CommitMessageOutboxAsync(context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);
+                }
 
                 if (this.AuditSink != null)
                 {
@@ -231,7 +240,10 @@ namespace Blueprint.Generated
 
                 await Blueprint.Runtime.Exec.PipelineHelpers.ExecuteResourceEventAuditSinkAsync(this.ResourceEventAuditSink, context, handlerResult, "UpdateWidgetCommand").ConfigureAwait(false);
 
-                await Blueprint.Runtime.Exec.PipelineHelpers.FlushBackgroundTasksAsync(context.ServiceProvider).ConfigureAwait(false);
+                if (this.HasBackgroundTaskScheduler)
+                {
+                    await Blueprint.Runtime.Exec.PipelineHelpers.FlushBackgroundTasksAsync(context.ServiceProvider).ConfigureAwait(false);
+                }
             }
 
             return handlerResult;

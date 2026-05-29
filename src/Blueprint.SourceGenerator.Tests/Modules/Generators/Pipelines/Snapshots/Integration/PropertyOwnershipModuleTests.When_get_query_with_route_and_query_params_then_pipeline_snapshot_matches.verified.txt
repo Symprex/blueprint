@@ -101,7 +101,7 @@ namespace Blueprint.Generated
             {
                 await Blueprint.Runtime.Exec.PipelineHelpers.PopulatePropertiesAsync(applicablePopulators, context).ConfigureAwait(false);
             }
-            if (Blueprint.Runtime.Exec.PipelineHelpers.CheckHttpAuthenticated(httpContext) is { } _authCheckResult)
+            if (Blueprint.Runtime.Exec.PipelineHelpers.CheckHttpAuthenticated(httpContext, context) is { } _authCheckResult)
             {
                 return _authCheckResult;
             }
@@ -125,7 +125,10 @@ namespace Blueprint.Generated
                 await Blueprint.Runtime.Exec.PipelineHelpers.ExecuteAuditSinkAsync(this.AuditSink, context, handlerResult, "GetUserItemsQuery").ConfigureAwait(false);
             }
 
-            await Blueprint.Runtime.Exec.PipelineHelpers.FlushBackgroundTasksAsync(context.ServiceProvider).ConfigureAwait(false);
+            if (this.HasBackgroundTaskScheduler)
+            {
+                await Blueprint.Runtime.Exec.PipelineHelpers.FlushBackgroundTasksAsync(context.ServiceProvider).ConfigureAwait(false);
+            }
 
             return handlerResult;
         }

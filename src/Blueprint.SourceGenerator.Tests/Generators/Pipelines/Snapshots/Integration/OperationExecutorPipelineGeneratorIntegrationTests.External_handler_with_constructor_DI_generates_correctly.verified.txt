@@ -45,16 +45,25 @@ namespace Blueprint.Generated
             var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<bool>(await testCommandHandler.HandleAsync(operation).ConfigureAwait(false));
 
 
-            await Blueprint.Runtime.Exec.PipelineHelpers.SaveUnitOfWorkAsync(context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);
+            if (this.HasUnitOfWork)
+            {
+                await Blueprint.Runtime.Exec.PipelineHelpers.SaveUnitOfWorkAsync(context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);
+            }
 
-            await Blueprint.Runtime.Exec.PipelineHelpers.CommitMessageOutboxAsync(context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);
+            if (this.HasMessageOutbox)
+            {
+                await Blueprint.Runtime.Exec.PipelineHelpers.CommitMessageOutboxAsync(context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);
+            }
 
             if (this.AuditSink != null)
             {
                 await Blueprint.Runtime.Exec.PipelineHelpers.ExecuteAuditSinkAsync(this.AuditSink, context, handlerResult, "TestCommand").ConfigureAwait(false);
             }
 
-            await Blueprint.Runtime.Exec.PipelineHelpers.FlushBackgroundTasksAsync(context.ServiceProvider).ConfigureAwait(false);
+            if (this.HasBackgroundTaskScheduler)
+            {
+                await Blueprint.Runtime.Exec.PipelineHelpers.FlushBackgroundTasksAsync(context.ServiceProvider).ConfigureAwait(false);
+            }
 
             return handlerResult;
         }

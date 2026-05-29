@@ -76,7 +76,10 @@ namespace Blueprint.Generated
                 await Blueprint.Runtime.Exec.PipelineHelpers.ExecuteAuditSinkAsync(this.AuditSink, context, handlerResult, "GetSummaryQuery").ConfigureAwait(false);
             }
 
-            await Blueprint.Runtime.Exec.PipelineHelpers.FlushBackgroundTasksAsync(context.ServiceProvider).ConfigureAwait(false);
+            if (this.HasBackgroundTaskScheduler)
+            {
+                await Blueprint.Runtime.Exec.PipelineHelpers.FlushBackgroundTasksAsync(context.ServiceProvider).ConfigureAwait(false);
+            }
 
             if (handlerResult is global::Blueprint.Runtime.Exec.OkResult<global::TestNamespace.SummaryResource> okResult_0A0E1A7F)
             {

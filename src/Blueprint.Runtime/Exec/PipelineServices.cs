@@ -49,6 +49,16 @@ public sealed class PipelineServices
 
         var blueprintJsonOpts = serviceProvider.GetService<IOptions<BlueprintJsonOptions>>();
         this.BodyJsonOptions = blueprintJsonOpts?.Value?.SerializerOptions;
+
+        // Cache scoped service registrations to avoid per-request DI lookups that would
+        // activate an unused scoped instance. Uses IServiceProviderIsService when available
+        // (always present in the MS DI container) for zero-activation existence checks.
+        // When IServiceProviderIsService is unavailable (e.g. test doubles), defaults to true
+        // to preserve backward-compatible runtime behaviour.
+        var isService = serviceProvider.GetService<IServiceProviderIsService>();
+        this.HasBackgroundTaskScheduler = isService?.IsService(typeof(Blueprint.Tasks.IBackgroundTaskScheduler)) ?? true;
+        this.HasUnitOfWork = isService?.IsService(typeof(Blueprint.Persistence.IUnitOfWork)) ?? true;
+        this.HasMessageOutbox = isService?.IsService(typeof(Blueprint.Messaging.IMessageOutbox)) ?? true;
     }
 
     /// <summary>
@@ -86,4 +96,23 @@ public sealed class PipelineServices
 
     /// <inheritdoc cref="OperationExecutorShell.BodyJsonOptions"/>
     public System.Text.Json.JsonSerializerOptions? BodyJsonOptions { get; }
+
+    /// <summary>
+    /// Indicates whether <c>IBackgroundTaskScheduler</c> is registered in the container.
+    /// When <c>false</c>, generated pipelines skip the per-request DI lookup and flush call,
+    /// eliminating ~50ns of unnecessary scoped service activation per request.
+    /// </summary>
+    public bool HasBackgroundTaskScheduler { get; }
+
+    /// <summary>
+    /// Indicates whether <c>IUnitOfWork</c> is registered in the container.
+    /// When <c>false</c>, generated command pipelines skip the per-request DI lookup.
+    /// </summary>
+    public bool HasUnitOfWork { get; }
+
+    /// <summary>
+    /// Indicates whether <c>IMessageOutbox</c> is registered in the container.
+    /// When <c>false</c>, generated command pipelines skip the per-request DI lookup.
+    /// </summary>
+    public bool HasMessageOutbox { get; }
 }

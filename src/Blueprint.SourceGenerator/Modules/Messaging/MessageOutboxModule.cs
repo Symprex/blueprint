@@ -81,7 +81,10 @@ public sealed class MessageOutboxModule : IBlueprintSourceGeneratorModule, IPipe
     private static void RenderCommitOutbox(PipelineRenderContext context)
     {
         context.WriteBlankLine();
-        context.WriteStatement("await Blueprint.Runtime.Exec.PipelineHelpers.CommitMessageOutboxAsync(context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);");
+        context.WriteStatement("if (this.HasMessageOutbox)");
+        context.WriteStatement("{");
+        context.WriteStatement("    await Blueprint.Runtime.Exec.PipelineHelpers.CommitMessageOutboxAsync(context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);");
+        context.WriteStatement("}");
     }
 
     private static bool IsCommand(INamedTypeSymbol operationType)

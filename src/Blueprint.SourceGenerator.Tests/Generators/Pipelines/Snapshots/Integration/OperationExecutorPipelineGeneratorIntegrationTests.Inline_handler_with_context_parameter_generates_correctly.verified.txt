@@ -48,7 +48,10 @@ namespace Blueprint.Generated
                 await Blueprint.Runtime.Exec.PipelineHelpers.ExecuteAuditSinkAsync(this.AuditSink, context, handlerResult, "TestQuery").ConfigureAwait(false);
             }
 
-            await Blueprint.Runtime.Exec.PipelineHelpers.FlushBackgroundTasksAsync(context.ServiceProvider).ConfigureAwait(false);
+            if (this.HasBackgroundTaskScheduler)
+            {
+                await Blueprint.Runtime.Exec.PipelineHelpers.FlushBackgroundTasksAsync(context.ServiceProvider).ConfigureAwait(false);
+            }
 
             return handlerResult;
         }

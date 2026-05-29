@@ -41,6 +41,9 @@ public sealed class BackgroundTaskFlushModule : IBlueprintSourceGeneratorModule,
     private static void RenderTaskFlush(PipelineRenderContext context)
     {
         context.WriteBlankLine();
-        context.WriteStatement("await Blueprint.Runtime.Exec.PipelineHelpers.FlushBackgroundTasksAsync(context.ServiceProvider).ConfigureAwait(false);");
+        context.WriteStatement("if (this.HasBackgroundTaskScheduler)");
+        context.WriteStatement("{");
+        context.WriteStatement("    await Blueprint.Runtime.Exec.PipelineHelpers.FlushBackgroundTasksAsync(context.ServiceProvider).ConfigureAwait(false);");
+        context.WriteStatement("}");
     }
 }

@@ -18,13 +18,10 @@ namespace Blueprint.Generated
     {
         static readonly string[] _appliedModuleIds =
             ["TenantModule", "PropertyPopulationModule", "HandlerExecutionModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule"];
-        readonly global::Microsoft.Extensions.Options.IOptions<global::TestNamespace.MySettings> _cached_IOptions_TestNamespace_MySettings;
 
         internal TestQueryExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, Blueprint.Runtime.Exec.PipelineServices pipelineServices)
             : base(loggerFactory, "TestQuery", pipelineServices)
         {
-            var serviceProvider = pipelineServices.ServiceProvider;
-            this._cached_IOptions_TestNamespace_MySettings = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::Microsoft.Extensions.Options.IOptions<global::TestNamespace.MySettings>>(serviceProvider);
         }
 
         protected override async System.Threading.Tasks.ValueTask<Blueprint.OperationResult> ExecuteCoreAsync(Blueprint.Runtime.Exec.ApiOperationContext context)
@@ -43,7 +40,7 @@ namespace Blueprint.Generated
             {
                 await Blueprint.Runtime.Exec.PipelineHelpers.PopulatePropertiesAsync(applicablePopulators, context).ConfigureAwait(false);
             }
-            var settings = this._cached_IOptions_TestNamespace_MySettings;
+            var settings = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::Microsoft.Extensions.Options.IOptions<global::TestNamespace.MySettings>>(context.ServiceProvider);
 
             var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<string>(await global::TestNamespace.TestQuery.InvokeAsync(settings).ConfigureAwait(false));
 
@@ -53,7 +50,10 @@ namespace Blueprint.Generated
                 await Blueprint.Runtime.Exec.PipelineHelpers.ExecuteAuditSinkAsync(this.AuditSink, context, handlerResult, "TestQuery").ConfigureAwait(false);
             }
 
-            await Blueprint.Runtime.Exec.PipelineHelpers.FlushBackgroundTasksAsync(context.ServiceProvider).ConfigureAwait(false);
+            if (this.HasBackgroundTaskScheduler)
+            {
+                await Blueprint.Runtime.Exec.PipelineHelpers.FlushBackgroundTasksAsync(context.ServiceProvider).ConfigureAwait(false);
+            }
 
             return handlerResult;
         }

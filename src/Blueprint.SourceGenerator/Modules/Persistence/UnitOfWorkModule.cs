@@ -83,7 +83,10 @@ public sealed class UnitOfWorkModule : IBlueprintSourceGeneratorModule, IPipelin
     private static void RenderSaveChanges(PipelineRenderContext context)
     {
         context.WriteBlankLine();
-        context.WriteStatement("await Blueprint.Runtime.Exec.PipelineHelpers.SaveUnitOfWorkAsync(context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);");
+        context.WriteStatement("if (this.HasUnitOfWork)");
+        context.WriteStatement("{");
+        context.WriteStatement("    await Blueprint.Runtime.Exec.PipelineHelpers.SaveUnitOfWorkAsync(context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);");
+        context.WriteStatement("}");
     }
 
     private static bool IsCommand(INamedTypeSymbol operationType)
