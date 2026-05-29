@@ -368,15 +368,18 @@ public static class EndpointRouteBuilderExtensions
             await this.RouteOperationAsync(httpContext, operation, pipeline).ConfigureAwait(false);
         }
 
-        private async Task RouteOperationAsync(HttpContext httpContext, ApiOperationDescriptor operation, IOperationExecutorPipeline pipeline)
+        /// <summary>
+        /// Routes an HTTP request through the Blueprint pipeline, using a sync fast-path when
+        /// both pipeline execution and response writing complete synchronously (avoiding the
+        /// ~176-byte async state machine allocation on simple queries with cached/in-memory handlers).
+        /// </summary>
+        private Task RouteOperationAsync(HttpContext httpContext, ApiOperationDescriptor operation, IOperationExecutorPipeline pipeline)
         {
             var httpRequest = httpContext.Request;
 
             // Set the activity display name to the operation type for better trace visibility
             var activity = Activity.Current;
             activity?.DisplayName = operation.Name;
-
-            // Method enforcement is handled by ASP.NET Core routing via HttpMethodMetadata on mapped endpoints.
 
             // Use the ASP.NET Core request scope directly — creating a nested scope wastes ~80 bytes
             // per request and provides no additional isolation since scoped services are already
@@ -410,41 +413,106 @@ public static class EndpointRouteBuilderExtensions
 
             apiContext.BaseUri = this._cachedBaseUri;
 
+            // Pipeline.ExecuteAsync never throws — it wraps all exceptions in OperationResult internally.
+            var executionTask = pipeline.ExecuteAsync(apiContext);
+
+            if (executionTask.IsCompletedSuccessfully)
+            {
+                return this.HandleResultSyncPath(httpContext, apiContext, executionTask.Result, operation);
+            }
+
+            return this.RouteOperationSlowPathAsync(httpContext, apiContext, executionTask, operation);
+        }
+
+        /// <summary>
+        /// Handles the result when pipeline execution completed synchronously. If response
+        /// writing also completes synchronously, returns <see cref="Task.CompletedTask"/> to
+        /// avoid allocating an async state machine Task entirely.
+        /// </summary>
+        private Task HandleResultSyncPath(
+            HttpContext httpContext,
+            ApiOperationContext apiContext,
+            OperationResult result,
+            ApiOperationDescriptor operation)
+        {
+            var operationResultExecutor = this._resultExecutor ?? DefaultOperationResultExecutor;
+
+            Task<bool> writeTask;
             try
             {
-                var result = await pipeline.ExecuteAsync(apiContext).ConfigureAwait(false);
+                writeTask = operationResultExecutor.TryExecuteAsync(httpContext, apiContext, result, this._httpOptions);
+            }
+            catch (Exception ex)
+            {
+                return this.HandleUnexpectedExceptionAsync(httpContext, operation, ex);
+            }
+
+            if (writeTask.IsCompletedSuccessfully)
+            {
+                if (writeTask.Result == false)
+                {
+                    // Legacy self-executing results
+                    var legacyTask = result.ExecuteAsync(apiContext);
+                    return legacyTask.IsCompleted ? Task.CompletedTask : legacyTask;
+                }
+
+                return Task.CompletedTask;
+            }
+
+            return AwaitWriteTaskAsync(writeTask, result, apiContext);
+        }
+
+        private static async Task AwaitWriteTaskAsync(Task<bool> writeTask, OperationResult result, ApiOperationContext apiContext)
+        {
+            if (await writeTask.ConfigureAwait(false) == false)
+            {
+                await result.ExecuteAsync(apiContext).ConfigureAwait(false);
+            }
+        }
+
+        private async Task RouteOperationSlowPathAsync(
+            HttpContext httpContext,
+            ApiOperationContext apiContext,
+            ValueTask<OperationResult> executionTask,
+            ApiOperationDescriptor operation)
+        {
+            try
+            {
+                var result = await executionTask.ConfigureAwait(false);
 
                 var operationResultExecutor = this._resultExecutor ?? DefaultOperationResultExecutor;
                 if (await operationResultExecutor.TryExecuteAsync(httpContext, apiContext, result, this._httpOptions).ConfigureAwait(false) == false)
                 {
-                    // Legacy self-executing results still flow through the old path until the broader host-translation workstream lands.
                     await result.ExecuteAsync(apiContext).ConfigureAwait(false);
                 }
             }
             catch (OperationCanceledException) when (httpContext.RequestAborted.IsCancellationRequested)
             {
-                // Client disconnected — no response needed. Let ASP.NET Core handle the abort.
                 throw;
             }
             catch (Exception ex)
             {
-                // Defense-in-depth: the generated pipeline has its own exception translation, but if something
-                // truly unexpected escapes (DI failure, result executor crash), emit a ProblemDetails 500.
-                activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-                this._logger.LogError(ex, "Unhandled exception escaped pipeline for operation {OperationName}", operation.Name);
+                await this.HandleUnexpectedExceptionAsync(httpContext, operation, ex).ConfigureAwait(false);
+            }
+        }
 
-                if (!httpContext.Response.HasStarted)
-                {
-                    httpContext.Response.StatusCode = 500;
-                    httpContext.Response.ContentType = "application/problem+json";
+        private async Task HandleUnexpectedExceptionAsync(HttpContext httpContext, ApiOperationDescriptor operation, Exception ex)
+        {
+            var activity = Activity.Current;
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            this._logger.LogError(ex, "Unhandled exception escaped pipeline for operation {OperationName}", operation.Name);
 
-                    var exposeDetails = this._httpOptions.ExposeExceptionDetailsInErrorResponses;
-                    var detail = exposeDetails ? ex.ToString() : "An unexpected error occurred.";
+            if (!httpContext.Response.HasStarted)
+            {
+                httpContext.Response.StatusCode = 500;
+                httpContext.Response.ContentType = "application/problem+json";
 
-                    await httpContext.Response.WriteAsync(
-                        $$"""{"type":"https://httpstatuses.com/500","title":"Internal Server Error","status":500,"detail":"{{EscapeJsonString(detail)}}"}""",
-                        httpContext.RequestAborted).ConfigureAwait(false);
-                }
+                var exposeDetails = this._httpOptions.ExposeExceptionDetailsInErrorResponses;
+                var detail = exposeDetails ? ex.ToString() : "An unexpected error occurred.";
+
+                await httpContext.Response.WriteAsync(
+                    $$"""{"type":"https://httpstatuses.com/500","title":"Internal Server Error","status":500,"detail":"{{EscapeJsonString(detail)}}"}""",
+                    httpContext.RequestAborted).ConfigureAwait(false);
             }
         }
 
