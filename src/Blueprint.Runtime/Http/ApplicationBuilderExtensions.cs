@@ -56,12 +56,12 @@ public static class EndpointRouteBuilderExtensions
 
         var httpOptions = endpoints.ServiceProvider.GetService<IOptions<BlueprintHttpOptions>>()?.Value ?? new BlueprintHttpOptions();
 
-        RequestDelegate requestDelegate = new BlueprintApiRouter<TExec>(
+        var router = new BlueprintApiRouter<TExec>(
             endpoints.ServiceProvider,
             runtimeModel,
             endpoints.ServiceProvider.GetRequiredService<ILogger<BlueprintApiRouter<TExec>>>(),
             httpOptions,
-            basePath).RouteAsync;
+            basePath);
 
         // Pre-size based on expected operations (each may have 1-2 URLs plus fixed well-known endpoints).
         var builders = new List<IEndpointConventionBuilder>((runtimeModel.OperationCount * 2) + 8);
@@ -180,7 +180,7 @@ public static class EndpointRouteBuilderExtensions
                     }
                 }
 
-                var builder = endpoints.Map(RoutePatternFactory.Parse(basePath.TrimEnd('/') + url.UrlFormat), requestDelegate);
+                var builder = endpoints.Map(RoutePatternFactory.Parse(basePath.TrimEnd('/') + url.UrlFormat), router.CreateRequestDelegate(operation));
                 builder.WithMetadata(operation);
                 builder.WithMetadata(new HttpMethodMetadata(httpMethods));
                 builder.WithDisplayName(string.Concat(string.Join('|', httpMethods), " ", operation.Name));
@@ -343,12 +343,34 @@ public static class EndpointRouteBuilderExtensions
             this._resultExecutor = rootServiceProvider.GetService<HttpOperationResultExecutor>();
         }
 
+        /// <summary>
+        /// Creates a per-operation request delegate that captures the descriptor, eliminating
+        /// per-request endpoint metadata lookup on the hot path. The pipeline reference is
+        /// resolved lazily on first request to support test scenarios where pipelines are
+        /// registered after endpoint mapping.
+        /// </summary>
+        internal RequestDelegate CreateRequestDelegate(ApiOperationDescriptor operation)
+        {
+            IOperationExecutorPipeline? cachedPipeline = null;
+            return httpContext =>
+            {
+                cachedPipeline ??= this._executor.GetPipeline(operation.OperationType);
+                return this.RouteOperationAsync(httpContext, operation, cachedPipeline);
+            };
+        }
+
         public async Task RouteAsync(HttpContext httpContext)
         {
             var endpoint = httpContext.GetEndpoint()!;
-            var httpRequest = httpContext.Request;
-
             var operation = endpoint.Metadata.GetMetadata<ApiOperationDescriptor>()!;
+            var pipeline = this._executor.GetPipeline(operation.OperationType);
+
+            await this.RouteOperationAsync(httpContext, operation, pipeline).ConfigureAwait(false);
+        }
+
+        private async Task RouteOperationAsync(HttpContext httpContext, ApiOperationDescriptor operation, IOperationExecutorPipeline pipeline)
+        {
+            var httpRequest = httpContext.Request;
 
             // Set the activity display name to the operation type for better trace visibility
             var activity = Activity.Current;
@@ -390,7 +412,7 @@ public static class EndpointRouteBuilderExtensions
 
             try
             {
-                var result = await this._executor.GetPipeline(operation.OperationType).ExecuteAsync(apiContext).ConfigureAwait(false);
+                var result = await pipeline.ExecuteAsync(apiContext).ConfigureAwait(false);
 
                 var operationResultExecutor = this._resultExecutor ?? DefaultOperationResultExecutor;
                 if (await operationResultExecutor.TryExecuteAsync(httpContext, apiContext, result, this._httpOptions).ConfigureAwait(false) == false)
