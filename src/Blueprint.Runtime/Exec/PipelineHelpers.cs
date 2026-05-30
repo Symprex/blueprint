@@ -38,6 +38,15 @@ public static class PipelineHelpers
     private static readonly ConcurrentDictionary<string, ActivityTagsCollection> _auditTagsCache = new();
 
     /// <summary>
+    /// Cached <see cref="ApiLinkGenerator"/> instance. Since the router middleware reuses the same
+    /// <c>BaseUri</c> string reference for all requests with the same scheme/host/path, a simple
+    /// reference-equality check avoids allocating a new generator (~40B) on every request that
+    /// populates HATEOAS links. Thread-safe via volatile read/write — worst case two threads
+    /// race and one allocation is lost, but correctness is maintained.
+    /// </summary>
+    private static volatile ApiLinkGenerator? _cachedApiLinkGenerator;
+
+    /// <summary>
     /// Cached <c>Task.FromResult&lt;OperationResult?&gt;(null)</c> to avoid allocating a new Task on every
     /// successful authorization fast-path return. Since <c>Task.FromResult(default(T))</c> where T is a
     /// reference type is NOT cached by the runtime (unlike <c>Task.FromResult(true/false)</c>), a shared
@@ -1639,10 +1648,20 @@ public static class PipelineHelpers
 
         if (context.BaseUri is not null)
         {
-            // Fast path: construct inline from the pre-computed BaseUri (set by the HTTP router).
-            // This avoids a scoped DI factory invocation that would re-read IHttpContextAccessor
-            // and recompute the same base URI on every request.
-            apiLinkGenerator = new Blueprint.Http.ApiLinkGenerator(context.App, context.BaseUri);
+            // Fast path: reuse the cached generator when the BaseUri reference hasn't changed
+            // (the router middleware reuses the same string instance across requests).
+            // Eliminates ~40B allocation per request on the link-generation hot path.
+            var cached = _cachedApiLinkGenerator;
+
+            if (cached is not null && ReferenceEquals(cached.OriginalBaseUri, context.BaseUri))
+            {
+                apiLinkGenerator = cached;
+            }
+            else
+            {
+                apiLinkGenerator = new Blueprint.Http.ApiLinkGenerator(context.App, context.BaseUri);
+                _cachedApiLinkGenerator = (ApiLinkGenerator)apiLinkGenerator;
+            }
         }
         else
         {

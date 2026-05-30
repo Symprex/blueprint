@@ -25,6 +25,7 @@ public class LinkPopulationBenchmarks
     private IServiceProvider _serviceProviderWithLinkGen = null!;
     private IServiceProvider _serviceProviderWithoutLinkGen = null!;
     private ApiOperationContext _contextDiFallback = null!;
+    private ApiOperationContext _contextInlinePath = null!;
     private OperationResult _okResult = null!;
 
     /// <summary>
@@ -83,6 +84,17 @@ public class LinkPopulationBenchmarks
             Operation = new LinkPopBenchmarkQuery { Id = "resource-42" },
         };
 
+        // Context with BaseUri uses the cached inline path (new optimization)
+        this._contextInlinePath = new ApiOperationContext(
+            this._serviceProviderWithLinkGen,
+            app,
+            descriptor,
+            CancellationToken.None)
+        {
+            Operation = new LinkPopBenchmarkQuery { Id = "resource-42" },
+            BaseUri = "https://api.example.com/",
+        };
+
         this._okResult = new OkResult<LinkPopBenchmarkResource>(new LinkPopBenchmarkResource { Id = "resource-42" });
     }
 
@@ -98,6 +110,21 @@ public class LinkPopulationBenchmarks
         return PipelineHelpers.PopulateHateoasLinksAsync(
             this._serviceProviderWithLinkGen,
             this._contextDiFallback,
+            this._okResult);
+    }
+
+    /// <summary>
+    /// Measures the cached inline path: BaseUri is set and the ApiLinkGenerator is cached
+    /// via reference equality. This is the production hot path — eliminates both DI resolution
+    /// and per-request ApiLinkGenerator allocation after the first request.
+    /// </summary>
+    /// <returns>A completed task.</returns>
+    [Benchmark]
+    public Task PopulateLinks_CachedInlinePath()
+    {
+        return PipelineHelpers.PopulateHateoasLinksAsync(
+            this._serviceProviderWithLinkGen,
+            this._contextInlinePath,
             this._okResult);
     }
 

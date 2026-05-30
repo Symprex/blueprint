@@ -11,6 +11,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Blueprint.SourceGenerator.Benchmarks" />
+    <InternalsVisibleTo Include="Blueprint.SourceGenerator.Tests.Integration" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="JetBrains.Annotations" Version="2024.3.0" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
   </ItemGroup>
@@ -19,4 +24,3 @@
     <ProjectReference Include="..\Blueprint.Runtime.Model\Blueprint.Runtime.Model.csproj" />
   </ItemGroup>
 </Project>
-

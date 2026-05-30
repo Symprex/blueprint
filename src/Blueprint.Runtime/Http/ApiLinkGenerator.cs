@@ -23,6 +23,13 @@ public sealed class ApiLinkGenerator : IApiLinkGenerator
 
     private readonly BlueprintApp _app;
     private readonly string _baseUri;
+    private readonly string _originalBaseUri;
+
+    /// <summary>
+    /// Gets the original (pre-normalization) base URI passed to the constructor, enabling
+    /// callers to check reference equality for caching (the router reuses the same string instance).
+    /// </summary>
+    internal string OriginalBaseUri => this._originalBaseUri;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ApiLinkGenerator"/> class.
@@ -35,6 +42,7 @@ public sealed class ApiLinkGenerator : IApiLinkGenerator
     public ApiLinkGenerator(BlueprintApp app, string baseUri)
     {
         this._app = app;
+        this._originalBaseUri = baseUri;
         this._baseUri = baseUri.EndsWith('/') ? baseUri : baseUri + "/";
     }
 
