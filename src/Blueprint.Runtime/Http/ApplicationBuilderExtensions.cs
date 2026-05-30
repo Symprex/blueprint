@@ -413,8 +413,18 @@ public static class EndpointRouteBuilderExtensions
 
             apiContext.BaseUri = this._cachedBaseUri;
 
-            // Pipeline.ExecuteAsync never throws — it wraps all exceptions in OperationResult internally.
-            var executionTask = pipeline.ExecuteAsync(apiContext);
+            // Pipeline.ExecuteAsync never throws in generated code — it wraps all exceptions in
+            // OperationResult internally. However, guard defensively in case a custom or hand-rolled
+            // pipeline violates this contract (e.g., constructor validation throws synchronously).
+            ValueTask<OperationResult> executionTask;
+            try
+            {
+                executionTask = pipeline.ExecuteAsync(apiContext);
+            }
+            catch (Exception ex)
+            {
+                return this.HandleUnexpectedExceptionAsync(httpContext, operation, ex);
+            }
 
             if (executionTask.IsCompletedSuccessfully)
             {

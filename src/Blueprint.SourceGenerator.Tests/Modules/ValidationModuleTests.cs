@@ -1687,11 +1687,11 @@ public class ValidationModuleTests
         pipelineSource.Should().Contain("operation.Age",
             "property-level [Range] check should be generated even when IValidatableObject is implemented");
 
-        // IValidatableObject.Validate() should be delegated to shared helper after property checks
-        pipelineSource.Should().Contain("ValidateIValidatableObject(context, operation)",
-            "IValidatableObject.Validate() should be delegated to PipelineHelpers after generated property checks");
-        pipelineSource.Should().Contain("_ivoResult != null",
-            "pipeline should guard on the IValidatableObject result");
+        // IValidatableObject.Validate() should be accumulated into the same error list after property checks
+        pipelineSource.Should().Contain("AccumulateIValidatableObject(validationResults, operation)",
+            "IValidatableObject.Validate() should be accumulated via PipelineHelpers after generated property checks");
+        pipelineSource.Should().Contain("validationResults is not null",
+            "pipeline should guard on the accumulated validation results");
 
         // Should NOT use the whole-object TryValidateObject fallback
         pipelineSource.Should().NotContain("global::System.ComponentModel.DataAnnotations.Validator.TryValidateObject",
