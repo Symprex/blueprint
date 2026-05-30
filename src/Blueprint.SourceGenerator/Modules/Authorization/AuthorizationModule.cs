@@ -289,6 +289,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
         var hasTemplateValidationErrors = false;
         var valueTypePropertyNames = new HashSet<string>();
         var fallbackOnlyTokenNames = new HashSet<string>();
+        var invalidFallbackTokenNames = new HashSet<string>();
 
         foreach (var (_, _, template) in effectiveScopePairs)
         {
@@ -350,16 +351,46 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
                     }
                 }
 
-                // Validate fallback path if present and not an auth path
+                // Validate fallback path if present and not an auth path.
+                // When the primary exists, an invalid fallback should not suppress code
+                // generation — just emit primary-only code and warn about the dead fallback.
                 if (token.FallbackPropertyPath is not null && !ResourceKeyToken.IsAuthPropertyPath(token.FallbackPropertyPath))
                 {
-                    ValidatePropertyPath(
-                        token.FallbackPropertyPath,
-                        operationType,
-                        operationLocation,
-                        context,
-                        ref hasTemplateValidationErrors,
-                        valueTypePropertyNames);
+                    if (primaryExists)
+                    {
+                        // Primary is valid; fallback is optional. Validate but don't block code gen.
+                        var fallbackSegment = token.FallbackPropertyPath.Split('.')[0];
+                        var fallbackProperty = operationType.GetAllMembers()
+                            .OfType<IPropertySymbol>()
+                            .FirstOrDefault(p => p.Name == fallbackSegment);
+
+                        if (fallbackProperty is null)
+                        {
+                            context.AddDiagnostic(
+                                new DiagnosticInfo(
+                                    AuthorizationDiagnosticDescriptors.ResourceKeyTemplatePropertyNotFound,
+                                    operationLocation,
+                                    [operationType.Name, fallbackSegment]));
+
+                            // Track as invalid so code gen skips the fallback expression
+                            invalidFallbackTokenNames.Add(token.Name);
+                        }
+                        else if (fallbackProperty.Type.IsValueType)
+                        {
+                            valueTypePropertyNames.Add(fallbackSegment);
+                        }
+                    }
+                    else
+                    {
+                        // Primary doesn't exist — fallback failure is a hard error
+                        ValidatePropertyPath(
+                            token.FallbackPropertyPath,
+                            operationType,
+                            operationLocation,
+                            context,
+                            ref hasTemplateValidationErrors,
+                            valueTypePropertyNames);
+                    }
                 }
             }
         }
@@ -372,7 +403,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
 
         context.AddRenderStep(
             PipelineStage.Authorisation,
-            ctx => RenderAuthorizationCheck(ctx, effectiveScopePairs, hasTemplateValidationErrors, valueTypePropertyNames, fallbackOnlyTokenNames));
+            ctx => RenderAuthorizationCheck(ctx, effectiveScopePairs, hasTemplateValidationErrors, valueTypePropertyNames, fallbackOnlyTokenNames, invalidFallbackTokenNames));
     }
 
     private static void RenderAuthorizationCheck(
@@ -380,16 +411,18 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
         List<(string Noun, string Verb, string? ResourceKeyTemplate)> scopePairs,
         bool hasTemplateValidationErrors,
         HashSet<string> valueTypePropertyNames,
-        HashSet<string> fallbackOnlyTokenNames)
+        HashSet<string> fallbackOnlyTokenNames,
+        HashSet<string> invalidFallbackTokenNames)
     {
-        // BPAU007 is now an error, so hasTemplateValidationErrors means no code is emitted
-        // (the build will fail). We only need the resolved path.
+        // hasTemplateValidationErrors means the primary property path is missing AND there's
+        // no valid fallback. We cannot generate correct property access, so skip code emission.
+        // The build will fail on the diagnostic (BPAU007 on the primary path).
         if (hasTemplateValidationErrors)
         {
             return;
         }
 
-        RenderResolvedAuthorizationCheck(context, scopePairs, valueTypePropertyNames, fallbackOnlyTokenNames);
+        RenderResolvedAuthorizationCheck(context, scopePairs, valueTypePropertyNames, fallbackOnlyTokenNames, invalidFallbackTokenNames);
     }
 
     /// <summary>
@@ -400,7 +433,8 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
         PipelineRenderContext context,
         List<(string Noun, string Verb, string? ResourceKeyTemplate)> scopePairs,
         HashSet<string> valueTypePropertyNames,
-        HashSet<string> fallbackOnlyTokenNames)
+        HashSet<string> fallbackOnlyTokenNames,
+        HashSet<string> invalidFallbackTokenNames)
     {
         var operationExpr = context.GetOperationExpression();
         var httpContextExpr = context.GetHttpContextExpression();
@@ -412,7 +446,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
         {
             var sp = scopePairs[0];
             resolvedScopeArg = sp.ResourceKeyTemplate is not null
-                ? BuildResolvedScopePairExpression(sp, operationExpr, principalExpr, valueTypePropertyNames, fallbackOnlyTokenNames)
+                ? BuildResolvedScopePairExpression(sp, operationExpr, principalExpr, valueTypePropertyNames, fallbackOnlyTokenNames, invalidFallbackTokenNames)
                 : $"new Blueprint.Model.ResolvedScopePair(\"{sp.Noun}\", \"{sp.Verb}\", null, null)";
         }
         else
@@ -420,7 +454,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
             var resolvedElements = string.Join(
                 ", ",
                 scopePairs.Select(sp => sp.ResourceKeyTemplate is not null
-                    ? BuildResolvedScopePairExpression(sp, operationExpr, principalExpr, valueTypePropertyNames, fallbackOnlyTokenNames)
+                    ? BuildResolvedScopePairExpression(sp, operationExpr, principalExpr, valueTypePropertyNames, fallbackOnlyTokenNames, invalidFallbackTokenNames)
                     : $"new Blueprint.Model.ResolvedScopePair(\"{sp.Noun}\", \"{sp.Verb}\", null, null)"));
 
             resolvedScopeArg = $"[{resolvedElements}]";
@@ -445,11 +479,12 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
         string operationExpr,
         string principalExpr,
         HashSet<string> valueTypePropertyNames,
-        HashSet<string> fallbackOnlyTokenNames)
+        HashSet<string> fallbackOnlyTokenNames,
+        HashSet<string> invalidFallbackTokenNames)
     {
         var tokens = ResourceKeyTemplateParser.ParseTokens(sp.ResourceKeyTemplate!);
         var expandedExpr = ResourceKeyTemplateParser.GenerateExpansionExpression(
-            sp.ResourceKeyTemplate!, tokens, operationExpr, principalExpr, "context", valueTypePropertyNames, fallbackOnlyTokenNames);
+            sp.ResourceKeyTemplate!, tokens, operationExpr, principalExpr, "context", valueTypePropertyNames, fallbackOnlyTokenNames, invalidFallbackTokenNames);
 
         return $"new Blueprint.Model.ResolvedScopePair(\"{sp.Noun}\", \"{sp.Verb}\", \"{sp.ResourceKeyTemplate}\", {expandedExpr})";
     }

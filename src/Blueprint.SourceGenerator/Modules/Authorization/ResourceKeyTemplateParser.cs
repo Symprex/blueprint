@@ -144,6 +144,11 @@ internal static class ResourceKeyTemplateParser
     /// but a valid auth fallback was provided. For these tokens, only the fallback expression is
     /// emitted (the primary path is skipped entirely to avoid generating invalid property access).
     /// </param>
+    /// <param name="invalidFallbackTokenNames">
+    /// Optional set of token names where the primary property exists but the fallback property
+    /// path does not. For these tokens, only the primary expression is emitted (the invalid
+    /// fallback is ignored to avoid generating invalid property access).
+    /// </param>
     /// <returns>A C# expression string that evaluates to the expanded resource key.</returns>
     public static string GenerateExpansionExpression(
         string template,
@@ -152,7 +157,8 @@ internal static class ResourceKeyTemplateParser
         string principalExpression,
         string? contextExpression = null,
         HashSet<string>? valueTypePropertyNames = null,
-        HashSet<string>? fallbackOnlyTokenNames = null)
+        HashSet<string>? fallbackOnlyTokenNames = null,
+        HashSet<string>? invalidFallbackTokenNames = null)
     {
         if (tokens.Count == 0)
         {
@@ -181,12 +187,33 @@ internal static class ResourceKeyTemplateParser
             }
             else if (token.FallbackPropertyPath != null)
             {
-                var primaryExpr = GeneratePathExpression(
-                    token.Name, operationExpression, principalExpression, contextExpression, valueTypePropertyNames);
-                var fallbackExpr = GeneratePathExpression(
-                    token.FallbackPropertyPath, operationExpression, principalExpression, contextExpression, valueTypePropertyNames);
+                // When the fallback property was validated and found to be invalid (doesn't exist
+                // on the operation), treat this token as primary-only to avoid generating code
+                // that references a non-existent property.
+                var hasInvalidFallback = invalidFallbackTokenNames?.Contains(token.Name) == true;
 
-                replacement = $"{{{primaryExpr} ?? {fallbackExpr} ?? \"\"}}";
+                if (hasInvalidFallback)
+                {
+                    var primaryExpr = GeneratePathExpression(
+                        token.Name, operationExpression, principalExpression, contextExpression, valueTypePropertyNames);
+
+                    var isSimpleValueType = !token.Name.Contains('.') &&
+                        !token.IsAuthPath &&
+                        valueTypePropertyNames?.Contains(token.Name) == true;
+
+                    replacement = isSimpleValueType
+                        ? $"{{{primaryExpr}}}"
+                        : $"{{{primaryExpr} ?? \"\"}}";
+                }
+                else
+                {
+                    var primaryExpr = GeneratePathExpression(
+                        token.Name, operationExpression, principalExpression, contextExpression, valueTypePropertyNames);
+                    var fallbackExpr = GeneratePathExpression(
+                        token.FallbackPropertyPath, operationExpression, principalExpression, contextExpression, valueTypePropertyNames);
+
+                    replacement = $"{{{primaryExpr} ?? {fallbackExpr} ?? \"\"}}";
+                }
             }
             else
             {

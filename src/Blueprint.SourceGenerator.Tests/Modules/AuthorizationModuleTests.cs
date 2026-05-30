@@ -1074,6 +1074,45 @@ public class AuthorizationModuleTests
             "a missing primary path without fallback should still fire BPAU007");
     }
 
+    [Fact]
+    public void When_Resource_template_has_valid_primary_but_invalid_fallback_then_warns_but_still_generates_authorization()
+    {
+        var compilation = CreateCompilation(
+            """
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace;
+
+            [RootLink("/tenantUsers/{UserTenantId}/{Id}")]
+            [Resource("tenantUser", "delete", "/Tenants/{UserTenantId:NonExistentProp}")]
+            public partial class DeleteTenantUserCommand : ICommand<string>
+            {
+                public string UserTenantId { get; set; }
+                public string Id { get; set; }
+
+                public static Task<string> HandleAsync(DeleteTenantUserCommand operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        var config = new BlueprintSourceGenerationConfig([new AuthenticationModule(), new AuthorizationModule()]);
+        var result = config.BuildPipelinePlan("TestNamespace.DeleteTenantUserCommand", compilation);
+
+        // The invalid fallback should still emit a BPAU007 warning
+        result.Diagnostics.Should().Contain(
+            static d => d.Descriptor.Id == "BPAU007",
+            "invalid fallback property should still warn");
+
+        // But authorization code should still be generated (not suppressed)
+        result.Value!.RenderSteps.Should().Contain(
+            static s => s.Stage == PipelineStage.Authorisation,
+            "authorization check must still be generated when primary property exists");
+    }
+
     // ── Duplicate scope pair detection ─────────────────────────────
 
     [Fact]
