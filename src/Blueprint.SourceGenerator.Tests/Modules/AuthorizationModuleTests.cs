@@ -1102,10 +1102,14 @@ public class AuthorizationModuleTests
         var config = new BlueprintSourceGenerationConfig([new AuthenticationModule(), new AuthorizationModule()]);
         var result = config.BuildPipelinePlan("TestNamespace.DeleteTenantUserCommand", compilation);
 
-        // The invalid fallback should still emit a BPAU007 warning
+        // The invalid fallback should emit a BPAU010 warning (not BPAU007 error)
         result.Diagnostics.Should().Contain(
+            static d => d.Descriptor.Id == "BPAU010",
+            "invalid fallback property should emit BPAU010 warning");
+
+        result.Diagnostics.Should().NotContain(
             static d => d.Descriptor.Id == "BPAU007",
-            "invalid fallback property should still warn");
+            "BPAU007 (error) should not fire when primary property exists");
 
         // But authorization code should still be generated (not suppressed)
         result.Value!.RenderSteps.Should().Contain(

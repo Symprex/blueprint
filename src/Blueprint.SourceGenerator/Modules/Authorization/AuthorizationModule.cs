@@ -368,7 +368,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
                         {
                             context.AddDiagnostic(
                                 new DiagnosticInfo(
-                                    AuthorizationDiagnosticDescriptors.ResourceKeyTemplatePropertyNotFound,
+                                    AuthorizationDiagnosticDescriptors.ResourceKeyTemplateFallbackPropertyNotFound,
                                     operationLocation,
                                     [operationType.Name, fallbackSegment]));
 

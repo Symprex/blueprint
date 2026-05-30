@@ -57,14 +57,16 @@ internal static class AuthorizationDiagnosticDescriptors
 
     /// <summary>
     /// BPAU007: A <c>{PropertyName}</c> token in a resource key template does not match any
-    /// public property on the operation type (or the <c>[FromResource]</c> source operation).
+    /// public property on the operation type, and no valid fallback path exists. This suppresses
+    /// authorization code generation entirely — the operation will have NO runtime authorization
+    /// enforcement. This is a security issue: fix the template or add the property.
     /// </summary>
     public static readonly DiagnosticDescriptor ResourceKeyTemplatePropertyNotFound = new(
         id: "BPAU007",
         title: "Resource key template token does not match a property",
-        messageFormat: "Resource key template for operation '{0}' contains token '{{{1}}}' but no public property '{1}' exists on the operation type. Fix the template or add the property.",
+        messageFormat: "Resource key template for operation '{0}' contains token '{{{1}}}' but no public property '{1}' exists on the operation type. Authorization enforcement is suppressed. Fix the template or add the property.",
         category: "Blueprint.Authorization",
-        defaultSeverity: DiagnosticSeverity.Warning,
+        defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
     /// <summary>
@@ -89,6 +91,20 @@ internal static class AuthorizationDiagnosticDescriptors
         id: "BPAU009",
         title: "Duplicate [Resource] scope pair",
         messageFormat: "Operation '{0}' declares [Resource(\"{1}\", \"{2}\")] more than once. Remove the duplicate attribute.",
+        category: "Blueprint.Authorization",
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
+
+    /// <summary>
+    /// BPAU010: A fallback property path in a resource key template (the part after <c>:</c> in
+    /// <c>{Primary:Fallback}</c>) does not exist on the operation type. Since the primary property
+    /// exists and is used for authorization, this is non-blocking — the fallback is dead code.
+    /// Remove the fallback to silence this warning.
+    /// </summary>
+    public static readonly DiagnosticDescriptor ResourceKeyTemplateFallbackPropertyNotFound = new(
+        id: "BPAU010",
+        title: "Resource key template fallback property does not exist",
+        messageFormat: "Resource key template for operation '{0}' has fallback '{{{1}}}' but no public property '{1}' exists on the operation type. The primary property is used; remove the fallback to silence this warning.",
         category: "Blueprint.Authorization",
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
