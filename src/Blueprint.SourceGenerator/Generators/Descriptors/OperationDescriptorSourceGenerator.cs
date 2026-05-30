@@ -168,14 +168,6 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
         return DescriptorPlanBuilder.Build(result.Value.FullClassName, compilation, executionPlanResult, exceptionTranslatorPolicyResult);
     }
 
-    private static Result<PipelinePlan> ConfigurePipelinePlan(
-        string operationFullClassName,
-        Compilation compilation,
-        Result<BlueprintModuleExecutionPlan> executionPlanResult)
-    {
-        return PipelinePlanBuilder.Build(operationFullClassName, compilation, executionPlanResult);
-    }
-
     private static string GenerateDescriptorClass(
         DescriptorPlan plan)
     {

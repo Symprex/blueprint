@@ -88,47 +88,37 @@ internal static class DescriptorPlanBuilder
         HostExposureDiagnostics.AddUnsupportedHostDiagnostics(descriptorPlan, executionPlanResult.Value.HostContributors);
         HostExposureDiagnostics.AddConflictingHostDiagnostics(descriptorPlan, executionPlanResult.Value.HostContributors);
 
-        var pipelinePlanResult = PipelinePlanBuilder.Build(operationFullClassName, compilation, executionPlanResult, operationLookup: operationLookup as CompilationOperationLookup);
-
+        // Pipeline-level diagnostics (MissingRequiredVariable, BP200, module-specific) are reported
+        // by the pipeline generator itself — no need to redundantly build the full pipeline plan here.
         var descriptorDiags = descriptorPlan.Diagnostics;
-        var pipelineDiags = pipelinePlanResult.Diagnostics;
-        var descriptorCount = descriptorDiags.Count;
-        var pipelineCount = pipelineDiags.Count;
-        var totalCount = descriptorCount + pipelineCount;
 
-        if (totalCount == 0)
+        if (descriptorDiags.Count == 0)
         {
             return Result.Success(descriptorPlan);
         }
 
-        // Merge diagnostics into a single pre-sized array — avoids Concat + ToArray overhead
-        var allDiagnostics = new DiagnosticInfo[totalCount];
-        for (var i = 0; i < descriptorCount; i++)
-        {
-            allDiagnostics[i] = descriptorDiags[i];
-        }
-
-        for (var i = 0; i < pipelineCount; i++)
-        {
-            allDiagnostics[descriptorCount + i] = pipelineDiags[i];
-        }
-
         var hasErrors = false;
-        for (var i = 0; i < totalCount; i++)
+        for (var i = 0; i < descriptorDiags.Count; i++)
         {
-            if (allDiagnostics[i].Descriptor.DefaultSeverity == DiagnosticSeverity.Error)
+            if (descriptorDiags[i].Descriptor.DefaultSeverity == DiagnosticSeverity.Error)
             {
                 hasErrors = true;
                 break;
             }
         }
 
-        if (hasErrors)
+        var diagArray = new DiagnosticInfo[descriptorDiags.Count];
+        for (var i = 0; i < descriptorDiags.Count; i++)
         {
-            return Result<DescriptorPlan>.Failure(allDiagnostics);
+            diagArray[i] = descriptorDiags[i];
         }
 
-        return new Result<DescriptorPlan>(descriptorPlan, new EquatableList<DiagnosticInfo>(allDiagnostics));
+        if (hasErrors)
+        {
+            return Result<DescriptorPlan>.Failure(diagArray);
+        }
+
+        return new Result<DescriptorPlan>(descriptorPlan, new EquatableList<DiagnosticInfo>(diagArray));
     }
 
     /// <summary>
