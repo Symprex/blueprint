@@ -1614,11 +1614,12 @@ public static class PipelineHelpers
     }
 
     /// <summary>
-    /// Resolves <c>IApiLinkGenerator</c> and <c>IResourceLinkGenerator</c> from DI and invokes
-    /// <see cref="Blueprint.Http.LinkGeneratorHandler"/> to populate all HATEOAS links on the
-    /// returned resource. Skips link population entirely for <see cref="INotModifiedResult"/>
-    /// responses or when link generation is not registered. Replaces the 10-line inline block
-    /// that was previously emitted per-pipeline.
+    /// Populates HATEOAS links on the operation result. When <see cref="ApiOperationContext.BaseUri"/>
+    /// is available (set by the HTTP router), constructs <see cref="Blueprint.Http.ApiLinkGenerator"/>
+    /// inline — avoiding the per-request scoped DI resolution of <c>IApiLinkGenerator</c> that
+    /// previously re-read <c>IHttpContextAccessor</c> and recomputed the base URI every request.
+    /// Falls back to DI resolution when BaseUri is unavailable (non-HTTP host or test contexts).
+    /// Skips link population entirely for <see cref="INotModifiedResult"/> responses.
     /// </summary>
     /// <param name="serviceProvider">The scoped service provider for the current request.</param>
     /// <param name="context">The operation context for the current pipeline execution.</param>
@@ -1634,12 +1635,26 @@ public static class PipelineHelpers
             return Task.CompletedTask;
         }
 
-        var apiLinkGenerator = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions
-            .GetService<Blueprint.Http.IApiLinkGenerator>(serviceProvider);
+        Blueprint.Http.IApiLinkGenerator? apiLinkGenerator;
 
-        if (apiLinkGenerator == null)
+        if (context.BaseUri is not null)
         {
-            return Task.CompletedTask;
+            // Fast path: construct inline from the pre-computed BaseUri (set by the HTTP router).
+            // This avoids a scoped DI factory invocation that would re-read IHttpContextAccessor
+            // and recompute the same base URI on every request.
+            apiLinkGenerator = new Blueprint.Http.ApiLinkGenerator(context.App, context.BaseUri);
+        }
+        else
+        {
+            // Fallback: resolve from DI for non-HTTP hosts or test contexts where BaseUri
+            // was not pre-computed by the router.
+            apiLinkGenerator = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions
+                .GetService<Blueprint.Http.IApiLinkGenerator>(serviceProvider);
+
+            if (apiLinkGenerator == null)
+            {
+                return Task.CompletedTask;
+            }
         }
 
         return PopulateHateoasLinksCoreAsync(serviceProvider, apiLinkGenerator, context, handlerResult);

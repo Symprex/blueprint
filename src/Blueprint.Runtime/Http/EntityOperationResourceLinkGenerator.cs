@@ -14,26 +14,21 @@ namespace Blueprint.Http;
 public sealed class EntityOperationResourceLinkGenerator : IResourceLinkGenerator
 {
     private readonly IApiAuthoriserAggregator _apiAuthoriserAggregator;
-    private readonly IApiLinkGenerator _linkGenerator;
     private readonly ILogger<EntityOperationResourceLinkGenerator> _logger;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="EntityOperationResourceLinkGenerator"/> class.
     /// </summary>
     /// <param name="apiAuthoriserAggregator">The authoriser to determine link visibility.</param>
-    /// <param name="linkGenerator">The link generator to construct URLs.</param>
     /// <param name="logger">The logger.</param>
     public EntityOperationResourceLinkGenerator(
         IApiAuthoriserAggregator apiAuthoriserAggregator,
-        IApiLinkGenerator linkGenerator,
         ILogger<EntityOperationResourceLinkGenerator> logger)
     {
         Guard.NotNull(apiAuthoriserAggregator);
-        Guard.NotNull(linkGenerator);
         Guard.NotNull(logger);
 
         this._apiAuthoriserAggregator = apiAuthoriserAggregator;
-        this._linkGenerator = linkGenerator;
         this._logger = logger;
     }
 
@@ -94,7 +89,7 @@ public sealed class EntityOperationResourceLinkGenerator : IResourceLinkGenerato
                 continue;
             }
 
-            var url = this._linkGenerator.CreateUrl(link, linkableResource);
+            var url = apiLinkGenerator.CreateUrl(link, linkableResource);
 
             // We could not generate this URL — a placeholder value could not be injected
             if (url == null)
