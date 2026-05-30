@@ -323,7 +323,7 @@ public static class EndpointRouteBuilderExtensions
         private string? _cachedBaseUri;
         private string? _cachedScheme;
         private string? _cachedHost;
-        private PathString _cachedPathBase;
+        private PathString _cachedRequestPathBase;
 
         public BlueprintApiRouter(
             IServiceProvider rootServiceProvider,
@@ -395,19 +395,24 @@ public static class EndpointRouteBuilderExtensions
             };
 
             // Compute a stable base URI for link generation and redirect targets.
-            // Cache the result to avoid per-request string interpolation when values are stable.
-            var host = this._httpOptions.PublicHost ?? httpRequest.Host.Value;
-            var basePath = httpRequest.PathBase.Add(this._normalizedBasePath);
+            // Cache the result to avoid per-request string allocation. Check scheme and host
+            // first (cheapest comparisons) to skip PathBase.Add() allocation on the hot path.
             var scheme = httpRequest.Scheme;
+            var host = this._httpOptions.PublicHost ?? httpRequest.Host.Value;
 
-            if (this._cachedBaseUri is null
-                || !string.Equals(scheme, this._cachedScheme, StringComparison.Ordinal)
-                || !string.Equals(host, this._cachedHost, StringComparison.Ordinal)
-                || basePath != this._cachedPathBase)
+            if (this._cachedBaseUri is not null
+                && string.Equals(scheme, this._cachedScheme, StringComparison.Ordinal)
+                && string.Equals(host, this._cachedHost, StringComparison.Ordinal)
+                && httpRequest.PathBase == this._cachedRequestPathBase)
             {
+                // Hot path: nothing changed, reuse cached URI with zero allocation.
+            }
+            else
+            {
+                var basePath = httpRequest.PathBase.Add(this._normalizedBasePath);
                 this._cachedScheme = scheme;
                 this._cachedHost = host;
-                this._cachedPathBase = basePath;
+                this._cachedRequestPathBase = httpRequest.PathBase;
                 this._cachedBaseUri = $"{scheme}://{host}{basePath}";
             }
 
