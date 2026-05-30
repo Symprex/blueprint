@@ -112,7 +112,11 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             context.RequireAsync();
         }
 
-        context.AddRenderStep(PipelineStage.Population, renderContext => RenderPopulation(renderContext, entries));
+        // Cache TypeConverter instances as static readonly fields to avoid per-request
+        // TypeDescriptor.GetConverter() lookup (~50-500ns per call depending on cache state).
+        var converterFieldMap = EmitCachedTypeConverterFields(context, entries);
+
+        context.AddRenderStep(PipelineStage.Population, renderContext => RenderPopulation(renderContext, entries, converterFieldMap));
 
         // Single-pass partition: collect claim-mapped, init-only, and body entries in one traversal
         // instead of three separate Where().ToList/ToArray() scans.
@@ -1081,6 +1085,59 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         return !IsSupportedScalarType(effectiveType) && HasTypeConverterAttribute(effectiveType);
     }
 
+    /// <summary>
+    /// Registers static readonly <see cref="System.ComponentModel.TypeConverter"/> fields for types that
+    /// require TypeConverter-based binding. This eliminates the per-request
+    /// <c>TypeDescriptor.GetConverter(typeof(T))</c> call (~50-500ns depending on cache state).
+    /// </summary>
+    private static Dictionary<string, string> EmitCachedTypeConverterFields(
+        PipelineContributorContext context,
+        List<PropertyOwnershipEntry> entries)
+    {
+        var converterFieldMap = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        foreach (var entry in entries)
+        {
+            if (entry.Source is not (PropertyOwnershipSource.Route or PropertyOwnershipSource.Query))
+            {
+                continue;
+            }
+
+            var effectiveType = GetEffectiveBindingType(entry.TypeSymbol);
+            if (!IsTypeConverterOnlyType(entry.TypeSymbol))
+            {
+                continue;
+            }
+
+            var fqType = effectiveType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+            if (converterFieldMap.ContainsKey(fqType))
+            {
+                continue;
+            }
+
+            var fieldName = $"_tc_{entry.PropertyName}";
+
+            // Ensure unique field names across different properties that share the same type
+            if (converterFieldMap.ContainsValue(fieldName))
+            {
+                fieldName = $"_tc_{entry.PropertyName}_{converterFieldMap.Count}";
+            }
+
+            converterFieldMap[fqType] = fieldName;
+
+            context.AddDeferredClassMember(classBuilder =>
+            {
+                classBuilder.AddProperty(fieldName, Accessibility.Private)
+                    .SetType("System.ComponentModel.TypeConverter")
+                    .MakeStatic()
+                    .WithReadonlyValue($"System.ComponentModel.TypeDescriptor.GetConverter(typeof({fqType}))");
+            });
+        }
+
+        return converterFieldMap;
+    }
+
     private static void RenderDescriptorFeatureData(ICodeWriter writer, List<PropertyOwnershipEntry> entries)
     {
         if (entries.Count == 0)
@@ -1153,7 +1210,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
     /// header, cookie) in a single pipeline stage. Blank lines separate logical sections for readability
     /// in the generated output.
     /// </summary>
-    private static void RenderPopulation(PipelineRenderContext context, List<PropertyOwnershipEntry> entries)
+    private static void RenderPopulation(PipelineRenderContext context, List<PropertyOwnershipEntry> entries, Dictionary<string, string> converterFieldMap)
     {
         // Single-pass partitioning by source avoids scanning the entries collection 5 times.
         List<PropertyOwnershipEntry>? bodyEntries = null;
@@ -1215,7 +1272,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             {
                 foreach (var entry in routeEntries)
                 {
-                    WriteRouteExtraction(bindingBranch, operationExpr, entry);
+                    WriteRouteExtraction(bindingBranch, operationExpr, entry, converterFieldMap);
                 }
             }
 
@@ -1229,7 +1286,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             {
                 foreach (var entry in queryEntries)
                 {
-                    WriteQueryExtraction(bindingBranch, operationExpr, entry);
+                    WriteQueryExtraction(bindingBranch, operationExpr, entry, converterFieldMap);
                 }
             }
 
@@ -1381,7 +1438,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         writer.AppendLine($"        {FormatPropertyAssignment("operation", entry, readerExpr)}");
     }
 
-    private static void WriteRouteExtraction(PipelineRenderContext context, string operationExpr, PropertyOwnershipEntry entry)
+    private static void WriteRouteExtraction(PipelineRenderContext context, string operationExpr, PropertyOwnershipEntry entry, Dictionary<string, string> converterFieldMap)
     {
         var effectiveType = GetEffectiveBindingType(entry.TypeSymbol);
         var routeValueExpr = $"httpContext.Request.RouteValues[\"{entry.BindingName}\"]";
@@ -1398,6 +1455,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         else if (IsTypeConverterOnlyType(entry.TypeSymbol))
         {
             var fqType = effectiveType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            var converterFieldName = converterFieldMap[fqType];
 
             context.If($"{routeValueExpr} is string routeStr_{entry.PropertyName}", ifCtx =>
             {
@@ -1406,7 +1464,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
                     var assignment = FormatPropertyAssignment(
                         operationExpr,
                         entry,
-                        $"({fqType})System.ComponentModel.TypeDescriptor.GetConverter(typeof({fqType})).ConvertFromInvariantString(routeStr_{entry.PropertyName})!");
+                        $"({fqType}){converterFieldName}.ConvertFromInvariantString(routeStr_{entry.PropertyName})!");
                     tryCtx.WriteStatement(assignment);
                 });
                 ifCtx.Catch("System.Exception", catchCtx =>
@@ -1433,7 +1491,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         }
     }
 
-    private static void WriteQueryExtraction(PipelineRenderContext context, string operationExpr, PropertyOwnershipEntry entry)
+    private static void WriteQueryExtraction(PipelineRenderContext context, string operationExpr, PropertyOwnershipEntry entry, Dictionary<string, string> converterFieldMap)
     {
         var typeSymbol = entry.TypeSymbol;
         var queryParamName = entry.BindingName!;
@@ -1467,6 +1525,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         {
             var queryVar = $"_qv_{entry.PropertyName}";
             var fqType = effectiveType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            var converterFieldName = converterFieldMap[fqType];
 
             context.WriteStatement($"var {queryVar} = httpContext.Request.Query[\"{queryParamName}\"];");
 
@@ -1477,7 +1536,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
                     var assignment = FormatPropertyAssignment(
                         operationExpr,
                         entry,
-                        $"({fqType})System.ComponentModel.TypeDescriptor.GetConverter(typeof({fqType})).ConvertFromInvariantString({queryVar}[0])!");
+                        $"({fqType}){converterFieldName}.ConvertFromInvariantString({queryVar}[0])!");
                     tryCtx.WriteStatement(assignment);
                 });
                 ifCtx.Catch("System.Exception", catchCtx =>
