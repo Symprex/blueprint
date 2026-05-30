@@ -1833,6 +1833,87 @@ public static class PipelineHelpers
         return null;
     }
 
+    private static readonly ConcurrentDictionary<(System.Text.Json.Serialization.JsonSerializerContext?, Type), System.Text.Json.Serialization.Metadata.JsonTypeInfo?> _inlineTypeInfoCache = new();
+
+    // Thread-local buffer and writer for inline JSON response writing from generated pipelines.
+    // These are the same pattern as HttpOperationResultExecutor's fields — thread locality eliminates contention.
+    [ThreadStatic]
+    private static System.Buffers.ArrayBufferWriter<byte>? _inlineResponseBuffer;
+
+    [ThreadStatic]
+    private static System.Text.Json.Utf8JsonWriter? _inlineResponseWriter;
+
+    /// <summary>
+    /// Writes a 200 OK JSON response directly from the generated pipeline, bypassing
+    /// <see cref="OkResult{T}"/> allocation. The caller should return
+    /// <see cref="Http.HttpResponseAlreadyWrittenResult.Instance"/> after calling this method.
+    /// </summary>
+    /// <remarks>
+    /// This method replicates the fast-path logic from <c>HttpOperationResultExecutor.HandleOkResult</c>
+    /// but operates on a typed content reference, eliminating the need for an intermediate heap-allocated
+    /// <see cref="OkResult{T}"/> wrapper (~40 bytes per request).
+    /// </remarks>
+    /// <param name="httpContext">The HTTP context for the current request.</param>
+    /// <param name="operationContext">The operation context providing access to the app serializer.</param>
+    /// <param name="content">The typed response content to serialize as JSON.</param>
+    /// <returns>A task that completes when the response body has been written.</returns>
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2026",
+        Justification = "Fallback serialization path mirrors HttpOperationResultExecutor — only reached when no app-owned JsonSerializerContext covers the response type.")]
+    [UnconditionalSuppressMessage(
+        "AOT",
+        "IL3050",
+        Justification = "Fallback serialization path mirrors HttpOperationResultExecutor — AOT consumers must ensure their JsonSerializerContext covers all response types.")]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static Task WriteOkJsonResponseAsync(
+        Microsoft.AspNetCore.Http.HttpContext httpContext,
+        ApiOperationContext operationContext,
+        object content)
+    {
+        httpContext.Response.StatusCode = 200;
+        httpContext.Response.ContentType = "application/json; charset=utf-8";
+
+        var serializerContext = operationContext.App.AppOwnedSerializerContext;
+        var contentType = content.GetType();
+
+        var jsonTypeInfo = _inlineTypeInfoCache.GetOrAdd(
+            (serializerContext, contentType),
+            static key => key.Item1?.GetTypeInfo(key.Item2));
+
+        if (jsonTypeInfo is not null)
+        {
+            var buffer = _inlineResponseBuffer ??= new System.Buffers.ArrayBufferWriter<byte>(512);
+            buffer.Clear();
+
+            var writer = _inlineResponseWriter;
+            if (writer is null)
+            {
+                writer = new System.Text.Json.Utf8JsonWriter(buffer);
+                _inlineResponseWriter = writer;
+            }
+            else
+            {
+                writer.Reset(buffer);
+            }
+
+            System.Text.Json.JsonSerializer.Serialize(writer, content, jsonTypeInfo);
+            writer.Flush();
+
+            httpContext.Response.ContentLength = buffer.WrittenCount;
+
+            var writeTask = httpContext.Response.Body.WriteAsync(buffer.WrittenMemory, httpContext.RequestAborted);
+            return writeTask.IsCompletedSuccessfully
+                ? Task.CompletedTask
+                : writeTask.AsTask();
+        }
+        else
+        {
+            return System.Text.Json.JsonSerializer.SerializeAsync(
+                httpContext.Response.Body, content, contentType, serializerContext?.Options, httpContext.RequestAborted);
+        }
+    }
+
     /// <summary>
     /// A stack-allocated <see cref="IReadOnlyList{T}"/> that holds exactly one element,
     /// avoiding the heap allocation of a single-element <c>T[]</c> array. Generated pipelines

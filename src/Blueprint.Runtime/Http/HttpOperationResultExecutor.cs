@@ -105,6 +105,7 @@ public class HttpOperationResultExecutor
 
             // Status-only results that require no I/O (zero allocation path).
             case HttpPipelineShortCircuitResult:
+            case HttpResponseAlreadyWrittenResult:
             case NoResultOperationResult:
                 return _trueTask;
 
