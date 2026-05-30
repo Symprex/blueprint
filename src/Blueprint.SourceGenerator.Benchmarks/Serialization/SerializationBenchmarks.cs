@@ -117,25 +117,53 @@ public class SerializationBenchmarks
         await JsonSerializer.SerializeAsync<object>(this._outputStream, this._smallResource, _reflectionOptions).ConfigureAwait(false);
     }
 
+    private static readonly JsonEncodedText _propObject = JsonEncodedText.Encode("$object");
+    private static readonly JsonEncodedText _propEventId = JsonEncodedText.Encode("eventId");
+    private static readonly JsonEncodedText _propChangeType = JsonEncodedText.Encode("changeType");
+    private static readonly JsonEncodedText _propCreated = JsonEncodedText.Encode("created");
+    private static readonly JsonEncodedText _propResourceObject = JsonEncodedText.Encode("resourceObject");
+    private static readonly JsonEncodedText _propData = JsonEncodedText.Encode("data");
+    private static readonly JsonEncodedText _valEvent = JsonEncodedText.Encode("ResourceEvent");
+    private static readonly JsonEncodedText _valCreated = JsonEncodedText.Encode("Created");
+    private static readonly JsonEncodedText _valResourceType = JsonEncodedText.Encode("SerBenchmarkResource");
+
+    [ThreadStatic]
+    private static System.Buffers.ArrayBufferWriter<byte>? _benchBuffer;
+
+    [ThreadStatic]
+    private static Utf8JsonWriter? _benchWriter;
+
     /// <summary>
-    /// Serialize a ResourceEvent envelope using Utf8JsonWriter (the optimized path
-    /// used by HttpOperationResultExecutor for ResourceEventResult).
+    /// Serialize a ResourceEvent envelope using thread-static Utf8JsonWriter reuse,
+    /// matching the production path in HttpOperationResultExecutor.
     /// </summary>
     [Benchmark]
     public void ResourceEventEnvelope_Utf8Writer()
     {
-        this._outputStream.Position = 0;
-        this._outputStream.SetLength(0);
-        using var writer = new Utf8JsonWriter(this._outputStream);
+        var buffer = _benchBuffer ??= new System.Buffers.ArrayBufferWriter<byte>(512);
+        buffer.Clear();
+
+        var writer = _benchWriter;
+        if (writer is null)
+        {
+            writer = new Utf8JsonWriter(buffer);
+            _benchWriter = writer;
+        }
+        else
+        {
+            writer.Reset(buffer);
+        }
+
         writer.WriteStartObject();
-        writer.WriteString("$object", "ResourceEvent");
-        writer.WriteString("eventId", Guid.NewGuid().ToString());
-        writer.WriteString("changeType", "Created");
-        writer.WriteString("created", DateTime.UtcNow.ToString("O"));
-        writer.WriteString("resourceObject", "SerBenchmarkResource");
-        writer.WritePropertyName("data");
+        writer.WriteString(_propObject, _valEvent);
+        writer.WriteString(_propEventId, Guid.NewGuid().ToString("N"));
+        writer.WriteString(_propChangeType, _valCreated);
+        writer.WriteString(_propCreated, DateTimeOffset.UtcNow);
+        writer.WriteString(_propResourceObject, _valResourceType);
+        writer.WritePropertyName(_propData);
         JsonSerializer.Serialize(writer, this._smallResource, SerBenchmarkJsonContext.Default.SerBenchmarkResource);
         writer.WriteEndObject();
+        writer.Flush();
     }
 
     private static readonly JsonSerializerOptions _reflectionOptions = new()
