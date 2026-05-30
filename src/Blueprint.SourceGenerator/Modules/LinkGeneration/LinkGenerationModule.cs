@@ -1118,7 +1118,7 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
     {
         context.WriteBlankLine();
         context.WriteStatement("// Populate full HATEOAS links (skip 304 Not Modified)");
-        context.WriteStatement("await Blueprint.Runtime.Exec.PipelineHelpers.PopulateHateoasLinksAsync(context.ServiceProvider, context, handlerResult).ConfigureAwait(false);");
+        context.WriteStatement("await PopulateHateoasLinksAsync(context.ServiceProvider, context, handlerResult).ConfigureAwait(false);");
     }
 
     private static string BuildHrefInterpolation(string urlTemplate)

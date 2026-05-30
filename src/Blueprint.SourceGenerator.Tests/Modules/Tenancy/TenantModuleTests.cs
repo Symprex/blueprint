@@ -53,7 +53,7 @@ public class TenantModuleTests
         var pipelineSource = string.Join("\n", pipelineSources.Select(static s => s.SourceText));
 
         // Uses cached services from base class (no per-request DI lookup)
-        pipelineSource.Should().Contain("PipelineHelpers.ResolveTenant(this.TenantResolver, this.TenantAccessor, context.UserPrincipal)");
+        pipelineSource.Should().Contain("ResolveTenant(this.TenantResolver, this.TenantAccessor, context.UserPrincipal)");
 
         // Direct property assignment from cached accessor (no reflection)
         pipelineSource.Should().Contain("operation.TenantId = this.TenantAccessor.Current");
@@ -100,7 +100,7 @@ public class TenantModuleTests
         var pipelineSource = string.Join("\n", pipelineSources.Select(static s => s.SourceText));
 
         // Still resolves and sets accessor (all operations get tenant context)
-        pipelineSource.Should().Contain("PipelineHelpers.ResolveTenant(");
+        pipelineSource.Should().Contain("ResolveTenant(");
 
         // Should NOT attempt direct property assignment
         pipelineSource.Should().NotContain("operation.TenantId");
@@ -192,7 +192,7 @@ public class TenantModuleTests
         var pipelineSource = string.Join("\n", pipelineSources.Select(static s => s.SourceText));
 
         // Still resolves and sets accessor
-        pipelineSource.Should().Contain("PipelineHelpers.ResolveTenant(");
+        pipelineSource.Should().Contain("ResolveTenant(");
 
         // Should NOT assign to readonly property
         pipelineSource.Should().NotContain("operation.TenantId");
@@ -393,7 +393,7 @@ public class TenantModuleTests
         var pipelineSource = string.Join("\n", pipelineSources.Select(static s => s.SourceText));
 
         // Still resolves tenant accessor (all operations get tenant context)
-        pipelineSource.Should().Contain("PipelineHelpers.ResolveTenant(");
+        pipelineSource.Should().Contain("ResolveTenant(");
 
         // Should NOT auto-populate TenantId from accessor — route binding handles it
         pipelineSource.Should().NotContain("_parsedTenantId");
@@ -651,7 +651,7 @@ public class TenantModuleTests
         var pipelineSource = string.Join("\n", pipelineSources.Select(static s => s.SourceText));
 
         // Tenant resolution should still happen (sets accessor)
-        pipelineSource.Should().Contain("PipelineHelpers.ResolveTenant(");
+        pipelineSource.Should().Contain("ResolveTenant(");
 
         // But should NOT auto-assign to operation.TenantId (explicit binding handles that)
         pipelineSource.Should().NotContain("operation.TenantId = this.TenantAccessor.Current");

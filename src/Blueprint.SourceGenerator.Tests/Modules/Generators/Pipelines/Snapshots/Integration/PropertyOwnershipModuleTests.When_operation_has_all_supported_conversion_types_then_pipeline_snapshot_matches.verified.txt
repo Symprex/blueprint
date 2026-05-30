@@ -39,6 +39,7 @@ TestNamespace.AllTypesGetQueryExecutorPipeline.g.cs:
 //------------------------------------------------------------------------------
 
 using Blueprint;
+using static Blueprint.Runtime.Exec.PipelineHelpers;
 
 namespace Blueprint.Generated
 {
@@ -65,7 +66,7 @@ namespace Blueprint.Generated
                 {
                     operation.OrgSlug = routeStr_OrgSlug;
                 }
-                var _routeErr_CategoryId = Blueprint.Runtime.Exec.PipelineHelpers.BindRouteValue(httpContext.Request.RouteValues, "CategoryId", out var _parsed_CategoryId, static (string _s, out int _v) => int.TryParse(_s, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out _v));
+                var _routeErr_CategoryId = BindRouteValue(httpContext.Request.RouteValues, "CategoryId", out var _parsed_CategoryId, static (string _s, out int _v) => int.TryParse(_s, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out _v));
                 if (_routeErr_CategoryId != null)
                 {
                     return _routeErr_CategoryId;
@@ -77,7 +78,7 @@ namespace Blueprint.Generated
                 {
                     operation.Term = _qv_Term[0];
                 }
-                var _qvErr_PageSize = Blueprint.Runtime.Exec.PipelineHelpers.BindQueryValue(httpContext.Request.Query, "pageSize", out var _parsed_PageSize, out var _qvFound_PageSize, static (string _s, out int _v) => int.TryParse(_s, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out _v));
+                var _qvErr_PageSize = BindQueryValue(httpContext.Request.Query, "pageSize", out var _parsed_PageSize, out var _qvFound_PageSize, static (string _s, out int _v) => int.TryParse(_s, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out _v));
                 if (_qvErr_PageSize != null)
                 {
                     return _qvErr_PageSize;
@@ -86,7 +87,7 @@ namespace Blueprint.Generated
                 {
                     operation.PageSize = _parsed_PageSize;
                 }
-                var _qvErr_Offset = Blueprint.Runtime.Exec.PipelineHelpers.BindQueryValue(httpContext.Request.Query, "offset", out var _parsed_Offset, out var _qvFound_Offset, static (string _s, out long _v) => long.TryParse(_s, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out _v));
+                var _qvErr_Offset = BindQueryValue(httpContext.Request.Query, "offset", out var _parsed_Offset, out var _qvFound_Offset, static (string _s, out long _v) => long.TryParse(_s, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out _v));
                 if (_qvErr_Offset != null)
                 {
                     return _qvErr_Offset;
@@ -95,7 +96,7 @@ namespace Blueprint.Generated
                 {
                     operation.Offset = _parsed_Offset;
                 }
-                var _qvErr_MinRating = Blueprint.Runtime.Exec.PipelineHelpers.BindQueryValue(httpContext.Request.Query, "minRating", out var _parsed_MinRating, out var _qvFound_MinRating, static (string _s, out double _v) => double.TryParse(_s, System.Globalization.NumberStyles.Float | System.Globalization.NumberStyles.AllowThousands, System.Globalization.CultureInfo.InvariantCulture, out _v));
+                var _qvErr_MinRating = BindQueryValue(httpContext.Request.Query, "minRating", out var _parsed_MinRating, out var _qvFound_MinRating, static (string _s, out double _v) => double.TryParse(_s, System.Globalization.NumberStyles.Float | System.Globalization.NumberStyles.AllowThousands, System.Globalization.CultureInfo.InvariantCulture, out _v));
                 if (_qvErr_MinRating != null)
                 {
                     return _qvErr_MinRating;
@@ -104,7 +105,7 @@ namespace Blueprint.Generated
                 {
                     operation.MinRating = _parsed_MinRating;
                 }
-                var _qvErr_IncludeDeleted = Blueprint.Runtime.Exec.PipelineHelpers.BindQueryValue(httpContext.Request.Query, "includeDeleted", out var _parsed_IncludeDeleted, out var _qvFound_IncludeDeleted, static (string _s, out bool _v) => bool.TryParse(_s, out _v));
+                var _qvErr_IncludeDeleted = BindQueryValue(httpContext.Request.Query, "includeDeleted", out var _parsed_IncludeDeleted, out var _qvFound_IncludeDeleted, static (string _s, out bool _v) => bool.TryParse(_s, out _v));
                 if (_qvErr_IncludeDeleted != null)
                 {
                     return _qvErr_IncludeDeleted;
@@ -113,7 +114,7 @@ namespace Blueprint.Generated
                 {
                     operation.IncludeDeleted = _parsed_IncludeDeleted;
                 }
-                var _qvErr_MinPrice = Blueprint.Runtime.Exec.PipelineHelpers.BindQueryValue(httpContext.Request.Query, "minPrice", out var _parsed_MinPrice, out var _qvFound_MinPrice, static (string _s, out decimal _v) => decimal.TryParse(_s, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out _v));
+                var _qvErr_MinPrice = BindQueryValue(httpContext.Request.Query, "minPrice", out var _parsed_MinPrice, out var _qvFound_MinPrice, static (string _s, out decimal _v) => decimal.TryParse(_s, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out _v));
                 if (_qvErr_MinPrice != null)
                 {
                     return _qvErr_MinPrice;
@@ -122,7 +123,7 @@ namespace Blueprint.Generated
                 {
                     operation.MinPrice = _parsed_MinPrice;
                 }
-                var _qvErr_FilterId = Blueprint.Runtime.Exec.PipelineHelpers.BindQueryValue(httpContext.Request.Query, "filterId", out var _parsed_FilterId, out var _qvFound_FilterId, static (string _s, out System.Guid _v) => System.Guid.TryParse(_s, out _v));
+                var _qvErr_FilterId = BindQueryValue(httpContext.Request.Query, "filterId", out var _parsed_FilterId, out var _qvFound_FilterId, static (string _s, out System.Guid _v) => System.Guid.TryParse(_s, out _v));
                 if (_qvErr_FilterId != null)
                 {
                     return _qvErr_FilterId;
@@ -131,7 +132,7 @@ namespace Blueprint.Generated
                 {
                     operation.FilterId = _parsed_FilterId;
                 }
-                var _qvErr_Since = Blueprint.Runtime.Exec.PipelineHelpers.BindQueryValue(httpContext.Request.Query, "since", out var _parsed_Since, out var _qvFound_Since, static (string _s, out System.DateTime _v) => System.DateTime.TryParse(_s, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out _v));
+                var _qvErr_Since = BindQueryValue(httpContext.Request.Query, "since", out var _parsed_Since, out var _qvFound_Since, static (string _s, out System.DateTime _v) => System.DateTime.TryParse(_s, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out _v));
                 if (_qvErr_Since != null)
                 {
                     return _qvErr_Since;
@@ -140,7 +141,7 @@ namespace Blueprint.Generated
                 {
                     operation.Since = _parsed_Since;
                 }
-                var _qvErr_ModifiedAfter = Blueprint.Runtime.Exec.PipelineHelpers.BindQueryValue(httpContext.Request.Query, "modifiedAfter", out var _parsed_ModifiedAfter, out var _qvFound_ModifiedAfter, static (string _s, out System.DateTimeOffset _v) => System.DateTimeOffset.TryParse(_s, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out _v));
+                var _qvErr_ModifiedAfter = BindQueryValue(httpContext.Request.Query, "modifiedAfter", out var _parsed_ModifiedAfter, out var _qvFound_ModifiedAfter, static (string _s, out System.DateTimeOffset _v) => System.DateTimeOffset.TryParse(_s, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out _v));
                 if (_qvErr_ModifiedAfter != null)
                 {
                     return _qvErr_ModifiedAfter;
@@ -149,7 +150,7 @@ namespace Blueprint.Generated
                 {
                     operation.ModifiedAfter = _parsed_ModifiedAfter;
                 }
-                var _qvErr_MaxResults = Blueprint.Runtime.Exec.PipelineHelpers.BindQueryValue(httpContext.Request.Query, "maxResults", out var _parsed_MaxResults, out var _qvFound_MaxResults, static (string _s, out int _v) => int.TryParse(_s, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out _v));
+                var _qvErr_MaxResults = BindQueryValue(httpContext.Request.Query, "maxResults", out var _parsed_MaxResults, out var _qvFound_MaxResults, static (string _s, out int _v) => int.TryParse(_s, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out _v));
                 if (_qvErr_MaxResults != null)
                 {
                     return _qvErr_MaxResults;
@@ -158,7 +159,7 @@ namespace Blueprint.Generated
                 {
                     operation.MaxResults = _parsed_MaxResults;
                 }
-                var _qvErr_MaxPrice = Blueprint.Runtime.Exec.PipelineHelpers.BindQueryValue(httpContext.Request.Query, "maxPrice", out var _parsed_MaxPrice, out var _qvFound_MaxPrice, static (string _s, out double _v) => double.TryParse(_s, System.Globalization.NumberStyles.Float | System.Globalization.NumberStyles.AllowThousands, System.Globalization.CultureInfo.InvariantCulture, out _v));
+                var _qvErr_MaxPrice = BindQueryValue(httpContext.Request.Query, "maxPrice", out var _parsed_MaxPrice, out var _qvFound_MaxPrice, static (string _s, out double _v) => double.TryParse(_s, System.Globalization.NumberStyles.Float | System.Globalization.NumberStyles.AllowThousands, System.Globalization.CultureInfo.InvariantCulture, out _v));
                 if (_qvErr_MaxPrice != null)
                 {
                     return _qvErr_MaxPrice;
@@ -172,7 +173,7 @@ namespace Blueprint.Generated
                 {
                     operation.Tags = _qv_Tags.ToArray();
                 }
-                var _qaErr_CategoryIds = Blueprint.Runtime.Exec.PipelineHelpers.BindQueryArray(httpContext.Request.Query, "categoryIds", out var _arr_CategoryIds, static (string _s, out int _v) => int.TryParse(_s, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out _v));
+                var _qaErr_CategoryIds = BindQueryArray(httpContext.Request.Query, "categoryIds", out var _arr_CategoryIds, static (string _s, out int _v) => int.TryParse(_s, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out _v));
                 if (_qaErr_CategoryIds != null)
                 {
                     return _qaErr_CategoryIds;
@@ -186,25 +187,25 @@ namespace Blueprint.Generated
             // Tenant resolution (compile-time, no reflection, cached services)
             if (this.TenantResolver != null && this.TenantAccessor != null)
             {
-                Blueprint.Runtime.Exec.PipelineHelpers.ResolveTenant(this.TenantResolver, this.TenantAccessor, context.UserPrincipal);
+                ResolveTenant(this.TenantResolver, this.TenantAccessor, context.UserPrincipal);
             }
 
             var applicablePopulators = this.GetApplicablePropertyPopulators(context.Descriptor);
             if (applicablePopulators.Length > 0)
             {
-                await Blueprint.Runtime.Exec.PipelineHelpers.PopulatePropertiesAsync(applicablePopulators, context).ConfigureAwait(false);
+                await PopulatePropertiesAsync(applicablePopulators, context).ConfigureAwait(false);
             }
-            if (Blueprint.Runtime.Exec.PipelineHelpers.CheckHttpAuthenticated(httpContext, context) is { } _authCheckResult)
+            if (CheckHttpAuthenticated(httpContext, context) is { } _authCheckResult)
             {
                 return _authCheckResult;
             }
 
             if (this.UserAuthorisationContextFactory != null)
             {
-                await Blueprint.Runtime.Exec.PipelineHelpers.LoadUserContextAsync(context, httpContext, this.UserAuthorisationContextFactory).ConfigureAwait(false);
+                await LoadUserContextAsync(context, httpContext, this.UserAuthorisationContextFactory).ConfigureAwait(false);
             }
 
-            var authoriserDenial = await Blueprint.Runtime.Exec.PipelineHelpers.RunPreFilteredAuthorisersAsync(context, this.GetApplicableApiAuthorisers(context.Descriptor), this.GetApplicableOperationAuthorisers(context.Descriptor)).ConfigureAwait(false);
+            var authoriserDenial = await RunPreFilteredAuthorisersAsync(context, this.GetApplicableApiAuthorisers(context.Descriptor), this.GetApplicableOperationAuthorisers(context.Descriptor)).ConfigureAwait(false);
             if (authoriserDenial != null)
             {
                 return authoriserDenial;
@@ -215,12 +216,12 @@ namespace Blueprint.Generated
 
             if (this.AuditSink != null)
             {
-                await Blueprint.Runtime.Exec.PipelineHelpers.ExecuteAuditSinkAsync(this.AuditSink, context, handlerResult, "AllTypesGetQuery").ConfigureAwait(false);
+                await ExecuteAuditSinkAsync(this.AuditSink, context, handlerResult, "AllTypesGetQuery").ConfigureAwait(false);
             }
 
             if (this.HasBackgroundTaskScheduler)
             {
-                await Blueprint.Runtime.Exec.PipelineHelpers.FlushBackgroundTasksAsync(context.ServiceProvider).ConfigureAwait(false);
+                await FlushBackgroundTasksAsync(context.ServiceProvider).ConfigureAwait(false);
             }
 
             return handlerResult;
@@ -247,6 +248,7 @@ TestNamespace.AllTypesPostCommandExecutorPipeline.g.cs:
 //------------------------------------------------------------------------------
 
 using Blueprint;
+using static Blueprint.Runtime.Exec.PipelineHelpers;
 
 namespace Blueprint.Generated
 {
@@ -269,7 +271,7 @@ namespace Blueprint.Generated
 
             if (!context.IsNested)
             {
-                var _bodyResult = await Blueprint.Runtime.Exec.PipelineHelpers.ReadJsonBodyAsync(httpContext, context.OperationCancelled, operation, PopulateFromJsonBody, this.BodyJsonOptions).ConfigureAwait(false);
+                var _bodyResult = await ReadJsonBodyAsync(httpContext, context.OperationCancelled, operation, PopulateFromJsonBody, this.BodyJsonOptions).ConfigureAwait(false);
                 if (_bodyResult != null)
                 {
                     return _bodyResult;
@@ -279,13 +281,13 @@ namespace Blueprint.Generated
                 {
                     operation.OrgSlug = routeStr_OrgSlug;
                 }
-                var _routeErr_ProjectId = Blueprint.Runtime.Exec.PipelineHelpers.BindRouteValue(httpContext.Request.RouteValues, "ProjectId", out var _parsed_ProjectId, static (string _s, out int _v) => int.TryParse(_s, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out _v));
+                var _routeErr_ProjectId = BindRouteValue(httpContext.Request.RouteValues, "ProjectId", out var _parsed_ProjectId, static (string _s, out int _v) => int.TryParse(_s, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out _v));
                 if (_routeErr_ProjectId != null)
                 {
                     return _routeErr_ProjectId;
                 }
                 operation.ProjectId = _parsed_ProjectId;
-                var _routeErr_ItemGuid = Blueprint.Runtime.Exec.PipelineHelpers.BindRouteValue(httpContext.Request.RouteValues, "ItemGuid", out var _parsed_ItemGuid, static (string _s, out System.Guid _v) => System.Guid.TryParse(_s, out _v));
+                var _routeErr_ItemGuid = BindRouteValue(httpContext.Request.RouteValues, "ItemGuid", out var _parsed_ItemGuid, static (string _s, out System.Guid _v) => System.Guid.TryParse(_s, out _v));
                 if (_routeErr_ItemGuid != null)
                 {
                     return _routeErr_ItemGuid;
@@ -296,25 +298,25 @@ namespace Blueprint.Generated
             // Tenant resolution (compile-time, no reflection, cached services)
             if (this.TenantResolver != null && this.TenantAccessor != null)
             {
-                Blueprint.Runtime.Exec.PipelineHelpers.ResolveTenant(this.TenantResolver, this.TenantAccessor, context.UserPrincipal);
+                ResolveTenant(this.TenantResolver, this.TenantAccessor, context.UserPrincipal);
             }
 
             var applicablePopulators = this.GetApplicablePropertyPopulators(context.Descriptor);
             if (applicablePopulators.Length > 0)
             {
-                await Blueprint.Runtime.Exec.PipelineHelpers.PopulatePropertiesAsync(applicablePopulators, context).ConfigureAwait(false);
+                await PopulatePropertiesAsync(applicablePopulators, context).ConfigureAwait(false);
             }
-            if (Blueprint.Runtime.Exec.PipelineHelpers.CheckHttpAuthenticated(httpContext, context) is { } _authCheckResult)
+            if (CheckHttpAuthenticated(httpContext, context) is { } _authCheckResult)
             {
                 return _authCheckResult;
             }
 
             if (this.UserAuthorisationContextFactory != null)
             {
-                await Blueprint.Runtime.Exec.PipelineHelpers.LoadUserContextAsync(context, httpContext, this.UserAuthorisationContextFactory).ConfigureAwait(false);
+                await LoadUserContextAsync(context, httpContext, this.UserAuthorisationContextFactory).ConfigureAwait(false);
             }
 
-            var authoriserDenial = await Blueprint.Runtime.Exec.PipelineHelpers.RunPreFilteredAuthorisersAsync(context, this.GetApplicableApiAuthorisers(context.Descriptor), this.GetApplicableOperationAuthorisers(context.Descriptor)).ConfigureAwait(false);
+            var authoriserDenial = await RunPreFilteredAuthorisersAsync(context, this.GetApplicableApiAuthorisers(context.Descriptor), this.GetApplicableOperationAuthorisers(context.Descriptor)).ConfigureAwait(false);
             if (authoriserDenial != null)
             {
                 return authoriserDenial;
@@ -325,22 +327,22 @@ namespace Blueprint.Generated
 
             if (this.HasUnitOfWork)
             {
-                await Blueprint.Runtime.Exec.PipelineHelpers.SaveUnitOfWorkAsync(context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);
+                await SaveUnitOfWorkAsync(context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);
             }
 
             if (this.HasMessageOutbox)
             {
-                await Blueprint.Runtime.Exec.PipelineHelpers.CommitMessageOutboxAsync(context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);
+                await CommitMessageOutboxAsync(context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);
             }
 
             if (this.AuditSink != null)
             {
-                await Blueprint.Runtime.Exec.PipelineHelpers.ExecuteAuditSinkAsync(this.AuditSink, context, handlerResult, "AllTypesPostCommand").ConfigureAwait(false);
+                await ExecuteAuditSinkAsync(this.AuditSink, context, handlerResult, "AllTypesPostCommand").ConfigureAwait(false);
             }
 
             if (this.HasBackgroundTaskScheduler)
             {
-                await Blueprint.Runtime.Exec.PipelineHelpers.FlushBackgroundTasksAsync(context.ServiceProvider).ConfigureAwait(false);
+                await FlushBackgroundTasksAsync(context.ServiceProvider).ConfigureAwait(false);
             }
 
             return handlerResult;

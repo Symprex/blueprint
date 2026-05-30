@@ -1203,7 +1203,7 @@ public class ValidationModuleTests
         pipelineSource.Should().Contain("operation.Name.Length < 3");
         pipelineSource.Should().Contain("_va_Name.FormatErrorMessage(\"Name\")");
         pipelineSource.Should().Contain("new global::System.ComponentModel.DataAnnotations.MinLengthAttribute(3)");
-        pipelineSource.Should().Contain("return Blueprint.Runtime.Exec.PipelineHelpers.CreateValidationFailure(context, validationResults);");
+        pipelineSource.Should().Contain("return CreateValidationFailure(context, validationResults);");
         pipelineSource.Should().NotContain("throw new global::Blueprint.Validation.ValidationException(validationResults);");
 
         // Validation exception handling now lives in OperationExecutorShell, not in generated validation code
@@ -1258,7 +1258,7 @@ public class ValidationModuleTests
         result.Diagnostics.Should().BeEmpty();
         var pipelineSource = result.Output.Single(static tree => tree.FilePath.EndsWith("CreateUserCommandExecutorPipeline.g.cs", StringComparison.Ordinal)).ToString();
 
-        pipelineSource.Should().Contain("return Blueprint.Runtime.Exec.PipelineHelpers.CreateValidationFailure(context, validationResults);");
+        pipelineSource.Should().Contain("return CreateValidationFailure(context, validationResults);");
         pipelineSource.Should().NotContain("return new Blueprint.Middleware.ValidationFailedOperationResult(validationResults);");
 
         // Validation exception translation catch blocks are now in OperationExecutorShell at runtime
@@ -1621,7 +1621,7 @@ public class ValidationModuleTests
         result.Diagnostics.Should().BeEmpty();
         var pipelineSource = result.Output.Single(static tree => tree.FilePath.EndsWith("CreateUserCommandExecutorPipeline.g.cs", StringComparison.Ordinal)).ToString();
 
-        pipelineSource.Should().Contain("Blueprint.Runtime.Exec.PipelineHelpers.ValidateIValidatableObject(context, operation)",
+        pipelineSource.Should().Contain("ValidateIValidatableObject(context, operation)",
             "IValidatableObject should be delegated to the shared PipelineHelpers method");
         pipelineSource.Should().Contain("_ivoResult != null",
             "pipeline should guard on the IValidatableObject result");
@@ -1688,7 +1688,7 @@ public class ValidationModuleTests
             "property-level [Range] check should be generated even when IValidatableObject is implemented");
 
         // IValidatableObject.Validate() should be delegated to shared helper after property checks
-        pipelineSource.Should().Contain("Blueprint.Runtime.Exec.PipelineHelpers.ValidateIValidatableObject(context, operation)",
+        pipelineSource.Should().Contain("ValidateIValidatableObject(context, operation)",
             "IValidatableObject.Validate() should be delegated to PipelineHelpers after generated property checks");
         pipelineSource.Should().Contain("_ivoResult != null",
             "pipeline should guard on the IValidatableObject result");

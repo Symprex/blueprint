@@ -53,7 +53,7 @@ public class PropertyPopulationModuleTests
         pipelineSource.Should().Contain("PropertyPopulators");
 
         // Delegates to PipelineHelpers.PopulatePropertiesAsync instead of inline code
-        pipelineSource.Should().Contain("PipelineHelpers.PopulatePropertiesAsync");
+        pipelineSource.Should().Contain("PopulatePropertiesAsync");
     }
 
     [Fact]
@@ -93,7 +93,7 @@ public class PropertyPopulationModuleTests
         var pipelineSource = string.Join("\n", pipelineSources.Select(static s => s.SourceText));
 
         pipelineSource.Should().Contain("PropertyPopulators");
-        pipelineSource.Should().Contain("PipelineHelpers.PopulatePropertiesAsync");
+        pipelineSource.Should().Contain("PopulatePropertiesAsync");
     }
 
     [Fact]
@@ -133,7 +133,7 @@ public class PropertyPopulationModuleTests
         var pipelineSource = string.Join("\n", pipelineSources.Select(static s => s.SourceText));
 
         // Pipelines delegate to the shared PipelineHelpers using pre-filtered populator array
-        pipelineSource.Should().Contain("PipelineHelpers.PopulatePropertiesAsync(applicablePopulators, context)");
+        pipelineSource.Should().Contain("PopulatePropertiesAsync(applicablePopulators, context)");
 
         // The inline Length == 1 / Length > 1 pattern should no longer appear in generated code
         pipelineSource.Should().NotContain("PropertyPopulators.Length == 1");

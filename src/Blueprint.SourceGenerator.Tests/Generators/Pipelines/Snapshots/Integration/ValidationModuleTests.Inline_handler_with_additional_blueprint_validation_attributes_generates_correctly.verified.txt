@@ -10,6 +10,7 @@
 //------------------------------------------------------------------------------
 
 using Blueprint;
+using static Blueprint.Runtime.Exec.PipelineHelpers;
 
 namespace Blueprint.Generated
 {
@@ -38,70 +39,70 @@ namespace Blueprint.Generated
             // Tenant resolution (compile-time, no reflection, cached services)
             if (this.TenantResolver != null && this.TenantAccessor != null)
             {
-                Blueprint.Runtime.Exec.PipelineHelpers.ResolveTenant(this.TenantResolver, this.TenantAccessor, context.UserPrincipal);
+                ResolveTenant(this.TenantResolver, this.TenantAccessor, context.UserPrincipal);
             }
 
             var applicablePopulators = this.GetApplicablePropertyPopulators(context.Descriptor);
             if (applicablePopulators.Length > 0)
             {
-                await Blueprint.Runtime.Exec.PipelineHelpers.PopulatePropertiesAsync(applicablePopulators, context).ConfigureAwait(false);
+                await PopulatePropertiesAsync(applicablePopulators, context).ConfigureAwait(false);
             }
             var validationResults = default(global::System.Collections.Generic.List<global::System.ComponentModel.DataAnnotations.ValidationResult>);
             if (operation.AcceptedTerms == false)
             {
-                Blueprint.Runtime.Exec.PipelineHelpers.AppendValidationError(ref validationResults, new global::Blueprint.Validation.MustBeTrueAttribute("Accept the terms.").FormatErrorMessage("AcceptedTerms"), "AcceptedTerms");
+                AppendValidationError(ref validationResults, new global::Blueprint.Validation.MustBeTrueAttribute("Accept the terms.").FormatErrorMessage("AcceptedTerms"), "AcceptedTerms");
             }
             if (operation.StartsAt is not null && operation.StartsAt.Value <= global::System.DateTime.UtcNow)
             {
-                Blueprint.Runtime.Exec.PipelineHelpers.AppendValidationError(ref validationResults, new global::Blueprint.Validation.InFutureAttribute("Future only.").FormatErrorMessage("StartsAt"), "StartsAt");
+                AppendValidationError(ref validationResults, new global::Blueprint.Validation.InFutureAttribute("Future only.").FormatErrorMessage("StartsAt"), "StartsAt");
             }
             if (operation.CompletedAt is not null && operation.CompletedAt.Value >= global::System.DateTimeOffset.UtcNow)
             {
-                Blueprint.Runtime.Exec.PipelineHelpers.AppendValidationError(ref validationResults, new global::Blueprint.Validation.InPastAttribute().FormatErrorMessage("CompletedAt"), "CompletedAt");
+                AppendValidationError(ref validationResults, new global::Blueprint.Validation.InPastAttribute().FormatErrorMessage("CompletedAt"), "CompletedAt");
             }
             if (operation.PublishedAt > global::System.DateTime.UtcNow)
             {
-                Blueprint.Runtime.Exec.PipelineHelpers.AppendValidationError(ref validationResults, new global::Blueprint.Validation.NotInFutureAttribute().FormatErrorMessage("PublishedAt"), "PublishedAt");
+                AppendValidationError(ref validationResults, new global::Blueprint.Validation.NotInFutureAttribute().FormatErrorMessage("PublishedAt"), "PublishedAt");
             }
             if (operation.ScheduledAt < global::System.DateTimeOffset.UtcNow)
             {
-                Blueprint.Runtime.Exec.PipelineHelpers.AppendValidationError(ref validationResults, new global::Blueprint.Validation.NotInPastAttribute().FormatErrorMessage("ScheduledAt"), "ScheduledAt");
+                AppendValidationError(ref validationResults, new global::Blueprint.Validation.NotInPastAttribute().FormatErrorMessage("ScheduledAt"), "ScheduledAt");
             }
             if (operation.ItemIds is not null && operation.ItemIds.Length == 0)
             {
-                Blueprint.Runtime.Exec.PipelineHelpers.AppendValidationError(ref validationResults, new global::Blueprint.Validation.NotEmptyListAttribute("Add at least one item.").FormatErrorMessage("ItemIds"), "ItemIds");
+                AppendValidationError(ref validationResults, new global::Blueprint.Validation.NotEmptyListAttribute("Add at least one item.").FormatErrorMessage("ItemIds"), "ItemIds");
             }
             if (operation.ScoreIds is not null && operation.ScoreIds.Length > 2)
             {
-                Blueprint.Runtime.Exec.PipelineHelpers.AppendValidationError(ref validationResults, new global::Blueprint.Validation.MaxItemsListAttribute(2, "Too many items.").FormatErrorMessage("ScoreIds"), "ScoreIds");
+                AppendValidationError(ref validationResults, new global::Blueprint.Validation.MaxItemsListAttribute(2, "Too many items.").FormatErrorMessage("ScoreIds"), "ScoreIds");
             }
             if (operation.MinimumAge is not null && operation.MinimumAge.Value < 5)
             {
-                Blueprint.Runtime.Exec.PipelineHelpers.AppendValidationError(ref validationResults, new global::Blueprint.Validation.GreaterThanOrEqualToAttribute(5, "Minimum five.").FormatErrorMessage("MinimumAge"), "MinimumAge");
+                AppendValidationError(ref validationResults, new global::Blueprint.Validation.GreaterThanOrEqualToAttribute(5, "Minimum five.").FormatErrorMessage("MinimumAge"), "MinimumAge");
             }
             if (operation.MaximumAge is not null && operation.MaximumAge.Value > 10)
             {
-                Blueprint.Runtime.Exec.PipelineHelpers.AppendValidationError(ref validationResults, new global::Blueprint.Validation.LessThanOrEqualToAttribute(10).FormatErrorMessage("MaximumAge"), "MaximumAge");
+                AppendValidationError(ref validationResults, new global::Blueprint.Validation.LessThanOrEqualToAttribute(10).FormatErrorMessage("MaximumAge"), "MaximumAge");
             }
             if ((operation.MaximumValue is not null && operation.MinimumValue is not null) && operation.MaximumValue.Value < operation.MinimumValue.Value)
             {
-                Blueprint.Runtime.Exec.PipelineHelpers.AppendValidationError(ref validationResults, new global::Blueprint.Validation.MustBeGreaterThanOrEqualAttribute("MinimumValue").FormatErrorMessage("MaximumValue"), "MaximumValue");
+                AppendValidationError(ref validationResults, new global::Blueprint.Validation.MustBeGreaterThanOrEqualAttribute("MinimumValue").FormatErrorMessage("MaximumValue"), "MaximumValue");
             }
             if (_va_Password.IsValid(operation.Password) == false)
             {
-                Blueprint.Runtime.Exec.PipelineHelpers.AppendValidationError(ref validationResults, _va_Password.FormatErrorMessage("Password"), "Password");
+                AppendValidationError(ref validationResults, _va_Password.FormatErrorMessage("Password"), "Password");
             }
             if (_va_ResourceKey.IsValid(operation.ResourceKey) == false)
             {
-                Blueprint.Runtime.Exec.PipelineHelpers.AppendValidationError(ref validationResults, _va_ResourceKey.FormatErrorMessage("ResourceKey"), "ResourceKey");
+                AppendValidationError(ref validationResults, _va_ResourceKey.FormatErrorMessage("ResourceKey"), "ResourceKey");
             }
             if (_va_Postcode.IsValid(operation.Postcode) == false)
             {
-                Blueprint.Runtime.Exec.PipelineHelpers.AppendValidationError(ref validationResults, _va_Postcode.FormatErrorMessage("Postcode"), "Postcode");
+                AppendValidationError(ref validationResults, _va_Postcode.FormatErrorMessage("Postcode"), "Postcode");
             }
             if (validationResults is not null)
             {
-                return Blueprint.Runtime.Exec.PipelineHelpers.CreateValidationFailure(context, validationResults);
+                return CreateValidationFailure(context, validationResults);
             }
 
             var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<string>(await global::TestNamespace.CreateUserCommand.HandleAsync(operation).ConfigureAwait(false));
@@ -109,22 +110,22 @@ namespace Blueprint.Generated
 
             if (this.HasUnitOfWork)
             {
-                await Blueprint.Runtime.Exec.PipelineHelpers.SaveUnitOfWorkAsync(context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);
+                await SaveUnitOfWorkAsync(context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);
             }
 
             if (this.HasMessageOutbox)
             {
-                await Blueprint.Runtime.Exec.PipelineHelpers.CommitMessageOutboxAsync(context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);
+                await CommitMessageOutboxAsync(context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);
             }
 
             if (this.AuditSink != null)
             {
-                await Blueprint.Runtime.Exec.PipelineHelpers.ExecuteAuditSinkAsync(this.AuditSink, context, handlerResult, "CreateUserCommand").ConfigureAwait(false);
+                await ExecuteAuditSinkAsync(this.AuditSink, context, handlerResult, "CreateUserCommand").ConfigureAwait(false);
             }
 
             if (this.HasBackgroundTaskScheduler)
             {
-                await Blueprint.Runtime.Exec.PipelineHelpers.FlushBackgroundTasksAsync(context.ServiceProvider).ConfigureAwait(false);
+                await FlushBackgroundTasksAsync(context.ServiceProvider).ConfigureAwait(false);
             }
 
             return handlerResult;

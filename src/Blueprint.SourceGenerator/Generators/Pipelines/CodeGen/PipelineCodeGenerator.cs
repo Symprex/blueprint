@@ -20,7 +20,8 @@ internal static class PipelineCodeGenerator
     /// <returns>The generated pipeline source for the supplied handler.</returns>
     public static string GeneratePipeline(OperationHandlerModel handler, PipelinePlan plan)
     {
-        var codeBuilder = CodeBuilder.Create("Blueprint.Generated");
+        var codeBuilder = CodeBuilder.Create("Blueprint.Generated")
+            .AddNamespaceImport("static Blueprint.Runtime.Exec.PipelineHelpers");
 
         var pipelineClass = codeBuilder.AddClass(handler.PipelineClassName)
             .MakeInternalClass()

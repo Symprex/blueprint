@@ -38,6 +38,7 @@ TestNamespace.GetAccountQueryExecutorPipeline.g.cs:
 //------------------------------------------------------------------------------
 
 using Blueprint;
+using static Blueprint.Runtime.Exec.PipelineHelpers;
 
 namespace Blueprint.Generated
 {
@@ -73,31 +74,31 @@ namespace Blueprint.Generated
             // Tenant resolution (compile-time, no reflection, cached services)
             if (this.TenantResolver != null && this.TenantAccessor != null)
             {
-                Blueprint.Runtime.Exec.PipelineHelpers.ResolveTenant(this.TenantResolver, this.TenantAccessor, context.UserPrincipal);
+                ResolveTenant(this.TenantResolver, this.TenantAccessor, context.UserPrincipal);
             }
 
             var applicablePopulators = this.GetApplicablePropertyPopulators(context.Descriptor);
             if (applicablePopulators.Length > 0)
             {
-                await Blueprint.Runtime.Exec.PipelineHelpers.PopulatePropertiesAsync(applicablePopulators, context).ConfigureAwait(false);
+                await PopulatePropertiesAsync(applicablePopulators, context).ConfigureAwait(false);
             }
-            if (Blueprint.Runtime.Exec.PipelineHelpers.CheckHttpAuthenticated(httpContext, context) is { } _authCheckResult)
+            if (CheckHttpAuthenticated(httpContext, context) is { } _authCheckResult)
             {
                 return _authCheckResult;
             }
 
             if (this.UserAuthorisationContextFactory != null)
             {
-                await Blueprint.Runtime.Exec.PipelineHelpers.LoadUserContextAsync(context, httpContext, this.UserAuthorisationContextFactory).ConfigureAwait(false);
+                await LoadUserContextAsync(context, httpContext, this.UserAuthorisationContextFactory).ConfigureAwait(false);
             }
 
-            var authorizationDenial = await Blueprint.Runtime.Exec.PipelineHelpers.CheckResourceAuthorizationAsync(context, httpContext.User, this.ResourceAuthorizationProvider, new Blueprint.Model.ResolvedScopePair("account", "read", "/tenants/{Auth.AccountId}/accounts/{Id}", $"/tenants/{context.UserAuthorisationContext?.AccountId ?? httpContext.User.FindFirst("AccountId")?.Value ?? ""}/accounts/{operation.Id?.ToString() ?? ""}"), httpContext.RequestAborted).ConfigureAwait(false);
+            var authorizationDenial = await CheckResourceAuthorizationAsync(context, httpContext.User, this.ResourceAuthorizationProvider, new Blueprint.Model.ResolvedScopePair("account", "read", "/tenants/{Auth.AccountId}/accounts/{Id}", $"/tenants/{context.UserAuthorisationContext?.AccountId ?? httpContext.User.FindFirst("AccountId")?.Value ?? ""}/accounts/{operation.Id?.ToString() ?? ""}"), httpContext.RequestAborted).ConfigureAwait(false);
             if (authorizationDenial != null)
             {
                 return authorizationDenial;
             }
 
-            var authoriserDenial = await Blueprint.Runtime.Exec.PipelineHelpers.RunPreFilteredAuthorisersAsync(context, this.GetApplicableApiAuthorisers(context.Descriptor), this.GetApplicableOperationAuthorisers(context.Descriptor)).ConfigureAwait(false);
+            var authoriserDenial = await RunPreFilteredAuthorisersAsync(context, this.GetApplicableApiAuthorisers(context.Descriptor), this.GetApplicableOperationAuthorisers(context.Descriptor)).ConfigureAwait(false);
             if (authoriserDenial != null)
             {
                 return authoriserDenial;
@@ -108,12 +109,12 @@ namespace Blueprint.Generated
 
             if (this.AuditSink != null)
             {
-                await Blueprint.Runtime.Exec.PipelineHelpers.ExecuteAuditSinkAsync(this.AuditSink, context, handlerResult, "GetAccountQuery").ConfigureAwait(false);
+                await ExecuteAuditSinkAsync(this.AuditSink, context, handlerResult, "GetAccountQuery").ConfigureAwait(false);
             }
 
             if (this.HasBackgroundTaskScheduler)
             {
-                await Blueprint.Runtime.Exec.PipelineHelpers.FlushBackgroundTasksAsync(context.ServiceProvider).ConfigureAwait(false);
+                await FlushBackgroundTasksAsync(context.ServiceProvider).ConfigureAwait(false);
             }
 
             return handlerResult;

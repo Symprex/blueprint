@@ -70,7 +70,7 @@ public sealed class ResourceEventSelfQueryModule : IBlueprintSourceGeneratorModu
     {
         context.WriteBlankLine();
         context.WriteStatement(
-            $"await Blueprint.Runtime.Exec.PipelineHelpers.ResolveResourceEventSelfQueryAsync(this.Executor, context, handlerResult, this.Logger, \"{operationTypeName}\").ConfigureAwait(false);");
+            $"await ResolveResourceEventSelfQueryAsync(this.Executor, context, handlerResult, this.Logger, \"{operationTypeName}\").ConfigureAwait(false);");
     }
 
     /// <summary>

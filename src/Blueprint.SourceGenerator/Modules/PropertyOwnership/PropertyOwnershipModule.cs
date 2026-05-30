@@ -1258,7 +1258,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             if (bodyEntries is { Count: > 0 })
             {
                 bindingBranch.WriteStatement(
-                    $"var _bodyResult = await Blueprint.Runtime.Exec.PipelineHelpers.ReadJsonBodyAsync(httpContext, context.OperationCancelled, {operationExpr}, PopulateFromJsonBody, this.BodyJsonOptions).ConfigureAwait(false);");
+                    $"var _bodyResult = await ReadJsonBodyAsync(httpContext, context.OperationCancelled, {operationExpr}, PopulateFromJsonBody, this.BodyJsonOptions).ConfigureAwait(false);");
                 bindingBranch.If("_bodyResult != null", earlyReturnCtx =>
                 {
                     earlyReturnCtx.Return("_bodyResult");
@@ -1480,7 +1480,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             var parsedVar = $"_parsed_{entry.PropertyName}";
 
             context.WriteStatement(
-                $"var {errVar} = Blueprint.Runtime.Exec.PipelineHelpers.BindRouteValue(httpContext.Request.RouteValues, \"{entry.BindingName}\", out var {parsedVar}, {lambda});");
+                $"var {errVar} = BindRouteValue(httpContext.Request.RouteValues, \"{entry.BindingName}\", out var {parsedVar}, {lambda});");
 
             context.If($"{errVar} != null", errCtx =>
             {
@@ -1553,7 +1553,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             var foundVar = $"_qvFound_{entry.PropertyName}";
 
             context.WriteStatement(
-                $"var {errVar} = Blueprint.Runtime.Exec.PipelineHelpers.BindQueryValue(httpContext.Request.Query, \"{queryParamName}\", out var {parsedVar}, out var {foundVar}, {lambda});");
+                $"var {errVar} = BindQueryValue(httpContext.Request.Query, \"{queryParamName}\", out var {parsedVar}, out var {foundVar}, {lambda});");
 
             context.If($"{errVar} != null", errCtx =>
             {
@@ -1593,7 +1593,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             var arrVar = $"_arr_{entry.PropertyName}";
 
             context.WriteStatement(
-                $"var {errVar} = Blueprint.Runtime.Exec.PipelineHelpers.BindQueryArray(httpContext.Request.Query, \"{queryParamName}\", out var {arrVar}, {lambda});");
+                $"var {errVar} = BindQueryArray(httpContext.Request.Query, \"{queryParamName}\", out var {arrVar}, {lambda});");
 
             context.If($"{errVar} != null", errCtx =>
             {
@@ -1639,7 +1639,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             var foundVar = $"_hvFound_{entry.PropertyName}";
 
             context.WriteStatement(
-                $"var {errVar} = Blueprint.Runtime.Exec.PipelineHelpers.BindHeaderValue(httpContext.Request.Headers, \"{headerName}\", out var {parsedVar}, out var {foundVar}, {lambda});");
+                $"var {errVar} = BindHeaderValue(httpContext.Request.Headers, \"{headerName}\", out var {parsedVar}, out var {foundVar}, {lambda});");
 
             context.If($"{errVar} != null", errCtx =>
             {
@@ -1685,7 +1685,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             var foundVar = $"_cvFound_{entry.PropertyName}";
 
             context.WriteStatement(
-                $"var {errVar} = Blueprint.Runtime.Exec.PipelineHelpers.BindCookieValue(httpContext.Request.Cookies, \"{cookieName}\", out var {parsedVar}, out var {foundVar}, {lambda});");
+                $"var {errVar} = BindCookieValue(httpContext.Request.Cookies, \"{cookieName}\", out var {parsedVar}, out var {foundVar}, {lambda});");
 
             context.If($"{errVar} != null", errCtx =>
             {

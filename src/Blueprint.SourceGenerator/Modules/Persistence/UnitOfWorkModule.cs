@@ -85,7 +85,7 @@ public sealed class UnitOfWorkModule : IBlueprintSourceGeneratorModule, IPipelin
         context.WriteBlankLine();
         context.WriteStatement("if (this.HasUnitOfWork)");
         context.WriteStatement("{");
-        context.WriteStatement("    await Blueprint.Runtime.Exec.PipelineHelpers.SaveUnitOfWorkAsync(context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);");
+        context.WriteStatement("    await SaveUnitOfWorkAsync(context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);");
         context.WriteStatement("}");
     }
 

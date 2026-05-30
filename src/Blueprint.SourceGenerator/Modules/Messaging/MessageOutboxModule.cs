@@ -83,7 +83,7 @@ public sealed class MessageOutboxModule : IBlueprintSourceGeneratorModule, IPipe
         context.WriteBlankLine();
         context.WriteStatement("if (this.HasMessageOutbox)");
         context.WriteStatement("{");
-        context.WriteStatement("    await Blueprint.Runtime.Exec.PipelineHelpers.CommitMessageOutboxAsync(context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);");
+        context.WriteStatement("    await CommitMessageOutboxAsync(context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);");
         context.WriteStatement("}");
     }
 

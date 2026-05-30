@@ -107,7 +107,7 @@ public sealed class ApiAuthoriserModule : IBlueprintSourceGeneratorModule, IPipe
             "if (this.UserAuthorisationContextFactory != null)");
         context.WriteStatement("{");
         context.WriteStatement(
-            $"    await Blueprint.Runtime.Exec.PipelineHelpers.LoadUserContextAsync(context, {httpContextExpr}, this.UserAuthorisationContextFactory).ConfigureAwait(false);");
+            $"    await LoadUserContextAsync(context, {httpContextExpr}, this.UserAuthorisationContextFactory).ConfigureAwait(false);");
         context.WriteStatement("}");
 
         context.WriteBlankLine();
@@ -117,7 +117,7 @@ public sealed class ApiAuthoriserModule : IBlueprintSourceGeneratorModule, IPipe
     {
         context.DeclareVariable(
             "authoriserDenial",
-            "await Blueprint.Runtime.Exec.PipelineHelpers.RunPreFilteredAuthorisersAsync(context, this.GetApplicableApiAuthorisers(context.Descriptor), this.GetApplicableOperationAuthorisers(context.Descriptor)).ConfigureAwait(false)");
+            "await RunPreFilteredAuthorisersAsync(context, this.GetApplicableApiAuthorisers(context.Descriptor), this.GetApplicableOperationAuthorisers(context.Descriptor)).ConfigureAwait(false)");
 
         context.If(
             "authoriserDenial != null",

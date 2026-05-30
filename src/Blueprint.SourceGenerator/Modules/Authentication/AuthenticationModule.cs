@@ -160,7 +160,7 @@ public sealed class AuthenticationModule : IBlueprintSourceGeneratorModule, IDes
         context.GetHttpContextExpression();
 
         context.If(
-            "Blueprint.Runtime.Exec.PipelineHelpers.CheckHttpAuthenticated(httpContext, context) is { } _authCheckResult",
+            "CheckHttpAuthenticated(httpContext, context) is { } _authCheckResult",
             branch =>
             {
                 branch.Return(

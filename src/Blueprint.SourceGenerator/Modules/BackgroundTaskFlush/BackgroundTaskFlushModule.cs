@@ -43,7 +43,7 @@ public sealed class BackgroundTaskFlushModule : IBlueprintSourceGeneratorModule,
         context.WriteBlankLine();
         context.WriteStatement("if (this.HasBackgroundTaskScheduler)");
         context.WriteStatement("{");
-        context.WriteStatement("    await Blueprint.Runtime.Exec.PipelineHelpers.FlushBackgroundTasksAsync(context.ServiceProvider).ConfigureAwait(false);");
+        context.WriteStatement("    await FlushBackgroundTasksAsync(context.ServiceProvider).ConfigureAwait(false);");
         context.WriteStatement("}");
     }
 }

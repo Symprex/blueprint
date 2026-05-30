@@ -48,7 +48,7 @@ public class MessageOutboxModuleTests
         var pipelineSource = string.Join("\n", pipelineSources.Select(static s => s.SourceText));
 
         // Each module contributes its own individual post-success call
-        pipelineSource.Should().Contain("PipelineHelpers.CommitMessageOutboxAsync(");
+        pipelineSource.Should().Contain("CommitMessageOutboxAsync(");
 
         // NoResult handler: guard is elided because the result is always successful
         pipelineSource.Should().NotContain("handlerResult.WasSuccessful");

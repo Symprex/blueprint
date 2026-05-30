@@ -89,7 +89,7 @@ public sealed class TenantModule : IBlueprintSourceGeneratorModule, IPipelineCon
             "if (this.TenantResolver != null && this.TenantAccessor != null)");
         context.WriteStatement("{");
         context.WriteStatement(
-            "    Blueprint.Runtime.Exec.PipelineHelpers.ResolveTenant(this.TenantResolver, this.TenantAccessor, context.UserPrincipal);");
+            "    ResolveTenant(this.TenantResolver, this.TenantAccessor, context.UserPrincipal);");
         context.WriteStatement("}");
 
         // If the operation has a TenantId property, assign directly (no reflection).

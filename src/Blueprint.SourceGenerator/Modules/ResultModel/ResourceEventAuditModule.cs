@@ -72,7 +72,7 @@ public sealed class ResourceEventAuditModule : IBlueprintSourceGeneratorModule, 
         // Delegate to shared helper — avoids duplicating the pattern match, null check,
         // try/catch, and activity event recording across every resource-event pipeline.
         context.WriteStatement(
-            $"await Blueprint.Runtime.Exec.PipelineHelpers.ExecuteResourceEventAuditSinkAsync(this.ResourceEventAuditSink, context, handlerResult, \"{operationTypeName}\").ConfigureAwait(false);");
+            $"await ExecuteResourceEventAuditSinkAsync(this.ResourceEventAuditSink, context, handlerResult, \"{operationTypeName}\").ConfigureAwait(false);");
     }
 
     /// <summary>

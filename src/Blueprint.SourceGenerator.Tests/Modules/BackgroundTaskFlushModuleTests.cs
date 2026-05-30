@@ -48,7 +48,7 @@ public class BackgroundTaskFlushModuleTests
         var pipelineSource = string.Join("\n", pipelineSources.Select(static s => s.SourceText));
 
         // Each module contributes its own individual post-success call
-        pipelineSource.Should().Contain("PipelineHelpers.FlushBackgroundTasksAsync(");
+        pipelineSource.Should().Contain("FlushBackgroundTasksAsync(");
 
         // NoResult handler: guard is elided because the result is always successful
         pipelineSource.Should().NotContain("handlerResult.WasSuccessful");
@@ -131,6 +131,6 @@ public class BackgroundTaskFlushModuleTests
         var pipelineSource = string.Join("\n", pipelineSources.Select(static s => s.SourceText));
 
         // Background task flush applies to all operation types
-        pipelineSource.Should().Contain("PipelineHelpers.FlushBackgroundTasksAsync");
+        pipelineSource.Should().Contain("FlushBackgroundTasksAsync");
     }
 }

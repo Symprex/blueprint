@@ -636,7 +636,7 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
             branch =>
             {
                 branch.WriteStatement(
-                    $"Blueprint.Runtime.Exec.PipelineHelpers.AppendValidationError(ref validationResults, {validationAttributeExpression}.FormatErrorMessage(\"{property.DisplayName}\"), \"{property.MemberName}\");");
+                    $"AppendValidationError(ref validationResults, {validationAttributeExpression}.FormatErrorMessage(\"{property.DisplayName}\"), \"{property.MemberName}\");");
             });
     }
 
@@ -694,7 +694,7 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
 
         context.DeclareVariable(
             "_ivoResult",
-            $"Blueprint.Runtime.Exec.PipelineHelpers.ValidateIValidatableObject(context, {operation})");
+            $"ValidateIValidatableObject(context, {operation})");
         context.If("_ivoResult != null", branch =>
         {
             branch.Return("_ivoResult");
@@ -714,7 +714,7 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
 
         context.Assign(
             "validationResults",
-            $"Blueprint.Runtime.Exec.PipelineHelpers.AccumulateIValidatableObject(validationResults, {operation})");
+            $"AccumulateIValidatableObject(validationResults, {operation})");
     }
 
     private static void RenderGenericValidation(PipelineRenderContext context)
@@ -736,7 +736,7 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
 
     private static void ReturnValidationFailure(PipelineRenderContext context, string validationResultsVariable)
     {
-        var resultExpression = $"Blueprint.Runtime.Exec.PipelineHelpers.CreateValidationFailure({context.GetContextExpression()}, {validationResultsVariable})";
+        var resultExpression = $"CreateValidationFailure({context.GetContextExpression()}, {validationResultsVariable})";
         context.Return(
             context.IsPipelineAsync()
                 ? resultExpression

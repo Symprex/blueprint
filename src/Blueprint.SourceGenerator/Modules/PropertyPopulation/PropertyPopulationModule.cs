@@ -57,7 +57,7 @@ public sealed class PropertyPopulationModule : IBlueprintSourceGeneratorModule, 
             "if (applicablePopulators.Length > 0)");
         context.WriteStatement("{");
         context.WriteStatement(
-            "    await Blueprint.Runtime.Exec.PipelineHelpers.PopulatePropertiesAsync(applicablePopulators, context).ConfigureAwait(false);");
+            "    await PopulatePropertiesAsync(applicablePopulators, context).ConfigureAwait(false);");
         context.WriteStatement("}");
     }
 }

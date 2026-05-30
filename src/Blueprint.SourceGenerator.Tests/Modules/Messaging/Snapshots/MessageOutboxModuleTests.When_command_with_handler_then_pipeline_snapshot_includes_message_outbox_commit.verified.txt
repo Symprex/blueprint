@@ -38,6 +38,7 @@ TestNamespace.PublishOrderCommandExecutorPipeline.g.cs:
 //------------------------------------------------------------------------------
 
 using Blueprint;
+using static Blueprint.Runtime.Exec.PipelineHelpers;
 
 namespace Blueprint.Generated
 {
@@ -60,35 +61,35 @@ namespace Blueprint.Generated
             // Tenant resolution (compile-time, no reflection, cached services)
             if (this.TenantResolver != null && this.TenantAccessor != null)
             {
-                Blueprint.Runtime.Exec.PipelineHelpers.ResolveTenant(this.TenantResolver, this.TenantAccessor, context.UserPrincipal);
+                ResolveTenant(this.TenantResolver, this.TenantAccessor, context.UserPrincipal);
             }
 
             var applicablePopulators = this.GetApplicablePropertyPopulators(context.Descriptor);
             if (applicablePopulators.Length > 0)
             {
-                await Blueprint.Runtime.Exec.PipelineHelpers.PopulatePropertiesAsync(applicablePopulators, context).ConfigureAwait(false);
+                await PopulatePropertiesAsync(applicablePopulators, context).ConfigureAwait(false);
             }
             var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<string>(await global::TestNamespace.PublishOrderCommand.HandleAsync(operation).ConfigureAwait(false));
 
 
             if (this.HasUnitOfWork)
             {
-                await Blueprint.Runtime.Exec.PipelineHelpers.SaveUnitOfWorkAsync(context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);
+                await SaveUnitOfWorkAsync(context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);
             }
 
             if (this.HasMessageOutbox)
             {
-                await Blueprint.Runtime.Exec.PipelineHelpers.CommitMessageOutboxAsync(context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);
+                await CommitMessageOutboxAsync(context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);
             }
 
             if (this.AuditSink != null)
             {
-                await Blueprint.Runtime.Exec.PipelineHelpers.ExecuteAuditSinkAsync(this.AuditSink, context, handlerResult, "PublishOrderCommand").ConfigureAwait(false);
+                await ExecuteAuditSinkAsync(this.AuditSink, context, handlerResult, "PublishOrderCommand").ConfigureAwait(false);
             }
 
             if (this.HasBackgroundTaskScheduler)
             {
-                await Blueprint.Runtime.Exec.PipelineHelpers.FlushBackgroundTasksAsync(context.ServiceProvider).ConfigureAwait(false);
+                await FlushBackgroundTasksAsync(context.ServiceProvider).ConfigureAwait(false);
             }
 
             return handlerResult;

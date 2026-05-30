@@ -80,7 +80,7 @@ public sealed class AuditingModule : IBlueprintSourceGeneratorModule, IPipelineC
         context.WriteStatement("if (this.AuditSink != null)");
         context.WriteStatement("{");
         context.WriteStatement(
-            $"    await Blueprint.Runtime.Exec.PipelineHelpers.ExecuteAuditSinkAsync(this.AuditSink, context, handlerResult, \"{operationTypeName}\").ConfigureAwait(false);");
+            $"    await ExecuteAuditSinkAsync(this.AuditSink, context, handlerResult, \"{operationTypeName}\").ConfigureAwait(false);");
         context.WriteStatement("}");
     }
 
