@@ -21,14 +21,7 @@ namespace TestNamespace
     [global::System.CodeDom.Compiler.GeneratedCodeAttribute("Blueprint.SourceGenerator", "1.0.0")]
     public static class TestAppHttpClientExtensions
     {
-        /// <summary>
-        /// Sends a <see cref="TestNamespace.GetTemplatesQuery"/> (GET) to the remote API.
-        /// </summary>
-        /// <param name="client">The Blueprint HTTP client.</param>
-        /// <param name="page">Maps to GetTemplatesQuery.Page.</param>
-        /// <param name="pageSize">Maps to GetTemplatesQuery.PageSize.</param>
-        /// <param name="cancellationToken">Cancellation token.</param>
-        /// <returns>The deserialized response.</returns>
+        /// <summary>Sends a <see cref="TestNamespace.GetTemplatesQuery"/> (GET) to the remote API.</summary>
         public static global::System.Threading.Tasks.Task<string[]?> GetTemplatesAsync(this global::Blueprint.HttpClient.BlueprintHttpClient<global::TestNamespace.TestApp> client, int page, int pageSize, global::System.Threading.CancellationToken cancellationToken = default)
         {
             var operation = new global::TestNamespace.GetTemplatesQuery
@@ -40,39 +33,19 @@ namespace TestNamespace
             return client.SendAsync<string[]>(operation, cancellationToken);
         }
 
-        /// <summary>
-        /// Sends a pre-built <see cref="TestNamespace.GetTemplatesQuery"/> (GET) to the remote API.
-        /// </summary>
-        /// <param name="client">The Blueprint HTTP client.</param>
-        /// <param name="operation">The operation to send.</param>
-        /// <param name="cancellationToken">Cancellation token.</param>
-        /// <returns>The deserialized response.</returns>
+        /// <summary>Sends a pre-built <see cref="TestNamespace.GetTemplatesQuery"/> (GET) to the remote API.</summary>
         public static global::System.Threading.Tasks.Task<string[]?> GetTemplatesAsync(this global::Blueprint.HttpClient.BlueprintHttpClient<global::TestNamespace.TestApp> client, global::TestNamespace.GetTemplatesQuery operation, global::System.Threading.CancellationToken cancellationToken = default)
         {
             return client.SendAsync<string[]>(operation, cancellationToken);
         }
 
-        /// <summary>
-        /// Sends a pre-built <see cref="TestNamespace.GetTemplatesQuery"/> (GET) to the remote API
-        /// with optional per-request customisation.
-        /// </summary>
-        /// <param name="client">The Blueprint HTTP client.</param>
-        /// <param name="operation">The operation to send.</param>
-        /// <param name="options">Optional call options to modify the outgoing request.</param>
-        /// <param name="cancellationToken">Cancellation token.</param>
-        /// <returns>The deserialized response.</returns>
+        /// <summary>Sends a pre-built <see cref="TestNamespace.GetTemplatesQuery"/> (GET) with optional per-request customisation.</summary>
         public static global::System.Threading.Tasks.Task<string[]?> GetTemplatesAsync(this global::Blueprint.HttpClient.BlueprintHttpClient<global::TestNamespace.TestApp> client, global::TestNamespace.GetTemplatesQuery operation, global::Blueprint.HttpClient.CallOptions? options, global::System.Threading.CancellationToken cancellationToken = default)
         {
             return client.SendAsync<string[]>(operation, options, cancellationToken);
         }
 
-        /// <summary>
-        /// Sends a <see cref="TestNamespace.GetTemplateByIdQuery"/> (GET) to the remote API.
-        /// </summary>
-        /// <param name="client">The Blueprint HTTP client.</param>
-        /// <param name="id">Maps to GetTemplateByIdQuery.Id.</param>
-        /// <param name="cancellationToken">Cancellation token.</param>
-        /// <returns>The deserialized response.</returns>
+        /// <summary>Sends a <see cref="TestNamespace.GetTemplateByIdQuery"/> (GET) to the remote API.</summary>
         public static global::System.Threading.Tasks.Task<string?> GetTemplateByIdAsync(this global::Blueprint.HttpClient.BlueprintHttpClient<global::TestNamespace.TestApp> client, string id, global::System.Threading.CancellationToken cancellationToken = default)
         {
             var operation = new global::TestNamespace.GetTemplateByIdQuery
@@ -83,39 +56,19 @@ namespace TestNamespace
             return client.SendAsync<string>(operation, cancellationToken);
         }
 
-        /// <summary>
-        /// Sends a pre-built <see cref="TestNamespace.GetTemplateByIdQuery"/> (GET) to the remote API.
-        /// </summary>
-        /// <param name="client">The Blueprint HTTP client.</param>
-        /// <param name="operation">The operation to send.</param>
-        /// <param name="cancellationToken">Cancellation token.</param>
-        /// <returns>The deserialized response.</returns>
+        /// <summary>Sends a pre-built <see cref="TestNamespace.GetTemplateByIdQuery"/> (GET) to the remote API.</summary>
         public static global::System.Threading.Tasks.Task<string?> GetTemplateByIdAsync(this global::Blueprint.HttpClient.BlueprintHttpClient<global::TestNamespace.TestApp> client, global::TestNamespace.GetTemplateByIdQuery operation, global::System.Threading.CancellationToken cancellationToken = default)
         {
             return client.SendAsync<string>(operation, cancellationToken);
         }
 
-        /// <summary>
-        /// Sends a pre-built <see cref="TestNamespace.GetTemplateByIdQuery"/> (GET) to the remote API
-        /// with optional per-request customisation.
-        /// </summary>
-        /// <param name="client">The Blueprint HTTP client.</param>
-        /// <param name="operation">The operation to send.</param>
-        /// <param name="options">Optional call options to modify the outgoing request.</param>
-        /// <param name="cancellationToken">Cancellation token.</param>
-        /// <returns>The deserialized response.</returns>
+        /// <summary>Sends a pre-built <see cref="TestNamespace.GetTemplateByIdQuery"/> (GET) with optional per-request customisation.</summary>
         public static global::System.Threading.Tasks.Task<string?> GetTemplateByIdAsync(this global::Blueprint.HttpClient.BlueprintHttpClient<global::TestNamespace.TestApp> client, global::TestNamespace.GetTemplateByIdQuery operation, global::Blueprint.HttpClient.CallOptions? options, global::System.Threading.CancellationToken cancellationToken = default)
         {
             return client.SendAsync<string>(operation, options, cancellationToken);
         }
 
-        /// <summary>
-        /// Sends a <see cref="TestNamespace.CreateTemplateCommand"/> (POST) to the remote API.
-        /// </summary>
-        /// <param name="client">The Blueprint HTTP client.</param>
-        /// <param name="name">Maps to CreateTemplateCommand.Name.</param>
-        /// <param name="description">Maps to CreateTemplateCommand.Description.</param>
-        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <summary>Sends a <see cref="TestNamespace.CreateTemplateCommand"/> (POST) to the remote API.</summary>
         public static global::System.Threading.Tasks.Task CreateTemplateAsync(this global::Blueprint.HttpClient.BlueprintHttpClient<global::TestNamespace.TestApp> client, string name, string? description = default, global::System.Threading.CancellationToken cancellationToken = default)
         {
             var operation = new global::TestNamespace.CreateTemplateCommand
@@ -127,25 +80,13 @@ namespace TestNamespace
             return client.SendAsync(operation, cancellationToken);
         }
 
-        /// <summary>
-        /// Sends a pre-built <see cref="TestNamespace.CreateTemplateCommand"/> (POST) to the remote API.
-        /// </summary>
-        /// <param name="client">The Blueprint HTTP client.</param>
-        /// <param name="operation">The operation to send.</param>
-        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <summary>Sends a pre-built <see cref="TestNamespace.CreateTemplateCommand"/> (POST) to the remote API.</summary>
         public static global::System.Threading.Tasks.Task CreateTemplateAsync(this global::Blueprint.HttpClient.BlueprintHttpClient<global::TestNamespace.TestApp> client, global::TestNamespace.CreateTemplateCommand operation, global::System.Threading.CancellationToken cancellationToken = default)
         {
             return client.SendAsync(operation, cancellationToken);
         }
 
-        /// <summary>
-        /// Sends a pre-built <see cref="TestNamespace.CreateTemplateCommand"/> (POST) to the remote API
-        /// with optional per-request customisation.
-        /// </summary>
-        /// <param name="client">The Blueprint HTTP client.</param>
-        /// <param name="operation">The operation to send.</param>
-        /// <param name="options">Optional call options to modify the outgoing request.</param>
-        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <summary>Sends a pre-built <see cref="TestNamespace.CreateTemplateCommand"/> (POST) with optional per-request customisation.</summary>
         public static global::System.Threading.Tasks.Task CreateTemplateAsync(this global::Blueprint.HttpClient.BlueprintHttpClient<global::TestNamespace.TestApp> client, global::TestNamespace.CreateTemplateCommand operation, global::Blueprint.HttpClient.CallOptions? options, global::System.Threading.CancellationToken cancellationToken = default)
         {
             return client.SendAsync(operation, options, cancellationToken);

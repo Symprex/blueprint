@@ -513,21 +513,8 @@ public sealed class TypedHttpClientExtensionsGenerator : IIncrementalGenerator, 
             returnType = "global::System.Threading.Tasks.Task";
         }
 
-        // XML doc
-        sb.AppendLine("        /// <summary>");
-        sb.AppendLine($"        /// Sends a <see cref=\"{op.OperationFqn.Replace("global::", string.Empty, StringComparison.Ordinal)}\"/> ({op.HttpMethod}) to the remote API.");
-        sb.AppendLine("        /// </summary>");
-        sb.AppendLine($"        /// <param name=\"client\">The Blueprint HTTP client.</param>");
-        foreach (var param in positionalParams.Concat(optionalParams))
-        {
-            sb.AppendLine($"        /// <param name=\"{ToCamelCase(param.Name)}\">Maps to {op.OperationTypeName}.{param.Name}.</param>");
-        }
-
-        sb.AppendLine($"        /// <param name=\"cancellationToken\">Cancellation token.</param>");
-        if (hasTypedResult)
-        {
-            sb.AppendLine($"        /// <returns>The deserialized response.</returns>");
-        }
+        // XML doc — summary only, param docs omitted to reduce generated output
+        sb.AppendLine($"        /// <summary>Sends a <see cref=\"{op.OperationFqn.Replace("global::", string.Empty, StringComparison.Ordinal)}\"/> ({op.HttpMethod}) to the remote API.</summary>");
 
         // Method signature
         sb.Append($"        public static {returnType} {op.MethodName}(");
@@ -596,16 +583,7 @@ public sealed class TypedHttpClientExtensionsGenerator : IIncrementalGenerator, 
         }
 
         // Overload 1: operation + cancellation token (no CallOptions)
-        sb.AppendLine("        /// <summary>");
-        sb.AppendLine($"        /// Sends a pre-built <see cref=\"{op.OperationFqn.Replace("global::", string.Empty, StringComparison.Ordinal)}\"/> ({op.HttpMethod}) to the remote API.");
-        sb.AppendLine("        /// </summary>");
-        sb.AppendLine($"        /// <param name=\"client\">The Blueprint HTTP client.</param>");
-        sb.AppendLine($"        /// <param name=\"operation\">The operation to send.</param>");
-        sb.AppendLine($"        /// <param name=\"cancellationToken\">Cancellation token.</param>");
-        if (hasTypedResult || isResourceEvent)
-        {
-            sb.AppendLine($"        /// <returns>The deserialized response.</returns>");
-        }
+        sb.AppendLine($"        /// <summary>Sends a pre-built <see cref=\"{op.OperationFqn.Replace("global::", string.Empty, StringComparison.Ordinal)}\"/> ({op.HttpMethod}) to the remote API.</summary>");
 
         sb.Append($"        public static {returnType} {op.MethodName}(");
         sb.Append($"this global::Blueprint.HttpClient.BlueprintHttpClient<{model.AppFqn}> client, ");
@@ -631,18 +609,7 @@ public sealed class TypedHttpClientExtensionsGenerator : IIncrementalGenerator, 
         sb.AppendLine();
 
         // Overload 2: operation + CallOptions + cancellation token (S365 exact signature)
-        sb.AppendLine("        /// <summary>");
-        sb.AppendLine($"        /// Sends a pre-built <see cref=\"{op.OperationFqn.Replace("global::", string.Empty, StringComparison.Ordinal)}\"/> ({op.HttpMethod}) to the remote API");
-        sb.AppendLine("        /// with optional per-request customisation.");
-        sb.AppendLine("        /// </summary>");
-        sb.AppendLine($"        /// <param name=\"client\">The Blueprint HTTP client.</param>");
-        sb.AppendLine($"        /// <param name=\"operation\">The operation to send.</param>");
-        sb.AppendLine($"        /// <param name=\"options\">Optional call options to modify the outgoing request.</param>");
-        sb.AppendLine($"        /// <param name=\"cancellationToken\">Cancellation token.</param>");
-        if (hasTypedResult || isResourceEvent)
-        {
-            sb.AppendLine($"        /// <returns>The deserialized response.</returns>");
-        }
+        sb.AppendLine($"        /// <summary>Sends a pre-built <see cref=\"{op.OperationFqn.Replace("global::", string.Empty, StringComparison.Ordinal)}\"/> ({op.HttpMethod}) with optional per-request customisation.</summary>");
 
         sb.Append($"        public static {returnType} {op.MethodName}(");
         sb.Append($"this global::Blueprint.HttpClient.BlueprintHttpClient<{model.AppFqn}> client, ");
