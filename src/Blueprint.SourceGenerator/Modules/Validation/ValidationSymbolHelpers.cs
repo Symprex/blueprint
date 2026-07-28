@@ -332,6 +332,30 @@ internal static class ValidationSymbolHelpers
     }
 
     /// <summary>
+    /// Checks whether an attribute type is Blueprint's <c>RequiredItemsIfAttribute</c>.
+    /// </summary>
+    /// <param name="attributeClass">The attribute type to inspect.</param>
+    /// <returns><see langword="true"/> when the attribute is a required-items-if attribute.</returns>
+    public static bool IsRequiredItemsIfAttribute(INamedTypeSymbol? attributeClass)
+    {
+        return attributeClass is not null
+               && attributeClass.Name == "RequiredItemsIfAttribute"
+               && attributeClass.IsInNamespace("Blueprint", "Validation");
+    }
+
+    /// <summary>
+    /// Checks whether an attribute type is Blueprint's <c>RequiredItemsIfNotAttribute</c>.
+    /// </summary>
+    /// <param name="attributeClass">The attribute type to inspect.</param>
+    /// <returns><see langword="true"/> when the attribute is a required-items-if-not attribute.</returns>
+    public static bool IsRequiredItemsIfNotAttribute(INamedTypeSymbol? attributeClass)
+    {
+        return attributeClass is not null
+               && attributeClass.Name == "RequiredItemsIfNotAttribute"
+               && attributeClass.IsInNamespace("Blueprint", "Validation");
+    }
+
+    /// <summary>
     /// Checks whether an attribute influences the display name used in validation messages, which forces runtime fallback.
     /// </summary>
     /// <param name="attributeClass">The attribute type to inspect.</param>
@@ -479,6 +503,46 @@ internal static class ValidationSymbolHelpers
         return type is INamedTypeSymbol namedType
                && namedType.Name == nameof(DateTimeOffset)
                && namedType.IsInRootNamespace("System");
+    }
+
+    /// <summary>
+    /// Determines whether a property type is a collection (array or any <see cref="System.Collections.IEnumerable"/>
+    /// other than <see cref="string"/>). Used by diagnostics to distinguish scalar properties, on which
+    /// <c>RequiredIf</c>/<c>RequiredIfNot</c> are appropriate, from collection properties, on which those attributes
+    /// silently pass empty lists and <c>RequiredItemsIf</c>/<c>RequiredItemsIfNot</c> or <c>NotEmptyList</c> should be
+    /// used instead.
+    /// </summary>
+    /// <param name="type">The property type to inspect.</param>
+    /// <returns><see langword="true"/> when the type is a collection type (excluding <see cref="string"/>).</returns>
+    public static bool IsCollectionType(ITypeSymbol type)
+    {
+        if (type is IArrayTypeSymbol)
+        {
+            return true;
+        }
+
+        // A string is IEnumerable<char> but is a scalar for validation purposes.
+        if (type.SpecialType == SpecialType.System_String)
+        {
+            return false;
+        }
+
+        if (type is INamedTypeSymbol named)
+        {
+            if (named.MetadataName == "IEnumerable" && named.IsInNamespace("System", "Collections"))
+            {
+                return true;
+            }
+
+            if (named.AllInterfaces.Any(static candidate =>
+                    candidate.MetadataName == "IEnumerable"
+                    && candidate.IsInNamespace("System", "Collections")))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>

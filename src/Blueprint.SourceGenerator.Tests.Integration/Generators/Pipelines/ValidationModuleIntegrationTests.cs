@@ -717,6 +717,86 @@ public class ValidationModuleIntegrationTests
     }
 
     [Fact]
+    public async Task When_required_items_if_validation_fails_on_empty_collection_then_generated_pipeline_returns_validation_failure_and_skips_handler()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
+        var pipeline = executor.GetPipeline(typeof(RequiredItemsIfValidationOperation));
+        var context = CreateContext(app, RequiredItemsIfValidationOperation.Configure());
+        var operation = (RequiredItemsIfValidationOperation)context.Operation;
+        operation.Enabled = true;
+        operation.Roles = new System.Collections.Generic.List<string>();
+
+        RequiredItemsIfValidationOperation.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<ValidationFailedResult>();
+        RequiredItemsIfValidationOperation.HandlerCallCount.Should().Be(0);
+        var validationResult = ((ValidationFailedResult)result).ValidationResults.Should().ContainSingle().Subject;
+        validationResult.MemberNames.Should().Contain(nameof(RequiredItemsIfValidationOperation.Roles));
+        validationResult.ErrorMessage.Should().Be("The Roles field must contain at least one item if Enabled field is True.");
+    }
+
+    [Fact]
+    public async Task When_required_items_if_validation_fails_on_null_collection_then_generated_pipeline_returns_validation_failure()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
+        var pipeline = executor.GetPipeline(typeof(RequiredItemsIfValidationOperation));
+        var context = CreateContext(app, RequiredItemsIfValidationOperation.Configure());
+        var operation = (RequiredItemsIfValidationOperation)context.Operation;
+        operation.Enabled = true;
+        operation.Roles = null;
+
+        RequiredItemsIfValidationOperation.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<ValidationFailedResult>();
+        RequiredItemsIfValidationOperation.HandlerCallCount.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task When_required_items_if_validation_passes_then_generated_pipeline_runs_handler_and_returns_ok()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
+        var pipeline = executor.GetPipeline(typeof(RequiredItemsIfValidationOperation));
+        var context = CreateContext(app, RequiredItemsIfValidationOperation.Configure());
+        var operation = (RequiredItemsIfValidationOperation)context.Operation;
+        operation.Enabled = true;
+        operation.Roles = new System.Collections.Generic.List<string> { "admin" };
+
+        RequiredItemsIfValidationOperation.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<OkResult<string>>();
+        RequiredItemsIfValidationOperation.HandlerCallCount.Should().Be(1);
+        ((OkResult)result).Unwrap<string>().Should().Be("admin");
+    }
+
+    [Fact]
+    public async Task When_required_items_if_condition_inactive_then_empty_collection_passes()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
+        var pipeline = executor.GetPipeline(typeof(RequiredItemsIfValidationOperation));
+        var context = CreateContext(app, RequiredItemsIfValidationOperation.Configure());
+        var operation = (RequiredItemsIfValidationOperation)context.Operation;
+        operation.Enabled = false;
+        operation.Roles = new System.Collections.Generic.List<string>();
+
+        RequiredItemsIfValidationOperation.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<OkResult<string>>();
+        RequiredItemsIfValidationOperation.HandlerCallCount.Should().Be(1);
+    }
+
+    [Fact]
     public async Task When_not_allowed_if_validation_fails_then_generated_pipeline_returns_validation_failure_and_skips_handler()
     {
         var app = new IntegrationTestBlueprintApp();
@@ -1891,6 +1971,27 @@ public partial class RequiredIfValidationOperation : ICommand<string>
     {
         HandlerCallCount++;
         return Task.FromResult(operation.Name ?? string.Empty);
+    }
+}
+
+public partial class RequiredItemsIfValidationOperation : ICommand<string>
+{
+    public static int HandlerCallCount { get; private set; }
+
+    public bool Enabled { get; set; }
+
+    [RequiredItemsIf(nameof(Enabled), true)]
+    public System.Collections.Generic.List<string>? Roles { get; set; }
+
+    public static void Reset()
+    {
+        HandlerCallCount = 0;
+    }
+
+    public static Task<string> HandleAsync(RequiredItemsIfValidationOperation operation)
+    {
+        HandlerCallCount++;
+        return Task.FromResult(operation.Roles is null ? string.Empty : string.Join(",", operation.Roles));
     }
 }
 

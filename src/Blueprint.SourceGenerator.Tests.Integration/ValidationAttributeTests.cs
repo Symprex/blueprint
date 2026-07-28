@@ -487,6 +487,120 @@ public class ValidationAttributeTests
         }
     }
 
+    public class RequiredItemsIfAttributeTests
+    {
+        private class TestModel
+        {
+            public bool RestrictFormats { get; set; }
+
+            [RequiredItemsIf(nameof(RestrictFormats), true)]
+            public List<string>? Formats { get; set; }
+        }
+
+        [Fact]
+        public void When_dependent_matches_and_collection_empty_then_fails()
+        {
+            var model = new TestModel { RestrictFormats = true, Formats = new List<string>() };
+            var context = new ValidationContext(model) { MemberName = nameof(TestModel.Formats) };
+            var attr = new RequiredItemsIfAttribute(nameof(TestModel.RestrictFormats), true);
+
+            var result = attr.GetValidationResult(model.Formats, context);
+
+            result.Should().NotBe(ValidationResult.Success);
+        }
+
+        [Fact]
+        public void When_dependent_matches_and_collection_null_then_fails()
+        {
+            var model = new TestModel { RestrictFormats = true, Formats = null };
+            var context = new ValidationContext(model) { MemberName = nameof(TestModel.Formats) };
+            var attr = new RequiredItemsIfAttribute(nameof(TestModel.RestrictFormats), true);
+
+            var result = attr.GetValidationResult(null, context);
+
+            result.Should().NotBe(ValidationResult.Success);
+        }
+
+        [Fact]
+        public void When_dependent_matches_and_collection_has_items_then_passes()
+        {
+            var model = new TestModel { RestrictFormats = true, Formats = new List<string> { "pdf" } };
+            var context = new ValidationContext(model) { MemberName = nameof(TestModel.Formats) };
+            var attr = new RequiredItemsIfAttribute(nameof(TestModel.RestrictFormats), true);
+
+            var result = attr.GetValidationResult(model.Formats, context);
+
+            result.Should().Be(ValidationResult.Success);
+        }
+
+        [Fact]
+        public void When_dependent_does_not_match_then_empty_collection_passes()
+        {
+            var model = new TestModel { RestrictFormats = false, Formats = new List<string>() };
+            var context = new ValidationContext(model) { MemberName = nameof(TestModel.Formats) };
+            var attr = new RequiredItemsIfAttribute(nameof(TestModel.RestrictFormats), true);
+
+            var result = attr.GetValidationResult(model.Formats, context);
+
+            result.Should().Be(ValidationResult.Success);
+        }
+
+        [Fact]
+        public void When_dependent_property_missing_then_returns_error()
+        {
+            var model = new TestModel();
+            var context = new ValidationContext(model) { MemberName = nameof(TestModel.Formats) };
+            var attr = new RequiredItemsIfAttribute("NonExistentProperty", true);
+
+            var result = attr.GetValidationResult(null, context);
+
+            result.Should().NotBe(ValidationResult.Success);
+            result!.ErrorMessage.Should().Contain("NonExistentProperty");
+        }
+
+        [Fact]
+        public void Error_message_mentions_at_least_one_item()
+        {
+            var msg = new RequiredItemsIfAttribute(nameof(TestModel.RestrictFormats), true).FormatErrorMessage("Formats");
+            msg.Should().Contain("Formats").And.Contain("at least one item");
+        }
+    }
+
+    public class RequiredItemsIfNotAttributeTests
+    {
+        private class TestModel
+        {
+            public string? Mode { get; set; }
+
+            [RequiredItemsIfNot(nameof(Mode), "All")]
+            public List<string>? Selected { get; set; }
+        }
+
+        [Fact]
+        public void When_dependent_does_not_match_and_collection_empty_then_fails()
+        {
+            var model = new TestModel { Mode = "Some", Selected = new List<string>() };
+            var context = new ValidationContext(model) { MemberName = nameof(TestModel.Selected) };
+            var attr = new RequiredItemsIfNotAttribute(nameof(TestModel.Mode), "All");
+
+            var result = attr.GetValidationResult(model.Selected, context);
+
+            result.Should().NotBe(ValidationResult.Success);
+        }
+
+        [Fact]
+        public void When_dependent_matches_then_empty_collection_passes()
+        {
+            var model = new TestModel { Mode = "All", Selected = new List<string>() };
+            var context = new ValidationContext(model) { MemberName = nameof(TestModel.Selected) };
+            var attr = new RequiredItemsIfNotAttribute(nameof(TestModel.Mode), "All");
+
+            var result = attr.GetValidationResult(model.Selected, context);
+
+            result.Should().Be(ValidationResult.Success);
+        }
+    }
+
     public class NotAllowedIfAttributeTests
     {
         private class TestModel

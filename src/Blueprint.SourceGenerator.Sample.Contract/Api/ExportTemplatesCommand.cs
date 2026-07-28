@@ -14,6 +14,7 @@ namespace Blueprint.SourceGenerator.Sample.Contract.Api;
 /// <list type="bullet">
 ///   <item><see cref="RequiredIfAttribute"/> — <see cref="NotifyEmail"/> is required when <see cref="NotifyOnCompletion"/> is true</item>
 ///   <item><see cref="NotAllowedIfAttribute"/> — <see cref="NotifyEmail"/> cannot be set when <see cref="NotifyOnCompletion"/> is false</item>
+///   <item><see cref="RequiredItemsIfAttribute"/> — <see cref="Formats"/> must be non-empty when <see cref="RestrictFormats"/> is true</item>
 /// </list>
 /// </summary>
 [ApiOperations("Templates")]
@@ -47,4 +48,20 @@ public partial class ExportTemplatesCommand : ICommand<AcceptedResult<ExportJobA
     [Blueprint.Validation.EmailAddress]
     [Description("Email address to notify on export completion. Required when NotifyOnCompletion is true.")]
     public string? NotifyEmail { get; set; }
+
+    /// <summary>
+    /// Whether to restrict the export to a specific set of formats. When true, <see cref="Formats"/> must
+    /// contain at least one format.
+    /// </summary>
+    [Description("Restrict the export to a specific set of formats.")]
+    public bool RestrictFormats { get; set; }
+
+    /// <summary>
+    /// The export formats to include. Required to contain at least one item when <see cref="RestrictFormats"/>
+    /// is true (via <see cref="RequiredItemsIfAttribute"/>). Because the requirement is cross-property
+    /// conditional, it is enforced at runtime and is intentionally absent from the OpenAPI schema.
+    /// </summary>
+    [RequiredItemsIf(nameof(RestrictFormats), true)]
+    [Description("Export formats to include. Must contain at least one item when RestrictFormats is true.")]
+    public List<string>? Formats { get; set; }
 }

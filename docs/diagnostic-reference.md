@@ -86,6 +86,30 @@ For detailed explanations, see [compile-time-validation.md](compile-time-validat
 | BPV012 | Info | `[Required]` is redundant on non-nullable value type |
 | BPV013 | Info | IValidatableObject prevents compile-time validation |
 | BPV014 | Warning | `[Required]` conflicts with `[DefaultValue]` |
+| BPV015 | Error | `RequiredItemsIfAttribute` references a missing property |
+| BPV016 | Error | `RequiredItemsIfNotAttribute` references a missing property |
+| BPV017 | Error | Conditional `[Required*]` attribute silently passes empty collections |
+| BPV018 | Error | `RequiredItemsIf*` attribute applied to a non-collection property |
+
+### BPV017 — conditional `[RequiredIf]`/`[RequiredIfNot]` on a collection
+
+`RequiredIf` and `RequiredIfNot` perform a scalar *presence* check: any non-`null` value satisfies them, and a collection's presence is never `null`-vs-empty aware. Applied to a list, an **empty** collection therefore passes even when the requirement is active. Use `[RequiredItemsIf]`/`[RequiredItemsIfNot]`, which inspect the item count, for a conditionally non-empty collection — or `[NotEmptyList]` when the requirement is unconditional.
+
+```csharp
+// ❌ BPV017 — empty Formats passes when RestrictFormats is true
+[RequiredIf(nameof(RestrictFormats), true)]
+public List<string>? Formats { get; set; }
+
+// ✅ empty Formats is rejected when RestrictFormats is true
+[RequiredItemsIf(nameof(RestrictFormats), true)]
+public List<string>? Formats { get; set; }
+```
+
+Like the other conditional validators, `RequiredItemsIf`/`RequiredItemsIfNot` are cross-property constraints and are enforced at runtime only — they are intentionally absent from the generated OpenAPI schema.
+
+### BPV018 — `[RequiredItemsIf]`/`[RequiredItemsIfNot]` on a non-collection
+
+These attributes inspect an item count, so they only make sense on a collection property. On a scalar property, use `[RequiredIf]`/`[RequiredIfNot]` instead.
 
 ## Property ownership and binding (BPPO)
 

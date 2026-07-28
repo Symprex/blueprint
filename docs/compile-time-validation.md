@@ -149,6 +149,12 @@ Current validation contributor IDs in active use:
 - `BPV005`: `NotAllowedIfAttribute` references a property that does not exist on the operation type.
 - `BPV006`: `LessThanPropertyAttribute` references a property that does not exist on the operation type.
 - `BPV007`: `MustBeGreaterThanOrEqualAttribute` references a property that does not exist on the operation type.
+- `BPV015`: `RequiredItemsIfAttribute` references a property that does not exist on the operation type.
+- `BPV016`: `RequiredItemsIfNotAttribute` references a property that does not exist on the operation type.
+- `BPV017`: a scalar conditional-required attribute (`RequiredIf`/`RequiredIfNot`) is applied to a collection property, where it silently passes empty collections. Use `RequiredItemsIf`/`RequiredItemsIfNot` (or `NotEmptyList` for an unconditional requirement).
+- `BPV018`: a collection-aware conditional attribute (`RequiredItemsIf`/`RequiredItemsIfNot`) is applied to a non-collection property. Use `RequiredIf`/`RequiredIfNot` for scalars.
+
+(`BPV008`–`BPV014` cover conflicting/redundant constraint shapes; see the [diagnostic reference](diagnostic-reference.md).)
 
 ### Resource event family diagnostics
 
@@ -280,8 +286,10 @@ Current fast-path strategy coverage (in planning order):
 | NotInPast | `NotInPastAttribute` | `DateTime`/`DateTimeOffset` including nullable pairs, optional custom message constructor | unsupported temporal types, named arguments |
 | NotEmptyList | `NotEmptyListAttribute` | arrays and collection shapes with generated `Count`/`Length`, optional custom message constructor | enumerable-only shapes without deterministic count, named arguments |
 | MaxItemsList | `MaxItemsListAttribute` | arrays and collection shapes with generated `Count`/`Length`, required max-items constructor with optional custom message | enumerable-only shapes without deterministic count, named arguments |
-| RequiredIf | `RequiredIfAttribute` | scalar/null dependent values, default constructor, compile-time `BPV003` | arrays, custom messages |
-| RequiredIfNot | `RequiredIfNotAttribute` | scalar/null dependent values, default constructor, compile-time `BPV004` | arrays, custom messages |
+| RequiredIf | `RequiredIfAttribute` | scalar/null dependent values, default constructor, compile-time `BPV003` | arrays, custom messages, collection properties (`BPV017`) |
+| RequiredIfNot | `RequiredIfNotAttribute` | scalar/null dependent values, default constructor, compile-time `BPV004` | arrays, custom messages, collection properties (`BPV017`) |
+| RequiredItemsIf | `RequiredItemsIfAttribute` | collection shapes with generated `Count`/`Length` (falls back to runtime otherwise), scalar/null dependent values, compile-time `BPV015`; conditional, so absent from the OpenAPI schema | non-collection properties (`BPV018`), dependent-value arrays, custom messages |
+| RequiredItemsIfNot | `RequiredItemsIfNotAttribute` | collection shapes with generated `Count`/`Length` (falls back to runtime otherwise), scalar/null dependent values, compile-time `BPV016`; conditional, so absent from the OpenAPI schema | non-collection properties (`BPV018`), dependent-value arrays, custom messages |
 | NotAllowedIf | `NotAllowedIfAttribute` | scalar dependent values, default constructor, compile-time `BPV005` | null dependent values, arrays, custom messages |
 | Password | `PasswordAttribute` | string properties, direct `IsValid` call, constructors with optional custom message/description flag | non-string types, named arguments |
 | ResourceKey | `ResourceKeyAttribute` | string properties, direct `IsValid` call, optional custom message constructor | non-string types, named arguments |

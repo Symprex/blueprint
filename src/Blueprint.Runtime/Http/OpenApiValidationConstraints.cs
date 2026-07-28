@@ -40,9 +40,10 @@ internal sealed record OpenApiValidationConstraints(
 
     /// <summary>
     /// Extracts validation constraints from the CLR property attributes on an operation type's property.
-    /// Conditional validators (<c>RequiredIfAttribute</c>, <c>RequiredIfNotAttribute</c>, <c>NotAllowedIfAttribute</c>)
-    /// are intentionally skipped because OpenAPI 3.x cannot represent cross-property conditionality; they remain
-    /// enforced at runtime through the generated validation pipeline.
+    /// Conditional validators (<c>RequiredIfAttribute</c>, <c>RequiredIfNotAttribute</c>, <c>NotAllowedIfAttribute</c>,
+    /// <c>RequiredItemsIfAttribute</c>, <c>RequiredItemsIfNotAttribute</c>) are intentionally skipped because OpenAPI 3.x
+    /// cannot represent cross-property conditionality; they remain enforced at runtime through the generated validation
+    /// pipeline.
     /// </summary>
     /// <param name="operationType">The operation CLR type to reflect on.</param>
     /// <param name="propertyName">The CLR property name to extract constraints from.</param>

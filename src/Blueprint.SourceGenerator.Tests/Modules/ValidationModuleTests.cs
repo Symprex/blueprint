@@ -188,6 +188,106 @@ public class ValidationModuleTests
     }
 
     [Fact]
+    public void When_required_items_if_attribute_references_missing_property_then_reports_validation_diagnostic()
+    {
+        var source = """
+                     using Blueprint.Validation;
+                     using System.Collections.Generic;
+
+                     public partial class IncludedOperation : IOperation
+                     {
+                         [RequiredItemsIf("MissingProperty", true)]
+                         public List<string>? Values { get; set; }
+                     }
+                     """;
+
+        var result = CompileDescriptor(source);
+
+        result.Diagnostics.Select(static d => d.Id).Should().Contain("BPV015");
+    }
+
+    [Fact]
+    public void When_required_items_if_not_attribute_references_missing_property_then_reports_validation_diagnostic()
+    {
+        var source = """
+                     using Blueprint.Validation;
+                     using System.Collections.Generic;
+
+                     public partial class IncludedOperation : IOperation
+                     {
+                         [RequiredItemsIfNot("MissingProperty", null)]
+                         public List<string>? Values { get; set; }
+                     }
+                     """;
+
+        var result = CompileDescriptor(source);
+
+        result.Diagnostics.Select(static d => d.Id).Should().Contain("BPV016");
+    }
+
+    [Fact]
+    public void When_required_if_applied_to_collection_then_reports_on_collection_diagnostic()
+    {
+        var source = """
+                     using Blueprint.Validation;
+                     using System.Collections.Generic;
+
+                     public partial class IncludedOperation : IOperation
+                     {
+                         public bool Enabled { get; set; }
+
+                         [RequiredIf(nameof(Enabled), true)]
+                         public List<string>? Values { get; set; }
+                     }
+                     """;
+
+        var result = CompileDescriptor(source);
+
+        result.Diagnostics.Select(static d => d.Id).Should().Contain("BPV017");
+    }
+
+    [Fact]
+    public void When_required_if_not_applied_to_collection_then_reports_on_collection_diagnostic()
+    {
+        var source = """
+                     using Blueprint.Validation;
+                     using System.Collections.Generic;
+
+                     public partial class IncludedOperation : IOperation
+                     {
+                         public string? Mode { get; set; }
+
+                         [RequiredIfNot(nameof(Mode), "All")]
+                         public List<string>? Values { get; set; }
+                     }
+                     """;
+
+        var result = CompileDescriptor(source);
+
+        result.Diagnostics.Select(static d => d.Id).Should().Contain("BPV017");
+    }
+
+    [Fact]
+    public void When_required_items_if_applied_to_non_collection_then_reports_non_collection_diagnostic()
+    {
+        var source = """
+                     using Blueprint.Validation;
+
+                     public partial class IncludedOperation : IOperation
+                     {
+                         public bool Enabled { get; set; }
+
+                         [RequiredItemsIf(nameof(Enabled), true)]
+                         public string? Name { get; set; }
+                     }
+                     """;
+
+        var result = CompileDescriptor(source);
+
+        result.Diagnostics.Select(static d => d.Id).Should().Contain("BPV018");
+    }
+
+    [Fact]
     public void Inline_handler_with_greater_than_property_validation_attribute_generates_property_comparison_before_handler_invocation()
     {
         var source = """
@@ -330,6 +430,59 @@ public class ValidationModuleTests
         pipelineSource.Should().Contain("operation.Enabled == true && global::System.String.IsNullOrWhiteSpace(operation.Name)");
         pipelineSource.Should().Contain("global::Blueprint.Validation.RequiredIfAttribute");
         pipelineSource.IndexOf("operation.Enabled == true && global::System.String.IsNullOrWhiteSpace(operation.Name)", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(pipelineSource.IndexOf("var handlerResult", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Inline_handler_with_required_items_if_validation_attribute_generates_collection_count_check_before_handler_invocation()
+    {
+        var source = """
+                     using Blueprint;
+                     using Blueprint.Model;
+                     using Blueprint.Validation;
+                     using System.Collections.Generic;
+                     using System.Threading.Tasks;
+
+                     namespace TestNamespace;
+
+                     [BlueprintAppScan]
+                     public partial class TestApp : BlueprintApp
+                     {
+                         public TestApp()
+                         {
+                             this.Register(CreateUserCommand.Configure());
+                         }
+                     }
+
+                     public class CreateUserCommand : ICommand<string>
+                     {
+                         public static ApiOperationDescriptor Configure()
+                         {
+                             return new ApiOperationDescriptor(typeof(CreateUserCommand), nameof(CreateUserCommand), "Tests");
+                         }
+
+                         public bool Enabled { get; set; }
+
+                         [RequiredItemsIf(nameof(Enabled), true)]
+                         public List<string>? Roles { get; set; }
+
+                         public static Task<string> HandleAsync(CreateUserCommand command)
+                         {
+                             return Task.FromResult(string.Empty);
+                         }
+                     }
+                     """;
+
+        var result = CompilePipeline(source);
+
+        result.Diagnostics.Should().BeEmpty();
+        var pipelineSource = result.Output.Single(static tree => tree.FilePath.EndsWith("CreateUserCommandExecutorPipeline.g.cs", StringComparison.Ordinal)).ToString();
+
+        pipelineSource.Should().NotContain("global::System.ComponentModel.DataAnnotations.Validator.TryValidateObject");
+        pipelineSource.Should().Contain("operation.Enabled == true && (operation.Roles is null || operation.Roles.Count == 0)");
+        pipelineSource.Should().Contain("global::Blueprint.Validation.RequiredItemsIfAttribute");
+        pipelineSource.IndexOf("operation.Enabled == true && (operation.Roles is null || operation.Roles.Count == 0)", StringComparison.Ordinal)
             .Should()
             .BeLessThan(pipelineSource.IndexOf("var handlerResult", StringComparison.Ordinal));
     }

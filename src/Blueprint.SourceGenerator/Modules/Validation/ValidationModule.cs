@@ -128,12 +128,67 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
                 {
                     CheckMissingPropertyDiagnostic(context, operationType.Name, operationProperties, property, attribute, ValidationDiagnosticDescriptors.MissingNotAllowedIfProperty);
                 }
+                else if (ValidationSymbolHelpers.IsRequiredItemsIfAttribute(attributeClass))
+                {
+                    CheckMissingPropertyDiagnostic(context, operationType.Name, operationProperties, property, attribute, ValidationDiagnosticDescriptors.MissingRequiredItemsIfProperty);
+                }
+                else if (ValidationSymbolHelpers.IsRequiredItemsIfNotAttribute(attributeClass))
+                {
+                    CheckMissingPropertyDiagnostic(context, operationType.Name, operationProperties, property, attribute, ValidationDiagnosticDescriptors.MissingRequiredItemsIfNotProperty);
+                }
             }
 
             ValidateConflictingRanges(context, operationType.Name, property);
             ValidateEmptyRegexPattern(context, operationType.Name, property);
             ValidateRedundantRequiredOnValueType(context, operationType.Name, property);
             ValidateConflictingRequiredAndDefault(context, operationType.Name, property);
+            ValidateConditionalRequiredCollectionUsage(context, operationType.Name, property);
+        }
+    }
+
+    /// <summary>
+    /// Emits BPV017 when a scalar conditional-required attribute (<c>RequiredIf</c> / <c>RequiredIfNot</c>) is applied
+    /// to a collection property, where it silently passes empty lists, and BPV018 when a collection-aware attribute
+    /// (<c>RequiredItemsIf</c> / <c>RequiredItemsIfNot</c>) is applied to a non-collection property.
+    /// </summary>
+    private static void ValidateConditionalRequiredCollectionUsage(
+        DescriptorContributorContext context,
+        string operationTypeName,
+        IPropertySymbol property)
+    {
+        var isCollection = ValidationSymbolHelpers.IsCollectionType(property.Type);
+
+        foreach (var attr in property.GetAttributes())
+        {
+            var attributeClass = attr.AttributeClass;
+            if (attributeClass is null)
+            {
+                continue;
+            }
+
+            var isScalarConditional = ValidationSymbolHelpers.IsRequiredIfAttribute(attributeClass)
+                                      || ValidationSymbolHelpers.IsRequiredIfNotAttribute(attributeClass);
+            var isItemsConditional = ValidationSymbolHelpers.IsRequiredItemsIfAttribute(attributeClass)
+                                     || ValidationSymbolHelpers.IsRequiredItemsIfNotAttribute(attributeClass);
+
+            if (isScalarConditional && isCollection)
+            {
+                var location = attr.ApplicationSyntaxReference?.GetSyntax().GetLocation() ?? property.Locations.FirstOrDefault();
+                context.AddDiagnostic(
+                    new DiagnosticInfo(
+                        ValidationDiagnosticDescriptors.ConditionalRequiredOnCollection,
+                        location,
+                        [property.Name, operationTypeName, attributeClass.Name]));
+            }
+            else if (isItemsConditional && !isCollection)
+            {
+                var location = attr.ApplicationSyntaxReference?.GetSyntax().GetLocation() ?? property.Locations.FirstOrDefault();
+                context.AddDiagnostic(
+                    new DiagnosticInfo(
+                        ValidationDiagnosticDescriptors.RequiredItemsOnNonCollection,
+                        location,
+                        [property.Name, operationTypeName, attributeClass.Name]));
+            }
         }
     }
 

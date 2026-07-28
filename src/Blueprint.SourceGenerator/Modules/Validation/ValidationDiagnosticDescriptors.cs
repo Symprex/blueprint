@@ -180,4 +180,55 @@ internal static class ValidationDiagnosticDescriptors
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
         description: "Applying both [Required] and [DefaultValue] to the same property is contradictory: the model binder fills in the default value before validation runs, so the Required check can never fail. Remove one of the attributes to clarify intent.");
+
+    /// <summary>
+    /// Gets the diagnostic emitted when a <c>RequiredItemsIfAttribute</c> references a missing property.
+    /// </summary>
+    public static readonly DiagnosticDescriptor MissingRequiredItemsIfProperty = new(
+        id: "BPV015",
+        title: "RequiredItemsIfAttribute references a missing property",
+        messageFormat: "The property '{0}' referenced by RequiredItemsIfAttribute on '{1}' does not exist on operation '{2}'",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "RequiredItemsIfAttribute must reference a real operation property so generated validation and runtime behavior stay deterministic.");
+
+    /// <summary>
+    /// Gets the diagnostic emitted when a <c>RequiredItemsIfNotAttribute</c> references a missing property.
+    /// </summary>
+    public static readonly DiagnosticDescriptor MissingRequiredItemsIfNotProperty = new(
+        id: "BPV016",
+        title: "RequiredItemsIfNotAttribute references a missing property",
+        messageFormat: "The property '{0}' referenced by RequiredItemsIfNotAttribute on '{1}' does not exist on operation '{2}'",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "RequiredItemsIfNotAttribute must reference a real operation property so generated validation and runtime behavior stay deterministic.");
+
+    /// <summary>
+    /// Gets the diagnostic emitted when a conditional-required scalar attribute (<c>RequiredIf</c> / <c>RequiredIfNot</c>)
+    /// is applied to a collection property, where it treats any non-null collection — including an empty one — as
+    /// satisfied and therefore silently accepts empty lists.
+    /// </summary>
+    public static readonly DiagnosticDescriptor ConditionalRequiredOnCollection = new(
+        id: "BPV017",
+        title: "Conditional [Required*] attribute silently passes empty collections",
+        messageFormat: "Property '{0}' on operation '{1}' is a collection but uses {2}, which treats any non-null collection (including an empty one) as satisfied — use RequiredItemsIf/RequiredItemsIfNot to require a non-empty collection, or [NotEmptyList] for an unconditional requirement",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "RequiredIf and RequiredIfNot perform a scalar presence check: a non-null collection always passes, so an empty list is accepted even when the requirement is active. Apply RequiredItemsIf/RequiredItemsIfNot (which inspect the item count) to a collection, or [NotEmptyList] when the requirement is unconditional.");
+
+    /// <summary>
+    /// Gets the diagnostic emitted when a collection-aware conditional attribute (<c>RequiredItemsIf</c> /
+    /// <c>RequiredItemsIfNot</c>) is applied to a non-collection property, where its item-count check cannot apply.
+    /// </summary>
+    public static readonly DiagnosticDescriptor RequiredItemsOnNonCollection = new(
+        id: "BPV018",
+        title: "RequiredItemsIf* attribute applied to a non-collection property",
+        messageFormat: "Property '{0}' on operation '{1}' is not a collection but uses {2}, which inspects an item count — use RequiredIf/RequiredIfNot for a scalar property",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "RequiredItemsIf and RequiredItemsIfNot inspect the item count of a collection. Applying them to a scalar property is a mistake; use RequiredIf/RequiredIfNot instead.");
 }

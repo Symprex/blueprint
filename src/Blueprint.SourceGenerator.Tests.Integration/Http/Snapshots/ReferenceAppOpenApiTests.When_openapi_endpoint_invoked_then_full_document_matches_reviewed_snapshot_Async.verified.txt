@@ -2537,6 +2537,18 @@
             "nullable": true,
             "format": "email",
             "description": "Email address to notify on export completion. Required when NotifyOnCompletion is true."
+          },
+          "restrictFormats": {
+            "type": "boolean",
+            "description": "Restrict the export to a specific set of formats."
+          },
+          "formats": {
+            "type": "array",
+            "nullable": true,
+            "description": "Export formats to include. Must contain at least one item when RestrictFormats is true.",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "additionalProperties": false

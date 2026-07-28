@@ -291,11 +291,13 @@ Blueprint-specific validators are also available:
 | `GreaterThanPropertyAttribute` | Value must be greater than another property |
 | `LessThanPropertyAttribute` | Value must be less than another property |
 | `MustBeGreaterThanOrEqualAttribute` | Cross-property >= comparison |
-| `RequiredIfAttribute` | Conditionally required when another property equals a value |
-| `RequiredIfNotAttribute` | Conditionally required when another property does not equal a value |
+| `RequiredIfAttribute` | Conditionally required (scalar) when another property equals a value |
+| `RequiredIfNotAttribute` | Conditionally required (scalar) when another property does not equal a value |
+| `RequiredItemsIfAttribute` | Collection must be non-empty when another property equals a value |
+| `RequiredItemsIfNotAttribute` | Collection must be non-empty when another property does not equal a value |
 | `NotAllowedIfAttribute` | Forbidden when another property equals a value |
 | `MustBeTrueAttribute` | Boolean must be true (consent/terms validation) |
-| `NotEmptyListAttribute` | Collection must not be empty |
+| `NotEmptyListAttribute` | Collection must not be empty (unconditional) |
 | `MaxItemsListAttribute` | Collection must not exceed max items |
 | `InFutureAttribute` | DateTime must be in the future |
 | `InPastAttribute` | DateTime must be in the past |

@@ -23,6 +23,8 @@ internal static class ValidationPropertyPlanner
         new RegularExpressionValidationFastPathStrategy(),
         new RequiredIfValidationFastPathStrategy(),
         new RequiredIfNotValidationFastPathStrategy(),
+        new RequiredItemsIfValidationFastPathStrategy(),
+        new RequiredItemsIfNotValidationFastPathStrategy(),
         new NotAllowedIfValidationFastPathStrategy(),
         new GreaterThanValidationFastPathStrategy(),
         new LessThanValidationFastPathStrategy(),

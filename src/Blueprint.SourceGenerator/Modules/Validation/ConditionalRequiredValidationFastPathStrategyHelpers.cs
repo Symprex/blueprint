@@ -45,6 +45,49 @@ internal static class ConditionalRequiredValidationFastPathStrategyHelpers
         return true;
     }
 
+    /// <summary>
+    /// Tries to create a rule for the collection-aware conditional-required attributes (<c>RequiredItemsIf</c> /
+    /// <c>RequiredItemsIfNot</c>). Unlike <see cref="TryCreateRule"/>, the "missing value" test inspects the
+    /// collection's item count so that a <see langword="null"/> or empty collection fails the requirement when it
+    /// is active. Only collection shapes with a deterministic count are lowered here; other shapes fall back to the
+    /// runtime attribute.
+    /// </summary>
+    /// <param name="property">The collection property being validated.</param>
+    /// <param name="propertyAccess">The generated-code expression used to read the property value.</param>
+    /// <param name="attribute">The conditional required-items attribute instance to translate.</param>
+    /// <param name="attributeTypeName">The runtime attribute type name used when emitting validation failures.</param>
+    /// <param name="isRequiredWhenConditionMatches">Whether a matching comparison should activate or deactivate the requirement.</param>
+    /// <param name="rule">Receives the generated fast-path rule when translation succeeds.</param>
+    /// <returns><see langword="true"/> when the attribute can be lowered into a generated fast-path rule.</returns>
+    public static bool TryCreateItemsRule(
+        IPropertySymbol property,
+        string propertyAccess,
+        AttributeData attribute,
+        string attributeTypeName,
+        bool isRequiredWhenConditionMatches,
+        [NotNullWhen(true)]
+        out ValidationFastPathRule? rule)
+    {
+        rule = null;
+
+        if (!ValidationSymbolHelpers.TryGetCollectionCountExpression(property.Type, propertyAccess, out var countExpression)
+            || !TryGetConditionExpressions(property, propertyAccess, attribute, isRequiredWhenConditionMatches, out var activeCondition, out var inactiveCondition, out var attributeExpression))
+        {
+            return false;
+        }
+
+        // A null or empty collection is "missing"; the null check short-circuits so the count expression is only
+        // evaluated on a non-null collection.
+        var missingValueCondition = $"({propertyAccess} is null || {countExpression} == 0)";
+        var presentValueCondition = $"({propertyAccess} is not null && {countExpression} > 0)";
+
+        rule = new ValidationFastPathRule(
+            $"{activeCondition} && {missingValueCondition}",
+            $"new global::Blueprint.Validation.{attributeTypeName}({attributeExpression})",
+            $"{inactiveCondition} || {presentValueCondition}");
+        return true;
+    }
+
     private static bool TryGetConditionExpressions(
         IPropertySymbol property,
         string propertyAccess,

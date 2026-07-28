@@ -1,0 +1,121 @@
+using System.Collections;
+using System.ComponentModel.DataAnnotations;
+using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
+
+namespace Blueprint.Validation;
+
+/// <summary>
+/// Requires a collection property to contain at least one item, unless another property matches one of the
+/// configured dependent values. This is the collection-aware counterpart to <see cref="RequiredIfNotAttribute"/>:
+/// where <see cref="RequiredIfNotAttribute"/> treats a non-null collection as satisfied (so an empty list passes),
+/// this attribute inspects the collection and rejects a <see langword="null"/> or empty collection when the
+/// requirement is active.
+/// </summary>
+[AttributeUsage(AttributeTargets.Property, AllowMultiple = true)]
+public sealed class RequiredItemsIfNotAttribute : ValidationAttribute
+{
+    private const string RequiredFieldMessage = "The {0} field must contain at least one item if {1} field is not {2}.";
+    private readonly HashSet<string?> _dependentValueTexts;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="RequiredItemsIfNotAttribute"/> class.
+    /// </summary>
+    /// <param name="dependentProperty">The sibling property whose value can deactivate the requirement.</param>
+    /// <param name="dependentValue">The dependent value, or values, that deactivate the requirement.</param>
+    public RequiredItemsIfNotAttribute(string dependentProperty, object? dependentValue)
+        : base(RequiredFieldMessage)
+    {
+        if (string.IsNullOrWhiteSpace(dependentProperty))
+        {
+            throw new ArgumentException("The dependent property name must be provided.", nameof(dependentProperty));
+        }
+
+        this.DependentProperty = dependentProperty;
+        this.DependentValue = dependentValue;
+        this.DependentValues = dependentValue is Array array ? array.Cast<object?>().ToArray() : [dependentValue];
+        this._dependentValueTexts = [.. this.DependentValues.Select(static value => value?.ToString())];
+    }
+
+    /// <summary>
+    /// Gets the sibling property whose value can deactivate the requirement.
+    /// </summary>
+    public string DependentProperty { get; }
+
+    /// <summary>
+    /// Gets the original dependent value supplied to the attribute constructor.
+    /// </summary>
+    public object? DependentValue { get; }
+
+    /// <summary>
+    /// Gets the dependent values normalised into an enumerable so arrays and scalar inputs follow the same validation path.
+    /// </summary>
+    public IEnumerable<object?> DependentValues { get; }
+
+    /// <inheritdoc />
+    public override string FormatErrorMessage(string name)
+    {
+        var dependentValueDisplay = string.Join(" or ", this._dependentValueTexts.Select(static v => v ?? "null"));
+        return string.Format(CultureInfo.CurrentCulture, this.ErrorMessageString, name, this.DependentProperty, dependentValueDisplay);
+    }
+
+    /// <inheritdoc />
+    [UnconditionalSuppressMessage("Trimming", "IL2075", Justification = "Blueprint validation attributes inspect preserved public operation properties during runtime fallback validation.")]
+    [UnconditionalSuppressMessage("AOT", "IL3050", Justification = "Cross-property validation uses compiled expression delegates for property access. Validation attributes are inherently reflection-based.")]
+    protected override ValidationResult? IsValid(object? value, ValidationContext validationContext)
+    {
+        ArgumentNullException.ThrowIfNull(validationContext);
+
+        var dependentGetter = CrossPropertyAccessorCache.GetGetter(validationContext.ObjectType, this.DependentProperty);
+        if (dependentGetter is null)
+        {
+            return new ValidationResult(
+                $"The property '{this.DependentProperty}' referenced by RequiredItemsIfNotAttribute on '{validationContext.MemberName}' does not exist on '{validationContext.ObjectType.Name}'.",
+                validationContext.MemberName is null ? null : [validationContext.MemberName]);
+        }
+
+        var dependentValue = dependentGetter(validationContext.ObjectInstance!);
+        if (this.MatchesDependentValue(dependentValue) || HasItems(value))
+        {
+            return ValidationResult.Success;
+        }
+
+        return new ValidationResult(
+            this.FormatErrorMessage(validationContext.DisplayName),
+            validationContext.MemberName is null ? null : [validationContext.MemberName]);
+    }
+
+    private bool MatchesDependentValue(object? candidate)
+    {
+        return this._dependentValueTexts.Contains(candidate?.ToString());
+    }
+
+    private static bool HasItems(object? value)
+    {
+        if (value is null)
+        {
+            return false;
+        }
+
+        if (value is ICollection collection)
+        {
+            return collection.Count > 0;
+        }
+
+        if (value is IEnumerable enumerable)
+        {
+            var enumerator = enumerable.GetEnumerator();
+
+            try
+            {
+                return enumerator.MoveNext();
+            }
+            finally
+            {
+                (enumerator as IDisposable)?.Dispose();
+            }
+        }
+
+        return false;
+    }
+}
