@@ -1,0 +1,41 @@
+name: Symprex Skills Sync
+
+# Vendors the agnostic Symprex packs into .claude/skills/, and the path-scoped rules
+# generated from them into .claude/rules/ and .github/instructions/. Both Claude Code
+# and GitHub Copilot read those paths, so this is the only route the guidance takes —
+# the packs are not published to any marketplace.
+#
+# Written by Symprex tooling. Your schedule is yours to change; the rest is worth
+# leaving as it is.
+
+on:
+  schedule:
+    - cron: '47 6 * * 2'
+  workflow_dispatch:
+
+# A scheduled run and a hand-triggered one overlapping would race on the same sync
+# branch, and the loser force-pushes over the winner.
+concurrency:
+  group: sync-agent-skills
+  cancel-in-progress: false
+
+jobs:
+  # This job's id is half of what a run list shows — "agent-skills / vendor" — so it
+  # says what is being synced rather than repeating the workflow name.
+  agent-skills:
+    uses: Symprex/ai-engineering/.github/workflows/sync-agent-skills.yml@v1
+    with:
+      # `stable` moves on every merge that changes a pack version. Pin an immutable
+      # skills-<date>-<sha> tag to hold this repository back deliberately.
+      ref: stable
+    secrets:
+      # Organization secrets, for the symprex-skills-sync GitHub App. The source
+      # repository is private, so this repo's own GITHUB_TOKEN cannot check it out;
+      # the reusable workflow mints an hour-long token from these instead. Both are
+      # required — without them the run fails at the mint step.
+      client-id: ${{ secrets.SYMPREX_SKILLS_CLIENT_ID }}
+      app-key: ${{ secrets.SYMPREX_SKILLS_APP_KEY }}
+    permissions:
+      contents: write
+      pull-requests: write
+

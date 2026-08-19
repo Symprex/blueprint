@@ -28,6 +28,22 @@
   - `dotnet test .\src\Blueprint.SourceGenerator.CodeWriter.Tests\Blueprint.SourceGenerator.CodeWriter.Tests.csproj --filter "FullyQualifiedName~CodeWriterTests"`
   - `dotnet format .\Blueprint.sln --no-restore --include src\Blueprint.SourceGenerator\Generators\App\AppDataModelSourceGenerator.cs`
 
+## Agent skills in this repository
+
+Two sets, and the distinction matters when deciding which to trust:
+
+- **`.claude/skills/`** is the vendored `symprex-practices` pack from
+  [Symprex/ai-engineering](https://github.com/Symprex/ai-engineering), kept level by
+  `.github/workflows/sync-agent-skills.yml`. These are organisation-wide conduct standards. Do not
+  edit them here; a local edit is overwritten by the next sync. The same rules also arrive
+  path-scoped as `.claude/rules/*.md` and `.github/instructions/*.instructions.md`.
+- **`.agents/skills/`** is this repository's own set, including the full `dotnet-*` reference
+  library. It is untouched and remains the authority on .NET here — those files are substantially
+  more detailed than any organisation-wide pack, and the `symprex-dotnet` pack is deliberately not
+  vendored into this repository for that reason.
+
+Repository conventions — scopes, commands, the gate — are in `.symprex/config.json`.
+
 ## Docs source of truth
 
 - `/docs/README.md` is the entry point for detailed repository guidance. Treat `/docs` as the detailed source of truth for architecture, principles, observability, and AI workflow.
@@ -63,10 +79,11 @@
 ## TDD and verification expectations
 
 - Everything in this repository follows TDD for implementation work: write the failing proof first, watch it fail for the right reason, then make the minimum production change.
-- Push toward the repo-local skills when relevant:
+- Push toward these skills when relevant. All three are now vendored organisation-wide from
+  Symprex/ai-engineering under `.claude/skills/`, and two were renamed in the move:
   - `test-driven-development` before feature, bugfix, refactor, or behavior-change edits
-  - `systematic-debugging` before fixing any unexpected test/build/runtime failure
-  - `verification-before-completion` before claiming success, moving on, or preparing to commit
+  - `diagnosing-bugs` (was `systematic-debugging`) before fixing any unexpected test/build/runtime failure
+  - `verifying-work` (was `verification-before-completion`) before claiming success, moving on, or preparing to commit
 - Treat sample-app alignment as part of verification work, not as optional cleanup: when a change affects consumer-visible contracts, generated registration/output, or sample-visible workflow, confirm the sample app still reflects the current contract and update it before claiming success or commit readiness.
 - For new planning helpers, registries, and orchestration seams, aim test coverage at happy paths, failure/diagnostic paths, and determinism edge cases.
 - For pipeline or module feature work, the minimum proof set is stricter than a line-presence assertion:

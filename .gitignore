@@ -17,3 +17,6 @@ artifacts/
 
 profile-output/
 BenchmarkDotNet.Artifacts/
+
+# Symprex workflow session state
+.symprex/STATE.md
