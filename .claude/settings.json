@@ -1,0 +1,13 @@
+{
+  "extraKnownMarketplaces": {
+    "symprex-ai": {
+      "source": {
+        "source": "github",
+        "repo": "Symprex/ai-engineering"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "symprex@symprex-ai": true
+  }
+}

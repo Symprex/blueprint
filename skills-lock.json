@@ -47,25 +47,10 @@
       "skillPath": "skills/profile/SKILL.md",
       "computedHash": "17f8bf916e1dc542a412daebb7916d0ff42a71bea3733d3abde8fceb613964a5"
     },
-    "systematic-debugging": {
-      "source": "obra/superpowers",
-      "sourceType": "github",
-      "computedHash": "72e9ab72627e4fd8ed26a582e82309a98ecdc4f6e1c99418430ac05682c9e91d"
-    },
-    "test-driven-development": {
-      "source": "obra/superpowers",
-      "sourceType": "github",
-      "computedHash": "126f1ebf6ccd414f42544f6e83d8cc5adb089e1108eaffb7c400701e37eecd9f"
-    },
     "using-dotnet": {
       "source": "novotnyllc/dotnet-artisan",
       "sourceType": "github",
       "computedHash": "9ac0c3f10391d6ed42372f54c244d3fcc67dde988c9eee81af0f93819a264e3a"
-    },
-    "verification-before-completion": {
-      "source": "obra/superpowers",
-      "sourceType": "github",
-      "computedHash": "9b446f0c7fe1cfb560b1d34439523b1a76d5f177290007b2c053a1c749a4a8ba"
     },
     "visual-explainer": {
       "source": "nicobailon/visual-explainer",
