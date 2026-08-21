@@ -13,7 +13,8 @@
                 ".config/**"
             ],
             "format": "dotnet format whitespace . --folder --include \"{file}\"",
-            "test": "dotnet test {project} --filter \"{filter}\"",
+            "test": "dotnet test {project}",
+            "testFilter": "--filter \"{filter}\"",
             "build": "dotnet build ./Blueprint.sln",
             "notes": "There is no lint command, and that is not an omission: analysers and StyleCop run during the build, and Directory.Build.props sets TreatWarningsAsErrors repo-wide, so `dotnet build ./Blueprint.sln` IS the lint. XML documentation on non-test C# is build-enforced too. The format command above is whitespace-only and deliberately avoids loading the solution, because it runs on every single edit; the repository's own Husky pre-commit hook runs the fuller `dotnet format Blueprint.sln --no-restore --include <staged>` and re-stages, so style beyond whitespace is fixed at commit time rather than at edit time. A fresh clone needs `dotnet tool restore` then `dotnet husky install` before that hook exists at all. Two traps specific to a source generator, both from .github/copilot-instructions.md: TestHelpers.cs runs the incremental generator twice and asserts the second run is fully cached, so a change can fail the tests by breaking incremental cacheability while the generated text is still correct — read the failure before assuming it is about output. And snapshot baselines under src/Blueprint.SourceGenerator.Tests/Generators/*/Snapshots/*.verified.txt are promoted by reviewing the .received.* file first; never overwrite a baseline without reading the generated diff. Read .github/copilot-instructions.md before non-trivial work — the conventions, the test matrix a pipeline slice owes, and the docs/ entry points are all current there."
         }
