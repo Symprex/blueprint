@@ -16,6 +16,7 @@ globs:
 - **Be specific enough to verify.** "Use 2-space indentation" over "format properly"; "run `pnpm test` before committing" over "test your changes". A vague instruction is followed vaguely.
 - **Do not contradict a sibling document.** Where two rules disagree, an agent picks one arbitrarily — which is worse than either alone. If you are adding a rule that overlaps an existing one, change the existing one instead.
 - **A standard that applies beyond this repository belongs upstream**, in the shared packs, not copied into a second place where it can drift.
+- **Resolve ownership before editing guidance in a consuming repository.** Check the `MANIFEST.json` under `.agents/skills/` or `.claude/skills/` and generated headers. Vendored guidance changes upstream in `Symprex/ai-engineering`; repository-owned guidance changes locally.
 
 # Editing a skill or a rule
 

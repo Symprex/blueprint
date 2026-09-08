@@ -30,4 +30,4 @@ needs no model.
 -->
 
 ---
-*The reasoning, the loop and the worked examples are in the `shell-powershell` skill at `.claude/skills/shell-powershell/SKILL.md`. This file is the part that must hold.*
+*The reasoning, the loop and the worked examples are in the `shell-powershell` skill at `.agents/skills/shell-powershell/SKILL.md`. This file is the part that must hold.*

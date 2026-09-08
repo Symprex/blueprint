@@ -30,6 +30,7 @@ Applies to production behaviour: features, bug fixes, and refactors that change 
 - **Mock only at real boundaries**: external APIs, the database, time, randomness, the filesystem. Never an internal collaborator.
 - Do not assert on a mock you configured in the same test.
 - Do not add tests for implementation trivia — config constants, class-name presence, static wiring with no behavioural effect. They cost maintenance and prove nothing.
+- **Describe a defect in the past tense, never the present** — "this used to ...". Point to whatever exists: the issue once filed, the PR once open, or the mechanism when neither exists yet.
 
 # Running the proof
 

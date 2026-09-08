@@ -26,6 +26,7 @@ applyTo: "**/*"
 - **No preamble.** Not "Great!", not "Certainly!", not "Here is what I did." Start with the content.
 - **Show the change, not the story** — the diff or the changed section, not prose about it.
 - **British English (en-GB) in all prose, comments and documentation.** Match the spelling already used in the file you are editing.
+- **Name the mechanism that produces a count in a code comment, not the count itself.** A count written into a comment goes stale exactly like a cached document, and nobody re-runs a comment to catch it.
 
 # Work you did not create
 
@@ -53,4 +54,4 @@ the proof of the approach:
 *Adapted from the Signature365 `AGENTS.md` "Core Agent Principles" and "Output Style" sections and its `Signature365` output style, generalised to any repository.*
 
 ---
-*The reasoning, the loop and the worked examples are in the `agent-conduct` skill at `.claude/skills/agent-conduct/SKILL.md`. This file is the part that must hold.*
+*The reasoning, the loop and the worked examples are in the `agent-conduct` skill at `.agents/skills/agent-conduct/SKILL.md`. This file is the part that must hold.*

@@ -54,6 +54,24 @@ Every requirement in the originating issue, spec or task: present, missing, or c
 
 If there is no spec to review against, say so and report Standards only. Do not invent a spec from the diff and then check the diff against it.
 
+#### Where else does this input arrive?
+
+**For each guarantee this change adds, find every other path that reaches it.** A fix that holds where the author was looking and not one call site over is the commonest defect in a multi-part change, and it reads as correct in isolation — because it *is* correct, for the input its author had in mind.
+
+Across one branch of nine tasks this was the shape of most must-fixes. Not wrong logic: incomplete reach. A `$null` guard that was load-bearing only via a chained call from a sibling script. A flag fixed to respect an unreadable row while the routing decision beside it still keyed on a literal token, so the same input took the destructive branch. Malformed rows made visible while an unclosed fence still swallowed them. A comparison whose permissive pre-flight and strict read-back disagreed, so it created issues and then refused them. Every one was found by a reviewer holding two files at once, and missed by every reviewer scoped to a single file.
+
+**The cheap detector is mechanical, not editorial.** Before reasoning about it, grep for the other call sites of the symbol, the other readers of the field, the other end of the comparison. Several of those were found that way rather than by thinking, and one agent caught its own over-claim with it after two attempts at the same comment.
+
+Concretely, ask it of:
+
+- a helper the change added or altered — who else calls it, and with what shapes?
+- a guard added to one read — are there sibling reads of the same value that skip it?
+- a comparison — do both ends use the same rules? A case-insensitive probe against a case-sensitive read-back is two behaviours, not one.
+- a branch on a signal — can the thing producing that signal report others?
+- a reassurance in prose or a message — is it true on every branch that can print it, or only the one the author had open?
+
+This sits in Spec rather than Standards because these are contract failures, not convention slips. It is the same question a seam review asks one level up, between tasks — a per-task reviewer is scoped away from its siblings and structurally cannot see the join. The same argument applies *within* one task, between two call sites of one helper or the two ends of one comparison.
+
 ### Security
 
 Run this axis when the diff touches authentication, authorisation, data access, input handling, secrets, or any surface reachable from outside. When in doubt, run it — the cost is one extra pass.
@@ -66,11 +84,11 @@ Run this axis when the diff touches authentication, authorisation, data access, 
 
 Judge severity by consequence, not by category: ask whether this would enable a breach, data exposure, privilege escalation or unauthorised access to real data if it shipped today. A theoretical weakness on an unreachable path is a note; a missing tenant predicate is a must-fix.
 
-The repo's own rules define the mechanism — the attribute, the guard, the fixture. `dotnet-advisor` and `frontend-advisor` say where those rules live. Where a scope's `notes` in `.symprex/config.json` records a pattern that is deliberate, respect it rather than reporting it every time.
+The repo's own rules define the mechanism — the attribute, the guard, the fixture. `dotnet-advisor` and `frontend-advisor` say where those rules live. Respect deliberate patterns recorded in repository-owned `AGENTS.md`, path-specific instructions or skills rather than reporting them every time.
 
 ### Fidelity
 
-Run this axis only when a design pack is actually there to compare against. `## Prototype` in `.symprex/STATE.md` records the paths where the work came through a prototype stage; the design pack is `SET.md` and the chosen variant's `DESIGN.md`, and an archived pack sits under the specs directory. No `.symprex/STATE.md`, or no `## Prototype` section in it, means this axis does not apply — skip it and say so.
+Run this axis only when a design pack is actually there to compare against. `## Prototype` in `.symprex/STATE.md` records the working paths where the work came through a prototype stage; the design pack is `SET.md` and the chosen variant's `DESIGN.md`. No `.symprex/STATE.md`, or no `## Prototype` section in it, means this axis does not apply — skip it and say so.
 
 Compare the built thing against the chosen variant — labels, button text, icons, layout, the states the variant showed, and `DESIGN.md`'s rebuild notes.
 
@@ -86,9 +104,13 @@ Whether it actually runs. That is verification, and it is a separate job.
 
 ## The bar
 
-"Done right", not "good enough". Everything worth fixing blocks.
+"Done right", not "good enough" — but only what blocks may be written as blocking. **`[must-fix]` is for a finding you can name a consequence for**: it changes behaviour, it misleads a reader, or it breaches a rule this repo states. Everything else is `[should-fix]` or `[nice-to-have]`, and neither of those fails a review. A finding whose whole case is that you would have written it differently is a `[nice-to-have]` at most, however strongly you would have.
 
-Convergence comes from **scoping the re-review**, not from lowering the bar. On a second pass, ask only whether the previously reported findings were fixed — do not hunt for new issues you could have raised the first time. That is how a review loop runs forever.
+That is not a lower bar. It is the same bar, applied to the label — "everything worth fixing blocks" with must-fix stretched to cover taste produces a review nobody can pass, and a task that cannot pass is a task that gets reviewed five times.
+
+**A second pass on the same change is a confirm pass and nothing else.** For each finding you already raised: fixed, or not fixed, with the evidence. Do not re-run the axes and do not raise anything new. Anything you notice anyway goes in a `## Carried` list at the end — unranked, no verdict attached, for whoever holds the loop to schedule. Hunting fresh findings on a second pass is how a review loop runs forever, and no instruction to be proportionate prevents it: a reviewer that has not seen the change before cannot confirm anything, so the caller must resume the reviewer that raised the findings rather than dispatch a new one.
+
+Prose diffs — documentation, skills, agent instructions, ADRs — get the same bar, and it binds harder there because nothing compiles. Ask what a reader would **do** wrong. Sentence length, word choice and table alignment are not findings unless the repo states a rule about them.
 
 ## Report
 
@@ -111,11 +133,14 @@ Standards, Spec, Security (diff touches tenant-scoped queries) — Fidelity skip
 ## Fidelity
 - [should-fix] <difference from the chosen variant> — <what the pack showed>
 
+## Carried
+- <noticed on a confirm pass, outside the findings under confirmation — no verdict>
+
 ## Verdict
 pass | fail — <one line>
 ```
 
-`fail` on a single must-fix on **any** axis. Write "None" rather than inventing findings to fill a section; an empty Standards section on a small, careful change is the correct output. Omit an axis's section entirely when it did not run, and say why in `## Axes run`.
+`fail` on a single must-fix on **any** axis. Write "None" rather than inventing findings to fill a section; an empty Standards section on a small, careful change is the correct output. Omit an axis's section entirely when it did not run, and say why in `## Axes run`. `## Carried` appears only on a confirm pass, and never affects the verdict.
 
 ---
 *The two-axis structure and the one-pass-per-axis approach are adapted from [mattpocock/skills](https://github.com/mattpocock/skills) `engineering/code-review` (MIT).*
