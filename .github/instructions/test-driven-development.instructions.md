@@ -24,6 +24,7 @@ Applies to production behaviour: features, bug fixes, and refactors that change 
 - **Mock only at real boundaries**: external APIs, the database, time, randomness, the filesystem. Never an internal collaborator.
 - Do not assert on a mock you configured in the same test.
 - Do not add tests for implementation trivia — config constants, class-name presence, static wiring with no behavioural effect. They cost maintenance and prove nothing.
+- **Describe a defect in the past tense, never the present** — "this used to ...". Point to whatever exists: the issue once filed, the PR once open, or the mechanism when neither exists yet.
 
 # Running the proof
 
@@ -48,4 +49,4 @@ where a rule only reaches whoever loaded it.
 *The independence rule and tautology litmus are adapted from [mattpocock/skills](https://github.com/mattpocock/skills) `engineering/tdd` (MIT). The loop and carry-forward rules come from the Signature365 `test-driven-development` skill.*
 
 ---
-*The reasoning, the loop and the worked examples are in the `test-driven-development` skill at `.claude/skills/test-driven-development/SKILL.md`. This file is the part that must hold.*
+*The reasoning, the loop and the worked examples are in the `test-driven-development` skill at `.agents/skills/test-driven-development/SKILL.md`. This file is the part that must hold.*

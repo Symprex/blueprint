@@ -27,6 +27,7 @@ paths:
 - **No preamble.** Not "Great!", not "Certainly!", not "Here is what I did." Start with the content.
 - **Show the change, not the story** — the diff or the changed section, not prose about it.
 - **British English (en-GB) in all prose, comments and documentation.** Match the spelling already used in the file you are editing.
+- **Name the mechanism that produces a count in a code comment, not the count itself.** A count written into a comment goes stale exactly like a cached document, and nobody re-runs a comment to catch it.
 
 # Work you did not create
 
