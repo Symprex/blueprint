@@ -44,7 +44,8 @@ public class SyntheticFixtureInvalidationReportTests
             .Equal("Synthetic.Scale.SyntheticOperation050ExecutorPipeline.g.cs");
 
         await Verify(report.ToJson())
-            .UseDirectory(SnapshotsFolder);
+            .UseDirectory(SnapshotsFolder)
+            .ScrubGeneratorVersion();
     }
 
     [Fact]
@@ -77,7 +78,8 @@ public class SyntheticFixtureInvalidationReportTests
             .HaveCount(100);
 
         await Verify(report.ToJson())
-            .UseDirectory(SnapshotsFolder);
+            .UseDirectory(SnapshotsFolder)
+            .ScrubGeneratorVersion();
     }
 
     private static MultiGeneratorEditResult CompileEditResult(
