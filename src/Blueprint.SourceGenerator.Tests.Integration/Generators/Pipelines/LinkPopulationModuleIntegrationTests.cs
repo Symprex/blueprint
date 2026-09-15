@@ -414,6 +414,11 @@ internal sealed class StubApiLinkGenerator : IApiLinkGenerator
         return null;
     }
 
+    public string CreateUrlTemplate(ApiOperationLink link)
+    {
+        return string.Empty;
+    }
+
     public string CreateUrl(object operation)
     {
         return string.Empty;

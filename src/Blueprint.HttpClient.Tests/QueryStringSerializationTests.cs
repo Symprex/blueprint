@@ -1,0 +1,231 @@
+using System.Collections.Immutable;
+using System.Net;
+using System.Text;
+using Blueprint.Model;
+using FluentAssertions;
+
+namespace Blueprint.HttpClient.Tests;
+
+/// <summary>
+/// Test-only operation with an array-typed query property. Declared top-level (not nested inside
+/// the test class) and <c>partial</c> because <c>OperationDescriptorSourceGenerator</c> scans the
+/// whole compilation for <see cref="IOperation"/> implementations and requires both; the generated
+/// descriptor it produces is unused here — the tests below build their own
+/// <see cref="ApiOperationDescriptor"/> to control which query-serialisation path is exercised.
+/// </summary>
+public sealed partial class ArrayQueryOperation : IOperation
+{
+    public string?[]? Ids { get; set; }
+}
+
+/// <summary>
+/// Test-only operation with a <see langword="string"/> query property, used to prove a string
+/// (itself <see cref="IEnumerable{T}"/> of <see langword="char"/>) is never exploded into repeated
+/// query keys. See <see cref="ArrayQueryOperation"/> remarks for why it is top-level and partial.
+/// </summary>
+public sealed partial class StringQueryOperation : IOperation
+{
+    public string? Q { get; set; }
+}
+
+/// <summary>
+/// Covers <c>BlueprintHttpClient.AppendQueryStringFromOwnership</c> and
+/// <c>AppendQueryStringFallback</c>, which both serialise a non-string <see cref="IEnumerable{T}"/>
+/// query property as one repeated <c>name=value</c> pair per element rather than a single
+/// comma-joined value. Signature365 commit <c>19e2da72bf</c> fixed the same defect in
+/// <c>ApiLinkGenerator</c>; these tests guard the equivalent Blueprint code path, which had no
+/// coverage of its own even though the production logic is already correct.
+/// <para>
+/// Each descriptor is hand-built rather than reused from <c>SampleBlueprintApp</c> because the
+/// source generator attaches <c>CompiledHttpRequestFeatureData</c> to every GET/DELETE operation
+/// with a registered URL, and <c>BlueprintHttpClient.CreateRequest</c> prefers that compiled
+/// delegate over both methods under test whenever it is present. Omitting
+/// <c>CompiledHttpRequestFeatureData</c> here is what forces requests through the reflection-based
+/// query builders instead.
+/// </para>
+/// </summary>
+public sealed class QueryStringSerializationTests
+{
+    // ──────────────────────────────────────────────
+    //  AppendQueryStringFromOwnership (:591-611)
+    // ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task Ownership_array_property_emits_one_key_per_element_in_order()
+    {
+        var operation = new ArrayQueryOperation { Ids = ["a", "b", "c"] };
+
+        var query = await SendWithOwnershipAsync(
+            operation,
+            new OperationPropertyBindingEntry(nameof(ArrayQueryOperation.Ids), PropertyBindingSource.Query, "ids", "string[]"));
+
+        query.Should().Be("?ids=a&ids=b&ids=c");
+    }
+
+    [Fact]
+    public async Task Ownership_string_property_is_not_exploded_into_repeated_keys()
+    {
+        // A string is IEnumerable<char> — it must be treated as a single scalar value, not a
+        // collection of one-character elements.
+        var operation = new StringQueryOperation { Q = "abc" };
+
+        var query = await SendWithOwnershipAsync(
+            operation,
+            new OperationPropertyBindingEntry(nameof(StringQueryOperation.Q), PropertyBindingSource.Query, "q", "string"));
+
+        query.Should().Be("?q=abc");
+    }
+
+    [Fact]
+    public async Task Ownership_empty_collection_emits_no_query_string()
+    {
+        var operation = new ArrayQueryOperation { Ids = [] };
+
+        var query = await SendWithOwnershipAsync(
+            operation,
+            new OperationPropertyBindingEntry(nameof(ArrayQueryOperation.Ids), PropertyBindingSource.Query, "ids", "string[]"));
+
+        query.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Ownership_null_elements_are_skipped()
+    {
+        var operation = new ArrayQueryOperation { Ids = ["a", null, "b"] };
+
+        var query = await SendWithOwnershipAsync(
+            operation,
+            new OperationPropertyBindingEntry(nameof(ArrayQueryOperation.Ids), PropertyBindingSource.Query, "ids", "string[]"));
+
+        query.Should().Be("?ids=a&ids=b");
+    }
+
+    [Fact]
+    public async Task Ownership_elements_are_url_encoded_individually()
+    {
+        var operation = new ArrayQueryOperation { Ids = ["a b", "c&d"] };
+
+        var query = await SendWithOwnershipAsync(
+            operation,
+            new OperationPropertyBindingEntry(nameof(ArrayQueryOperation.Ids), PropertyBindingSource.Query, "ids", "string[]"));
+
+        query.Should().Be("?ids=a%20b&ids=c%26d");
+    }
+
+    // ──────────────────────────────────────────────
+    //  AppendQueryStringFallback (:672-682)
+    // ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task Fallback_array_property_emits_one_key_per_element_in_order()
+    {
+        var operation = new ArrayQueryOperation { Ids = ["a", "b", "c"] };
+
+        var query = await SendWithFallbackAsync(operation);
+
+        query.Should().Be("?Ids=a&Ids=b&Ids=c");
+    }
+
+    [Fact]
+    public async Task Fallback_string_property_is_not_exploded_into_repeated_keys()
+    {
+        var operation = new StringQueryOperation { Q = "abc" };
+
+        var query = await SendWithFallbackAsync(operation);
+
+        query.Should().Be("?Q=abc");
+    }
+
+    [Fact]
+    public async Task Fallback_empty_collection_emits_no_query_string()
+    {
+        var operation = new ArrayQueryOperation { Ids = [] };
+
+        var query = await SendWithFallbackAsync(operation);
+
+        query.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Fallback_null_elements_are_skipped()
+    {
+        var operation = new ArrayQueryOperation { Ids = ["a", null, "b"] };
+
+        var query = await SendWithFallbackAsync(operation);
+
+        query.Should().Be("?Ids=a&Ids=b");
+    }
+
+    [Fact]
+    public async Task Fallback_elements_are_url_encoded_individually()
+    {
+        var operation = new ArrayQueryOperation { Ids = ["a b", "c&d"] };
+
+        var query = await SendWithFallbackAsync(operation);
+
+        query.Should().Be("?Ids=a%20b&Ids=c%26d");
+    }
+
+    /// <summary>
+    /// Sends <paramref name="operation"/> through a descriptor carrying
+    /// <see cref="OperationPropertyOwnershipFeatureData"/> for the given <paramref name="queryEntry"/>,
+    /// which routes <c>CreateRequest</c> through <c>AppendQueryStringFromOwnership</c>.
+    /// </summary>
+    private static async Task<string> SendWithOwnershipAsync<TOperation>(
+        TOperation operation, OperationPropertyBindingEntry queryEntry)
+        where TOperation : IOperation
+    {
+        var descriptor = BuildDescriptor<TOperation>();
+        descriptor.SetFeatureData(new OperationPropertyOwnershipFeatureData(ImmutableArray.Create(queryEntry)));
+
+        return await SendAndCaptureQueryAsync(descriptor, operation);
+    }
+
+    /// <summary>
+    /// Sends <paramref name="operation"/> through a descriptor with no ownership feature data, which
+    /// routes <c>CreateRequest</c> through the reflection-based <c>AppendQueryStringFallback</c>.
+    /// </summary>
+    private static async Task<string> SendWithFallbackAsync<TOperation>(TOperation operation)
+        where TOperation : IOperation
+    {
+        var descriptor = BuildDescriptor<TOperation>();
+
+        return await SendAndCaptureQueryAsync(descriptor, operation);
+    }
+
+    private static ApiOperationDescriptor BuildDescriptor<TOperation>()
+    {
+        var descriptor = new ApiOperationDescriptor(typeof(TOperation), typeof(TOperation).Name, "test");
+        descriptor.AddUrl(new ApiOperationUrl("/query-string-test"));
+        descriptor.SetFeatureData(new OperationHttpMethodMetadataFeatureData(ImmutableArray.Create("GET")));
+
+        return descriptor;
+    }
+
+    private static async Task<string> SendAndCaptureQueryAsync<TOperation>(
+        ApiOperationDescriptor descriptor, TOperation operation)
+        where TOperation : IOperation
+    {
+        var app = new BlueprintApp();
+        app.Register(descriptor);
+
+        HttpRequestMessage? captured = null;
+        var handler = new FakeHttpHandler(req =>
+        {
+            captured = req;
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("{}", Encoding.UTF8, "application/json"),
+            };
+        });
+
+        var httpClient = new System.Net.Http.HttpClient(handler) { BaseAddress = new Uri("https://localhost") };
+        var client = new BlueprintHttpClient<BlueprintApp>(httpClient, app);
+
+        await client.SendAsync<System.Text.Json.JsonElement>(operation);
+
+        captured.Should().NotBeNull();
+
+        return captured!.RequestUri!.Query;
+    }
+}

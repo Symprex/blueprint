@@ -82,9 +82,12 @@ public static class LinkGeneratorHandler
 
             foreach (var obj in enumerableResult)
             {
-                if (obj is ILinkableResource apiResourceItem)
+                if (obj is ILinkableResource or IApiResourceCollection)
                 {
-                    await AddLinksAsync(apiLinkGenerator, generators, context, apiResourceItem).ConfigureAwait(false);
+                    // Recurse rather than call the ILinkableResource overload directly: an
+                    // enumerated item may itself be a resource collection (e.g. a ListApiResource
+                    // nested inside another collection), whose own children also need links.
+                    await AddResourceLinksAsync(apiLinkGenerator, generators, context, obj).ConfigureAwait(false);
                 }
                 else
                 {

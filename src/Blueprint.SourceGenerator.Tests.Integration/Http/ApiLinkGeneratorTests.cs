@@ -144,6 +144,94 @@ public class ApiLinkGeneratorTests
     }
 
     [Fact]
+    public void CreateUrl_with_query_string_collection_emits_repeated_keys()
+    {
+        var (app, _) = CreateAppWithLink("resources/{Id}");
+        var generator = new ApiLinkGenerator(app, "https://api.example.com/");
+
+        var selfLink = generator.CreateSelfLink<LinkGenTestResource>("r1", new { Codes = new[] { "a", "b" } });
+
+        selfLink.Href.Should().Be("https://api.example.com/resources/r1?codes=a&codes=b");
+    }
+
+    [Fact]
+    public void CreateUrl_with_query_string_collection_alongside_scalar_separates_pairs_correctly()
+    {
+        var (app, _) = CreateAppWithLink("resources/{Id}");
+        var generator = new ApiLinkGenerator(app, "https://api.example.com/");
+
+        var selfLink = generator.CreateSelfLink<LinkGenTestResource>("r1", new { Codes = new[] { "a", "b" }, PageSize = 10 });
+
+        selfLink.Href.Should().Be("https://api.example.com/resources/r1?codes=a&codes=b&pageSize=10");
+    }
+
+    [Fact]
+    public void CreateUrl_with_query_string_string_value_is_not_treated_as_collection()
+    {
+        var (app, _) = CreateAppWithLink("resources/{Id}");
+        var generator = new ApiLinkGenerator(app, "https://api.example.com/");
+
+        var selfLink = generator.CreateSelfLink<LinkGenTestResource>("r1", new { Name = "abc" });
+
+        selfLink.Href.Should().Be("https://api.example.com/resources/r1?name=abc");
+    }
+
+    [Fact]
+    public void CreateUrl_with_query_string_empty_collection_emits_nothing()
+    {
+        var (app, _) = CreateAppWithLink("resources/{Id}");
+        var generator = new ApiLinkGenerator(app, "https://api.example.com/");
+
+        var selfLink = generator.CreateSelfLink<LinkGenTestResource>("r1", new { Codes = Array.Empty<string>(), Name = "test" });
+
+        selfLink.Href.Should().Be("https://api.example.com/resources/r1?name=test");
+    }
+
+    [Fact]
+    public void CreateUrl_with_query_string_empty_collection_alone_emits_no_query_string()
+    {
+        var (app, _) = CreateAppWithLink("resources/{Id}");
+        var generator = new ApiLinkGenerator(app, "https://api.example.com/");
+
+        var selfLink = generator.CreateSelfLink<LinkGenTestResource>("r1", new { Codes = Array.Empty<string>() });
+
+        selfLink.Href.Should().Be("https://api.example.com/resources/r1");
+    }
+
+    [Fact]
+    public void CreateUrl_with_query_string_collection_skips_null_elements()
+    {
+        var (app, _) = CreateAppWithLink("resources/{Id}");
+        var generator = new ApiLinkGenerator(app, "https://api.example.com/");
+
+        var selfLink = generator.CreateSelfLink<LinkGenTestResource>("r1", new { Codes = new[] { "a", null, "b" } });
+
+        selfLink.Href.Should().Be("https://api.example.com/resources/r1?codes=a&codes=b");
+    }
+
+    [Fact]
+    public void CreateUrl_with_query_string_collection_url_encodes_each_element()
+    {
+        var (app, _) = CreateAppWithLink("resources/{Id}");
+        var generator = new ApiLinkGenerator(app, "https://api.example.com/");
+
+        var selfLink = generator.CreateSelfLink<LinkGenTestResource>("r1", new { Codes = new[] { "a b", "c&d" } });
+
+        selfLink.Href.Should().Be("https://api.example.com/resources/r1?codes=a%20b&codes=c%26d");
+    }
+
+    [Fact]
+    public void CreateUrl_with_query_string_empty_string_elements_are_not_skipped()
+    {
+        var (app, _) = CreateAppWithLink("resources/{Id}");
+        var generator = new ApiLinkGenerator(app, "https://api.example.com/");
+
+        var selfLink = generator.CreateSelfLink<LinkGenTestResource>("r1", new { Codes = new[] { string.Empty }, Name = string.Empty });
+
+        selfLink.Href.Should().Be("https://api.example.com/resources/r1?codes=&name=");
+    }
+
+    [Fact]
     public void HasPlaceholders_returns_true_when_url_has_braces()
     {
         var (_, link) = CreateAppWithLink("resources/{Id}");

@@ -64,6 +64,20 @@ public interface IApiLinkGenerator
     string? CreateUrl(ApiOperationLink link, object? result = null);
 
     /// <summary>
+    /// Creates a fully qualified URL template for the specified <paramref name="link"/>, retaining
+    /// its placeholders for a client to fill in rather than requiring a values object up front.
+    /// </summary>
+    /// <remarks>
+    /// Intended for links whose placeholders cannot be filled at the point of generation — for
+    /// example a root link rendered without a specific resource instance to hand. Placeholders are
+    /// already normalised to the name of the property they represent (i.e. <c>{Id:UserId}</c> becomes
+    /// <c>{Id}</c>), matching <see cref="ApiOperationLink.RoutingUrl"/>.
+    /// </remarks>
+    /// <param name="link">The link to generate a URL template for.</param>
+    /// <returns>A fully-qualified URL template.</returns>
+    string CreateUrlTemplate(ApiOperationLink link);
+
+    /// <summary>
     /// Generates a fully-qualified URL for an operation instance, using the first registered
     /// link for the operation type and the operation's property values to fill placeholders.
     /// </summary>

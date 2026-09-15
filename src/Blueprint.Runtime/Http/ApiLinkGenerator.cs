@@ -173,6 +173,14 @@ public sealed class ApiLinkGenerator : IApiLinkGenerator
     }
 
     /// <inheritdoc />
+    public string CreateUrlTemplate(ApiOperationLink link)
+    {
+        // RoutingUrl is used in preference to UrlFormat as it has already normalised the
+        // placeholders down to the property names they represent (i.e. {Id:UserId} => {Id}).
+        return this._baseUri + link.RoutingUrl.TrimStart('/');
+    }
+
+    /// <inheritdoc />
     public string CreateUrl(object operation)
     {
         var operationType = operation.GetType();
@@ -237,6 +245,28 @@ public sealed class ApiLinkGenerator : IApiLinkGenerator
 
             if (value is null)
             {
+                continue;
+            }
+
+            // Collections (arrays, List<T>, etc.) are emitted as one repeated key per element
+            // rather than being stringified as a whole. A string is itself IEnumerable<char>
+            // but must not be treated as a collection.
+            if (value is not string && value is System.Collections.IEnumerable enumerable)
+            {
+                foreach (var item in enumerable)
+                {
+                    if (item is null)
+                    {
+                        continue;
+                    }
+
+                    sb.Append(first ? '?' : '&');
+                    first = false;
+                    sb.Append(escapedName);
+                    sb.Append('=');
+                    sb.Append(Uri.EscapeDataString(item is string itemString ? itemString : item.ToString()!));
+                }
+
                 continue;
             }
 
