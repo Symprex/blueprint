@@ -29,16 +29,23 @@ internal static class OpenApiDocumentEndpoint
     /// Optional ordered per-operation processors that can customise rendered operation objects before the document is cached.
     /// When <see langword="null"/> no operation processors are applied.
     /// </param>
+    /// <param name="httpOptions">
+    /// Optional Blueprint HTTP options consulted when no explicit <see cref="OpenApiInfoOptions.Servers"/> are
+    /// configured, to populate a default <c>servers</c> entry from <see cref="BlueprintHttpOptions.PublicApiHost"/>
+    /// or <see cref="BlueprintHttpOptions.PublicHost"/>. When <see langword="null"/> the <c>servers</c> array stays
+    /// omitted unless <see cref="OpenApiInfoOptions.Servers"/> already carries entries.
+    /// </param>
     /// <returns>A request delegate that writes the rendered OpenAPI 3.x JSON to the response.</returns>
     public static (RequestDelegate Delegate, PreRenderedOpenApiDocument Document) Create(
         BlueprintApp app,
         OpenApiInfoOptions? infoOptions = null,
         OpenApiSchemaProcessorOptions? schemaProcessorOptions = null,
-        OpenApiOperationProcessorOptions? operationProcessorOptions = null)
+        OpenApiOperationProcessorOptions? operationProcessorOptions = null,
+        BlueprintHttpOptions? httpOptions = null)
     {
         ArgumentNullException.ThrowIfNull(app);
 
-        var json = RenderDocument(app, infoOptions, schemaProcessorOptions, operationProcessorOptions);
+        var json = RenderDocument(app, infoOptions, schemaProcessorOptions, operationProcessorOptions, httpOptions);
         var document = new PreRenderedOpenApiDocument(json);
 
         // Compute a stable ETag from the document content so clients can use If-None-Match
@@ -77,7 +84,8 @@ internal static class OpenApiDocumentEndpoint
         BlueprintApp app,
         OpenApiInfoOptions? infoOptions,
         OpenApiSchemaProcessorOptions? schemaProcessorOptions,
-        OpenApiOperationProcessorOptions? operationProcessorOptions)
+        OpenApiOperationProcessorOptions? operationProcessorOptions,
+        BlueprintHttpOptions? httpOptions)
     {
         var documentBuilderContext = OpenApiDocumentBuilderContext.Create(app);
         var schemaProjectionContext = OpenApiSchemaProjectionContext.Create(documentBuilderContext);
@@ -105,6 +113,6 @@ internal static class OpenApiDocumentEndpoint
         var pathItemContext = OpenApiPathItemRenderingContext.Create(operationContext);
         var documentContext = OpenApiDocumentRenderingContext.Create(pathItemContext);
 
-        return OpenApiOutputRenderingContext.Create(documentContext, infoOptions, schemaProcessorOptions).Json;
+        return OpenApiOutputRenderingContext.Create(documentContext, infoOptions, schemaProcessorOptions, httpOptions).Json;
     }
 }

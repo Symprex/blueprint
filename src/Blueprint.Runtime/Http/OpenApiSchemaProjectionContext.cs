@@ -138,6 +138,13 @@ public sealed record OpenApiSchemaProjectionContext(
         var schemaDescription = bodyType.GetCustomAttribute<DescriptionAttribute>()?.Description;
         var schemaTitle = bodyType.GetCustomAttribute<System.ComponentModel.DisplayNameAttribute>()?.DisplayName;
 
+        // Conditional validators are cross-property, so they belong to this schema rather than to any one of its
+        // properties, and are gathered from the CLR type rather than from serializer metadata — which carries no
+        // attributes of its own.
+        var conditionals = ExtractSchemaConditionals(
+            bodyType,
+            CreateDeclaredJsonNamesByClrName(bodyType, serializerContext.Options, properties));
+
         return new OpenApiSchemaModel(
             bodyTypeName,
             MapKind(bodyType, typeInfo.Kind),
@@ -145,7 +152,115 @@ public sealed record OpenApiSchemaProjectionContext(
             propertyNames,
             properties,
             schemaDescription,
-            schemaTitle);
+            schemaTitle,
+            conditionals);
+    }
+
+    /// <summary>
+    /// Extracts the cross-property conditional requirements declared by a covered body type's properties, resolved from
+    /// the CLR names the validators name onto the JSON-visible names the schema component declares.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A requirement is projected only when both its target and its dependent are declared properties of
+    /// <em>this</em> schema. Anything else is dropped rather than guessed at: the rendered component carries
+    /// <c>"additionalProperties": false</c>, so a condition naming a member the schema does not declare is
+    /// unsatisfiable rather than merely unhelpful, and under the negated form it would apply the requirement to every
+    /// payload — blocking client-side what the server accepts.
+    /// </para>
+    /// <para>
+    /// The result is ordered explicitly. <see cref="Type.GetProperties(BindingFlags)"/> guarantees no order, and the
+    /// rendered document carries an ETag over its bytes, so the conditionals must not shuffle between builds.
+    /// </para>
+    /// </remarks>
+    /// <param name="bodyType">The covered body type whose properties declare the conditional validators.</param>
+    /// <param name="declaredJsonNamesByClrName">The CLR-to-JSON name map for the properties this schema declares.</param>
+    /// <returns>The resolved conditional requirements in deterministic order; empty when none apply.</returns>
+    internal static ImmutableArray<OpenApiConditionalRequirement> ExtractSchemaConditionals(
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] Type bodyType,
+        IReadOnlyDictionary<string, string> declaredJsonNamesByClrName)
+    {
+        ArgumentNullException.ThrowIfNull(bodyType);
+        ArgumentNullException.ThrowIfNull(declaredJsonNamesByClrName);
+
+        if (declaredJsonNamesByClrName.Count == 0)
+        {
+            return [];
+        }
+
+        var builder = ImmutableArray.CreateBuilder<OpenApiConditionalRequirement>();
+
+        foreach (var clrProperty in bodyType.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+        {
+            foreach (var requirement in OpenApiValidationConstraints.ExtractConditionalRequirements(clrProperty))
+            {
+                if (declaredJsonNamesByClrName.TryGetValue(requirement.TargetPropertyName, out var targetName)
+                    && declaredJsonNamesByClrName.TryGetValue(requirement.DependentPropertyName, out var dependentName))
+                {
+                    builder.Add(requirement with
+                    {
+                        TargetPropertyName = targetName,
+                        DependentPropertyName = dependentName,
+                    });
+                }
+            }
+        }
+
+        return
+        [
+            .. builder
+                .OrderBy(static requirement => requirement.TargetPropertyName, StringComparer.Ordinal)
+                .ThenBy(static requirement => requirement.DependentPropertyName, StringComparer.Ordinal),
+        ];
+    }
+
+    /// <summary>
+    /// Maps each CLR property name on a covered body type to the JSON-visible name the rendered schema declares for it,
+    /// omitting every property the schema does not declare — <c>[JsonIgnore]</c>d members, extension-data buckets, and
+    /// anything else the serializer does not surface as a named property.
+    /// </summary>
+    /// <remarks>
+    /// Conditional validators name CLR properties while a schema's <c>if</c>/<c>then</c> branches must name the
+    /// properties the component declares, so this map is the only bridge between the two. Its omissions are load
+    /// bearing: they are what stops a requirement being projected onto a name no instance of the schema can carry.
+    /// </remarks>
+    /// <param name="bodyType">The covered body type to map.</param>
+    /// <param name="serializerOptions">The serializer options that decide the JSON name for a property.</param>
+    /// <param name="properties">The projected properties of this schema, including any extension-data bucket.</param>
+    /// <returns>The CLR-to-JSON name map for the properties the schema declares.</returns>
+    private static Dictionary<string, string> CreateDeclaredJsonNamesByClrName(
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] Type bodyType,
+        JsonSerializerOptions serializerOptions,
+        ImmutableArray<OpenApiSchemaPropertyModel> properties)
+    {
+        var jsonNamesByClrName = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        // Extension data is the catch-all bucket rather than a named member, so CreateComponent drops it from the
+        // schema's properties. A conditional naming it would name something no instance declares.
+        var declaredJsonNames = properties
+            .Where(static property => !property.IsExtensionData)
+            .Select(static property => property.Name)
+            .ToHashSet(StringComparer.Ordinal);
+
+        if (declaredJsonNames.Count == 0)
+        {
+            return jsonNamesByClrName;
+        }
+
+        foreach (var clrProperty in bodyType.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+        {
+            var jsonName = GetJsonPropertyName(clrProperty, serializerOptions);
+
+            if (declaredJsonNames.Contains(jsonName))
+            {
+                // A property shadowed with `new` appears twice under one CLR name; the first wins. Either candidate
+                // reached here already resolves to a name the schema declares, so the choice between them cannot
+                // introduce one it does not.
+                jsonNamesByClrName.TryAdd(clrProperty.Name, jsonName);
+            }
+        }
+
+        return jsonNamesByClrName;
     }
 
     private static OpenApiSchemaPropertyModel CreateProperty(
@@ -1022,6 +1137,8 @@ public sealed record OpenApiSchemaProjectionContext(
 /// <param name="Properties">The ordered JSON-visible property metadata projected from serializer metadata.</param>
 /// <param name="Description">The schema-level description from <see cref="System.ComponentModel.DescriptionAttribute"/> when specified.</param>
 /// <param name="Title">The schema-level title from <see cref="System.ComponentModel.DisplayNameAttribute"/> when specified.</param>
+/// <param name="Conditionals">The cross-property conditional requirements this schema's properties declare, resolved to
+/// the JSON-visible names the schema declares. Empty when no property carries a conditional validator.</param>
 public sealed record OpenApiSchemaModel(
     string BodyTypeName,
     OpenApiSchemaKind Kind,
@@ -1029,7 +1146,8 @@ public sealed record OpenApiSchemaModel(
     ImmutableArray<string> PropertyNames,
     ImmutableArray<OpenApiSchemaPropertyModel> Properties,
     string? Description = null,
-    string? Title = null);
+    string? Title = null,
+    ImmutableArray<OpenApiConditionalRequirement> Conditionals = default);
 
 /// <summary>
 /// Captures one JSON-visible property projected from serializer metadata for a covered schema.

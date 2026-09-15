@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.ComponentModel.DataAnnotations;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
@@ -40,10 +41,12 @@ internal sealed record OpenApiValidationConstraints(
 
     /// <summary>
     /// Extracts validation constraints from the CLR property attributes on an operation type's property.
-    /// Conditional validators (<c>RequiredIfAttribute</c>, <c>RequiredIfNotAttribute</c>, <c>NotAllowedIfAttribute</c>,
-    /// <c>RequiredItemsIfAttribute</c>, <c>RequiredItemsIfNotAttribute</c>) are intentionally skipped because OpenAPI 3.x
-    /// cannot represent cross-property conditionality; they remain enforced at runtime through the generated validation
-    /// pipeline.
+    /// This covers only the constraints that belong to the property's own schema. The conditional validators
+    /// (<c>RequiredIfAttribute</c>, <c>RequiredIfNotAttribute</c>, <c>RequiredItemsIfAttribute</c>,
+    /// <c>RequiredItemsIfNotAttribute</c>) are cross-property and belong to the <em>containing</em> schema, so they are
+    /// extracted separately by <see cref="ExtractConditionalRequirements"/> and rendered as <c>allOf</c>/<c>if</c>/<c>then</c>.
+    /// <c>NotAllowedIfAttribute</c> remains unprojected: JSON Schema can express it, but nothing downstream consumes it yet
+    /// and an unproven projection of a prohibition is the direction that risks blocking valid payloads client-side.
     /// </summary>
     /// <param name="operationType">The operation CLR type to reflect on.</param>
     /// <param name="propertyName">The CLR property name to extract constraints from.</param>
@@ -96,6 +99,190 @@ internal sealed record OpenApiValidationConstraints(
             minimum.IsExclusive,
             maximum.IsExclusive,
             format);
+    }
+
+    /// <summary>
+    /// Extracts the cross-property conditional requirements declared on a property by the conditional validators
+    /// (<c>RequiredIf</c>, <c>RequiredIfNot</c>, <c>RequiredItemsIf</c>, <c>RequiredItemsIfNot</c>), for projection onto
+    /// the containing object schema as <c>allOf</c>/<c>if</c>/<c>then</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Property names on the returned requirements are CLR names. The caller resolves them to the JSON-visible names
+    /// used by the containing schema and drops any requirement whose target or dependent is not a member of it — this
+    /// type has no knowledge of binding.
+    /// </para>
+    /// <para>
+    /// Two skips are deliberate, and both keep the projection from claiming more than the runtime enforces. A target
+    /// that is a non-nullable value type is skipped because its requirement can never fail — <c>HasRequiredValue</c>
+    /// returns true for any non-null, non-string value, and the generated fast path likewise produces no rule — so
+    /// emitting one would reject payloads the server accepts. An item requirement on a property that is not a
+    /// recognisable single-element collection is skipped for the same reason: without an element type there is no
+    /// constraint that is certain not to over-reach.
+    /// </para>
+    /// <para>
+    /// A <c>null</c> dependent value is <em>not</em> skipped. Legacy Blueprint's projection skips it as a server-side
+    /// no-op, which is untrue of these attributes: <c>DependentValues</c> is compared through <c>value?.ToString()</c>,
+    /// so a null dependent value matches exactly when the dependent property is null and the requirement genuinely
+    /// activates. Skipping it would drop a constraint the runtime enforces.
+    /// </para>
+    /// </remarks>
+    /// <param name="property">The CLR property to extract conditional requirements from, or <c>null</c> when not found.</param>
+    /// <returns>The conditional requirements declared on the property, in dependent-property name order; empty when none apply.</returns>
+    public static ImmutableArray<OpenApiConditionalRequirement> ExtractConditionalRequirements(PropertyInfo? property)
+    {
+        if (property is null)
+        {
+            return [];
+        }
+
+        var scalarTargetKind = GetScalarTargetKind(property.PropertyType);
+        var itemsTargetKind = GetItemsTargetKind(property.PropertyType);
+
+        var builder = ImmutableArray.CreateBuilder<OpenApiConditionalRequirement>();
+
+        foreach (var attribute in property.GetCustomAttributes(inherit: true))
+        {
+            switch (attribute)
+            {
+                case RequiredIfAttribute requiredIf:
+                    Add(requiredIf.DependentProperty, requiredIf.DependentValues, negated: false, scalarTargetKind);
+                    break;
+                case RequiredIfNotAttribute requiredIfNot:
+                    Add(requiredIfNot.DependentProperty, requiredIfNot.DependentValues, negated: true, scalarTargetKind);
+                    break;
+                case RequiredItemsIfAttribute requiredItemsIf:
+                    Add(requiredItemsIf.DependentProperty, requiredItemsIf.DependentValues, negated: false, itemsTargetKind);
+                    break;
+                case RequiredItemsIfNotAttribute requiredItemsIfNot:
+                    Add(requiredItemsIfNot.DependentProperty, requiredItemsIfNot.DependentValues, negated: true, itemsTargetKind);
+                    break;
+            }
+        }
+
+        // Reflection does not guarantee an order for repeated attributes on one member, and the rendered document is a
+        // contract with an ETag over it, so impose one rather than let the JSON shuffle between builds.
+        return [.. builder.OrderBy(static requirement => requirement.DependentPropertyName, StringComparer.Ordinal)];
+
+        void Add(string dependentProperty, IEnumerable<object?> dependentValues, bool negated, OpenApiConditionalTargetKind? targetKind)
+        {
+            if (targetKind is not { } kind || !TryNormaliseDependentValues(dependentValues, out var normalisedValues))
+            {
+                return;
+            }
+
+            builder.Add(new OpenApiConditionalRequirement(
+                dependentProperty,
+                normalisedValues,
+                negated,
+                property.Name,
+                kind));
+        }
+    }
+
+    /// <summary>
+    /// Normalises the dependent values for JSON rendering, failing when any of them has no faithful JSON representation.
+    /// Enum members and <see cref="char"/> values are projected to strings because both render as <c>type: string</c> in
+    /// the document; booleans, the integral and floating-point types, strings and <see langword="null"/> pass through to
+    /// their natural JSON form.
+    /// </summary>
+    /// <remarks>
+    /// Guessing at a representation would be tolerable while an unmatched condition could only fail to fire — that
+    /// under-enforces, which is safe. It is not tolerable under the negated (<c>RequiredIfNot</c>/<c>RequiredItemsIfNot</c>)
+    /// form, where the test is wrapped in <c>not</c>: a condition that can never match becomes one that always matches, so
+    /// the requirement always applies and the generated client rejects payloads the server accepts. An unrepresentable
+    /// value therefore drops the whole requirement rather than being approximated.
+    /// </remarks>
+    /// <param name="dependentValues">The raw dependent values from the attribute.</param>
+    /// <param name="normalisedValues">The normalised values when every one of them can be represented.</param>
+    /// <returns><see langword="true"/> when every dependent value has a faithful JSON representation.</returns>
+    private static bool TryNormaliseDependentValues(IEnumerable<object?> dependentValues, out ImmutableArray<object?> normalisedValues)
+    {
+        var builder = ImmutableArray.CreateBuilder<object?>();
+
+        foreach (var value in dependentValues)
+        {
+            switch (value)
+            {
+                case null:
+                case bool:
+                case string:
+                case sbyte or byte or short or ushort or int or uint or long or ulong:
+                case float or double or decimal:
+                    builder.Add(value);
+                    break;
+
+                // Enums serialise as their member name, and a char as a one-character string; both render as
+                // "type": "string" in the document, so the string form is the one that can match.
+                case Enum:
+                case char:
+                    builder.Add(value.ToString());
+                    break;
+
+                default:
+                    normalisedValues = [];
+                    return false;
+            }
+        }
+
+        normalisedValues = builder.ToImmutable();
+        return true;
+    }
+
+    /// <summary>
+    /// Maps a scalar target's CLR type onto the constraint the runtime enforces for it, or <c>null</c> when the
+    /// requirement cannot fail at runtime and therefore must not be projected.
+    /// </summary>
+    private static OpenApiConditionalTargetKind? GetScalarTargetKind(Type targetType)
+    {
+        if (targetType == typeof(string))
+        {
+            return OpenApiConditionalTargetKind.NonBlankString;
+        }
+
+        // Mirrors ConditionalRequiredValidationFastPathStrategyHelpers.TryGetRequiredStateExpressions: a non-nullable
+        // value type has no "missing" state, so neither the fast path nor the runtime attribute can ever reject it.
+        return targetType.IsValueType && Nullable.GetUnderlyingType(targetType) is null
+            ? null
+            : OpenApiConditionalTargetKind.NonNull;
+    }
+
+    /// <summary>
+    /// Maps a collection target's CLR type onto the item constraint the runtime enforces for it, or <c>null</c> when the
+    /// element type cannot be determined.
+    /// </summary>
+    private static OpenApiConditionalTargetKind? GetItemsTargetKind(Type targetType)
+    {
+        // RequiredItemsIfAttribute.HasItems rejects an element whose ToString() is blank, whatever the element type, so
+        // a List<int> of [1, 2] satisfies it. Narrowing items to "type": "string" regardless of element type — as legacy
+        // Blueprint does — would reject that payload client-side while the server accepts it.
+        return GetCollectionElementType(targetType) switch
+        {
+            null => null,
+            { } elementType when elementType == typeof(string) => OpenApiConditionalTargetKind.NonBlankStringItems,
+            _ => OpenApiConditionalTargetKind.NonNullItems,
+        };
+    }
+
+    /// <summary>
+    /// Resolves the element type of a single-element collection (an array or a one-argument generic such as
+    /// <c>List&lt;T&gt;</c>), or <c>null</c> when the type is not one.
+    /// </summary>
+    private static Type? GetCollectionElementType(Type propertyType)
+    {
+        if (propertyType == typeof(string) || !typeof(System.Collections.IEnumerable).IsAssignableFrom(propertyType))
+        {
+            return null;
+        }
+
+        if (propertyType.IsArray)
+        {
+            return propertyType.GetElementType();
+        }
+
+        return propertyType.IsGenericType && propertyType.GetGenericArguments() is { Length: 1 } typeArguments
+            ? typeArguments[0]
+            : null;
     }
 
     private static int? GetMinLength(IReadOnlyList<ValidationAttribute> validationAttributes)

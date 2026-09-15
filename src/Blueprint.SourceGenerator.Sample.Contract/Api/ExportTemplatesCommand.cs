@@ -58,8 +58,9 @@ public partial class ExportTemplatesCommand : ICommand<AcceptedResult<ExportJobA
 
     /// <summary>
     /// The export formats to include. Required to contain at least one item when <see cref="RestrictFormats"/>
-    /// is true (via <see cref="RequiredItemsIfAttribute"/>). Because the requirement is cross-property
-    /// conditional, it is enforced at runtime and is intentionally absent from the OpenAPI schema.
+    /// is true (via <see cref="RequiredItemsIfAttribute"/>). Being cross-property, the requirement belongs to the
+    /// containing schema rather than this property, and is projected into the OpenAPI document as an
+    /// <c>allOf</c>/<c>if</c>/<c>then</c> conditional so generated clients enforce it too.
     /// </summary>
     [RequiredItemsIf(nameof(RestrictFormats), true)]
     [Description("Export formats to include. Must contain at least one item when RestrictFormats is true.")]

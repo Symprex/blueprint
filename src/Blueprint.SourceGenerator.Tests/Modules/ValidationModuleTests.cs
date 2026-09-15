@@ -480,9 +480,12 @@ public class ValidationModuleTests
         var pipelineSource = result.Output.Single(static tree => tree.FilePath.EndsWith("CreateUserCommandExecutorPipeline.g.cs", StringComparison.Ordinal)).ToString();
 
         pipelineSource.Should().NotContain("global::System.ComponentModel.DataAnnotations.Validator.TryValidateObject");
-        pipelineSource.Should().Contain("operation.Enabled == true && (operation.Roles is null || operation.Roles.Count == 0)");
+        const string expectedMissingCondition = "operation.Enabled == true && (operation.Roles is null || operation.Roles.Count == 0 || "
+            + "!global::System.Linq.Enumerable.All(global::System.Linq.Enumerable.Cast<object>((global::System.Collections.IEnumerable)operation.Roles), "
+            + "static e => e != null && !global::System.String.IsNullOrWhiteSpace(e.ToString())))";
+        pipelineSource.Should().Contain(expectedMissingCondition);
         pipelineSource.Should().Contain("global::Blueprint.Validation.RequiredItemsIfAttribute");
-        pipelineSource.IndexOf("operation.Enabled == true && (operation.Roles is null || operation.Roles.Count == 0)", StringComparison.Ordinal)
+        pipelineSource.IndexOf(expectedMissingCondition, StringComparison.Ordinal)
             .Should()
             .BeLessThan(pipelineSource.IndexOf("var handlerResult", StringComparison.Ordinal));
     }

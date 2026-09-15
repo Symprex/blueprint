@@ -10,7 +10,8 @@ namespace Blueprint.Validation;
 /// configured dependent values. This is the collection-aware counterpart to <see cref="RequiredIfNotAttribute"/>:
 /// where <see cref="RequiredIfNotAttribute"/> treats a non-null collection as satisfied (so an empty list passes),
 /// this attribute inspects the collection and rejects a <see langword="null"/> or empty collection when the
-/// requirement is active.
+/// requirement is active. Every element must also be non-<see langword="null"/> and non-whitespace: a collection
+/// containing only blank strings is treated the same as an empty collection.
 /// </summary>
 [AttributeUsage(AttributeTargets.Property, AllowMultiple = true)]
 public sealed class RequiredItemsIfNotAttribute : ValidationAttribute
@@ -90,32 +91,32 @@ public sealed class RequiredItemsIfNotAttribute : ValidationAttribute
         return this._dependentValueTexts.Contains(candidate?.ToString());
     }
 
+    /// <summary>
+    /// Determines whether a collection contains at least one qualifying item. A qualifying item is
+    /// non-<see langword="null"/> and, when its string representation is inspected, not blank — so a collection of
+    /// whitespace-only strings is treated the same as an empty collection.
+    /// </summary>
+    /// <param name="value">The collection value to inspect.</param>
+    /// <returns><see langword="true"/> when the collection contains at least one qualifying item.</returns>
     private static bool HasItems(object? value)
     {
-        if (value is null)
+        if (value is not IEnumerable enumerable)
         {
             return false;
         }
 
-        if (value is ICollection collection)
-        {
-            return collection.Count > 0;
-        }
+        var hasAny = false;
 
-        if (value is IEnumerable enumerable)
+        foreach (var item in enumerable)
         {
-            var enumerator = enumerable.GetEnumerator();
+            hasAny = true;
 
-            try
+            if (item is null || string.IsNullOrWhiteSpace(item.ToString()))
             {
-                return enumerator.MoveNext();
-            }
-            finally
-            {
-                (enumerator as IDisposable)?.Dispose();
+                return false;
             }
         }
 
-        return false;
+        return hasAny;
     }
 }

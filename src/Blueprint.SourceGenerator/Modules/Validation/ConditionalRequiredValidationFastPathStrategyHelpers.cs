@@ -48,9 +48,10 @@ internal static class ConditionalRequiredValidationFastPathStrategyHelpers
     /// <summary>
     /// Tries to create a rule for the collection-aware conditional-required attributes (<c>RequiredItemsIf</c> /
     /// <c>RequiredItemsIfNot</c>). Unlike <see cref="TryCreateRule"/>, the "missing value" test inspects the
-    /// collection's item count so that a <see langword="null"/> or empty collection fails the requirement when it
-    /// is active. Only collection shapes with a deterministic count are lowered here; other shapes fall back to the
-    /// runtime attribute.
+    /// collection's item count and every element so that a <see langword="null"/> or empty collection, or a
+    /// collection containing only <see langword="null"/> or whitespace-only elements, fails the requirement when it
+    /// is active — matching the runtime attribute's element-aware check. Only collection shapes with a
+    /// deterministic count are lowered here; other shapes fall back to the runtime attribute.
     /// </summary>
     /// <param name="property">The collection property being validated.</param>
     /// <param name="propertyAccess">The generated-code expression used to read the property value.</param>
@@ -76,10 +77,17 @@ internal static class ConditionalRequiredValidationFastPathStrategyHelpers
             return false;
         }
 
-        // A null or empty collection is "missing"; the null check short-circuits so the count expression is only
-        // evaluated on a non-null collection.
-        var missingValueCondition = $"({propertyAccess} is null || {countExpression} == 0)";
-        var presentValueCondition = $"({propertyAccess} is not null && {countExpression} > 0)";
+        // A null or empty collection is "missing", and so is a collection whose elements are all null or
+        // whitespace-only — matching the runtime attribute's HasItems check. The null and count checks
+        // short-circuit so the element scan below only runs against a non-null, non-empty collection.
+        // Cast<object>, not Cast<object?>: an explicit nullable-reference-annotated type argument in generated code
+        // requires a surrounding #nullable context, which pipeline files don't declare. The null check on each
+        // boxed element below makes the annotation unnecessary anyway.
+        var qualifyingItemsExpression =
+            $"global::System.Linq.Enumerable.All(global::System.Linq.Enumerable.Cast<object>((global::System.Collections.IEnumerable){propertyAccess}), " +
+            "static e => e != null && !global::System.String.IsNullOrWhiteSpace(e.ToString()))";
+        var missingValueCondition = $"({propertyAccess} is null || {countExpression} == 0 || !{qualifyingItemsExpression})";
+        var presentValueCondition = $"({propertyAccess} is not null && {countExpression} > 0 && {qualifyingItemsExpression})";
 
         rule = new ValidationFastPathRule(
             $"{activeCondition} && {missingValueCondition}",

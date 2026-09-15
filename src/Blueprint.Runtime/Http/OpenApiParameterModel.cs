@@ -83,7 +83,15 @@ public sealed record OpenApiParameterModel(
 /// <param name="Properties">The ordered body-owned properties projected as inline schema entries.</param>
 public sealed record OpenApiRequestBodyModel(
     bool Required,
-    ImmutableArray<OpenApiRequestBodyPropertyModel> Properties);
+    ImmutableArray<OpenApiRequestBodyPropertyModel> Properties)
+{
+    /// <summary>
+    /// Gets the cross-property conditional requirements declared by the body-owned properties. These belong to the
+    /// containing body schema rather than to any one property, and render as <c>allOf</c>/<c>if</c>/<c>then</c>.
+    /// Empty when no body property carries a conditional validator.
+    /// </summary>
+    public ImmutableArray<OpenApiConditionalRequirement> Conditionals { get; init; } = [];
+}
 
 /// <summary>
 /// Captures one property within an inline request body schema, using the external JSON binding name
