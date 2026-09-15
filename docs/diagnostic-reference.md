@@ -202,12 +202,14 @@ See also [consumer-migration-guide.md](consumer-migration-guide.md).
 | BPMIG101 | Warning | Config required | Migrate configured `AddAuthentication(...)` usage |
 | BPMIG200 | Warning | Consumer rewrite | Migrate `[FromResource]` usage |
 | BPMIG201 | Warning | Consumer rewrite | Migrate `{Auth:...}` placeholder usage |
+| BPMIG203 | Warning | Consumer rewrite | Migrate `[Resource(noun, verb, path)]` resource key template (drop if pure auth-claim, else rewrite to an explicit binding) |
 | BPMIG300 | Warning | Namespace rename | Update legacy Blueprint namespace using directive |
 | BPMIG301 | Warning | Consumer rewrite | `IMiddlewareBuilder` replaced by source-generator modules |
 | BPMIG302 | Warning | Consumer rewrite | `BlueprintApiBuilder` replaced by `AddBlueprintApi<TApp, TExec>` |
 | BPMIG303 | Warning | Auto-fixable | Remove obsolete Blueprint namespace |
 | BPMIG400 | Warning | Auto-fixable | Add `partial` to operation class |
 | BPMIG401 | Warning | Auto-fixable | Add `partial` to API resource class |
+| BPMIG402 | Warning | Auto-fixable | Add missing using for relocated Blueprint type |
 
 ### Informational / disabled
 

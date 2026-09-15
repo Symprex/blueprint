@@ -143,7 +143,7 @@ public sealed class DiagnosticFinding
         {
             "BPMIG001" or "BPMIG100" => @"migration\openapi\plan.md",
             "BPMIG002" => @"migration\resource-model-links-and-post-processing\plan.md",
-            "BPMIG003" or "BPMIG101" or "BPMIG200" or "BPMIG201" => @"migration\authentication-and-authorisation\plan.md",
+            "BPMIG003" or "BPMIG101" or "BPMIG200" or "BPMIG201" or "BPMIG203" => @"migration\authentication-and-authorisation\plan.md",
             "BPMIG400" or "BPMIG401" or "BPMIG402" => @"migration\breaking-changes-and-migration-tooling\plan.md",
             _ => @"migration\breaking-changes-and-migration-tooling\plan.md",
         };

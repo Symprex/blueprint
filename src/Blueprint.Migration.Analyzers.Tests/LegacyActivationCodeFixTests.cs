@@ -364,6 +364,210 @@ public sealed class LegacyActivationCodeFixTests
         fixedSource.Should().NotContain("{Auth:AccountId}");
     }
 
+    [Xunit.Fact]
+    public async Task When_bpmig203_is_reported_on_a_pure_auth_claim_placeholder_then_code_fix_removes_the_resource_key_template_argument()
+    {
+        // A template whose only placeholder is an auth-claim reference is inferred automatically
+        // by the source-generated model, so dropping the argument is behaviour-preserving. This
+        // mirrors every one of Signature365's "/Tenants/{Auth:AccountId}" migrations, which were
+        // all dropped to a two-argument [Resource(noun, verb)].
+        const string source = """
+            namespace Legacy.Blueprint;
+
+            [System.AttributeUsage(System.AttributeTargets.Class)]
+            public sealed class ResourceAttribute : System.Attribute
+            {
+                public ResourceAttribute(string noun, string verb, string resourceKeyTemplate) { }
+            }
+
+            [Resource("Account", "Read", "/Tenants/{Auth:AccountId}")]
+            public sealed class GetAccountQuery { }
+            """;
+
+        var fixedSource = await ApplyCodeFixAsync(source, "BPMIG203");
+
+        fixedSource.Should().Contain("[Resource(\"Account\", \"Read\")]");
+        fixedSource.Should().NotContain("/Tenants/{Auth:AccountId}");
+    }
+
+    [Xunit.Fact]
+    public async Task When_bpmig203_is_reported_on_a_bare_id_resource_key_template_then_code_fix_does_not_register_a_fix()
+    {
+        // A bare "{Id}" placeholder means the resource's own key must be bound from the
+        // authenticated caller (e.g. rewritten by hand to "{Id:Auth.Id}") rather than simply
+        // dropped, so this variant is reported but not silently rewritten.
+        const string source = """
+            namespace Legacy.Blueprint;
+
+            [System.AttributeUsage(System.AttributeTargets.Class)]
+            public sealed class ResourceAttribute : System.Attribute
+            {
+                public ResourceAttribute(string noun, string verb, string resourceKeyTemplate) { }
+            }
+
+            [Resource("Identity", "Read", "/Identities/{Id}")]
+            public sealed class GetIdentityProfileQuery { }
+            """;
+
+        var fixedSource = await ApplyCodeFixAsync(source, "BPMIG203");
+
+        fixedSource.Should().Contain("[Resource(\"Identity\", \"Read\", \"/Identities/{Id}\")]");
+    }
+
+    [Xunit.Fact]
+    public async Task When_bpmig203_is_reported_on_a_tenantid_resource_key_template_then_code_fix_does_not_register_a_fix()
+    {
+        // A "{TenantId}" placeholder is bound from the operation's own property rather than an
+        // auth claim; Signature365 hand-rewrote these to "{TenantId:Auth.AccountId}" instead of
+        // dropping them, so the fix must not attempt that rewrite automatically.
+        const string source = """
+            namespace Legacy.Blueprint;
+
+            [System.AttributeUsage(System.AttributeTargets.Class)]
+            public sealed class ResourceAttribute : System.Attribute
+            {
+                public ResourceAttribute(string noun, string verb, string resourceKeyTemplate) { }
+            }
+
+            [Resource("SentEmail", "Read", "/Tenants/{TenantId}/SentEmails")]
+            public sealed class FindSentEmailsQuery { }
+            """;
+
+        var fixedSource = await ApplyCodeFixAsync(source, "BPMIG203");
+
+        fixedSource.Should().Contain("[Resource(\"SentEmail\", \"Read\", \"/Tenants/{TenantId}/SentEmails\")]");
+    }
+
+    [Xunit.Fact]
+    public async Task When_bpmig203_is_reported_on_resource_with_a_details_named_argument_then_code_fix_removes_only_the_resource_key_template_argument()
+    {
+        // Mirrors Signature365's GetAccountStateQuery: a pure auth-claim template plus a
+        // Details = "..." named argument. The template is dropped but Details is preserved.
+        const string source = """
+            namespace Legacy.Blueprint;
+
+            [System.AttributeUsage(System.AttributeTargets.Class)]
+            public sealed class ResourceAttribute : System.Attribute
+            {
+                public ResourceAttribute(string noun, string verb, string resourceKeyTemplate) { }
+
+                public string Details { get; set; }
+            }
+
+            [Resource("BillingAccount", "Read", "/Tenants/{Auth:AccountId}", Details = "AllowAnonymous background task")]
+            public sealed class GetAccountStateQuery { }
+            """;
+
+        var fixedSource = await ApplyCodeFixAsync(source, "BPMIG203");
+
+        fixedSource.Should().Contain(
+            "[Resource(\"BillingAccount\", \"Read\", Details = \"AllowAnonymous background task\")]");
+        fixedSource.Should().NotContain("/Tenants/{Auth:AccountId}");
+    }
+
+    [Xunit.Fact]
+    public async Task When_bpmig203_is_reported_on_a_mixed_auth_and_non_auth_resource_key_template_then_code_fix_does_not_register_a_fix()
+    {
+        // The one shape where a widening regression could silently broaden authorisation across
+        // many files: a template that combines a safe auth-claim segment with a non-auth segment
+        // (the resource's own instance key). Every placeholder must be an auth claim before the
+        // fix applies, so a single non-auth placeholder anywhere in the template must decline.
+        const string source = """
+            namespace Legacy.Blueprint;
+
+            [System.AttributeUsage(System.AttributeTargets.Class)]
+            public sealed class ResourceAttribute : System.Attribute
+            {
+                public ResourceAttribute(string noun, string verb, string resourceKeyTemplate) { }
+            }
+
+            [Resource("TenantUser", "Read", "/Tenants/{Auth:AccountId}/Users/{Id}")]
+            public sealed class GetTenantUserQuery { }
+            """;
+
+        var fixedSource = await ApplyCodeFixAsync(source, "BPMIG203");
+
+        fixedSource.Should().Contain("[Resource(\"TenantUser\", \"Read\", \"/Tenants/{Auth:AccountId}/Users/{Id}\")]");
+    }
+
+    [Xunit.Fact]
+    public async Task When_bpmig203_is_reported_on_a_resource_key_template_with_no_placeholder_then_code_fix_does_not_register_a_fix()
+    {
+        // A static template with no placeholder at all (e.g. "/", "/Messages") has no positive
+        // evidence in the measured corpus either way, so it is left for manual review rather than
+        // guessed at.
+        const string source = """
+            namespace Legacy.Blueprint;
+
+            [System.AttributeUsage(System.AttributeTargets.Class)]
+            public sealed class ResourceAttribute : System.Attribute
+            {
+                public ResourceAttribute(string noun, string verb, string resourceKeyTemplate) { }
+            }
+
+            [Resource("ApplicationConfig", "Read", "/")]
+            public sealed class GetApplicationConfigQuery { }
+            """;
+
+        var fixedSource = await ApplyCodeFixAsync(source, "BPMIG203");
+
+        fixedSource.Should().Contain("[Resource(\"ApplicationConfig\", \"Read\", \"/\")]");
+    }
+
+    [Xunit.Fact]
+    public async Task When_bpmig203_is_reported_on_a_dot_syntax_auth_claim_placeholder_then_code_fix_removes_the_resource_key_template_argument()
+    {
+        // BPMIG201 rewrites the old "{Auth:X}" colon syntax to the new "{Auth.X}" dot syntax, so
+        // the arity fix must accept a template already migrated to dot syntax, not only the old
+        // colon form.
+        const string source = """
+            namespace Legacy.Blueprint;
+
+            [System.AttributeUsage(System.AttributeTargets.Class)]
+            public sealed class ResourceAttribute : System.Attribute
+            {
+                public ResourceAttribute(string noun, string verb, string resourceKeyTemplate) { }
+            }
+
+            [Resource("Account", "Read", "/Tenants/{Auth.AccountId}")]
+            public sealed class GetAccountQuery { }
+            """;
+
+        var fixedSource = await ApplyCodeFixAsync(source, "BPMIG203");
+
+        fixedSource.Should().Contain("[Resource(\"Account\", \"Read\")]");
+        fixedSource.Should().NotContain("/Tenants/{Auth.AccountId}");
+    }
+
+    [Xunit.Fact]
+    public async Task When_bpmig203_is_reported_on_a_non_constant_resource_key_template_then_code_fix_does_not_register_a_fix()
+    {
+        // A resource key template that is not a compile-time constant (e.g. built from a field
+        // reference) cannot be inspected for auth-only placeholders, so it must be left for
+        // manual review rather than guessed at.
+        const string source = """
+            namespace Legacy.Blueprint;
+
+            [System.AttributeUsage(System.AttributeTargets.Class)]
+            public sealed class ResourceAttribute : System.Attribute
+            {
+                public ResourceAttribute(string noun, string verb, string resourceKeyTemplate) { }
+            }
+
+            public static class Templates
+            {
+                public static readonly string AccountTemplate = "/Tenants/{Auth:AccountId}";
+            }
+
+            [Resource("Account", "Read", Templates.AccountTemplate)]
+            public sealed class GetAccountQuery { }
+            """;
+
+        var fixedSource = await ApplyCodeFixAsync(source, "BPMIG203");
+
+        fixedSource.Should().Contain("[Resource(\"Account\", \"Read\", Templates.AccountTemplate)]");
+    }
+
     private static Document CreateDocument(string source)
     {
         var projectId = ProjectId.CreateNewId("LegacyActivationCodeFixTests");

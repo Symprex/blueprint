@@ -75,6 +75,15 @@ public sealed class MigrationDiagnosticDescriptorsTests
     }
 
     [Xunit.Fact]
+    public void When_loading_migration_diagnostic_descriptors_then_legacy_resource_arity_uses_bpmig203()
+    {
+        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.LegacyResourceArityRequiresMigration.Id.Should().Be("BPMIG203");
+        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.LegacyResourceArityRequiresMigration.DefaultSeverity.Should().Be(Microsoft.CodeAnalysis.DiagnosticSeverity.Warning);
+        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.LegacyResourceArityRequiresMigration.IsEnabledByDefault.Should().BeTrue();
+        Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.LegacyResourceArityRequiresMigration.MessageFormat.ToString().Should().Contain("Resource");
+    }
+
+    [Xunit.Fact]
     public void When_loading_migration_diagnostic_descriptors_then_legacy_namespace_uses_the_first_namespace_migration_slot()
     {
         Blueprint.Migration.Analyzers.MigrationDiagnosticDescriptors.LegacyNamespaceUsing.Id.Should().Be("BPMIG300");

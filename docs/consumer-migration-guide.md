@@ -23,6 +23,7 @@ This guide walks through migrating a legacy Blueprint application (such as a Sig
 | `AddAuthentication(...)` | ASP.NET Core `AddAuthentication()` + `UseAuthentication()` | Configuration-required (BPMIG101) |
 | `[FromResource(...)]` attribute | `[Resource("noun", "verb")]` + `[FromResource(typeof(X))]` | Consumer rewrite (BPMIG200) |
 | `{Auth:...}` placeholders | Source-generated auth metadata | Consumer rewrite (BPMIG201) |
+| `[Resource(noun, verb, path)]` resource key template | `[Resource(noun, verb)]` when every placeholder is an auth claim (`{Auth:...}`/`{Auth....}`); otherwise an explicit `{Property:Auth.Claim}` binding | Consumer rewrite (BPMIG203) |
 | Legacy namespace usings | Updated namespaces | Auto-fixable (BPMIG300) |
 | Runtime middleware pipeline | Generated `IOperationExecutorPipeline` per operation | Automatic |
 | `IApiOperationHandler<T>` | Same interface, same registration | No change |

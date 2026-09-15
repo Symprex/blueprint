@@ -21,6 +21,7 @@ public sealed class LegacyActivationAnalyzer : DiagnosticAnalyzer
             MigrationDiagnosticDescriptors.ConfiguredAddAuthenticationRequiresMigration,
             MigrationDiagnosticDescriptors.LegacyFromResourceUsageRequiresMigration,
             MigrationDiagnosticDescriptors.LegacyAuthPlaceholderUsageRequiresMigration,
+            MigrationDiagnosticDescriptors.LegacyResourceArityRequiresMigration,
         ];
 
     /// <inheritdoc />
@@ -139,6 +140,17 @@ public sealed class LegacyActivationAnalyzer : DiagnosticAnalyzer
                 attribute.Name.GetLocation()));
         }
 
+        if (attributeType.Name == "ResourceAttribute"
+            && !IsNewBlueprintFrameworkAttribute(attributeType)
+            && HasLegacyResourceArity(attribute))
+        {
+            // Migration analyzers intentionally key off the stable legacy attribute type name so app-local wrappers
+            // and namespace moves still surface upgrade work while consumers migrate toward the source-generated model.
+            context.ReportDiagnostic(Diagnostic.Create(
+                MigrationDiagnosticDescriptors.LegacyResourceArityRequiresMigration,
+                attribute.Name.GetLocation()));
+        }
+
         if (!IsLegacyResourceTemplateAttribute(attributeType)
             || !TryGetAuthPlaceholderLocation(attribute, context, out var placeholderLocation))
         {
@@ -148,6 +160,32 @@ public sealed class LegacyActivationAnalyzer : DiagnosticAnalyzer
         context.ReportDiagnostic(Diagnostic.Create(
             MigrationDiagnosticDescriptors.LegacyAuthPlaceholderUsageRequiresMigration,
             placeholderLocation));
+    }
+
+    /// <summary>
+    /// Determines whether an attribute still declares the legacy three-positional-argument
+    /// <c>Resource(noun, verb, resourceKeyTemplate)</c> shape. Additional named arguments (e.g. a
+    /// <c>Details = "..."</c> property) are ignored for this check because the diagnostic still
+    /// applies to the positional arity even when the code fix later declines to auto-apply.
+    /// </summary>
+    private static bool HasLegacyResourceArity(AttributeSyntax attribute)
+    {
+        var arguments = attribute.ArgumentList?.Arguments;
+        if (arguments is not { Count: >= 3 })
+        {
+            return false;
+        }
+
+        for (var i = 0; i < 3; i++)
+        {
+            var argument = arguments.Value[i];
+            if (argument.NameColon is not null || argument.NameEquals is not null)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static bool IsLegacyResourceTemplateAttribute(INamedTypeSymbol attributeType)

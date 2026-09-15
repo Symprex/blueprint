@@ -22,9 +22,16 @@ public sealed class TransformationApplier
 {
     /// <summary>
     /// Safety limit per project to guard against infinite loops where a code fix continuously
-    /// re-introduces the same diagnostic.
+    /// re-introduces the same diagnostic. Sized above Signature365's largest single service:
+    /// Portal is estimated at 900-1,000+ auto-fixable instances once BPMIG402 is included
+    /// (~660 legacy namespace usings, ~66 <c>[FromResource(...)]</c> sites, ~96
+    /// <c>[Resource(...)]</c> sites, and ~161 operation classes needing <c>partial</c>). A limit at
+    /// or below that count would silently leave the largest service partially migrated inside a PR
+    /// that cannot be staged, printing only a stderr warning rather than failing loudly. Declined
+    /// diagnostics (e.g. BPMIG203 findings the code fix leaves for manual review) do not consume
+    /// this counter, since no fix is applied for them.
     /// </summary>
-    private const int MaxFixesPerProject = 1_000;
+    private const int MaxFixesPerProject = 5_000;
 
     private static readonly ImmutableArray<string> SupportedDiagnosticIds =
     [
@@ -33,6 +40,7 @@ public sealed class TransformationApplier
         "BPMIG003",
         "BPMIG200",
         "BPMIG201",
+        "BPMIG203",
         "BPMIG300",
         "BPMIG303",
         "BPMIG400",
