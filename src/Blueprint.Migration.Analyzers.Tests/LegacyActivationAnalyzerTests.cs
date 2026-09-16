@@ -347,6 +347,64 @@ public sealed class LegacyActivationAnalyzerTests
         diagnostic.Location.GetLineSpan().StartLinePosition.Line.Should().Be(16);
     }
 
+    [Xunit.Fact]
+    public async Task When_legacy_operation_uses_three_argument_resource_then_reports_bpmig203_on_the_attribute()
+    {
+        const string source = """
+            namespace Legacy.Blueprint;
+
+            using System;
+
+            [AttributeUsage(AttributeTargets.Class)]
+            public sealed class ResourceAttribute : Attribute
+            {
+                public ResourceAttribute(string noun, string verb, string resourceKeyTemplate)
+                {
+                }
+            }
+
+            [Resource("Account", "Read", "/Tenants/{TenantId}")]
+            public sealed class GetAccountQuery
+            {
+            }
+            """;
+
+        var diagnostics = await GetDiagnosticsAsync(source);
+
+        diagnostics.Should().ContainSingle(static diagnostic => diagnostic.Id == "BPMIG203");
+
+        var diagnostic = diagnostics.Single(static candidate => candidate.Id == "BPMIG203");
+        diagnostic.GetMessage().Should().Contain("Resource");
+        diagnostic.Location.GetLineSpan().StartLinePosition.Line.Should().Be(12);
+    }
+
+    [Xunit.Fact]
+    public async Task When_legacy_operation_uses_two_argument_resource_then_does_not_report_bpmig203()
+    {
+        const string source = """
+            namespace Legacy.Blueprint;
+
+            using System;
+
+            [AttributeUsage(AttributeTargets.Class)]
+            public sealed class ResourceAttribute : Attribute
+            {
+                public ResourceAttribute(string noun, string verb)
+                {
+                }
+            }
+
+            [Resource("Account", "Read")]
+            public sealed class GetAccountQuery
+            {
+            }
+            """;
+
+        var diagnostics = await GetDiagnosticsAsync(source);
+
+        diagnostics.Should().NotContain(static diagnostic => diagnostic.Id == "BPMIG203");
+    }
+
     private static async Task<ImmutableArray<Diagnostic>> GetDiagnosticsAsync(string source)
     {
         var syntaxTree = CSharpSyntaxTree.ParseText(source, new CSharpParseOptions(LanguageVersion.Preview));

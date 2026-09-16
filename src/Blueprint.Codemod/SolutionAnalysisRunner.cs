@@ -274,7 +274,18 @@ public sealed class SolutionAnalysisRunner
         return string.Equals(diagnosticId, diagnosticFilter, StringComparison.Ordinal);
     }
 
-    private static DiagnosticDescriptor? ResolveDescriptor(string diagnosticId)
+    /// <summary>
+    /// Maps a diagnostic ID collected from SARIF output back to its <see cref="DiagnosticDescriptor"/> so it can be
+    /// projected into the shared <see cref="MigrationReport"/>. Unknown diagnostics resolve to <see langword="null"/>
+    /// and are silently skipped, because they may come from the target solution's own analyzers — but every ID
+    /// exposed by <see cref="MigrationDiagnosticDescriptors"/> must have an arm here, or that diagnostic family
+    /// never reaches the dry-run report, <c>--mode review</c> output, or <c>codemod-report.json</c>/<c>.md</c>,
+    /// no matter how many findings it produces. <c>internal</c> for direct exhaustiveness testing from
+    /// <c>Blueprint.Codemod.Tests</c>.
+    /// </summary>
+    /// <param name="diagnosticId">The reserved BPMIG diagnostic ID collected from SARIF output.</param>
+    /// <returns>The matching descriptor, or <see langword="null"/> for an unrecognised ID.</returns>
+    internal static DiagnosticDescriptor? ResolveDescriptor(string diagnosticId)
     {
         return diagnosticId switch
         {
@@ -286,12 +297,14 @@ public sealed class SolutionAnalysisRunner
             "BPMIG200" => MigrationDiagnosticDescriptors.LegacyFromResourceUsageRequiresMigration,
             "BPMIG201" => MigrationDiagnosticDescriptors.LegacyAuthPlaceholderUsageRequiresMigration,
             "BPMIG202" => MigrationDiagnosticDescriptors.AbstractGenericBaseImplementsOperation,
+            "BPMIG203" => MigrationDiagnosticDescriptors.LegacyResourceArityRequiresMigration,
             "BPMIG300" => MigrationDiagnosticDescriptors.LegacyNamespaceUsing,
             "BPMIG301" => MigrationDiagnosticDescriptors.LegacyMiddlewareBuilderUsage,
             "BPMIG302" => MigrationDiagnosticDescriptors.LegacyBlueprintApiBuilderUsage,
             "BPMIG303" => MigrationDiagnosticDescriptors.LegacyNamespaceRemoved,
             "BPMIG400" => MigrationDiagnosticDescriptors.OperationMissingPartialKeyword,
             "BPMIG401" => MigrationDiagnosticDescriptors.ResourceMissingPartialKeyword,
+            "BPMIG402" => MigrationDiagnosticDescriptors.RelocatedTypeNeedUsing,
             _ => null, // Unknown diagnostics are silently skipped — they may come from the target solution's own analyzers.
         };
     }

@@ -66,6 +66,62 @@ public sealed class AccountCommand
 }
 
 /// <summary>
+/// Minimal legacy Resource attribute stub used to trigger the resource-arity migration diagnostic.
+/// </summary>
+[AttributeUsage(AttributeTargets.Class)]
+public sealed class ResourceAttribute : Attribute
+{
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ResourceAttribute"/> class with only a noun and verb.
+    /// This constructor matches the migrated form after stripping the resource key template.
+    /// </summary>
+    /// <param name="noun">The resource noun.</param>
+    /// <param name="verb">The action verb.</param>
+    public ResourceAttribute(string noun, string verb)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ResourceAttribute"/> class.
+    /// </summary>
+    /// <param name="noun">The resource noun.</param>
+    /// <param name="verb">The action verb.</param>
+    /// <param name="resourceKeyTemplate">The legacy resource key template.</param>
+    public ResourceAttribute(string noun, string verb, string resourceKeyTemplate)
+    {
+    }
+}
+
+/// <summary>
+/// Minimal legacy query type carrying a three-argument Resource attribute whose template references a
+/// non-auth property, so it must be flagged for manual review rather than auto-fixed.
+/// </summary>
+[Resource("Account", "Read", "/Tenants/{TenantId}")]
+public sealed class GetAccountQuery
+{
+}
+
+/// <summary>
+/// Minimal legacy command type carrying a three-argument Resource attribute whose template is a pure
+/// auth-claim reference, so it must be auto-fixed by dropping the resource key template argument.
+/// </summary>
+[Resource("Disclaimer", "Update", "/Tenants/{Auth:AccountId}")]
+public sealed class UpdateDisclaimerCommand
+{
+}
+
+/// <summary>
+/// Minimal legacy query type carrying a three-argument Resource attribute whose template mixes a safe
+/// auth-claim placeholder with a non-auth instance-key placeholder. Every placeholder must be an auth
+/// claim before the fix applies, so this must be flagged for manual review rather than auto-fixed, even
+/// though the first placeholder alone would pass.
+/// </summary>
+[Resource("User", "Read", "/Tenants/{Auth:AccountId}/Users/{Id}")]
+public sealed class GetUserQuery
+{
+}
+
+/// <summary>
 /// Minimal extension surface that mirrors the legacy activation APIs used by the dry-run fixture.
 /// </summary>
 public static class BlueprintApiBuilderExtensions

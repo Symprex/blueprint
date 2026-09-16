@@ -24,6 +24,20 @@ public sealed class ApplyModeTests
             updatedSource.Should().Contain("builder.AddOpenApi(options => options.Title = \"Legacy\");");
             updatedSource.Should().Contain("builder.AddAuthentication(_ => { });");
 
+            // BPMIG203: the pure auth-claim template is auto-fixed by dropping the resource key
+            // template argument, while the non-auth {TenantId} template is left for manual review.
+            updatedSource.Should().Contain("[Resource(\"Disclaimer\", \"Update\")]");
+            updatedSource.Should().Contain("[Resource(\"Account\", \"Read\", \"/Tenants/{TenantId}\")]");
+
+            // A mixed auth-claim + non-auth template must survive ApplyAsync's real batch fix-all
+            // path with its arity untouched: every placeholder must be an auth claim before the
+            // resource-key-template argument is dropped, and this template's first placeholder
+            // alone would incorrectly pass an "any" predicate. BPMIG201 legitimately normalises the
+            // old "{Auth:...}" colon syntax to "{Auth....}" dot syntax in the same pass, but BPMIG203
+            // must still decline to drop the argument because of the trailing non-auth "{Id}".
+            updatedSource.Should().NotContain("[Resource(\"User\", \"Read\")]");
+            updatedSource.Should().Contain("[Resource(\"User\", \"Read\", \"/Tenants/{Auth.AccountId}/Users/{Id}\")]");
+
             var runner = new SolutionAnalysisRunner();
             var report = await runner.DryRunAsync(
                 new SolutionAnalysisOptions(
@@ -32,7 +46,7 @@ public sealed class ApplyModeTests
 
             report.Report.Findings.Select(static finding => finding.DiagnosticId)
                 .Should()
-                .Equal("BPMIG100", "BPMIG101", "BPMIG200", "BPMIG302");
+                .Equal("BPMIG100", "BPMIG101", "BPMIG200", "BPMIG203", "BPMIG302");
         }
         finally
         {

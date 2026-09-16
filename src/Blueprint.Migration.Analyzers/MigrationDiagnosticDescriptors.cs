@@ -92,6 +92,25 @@ public static class MigrationDiagnosticDescriptors
         description: "Legacy '{Auth:X}' colon syntax is replaced by '{Auth.X}' dot-notation. Colon now exclusively means fallback, and dot means property path navigation. 'Auth' is treated as a well-known first segment that resolves from the authorization context.");
 
     /// <summary>
+    /// Gets the diagnostic emitted when legacy Blueprint operations still declare the third
+    /// (resource-key-template) argument on <c>[Resource(noun, verb, path)]</c>, which needs consumer review because
+    /// the correct migration depends on what the template references: a template built entirely from auth-claim
+    /// placeholders (<c>{Auth:...}</c>/<c>{Auth....}</c>) is inferred automatically and the argument should be
+    /// dropped, but a template that binds the resource's own instance key (e.g. a bare <c>{Id}</c> or
+    /// <c>{TenantId}</c>) needs an explicit <c>{Property:Auth.Claim}</c> rewrite instead — dropping it would widen
+    /// the authorisation check. See <c>ResourceArityCodeFixProvider</c> in
+    /// <c>Blueprint.Migration.Analyzers.CodeFixes</c> for the measured rule.
+    /// </summary>
+    public static DiagnosticDescriptor LegacyResourceArityRequiresMigration { get; } = new(
+        id: "BPMIG203",
+        title: "Migrate Resource resource-key-template",
+        messageFormat: "Migrate '[Resource(noun, verb, resourceKeyTemplate)]' usage: drop the resourceKeyTemplate argument only if every placeholder is an auth claim, otherwise rewrite it to an explicit '{Property:Auth.Claim}' binding.",
+        category: "BlueprintMigration",
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "Legacy Blueprint migrations should treat three-argument [Resource(noun, verb, resourceKeyTemplate)] usage as consumer-extension rewrite work: a template consisting only of auth-claim placeholders is inferred automatically and the argument can be dropped to [Resource(noun, verb)], but a template that binds the resource's own instance key (a bare {Id} or {TenantId}, for example) instead needs an explicit {Property:Auth.Claim} rewrite, because dropping it would silently widen the authorisation check from a specific instance to every instance of the noun. A two-argument [Resource(noun, verb)] needs no change.");
+
+    /// <summary>
     /// Gets the diagnostic emitted when an abstract generic class directly implements <c>IQuery&lt;T&gt;</c> or
     /// <c>ICommand&lt;T&gt;</c>. This pattern is now fully supported — <c>IOperation</c> no longer declares a
     /// <c>static abstract Configure()</c> member. The diagnostic is retained (disabled by default, informational
