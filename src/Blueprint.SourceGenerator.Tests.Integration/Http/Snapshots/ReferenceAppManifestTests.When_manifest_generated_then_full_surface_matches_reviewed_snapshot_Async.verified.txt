@@ -297,6 +297,26 @@
     - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
     - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
 
+### GetTemplateNotificationRules
+  Type: GetTemplateNotificationRulesQuery
+  Source: Source Generated
+  HTTP Methods: GET
+  URL: /templates/{Id}/notification-rules
+  Hosts: http
+  Auth: Authenticated
+  Discovery: query (Blueprint.SourceGenerator.Sample.Contract.Api.GetTemplateNotificationRulesQuery)
+  Group: Templates
+  Failure Outcomes:
+    - legacy-validation-exception: Blueprint.Validation.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
+    - data-annotations-validation-exception: System.ComponentModel.DataAnnotations.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
+    - default-unhandled-exception: System.Exception -> Blueprint.Runtime.Exec.UnhandledExceptionResult
+  HTTP Responses:
+    - 200: hasBody=True types=[Blueprint.SourceGenerator.Sample.Contract.Api.TemplateNotificationRuleApiResource[]]
+    - 401: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+    - 403: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+    - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
+    - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+
 ### GetTemplates
   Type: GetTemplatesQuery
   Source: Source Generated

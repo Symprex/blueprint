@@ -133,30 +133,40 @@ public sealed record OpenApiOutputRenderingContext(
     /// Optional ordered schema processors that can transform rendered schema components before they are written into the
     /// <c>components/schemas</c> section. When <see langword="null"/> no schema processors are applied.
     /// </param>
+    /// <param name="httpOptions">
+    /// Optional Blueprint HTTP options consulted when no explicit <see cref="OpenApiInfoOptions.Servers"/> are
+    /// configured: <see cref="BlueprintHttpOptions.PublicApiHost"/> is preferred, falling back to
+    /// <see cref="BlueprintHttpOptions.PublicHost"/>, to populate a single default <c>servers</c> entry with the
+    /// address this API is reachable at. When <see langword="null"/>, or when neither option is set, the
+    /// <c>servers</c> array is omitted unless <see cref="OpenApiInfoOptions.Servers"/> already carries entries.
+    /// </param>
     /// <returns>The rendered output context carrying the JSON string.</returns>
     public static OpenApiOutputRenderingContext Create(
         OpenApiDocumentRenderingContext documentRendering,
         OpenApiInfoOptions? infoOptions = null,
-        OpenApiSchemaProcessorOptions? schemaProcessorOptions = null)
+        OpenApiSchemaProcessorOptions? schemaProcessorOptions = null,
+        BlueprintHttpOptions? httpOptions = null)
     {
         ArgumentNullException.ThrowIfNull(documentRendering);
 
         var json = RenderJson(
             documentRendering,
             infoOptions ?? new OpenApiInfoOptions(),
-            schemaProcessorOptions ?? new OpenApiSchemaProcessorOptions());
+            schemaProcessorOptions ?? new OpenApiSchemaProcessorOptions(),
+            httpOptions);
         return new OpenApiOutputRenderingContext(documentRendering, json);
     }
 
     private static string RenderJson(
         OpenApiDocumentRenderingContext document,
         OpenApiInfoOptions infoOptions,
-        OpenApiSchemaProcessorOptions schemaProcessorOptions)
+        OpenApiSchemaProcessorOptions schemaProcessorOptions,
+        BlueprintHttpOptions? httpOptions)
     {
         var buffer = new ArrayBufferWriter<byte>();
         using var writer = new Utf8JsonWriter(buffer, new JsonWriterOptions { Indented = true });
 
-        WriteDocument(writer, document, infoOptions, schemaProcessorOptions);
+        WriteDocument(writer, document, infoOptions, schemaProcessorOptions, httpOptions);
         writer.Flush();
 
         return Encoding.UTF8.GetString(buffer.WrittenSpan);
@@ -166,7 +176,8 @@ public sealed record OpenApiOutputRenderingContext(
         Utf8JsonWriter writer,
         OpenApiDocumentRenderingContext document,
         OpenApiInfoOptions infoOptions,
-        OpenApiSchemaProcessorOptions schemaProcessorOptions)
+        OpenApiSchemaProcessorOptions schemaProcessorOptions,
+        BlueprintHttpOptions? httpOptions)
     {
         writer.WriteStartObject();
 
@@ -206,7 +217,7 @@ public sealed record OpenApiOutputRenderingContext(
 
         writer.WriteString("openapi", string.IsNullOrWhiteSpace(infoOptions.OpenApiVersion) ? DefaultOpenApiVersion : infoOptions.OpenApiVersion);
         WriteInfo(writer, infoOptions);
-        WriteServers(writer, infoOptions.Servers);
+        WriteServers(writer, ResolveServers(infoOptions.Servers, httpOptions));
         WritePaths(writer, document.Paths, allRequireAuth, effectiveSchemes, infoOptions.SchemaNameFormatter);
         WriteComponents(writer, document.SchemaComponents, schemaProcessorOptions, effectiveSchemes, infoOptions.SchemaNameFormatter);
         WriteDocumentTags(writer, document.Paths);
@@ -274,6 +285,39 @@ public sealed record OpenApiOutputRenderingContext(
         }
 
         writer.WriteEndObject();
+    }
+
+    /// <summary>
+    /// Resolves the effective <c>servers</c> list: the explicitly configured entries when there are any, and otherwise
+    /// the single gateway-reachable address in <see cref="BlueprintHttpOptions.PublicApiHost"/>. There is no tier below
+    /// that — when <c>PublicApiHost</c> is unset the <c>servers</c> array stays empty (omitted by
+    /// <see cref="WriteServers"/>), and the incoming request's origin is never consulted because the document is
+    /// rendered once at registration (<see cref="OpenApiDocumentEndpoint"/>), before any request exists.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="BlueprintHttpOptions.PublicHost"/> is deliberately <em>not</em> a fallback. It is a bare host that
+    /// link generation composes a scheme and the request's <c>PathBase</c> around separately, whereas a <c>servers</c>
+    /// entry is a complete address including any mount prefix. Treating it as one would make an app that sets only
+    /// <c>PublicHost</c> — an option that predates this and is set for link generation — silently advertise a
+    /// prefix-less URL its API does not answer on.
+    /// </remarks>
+    private static List<OpenApiServerEntry> ResolveServers(List<OpenApiServerEntry> configuredServers, BlueprintHttpOptions? httpOptions)
+    {
+        if (configuredServers.Count > 0)
+        {
+            return configuredServers;
+        }
+
+        var publicApiHost = httpOptions?.PublicApiHost;
+        if (string.IsNullOrWhiteSpace(publicApiHost))
+        {
+            return configuredServers;
+        }
+
+        // The configured host may already carry a scheme (e.g. copied from a full URL); avoid doubling it up.
+        var url = publicApiHost.Contains("://", StringComparison.Ordinal) ? publicApiHost : $"https://{publicApiHost}";
+
+        return [new OpenApiServerEntry { Url = url }];
     }
 
     private static void WriteServers(Utf8JsonWriter writer, List<OpenApiServerEntry> servers)
@@ -1352,7 +1396,229 @@ public sealed record OpenApiOutputRenderingContext(
             writer.WriteEndArray();
         }
 
+        if (!component.Conditionals.IsDefaultOrEmpty)
+        {
+            writer.WritePropertyName("allOf");
+            writer.WriteStartArray();
+
+            foreach (var conditional in component.Conditionals)
+            {
+                WriteConditionalRequirement(writer, conditional);
+            }
+
+            writer.WriteEndArray();
+        }
+
         writer.WriteEndObject();
+    }
+
+    /// <summary>
+    /// Writes one cross-property conditional requirement as a JSON Schema <c>if</c>/<c>then</c> pair.
+    /// </summary>
+    /// <remarks>
+    /// The <c>if</c> always requires the dependent property to be present, so a payload omitting it never activates the
+    /// <c>then</c>. That under-enforces relative to the server, which sees the CLR default rather than an absence, and
+    /// never over-enforces — a generated client validator that blocks a payload the server would accept is a worse
+    /// failure than one the server still rejects.
+    /// </remarks>
+    private static void WriteConditionalRequirement(Utf8JsonWriter writer, OpenApiConditionalRequirement conditional)
+    {
+        writer.WriteStartObject();
+
+        writer.WritePropertyName("if");
+        writer.WriteStartObject();
+        writer.WritePropertyName("required");
+        writer.WriteStartArray();
+        writer.WriteStringValue(conditional.DependentPropertyName);
+        writer.WriteEndArray();
+        writer.WritePropertyName("properties");
+        writer.WriteStartObject();
+        writer.WritePropertyName(conditional.DependentPropertyName);
+        WriteDependentValueCondition(writer, conditional);
+        writer.WriteEndObject();
+        writer.WriteEndObject();
+
+        writer.WritePropertyName("then");
+        writer.WriteStartObject();
+        writer.WritePropertyName("required");
+        writer.WriteStartArray();
+        writer.WriteStringValue(conditional.TargetPropertyName);
+        writer.WriteEndArray();
+
+        // "required" alone carries the whole of a NonNull requirement, so that kind contributes no property constraint
+        // and the properties block is omitted rather than filled with an empty schema.
+        if (conditional.TargetKind != OpenApiConditionalTargetKind.NonNull)
+        {
+            writer.WritePropertyName("properties");
+            writer.WriteStartObject();
+            writer.WritePropertyName(conditional.TargetPropertyName);
+            WriteConditionalTargetConstraint(writer, conditional.TargetKind);
+            writer.WriteEndObject();
+        }
+
+        writer.WriteEndObject();
+
+        writer.WriteEndObject();
+    }
+
+    /// <summary>
+    /// Writes the dependent-property test for a conditional: <c>const</c> for a single value, <c>enum</c> for several,
+    /// each wrapped in <c>not</c> for the negated (<c>RequiredIfNot</c>/<c>RequiredItemsIfNot</c>) form.
+    /// </summary>
+    private static void WriteDependentValueCondition(Utf8JsonWriter writer, OpenApiConditionalRequirement conditional)
+    {
+        writer.WriteStartObject();
+
+        if (conditional.DependentValueNegated)
+        {
+            writer.WritePropertyName("not");
+            writer.WriteStartObject();
+        }
+
+        if (conditional.DependentValues.Length == 1)
+        {
+            writer.WritePropertyName("const");
+            WriteConditionalValue(writer, conditional.DependentValues[0]);
+        }
+        else
+        {
+            writer.WritePropertyName("enum");
+            writer.WriteStartArray();
+
+            foreach (var value in conditional.DependentValues)
+            {
+                WriteConditionalValue(writer, value);
+            }
+
+            writer.WriteEndArray();
+        }
+
+        if (conditional.DependentValueNegated)
+        {
+            writer.WriteEndObject();
+        }
+
+        writer.WriteEndObject();
+    }
+
+    /// <summary>
+    /// Writes the shape an active conditional requires of its target. String constraints carry <c>pattern</c> as well as
+    /// <c>minLength</c> because the runtime attributes and the generated fast path both reject a whitespace-only value,
+    /// which <c>"minLength": 1</c> alone permits.
+    /// </summary>
+    /// <remarks>
+    /// "Not null" is expressed by the enclosing <c>then</c>'s <c>required</c> entry alone. The obvious stronger form,
+    /// <c>{ "not": { "type": "null" } }</c>, is not legal in the OpenAPI 3.0 dialect this document declares — <c>"null"</c>
+    /// is outside its <c>type</c> enum — and validators reject the document rather than skipping the keyword. What it adds
+    /// over <c>required</c> is rejecting an explicit <c>"x": null</c>, so omitting it under-enforces slightly, which is the
+    /// safe direction.
+    /// </remarks>
+    private static void WriteConditionalTargetConstraint(Utf8JsonWriter writer, OpenApiConditionalTargetKind targetKind)
+    {
+        writer.WriteStartObject();
+
+        switch (targetKind)
+        {
+            case OpenApiConditionalTargetKind.NonBlankString:
+                WriteNonBlankStringConstraint(writer);
+                break;
+
+            // NonNull contributes nothing beyond the enclosing "required" entry, so it yields an empty schema. The
+            // caller skips it entirely rather than emitting one; handling it here keeps this method total, so that
+            // skip stays an optimisation rather than something this method depends on.
+            case OpenApiConditionalTargetKind.NonNull:
+                break;
+
+            case OpenApiConditionalTargetKind.NonBlankStringItems:
+            case OpenApiConditionalTargetKind.NonNullItems:
+                writer.WriteString("type", "array");
+                writer.WriteNumber("minItems", 1);
+
+                if (targetKind == OpenApiConditionalTargetKind.NonBlankStringItems)
+                {
+                    writer.WritePropertyName("items");
+                    writer.WriteStartObject();
+                    WriteNonBlankStringConstraint(writer);
+                    writer.WriteEndObject();
+                }
+
+                break;
+
+            default:
+                throw new ArgumentOutOfRangeException(nameof(targetKind), targetKind, "Unsupported conditional target kind.");
+        }
+
+        writer.WriteEndObject();
+    }
+
+    private static void WriteNonBlankStringConstraint(Utf8JsonWriter writer)
+    {
+        writer.WriteString("type", "string");
+        writer.WriteNumber("minLength", 1);
+
+        // minLength alone still admits "   ", which string.IsNullOrWhiteSpace rejects. The pattern is unanchored, so it
+        // matches a non-whitespace character anywhere in the value.
+        writer.WriteString("pattern", @"\S");
+    }
+
+    /// <summary>
+    /// Writes a dependent value with its natural JSON type.
+    /// </summary>
+    /// <remarks>
+    /// Every integral type must be listed. A value that falls through to the string branch can never match a property the
+    /// document declares as <c>"type": "integer"</c>, and under the negated form that inverts: a <c>const</c> that never
+    /// matches makes the enclosing <c>not</c> always true, so the requirement always applies and the generated client
+    /// rejects payloads the server accepts. Enum members and chars arrive already normalised to strings, and
+    /// <see cref="OpenApiValidationConstraints.ExtractConditionalRequirements"/> drops any requirement carrying a value it
+    /// cannot represent, so the string branch is reached only by values that genuinely render as strings.
+    /// </remarks>
+    private static void WriteConditionalValue(Utf8JsonWriter writer, object? value)
+    {
+        switch (value)
+        {
+            case null:
+                writer.WriteNullValue();
+                break;
+            case bool b:
+                writer.WriteBooleanValue(b);
+                break;
+            case int i:
+                writer.WriteNumberValue(i);
+                break;
+            case long l:
+                writer.WriteNumberValue(l);
+                break;
+            case short s:
+                writer.WriteNumberValue(s);
+                break;
+            case byte by:
+                writer.WriteNumberValue(by);
+                break;
+            case sbyte sb:
+                writer.WriteNumberValue(sb);
+                break;
+            case ushort us:
+                writer.WriteNumberValue(us);
+                break;
+            case uint ui:
+                writer.WriteNumberValue(ui);
+                break;
+            case ulong ul:
+                writer.WriteNumberValue(ul);
+                break;
+            case double d:
+                writer.WriteNumberValue(d);
+                break;
+            case decimal m:
+                writer.WriteNumberValue(m);
+                break;
+            case float f:
+                writer.WriteNumberValue(f);
+                break;
+            default:
+                writer.WriteStringValue(value.ToString());
+                break;
+        }
     }
 
     private static OpenApiSchemaComponentModel ProcessSchemaComponent(

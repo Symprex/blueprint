@@ -44,4 +44,21 @@ public sealed class BlueprintHttpOptions
     /// incoming HTTP request and use the <see cref="HttpRequest.Host" /> property.
     /// </remarks>
     public string? PublicHost { get; set; }
+
+    /// <summary>
+    /// An optional address, which may carry a path prefix as well as a host, that this API should
+    /// advertise to its clients as its own address — used as the default OpenAPI <c>servers</c> entry.
+    /// </summary>
+    /// <remarks>
+    /// By default this is <c>null</c>, which omits the <c>servers</c> array entirely (unless
+    /// <see cref="OpenApiInfoOptions.Servers" /> is configured explicitly, which always wins).
+    /// <see cref="PublicHost" /> is not consulted as a fallback: it is a bare host that link generation composes a
+    /// scheme and the request's base path around, not the complete address a <c>servers</c> entry has to be.
+    /// Set this where the address clients should call differs from the
+    /// one links are built against — for example a gateway that fronts this API on a different host or
+    /// strips a path prefix before the request reaches it. The value is taken as the complete public
+    /// address, including any base path, since the OpenAPI document is rendered once at registration and
+    /// has no request or routing context to compose one from.
+    /// </remarks>
+    public string? PublicApiHost { get; set; }
 }

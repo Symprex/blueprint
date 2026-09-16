@@ -144,7 +144,8 @@ public sealed record OpenApiDocumentRenderingContext(
                     primaryOperation.OperationName,
                     "object",
                     requiredNames.ToImmutable(),
-                    properties.ToImmutable()));
+                    properties.ToImmutable(),
+                    Conditionals: requestBody.Conditionals));
             }
         }
 

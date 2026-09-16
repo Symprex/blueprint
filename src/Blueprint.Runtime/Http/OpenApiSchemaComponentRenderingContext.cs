@@ -53,7 +53,8 @@ public sealed record OpenApiSchemaComponentRenderingContext(
             properties,
             schema.Description,
             schema.Title,
-            HasExtensionData: hasExtensionData);
+            HasExtensionData: hasExtensionData,
+            Conditionals: schema.Conditionals);
     }
 
     private static OpenApiSchemaComponentPropertyModel CreateProperty(OpenApiSchemaPropertyModel property)
@@ -139,6 +140,10 @@ public sealed record OpenApiSchemaComponentRenderingContext(
 /// string enum members. Enum components are rendered as <c>type: string</c> with <c>enum</c> and
 /// <c>x-enumNames</c> arrays, and properties that reference them use <c>$ref</c> via <c>oneOf</c>.
 /// </param>
+/// <param name="Conditionals">
+/// The cross-property conditional requirements declared by this schema's properties, rendered as an
+/// <c>allOf</c> array of <c>if</c>/<c>then</c> pairs. Empty when no property carries a conditional validator.
+/// </param>
 public sealed record OpenApiSchemaComponentModel(
     string BodyTypeName,
     string? Type,
@@ -148,7 +153,8 @@ public sealed record OpenApiSchemaComponentModel(
     string? Title = null,
     ImmutableArray<OpenApiSchemaLinkExtension> Links = default,
     bool HasExtensionData = false,
-    ImmutableArray<string> ComponentEnumValues = default);
+    ImmutableArray<string> ComponentEnumValues = default,
+    ImmutableArray<OpenApiConditionalRequirement> Conditionals = default);
 
 /// <summary>
 /// Represents one entry in the <c>x-links</c> vendor extension array for an OpenAPI schema component.
@@ -159,6 +165,59 @@ public sealed record OpenApiSchemaComponentModel(
 /// <param name="OperationId">The <c>operationId</c> of the linked operation (its class name).</param>
 /// <param name="Method">The HTTP method of the linked operation (e.g. "GET", "POST", "DELETE").</param>
 public sealed record OpenApiSchemaLinkExtension(string Rel, string OperationId, string Method);
+
+/// <summary>
+/// Describes the shape a conditionally-required target property must take once its condition is active.
+/// The kinds mirror what <c>RequiredIfAttribute</c>/<c>RequiredItemsIfAttribute</c> and the generated
+/// validation fast path enforce at runtime, so the projected schema cannot disagree with either.
+/// </summary>
+public enum OpenApiConditionalTargetKind
+{
+    /// <summary>The target is a string that must be present and not blank (matching <c>string.IsNullOrWhiteSpace</c>).</summary>
+    NonBlankString,
+
+    /// <summary>
+    /// The target must be present. Presence is the whole of it: the stronger <c>{ "not": { "type": "null" } }</c> is
+    /// not legal in the OpenAPI 3.0 dialect this document declares, so the enclosing <c>required</c> entry carries the
+    /// constraint alone and an explicit <c>null</c> satisfies it.
+    /// </summary>
+    NonNull,
+
+    /// <summary>The target must be a non-empty array whose every element is a non-blank string.</summary>
+    NonBlankStringItems,
+
+    /// <summary>
+    /// The target must be present and a non-empty array. Its elements are left unconstrained, for the reason
+    /// <see cref="NonNull"/> gives: element non-nullness has no legal expression in this dialect either.
+    /// </summary>
+    NonNullItems,
+}
+
+/// <summary>
+/// Captures one cross-property conditional requirement projected onto an object schema as a JSON Schema
+/// <c>if</c>/<c>then</c> pair within <c>allOf</c>, so generated client validators enforce the same
+/// cross-property rules the server does instead of silently dropping them.
+/// </summary>
+/// <remarks>
+/// The <c>if</c> always requires the dependent property to be present. A payload that omits it therefore
+/// never activates the <c>then</c>, even where the server — which sees the CLR default rather than an
+/// absence — would consider the requirement active. That under-enforces on the client and never
+/// over-enforces, which is the safe direction: a generated validator blocking a payload the server would
+/// have accepted is a worse failure than one the server still rejects.
+/// </remarks>
+/// <param name="DependentPropertyName">The JSON-visible name of the sibling property that controls the requirement.</param>
+/// <param name="DependentValues">The dependent values that activate (or, when negated, deactivate) the requirement.
+/// Enum values are normalised to their member name to match how enums render in the document.</param>
+/// <param name="DependentValueNegated">Whether the requirement activates when the dependent property does
+/// <em>not</em> match one of <paramref name="DependentValues"/> (<c>RequiredIfNot</c>/<c>RequiredItemsIfNot</c>).</param>
+/// <param name="TargetPropertyName">The JSON-visible name of the property that becomes required.</param>
+/// <param name="TargetKind">The shape the target must take once the requirement is active.</param>
+public sealed record OpenApiConditionalRequirement(
+    string DependentPropertyName,
+    ImmutableArray<object?> DependentValues,
+    bool DependentValueNegated,
+    string TargetPropertyName,
+    OpenApiConditionalTargetKind TargetKind);
 
 /// <summary>
 /// Captures one rendered property within a reusable OpenAPI schema component.

@@ -214,6 +214,11 @@ public sealed record OpenApiOperationRenderingContext(
         var parameters = ImmutableArray.CreateBuilder<OpenApiParameterModel>();
         var bodyProperties = ImmutableArray.CreateBuilder<OpenApiRequestBodyPropertyModel>();
 
+        // Conditional requirements are cross-property, so they are gathered against CLR names while the ownership plan
+        // is walked and resolved to JSON names afterwards, once every body property is known.
+        var conditionalRequirements = ImmutableArray.CreateBuilder<OpenApiConditionalRequirement>();
+        var bodyPropertyNamesByClrName = new Dictionary<string, string>(StringComparer.Ordinal);
+
         foreach (var entry in ownershipData.Entries)
         {
             var clrProperty = descriptor.OperationType.GetProperty(
@@ -353,6 +358,9 @@ public sealed record OpenApiOperationRenderingContext(
                 case PropertyBindingSource.Body:
                     var (bodyItemsType, bodyItemsFormat, bodyItemsSchemaRef, bodyAdditionalType, bodyAdditionalFormat, bodyAdditionalSchemaRef) = ResolveCollectionSchema(clrProperty);
 
+                    bodyPropertyNamesByClrName[entry.PropertyName] = entry.BindingName ?? entry.PropertyName;
+                    conditionalRequirements.AddRange(OpenApiValidationConstraints.ExtractConditionalRequirements(clrProperty));
+
                     bodyProperties.Add(new OpenApiRequestBodyPropertyModel(
                         entry.BindingName ?? entry.PropertyName,
                         schemaType,
@@ -393,9 +401,50 @@ public sealed record OpenApiOperationRenderingContext(
 
         var requestBody = bodyProperties.Count > 0
             ? new OpenApiRequestBodyModel(Required: true, bodyProperties.ToImmutableArray())
+            {
+                Conditionals = ResolveBodyConditionals(conditionalRequirements, bodyPropertyNamesByClrName),
+            }
             : null;
 
         return (orderedParameters, requestBody);
+    }
+
+    /// <summary>
+    /// Resolves gathered conditional requirements from CLR property names to the JSON-visible body property names,
+    /// dropping any whose target or dependent is not a body property of this operation.
+    /// </summary>
+    /// <remarks>
+    /// A conditional is only expressible where both properties live in the same object schema. Route, query, header and
+    /// cookie properties render into the operation's <c>parameters</c> array, which has no containing object, so a
+    /// conditional touching one of them is skipped rather than mis-attached to the body schema. The body schema also
+    /// renders <c>"additionalProperties": false</c>, which would make a condition naming an undeclared property
+    /// unsatisfiable rather than merely unhelpful.
+    /// </remarks>
+    private static ImmutableArray<OpenApiConditionalRequirement> ResolveBodyConditionals(
+        IReadOnlyList<OpenApiConditionalRequirement> conditionalRequirements,
+        Dictionary<string, string> bodyPropertyNamesByClrName)
+    {
+        if (conditionalRequirements.Count == 0)
+        {
+            return [];
+        }
+
+        var builder = ImmutableArray.CreateBuilder<OpenApiConditionalRequirement>(conditionalRequirements.Count);
+
+        foreach (var requirement in conditionalRequirements)
+        {
+            if (bodyPropertyNamesByClrName.TryGetValue(requirement.TargetPropertyName, out var targetName)
+                && bodyPropertyNamesByClrName.TryGetValue(requirement.DependentPropertyName, out var dependentName))
+            {
+                builder.Add(requirement with
+                {
+                    TargetPropertyName = targetName,
+                    DependentPropertyName = dependentName,
+                });
+            }
+        }
+
+        return builder.ToImmutable();
     }
 
     /// <summary>
