@@ -19,7 +19,15 @@ env:
 jobs:
   build-and-test:
     name: Build and test
-    runs-on: ubuntu-latest
+    # windows-latest, not ubuntu-latest, and this is load-bearing rather than incidental. The
+    # first CI run on Linux failed 68 tests: 67 Verify snapshot mismatches, because the committed
+    # .verified.txt baselines carry CRLF and a BOM while the generator emits LF on Linux, and one
+    # Blueprint.Codemod test that starts `powershell`, which does not exist there. This repository
+    # is Windows-native throughout — .symprex/config.json, copilot-instructions.md and the Husky
+    # hooks are all PowerShell — so CI matching the developer environment is the fix. Moving back
+    # to ubuntu means making 67 baselines line-ending agnostic and the process invocation `pwsh`
+    # first; it is not a one-line change.
+    runs-on: windows-latest
     steps:
       # MinVer derives the package version from git tags and commit height, and the default
       # fetch-depth: 1 shallow clone gives it neither — without full history a local pack and a
@@ -75,7 +83,15 @@ jobs:
     name: Pack and publish
     needs: build-and-test
     if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
-    runs-on: ubuntu-latest
+    # windows-latest, not ubuntu-latest, and this is load-bearing rather than incidental. The
+    # first CI run on Linux failed 68 tests: 67 Verify snapshot mismatches, because the committed
+    # .verified.txt baselines carry CRLF and a BOM while the generator emits LF on Linux, and one
+    # Blueprint.Codemod test that starts `powershell`, which does not exist there. This repository
+    # is Windows-native throughout — .symprex/config.json, copilot-instructions.md and the Husky
+    # hooks are all PowerShell — so CI matching the developer environment is the fix. Moving back
+    # to ubuntu means making 67 baselines line-ending agnostic and the process invocation `pwsh`
+    # first; it is not a one-line change.
+    runs-on: windows-latest
     permissions:
       contents: read
       packages: write
