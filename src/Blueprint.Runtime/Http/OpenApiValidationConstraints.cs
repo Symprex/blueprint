@@ -161,8 +161,19 @@ internal sealed record OpenApiValidationConstraints(
         }
 
         // Reflection does not guarantee an order for repeated attributes on one member, and the rendered document is a
-        // contract with an ETag over it, so impose one rather than let the JSON shuffle between builds.
-        return [.. builder.OrderBy(static requirement => requirement.DependentPropertyName, StringComparer.Ordinal)];
+        // contract with an ETag over it, so impose one rather than let the JSON shuffle between builds. Dependent name
+        // alone is not a total order: a scalar RequiredIf and an items RequiredItemsIf on the same property share both
+        // target (this property) and dependent, and differ only in TargetKind, so that is the tiebreak that actually
+        // separates them. DependentValueNegated and the dependent values themselves are the final fallback for the
+        // (currently unreachable) case where even the target kind ties.
+        return
+        [
+            .. builder
+                .OrderBy(static requirement => requirement.DependentPropertyName, StringComparer.Ordinal)
+                .ThenBy(static requirement => requirement.TargetKind)
+                .ThenBy(static requirement => requirement.DependentValueNegated)
+                .ThenBy(static requirement => FormatDependentValuesKey(requirement.DependentValues), StringComparer.Ordinal),
+        ];
 
         void Add(string dependentProperty, IEnumerable<object?> dependentValues, bool negated, OpenApiConditionalTargetKind? targetKind)
         {
@@ -227,6 +238,18 @@ internal sealed record OpenApiValidationConstraints(
 
         normalisedValues = builder.ToImmutable();
         return true;
+    }
+
+    /// <summary>
+    /// Renders normalised dependent values as a single ordinal-comparable key, for use as the final ordering tiebreak
+    /// when two requirements share every other field. A unit-separator control character keeps <c>["a", "b"]</c> from
+    /// comparing equal to <c>["ab"]</c>. The separator is written as the escape <c>'\u001F'</c>; no raw control byte appears in this file, so the literal survives formatting, patching and copy-paste intact.
+    /// </summary>
+    /// <param name="dependentValues">The normalised dependent values to render.</param>
+    /// <returns>The ordinal-comparable key for the values.</returns>
+    internal static string FormatDependentValuesKey(ImmutableArray<object?> dependentValues)
+    {
+        return string.Join('\u001F', dependentValues.Select(static value => value?.ToString() ?? string.Empty));
     }
 
     /// <summary>

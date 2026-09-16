@@ -211,6 +211,14 @@ properties. Legacy emits a component for it — `ApplyToDto`, reached from Porta
 exactly that shape. Closing *that* is a separate parity gap about which components exist, not about
 conditionals, and nothing about the conditional projection changes when it is closed.
 
+> **Superseded/closed by task 13 — preserved as historical record, not current behaviour.** The
+> paragraph below predates task 13 and describes the state *before* it closed the "Known limitation"
+> section above records. It is kept verbatim for the history; do not read it as the current contract.
+> In particular, both of the following are now false: `OpenApiSchemaProjectionContext` does carry the
+> CLR property handles the extraction needs (see the "Closed by task 13" note above), and schema
+> components built from serializer metadata carry their own conditionals too, not only the
+> request-body component.
+
 Only the **request-body** schema component carries conditionals. A conditional declared on a nested DTO
 that a body property `$ref`s is not projected: nested DTO components are built from serializer metadata
 in `OpenApiSchemaProjectionContext`, which does not carry the CLR property handles the extraction needs.

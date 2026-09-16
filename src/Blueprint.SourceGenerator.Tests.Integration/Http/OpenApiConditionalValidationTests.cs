@@ -2,6 +2,8 @@ using System.Collections.Frozen;
 using System.Collections.Immutable;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 using Blueprint.Model;
 using Blueprint.Runtime.Http;
 using Blueprint.SourceGenerator.Sample;
@@ -341,6 +343,18 @@ public class OpenApiConditionalValidationTests
             .Should().Equal("Alpha", "Beta");
     }
 
+    [Fact]
+    public void When_a_property_declares_a_scalar_and_an_items_conditional_on_the_same_dependent_then_target_kind_breaks_the_tie()
+    {
+        // RequiredIf and RequiredItemsIf on the one List<string>? property share both target (this property) and
+        // dependent (Dependent), so ordering by dependent name alone ties. Reflection does not order repeated
+        // attributes on one member, and the rendered document carries an ETag over its bytes, so TargetKind — not
+        // reflection's unordered attribute sequence — must be what closes the tie.
+        ExtractFor(nameof(ConditionalTargetShapes.RequiredByScalarAndItemsOnSameDependent))
+            .Select(static requirement => requirement.TargetKind)
+            .Should().Equal(OpenApiConditionalTargetKind.NonNull, OpenApiConditionalTargetKind.NonBlankStringItems);
+    }
+
     [Theory]
     [InlineData(nameof(ConditionalTargetShapes.RequiredWhenUnsignedDependentMatches), """{"if":{"required":["mode"],"properties":{"mode":{"const":5}}},"then":{"required":["note"],"properties":{"note":{"type":"string","minLength":1,"pattern":"\\S"}}}}""")]
     [InlineData(nameof(ConditionalTargetShapes.RequiredWhenSignedByteDependentMatches), """{"if":{"required":["mode"],"properties":{"mode":{"const":-3}}},"then":{"required":["note"],"properties":{"note":{"type":"string","minLength":1,"pattern":"\\S"}}}}""")]
@@ -477,6 +491,29 @@ public class OpenApiConditionalValidationTests
             .Should().Equal("placeholder", "prompt");
     }
 
+    [Fact]
+    public void When_an_ignored_member_s_computed_json_name_collides_with_a_declared_property_then_the_conditional_is_dropped_not_repointed()
+    {
+        // Owner is [JsonIgnore]d, so the serializer never declares a JSON property for it: STJ's own typeInfo.Properties
+        // omits it entirely. OwnerId carries [JsonPropertyName("Owner")], so Owner's *computed* JSON name (its own CLR
+        // name, since JsonIgnore does not touch naming) collides with the name OwnerId actually declares. A map built by
+        // testing that computed name for membership in the declared set would wrongly admit Owner and re-point the
+        // RequiredIfNot below — written against the ignored Owner — onto OwnerId. Keying on the serializer's own
+        // declared properties cannot make that substitution, so the conditional must be dropped instead.
+        var options = new JsonSerializerOptions { TypeInfoResolver = new DefaultJsonTypeInfoResolver() };
+        var typeInfo = options.GetTypeInfo(typeof(AliasCollisionShape));
+
+        var declaredJsonNamesByClrName = OpenApiSchemaProjectionContext.CreateDeclaredJsonNamesByClrName(typeInfo);
+        var requirements = OpenApiSchemaProjectionContext.ExtractSchemaConditionals(
+            typeof(AliasCollisionShape),
+            declaredJsonNamesByClrName);
+
+        requirements.Should().BeEmpty(
+            "Owner is JsonIgnore'd and so declares no JSON property for the conditional to bind to; it must be "
+            + "dropped rather than silently re-pointed onto the unrelated OwnerId property that happens to share its "
+            + "computed JSON name");
+    }
+
     /// <summary>
     /// Projects <see cref="NestedSettingsShape"/>'s conditionals against a schema that declares only some of its
     /// properties, and under JSON names that differ from the CLR ones.
@@ -582,6 +619,28 @@ public class OpenApiConditionalValidationTests
     }
 
     /// <summary>
+    /// A DTO where an ignored navigation property's computed JSON name collides with a different, genuinely declared
+    /// property's <c>[JsonPropertyName]</c>. <c>Owner</c> is never serialised; <c>OwnerId</c> is the property that
+    /// actually renders under the name <c>"Owner"</c>.
+    /// </summary>
+    private sealed class AliasCollisionShape
+    {
+        [JsonIgnore]
+        public OwnerReference? Owner { get; set; }
+
+        [JsonPropertyName("Owner")]
+        public string? OwnerId { get; set; }
+
+        [RequiredIfNot(nameof(Owner), null)]
+        public string? Note { get; set; }
+    }
+
+    private sealed class OwnerReference
+    {
+        public string? Id { get; set; }
+    }
+
+    /// <summary>
     /// A nested settings DTO whose schema declares only some of its CLR properties, and under different names. It
     /// stands in for the shapes a serializer context surfaces selectively: <c>ServerOnly</c> and <c>Undeclared</c> are
     /// absent from the schema the way a <c>[JsonIgnore]</c>d or extension-data member is.
@@ -681,6 +740,13 @@ public class OpenApiConditionalValidationTests
         [RequiredIf(nameof(Beta), "b")]
         [RequiredIf(nameof(Alpha), "a")]
         public string? RequiredByTwoDependents { get; set; }
+
+        // Declared items-attribute-first so a pre-fix ordering that relies only on reflection's (unstable) attribute
+        // sequence for a same-target/same-dependent tie is exercised in the direction most likely to disagree with
+        // the fixed, TargetKind-driven order below.
+        [RequiredItemsIf(nameof(Dependent), true)]
+        [RequiredIf(nameof(Dependent), true)]
+        public List<string>? RequiredByScalarAndItemsOnSameDependent { get; set; }
     }
 
     private static async Task<(string Json, int StatusCode)> InvokeOpenApiEndpointAsync()

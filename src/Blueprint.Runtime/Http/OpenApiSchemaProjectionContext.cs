@@ -143,7 +143,7 @@ public sealed record OpenApiSchemaProjectionContext(
         // attributes of its own.
         var conditionals = ExtractSchemaConditionals(
             bodyType,
-            CreateDeclaredJsonNamesByClrName(bodyType, serializerContext.Options, properties));
+            CreateDeclaredJsonNamesByClrName(typeInfo));
 
         return new OpenApiSchemaModel(
             bodyTypeName,
@@ -170,7 +170,14 @@ public sealed record OpenApiSchemaProjectionContext(
     /// </para>
     /// <para>
     /// The result is ordered explicitly. <see cref="Type.GetProperties(BindingFlags)"/> guarantees no order, and the
-    /// rendered document carries an ETag over its bytes, so the conditionals must not shuffle between builds.
+    /// rendered document carries an ETag over its bytes, so the conditionals must not shuffle between builds. Target
+    /// then dependent name is not a total order on its own: a scalar and an items conditional (<c>RequiredIf</c> and
+    /// <c>RequiredItemsIf</c>) can share both a target and a dependent while differing only in
+    /// <see cref="OpenApiConditionalTargetKind"/> — reachable because both attributes may decorate the one property —
+    /// so that, then the negation flag and the dependent values themselves as a final fallback, closes the tie. The
+    /// same tiebreak keys as <see cref="OpenApiValidationConstraints.ExtractConditionalRequirements"/> applies within
+    /// one property, so this only has further work to do across properties that resolve to the same target and
+    /// dependent JSON names.
     /// </para>
     /// </remarks>
     /// <param name="bodyType">The covered body type whose properties declare the conditional validators.</param>
@@ -210,7 +217,12 @@ public sealed record OpenApiSchemaProjectionContext(
         [
             .. builder
                 .OrderBy(static requirement => requirement.TargetPropertyName, StringComparer.Ordinal)
-                .ThenBy(static requirement => requirement.DependentPropertyName, StringComparer.Ordinal),
+                .ThenBy(static requirement => requirement.DependentPropertyName, StringComparer.Ordinal)
+                .ThenBy(static requirement => requirement.TargetKind)
+                .ThenBy(static requirement => requirement.DependentValueNegated)
+                .ThenBy(
+                    static requirement => OpenApiValidationConstraints.FormatDependentValuesKey(requirement.DependentValues),
+                    StringComparer.Ordinal),
         ];
     }
 
@@ -220,44 +232,46 @@ public sealed record OpenApiSchemaProjectionContext(
     /// anything else the serializer does not surface as a named property.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Conditional validators name CLR properties while a schema's <c>if</c>/<c>then</c> branches must name the
     /// properties the component declares, so this map is the only bridge between the two. Its omissions are load
     /// bearing: they are what stops a requirement being projected onto a name no instance of the schema can carry.
+    /// </para>
+    /// <para>
+    /// The map is keyed by walking <paramref name="typeInfo"/>'s own declared properties and reading each one's
+    /// <see cref="JsonPropertyInfo.AttributeProvider"/> back as the <see cref="PropertyInfo"/> the serializer bound
+    /// it to, rather than by recomputing a JSON name for every CLR property and testing it for membership in the
+    /// declared set. Name-equality matching admits a non-serialised member whose computed JSON name happens to
+    /// collide with a different declared property's name — for example a <c>[JsonIgnore]</c>d <c>Owner</c> beside a
+    /// <c>[JsonPropertyName("Owner")] OwnerId</c> — and silently re-points a conditional written against the
+    /// ignored member onto the unrelated one. Keying on the serializer's own property identity cannot make that
+    /// substitution: the CLR property is the one STJ actually declared the member for.
+    /// </para>
     /// </remarks>
-    /// <param name="bodyType">The covered body type to map.</param>
-    /// <param name="serializerOptions">The serializer options that decide the JSON name for a property.</param>
-    /// <param name="properties">The projected properties of this schema, including any extension-data bucket.</param>
+    /// <param name="typeInfo">The serializer's type metadata for the covered body type to map.</param>
     /// <returns>The CLR-to-JSON name map for the properties the schema declares.</returns>
-    private static Dictionary<string, string> CreateDeclaredJsonNamesByClrName(
-        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] Type bodyType,
-        JsonSerializerOptions serializerOptions,
-        ImmutableArray<OpenApiSchemaPropertyModel> properties)
+    internal static Dictionary<string, string> CreateDeclaredJsonNamesByClrName(JsonTypeInfo typeInfo)
     {
         var jsonNamesByClrName = new Dictionary<string, string>(StringComparer.Ordinal);
 
-        // Extension data is the catch-all bucket rather than a named member, so CreateComponent drops it from the
-        // schema's properties. A conditional naming it would name something no instance declares.
-        var declaredJsonNames = properties
-            .Where(static property => !property.IsExtensionData)
-            .Select(static property => property.Name)
-            .ToHashSet(StringComparer.Ordinal);
-
-        if (declaredJsonNames.Count == 0)
+        foreach (var jsonProperty in typeInfo.Properties)
         {
-            return jsonNamesByClrName;
-        }
-
-        foreach (var clrProperty in bodyType.GetProperties(BindingFlags.Public | BindingFlags.Instance))
-        {
-            var jsonName = GetJsonPropertyName(clrProperty, serializerOptions);
-
-            if (declaredJsonNames.Contains(jsonName))
+            // Extension data is the catch-all bucket rather than a named member, so CreateComponent drops it from
+            // the schema's properties. A conditional naming it would name something no instance declares.
+            if (jsonProperty.IsExtensionData)
             {
-                // A property shadowed with `new` appears twice under one CLR name; the first wins. Either candidate
-                // reached here already resolves to a name the schema declares, so the choice between them cannot
-                // introduce one it does not.
-                jsonNamesByClrName.TryAdd(clrProperty.Name, jsonName);
+                continue;
             }
+
+            if (jsonProperty.AttributeProvider is not PropertyInfo clrProperty)
+            {
+                continue;
+            }
+
+            // A property shadowed with `new` appears twice under one CLR name; the first wins. Either candidate
+            // reached here already resolves to a name the schema declares, so the choice between them cannot
+            // introduce one it does not.
+            jsonNamesByClrName.TryAdd(clrProperty.Name, jsonProperty.Name);
         }
 
         return jsonNamesByClrName;
