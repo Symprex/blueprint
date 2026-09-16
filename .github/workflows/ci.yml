@@ -34,6 +34,12 @@ jobs:
       # CI pack would silently disagree. This is not just for the publish job: PR/branch builds
       # go through the same MinVer-versioned props, so they need the same history to compute a
       # sane (if unpublished) version.
+      # Must precede checkout. Windows MAX_PATH is 260 characters and the Verify snapshot
+      # baselines have long, descriptive filenames; under the runner workspace path the
+      # checkout itself fails with "Filename too long" before a single step runs.
+      - name: Enable git long paths
+        run: git config --system core.longpaths true
+
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -96,6 +102,12 @@ jobs:
       contents: read
       packages: write
     steps:
+      # Must precede checkout. Windows MAX_PATH is 260 characters and the Verify snapshot
+      # baselines have long, descriptive filenames; under the runner workspace path the
+      # checkout itself fails with "Filename too long" before a single step runs.
+      - name: Enable git long paths
+        run: git config --system core.longpaths true
+
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
