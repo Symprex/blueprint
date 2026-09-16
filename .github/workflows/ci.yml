@@ -135,15 +135,24 @@ jobs:
       # NuGet.config lists only nuget.org, and three of these package IDs (Blueprint.Testing,
       # Blueprint.Http, Blueprint.Tasks.Hangfire) already exist there at 0.8.4 from the
       # barclayadam/blueprint upstream fork. An unqualified push could go to the wrong feed;
-      # naming the GitHub Packages source here is what guarantees it doesn't.
+      # naming the GitHub Packages source here is what guarantees it does not.
+      # The glob is expanded here rather than handed to dotnet: `dotnet nuget push` does not
+      # expand wildcards on Windows, and quoting stops the shell doing it, so passing the
+      # pattern through fails with "File does not exist" even though Pack just produced them.
       #
-      # The glob is *.nupkg, not *.nupkg and *.snupkg — deliberately, not an oversight. GitHub
-      # Packages' NuGet endpoint does not accept .snupkg symbol packages at all; including them
-      # here would fail the push outright. The .snupkg files the Pack step produced alongside the
-      # .nupkg ones are simply left unpublished.
+      # Extension is compared explicitly rather than filtering on "*.nupkg", because Windows
+      # wildcard matching also matches .snupkg against that pattern. Symbol packages must not
+      # be pushed: GitHub Packages' NuGet endpoint rejects them outright.
       - name: Push to GitHub Packages
-        run: >
-          dotnet nuget push "${{ runner.temp }}/packages/*.nupkg"
-          --source https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json
-          --api-key ${{ secrets.GITHUB_TOKEN }}
-          --skip-duplicate
+        run: |
+          $packages = Get-ChildItem "${{ runner.temp }}/packages" -File |
+            Where-Object { $_.Extension -eq '.nupkg' }
+          if (-not $packages) { throw "Pack produced no .nupkg files to push." }
+          Write-Host "Pushing $($packages.Count) package(s)."
+          foreach ($package in $packages) {
+            dotnet nuget push $package.FullName `
+              --source https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json `
+              --api-key ${{ secrets.GITHUB_TOKEN }} `
+              --skip-duplicate
+            if ($LASTEXITCODE -ne 0) { throw "Push failed for $($package.Name)." }
+          }
