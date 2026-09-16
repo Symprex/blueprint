@@ -5,6 +5,9 @@
     <Nullable>enable</Nullable>
     <LangVersion>preview</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Not part of this task's shipping set (D2/D6 name nine libraries plus Runtime.Model and
+         SourceGenerator); packaging the codemod tool is a decision for a later task. -->
+    <IsPackable>false</IsPackable>
   </PropertyGroup>
 
   <ItemGroup>
@@ -17,8 +20,12 @@
     <PackageReference Include="Microsoft.CodeAnalysis.Common" Version="4.14.0" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="4.14.0" />
     <PackageReference Include="Microsoft.CodeAnalysis.Workspaces.MSBuild" Version="4.14.0" />
-    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.7" />
-    <PackageReference Include="System.Security.Cryptography.Xml" Version="10.0.7" />
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.12" />
+    <!-- Direct pin overrides the transitive System.Security.Cryptography.Xml 10.0.7 reached via the
+         Microsoft.Build/Roslyn workspace packages above, which carries GHSA-23rf-6693-g89p and
+         related high-severity advisories (NU1903). Keep this at or above the first patched
+         release; NuGetAudit stays enabled repo-wide. -->
+    <PackageReference Include="System.Security.Cryptography.Xml" Version="10.0.12" />
     <ProjectReference Include="..\Blueprint.Migration.Analyzers\Blueprint.Migration.Analyzers.csproj" />
     <ProjectReference Include="..\Blueprint.Migration.Analyzers.CodeFixes\Blueprint.Migration.Analyzers.CodeFixes.csproj" />
   </ItemGroup>

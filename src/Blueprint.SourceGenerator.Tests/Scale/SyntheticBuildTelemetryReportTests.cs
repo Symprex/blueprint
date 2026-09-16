@@ -39,7 +39,8 @@ public class SyntheticBuildTelemetryReportTests
             .Be(101);
 
         await Verify(report.ToJson())
-            .UseDirectory(SnapshotsFolder);
+            .UseDirectory(SnapshotsFolder)
+            .ScrubGeneratorVersion();
     }
 
     [Fact]
@@ -72,7 +73,8 @@ public class SyntheticBuildTelemetryReportTests
         ((JObject)payload["mutation"]!)["sourcePath"]!.Value<string>().Should().Be(@"Operations\SyntheticOperation050.cs");
 
         await Verify(report.ToJson())
-            .UseDirectory(SnapshotsFolder);
+            .UseDirectory(SnapshotsFolder)
+            .ScrubGeneratorVersion();
     }
 
     private static MultiGeneratorGenerationResult CompileResult(SyntheticBlueprintFixture fixture)

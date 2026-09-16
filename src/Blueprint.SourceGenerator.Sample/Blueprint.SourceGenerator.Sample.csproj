@@ -3,6 +3,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
     <!-- The sample deliberately consumes [Obsolete] operations to demonstrate deprecated rendering. -->
     <NoWarn>$(NoWarn);CS0618</NoWarn>
     <!-- Uncomment to inspect generated source files:

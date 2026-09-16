@@ -7,6 +7,9 @@
     <Nullable>enable</Nullable>
     <LangVersion>preview</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Not part of this task's shipping set (D2/D6 name nine libraries plus Runtime.Model and
+         SourceGenerator); packaging the migration analyzer is a decision for a later task. -->
+    <IsPackable>false</IsPackable>
   </PropertyGroup>
 
   <ItemGroup>

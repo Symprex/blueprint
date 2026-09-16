@@ -7,6 +7,12 @@
     <Nullable>enable</Nullable>
     <LangVersion>preview</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Not packaged on its own — the samples (Blueprint.SourceGenerator.Sample,
+         .Sample.Contract) always reference the generator and its code fixes as a matched pair, so
+         this DLL is bundled directly into Blueprint.SourceGenerator's own analyzers/dotnet/cs
+         (see that project's ProjectReference/None items) rather than published as a separate
+         feed package. -->
+    <IsPackable>false</IsPackable>
   </PropertyGroup>
 
   <ItemGroup>
@@ -15,9 +21,5 @@
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="4.9.2" PrivateAssets="all" />
     <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="3.11.0" PrivateAssets="all" />
     <PackageReference Include="System.Composition.AttributedModel" Version="8.0.0" PrivateAssets="all" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <None Include="$(OutputPath)\*.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
   </ItemGroup>
 </Project>

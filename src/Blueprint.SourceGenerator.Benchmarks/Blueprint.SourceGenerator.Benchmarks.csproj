@@ -14,7 +14,15 @@
   <ItemGroup>
     <PackageReference Include="BenchmarkDotNet" Version="0.14.0" />
     <PackageReference Include="Microsoft.AspNetCore.TestHost" Version="10.0.8" />
+    <!-- Marten pulls in JasperFx.RuntimeCompiler, whose "Microsoft.CodeAnalysis" dependency
+         floors at 4.7.0 and, at that floor, exact-pins CSharp.Workspaces/VisualBasic.Workspaces
+         to [4.7.0]. Nothing else in the graph forces the umbrella package above its floor, so
+         restore settles on 4.7.0 there while our own Microsoft.CodeAnalysis.CSharp reference
+         resolves Common to 5.0.0 — a genuine NU1608 downgrade conflict, not an audit finding.
+         Pinning the umbrella package directly keeps both resolutions on 5.0.0. -->
+    <PackageReference Include="Microsoft.CodeAnalysis" Version="5.0.0" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.0.0" />
+    <PackageReference Include="Microsoft.CodeAnalysis.Scripting" Version="5.0.0" />
   </ItemGroup>
 
   <ItemGroup>

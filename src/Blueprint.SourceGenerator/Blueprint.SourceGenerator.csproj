@@ -9,6 +9,29 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <MeziantouPolyfill_ExcludedPolyfills>T:System.Runtime.CompilerServices.ModuleInitializerAttribute</MeziantouPolyfill_ExcludedPolyfills>
+
+    <!-- A Roslyn analyzer package carries its payload under analyzers/dotnet/cs, not lib/ — the
+         compiler host loads analyzers directly and never resolves a lib/ref dependency group for
+         them. Without IncludeBuildOutput=false the main assembly would additionally land in
+         lib/netstandard2.0/, which is the exact "consumers reference it and get nothing" failure
+         this pairs with the None/PackagePath item below to avoid. -->
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <!-- NuGet's NU5128 ("no lib/ref assets for a dependency group") is built around the shape of
+         a normal class library and is a false positive for an analyzer-only package — the payload
+         lives under analyzers/dotnet/cs (populated below via None/PackagePath, per the linked
+         Roslyn discussion) instead. Suppressed on this project only, not via the repo-wide
+         WarningsNotAsErrors list.
+
+         Separately, and load-bearing rather than cosmetic: NuGet.Build.Tasks.Pack's NU5017 ("no
+         dependencies nor content") does not recognise analyzers/dotnet/cs as "content" at all —
+         confirmed by direct inspection, an analyzer-only package whose <dependencies> group ends
+         up empty fails to pack with NU5017 as a hard error even though the .nupkg it writes on
+         the way to that error is fully correct. NoPackageAnalysis does not suppress it (that
+         property only controls a separate, later warning pass; this check runs earlier, in
+         nuspec generation). The dependency below on Newtonsoft.Json — deliberately left as a
+         normal, non-private reference rather than PrivateAssets="all" — is what keeps that group
+         non-empty. -->
+    <NoWarn>$(NoWarn);NU5128</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -19,20 +42,69 @@
     </PackageReference>
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.9.2" PrivateAssets="all" />
     <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="3.11.0" PrivateAssets="all" />
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <!-- Left as a normal (non-private) reference on purpose, not just by omission: the analyzer
+         host never resolves NuGet dependencies at load time (the dll bundled directly into
+         analyzers/dotnet/cs below, via GeneratePathProperty, is what actually gets loaded), so
+         this entry is inert there — but PrivateAssets="all" was tried and empties the
+         <dependencies> group entirely, which fails NuGet's NU5017 pack-time check (see the
+         PropertyGroup comment above). Newtonsoft.Json 13.0.3 genuinely exists on nuget.org, so a
+         consumer resolving it is harmless dead weight, not a 404. -->
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" GeneratePathProperty="true" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Blueprint.SourceGenerator.CodeWriter\Blueprint.SourceGenerator.CodeWriter.csproj" />
+    <!-- PrivateAssets="all": neither CodeWriter nor CodeFixes is packable on its own, and neither
+         will ever exist as a package on the feed — both DLLs are bundled directly into
+         analyzers/dotnet/cs (see the None item below, which picks up everything MSBuild copies
+         into this project's own output directory), not resolved as a NuGet dependency. Without
+         this, pack would add a <dependency> on a package that 404s for every consumer.
+
+         CodeFixes ships bundled here rather than as its own package: the sample projects
+         (Blueprint.SourceGenerator.Sample, .Sample.Contract) always reference the generator and
+         its code fixes together as a matched pair, and a consumer who installs only
+         Blueprint.SourceGenerator from the feed should get the same IDE quick-fix experience, not
+         a silently missing one. -->
+    <ProjectReference Include="..\Blueprint.SourceGenerator.CodeWriter\Blueprint.SourceGenerator.CodeWriter.csproj" PrivateAssets="all" />
+    <ProjectReference Include="..\Blueprint.SourceGenerator.CodeFixes\Blueprint.SourceGenerator.CodeFixes.csproj" PrivateAssets="all" />
   </ItemGroup>
 
   <ItemGroup>
     <InternalsVisibleTo Include="Blueprint.SourceGenerator.Tests" />
   </ItemGroup>
 
-  <!-- See https://github.com/dotnet/roslyn/discussions/47517#discussioncomment-3542590 for why the below is necessary -->
+  <!-- See https://github.com/dotnet/roslyn/discussions/47517#discussioncomment-3542590 for why the below is necessary.
+
+       KNOWN TRAP for whoever next touches this project's pack behaviour: a wildcard Include on a
+       plain top-level ItemGroup is evaluated once, at project load — before any target (including
+       Build) has run. Reproduced directly: a single `dotnet pack` against a clean bin/, with no
+       prior `dotnet build`, silently produced a package containing Newtonsoft.Json.dll but
+       neither Blueprint.SourceGenerator.dll nor Blueprint.SourceGenerator.CodeWriter.dll — the
+       glob matched an empty output directory. It packs without error and installs a consumer gets
+       nothing from. A `BeforeTargets="_GetPackageFiles" DependsOnTargets="Build"` Target was
+       tried as a fix (re-evaluating the glob after Build) and does correctly populate the
+       package — but it then hits NuGet.Build.Tasks.Pack's NU5017 ("no dependencies nor content")
+       as a hard error on a single-invocation pack, for reasons that did not resolve even after
+       clearing every cached obj/*.nuspec from the intermediate directory; the two behaviours
+       (correct content vs. NU5017) appear to come from different, disagreeing phases of the same
+       PackTask run. Given that, this project relies on the caller building before packing rather
+       than packing standalone: `dotnet build` then `dotnet pack` with `-p:NoBuild=true` (exactly
+       what CI's publish job does, in .github/workflows/ci.yml). A plain `dotnet pack` with no
+       prior build is not safe for this project — always build first. -->
   <ItemGroup>
     <None Include="$(OutputPath)\*.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+  </ItemGroup>
+
+  <!-- A Roslyn component's ReferenceCopyLocalPaths is empty by design (the SDK does not copy any
+       dependency to the analyzer's own output) — Microsoft.CodeAnalysis.* is deliberately excluded
+       because the compiler host already has it loaded, but that same mechanism silently drops
+       Newtonsoft.Json too, which the generator's own code (manifest emission) genuinely needs at
+       analyzer load time. There is no dependency resolution for an installed analyzer, so it must
+       be bundled here explicitly rather than left to a <dependency> entry in the nuspec, which
+       GeneratePathProperty resolves to the restored package's own lib assembly. This item uses a
+       literal, restore-resolved path rather than a wildcard, so it is not subject to the same
+       evaluation-order timing as the one above. -->
+  <ItemGroup>
+    <None Include="$(PkgNewtonsoft_Json)\lib\netstandard2.0\Newtonsoft.Json.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
   </ItemGroup>
   <ItemGroup>
     <Folder Include="Generators\" />
@@ -48,4 +120,5 @@
       <TargetPathWithTargetPlatformMoniker Include="$(MSBuildThisFileDirectory)..\Blueprint.SourceGenerator.CodeWriter\$(OutputPath)Blueprint.SourceGenerator.CodeWriter.dll" IncludeRuntimeDependency="false" />
     </ItemGroup>
   </Target>
+
 </Project>

@@ -6,8 +6,8 @@
 
     <PackageId>$(AssemblyName)</PackageId>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
-    <PackageProjectUrl>https://github.com/barclayadam/blueprint</PackageProjectUrl>
-    <PackageReleaseNotes>See https://github.com/barclayadam/blueprint/releases for more info</PackageReleaseNotes>
+    <PackageProjectUrl>https://github.com/Symprex/blueprint-source-gen</PackageProjectUrl>
+    <PackageReleaseNotes>See https://github.com/Symprex/blueprint-source-gen/releases for more info</PackageReleaseNotes>
     <PackageBaseTags>API;CQRS;Blueprint;Rest</PackageBaseTags>
 
     <IsPackable>true</IsPackable>
@@ -24,6 +24,31 @@
     <CodeAnalysisDictionary>$(MSBuildThisFileDirectory)CustomDictionary.xml</CodeAnalysisDictionary>
 
     <DefineConstants>$(DefineConstants);JETBRAINS_ANNOTATIONS</DefineConstants>
+
+    <!-- Restated rather than inherited: this is the nearest Directory.Build.props to every
+         project under src/, so MSBuild never walks up to import the repository-root file, and
+         the root's own <WarningsNotAsErrors> for NU190x silently never applied here (a defect,
+         not a policy choice — the root file's comment already states the intended policy). A
+         full <Import> of the root file was considered instead but rejected: several projects
+         here (e.g. Blueprint.Runtime, Blueprint.SourceGenerator) already carry their own direct
+         `JetBrains.Annotations` PackageReference, and the root file adds the same reference
+         again, which raises NU1504 (duplicate PackageReference) under TreatWarningsAsErrors.
+         Restating just this one property is the minimal fix.
+
+         Advisories are still discovered and still reported — this only keeps them warnings
+         instead of build errors, matching the root's documented intent: manage vulnerabilities
+         outside the build system rather than let a newly-published advisory break an unrelated
+         build the next morning. This is not a blanket "ignore audits" switch; Blueprint.Codemod's
+         own NU1903 was fixed with a direct version pin, not this list.
+
+         The Marten case in particular is closed, not open: GHSA-vmw2-qwm8-x84c's first patched
+         version is 8.37.0, with no 6.x backport, and D1 (approved) pins Marten down to 6.4.2
+         deliberately for Signature365 parity. Signature365's own epic (Symprex/Signature365#6601)
+         analysed this exact advisory and found it unreachable there — Marten's full-text-search
+         methods are never called, and the one full-text index configured passes no `regConfig` —
+         so the SCA alert stays open for the duration of the 6.4.2 pin on that basis, not because
+         auditing was weakened here. Do not read this as an invitation to move Marten to 8.x. -->
+    <WarningsNotAsErrors>NU1901;NU1902;NU1903;NU1904</WarningsNotAsErrors>
   </PropertyGroup>
 
   <ItemGroup>
@@ -38,16 +63,37 @@
     </AdditionalFiles>
   </ItemGroup>
 
-  <!-- Only required during CI builds -->
+  <!-- Only required during CI builds — a deterministic build path baked into the PDB is only
+       useful (and only reproducible) from a clean CI checkout. -->
   <PropertyGroup Condition="'$(GITHUB_ACTIONS)' == 'true'">
     <DebugSymbols>true</DebugSymbols>
     <DebugType>portable</DebugType>
-    
+
     <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
-    <MinVerTagPrefix>v</MinVerTagPrefix>
   </PropertyGroup>
 
-  <ItemGroup Condition="'$(GITHUB_ACTIONS)' == 'true'">
+  <!-- MinVer and SourceLink used to be gated behind GITHUB_ACTIONS as well, which meant a local
+       `dotnet pack` produced an unversioned package with no RepositoryUrl at all — and it is
+       RepositoryUrl (populated by PublishRepositoryUrl + SourceLink below) that GitHub Packages
+       uses to route a pushed package to this repository. Both now apply everywhere so a local
+       pack matches what CI produces.
+
+       There are no git tags in this repository yet. MinVer's default floor with no tag is
+       0.0.0, and three of these package IDs (Blueprint.Testing, Blueprint.Http,
+       Blueprint.Tasks.Hangfire) already exist on nuget.org at 0.8.4 from the upstream fork
+       (barclayadam/blueprint) — a 0.0.0-alpha.* here would be a confusing, lower-than-upstream
+       floor even though Signature365 never resolves those from nuget.org (packageSourceMapping
+       keeps it pinned to GitHub Packages; see D6). MinVerMinimumMajorMinor sets a 0.1 floor
+       instead, so an untagged build here versions as 0.1.0-alpha.0.<height>+<sha>. The first
+       real release is cut by pushing tag v0.1.0, deliberately, once this package has been
+       verified end-to-end — not part of this change. -->
+  <PropertyGroup>
+    <MinVerTagPrefix>v</MinVerTagPrefix>
+    <MinVerMinimumMajorMinor>0.1</MinVerMinimumMajorMinor>
+    <MinVerDefaultPreReleaseIdentifiers>alpha.0</MinVerDefaultPreReleaseIdentifiers>
+  </PropertyGroup>
+
+  <ItemGroup>
     <PackageReference Include="MinVer" Version="5.0.0" PrivateAssets="All" IncludeAssets="runtime; build; native; contentfiles; analyzers; buildtransitive"/>
     <PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.1.0-beta-20204-02" PrivateAssets="All" IncludeAssets="runtime; build; native; contentfiles; analyzers"/>
   </ItemGroup>
