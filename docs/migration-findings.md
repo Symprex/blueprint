@@ -30,7 +30,7 @@
 | Compile-time diagnostics | ✅ Done | Auth, property ownership, HTTP, link, validation, result, and serializer diagnostics cover the migration surface |
 | ApiExceptionFactory resolution | ✅ Done | Field references (e.g. `CommonApiExceptions.NotFound`) resolved via semantic model; no BP010 warnings for S365 pattern |
 | BP001 ApiResource partial | ✅ Done | Downgraded from Error to Warning; non-partial resources work with virtual `Object` fallback |
-| Codemod run | ✅ Done | 10 BPMIG diagnostics found across 158 projects; code fixes exist for redundant setup and missing `partial` |
+| Codemod run | ⚠️ Figures superseded 2026-09-17 | Original run found 10 BPMIG diagnostics across 158 projects; a fresh scan against 162 projects found 15 emitted IDs (BPMIG202 stays disabled) and 3,795 instances, including two IDs — BPMIG203, BPMIG402 — this run did not cover. See "Codemod Results" below and `wiki/specs/blueprint-source-gen-migration/codemod-scan-baseline.md` in the Signature365 repository |
 | Pipeline helper extraction | ✅ Done | JSON, auth, validation, UoW, outbox, HATEOAS, and audit steps are centralized in `PipelineHelpers` |
 | Runtime hot-path optimization | ✅ Done | Binding helpers, async fast-paths, pre-sized collections, cached API catalog, and auth structs reduce overhead |
 | Benchmarks and load tests | ✅ Done | 7 benchmark classes, 7 auth benchmark scenarios, and 9 NBomber scenarios documented |
@@ -760,14 +760,32 @@ The best way to read the diagnostics section is that Blueprint now prefers compi
 ## Codemod Results
 
 ### S365 codemod run summary
-The codemod was run against `Signature365.sln` (158 projects) and found 10 `BPMIG` diagnostics across four buckets. The duplicates in the old document can be replaced with the simple summary below: some items are pure deletion, some require startup/config rewrites, some require consumer extension updates, and a few remain deliberate design-review checkpoints.
+
+> **Superseded 2026-09-17.** The run described below scanned `Signature365.sln` at 158 projects
+> and found 10 `BPMIG` diagnostics; it predates `BPMIG203` (added after this document was written)
+> and never picked up `BPMIG402`. A fresh Blueprint.Codemod review-mode scan against the current
+> 162-project solution found **15 emitted IDs and 3,795 instances** (`BPMIG202` stays disabled by
+> default and is never emitted). That scan is committed in the Signature365 repository at
+> `wiki/specs/blueprint-source-gen-migration/codemod-scan-baseline.md`, which also records that
+> only 160 of the 162 projects' SARIF output was observed before the tool's own cleanup ran — so
+> its totals are a well-evidenced floor, not a proven-complete count. Re-run before relying on
+> either set of figures for sizing; both go stale as Signature365's solution moves.
+
+The codemod was run against `Signature365.sln` (158 projects) and found 10 `BPMIG` diagnostics across four buckets. The duplicates in the old document can be replaced with the simple summary below: some items are pure deletion, some require startup/config rewrites, some require consumer extension updates, and a few remain deliberate design-review checkpoints. The fresh 2026-09-17 scan noted above adds two more IDs to the same four buckets — `BPMIG203` to consumer-extension rewrite, `BPMIG402` to auto-fixable — without changing the shape of the split.
+
+> The bucket table below also moves `BPMIG300` from "Manual design review" to "Auto-fixable" and
+> adds `BPMIG303` (missing from the original bucket table entirely, though it was scanned). Both
+> have a code-fix provider in `Blueprint.Migration.Analyzers.CodeFixes`
+> (`LegacyNamespaceCodeFixProvider`, `LegacyRemovedNamespaceCodeFixProvider`) and are in
+> `TransformationApplier.SupportedDiagnosticIds` — the original "Manual design review" label for
+> BPMIG300 contradicted the toolchain description two sections below it.
 
 | Bucket | IDs | Consolidated action |
 |--------|-----|---------------------|
-| Auto-fixable | `BPMIG001`, `BPMIG002`, `BPMIG003`, `BPMIG400`, `BPMIG401` | Remove redundant setup and add `partial` where required |
+| Auto-fixable | `BPMIG001`, `BPMIG002`, `BPMIG003`, `BPMIG300`, `BPMIG303`, `BPMIG400`, `BPMIG401`, `BPMIG402` | Remove redundant setup, update namespaces, add `partial` where required, add missing `using` for relocated types |
 | Configuration required | `BPMIG100`, `BPMIG101` | Move legacy `AddOpenApi(...)` / `AddAuthentication(...)` configuration to the new seams |
-| Consumer-extension rewrite | `BPMIG200`, `BPMIG201` | Update `FromResource(...)` usage and verify `{Auth:...}` template handling |
-| Manual design review | `BPMIG300`, `BPMIG301`, `BPMIG302` | Namespace cleanup, middleware-to-module review, and startup rewrite |
+| Consumer-extension rewrite | `BPMIG200`, `BPMIG201`, `BPMIG203` | Update `FromResource(...)` usage, verify `{Auth:...}` template handling, and rewrite `[Resource]` resource-key templates whose placeholders are not all auth claims |
+| Manual design review | `BPMIG301`, `BPMIG302` | Middleware-to-module review and startup rewrite |
 
 | BPMIG code | Practical meaning |
 |---|---|
@@ -778,14 +796,16 @@ The codemod was run against `Signature365.sln` (158 projects) and found 10 `BPMI
 | `BPMIG101` | Move configured authentication/context-loader setup to the new seam |
 | `BPMIG200` | Migrate legacy `FromResource(...)` forms |
 | `BPMIG201` | Verify `{Auth:...}` placeholder handling |
+| `BPMIG203` | Rewrite `[Resource]` resource-key template — auto-fixable only when every placeholder is an auth claim, otherwise manual |
 | `BPMIG300` | Update legacy Blueprint namespaces |
 | `BPMIG301` | Review `IMiddlewareBuilder` usage and replace with modules or ASP.NET middleware |
 | `BPMIG302` | Replace legacy `BlueprintApiBuilder` startup flow |
 | `BPMIG400` | Add `partial` to operation types |
 | `BPMIG401` | Add `partial` to API-resource types |
+| `BPMIG402` | Add missing `using` for a relocated Blueprint type |
 
 ### Auto-fix and review details
-The high-volume mechanical changes are well understood. `BPMIG400` adds `partial` to ~240+ operation types, `BPMIG401` does the same for ~60 resource types, and the legacy activation cleanup removes redundant `AddOpenApi()`, `AddHateoasLinks()`, and `AddAuthorisation()` calls because those features are now implied by the generated app model. `BPMIG202` is no longer a blocker at all because abstract generic base operations are already supported; it was downgraded to an informational path.
+The high-volume mechanical changes are well understood. `BPMIG400` adds `partial` to operation types (731 instances in the 2026-09-17 scan baseline above), `BPMIG401` does the same for resource types (166 instances), and the legacy activation cleanup removes redundant `AddOpenApi()`, `AddHateoasLinks()`, and `AddAuthorisation()` calls because those features are now implied by the generated app model. `BPMIG202` is no longer a blocker at all because abstract generic base operations are already supported; it was downgraded to an informational path and stays `isEnabledByDefault: false`, so it is never emitted by a scan.
 
 ### Code-fix coverage in the codemod toolchain
 The codemod story is not just “report and stop.” `LegacyActivationCodeFixProvider` handles the redundant-activation cleanups, `MissingPartialCodeFixProvider` covers both partial-class diagnostics, and the separate Blueprint code-fix project covers the related BP* diagnostics inside the IDE. Together, that means the migration’s highest-volume edits are mostly mechanical and tool-assisted rather than handwritten.

@@ -113,6 +113,15 @@ All framework features required for S365 migration are implemented, tested, and 
 
 The codemod was run in `apply` mode against S365's `blueprint-codemod-test` branch.
 
+> This apply run predates the 2026-09-17 scan baseline above — it was measured against the old
+> 2,896-instance, 158-project scan, not the current 3,795-instance, 162-project one. It is a
+> distinct number from the scan count regardless: an apply run always lands below the scan total,
+> because `TransformationApplier` reprocesses a project after each fix and some fixes make others
+> moot — see the unheaded paragraph just above "Divergence from the stale report" in
+> `wiki/specs/blueprint-source-gen-migration/codemod-scan-baseline.md` (Signature365 repository)
+> for the mechanism. Do not read 2,509 as an up-to-date apply figure for the current scan — it has
+> not been re-run.
+
 | Metric | Value |
 |--------|-------|
 | Total fixes applied | **2,509** |
@@ -266,37 +275,70 @@ The scratch proof project compiles S365's `Analytics.Contract` (2 operations) an
 
 ## S365 Codemod Scan Results
 
-Full-solution scan of `Signature365.sln` (158 projects). All 13 BPMIG diagnostics detected.
-Total instances across all projects: **2,896**.
+> **Measured 2026-09-17**, review-mode only, against `backend/Signature365.sln` (162 `.csproj`
+> entries) at Signature365 tag/commit current at that date. Baseline artefact committed in the
+> Signature365 repository at `wiki/specs/blueprint-source-gen-migration/codemod-scan-baseline.md`.
+> These counts move whenever Signature365's solution moves — re-run the scan before relying on
+> them for sizing, rather than trusting the numbers below indefinitely. The scanner itself only
+> observed 160 SARIF files against those 162 projects before its own cleanup ran, so the totals
+> are a well-evidenced floor, not a proven-complete count.
+>
+> This table previously reported 2,896 instances across 13 IDs from a 158-project scan; it had no
+> `BPMIG402` row and predated `BPMIG203` entirely. The figures below replace that stale count. The
+> stale table also mislabelled `BPMIG300`/`BPMIG303` as "Manual review" while its own bullet list
+> below named their auto-fix providers — that self-contradiction is fixed here by labelling both
+> "Auto-fixable", matching `TransformationApplier.SupportedDiagnosticIds` in `Blueprint.Codemod`.
+
+Total instances across all projects: **3,795** across **15 emitted** diagnostic IDs. A sixteenth
+ID, `BPMIG202`, is `isEnabledByDefault: false` and is never emitted, so it is excluded from the
+total below rather than counted as zero.
 
 | ID | Category | Title | Instances | Severity |
 |----|----------|-------|-----------|----------|
-| BPMIG001 | Auto-fixable | Remove redundant `AddOpenApi()` | 17 | Info |
-| BPMIG002 | Auto-fixable | Remove redundant `AddHateoasLinks()` | 16 | Info |
-| BPMIG003 | Auto-fixable | Remove redundant `AddAuthorisation()` | 27 | Info |
+| BPMIG001 | Auto-fixable | Remove redundant `AddOpenApi()` | 23 | Info |
+| BPMIG002 | Auto-fixable | Remove redundant `AddHateoasLinks()` | 18 | Info |
+| BPMIG003 | Auto-fixable | Remove redundant `AddAuthorisation()` | 28 | Info |
 | BPMIG100 | Config required | Migrate configured `AddOpenApi(...)` | 21 | Warning |
-| BPMIG101 | Config required | Migrate configured `AddAuthentication(...)` | 27 | Warning |
-| BPMIG200 | Auto-fixable | Migrate `FromResource(...)` usage | 161 | Warning |
-| BPMIG201 | Auto-fixable | Migrate `{Auth:...}` placeholder | 139 | Warning |
-| BPMIG300 | Manual review | Update legacy Blueprint namespace | 1,399 | Warning |
+| BPMIG101 | Config required | Migrate configured `AddAuthentication(...)` | 28 | Warning |
+| BPMIG200 | Auto-fixable | Migrate `FromResource(...)` usage | 184 | Warning |
+| BPMIG201 | Auto-fixable | Migrate `{Auth:...}` placeholder | 146 | Warning |
+| BPMIG203 | Conditional auto-fix | Migrate `[Resource]` resource-key template | 380 | Warning |
+| BPMIG300 | Auto-fixable | Update legacy Blueprint namespace | 1,546 | Warning |
 | BPMIG301 | Manual review | `IMiddlewareBuilder` → source-gen modules | 21 | Warning |
-| BPMIG302 | Manual review | `BlueprintApiBuilder` → `AddBlueprintApi<T,E>` | 43 | Warning |
-| BPMIG303 | Manual review | Remove obsolete Blueprint namespace | 218 | Warning |
-| BPMIG400 | Auto-fixable | Add `partial` to operation class | 647 | Warning |
-| BPMIG401 | Auto-fixable | Add `partial` to API resource class | 160 | Warning |
+| BPMIG302 | Manual review | `BlueprintApiBuilder` → `AddBlueprintApi<T,E>` | 44 | Warning |
+| BPMIG303 | Auto-fixable | Remove obsolete Blueprint namespace | 218 | Warning |
+| BPMIG400 | Auto-fixable | Add `partial` to operation class | 731 | Warning |
+| BPMIG401 | Auto-fixable | Add `partial` to API resource class | 166 | Warning |
+| BPMIG402 | Auto-fixable | Add missing `using` for relocated Blueprint type | 241 | Warning |
+
+**BPMIG203 is the most consequential addition.** These are `[Resource]` attributes carrying a
+resource-key template, and only the subset whose placeholders are *all* auth claims
+(`{Auth:...}`/`{Auth....}`) can be auto-fixed — a template binding the resource's own instance key
+(e.g. bare `{Id}`/`{TenantId}`) is declined by the code-fix provider and must be rewritten by
+hand, or the authorisation check it guards silently widens from one instance to every instance of
+a noun. The scan cannot split the 380 instances by which branch applies; that split is only known
+once `--apply` runs.
 
 **Category breakdown (by instance count):**
-- **Auto-fixable by codemod** (2,784 instances / 96%): BPMIG001-003, BPMIG200-201, BPMIG300, BPMIG303, BPMIG400-401 — 9 code fix providers handle these automatically
-- **Configuration required** (48 instances / 2%): BPMIG100-101 — startup migration, manual but mechanical
-- **Manual design review** (64 instances / 2%): BPMIG301-302 — middleware/builder rewrites
+- **Auto-fixable by codemod, fully** (3,301 instances / 87%): BPMIG001-003, BPMIG200-201,
+  BPMIG300, BPMIG303, BPMIG400-402 — 8 code fix providers in `Blueprint.Migration.Analyzers.CodeFixes`
+  handle these automatically
+- **Conditional auto-fix** (380 instances / 10%): BPMIG203 — auto-fixed only when every
+  placeholder is an auth claim; the rest need a manual rewrite
+- **Configuration required** (49 instances / 1%): BPMIG100-101 — startup migration, manual but
+  mechanical
+- **Manual design review** (65 instances / 2%): BPMIG301-302 — middleware/builder rewrites
 
-**Automation coverage: 96% (2,784 of 2,896 instances)**
-- BPMIG001-003: Remove redundant activation calls (60 instances) — `LegacyActivationCodeFixProvider`
-- BPMIG200: Strip resource key template from `[FromResource]` (161 instances) — `FromResourceCodeFixProvider`
-- BPMIG201: Remove `{Auth:...}` template arguments (139 instances) — `AuthPlaceholderCodeFixProvider`
-- BPMIG300: Replace legacy namespace usings (1,399 instances) — `LegacyNamespaceCodeFixProvider`
+**Automation coverage: 87% fully automatic (3,301 of 3,795 instances), a further 10% partially
+automatic (BPMIG203)**
+- BPMIG001-003: Remove redundant activation calls (69 instances) — `LegacyActivationCodeFixProvider`
+- BPMIG200: Strip resource key template from `[FromResource]` (184 instances) — `FromResourceCodeFixProvider`
+- BPMIG201: Remove `{Auth:...}` template arguments (146 instances) — `AuthPlaceholderCodeFixProvider`
+- BPMIG203: Rewrite `[Resource]` resource-key template when every placeholder is an auth claim (380 instances, split between auto-fix and manual unknown until `--apply` runs) — `ResourceArityCodeFixProvider`
+- BPMIG300: Replace legacy namespace usings (1,546 instances) — `LegacyNamespaceCodeFixProvider`
 - BPMIG303: Remove obsolete namespace usings (218 instances) — `LegacyRemovedNamespaceCodeFixProvider`
-- BPMIG400-401: Add `partial` to operation/resource classes (807 instances) — `MissingPartialCodeFixProvider`
+- BPMIG400-401: Add `partial` to operation/resource classes (897 instances) — `MissingPartialCodeFixProvider`
+- BPMIG402: Add missing `using` for a relocated Blueprint type (241 instances) — `RelocatedTypeCodeFixProvider`
 
 ## Contract Compilation Results (15/15)
 
