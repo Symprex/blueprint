@@ -47,6 +47,21 @@ public class OpenApiServerFromHttpOptionsEndpointTests
             "servers should stay omitted when the DI-registered options carry no host");
     }
 
+    [Fact]
+    public async Task When_only_public_host_configured_in_di_then_served_document_omits_servers_section()
+    {
+        // PublicHost is a bare host for link generation, not the complete address a servers entry has to be.
+        // OpenApiServerDefaultTests proves this at the OpenApiOutputRenderingContext.Create seam directly; this
+        // proves the same option, once resolved by DI and handed to the real MapBlueprintApi-registered endpoint,
+        // does not leak through as a servers entry either — the wiring, not just the renderer, has to respect it.
+        var (json, _) = await InvokeOpenApiEndpointAsync(new BlueprintHttpOptions { PublicHost = "internal.example.com" });
+
+        using var doc = JsonDocument.Parse(json);
+
+        doc.RootElement.TryGetProperty("servers", out _).Should().BeFalse(
+            "PublicHost is not a complete public address and must not stand in for PublicApiHost, even once resolved by the real endpoint");
+    }
+
     private static async Task<(string Json, int StatusCode)> InvokeOpenApiEndpointAsync(BlueprintHttpOptions httpOptions)
     {
         var services = new ServiceCollection()

@@ -204,9 +204,10 @@ public class OpenApiConditionalValidationTests
             .ToList();
 
         // The loop below is vacuous unless a conditional reaches the document by both routes: the request-body
-        // component and the serializer-metadata component.
+        // component and the serializer-metadata component. SetTemplateNotificationPriority adds a second
+        // request-body carrier, exercising an integer-typed dependent rather than ExportTemplates' boolean one.
         conditionedSchemas.Select(static schema => schema.Name).Should().BeEquivalentTo(
-            ["ExportTemplates", "TemplateNotificationRuleApiResource"]);
+            ["ExportTemplates", "SetTemplateNotificationPriority", "TemplateNotificationRuleApiResource"]);
 
         foreach (var schema in conditionedSchemas)
         {
@@ -263,6 +264,79 @@ public class OpenApiConditionalValidationTests
                         $"the query-bound conditional on GetTemplateHistoryQuery must not surface on schema '{schema.Name}'");
             }
         }
+    }
+
+    [Fact]
+    public async Task When_body_property_type_also_carries_a_conditional_then_the_body_component_does_not_inherit_it()
+    {
+        // SetTemplateNotificationPriorityCommand.Rule is typed TemplateNotificationRuleApiResource — the same
+        // nested DTO that carries two [RequiredIf] declarations and reaches the document as a response-side
+        // component. A request body property never emits a $ref for a complex type (ResolveCollectionSchema
+        // returns no schema ref in any branch, and MapClrTypeToOpenApiSchema sends a class straight to inline
+        // "object"), so the DTO's conditional cannot reach this component by that route — there is no $ref to
+        // carry it across, and the extraction pass never visits the nested type's own properties in the first
+        // place. This is a documented limitation, not a bug: it stays honest by asserting both halves in one
+        // document, rather than assuming the more capable behaviour a $ref would need.
+        var (json, _) = await InvokeOpenApiEndpointAsync();
+        using var document = JsonDocument.Parse(json);
+
+        var bodySchema = document.RootElement
+            .GetProperty("components")
+            .GetProperty("schemas")
+            .GetProperty("SetTemplateNotificationPriority");
+
+        var ruleProperty = bodySchema.GetProperty("properties").GetProperty("rule");
+        ruleProperty.GetProperty("type").GetString().Should().Be("object",
+            "a request-body property typed as a complex DTO renders inline, not by $ref");
+        ruleProperty.TryGetProperty("$ref", out _).Should().BeFalse(
+            "request-body complex types never reference a component schema in this framework");
+
+        // The body component's own allOf must carry only its own (Level/Reason) conditional — never one
+        // belonging to the nested DTO the "rule" property happens to be typed as.
+        var bodyAllOf = bodySchema.GetProperty("allOf");
+        bodyAllOf.GetRawText().Should().NotContain("recipient",
+            "TemplateNotificationRuleApiResource's conditional targets recipient/Subject; neither may leak onto the referencing body component");
+        bodyAllOf.GetRawText().Should().NotContain("Subject",
+            "TemplateNotificationRuleApiResource's conditional targets recipient/Subject; neither may leak onto the referencing body component");
+
+        // Meanwhile the DTO's own component, reached elsewhere by a response $ref, still carries its conditional —
+        // proving the gap is specifically about the request-body route, not about the conditional being lost.
+        var dtoSchema = document.RootElement
+            .GetProperty("components")
+            .GetProperty("schemas")
+            .GetProperty("TemplateNotificationRuleApiResource");
+        dtoSchema.TryGetProperty("allOf", out _).Should().BeTrue(
+            "the DTO's own component must still carry its conditional via the response route");
+    }
+
+    [Fact]
+    public async Task When_dependent_is_integer_typed_then_declared_type_and_rendered_const_agree_in_one_document()
+    {
+        // SetTemplateNotificationPriorityCommand.Level is a real int (not the synthetic-fixture "boolean"
+        // property RenderedConditionFor mutates), so this is the first assertion that the projection's declared
+        // "type" and the "const" it writes for the same property agree in the actual emitted document. A string
+        // const against an integer property could never match, and under the RequiredIfNot "not" wrapper an
+        // unmatchable const makes "then" always apply — the client would demand Reason on every payload,
+        // including ones the server accepts unconditionally.
+        var (json, _) = await InvokeOpenApiEndpointAsync();
+        using var document = JsonDocument.Parse(json);
+
+        var bodySchema = document.RootElement
+            .GetProperty("components")
+            .GetProperty("schemas")
+            .GetProperty("SetTemplateNotificationPriority");
+
+        var levelProperty = bodySchema.GetProperty("properties").GetProperty("level");
+        levelProperty.GetProperty("type").GetString().Should().Be("integer",
+            "Level is declared as a CLR int");
+
+        var condition = bodySchema.GetProperty("allOf").EnumerateArray().Single();
+        var constElement = condition.GetProperty("if").GetProperty("properties").GetProperty("level").GetProperty("not").GetProperty("const");
+
+        constElement.ValueKind.Should().Be(JsonValueKind.Number,
+            "the const's JSON kind must agree with the integer type declared above; a string const could never match an integer instance");
+        constElement.GetInt32().Should().Be(5,
+            "RequiredIfNot(nameof(Level), 5) suppresses the requirement exactly when Level equals 5");
     }
 
     [Fact]

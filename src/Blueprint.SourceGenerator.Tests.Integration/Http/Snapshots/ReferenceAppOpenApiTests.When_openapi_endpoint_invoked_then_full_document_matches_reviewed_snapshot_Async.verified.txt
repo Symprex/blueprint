@@ -1632,6 +1632,106 @@
         ]
       }
     },
+    "/templates/{Id}/notification-priority": {
+      "put": {
+        "operationId": "SetTemplateNotificationPriority",
+        "summary": "Set the notification priority for a template, and optionally attach a notification rule.",
+        "tags": [
+          "Templates"
+        ],
+        "parameters": [
+          {
+            "name": "Id",
+            "in": "path",
+            "required": true,
+            "description": "The unique identifier of the template.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetTemplateNotificationPriority"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/templates/{Id}/notification-rules": {
       "get": {
         "operationId": "GetTemplateNotificationRules",
@@ -2832,6 +2932,56 @@
           "Created",
           "Updated",
           "Deleted"
+        ]
+      },
+      "SetTemplateNotificationPriority": {
+        "title": "SetTemplateNotificationPriority",
+        "type": "object",
+        "properties": {
+          "level": {
+            "type": "integer",
+            "format": "int32",
+            "description": "The notification priority level. Reason is required unless this is 5."
+          },
+          "reason": {
+            "type": "string",
+            "nullable": true,
+            "description": "Reason for the priority change. Required unless Level is 5."
+          },
+          "rule": {
+            "type": "object",
+            "nullable": true,
+            "description": "An optional notification rule to attach to the template."
+          }
+        },
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "required": [
+                "level"
+              ],
+              "properties": {
+                "level": {
+                  "not": {
+                    "const": 5
+                  }
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "reason"
+              ],
+              "properties": {
+                "reason": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "\\S"
+                }
+              }
+            }
+          }
         ]
       },
       "TemplateApiResource": {

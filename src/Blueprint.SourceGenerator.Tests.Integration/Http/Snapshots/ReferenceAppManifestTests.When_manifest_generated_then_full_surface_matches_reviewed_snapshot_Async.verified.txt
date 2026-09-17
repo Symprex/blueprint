@@ -501,6 +501,32 @@
     - data-annotations-validation-exception: System.ComponentModel.DataAnnotations.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
     - default-unhandled-exception: System.Exception -> Blueprint.Runtime.Exec.UnhandledExceptionResult
 
+### SetTemplateNotificationPriority
+  Type: SetTemplateNotificationPriorityCommand
+  Source: Source Generated
+  HTTP Methods: PUT
+  URL: /templates/{Id}/notification-priority
+  Hosts: http
+  Auth: Authenticated
+  Discovery: command (Blueprint.SourceGenerator.Sample.Contract.Api.SetTemplateNotificationPriorityCommand)
+  Group: Templates
+  Result Outcomes:
+    - KeyOnlyResourceEventResult
+  Failure Outcomes:
+    - legacy-validation-exception: Blueprint.Validation.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
+    - data-annotations-validation-exception: System.ComponentModel.DataAnnotations.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
+    - default-unhandled-exception: System.Exception -> Blueprint.Runtime.Exec.UnhandledExceptionResult
+  HTTP Responses:
+    - 200: hasBody=False types=[]
+    - 400: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+    - 401: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+    - 403: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+    - 415: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+    - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
+    - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+  Links:
+    - rel=set-notification-priority url=/templates/{Id}/notification-priority resource=TemplateApiResource
+
 ### UpdateTemplate
   Type: UpdateTemplateCommand
   Source: Source Generated
@@ -577,6 +603,7 @@
   TemplateApiResource [archive] -> /templates/{Id} (ArchiveTemplate)
   TemplateApiResource [clone] -> /templates/{Id}/clone (CloneTemplate)
   TemplateApiResource [self] -> /templates/{Id} (GetTemplate)
+  TemplateApiResource [set-notification-priority] -> /templates/{Id}/notification-priority (SetTemplateNotificationPriority)
   TemplateListApiResource [self] -> /templates (GetTemplates)
 
 ## Serializer Context

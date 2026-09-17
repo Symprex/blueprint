@@ -39,4 +39,10 @@ public static partial class TemplateResourceEvents
     /// </summary>
     [ResourceEventReason(ChangeType.Created, "cloned")]
     public sealed partial record Cloned(TemplateApiResource Resource);
+
+    /// <summary>
+    /// Signals that a template's notification priority was changed.
+    /// </summary>
+    [ResourceEventReason(ChangeType.Updated, "notification-priority-changed")]
+    public sealed partial record NotificationPriorityChanged([ResourceEventKey] string Key);
 }
