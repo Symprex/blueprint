@@ -77,27 +77,40 @@ public sealed class LegacyNamespaceCodeFixProvider : CodeFixProvider
             return document;
         }
 
-        // Build the replacement using directives
-        var newUsings = new List<UsingDirectiveSyntax>();
+        // Skip any replacement the document already has. The fix has to be idempotent because
+        // the namespace map overlaps - Blueprint.Http and Blueprint.OpenApi both map onto
+        // Blueprint.Runtime.Http, and Blueprint.Http and Blueprint.Properties both onto
+        // Blueprint.Model - so a document importing two legacy namespaces would otherwise gain
+        // the same replacement twice. That matters most under fix-all, where every fix is
+        // computed against one snapshot and cannot see what its siblings are inserting.
+        var existingUsings = root
+            .DescendantNodes()
+            .OfType<UsingDirectiveSyntax>()
+            .Where(directive => directive != oldUsing)
+            .Select(directive => directive.Name?.ToString())
+            .Where(static name => name is not null)
+            .ToImmutableHashSet(StringComparer.Ordinal);
 
-        foreach (var replacement in replacements)
-        {
-            var newName = SyntaxFactory.ParseName(replacement);
-            var newUsing = SyntaxFactory.UsingDirective(newName)
+        var newUsings = replacements
+            .Where(replacement => !existingUsings.Contains(replacement))
+            .Select(replacement => SyntaxFactory
+                .UsingDirective(SyntaxFactory.ParseName(replacement))
                 .WithLeadingTrivia(oldUsing.GetLeadingTrivia())
-                .WithTrailingTrivia(oldUsing.GetTrailingTrivia());
-            newUsings.Add(newUsing);
+                .WithTrailingTrivia(oldUsing.GetTrailingTrivia()))
+            .ToList();
+
+        // Every replacement was already present, so the migration is complete for this directive
+        // and only the legacy one needs to go. Removing it is still progress, which is what stops
+        // the codemod's convergence loop from seeing the same diagnostic again next round.
+        if (newUsings.Count == 0)
+        {
+            root = root.RemoveNode(oldUsing, SyntaxRemoveOptions.KeepNoTrivia)!;
+            return document.WithSyntaxRoot(root);
         }
 
-        // Replace the old using with the new one(s)
-        if (newUsings.Count == 1)
-        {
-            root = root.ReplaceNode(oldUsing, newUsings[0]);
-        }
-        else
-        {
-            root = root.ReplaceNode(oldUsing, newUsings);
-        }
+        root = newUsings.Count == 1
+            ? root.ReplaceNode(oldUsing, newUsings[0])
+            : root.ReplaceNode(oldUsing, newUsings);
 
         return document.WithSyntaxRoot(root);
     }

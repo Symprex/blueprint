@@ -137,6 +137,59 @@ public sealed class ApplyModeTests
         }
     }
 
+    [Xunit.Fact]
+    public async Task When_one_document_holds_several_legacy_usings_then_each_is_replaced_exactly_once()
+    {
+        // Regression: batching a diagnostic id across a project computes every fix against one
+        // snapshot and merges the resulting text changes. Where several fixes land in the SAME
+        // document - and Blueprint.Http and Blueprint.OpenApi each expand one using into more
+        // than one - a removal span can be dropped while its insertion still lands. The symptom
+        // is a document that accumulates replacement usings while keeping the legacy one, and a
+        // diagnostic that therefore never clears: the project plateaus at a constant fix count
+        // per round until the round cap stops it, leaving it partially migrated.
+        //
+        // Observed on Signature365 before this was guarded: 80 files carrying 198 redundant
+        // using lines, with the originals still present.
+        var fixtureRoot = CreateWorkingFixtureRoot("SharedDocumentUsingsApp");
+        try
+        {
+            var solutionPath = Path.Combine(fixtureRoot, "SharedDocumentUsingsApp.sln");
+            var consumerPath = Path.Combine(fixtureRoot, "SharedDocumentUsingsApp", "Consumer.cs");
+
+            var applier = new TransformationApplier();
+            await applier.ApplyAsync(
+                new ApplyModeOptions(solutionPath: solutionPath, diagnosticFilter: "BPMIG*"));
+
+            var usings = (await File.ReadAllLinesAsync(consumerPath))
+                .Where(static line => line.StartsWith("using ", StringComparison.Ordinal))
+                .Select(static line => line.Trim())
+                .ToArray();
+
+            // No legacy namespace may survive its own rewrite.
+            usings.Should().NotContain("using Blueprint.Http;");
+            usings.Should().NotContain("using Blueprint.Authorisation;");
+            usings.Should().NotContain("using Blueprint.OpenApi;");
+            usings.Should().NotContain("using Blueprint.Properties;");
+
+            // And nothing may be inserted twice. This is the assertion the first version of this
+            // guard lacked, and the reason the defect reached a real corpus.
+            usings.Should().OnlyHaveUniqueItems(
+                "each replacement using must be inserted exactly once");
+
+            // The replacements the map specifies must actually be present.
+            usings.Should().Contain("using Blueprint.Model;");
+            usings.Should().Contain("using Blueprint.Runtime.Http;");
+            usings.Should().Contain("using Blueprint.Authorization;");
+        }
+        finally
+        {
+            if (Directory.Exists(fixtureRoot))
+            {
+                Directory.Delete(fixtureRoot, recursive: true);
+            }
+        }
+    }
+
     private static string CreateWorkingFixtureRoot(string fixtureName)
     {
         var repositoryRoot = GetRepositoryRoot();
