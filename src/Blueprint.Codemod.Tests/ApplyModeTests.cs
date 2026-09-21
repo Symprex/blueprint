@@ -101,11 +101,28 @@ public sealed class ApplyModeTests
         try
         {
             var solutionPath = Path.Combine(fixtureRoot, "ManyDiagnosticsApp.sln");
-            var programPath = Path.Combine(fixtureRoot, "ManyDiagnosticsApp", "Program.cs");
-            var siteCount = System.Text.RegularExpressions.Regex.Matches(
-                await File.ReadAllTextAsync(programPath),
-                @"\[FromResource\(typeof\([^)]*\), ""\{Auth:AccountId\}""\)\]").Count;
+            var projectDirectory = Path.Combine(fixtureRoot, "ManyDiagnosticsApp");
+            var sourcePaths = Directory.GetFiles(projectDirectory, "*.cs", SearchOption.AllDirectories);
+            var siteCount = 0;
+            var documentsWithSites = 0;
+
+            foreach (var sourcePath in sourcePaths)
+            {
+                var matches = System.Text.RegularExpressions.Regex.Matches(
+                    await File.ReadAllTextAsync(sourcePath),
+                    @"\[FromResource\(typeof\([^)]*\), ""\{Auth:AccountId\}""\)\]").Count;
+                siteCount += matches;
+                if (matches > 0)
+                {
+                    documentsWithSites++;
+                }
+            }
+
             siteCount.Should().BeGreaterThan(30, "the fixture must hold enough sites for the pass count to be meaningful");
+            const string spreadReason =
+                "the sites must be spread across documents the way a real corpus spreads them - a batch takes one "
+                + "occurrence per document, so putting them all in one file measures the worst case instead";
+            documentsWithSites.Should().BeGreaterThan(10, spreadReason);
 
             var applier = new TransformationApplier();
             await applier.ApplyAsync(
@@ -114,11 +131,13 @@ public sealed class ApplyModeTests
                     diagnosticFilter: "BPMIG*"));
 
             // Correctness first: batching must not lose or corrupt a fix.
-            var updatedSource = await File.ReadAllTextAsync(programPath);
-            updatedSource.Should().NotContain(
-                @"[FromResource(typeof(AccountLookupQuery), ""{Auth:AccountId}"")]",
-                "every auto-fixable BPMIG200 site must have its resource key template dropped");
-            updatedSource.Should().Contain("[FromResource(typeof(AccountLookupQuery))]");
+            foreach (var sourcePath in sourcePaths)
+            {
+                var updatedSource = await File.ReadAllTextAsync(sourcePath);
+                updatedSource.Should().NotContain(
+                    @"[FromResource(typeof(AccountLookupQuery), ""{Auth:AccountId}"")]",
+                    "every auto-fixable BPMIG200 site must have its resource key template dropped");
+            }
 
             var passes = (int)typeof(TransformationApplier)
                 .GetProperty("AnalyzerPasses", BindingFlags.NonPublic | BindingFlags.Instance)!
@@ -175,6 +194,16 @@ public sealed class ApplyModeTests
             // guard lacked, and the reason the defect reached a real corpus.
             usings.Should().OnlyHaveUniqueItems(
                 "each replacement using must be inserted exactly once");
+
+            // Convergence, asserted separately from correctness. A run that stops on a limit
+            // still writes its partial result and exits successfully, so uniqueness alone passed
+            // while the real corpus was left with surviving legacy usings in ten projects.
+            var stoppedOnLimit = (int)typeof(TransformationApplier)
+                .GetProperty("ProjectsStoppedOnLimit", BindingFlags.NonPublic | BindingFlags.Instance)!
+                .GetValue(applier)!;
+            stoppedOnLimit.Should().Be(
+                0,
+                "the project must converge rather than stop on the round or fix limit");
 
             // The replacements the map specifies must actually be present.
             usings.Should().Contain("using Blueprint.Model;");

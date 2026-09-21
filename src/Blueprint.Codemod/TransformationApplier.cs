@@ -34,13 +34,14 @@ public sealed class TransformationApplier
     private const int MaxFixesPerProject = 5_000;
 
     /// <summary>
-    /// Caps the outer convergence loop. A round is one batched pass over every supported
-    /// diagnostic id in a project, so rounds only continue while a previous round changed
-    /// something. Interacting fixes (BPMIG200/201/203 on one attribute argument list) settle in
-    /// two or three rounds; a higher count means a pair of fixes is undoing each other, which is
-    /// a defect to surface loudly rather than spin on.
+    /// Runaway guard on the outer convergence loop, not its exit condition - a round that
+    /// changes nothing is what ends it. Because a batch takes at most one occurrence of a
+    /// diagnostic per document, a project legitimately needs as many rounds as the most
+    /// occurrences any single one of its documents holds, plus a few for interacting fixes
+    /// (BPMIG200/201/203 share one attribute argument list). Signature365's worst document holds
+    /// eleven, so a limit near that would cap a correct run rather than catch a broken one.
     /// </summary>
-    private const int MaxRoundsPerProject = 10;
+    private const int MaxRoundsPerProject = 60;
 
     private static readonly ImmutableArray<string> SupportedDiagnosticIds =
     [
@@ -65,6 +66,14 @@ public sealed class TransformationApplier
     /// in the output but turns a minutes-long run on a large solution into an hours-long one.
     /// </summary>
     internal int AnalyzerPasses { get; private set; }
+
+    /// <summary>
+    /// Gets the number of projects the last <see cref="ApplyAsync"/> call left incompletely
+    /// migrated, having stopped them on a limit rather than on convergence. Exposed for tests:
+    /// a run that stops early still writes its partial result and exits successfully, so
+    /// without this the only signal is a line on stderr.
+    /// </summary>
+    internal int ProjectsStoppedOnLimit { get; private set; }
 
     /// <summary>
     /// Applies the currently supported codemod transformations for a solution.
@@ -106,6 +115,7 @@ public sealed class TransformationApplier
         var codeFixProviders = CreateCodeFixProviders();
         var totalFixes = 0;
         this.AnalyzerPasses = 0;
+        this.ProjectsStoppedOnLimit = 0;
 
         // Process projects one at a time, exhausting all fixes within each project before
         // moving on. This means each project's compilation is rebuilt only for its own fixes,
@@ -176,6 +186,7 @@ public sealed class TransformationApplier
 
             if (projectFixes >= MaxFixesPerProject || rounds >= MaxRoundsPerProject)
             {
+                this.ProjectsStoppedOnLimit++;
                 var projectName = solution.GetProject(projectId)?.Name ?? projectId.Id.ToString();
                 Console.Error.WriteLine(
                     $"[codemod] WARNING: Project '{projectName}' stopped at {projectFixes} fixes after {rounds} round(s) " +
@@ -230,6 +241,18 @@ public sealed class TransformationApplier
             return (null, 0);
         }
 
+        // At most one occurrence per document per batch, and this is the load-bearing line.
+        // BatchFixer computes every fix in the batch against one snapshot and then merges the
+        // resulting text changes, discarding any that conflict. Occurrences clustered in one
+        // region of a document - several legacy usings in the same using block is the common
+        // case - produce adjacent spans, so the merge silently drops some edits. The fix is
+        // computed correctly and then thrown away, which no change inside a code-fix provider
+        // can prevent. Taking one occurrence per document makes conflict structurally
+        // impossible, and the outer round loop picks up the rest.
+        //
+        // The cost is rounds rather than correctness: a project needs as many rounds as the
+        // most occurrences in any single document, which is a handful, against one full pass
+        // per fix before any of this. Signature365's worst document holds eleven.
         var codeFixProvider = codeFixProviders.SingleOrDefault(
             provider => provider.FixableDiagnosticIds.Contains(diagnosticId));
         if (codeFixProvider is null)
@@ -247,37 +270,62 @@ public sealed class TransformationApplier
         // placeholder - and declining is a correct outcome, not an error. Anchoring on a
         // declining candidate yields no equivalence key and would skip every fixable occurrence
         // of the id in the project along with it.
+        // Select at most one occurrence per document, and within each document the first the
+        // provider will actually fix. Both halves are load-bearing.
+        //
+        // One per document, because BatchFixer computes every fix in the batch against one
+        // snapshot and merges the resulting text changes, discarding any that conflict.
+        // Occurrences clustered in one region of a document - several legacy usings in the same
+        // using block - produce adjacent spans, so the merge silently drops edits that were
+        // computed correctly. No change inside a code-fix provider can prevent that. The outer
+        // round loop picks up the remainder, so the cost is rounds rather than correctness.
+        //
+        // The first the provider *fixes*, because several providers decline per site: BPMIG203
+        // declines any resource key template holding a non-auth placeholder. Taking a document's
+        // first occurrence blindly can land on a declining one and skip the whole document,
+        // which is how three fixable [Resource] sites in one file end up with none fixed.
         Document? anchorDocument = null;
         CodeAction? anchorAction = null;
+        var selected = new List<Diagnostic>();
 
-        foreach (var candidate in candidates)
+        foreach (var group in candidates.GroupBy(static candidate => candidate.Location.SourceTree))
         {
-            var document = solution.GetDocument(candidate.Location.SourceTree);
-            if (document is null)
+            foreach (var candidate in group)
             {
-                continue;
-            }
+                var document = solution.GetDocument(candidate.Location.SourceTree);
+                if (document is null)
+                {
+                    continue;
+                }
 
-            var registeredActions = new List<CodeAction>();
-            var registrationContext = new CodeFixContext(
-                document,
-                candidate,
-                (action, _) => registeredActions.Add(action),
-                cancellationToken);
-            await codeFixProvider.RegisterCodeFixesAsync(registrationContext);
+                var registeredActions = new List<CodeAction>();
+                var registrationContext = new CodeFixContext(
+                    document,
+                    candidate,
+                    (action, _) => registeredActions.Add(action),
+                    cancellationToken);
+                await codeFixProvider.RegisterCodeFixesAsync(registrationContext);
 
-            if (registeredActions.Count > 0)
-            {
-                anchorDocument = document;
-                anchorAction = registeredActions[0];
+                if (registeredActions.Count == 0)
+                {
+                    continue;
+                }
+
+                selected.Add(candidate);
+                anchorDocument ??= document;
+                anchorAction ??= registeredActions[0];
                 break;
             }
         }
 
-        if (anchorDocument is null || anchorAction is null)
+        if (anchorDocument is null || anchorAction is null || selected.Count == 0)
         {
             return (null, 0);
         }
+
+        candidates = selected
+            .OrderBy(static candidate => candidate.Location.SourceTree?.FilePath, StringComparer.Ordinal)
+            .ToImmutableArray();
 
         var fixAllProvider = codeFixProvider.GetFixAllProvider();
         if (fixAllProvider is null)
