@@ -33,6 +33,15 @@ public sealed class TransformationApplier
     /// </summary>
     private const int MaxFixesPerProject = 5_000;
 
+    /// <summary>
+    /// Caps the outer convergence loop. A round is one batched pass over every supported
+    /// diagnostic id in a project, so rounds only continue while a previous round changed
+    /// something. Interacting fixes (BPMIG200/201/203 on one attribute argument list) settle in
+    /// two or three rounds; a higher count means a pair of fixes is undoing each other, which is
+    /// a defect to surface loudly rather than spin on.
+    /// </summary>
+    private const int MaxRoundsPerProject = 10;
+
     private static readonly ImmutableArray<string> SupportedDiagnosticIds =
     [
         "BPMIG001",
@@ -49,6 +58,13 @@ public sealed class TransformationApplier
     ];
 
     private static int _msbuildRegistered;
+
+    /// <summary>
+    /// Gets the number of compile-and-analyse passes the last <see cref="ApplyAsync"/> call made.
+    /// Exposed for tests: it is the cost driver of apply mode, and a regression here is invisible
+    /// in the output but turns a minutes-long run on a large solution into an hours-long one.
+    /// </summary>
+    internal int AnalyzerPasses { get; private set; }
 
     /// <summary>
     /// Applies the currently supported codemod transformations for a solution.
@@ -89,51 +105,81 @@ public sealed class TransformationApplier
         var analyzers = CreateAnalyzers();
         var codeFixProviders = CreateCodeFixProviders();
         var totalFixes = 0;
+        this.AnalyzerPasses = 0;
 
         // Process projects one at a time, exhausting all fixes within each project before
         // moving on. This means each project's compilation is rebuilt only for its own fixes,
         // not for unrelated fixes in other projects.
+        //
+        // Within a project, fixes are batched per diagnostic id through the provider's own
+        // FixAllProvider, and the project is re-analysed between ids. That split is deliberate:
+        // batching is what removes the per-fix compilation (the cost driver - a project with a
+        // thousand fixable sites paid a thousand full compile-and-analyse passes), while
+        // re-analysing between ids preserves the interaction the per-fix loop got for free.
+        // BPMIG200, BPMIG201 and BPMIG203 all edit the same attribute argument list, so a fix
+        // for one changes what the others see; batching them against a single stale snapshot
+        // would produce conflicting edits. The outer round loop then repeats until a whole pass
+        // over the ids changes nothing, which is what makes the result independent of id order.
         foreach (var projectId in solution.ProjectIds)
         {
             var projectFixes = 0;
+            var rounds = 0;
 
-            while (projectFixes < MaxFixesPerProject)
+            while (rounds < MaxRoundsPerProject)
             {
-                var project = solution.GetProject(projectId);
-                if (project is null)
+                var roundFixes = 0;
+
+                foreach (var diagnosticId in diagnosticsToApply)
+                {
+                    var project = solution.GetProject(projectId);
+                    if (project is null)
+                    {
+                        break;
+                    }
+
+                    var (nextSolution, fixCount) = await this.ApplyAllForDiagnosticAsync(
+                        solution,
+                        project,
+                        analyzers,
+                        codeFixProviders,
+                        diagnosticId,
+                        options.DiagnosticFilter,
+                        cancellationToken);
+
+                    if (nextSolution is null)
+                    {
+                        continue;
+                    }
+
+                    solution = nextSolution;
+                    roundFixes += fixCount;
+                }
+
+                if (roundFixes == 0)
                 {
                     break;
                 }
 
-                var nextSolution = await ApplyNextFixForProjectAsync(
-                    solution,
-                    project,
-                    analyzers,
-                    codeFixProviders,
-                    options.DiagnosticFilter,
-                    cancellationToken);
+                projectFixes += roundFixes;
+                totalFixes += roundFixes;
+                rounds++;
 
-                if (nextSolution is null)
+                var currentName = solution.GetProject(projectId)?.Name ?? projectId.Id.ToString();
+                Console.Error.WriteLine(
+                    $"[codemod] {currentName}: round {rounds} applied {roundFixes} fixes ({totalFixes} total).");
+
+                if (projectFixes >= MaxFixesPerProject)
                 {
                     break;
-                }
-
-                solution = nextSolution;
-                projectFixes++;
-                totalFixes++;
-
-                if (totalFixes % 100 == 0)
-                {
-                    Console.Error.WriteLine($"[codemod] Applied {totalFixes} fixes so far (current project: {project.Name})...");
                 }
             }
 
-            if (projectFixes >= MaxFixesPerProject)
+            if (projectFixes >= MaxFixesPerProject || rounds >= MaxRoundsPerProject)
             {
                 var projectName = solution.GetProject(projectId)?.Name ?? projectId.Id.ToString();
                 Console.Error.WriteLine(
-                    $"[codemod] WARNING: Project '{projectName}' hit the {MaxFixesPerProject}-fix safety limit. " +
-                    "Some diagnostics may remain unfixed.");
+                    $"[codemod] WARNING: Project '{projectName}' stopped at {projectFixes} fixes after {rounds} round(s) " +
+                    $"(limits: {MaxFixesPerProject} fixes, {MaxRoundsPerProject} rounds). Some diagnostics may remain unfixed.");
             }
         }
 
@@ -147,73 +193,163 @@ public sealed class TransformationApplier
     }
 
     /// <summary>
-    /// Tries to apply the next supported code fix within a single project. Returns the updated
-    /// solution if a fix was applied, or <c>null</c> if no more fixable diagnostics remain.
+    /// Applies every fixable occurrence of one diagnostic id across a project in a single
+    /// compile-and-analyse pass, using the provider's own <see cref="FixAllProvider"/>. Returns
+    /// the updated solution and the number of occurrences batched, or <c>(null, 0)</c> when the
+    /// id has no fixable occurrence left.
     /// </summary>
-    private static async Task<Solution?> ApplyNextFixForProjectAsync(
+    private async Task<(Solution? Solution, int FixCount)> ApplyAllForDiagnosticAsync(
         Solution solution,
         Project project,
         ImmutableArray<DiagnosticAnalyzer> analyzers,
         ImmutableArray<CodeFixProvider> codeFixProviders,
+        string diagnosticId,
         string diagnosticFilter,
         CancellationToken cancellationToken)
     {
         var compilation = await project.GetCompilationAsync(cancellationToken);
         if (compilation is null)
         {
-            return null;
+            return (null, 0);
         }
 
+        this.AnalyzerPasses++;
         var diagnostics = await compilation
             .WithAnalyzers(analyzers)
             .GetAnalyzerDiagnosticsAsync(cancellationToken);
         var candidates = diagnostics
             .Where(static candidate => candidate.Location.IsInSource)
+            .Where(candidate => string.Equals(candidate.Id, diagnosticId, StringComparison.Ordinal))
             .Where(candidate => SolutionAnalysisRunner.MatchesDiagnosticFilter(candidate.Id, diagnosticFilter))
-            .Where(static candidate => SupportedDiagnosticIds.Contains(candidate.Id))
             .OrderBy(static candidate => candidate.Location.SourceTree?.FilePath, StringComparer.Ordinal)
-            .ThenBy(static candidate => candidate.Location.SourceSpan.Start);
+            .ThenBy(static candidate => candidate.Location.SourceSpan.Start)
+            .ToImmutableArray();
 
-        foreach (var diagnostic in candidates)
+        if (candidates.Length == 0)
         {
-            if (diagnostic.Location.SourceTree is null)
-            {
-                continue;
-            }
+            return (null, 0);
+        }
 
-            var document = solution.GetDocument(diagnostic.Location.SourceTree);
+        var codeFixProvider = codeFixProviders.SingleOrDefault(
+            provider => provider.FixableDiagnosticIds.Contains(diagnosticId));
+        if (codeFixProvider is null)
+        {
+            throw new InvalidOperationException(
+                $"The codemod apply mode does not have a code-fix provider for supported diagnostic '{diagnosticId}'.");
+        }
+
+        // The equivalence key comes from asking the provider to register against a real
+        // diagnostic rather than being hard-coded: it is the provider's own identifier for the
+        // action, and FixAllProvider selects which registered action to batch by it.
+        //
+        // The anchor must be a candidate the provider actually fixes, not simply the first one.
+        // Several providers decline per site - BPMIG203 declines any template with a non-auth
+        // placeholder - and declining is a correct outcome, not an error. Anchoring on a
+        // declining candidate yields no equivalence key and would skip every fixable occurrence
+        // of the id in the project along with it.
+        Document? anchorDocument = null;
+        CodeAction? anchorAction = null;
+
+        foreach (var candidate in candidates)
+        {
+            var document = solution.GetDocument(candidate.Location.SourceTree);
             if (document is null)
             {
                 continue;
             }
 
-            var codeFixProvider = codeFixProviders.SingleOrDefault(
-                provider => provider.FixableDiagnosticIds.Contains(diagnostic.Id));
-            if (codeFixProvider is null)
+            var registeredActions = new List<CodeAction>();
+            var registrationContext = new CodeFixContext(
+                document,
+                candidate,
+                (action, _) => registeredActions.Add(action),
+                cancellationToken);
+            await codeFixProvider.RegisterCodeFixesAsync(registrationContext);
+
+            if (registeredActions.Count > 0)
             {
-                throw new InvalidOperationException(
-                    $"The codemod apply mode does not have a code-fix provider for supported diagnostic '{diagnostic.Id}'.");
+                anchorDocument = document;
+                anchorAction = registeredActions[0];
+                break;
             }
-
-            var actions = new List<CodeAction>();
-            var context = new CodeFixContext(document, diagnostic, (action, _) => actions.Add(action), cancellationToken);
-            await codeFixProvider.RegisterCodeFixesAsync(context);
-
-            if (actions.Count == 0)
-            {
-                // The code fix provider may decline to register a fix when the diagnostic's
-                // target has already been partially fixed by another provider (e.g. BPMIG201
-                // stripped the template arg, so BPMIG200 no longer has a second arg to remove).
-                continue;
-            }
-
-            var operations = await actions[0].GetOperationsAsync(cancellationToken);
-            var applyChangesOperation = operations.OfType<ApplyChangesOperation>().Single();
-            EnsureCodeFixMadeProgress(solution, applyChangesOperation.ChangedSolution, diagnostic.Id);
-            return applyChangesOperation.ChangedSolution;
         }
 
-        return null;
+        if (anchorDocument is null || anchorAction is null)
+        {
+            return (null, 0);
+        }
+
+        var fixAllProvider = codeFixProvider.GetFixAllProvider();
+        if (fixAllProvider is null)
+        {
+            throw new InvalidOperationException(
+                $"The code-fix provider for '{diagnosticId}' does not supply a FixAllProvider, so apply mode "
+                + "cannot batch it. Declare one (WellKnownFixAllProviders.BatchFixer is usually correct).");
+        }
+
+        var fixAllContext = new FixAllContext(
+            anchorDocument,
+            codeFixProvider,
+            FixAllScope.Project,
+            anchorAction.EquivalenceKey,
+            [diagnosticId],
+            new BatchedDiagnosticProvider(candidates),
+            cancellationToken);
+
+        var fixAllAction = await fixAllProvider.GetFixAsync(fixAllContext);
+        if (fixAllAction is null)
+        {
+            return (null, 0);
+        }
+
+        var operations = await fixAllAction.GetOperationsAsync(cancellationToken);
+        var applyChangesOperation = operations.OfType<ApplyChangesOperation>().SingleOrDefault();
+        if (applyChangesOperation is null)
+        {
+            return (null, 0);
+        }
+
+        EnsureCodeFixMadeProgress(solution, applyChangesOperation.ChangedSolution, diagnosticId);
+        return (applyChangesOperation.ChangedSolution, candidates.Length);
+    }
+
+    /// <summary>
+    /// Feeds a fixed set of already-computed diagnostics to <see cref="FixAllContext"/>, so the
+    /// batch runs against the analyser pass that has just been paid for rather than triggering
+    /// another one per document.
+    /// </summary>
+    private sealed class BatchedDiagnosticProvider : FixAllContext.DiagnosticProvider
+    {
+        private readonly ImmutableArray<Diagnostic> diagnostics;
+
+        public BatchedDiagnosticProvider(ImmutableArray<Diagnostic> diagnostics)
+        {
+            this.diagnostics = diagnostics;
+        }
+
+        public override Task<IEnumerable<Diagnostic>> GetAllDiagnosticsAsync(
+            Project project,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IEnumerable<Diagnostic>>(this.diagnostics);
+        }
+
+        public override Task<IEnumerable<Diagnostic>> GetDocumentDiagnosticsAsync(
+            Document document,
+            CancellationToken cancellationToken)
+        {
+            var tree = document.GetSyntaxTreeAsync(cancellationToken).GetAwaiter().GetResult();
+            return Task.FromResult<IEnumerable<Diagnostic>>(
+                this.diagnostics.Where(diagnostic => diagnostic.Location.SourceTree == tree));
+        }
+
+        public override Task<IEnumerable<Diagnostic>> GetProjectDiagnosticsAsync(
+            Project project,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IEnumerable<Diagnostic>>(
+                this.diagnostics.Where(static diagnostic => !diagnostic.Location.IsInSource));
+        }
     }
 
     private static ImmutableArray<DiagnosticAnalyzer> CreateAnalyzers()

@@ -1,3 +1,4 @@
+using System.Reflection;
 using FluentAssertions;
 
 namespace Blueprint.Codemod.Tests;
@@ -85,6 +86,71 @@ public sealed class ApplyModeTests
                 Directory.Delete(fixtureRoot, recursive: true);
             }
         }
+    }
+
+    [Xunit.Fact]
+    public async Task When_a_project_holds_many_independent_diagnostics_then_apply_mode_batches_them_instead_of_recompiling_per_fix()
+    {
+        // Apply mode's cost is compile-and-analyse passes, not fixes: each pass is a full
+        // compilation plus a full analyzer run over the project. Recomputing that per individual
+        // fix is what turns a large solution from minutes into hours - Signature365's 3,301
+        // auto-fixable diagnostics would pay 3,301 passes. The fixture holds 41 independent
+        // BPMIG200 sites in one project, so a batching applier needs a handful of passes to
+        // converge while a per-fix applier needs one per site.
+        var fixtureRoot = CreateWorkingFixtureRoot("ManyDiagnosticsApp");
+        try
+        {
+            var solutionPath = Path.Combine(fixtureRoot, "ManyDiagnosticsApp.sln");
+            var programPath = Path.Combine(fixtureRoot, "ManyDiagnosticsApp", "Program.cs");
+            var siteCount = System.Text.RegularExpressions.Regex.Matches(
+                await File.ReadAllTextAsync(programPath),
+                @"\[FromResource\(typeof\([^)]*\), ""\{Auth:AccountId\}""\)\]").Count;
+            siteCount.Should().BeGreaterThan(30, "the fixture must hold enough sites for the pass count to be meaningful");
+
+            var applier = new TransformationApplier();
+            await applier.ApplyAsync(
+                new ApplyModeOptions(
+                    solutionPath: solutionPath,
+                    diagnosticFilter: "BPMIG*"));
+
+            // Correctness first: batching must not lose or corrupt a fix.
+            var updatedSource = await File.ReadAllTextAsync(programPath);
+            updatedSource.Should().NotContain(
+                @"[FromResource(typeof(AccountLookupQuery), ""{Auth:AccountId}"")]",
+                "every auto-fixable BPMIG200 site must have its resource key template dropped");
+            updatedSource.Should().Contain("[FromResource(typeof(AccountLookupQuery))]");
+
+            var passes = (int)typeof(TransformationApplier)
+                .GetProperty("AnalyzerPasses", BindingFlags.NonPublic | BindingFlags.Instance)!
+                .GetValue(applier)!;
+
+            passes.Should().BeLessThan(
+                siteCount,
+                "apply mode must batch a diagnostic id across the project rather than recompiling once per fix");
+        }
+        finally
+        {
+            if (Directory.Exists(fixtureRoot))
+            {
+                Directory.Delete(fixtureRoot, recursive: true);
+            }
+        }
+    }
+
+    private static string CreateWorkingFixtureRoot(string fixtureName)
+    {
+        var repositoryRoot = GetRepositoryRoot();
+        var sourceFixtureRoot = Path.Combine(
+            repositoryRoot, "src", "Blueprint.Codemod.Tests", "TestFixtures", fixtureName);
+        var workingFixtureRoot = Path.Combine(
+            repositoryRoot,
+            "src",
+            "Blueprint.Codemod.Tests",
+            "TestFixtures",
+            $"{fixtureName}.Apply.{Guid.NewGuid():N}");
+
+        CopyDirectory(sourceFixtureRoot, workingFixtureRoot);
+        return workingFixtureRoot;
     }
 
     private static string CreateWorkingFixtureRoot()
