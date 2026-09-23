@@ -92,6 +92,58 @@ public class TypedHttpClientExtensionsGeneratorTests
         await Compile(source).VerifySuccessAsync(SnapshotsFolder);
     }
 
+    [Fact]
+    public async Task When_operation_has_property_named_operation_then_generated_client_compiles()
+    {
+        // Mirrors S365's CompleteAiChatCommand, whose `Operation` property is part of the wire payload and so cannot
+        // be renamed. The flattened overload derives a parameter named `operation` from it, which the generated
+        // method body must not shadow with its own local.
+        var source = """
+                     public class CompleteAiChatCommand : ICommand<string>
+                     {
+                         [Required]
+                         public string Operation { get; set; } = default!;
+
+                         [Required]
+                         public string TenantId { get; set; } = default!;
+
+                         public static ApiOperationDescriptor Configure() => default!;
+                     }
+
+                     [BlueprintAppScan]
+                     public partial class TestApp : BlueprintApp
+                     {
+                     }
+                     """;
+
+        await Compile(source).VerifySuccessAsync(SnapshotsFolder);
+    }
+
+    [Fact]
+    public async Task When_operation_has_properties_named_like_the_fixed_parameters_then_generated_client_compiles()
+    {
+        // `client` (the extension receiver) and `cancellationToken` are hard-coded parameter names, so properties
+        // that camel-case to either would produce duplicate parameter names.
+        var source = """
+                     public class RegisterClientCommand : ICommand
+                     {
+                         [Required]
+                         public string Client { get; set; } = default!;
+
+                         public System.Threading.CancellationToken CancellationToken { get; set; }
+
+                         public static ApiOperationDescriptor Configure() => default!;
+                     }
+
+                     [BlueprintAppScan]
+                     public partial class TestApp : BlueprintApp
+                     {
+                     }
+                     """;
+
+        await Compile(source).VerifySuccessAsync(SnapshotsFolder);
+    }
+
     private static GenerationResult Compile(string source)
     {
         return TestHelpers.Compile<TypedHttpClientExtensionsGenerator>(Usings + source);

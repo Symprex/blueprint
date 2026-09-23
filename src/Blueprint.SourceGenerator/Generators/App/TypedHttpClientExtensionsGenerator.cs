@@ -460,10 +460,25 @@ public sealed class TypedHttpClientExtensionsGenerator : IIncrementalGenerator, 
         var optionalParams = op.Parameters.Where(p => !IsPositional(p))
             .OrderBy(static p => p.Name, StringComparer.Ordinal).ToList();
 
+        // Property-derived parameter names are part of the public surface (callers pass them as named arguments,
+        // and the property itself is the wire payload), so they are never renamed. The names the generator owns —
+        // the extension receiver, the cancellation token and the body's local — share the method's scope with
+        // them, and so are the ones that give way when a property happens to camel-case to the same name.
+        var propertyParameterNames = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var param in op.Parameters)
+        {
+            propertyParameterNames.Add(ToCamelCase(param.Name));
+        }
+
+        var clientName = ReserveUniqueName("client", propertyParameterNames);
+        var cancellationTokenName = ReserveUniqueName("cancellationToken", propertyParameterNames);
+        var operationName = ReserveUniqueName("operation", propertyParameterNames);
+
         // Build parameter list
         var paramParts = new List<string>
         {
-            $"this global::Blueprint.HttpClient.BlueprintHttpClient<{model.AppFqn}> client",
+            $"this global::Blueprint.HttpClient.BlueprintHttpClient<{model.AppFqn}> {clientName}",
         };
 
         foreach (var param in positionalParams)
@@ -478,7 +493,7 @@ public sealed class TypedHttpClientExtensionsGenerator : IIncrementalGenerator, 
             paramParts.Add($"{param.TypeFqn} {paramName} = default");
         }
 
-        paramParts.Add("global::System.Threading.CancellationToken cancellationToken = default");
+        paramParts.Add($"global::System.Threading.CancellationToken {cancellationTokenName} = default");
 
         // Determine return type - SendAsync<T> returns Task<T?> but for value types T? is just T (no Nullable wrapper without struct constraint)
         var hasTypedResult = op.ResultTypeFqn is not null;
@@ -512,7 +527,7 @@ public sealed class TypedHttpClientExtensionsGenerator : IIncrementalGenerator, 
         sb.AppendLine("        {");
 
         // Body: construct operation and call SendAsync
-        sb.AppendLine($"            var operation = new {op.OperationFqn}");
+        sb.AppendLine($"            var {operationName} = new {op.OperationFqn}");
         sb.AppendLine("            {");
 
         foreach (var param in positionalParams)
@@ -532,18 +547,41 @@ public sealed class TypedHttpClientExtensionsGenerator : IIncrementalGenerator, 
 
         if (isResourceEvent)
         {
-            sb.AppendLine($"            return client.SendResourceEventEnvelopeAsync<{op.ResourceEventResourceTypeFqn}>(operation, cancellationToken);");
+            sb.AppendLine($"            return {clientName}.SendResourceEventEnvelopeAsync<{op.ResourceEventResourceTypeFqn}>({operationName}, {cancellationTokenName});");
         }
         else if (hasTypedResult)
         {
-            sb.AppendLine($"            return client.SendAsync<{op.ResultTypeFqn}>(operation, cancellationToken);");
+            sb.AppendLine($"            return {clientName}.SendAsync<{op.ResultTypeFqn}>({operationName}, {cancellationTokenName});");
         }
         else
         {
-            sb.AppendLine("            return client.SendAsync(operation, cancellationToken);");
+            sb.AppendLine($"            return {clientName}.SendAsync({operationName}, {cancellationTokenName});");
         }
 
         sb.AppendLine("        }");
+    }
+
+    /// <summary>
+    /// Returns <paramref name="preferredName"/>, or the first <c>preferredName1</c>, <c>preferredName2</c>, … not
+    /// already in <paramref name="namesInScope"/>, and adds the result to that set so that the next generator-owned
+    /// name reserved against it cannot take the same one.
+    /// </summary>
+    /// <remarks>
+    /// The preferred name is kept whenever it is free, so the generated signature of every operation without a
+    /// clash is unchanged — including the <c>cancellationToken</c> name callers pass as a named argument.
+    /// </remarks>
+    private static string ReserveUniqueName(string preferredName, HashSet<string> namesInScope)
+    {
+        var name = preferredName;
+
+        for (var suffix = 1; namesInScope.Contains(name); suffix++)
+        {
+            name = preferredName + suffix.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        namesInScope.Add(name);
+
+        return name;
     }
 
     /// <summary>
