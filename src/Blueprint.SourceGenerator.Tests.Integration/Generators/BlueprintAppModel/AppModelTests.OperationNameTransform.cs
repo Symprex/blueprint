@@ -120,8 +120,9 @@ public class AppModelOperationNameTransformTests
     [Fact]
     public void When_document_links_are_enriched_from_the_app_then_x_links_use_the_app_operation_names()
     {
-        // The component is keyed the way EnrichWithResourceLinks matches it — by the resource's CLR full name — so the
-        // link-extension reader is exercised against the app's real links rather than through schema projection.
+        // The component is keyed by the resource's CLR full name, which EnrichWithResourceLinks falls back to when schema
+        // projection has no short name for a resource, so the link-extension reader is exercised on its own against the
+        // app's real links. The rendered-document test below covers the key schema projection actually gives it.
         var documentContext = CreateDocumentContextWithComponent(
             new IntegrationTestBlueprintApp(),
             typeof(SampleWidgetApiResource).FullName!);
@@ -131,6 +132,27 @@ public class AppModelOperationNameTransformTests
             .Links
             .Should()
             .Equal(new OpenApiSchemaLinkExtension("copy", "CopyWidget", "POST"));
+    }
+
+    [Fact]
+    public void When_openapi_document_is_rendered_then_resource_x_links_use_the_app_operation_names()
+    {
+        var schema = RenderDocument().RootElement
+            .GetProperty("components")
+            .GetProperty("schemas")
+            .GetProperty("SampleWidgetApiResource");
+
+        schema.TryGetProperty("x-links", out var links).Should().BeTrue(
+            "SampleWidgetApiResource is the target of the non-self copy link");
+
+        links.EnumerateArray()
+            .Select(static link => (
+                Keys: string.Join(",", link.EnumerateObject().Select(static property => property.Name)),
+                Rel: link.GetProperty("rel").GetString(),
+                OperationId: link.GetProperty("operationId").GetString(),
+                Method: link.GetProperty("method").GetString()))
+            .Should()
+            .Equal(("rel,operationId,method", "copy", "CopyWidget", "POST"));
     }
 
     private static JsonDocument RenderDocument()
