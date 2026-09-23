@@ -30,6 +30,7 @@ public class AppModelOpenApiSchemaProjectionContextTests
             "MultiExpandableTestEmployee",
             "NodaTimeEchoResponse",
             "ProblemDetails",
+            "SampleWidgetApiResource",
             "ValidationProblemDetails",
             "string");
 

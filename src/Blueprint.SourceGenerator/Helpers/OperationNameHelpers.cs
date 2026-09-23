@@ -6,6 +6,12 @@ namespace Blueprint.SourceGenerator.Helpers;
 /// generator reference these helpers so the same naming rules are applied
 /// consistently and collision detection is possible.
 /// </summary>
+/// <remarks>
+/// Suffix stripping belongs to the operation and is baked into its generated descriptor. An app's
+/// <c>[BlueprintAppOperationNames]</c> removal belongs to the app, because one operation can be hosted by several apps,
+/// so it is applied at runtime by the app registration instead — and <see cref="RemoveFromOperationName"/> is its
+/// compile-time mirror, which the collision check relies on agreeing with that emitted code.
+/// </remarks>
 internal static class OperationNameHelpers
 {
     /// <summary>
@@ -34,5 +40,21 @@ internal static class OperationNameHelpers
         }
 
         return typeName;
+    }
+
+    /// <summary>
+    /// Gives the descriptor name an app registers once its <c>[BlueprintAppOperationNames(Remove = ...)]</c> has been
+    /// applied: every ordinal occurrence of <paramref name="removal"/> is removed from a name that
+    /// <see cref="StripOperationSuffix"/> has already produced. That order and those semantics are legacy Blueprint's
+    /// <c>descriptor.Name.Replace(prefix, string.Empty)</c> convention, which also ran on the suffix-stripped name.
+    /// </summary>
+    /// <param name="strippedName">The descriptor name after suffix stripping.</param>
+    /// <param name="removal">The text the app removes; an empty value leaves the name unchanged.</param>
+    /// <returns>The name the app registers the operation under.</returns>
+    internal static string RemoveFromOperationName(string strippedName, string removal)
+    {
+        return removal.Length == 0
+            ? strippedName
+            : strippedName.Replace(removal, string.Empty, StringComparison.Ordinal);
     }
 }

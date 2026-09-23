@@ -345,27 +345,20 @@ Before declaring a service migration "OpenAPI compatible":
 ### Operation Naming Convention
 
 S365's Portal service uses `PortalOperationScannerConvention` which strips the "Portal" prefix
-from operation names. In Blueprint source-gen, this is handled via operation processors:
+from operation names. In Blueprint source-gen, declare it on the app root:
 
 ```csharp
-app.MapBlueprintApi<PortalBlueprintApp, PortalBlueprintAppExecutor>(
-    basePath: "/api/",
-    configureOpenApi: info =>
-    {
-        info.Title = "Signature 365 Portal API";
-        info.Version = "1.0";
-        info.OpenApiVersion = "3.0.0"; // Match S365 legacy for tooling compat
-        info.UseStatus200ForSuccessResponses = true; // S365 TS generators expect 200
-    },
-    configureOpenApiOperations: ops =>
-    {
-        // Equivalent of PortalOperationScannerConvention
-        ops.Processors.Add((op, _) => op with
-        {
-            OperationName = op.OperationName.Replace("Portal", "")
-        });
-    });
+[BlueprintAppScan(FromAssemblyOf = typeof(PortalResetActiveUsersCommand))]
+[BlueprintAppOperationNames(Remove = "Portal")] // Equivalent of PortalOperationScannerConvention
+public partial class PortalBlueprintApp : BlueprintApp;
 ```
+
+This renames the descriptor itself, so the OpenAPI `operationId`, the request-body schema key, `x-links`
+and anything reading `link.OperationDescriptor.Name` (such as `GetMyAuthManifestQuery`) all see
+`ResetActiveUsers`, as they did under legacy. Do not rename through an OpenAPI operation processor
+instead: that changes only the rendered `operationId` and leaves every other reader on the prefixed name.
+Resource schema names keep the prefix, and `BP011` fails the build if the removal gives two operations
+the same name.
 
 ### TenantId Auto-Exclusion
 

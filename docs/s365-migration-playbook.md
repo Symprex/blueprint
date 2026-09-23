@@ -933,8 +933,8 @@ In addition to standard checks, Generation requires:
 3. **Key differences to document**:
    - Endpoint path: `/openapi` → `/api/.blueprint/openapi.json` (configurable)
    - `operationId` format: New Blueprint uses C# type name (e.g. `GetTemplateQuery`)
-     — S365's `PortalOperationScannerConvention` strips app prefix; configure via
-     `configureOpenApiOperations` processor
+     — S365's `PortalOperationScannerConvention` strips app prefix; declare
+     `[BlueprintAppOperationNames(Remove = "Portal")]` on the app root
    - Response shapes: `200 OK` vs `201 Created` — new Blueprint infers from result types
    - Security scheme: New Blueprint writes `bearerAuth` with document-level hoisting
    - Schema naming: Configurable via `SchemaNameFormatter` delegate
@@ -1090,12 +1090,13 @@ var result = await vCardClient.GenerateVCardAsync(
 **Step 3: Operation scanner convention replacement:**
 
 S365 gateways use `IOperationScannerConvention` to strip prefixes from operation names
-(e.g., `VCardGatewayGenerateVCardQuery` → `GenerateVCardQuery` in the API surface).
+(e.g., `VCardGatewayGenerateVCardQuery` → `GenerateVCard` in the API surface).
 
-In new Blueprint, operation names come from the class name via `[BlueprintAppScan]`. The
-convention can be replicated by either:
-- Renaming gateway operations to match the desired API name directly
-- Using `[OperationName("GenerateVCard")]` attribute on the operation class
+In new Blueprint, operation names come from the class name with the `Query`/`Command` suffix stripped.
+The convention is replicated by declaring `[BlueprintAppOperationNames(Remove = "VCardGateway")]` on the
+gateway's `BlueprintApp` root, which removes every occurrence of that text from each operation it hosts
+(`VCardGatewayGenerateVCardQuery` → `GenerateVCard`), for the descriptor and so for every reader of its name.
+Renaming the gateway operations directly remains an alternative.
 
 #### S365 Gateway Inventory
 
