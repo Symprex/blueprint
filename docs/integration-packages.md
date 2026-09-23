@@ -99,6 +99,7 @@ services.AddRebus((configure, sp) =>
 | `StartRebusTransaction` middleware | `RebusTransactionScope` (automatic unless `[NoRebusTransaction]`) |
 | `IHandleMessages<T>` operation discovery | `BlueprintApiActivator.GetHandlers<T>()` caches and routes |
 | Per-message DI scope | Fresh scope created per message automatically |
+| `SaveMartenChangesMiddleware` around a subscribed message's `IHandleMessages<T>` | A plain (non-operation) handler's scoped `IUnitOfWork`, when registered, is saved when Rebus commits the message's transaction — after every handler has returned, before the messages they sent go out, and never for a delivery that failed or was moved to the error queue |
 
 ### Transaction Scope
 

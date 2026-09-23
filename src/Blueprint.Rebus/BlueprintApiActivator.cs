@@ -29,6 +29,10 @@ namespace Blueprint.Rebus;
 /// context: after the handlers, and after whichever commit or rollback and ack or nack callbacks Rebus runs for
 /// the outcome, whether the message succeeded or not.
 /// </para>
+/// <para>
+/// The <see cref="Persistence.IUnitOfWork"/> of that scope, when one is registered, is saved when Rebus commits the
+/// transaction, so the writes those handlers made through it are persisted exactly when the delivery succeeds.
+/// </para>
 /// </remarks>
 public sealed class BlueprintApiActivator : IContainerAdapter
 {
@@ -88,6 +92,11 @@ public sealed class BlueprintApiActivator : IContainerAdapter
         // Registered before resolving, so a handler that fails to construct cannot leak what was already resolved.
         transactionContext.OnDisposed(_ => DisposeHandlerScope(scope));
 
+        // Registered before any handler runs, so it precedes the commit callback the transport registers when a handler
+        // first sends: the handlers' writes are persisted before the messages announcing them go out.
+        var cancellationToken = MessageContext.Current?.IncomingStepContext.Load<CancellationToken>() ?? CancellationToken.None;
+        transactionContext.OnCommit(_ => SaveHandlerUnitOfWorkAsync(scope.ServiceProvider, cancellationToken));
+
         var handlers = scope.ServiceProvider.GetServices<IHandleMessages<TMessage>>().ToList();
 
         return Task.FromResult<IEnumerable<IHandleMessages<TMessage>>>(handlers);
@@ -117,6 +126,39 @@ public sealed class BlueprintApiActivator : IContainerAdapter
     private static void DisposeHandlerScope(AsyncServiceScope scope)
     {
         Task.Run(() => scope.DisposeAsync().AsTask()).GetAwaiter().GetResult();
+    }
+
+    /// <summary>
+    /// Saves the <see cref="Persistence.IUnitOfWork"/> of a plain handler's DI scope, if one is registered, from
+    /// <see cref="ITransactionContext.OnCommit"/>. That is the point at which Rebus has decided the message succeeded:
+    /// every handler has returned, and a delivery that failed or was aborted runs no commit callbacks, so nothing is
+    /// saved for it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Legacy Blueprint ran every subscribed message as an operation whose pipeline saved the unit of work after the
+    /// handler, so plain handlers write through an injected session and rely on that save. An operation message is
+    /// not saved here: its generated pipeline already saves its own unit of work.
+    /// </para>
+    /// <para>
+    /// The unit of work is resolved from the handlers' own scope, so it is the one they wrote through. A save that
+    /// throws fails the transaction's completion, so Rebus treats the delivery as failed and redelivers it.
+    /// </para>
+    /// <para>
+    /// It is a commit callback, not an ack callback, because Rebus acks a delivery it has given up on and moved to the
+    /// error queue without committing it. Saving on ack would persist the writes of a handler that threw.
+    /// </para>
+    /// </remarks>
+    /// <param name="services">The service provider of the scope the message's handlers were resolved from.</param>
+    /// <param name="cancellationToken">The cancellation token of the delivery.</param>
+    /// <returns>A task that completes when the unit of work has been saved, or at once when none is registered.</returns>
+    private static Task SaveHandlerUnitOfWorkAsync(IServiceProvider services, CancellationToken cancellationToken)
+    {
+        var unitOfWork = services.GetService<Persistence.IUnitOfWork>();
+
+        return unitOfWork is not null
+            ? unitOfWork.SaveChangesAsync(cancellationToken)
+            : Task.CompletedTask;
     }
 
 #pragma warning disable CA1812 // Instantiated via Activator.CreateInstance
