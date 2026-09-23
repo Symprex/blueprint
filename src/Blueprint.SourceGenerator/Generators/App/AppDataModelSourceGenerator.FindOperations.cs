@@ -204,6 +204,22 @@ public sealed partial class AppDataModelSourceGenerator
         {
             foreach (var kvp in registeredNameToOperations)
             {
+                // A name the removal empties has no usable operationId at all, which is the problem to report even
+                // when several operations share it.
+                if (kvp.Key.Length == 0)
+                {
+                    diagnostics.Add(
+                        new DiagnosticInfo(
+                            _emptyRemovedDescriptorNameRule,
+                            dataModelClass.OperationNameRemovalLocation ?? dataModelClass.DeclarationLocation,
+                            [
+                                operationNameRemoval!,
+                                string.Join(", ", kvp.Value.Select(static operation => operation.OperationName)),
+                            ]));
+
+                    continue;
+                }
+
                 // Operations that already shared a stripped name are BP009's to report; this reports only the
                 // collisions the app's removal introduced.
                 if (kvp.Value.Count > 1

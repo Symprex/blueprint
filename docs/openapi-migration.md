@@ -358,7 +358,7 @@ and anything reading `link.OperationDescriptor.Name` (such as `GetMyAuthManifest
 `ResetActiveUsers`, as they did under legacy. Do not rename through an OpenAPI operation processor
 instead: that changes only the rendered `operationId` and leaves every other reader on the prefixed name.
 Resource schema names keep the prefix, and `BP011` fails the build if the removal gives two operations
-the same name.
+the same name or leaves one with an empty name.
 
 ### TenantId Auto-Exclusion
 

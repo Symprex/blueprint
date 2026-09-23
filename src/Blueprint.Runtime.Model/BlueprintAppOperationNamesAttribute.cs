@@ -20,7 +20,8 @@ namespace Blueprint.Model;
 /// <c>descriptor.Name = descriptor.Name.Replace(prefix, string.Empty)</c>, and keeps those semantics exactly: an ordinal
 /// removal of every occurrence of <see cref="Remove"/>, applied after the <c>Query</c>/<c>Command</c> suffix has been
 /// stripped. Resource and response schema names are not affected, nor are the compile-time manifest artifacts, which are
-/// keyed by operation type. Two operations that the rename gives the same name fail the build with <c>BP011</c>.
+/// keyed by operation type. Two operations that the rename gives the same name, or an operation it leaves with no name
+/// at all, fail the build with <c>BP011</c>.
 /// </para>
 /// </remarks>
 [Conditional("CODE_ANALYSIS")]

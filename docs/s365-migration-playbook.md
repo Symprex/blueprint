@@ -932,7 +932,7 @@ In addition to standard checks, Generation requires:
 
 3. **Key differences to document**:
    - Endpoint path: `/openapi` → `/api/.blueprint/openapi.json` (configurable)
-   - `operationId` format: New Blueprint uses C# type name (e.g. `GetTemplateQuery`)
+   - `operationId` format: New Blueprint uses the C# type name with a `Query`/`Command` suffix stripped (e.g. `GetTemplate` for `GetTemplateQuery`)
      — S365's `PortalOperationScannerConvention` strips app prefix; declare
      `[BlueprintAppOperationNames(Remove = "Portal")]` on the app root
    - Response shapes: `200 OK` vs `201 Created` — new Blueprint infers from result types

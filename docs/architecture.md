@@ -65,7 +65,8 @@ each `Configure()` call returns a fresh descriptor, so the app renames only its 
 reader of `ApiOperationDescriptor.Name` in that app — OpenAPI `operationId` values, request-body schema keys, `x-links`,
 and code reading `link.OperationDescriptor.Name` such as an authorisation-manifest query — then sees the app's name.
 Resource and response schema names, which come from CLR types, do not change, and nor do the compile-time manifest
-artifacts, which are keyed by operation type. `BP011` fails the build when the removal gives two operations the same name.
+artifacts, which are keyed by operation type. `BP011` fails the build when the removal gives two operations the same name,
+or leaves one with an empty name.
 
 `HttpOperationResultExecutor` now also consumes that same app-owned serializer seam for HTTP API responses. When the app
 declares a `JsonSerializerContext`, the executor prefers its generated type metadata for semantic result bodies and

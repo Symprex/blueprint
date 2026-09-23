@@ -49,6 +49,47 @@ public class AppDataModelSourceGeneratorTests_OperationNameTransform
     }
 
     [Fact]
+    public void When_removal_leaves_an_operation_with_an_empty_name_then_reports_BP011()
+    {
+        // "SampleQuery" strips to "Sample", and removing "Sample" leaves nothing to use as its operationId.
+        var result = Compile(
+            Operation("SampleQuery") + Operation("FooCommand") + App("""[BlueprintAppOperationNames(Remove = "Sample")]"""));
+
+        var diagnostic = result.Diagnostics.Should().ContainSingle(static d => d.Id == "BP011").Subject;
+        diagnostic.Severity.Should().Be(DiagnosticSeverity.Error);
+        diagnostic.GetMessage(CultureInfo.InvariantCulture).Should().Be(
+            "The app's removal of 'Sample' from operation names leaves SampleQuery with an empty descriptor name. "
+            + "Rename it, or change the app's [BlueprintAppOperationNames], so its OpenAPI operationId is not empty.");
+    }
+
+    [Fact]
+    public void When_removal_empties_several_operation_names_then_reports_them_as_empty_rather_than_colliding()
+    {
+        // "SampleQuery" -> "Sample" and "SampleSampleCommand" -> "SampleSample" both become "": an empty name is the
+        // problem to report, not that the two empty names are equal.
+        var result = Compile(
+            Operation("SampleQuery") + Operation("SampleSampleCommand") + App("""[BlueprintAppOperationNames(Remove = "Sample")]"""));
+
+        result.Diagnostics.Where(static d => d.Id == "BP011")
+            .Select(static d => d.GetMessage(CultureInfo.InvariantCulture))
+            .Should()
+            .Equal(
+                "The app's removal of 'Sample' from operation names leaves SampleQuery, SampleSampleCommand with an empty "
+                + "descriptor name. Rename it, or change the app's [BlueprintAppOperationNames], so its OpenAPI "
+                + "operationId is not empty.");
+    }
+
+    [Fact]
+    public void When_an_operation_name_matches_the_removal_only_by_case_then_it_is_not_removed()
+    {
+        // Ordinal, as legacy's string.Replace was: "SAMPLEFooQuery" keeps "SAMPLEFoo", so it does not collide with "Foo".
+        var result = Compile(
+            Operation("SAMPLEFooQuery") + Operation("FooCommand") + App("""[BlueprintAppOperationNames(Remove = "Sample")]"""));
+
+        result.Diagnostics.Should().NotContain(static d => d.Id == "BP011");
+    }
+
+    [Fact]
     public void When_app_declares_no_removal_then_names_it_would_have_merged_are_not_reported()
     {
         var result = Compile(Operation("SampleFooQuery") + Operation("FooCommand") + App(string.Empty));

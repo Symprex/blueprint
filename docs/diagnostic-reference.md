@@ -18,7 +18,7 @@ For detailed explanations, see [compile-time-validation.md](compile-time-validat
 | BP008 | Error | Serializer-covered body type uses unsupported OpenAPI validation shape |
 | BP009 | Error | Duplicate descriptor name after Query/Command suffix stripping |
 | BP010 | Warning | Non-evaluable ApiExceptionFactory initializer |
-| BP011 | Error | Duplicate descriptor name after the app's `[BlueprintAppOperationNames]` removal |
+| BP011 | Error | Duplicate or empty descriptor name after the app's `[BlueprintAppOperationNames]` removal |
 
 ### Pipeline and handler (BP100–BP199)
 

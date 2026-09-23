@@ -88,6 +88,16 @@ public sealed partial class AppDataModelSourceGenerator : IIncrementalGenerator,
         isEnabledByDefault: true,
         description: "[BlueprintAppOperationNames(Remove = ...)] removes text from the descriptor name of every operation the app hosts, after Query/Command suffix stripping. When that gives two operations the same name, their OpenAPI operationIds, request-body schema keys and link operation names collide, so the collision must be resolved by renaming an operation or changing the removal.");
 
+    // BP011's second form: a removal that leaves a name empty is the degenerate case of the same misconfiguration.
+    private static readonly DiagnosticDescriptor _emptyRemovedDescriptorNameRule = new(
+        id: "BP011",
+        title: "Empty descriptor name after the app's operation-name removal",
+        messageFormat: "The app's removal of '{0}' from operation names leaves {1} with an empty descriptor name. Rename it, or change the app's [BlueprintAppOperationNames], so its OpenAPI operationId is not empty.",
+        category: "AppDataModelSourceGenerator",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "[BlueprintAppOperationNames(Remove = ...)] removes text from the descriptor name of every operation the app hosts, after Query/Command suffix stripping. When that removes the whole name, the operation has an empty OpenAPI operationId and request-body schema key, so the operation must be renamed or the removal changed.");
+
     private static readonly DiagnosticDescriptor _crossOperationRouteCollisionRule = new(
         id: "BPLG007",
         title: "Cross-operation route collision",
